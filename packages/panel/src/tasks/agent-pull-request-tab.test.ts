@@ -1329,7 +1329,7 @@ test("opened on its files, as a link to its changes opens it, the header stands 
   assert.equal(shownPanel()[0]?.querySelectorAll(".pull-request-entry").length, 2);
 });
 
-test("an App's bot stands by the logo GitHub gives it at its App's address, in the header's Opened by and Reviewers and in the conversation, its robot only until the logo loads", async () => {
+test("an App's bot stands by the logo GitHub gives it at its App's address, in the header's Opened by and Reviewers and in the conversation, its hard hat only until the logo loads", async () => {
   const devin = {
     login: "devin-ai-integration[bot]",
     bot: true,
@@ -1378,14 +1378,14 @@ test("an App's bot stands by the logo GitHub gives it at its App's address, in t
     picture.getAttribute("src"),
     "https://avatars.githubusercontent.com/in/811515?v=4&s=36",
   );
-  assert.ok(face.querySelector(".lucide-bot"), "its robot stands while the logo loads");
+  assert.ok(face.querySelector(".lucide-hard-hat"), "its hard hat stands while the logo loads");
   act(() => {
     picture.dispatchEvent(new Event("load"));
   });
   assert.equal(
-    face.querySelector(".lucide-bot") === null,
+    face.querySelector(".lucide-hard-hat") === null,
     true,
-    "the logo stands in the robot's place",
+    "the logo stands in the hard hat's place",
   );
 
   const opener =
@@ -2096,6 +2096,7 @@ test("a change refused for a repository out of the workspace's reach says where 
         openWorkspaceGitHub: (taskId) => opened.push(taskId),
         openGitHub: () => undefined,
         chooseRepository: () => undefined,
+        openBilling: () => undefined,
         moveTask: () => Promise.resolve(false),
       },
       children: createElement(Switching, {

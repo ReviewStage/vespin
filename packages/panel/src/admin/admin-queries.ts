@@ -19,6 +19,7 @@
 import type { AdminUserList } from "@repo/features/admin-answer-wire";
 import {
   ADMIN_READ,
+  type AdminBillingQuery,
   type AdminDayQuery,
   type AdminUserQuery,
   type AdminUsersQuery,
@@ -73,6 +74,16 @@ export function adminCostQuery(reads: AdminReads, query: AdminWindowedQuery) {
   return queryOptions({
     queryKey: [QUERY_ROOT.ADMIN, ADMIN_READ.COST, query.scope, query.window],
     queryFn: ({ signal }) => reads.cost(query, signal),
+    placeholderData: keepPreviousData,
+    ...ADMIN_READ_OPTIONS,
+  });
+}
+
+/** The Billing page's read, one UTC month. */
+export function adminBillingQuery(reads: AdminReads, query: AdminBillingQuery) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.ADMIN, ADMIN_READ.BILLING, query.month],
+    queryFn: ({ signal }) => reads.billing(query, signal),
     placeholderData: keepPreviousData,
     ...ADMIN_READ_OPTIONS,
   });

@@ -11,7 +11,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "description": "The line to take the agent back to just before, by the lineId read_agent names on a line sent to the agent."
+      "description": "The line to take the agent back to just before, by the lineId read_agent_transcript names on a line sent to the agent."
     }
   },
   "required": [

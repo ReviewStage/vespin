@@ -1,5 +1,9 @@
 // glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   TASK_SECTION_GLYPH,
@@ -10,6 +14,7 @@ import {
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
+import { PRODUCT_MARK_SYMBOL } from "./tokens/product-mark-symbol.js";
 import {
   TASK_PRIORITY_BARS_SYMBOL,
   TASK_PRIORITY_SYMBOL,
@@ -47,6 +52,10 @@ const priorityMark = (
     | typeof TASK_PRIORITY_BARS_SYMBOL,
 ): Glyph => name as Glyph;
 
+/** The product's mark, the Keel, cut from `@repo/brand`'s one description of it into the asset catalog, seated as a line glyph. */
+// SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
+const productMark = (name: typeof PRODUCT_MARK_SYMBOL): Glyph => name as Glyph;
+
 /** An SF Symbol, kept where iOS draws the thing its own way, or where the panel draws a mark of its own rather than a Lucide glyph. */
 // SAFETY: an SF Symbol's name is a glyph's name; this table is where glyphs are minted.
 const system = (name: SfSymbol): Glyph => name as Glyph;
@@ -58,10 +67,11 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
  * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
  * thing its own way (Share, and a sheet's close) or where the panel draws a mark of its own rather
- * than a Lucide glyph (a check box, a face, an MCP server, and the panel's
- * product mark), whose drawings are SF Symbols' nearest. A task's status
- * ring is the panel's own mark, written into the asset catalog from the
- * table `@repo/ui`'s `TaskStatusMark` draws (the developer, Nov 13, 2026).
+ * than a Lucide glyph (a check box, a face, an MCP server), whose drawings
+ * are SF Symbols' nearest. A task's status ring is the panel's own mark,
+ * written into the asset catalog from the table `@repo/ui`'s
+ * `TaskStatusMark` draws (the developer, Nov 13, 2026), and so is the
+ * product's Keel, where the panel leads its MCP & CLI page with it.
  */
 export const GLYPH = {
   // Places.
@@ -76,7 +86,7 @@ export const GLYPH = {
   WORKSPACE: lucide(LUCIDE_SYMBOL.BUILDING_COMPLEX),
   MAKE_OWNER: lucide(LUCIDE_SYMBOL.CROWN),
   // Things.
-  AGENT: lucide(LUCIDE_SYMBOL.BOT),
+  AGENT: lucide(LUCIDE_SYMBOL.HARD_HAT),
   PAGE: lucide(LUCIDE_SYMBOL.APP_WINDOW),
   COMMENT: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
   THREAD: lucide(LUCIDE_SYMBOL.MESSAGES_SQUARE),
@@ -179,6 +189,10 @@ export const GLYPH = {
   UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
   MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
   SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  // A queued message's acts, as the panel's queue dock draws Steer; Move Up and Move Down are its drag's reorder as a long press offers it.
+  STEER: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  MOVE_UP: lucide(LUCIDE_SYMBOL.ARROW_UP),
+  MOVE_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
   REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
   NEW_THREAD: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_PLUS),
@@ -261,7 +275,7 @@ export const GLYPH = {
   APP: system("app"),
   MCP_SERVER: system("server.rack"),
   MCP_TOOL: system("wrench.and.screwdriver"),
-  MCP_CLIENTS: system("app.connected.to.app.below.fill"),
+  PRODUCT: productMark(PRODUCT_MARK_SYMBOL),
 } as const;
 
 /** Each glyph the panel's section icon picker suggests (`TASK_SECTION_GLYPH`), as its Lucide glyph, so a section wears on the phone the icon its member chose. */
@@ -279,6 +293,13 @@ const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
   [TASK_SECTION_GLYPH.HEART]: lucide(LUCIDE_SYMBOL.HEART),
   [TASK_SECTION_GLYPH.CIRCLE]: lucide(LUCIDE_SYMBOL.CIRCLE),
 };
+
+/** The glyph each permission mode wears, the panel's own (`MODE_GLYPH`): a hand, a shield round an ellipsis, a shield round a "!". */
+export const PERMISSION_MODE_GLYPH = {
+  [AGENT_PERMISSION_MODE.ASK]: GLYPH.ASK_FIRST,
+  [AGENT_PERMISSION_MODE.AUTO]: GLYPH.AUTO_APPROVE,
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
+} as const satisfies Record<AgentPermissionMode, Glyph>;
 
 /** Whether a glyph's name is one the section icon picker suggests. */
 function isSectionGlyph(name: string): name is TaskSectionGlyph {
@@ -302,14 +323,20 @@ export function runsOnGlyph(place: {
 /**
  * The glyph a section leads with, as the panel's sidebar draws its icon: the
  * glyph its member chose from the picker's suggestions; the folder, the
- * picker's first, for an emoji, a glyph the app's catalog doesn't hold, or
- * no icon, since a sidebar row always leads with a glyph. Note that a
- * glyph's color is left to the panel, which alone draws it.
+ * picker's first, for a glyph the app's catalog doesn't hold or no icon,
+ * since a sidebar row always leads with a glyph, and for an emoji, which
+ * `sectionEmoji` draws in the glyph's place. Note that a glyph's color is
+ * left to the panel, which alone draws it.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;
 
   return isSectionGlyph(icon.glyph) ? SECTION_GLYPH[icon.glyph] : GLYPH.FOLDER;
+}
+
+/** The emoji a section leads with, drawn as words in its glyph's place, as the panel's sidebar draws it; none for a glyph or no icon. */
+export function sectionEmoji(icon: TaskSectionIcon | undefined): string | undefined {
+  return icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : undefined;
 }
 
 /** The glyphs the asset catalog holds, Lucide's and the task status and priority marks, rather than the system's symbols. */
@@ -318,7 +345,24 @@ const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
   ...Object.values(TASK_STATUS_SYMBOL),
   ...Object.values(TASK_PRIORITY_SYMBOL),
   TASK_PRIORITY_BARS_SYMBOL,
+  PRODUCT_MARK_SYMBOL,
 ]);
+
+/** The letters and digits iOS draws as a filled square of its own (`a.square.fill`), as a workspace's tile reads in a system menu. */
+const TILE_LETTER = /^[A-Z0-9]$/u;
+
+/**
+ * A workspace's letter as a system menu draws its tile: the system's filled
+ * square around the letter, which its menu tints in the tile's hue; the
+ * workspace glyph for a first character the system draws no square for,
+ * such as an emoji or a letter outside A to Z.
+ */
+export function letterTileGlyph(letter: string): Glyph {
+  // SAFETY: the system draws `<letter>.square.fill` for every letter and digit `TILE_LETTER` takes.
+  return TILE_LETTER.test(letter)
+    ? system(`${letter.toLowerCase()}.square.fill` as SfSymbol)
+    : GLYPH.WORKSPACE;
+}
 
 /** A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's name, an SF Symbol by its own. */
 export function glyphImage(

@@ -127,8 +127,9 @@ function toggleEntry<Field extends string, Id extends AppSettingId>(
   spec: ToggleSpec<Field, Id>,
 ): Omit<AppSettingSchemaEntry<Field, boolean, Id, boolean>, "guard" | "control"> {
   return {
+    // Note that nothing stored reads as the default, so an account's toggle on by default draws on before it is chosen.
     ...rowEntry(spec, APP_SETTING_KIND.TOGGLE, (settings) =>
-      appToggleText(settings(spec.field) === true),
+      appToggleText((settings(spec.field) ?? spec.default) === true),
     ),
     default: spec.default,
     analytics: { value: toggleAnalytics },

@@ -19,6 +19,7 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
+  billingRequiredWords,
   localAgentRefusalWords,
   type RefusedCall,
   startFailureWords,
@@ -87,6 +88,10 @@ export type StartAnswer =
 export function startRefusalWords(refused: RefusedCall): string {
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     return localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice);
+  }
+
+  if (refused.failure === AGENT_CALL_FAILURE.BILLING_REQUIRED) {
+    return billingRequiredWords(refused.billingRefusal, refused.billingManager);
   }
 
   return startFailureWords(refused.failure);
@@ -337,11 +342,17 @@ export function useRepositoryPick(
 
 /** The words, pictures, and choices a start carries. */
 interface StartAsk {
-  readonly prompt: string;
+  /** The words the agent starts on; none for Talk's, which starts it blank, its first words said on the call. */
+  readonly prompt: string | undefined;
   /** The pictures attached, in the order attached; none where nothing is. */
   readonly attachments: readonly AgentAttachment[] | undefined;
   readonly picked: ModelChoice | undefined;
   readonly runsOn: string;
+}
+
+/** What a start hands its agent: the words, or nothing for Talk's blank start. */
+function briefOf(prompt: string | undefined) {
+  return prompt === undefined ? { blank: true } : { prompt };
 }
 
 /**
@@ -357,7 +368,7 @@ export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartA
     const answer = await acts[ACT_KIND.AGENTS_START]({
       taskId,
       idempotencyKey: key,
-      prompt,
+      ...briefOf(prompt),
       ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
       ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
       ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
@@ -422,7 +433,7 @@ export function useStartTask(
       planning: false,
       agent: {
         idempotencyKey: key,
-        prompt,
+        ...briefOf(prompt),
         ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
         ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
         ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),

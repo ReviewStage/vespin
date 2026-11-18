@@ -6,7 +6,8 @@ import assert from "node:assert/strict";
 import type { SDKMessage } from "@cursor/sdk";
 import { it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { type Cause, Effect, Fiber, Layer, Match, Queue, Stream } from "effect";
+import { type Cause, Effect, Fiber, Layer, Match, Option, Queue, Schema, Stream } from "effect";
+import { TestClock } from "effect/testing";
 import { vi } from "vitest";
 import {
   CURSOR_SIGNED_OUT_DETAIL,
@@ -20,6 +21,7 @@ import {
   RUNNER_HARNESS,
   RUNNER_PLACE,
   RUNNER_TRANSCRIPTS,
+  RUNNER_UNANSWERED,
   type RunnerEvent,
 } from "./protocol.js";
 import { runAgent } from "./runner.js";
@@ -238,6 +240,7 @@ it.effect(
       assert.deepEqual(cursor.environment, [
         {
           PLAYWRIGHT_BROWSERS_PATH: "0",
+          NODE_PATH: "/usr/local/lib/node_modules",
           [RUNNER_ENV.BEARER]: undefined,
           [RUNNER_ENV.CLAUDE_TOKEN]: undefined,
           [RUNNER_ENV.API_KEY]: undefined,
@@ -314,6 +317,127 @@ it.effect(
                 data: Buffer.from(blob.data).toString("base64"),
               }),
           ),
+      );
+    }),
+);
+
+/** What the service holds of an agent that ran two turns, the second's line marked after the first's checkpoint. */
+const TWO_TURNS_HELD = [
+  {
+    type: "agent",
+    agent: {
+      agentId: SESSION,
+      cwd: CONFIG.cwd,
+      status: "idle",
+      createdAt: 0,
+      updatedAt: 0,
+      latestCheckpoint: { schemaVersion: 1, rootBlobId: "blob-second" },
+    },
+  },
+  { type: "cut", agentId: SESSION, before: LINE.FIRST, root: null },
+  { type: "checkpoint", agentId: SESSION, blobId: "blob-first", data: "Zmlyc3Q=" },
+  { type: "cut", agentId: SESSION, before: LINE.SECOND, root: "blob-first" },
+  { type: "checkpoint", agentId: SESSION, blobId: "blob-second", data: "c2Vjb25k" },
+];
+
+const LINE_AFTER_REWIND = "10000000-0000-4000-8000-000000000003";
+
+/** An agent row mirrored, read for the checkpoint it names alone. */
+const readRowCheckpoint = Schema.decodeUnknownOption(
+  Schema.Struct({
+    type: Schema.Literal("agent"),
+    agent: Schema.Struct({ latestCheckpoint: Schema.Struct({ rootBlobId: Schema.String }) }),
+  }),
+);
+
+it.effect(
+  "resumes a rewound agent from the checkpoint marked before the line dropped, and marks the line it sends next at that checkpoint",
+  () =>
+    Effect.gen(function* () {
+      const appended = fakeTranscripts(TWO_TURNS_HELD);
+      const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, rewindBefore: LINE.SECOND });
+      yield* write(message("Try it another way.", LINE_AFTER_REWIND));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      assert.deepEqual(
+        cursor.resumed.map(({ agentId }) => agentId),
+        [SESSION],
+      );
+      const entries = appended.flatMap(({ entries: each }) => each);
+      const [firstRow] = entries.flatMap((entry) => Option.toArray(readRowCheckpoint(entry)));
+      // The row the cut wrote goes first, ahead of the one the run's end writes.
+      assert.equal(firstRow?.agent.latestCheckpoint.rootBlobId, "blob-first");
+      assert.ok(
+        entries.some(
+          (entry) =>
+            JSON.stringify(entry) ===
+            JSON.stringify({
+              type: "cut",
+              agentId: SESSION,
+              before: LINE_AFTER_REWIND,
+              root: "blob-first",
+            }),
+        ),
+      );
+    }),
+);
+
+it.effect(
+  "resumes a fork's source agent as one of its own, under an id it mints, every entry mirrored under that id",
+  () =>
+    Effect.gen(function* () {
+      const appended = fakeTranscripts(TWO_TURNS_HELD);
+      const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, fork: true });
+      yield* write(message("Carry on from here.", LINE_AFTER_REWIND));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      const [resumed] = cursor.resumed.map(({ agentId }) => agentId);
+      assert.ok(resumed !== undefined && resumed !== SESSION);
+      assert.deepEqual(
+        [...new Set(appended.map(({ key }) => JSON.stringify(key)))],
+        [JSON.stringify({ projectKey: RUNNER_TRANSCRIPTS.CURSOR_PROJECT, sessionId: resumed })],
+      );
+      const entries = appended.flatMap(({ entries: each }) => each);
+      assert.ok(
+        entries.some(
+          (entry) =>
+            JSON.stringify(entry) ===
+            JSON.stringify({
+              type: "checkpoint",
+              agentId: resumed,
+              blobId: "blob-first",
+              data: "Zmlyc3Q=",
+            }),
+        ),
+      );
+    }),
+);
+
+it.effect(
+  "makes the agent anew, led by our instructions, where the line a rewind dropped was its first",
+  () =>
+    Effect.gen(function* () {
+      fakeTranscripts(TWO_TURNS_HELD);
+      const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, rewindBefore: LINE.FIRST });
+      yield* write(message("Start over.", LINE_AFTER_REWIND));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      assert.deepEqual(cursor.resumed, []);
+      assert.deepEqual(
+        cursor.created.map(({ agentId }) => agentId),
+        [SESSION],
+      );
+      assert.deepEqual(
+        cursor.sent.map(({ message: sent }) => sent.text),
+        [
+          "<coder_instructions>\nYou are a Vespin coding agent.\n</coder_instructions>\n\nStart over.",
+        ],
       );
     }),
 );
@@ -461,6 +585,73 @@ it.effect("cancels the run going on a Stop, and ends the launch stopped", () =>
       type: RUNNER_EVENT.END,
       reason: RUNNER_END.STOPPED,
     });
+  }),
+);
+
+it.effect(
+  "cancels a run that streams nothing for its silence limit, and ends the launch failed with words the member reads",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("I");
+
+      const { cursor, write, run } = yield* launch(
+        [{ messages: RECORDED_TURN, held: true }],
+        service,
+      );
+
+      yield* write(CONFIG);
+      yield* write(message("Read the README.", LINE.FIRST));
+      yield* service.seen;
+
+      yield* TestClock.adjust(RUNNER_UNANSWERED.SILENCE_MS - 1);
+      assert.equal(run.pollUnsafe(), undefined);
+      yield* TestClock.adjust(1);
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(cursor.cancels, 1);
+      assert.deepEqual(messagesOf(service.applied).at(-1), {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail:
+          "Cursor stopped answering for 5 minutes, so the turn was ended. Send a message to try again.",
+      });
+    }),
+);
+
+it.effect("never counts a run silent while one of its tool calls runs", () =>
+  Effect.gen(function* () {
+    const service = fakeService("npm test");
+
+    const { cursor, release, write, run } = yield* launch(
+      [
+        {
+          messages: [
+            { type: "status", ...IDS, status: "RUNNING" },
+            {
+              type: "tool_call",
+              ...IDS,
+              call_id: "call-2",
+              name: "shell",
+              status: "running",
+              args: { command: "npm test" },
+            },
+          ],
+          held: true,
+        },
+      ],
+      service,
+    );
+
+    yield* write(CONFIG);
+    yield* write(message("Run the tests.", LINE.FIRST));
+    yield* service.seen;
+
+    yield* TestClock.adjust(RUNNER_UNANSWERED.SILENCE_MS * 3);
+    assert.equal(run.pollUnsafe(), undefined);
+    assert.equal(cursor.cancels, 0);
+    release();
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
   }),
 );
 

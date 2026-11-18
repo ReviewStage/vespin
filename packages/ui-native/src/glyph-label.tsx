@@ -1,7 +1,7 @@
 // glyph-label.tsx -- a glyph as SwiftUI draws it, alone or beside an act's words, whether one of Lucide's from the asset catalog or an SF Symbol.
 
 import { Image, Label, Text } from "@expo/ui/swift-ui";
-import { font } from "@expo/ui/swift-ui/modifiers";
+import { font, tag } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { MARK_SIZE } from "./tokens/space.js";
@@ -76,6 +76,36 @@ export function GlyphLabel({
 }
 
 /**
+ * A picker's option as a system menu draws it: its words beside its photo,
+ * or its glyph in the color the menu keeps, or its words alone, tagged with
+ * the value picking it chooses, as SwiftUI's `Picker` reads its options.
+ */
+export function PickOption({
+  label,
+  value,
+  glyph,
+  color,
+  photo,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly glyph?: Glyph | undefined;
+  readonly color?: string | undefined;
+  readonly photo?: string | undefined;
+}) {
+  const tagged = [tag(value)];
+
+  if (photo !== undefined)
+    return <Label title={label} icon={<MenuPhoto photo={photo} />} modifiers={tagged} />;
+
+  if (glyph === undefined) return <Text modifiers={tagged}>{label}</Text>;
+
+  return (
+    <Label title={label} icon={<GlyphImage glyph={glyph} menuColor={color} />} modifiers={tagged} />
+  );
+}
+
+/**
  * What a SwiftUI button holds: its words alone, its words beside a person's
  * photo where it has one, or its words beside its glyph, which `@expo/ui`'s
  * `Button` draws from its children where it is given no label of its own.
@@ -100,22 +130,28 @@ export function actContent(
 /**
  * What a menu's act holds: as `actContent`, or, where it says more under its
  * words, such as when a reminder comes due, its words over that line beside
- * its glyph, which a system menu draws as its title and subtitle.
+ * its glyph, or its photo where it has one, which a system menu draws as its
+ * title and subtitle.
  */
 export function menuActContent(
   label: string,
   glyph: Glyph | undefined,
   detail: string | undefined,
   color?: string,
+  photo?: string,
 ): { readonly label: string } | { readonly children: ReactElement } {
-  if (detail === undefined) return actContent(label, glyph, undefined, color);
+  if (detail === undefined) return actContent(label, glyph, undefined, color, photo);
 
   return {
     children: (
       <>
         <Text>{label}</Text>
         <Text>{detail}</Text>
-        {glyph === undefined ? null : <GlyphImage glyph={glyph} menuColor={color} />}
+        {photo !== undefined ? (
+          <MenuPhoto photo={photo} />
+        ) : glyph === undefined ? null : (
+          <GlyphImage glyph={glyph} menuColor={color} />
+        )}
       </>
     ),
   };

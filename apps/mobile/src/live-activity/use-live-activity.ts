@@ -1,5 +1,5 @@
 /**
- * use-live-activity.ts -- the app's side of the Live Activity of the member's running agents: its tokens and its end told to the service, a Stop pressed on it sent through the host, and, on a fixture run, an activity of the fixture's own.
+ * use-live-activity.ts -- the app's side of the Live Activity of the member's running agents: its tokens and its end told to the service, and, on a fixture run, an activity of the fixture's own.
  *
  * The service starts, updates, and ends the activity by push, and the
  * widget extension draws it (`live-activity/`), so the app's part is small.
@@ -12,17 +12,15 @@
  * the native module too, so a token iOS hands while the app is woken in the
  * background goes from Swift before the host is up; an activity ended or dismissed on the phone is told too, with
  * its own token, so the service clears that token alone and push-to-starts
- * a fresh activity next time, and a sign-out ends it on the phone. A Stop pressed on an agent's row reaches the app's native module, which
- * hands it here; the host stops the agent as the agent page's Stop does, and
- * the request is answered whatever the host said, since the activity's next
- * push says how it went. A fixture run, which no push reaches, starts an
+ * a fresh activity next time, and a sign-out ends it on the phone. A Stop
+ * pressed on an agent's row is sent from Swift, in the app's process
+ * (`StopAgentIntent`), never through here. A fixture run, which no push reaches, starts an
  * activity of the fixture's content state where its launch asks for one
  * (`-liveActivity true`, as `maestro/live-activity.yaml` launches), so a
  * flow can shoot the Dynamic Island and the Lock Screen, and ends any
  * activity otherwise, so none outlasts its flow.
  */
 
-import { STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import {
   type LiveActivityContentState,
@@ -35,7 +33,6 @@ import { SERVICE_ORIGIN } from "../host/compose-mobile.js";
 import { APP_VERSION, useHostActs } from "../host/host-provider.js";
 import { launchLiveActivity } from "../host/launch-arguments.js";
 import { registeredPushDevice, useFixtureRun, usePushDeviceKey } from "../push-device.js";
-import { useWrite } from "../use-write.js";
 import { type KeptPhone, liveActivityModule } from "./live-activity-module.js";
 
 /** How long ago each of the fixture's agents began its turn, so its timers read as a working afternoon. */
@@ -88,8 +85,6 @@ function useActivityTokens(): UseActivityTokensResult {
   const [activity, setActivity] = useState<string | undefined>(undefined);
   const [ends, setEnds] = useState<readonly EndedActivity[]>([]);
   useEffect(() => {
-    if (liveActivityModule === null) return undefined;
-
     const subscriptions = [
       liveActivityModule.addListener("onStartToken", ({ token }) => setStart(token)),
       liveActivityModule.addListener("onActivityToken", ({ token }) => setActivity(token)),
@@ -112,10 +107,9 @@ function useActivityTokens(): UseActivityTokensResult {
   return { start, activity, ends, told };
 }
 
-/** The Live Activity's tokens and end told to the service and its Stop sent through the host while an account is signed in, and a fixture run's own activity started or ended once a launch. */
+/** The Live Activity's tokens and end told to the service while an account is signed in, and a fixture run's own activity started or ended once a launch. */
 export function useLiveActivity(signedIn: boolean): void {
   const acts = useHostActs();
-  const write = useWrite();
   const fixture = useFixtureRun();
   const key = usePushDeviceKey();
   const { start, activity, ends, told } = useActivityTokens();
@@ -136,7 +130,7 @@ export function useLiveActivity(signedIn: boolean): void {
       );
   }, [acts, phone, start]);
   useEffect(() => {
-    if (liveActivityModule === null || phone === undefined || fixture) return undefined;
+    if (phone === undefined || fixture) return undefined;
     const module = liveActivityModule;
 
     const kept: KeptPhone = {
@@ -226,34 +220,16 @@ export function useLiveActivity(signedIn: boolean): void {
   useEffect(() => {
     // Note that a sign-out ends the activity on the phone, so none of the account's agents stay on the Lock Screen with a Stop nothing answers, and forgets the phone, so Swift sends no token for the account signed out of.
     if (wasSignedIn.current && !signedIn) {
-      liveActivityModule?.keepPhone(null);
+      liveActivityModule.keepPhone(null);
       liveActivityModule
-        ?.endAll()
+        .endAll()
         .catch((cause: unknown) => console.error("The Live Activity was not ended.", cause));
     }
 
     wasSignedIn.current = signedIn;
   }, [signedIn]);
   useEffect(() => {
-    if (liveActivityModule === null || !signedIn) return undefined;
-    const module = liveActivityModule;
-
-    const subscription = module.addListener("onStop", ({ request, agentId }) => {
-      write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
-        refused: (answer) => {
-          if (!("failure" in answer)) return undefined;
-          console.error(`The stop was refused: ${answer.failure}.`);
-
-          return STOP_FAILED;
-        },
-        unanswered: STOP_FAILED,
-      }).finally(() => module.answerStop(request));
-    });
-
-    return () => subscription.remove();
-  }, [acts, write, signedIn]);
-  useEffect(() => {
-    if (liveActivityModule === null || !fixture) return;
+    if (!fixture) return;
 
     // Note that the state is encoded through the service's own Schema, so the widget decodes the bytes a push would carry.
     const started = launchLiveActivity()

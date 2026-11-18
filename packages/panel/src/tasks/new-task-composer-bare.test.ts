@@ -16,11 +16,10 @@ import { NewTaskComposer } from "./new-task-composer.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
 
 /**
- * New task's round button while its box holds nothing: ⌘Return there starts a
- * task with no agent, and the button's hint is the one place that says so,
- * with the chord. A box with words keeps the button's own hint, and the
- * automation's card, whose ⌘Return starts no bare task, never names one.
- * Synthetic throughout.
+ * New task's round button's hint: a box with words keeps the button's own
+ * hint, and the automation's card, whose ⌘Return starts no bare task and
+ * which offers no Talk, never names one. Note that a task's empty box holds
+ * Talk in the button's place (`agent-talk.tsx`). Synthetic throughout.
  */
 
 const roots: Root[] = [];
@@ -88,13 +87,6 @@ function sendHint(container: HTMLElement): SendHintResult {
 
   return { words, chord };
 }
-
-test("an empty box's button says ⌘Return starts a task with no agent", async () => {
-  const hint = sendHint(await mount());
-
-  assert.equal(hint.words, "Start a task with no agent");
-  assert.equal(hint.chord, "⌘⏎");
-});
 
 test("a box with words keeps the button's own hint, with no chord", async () => {
   const container = await mount();

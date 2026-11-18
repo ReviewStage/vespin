@@ -2,8 +2,11 @@ import { NodeFileSystem } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { AUTH_SESSION_END } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { AGENT_ATTACHMENT_TYPE, QUEUE_CHANGE } from "@repo/features/agent-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
+import { READ_MARK } from "@repo/features/read-mark";
 import { ACT_KIND } from "@repo/host/acts";
-import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
+import { OWN_TRANSCRIPT, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import { inboxGroupsIn, selectExperiment, selectInboxHoldings } from "@repo/host/app-state-reads";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { EXPERIMENT, THEME } from "@repo/settings";
@@ -28,11 +31,18 @@ import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server
 /** A thread the Inbox profile stages, by its title (`@repo/host/fixture-inbox`). */
 const STAGED_THREAD = "Who can withdraw an invite?";
 
+/** A notice the Inbox profile stages, which asks nothing, so a reply to it answers no ask. */
+const NOTICE = "acceptInvite can add a member twice";
+
+/** A picture's bytes as a reply carries them: a PNG's signature alone, which no reader here draws. */
+const PICTURE = "iVBORw0KGgo=";
+
 /** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a cipher that seals in the clear, a sign-in sheet closed at once, and no share token kept. */
 const testDevice: DeviceSeams = {
   fileSystem: NodeFileSystem.layer,
   createId: () => crypto.randomUUID(),
   openExternal: () => Promise.resolve(),
+  openSheet: () => Promise.resolve(),
   openSocket: () => Effect.succeed({ unreachable: true }),
   onAppActiveChanged: () => () => undefined,
   cipher: {
@@ -49,6 +59,21 @@ const testDevice: DeviceSeams = {
 
 /** The device a flow signs in on against the stubbed account service: its sheet granting at once. */
 const stubDevice: DeviceSeams = { ...testDevice, authSession: stubAuthSession };
+
+/**
+ * The document's version once the host has had many turns to stage the
+ * fixture again. Note that each change the store announces stages the
+ * fixture again, so a stage that always hands the store something new never
+ * lets the version stand.
+ */
+const settledVersion = (bridge: {
+  readonly requestAppState: () => Promise<{ readonly version: number }>;
+}) =>
+  Effect.gen(function* () {
+    yield* Effect.forEach(Array.from({ length: 50 }), () => Effect.yieldNow, { discard: true });
+
+    return (yield* Effect.promise(() => bridge.requestAppState())).version;
+  });
 
 /** The host stood up in a scope of its own over `stateRoot`, reaching no network, its counts run on the test's own services. */
 const standingHost = (
@@ -134,6 +159,126 @@ it.effect(
 );
 
 it.effect(
+  "a fixture run settles once a task is marked read, rather than staging its list again forever",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { acts, bridge } = yield* standingHost(root, RUN_PROFILE.INBOX);
+
+        const following = yield* Effect.acquireRelease(
+          Effect.sync(() => followAppStateInto(bridge, new QueryClient())),
+          (followed) => Effect.sync(() => followed.stop()),
+        );
+
+        yield* Effect.promise(() => following.written);
+
+        const task = following.taskList.tasks.toArray.find(
+          ({ name }) => name === "Weekly digest email",
+        );
+
+        expect(task).toBeDefined();
+
+        yield* Effect.promise(() =>
+          acts[ACT_KIND.TASKS_MARK_READ]({ taskId: task?.id ?? "", readMark: READ_MARK.READ }),
+        );
+
+        const first = yield* settledVersion(bridge);
+        const second = yield* settledVersion(bridge);
+
+        expect(second).toBe(first);
+      }),
+    ),
+);
+
+it.effect(
+  "a fixture run moves its agent's queued messages as a reorder asks, and settles once it has",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { acts, bridge } = yield* standingHost(root, RUN_PROFILE.INBOX);
+
+        const queued = (state: Awaited<ReturnType<typeof bridge.requestAppState>>) =>
+          Object.entries(state[LIVE_READ.TRANSCRIPT]).flatMap(([agentId, held]) => {
+            const queue = held?.[OWN_TRANSCRIPT]?.rows?.word?.queue;
+
+            return queue === undefined
+              ? []
+              : [{ agentId, ids: queue.messages.map(({ id }) => id) }];
+          });
+
+        const [staged] = queued(yield* Effect.promise(() => bridge.requestAppState()));
+        const [firstId, secondId] = staged?.ids ?? [];
+
+        expect(staged?.ids).toHaveLength(2);
+
+        yield* Effect.promise(() =>
+          acts[ACT_KIND.AGENTS_QUEUE]({
+            agentId: staged?.agentId ?? "",
+            change: { change: QUEUE_CHANGE.REORDER, order: [secondId ?? "", firstId ?? ""] },
+          }),
+        );
+
+        const first = yield* settledVersion(bridge);
+        const second = yield* settledVersion(bridge);
+        const [moved] = queued(yield* Effect.promise(() => bridge.requestAppState()));
+
+        expect(moved?.ids).toEqual([secondId, firstId]);
+        expect(second).toBe(first);
+      }),
+    ),
+);
+
+it.effect(
+  "a fixture run's thread carries back a reply's picture, which reads back by its attachment",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { acts, bridge } = yield* standingHost(root, RUN_PROFILE.INBOX);
+        const groups = yield* inboxGroupsOver(bridge);
+        const notice = groups.flatMap(({ items }) => items).find(({ title }) => title === NOTICE);
+
+        expect(notice).toBeDefined();
+        const itemId = notice?.id ?? "";
+        const clientKey = crypto.randomUUID();
+
+        yield* Effect.promise(() =>
+          acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
+            itemId,
+            text: "",
+            attachments: [
+              { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: PICTURE },
+            ],
+            clientKey,
+          }),
+        );
+
+        yield* settledVersion(bridge);
+
+        const read = (yield* inboxGroupsOver(bridge))
+          .flatMap(({ items }) => items)
+          .find(({ id }) => id === itemId);
+
+        const reply = read?.thread?.find((message) => message.clientKey === clientKey);
+        const [file] = reply?.files ?? [];
+
+        expect(file?.name).toBe("Picture 1");
+
+        const bytes = yield* Effect.promise(() =>
+          acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
+            itemId,
+            attachmentId: file?.attachmentId ?? "",
+          }),
+        );
+
+        expect(bytes).toEqual({ contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: PICTURE });
+      }),
+    ),
+);
+
+it.effect(
   "a setting written over the act port in one launch is read back by the next, from the host's folder",
   () =>
     Effect.scoped(
@@ -161,10 +306,12 @@ it.effect(
 );
 
 it.effect(
-  "signs in against the stubbed account service as the ios client, stands signed in at the next launch, and signs out revoking its token and the share sheet's",
+  "signs in against the stubbed account service as the ios client, keeps its tokens in the Keychain's vault, stands signed in at the next launch, and signs out revoking its token and the share sheet's",
   () => {
     // Each token the share sheet was handed, none standing for its removal.
     const shared: (string | undefined)[] = [];
+    // The tokens' text the Keychain keeps, as `keychain-tokens.ts` keeps it.
+    let vaulted: string | undefined;
 
     const device: DeviceSeams = {
       ...stubDevice,
@@ -172,6 +319,16 @@ it.effect(
         shared.push(kept?.token);
 
         return true;
+      },
+      tokenVault: {
+        read: Effect.sync(() => vaulted),
+        write: (tokens) =>
+          Effect.sync(() => {
+            vaulted = tokens;
+          }),
+        clear: Effect.sync(() => {
+          vaulted = undefined;
+        }),
       },
     };
 
@@ -210,12 +367,15 @@ it.effect(
           account: { status: ACCOUNT_STATUS.SIGNED_IN, email: STUB_ACCOUNT.email },
         });
 
+        expect(vaulted).toContain("stub-access");
+
         const { acts, bridge } = yield* standingHost(root, undefined, device);
         const relaunched = yield* Effect.promise(() => bridge.requestAppState());
         expect(relaunched.account.status).toBe(ACCOUNT_STATUS.SIGNED_IN);
 
         const signedOut = yield* Effect.promise(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]());
         expect(signedOut.status).toBe(ACCOUNT_STATUS.SIGNED_OUT);
+        expect(vaulted).toBeUndefined();
         expect(posted).toEqual([
           ["token", "ios"],
           ["revoke", "ios"],

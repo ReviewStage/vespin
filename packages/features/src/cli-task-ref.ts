@@ -4,17 +4,31 @@
  * A window and a link name a task by its key, a script by the id an answer
  * printed, so the command takes all three. A number or a key names a task of
  * the workspace the command acts in (`tasks.find`); the key's prefix is read
- * off the workspace's name and follows a rename (`workspace-key.ts`), so only
- * its number is read, and the prefix is never checked against the workspace.
+ * off the workspace's name and follows a rename (`workspace-key.ts`), so a
+ * command reads only its number, and leaves the prefix, which the ref still
+ * carries, to a reader that checks it against the workspace (an agent's
+ * `read_task`).
  */
 
+import { Schema } from "effect";
 import { isWireUuid } from "./service-wire.js";
 
-/** A task's key or its bare number: an optional prefix of letters and digits and a hyphen, then the number. */
-const TASK_NUMBER = /^(?:[\p{L}\p{N}]+-)?(\d+)$/u;
+/** The longest task a ref names: an id, or a key of a workspace's prefix, a hyphen, and a number. */
+const MAX_TASK_REF_CHARS = 64;
 
-/** What a command's argument names: a task by its id, or by its number in the workspace. */
-export type CliTaskRef = { readonly id: string } | { readonly number: number };
+/** A task named on the wire by its id or its key, as written, read by `cliTaskRefOf`. */
+export const taskRefSchema = Schema.String.check(
+  Schema.isNonEmpty(),
+  Schema.isMaxLength(MAX_TASK_REF_CHARS),
+);
+
+/** A task's key or its bare number: an optional prefix of letters and digits and a hyphen, then the number. */
+const TASK_NUMBER = /^(?:([\p{L}\p{N}]+)-)?(\d+)$/u;
+
+/** What a command's argument names: a task by its id, or by its number in the workspace, with the key's prefix where it was written as a key. */
+export type CliTaskRef =
+  | { readonly id: string }
+  | { readonly number: number; readonly prefix: string | undefined };
 
 /** The task an argument names, or none where it is neither an id, a number, nor a key. */
 export function cliTaskRefOf(argument: string): CliTaskRef | undefined {
@@ -22,7 +36,8 @@ export function cliTaskRefOf(argument: string): CliTaskRef | undefined {
   const lowered = trimmed.toLowerCase();
 
   if (isWireUuid(lowered)) return { id: lowered };
-  const number = Number(TASK_NUMBER.exec(trimmed)?.[1]);
+  const parts = TASK_NUMBER.exec(trimmed);
+  const number = Number(parts?.[2]);
 
-  return Number.isSafeInteger(number) && number >= 1 ? { number } : undefined;
+  return Number.isSafeInteger(number) && number >= 1 ? { number, prefix: parts?.[1] } : undefined;
 }

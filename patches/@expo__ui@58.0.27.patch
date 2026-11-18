@@ -87,42 +87,52 @@ index 35e91fc87448e062bc43cec99c3e82a8b2b517b5..9d743fc2bac2e3812a3d59203a38bb5f
      };
  }
  /**
-diff --git a/build/swift-ui/modifiers/index.d.ts b/build/swift-ui/modifiers/index.d.ts
-index 482ba8f30f4f393a2d56708cc25314d25db2b521..ed414d5c1929ff271f350e8a0ed60f5cd6332b72 100644
---- a/build/swift-ui/modifiers/index.d.ts
-+++ b/build/swift-ui/modifiers/index.d.ts
-@@ -1066,6 +1066,15 @@ export declare const badgeProminence: (badgeType: "standard" | "increased" | "de
-  * @see Official [SwiftUI documentation](https://developer.apple.com/documentation/swiftui/view/badge(_:)).
+diff --git a/build/swift-ui/Toolbar/index.d.ts b/build/swift-ui/Toolbar/index.d.ts
+index aeb1191459d01444aadc4ccbc78d77592347a02b..a338ed8bcff89448528ff11efd8dfb79187e7865 100644
+--- a/build/swift-ui/Toolbar/index.d.ts
++++ b/build/swift-ui/Toolbar/index.d.ts
+@@ -37,6 +37,12 @@ export interface ToolbarItemProps {
+      * @platform ios 27.0+
+      */
+     visibilityPriority?: ToolbarItemVisibilityPriority;
++    /**
++     * Whether a flexible space stands before the item, the two in one `ToolbarItemGroup`, such as
++     * one that stands a keyboard toolbar's lone item at its trailing edge, which iOS 26 otherwise
++     * centers, and where neither a `Spacer` inside the item nor a `ToolbarSpacer` moves it.
++     */
++    spacerBefore?: boolean;
+     /**
+      * The content of the item.
+      */
+@@ -65,7 +71,7 @@ declare function ToolbarContent(props: ToolbarContentProps): import("react").JSX
+  * @platform ios
+  * @platform tvos
   */
- export declare const badge: (value?: string) => ModifierConfig;
-+/**
-+ * The margins a scroll view's content stands in, the scroll view keeping its
-+ * whole width (Vespin's patch).
-+ * @see Official [SwiftUI documentation](https://developer.apple.com/documentation/swiftui/view/contentmargins(_:_:for:)).
-+ */
-+export declare const scrollContentMargins: (params?: {
-+    length?: number;
-+    edges?: "all" | "top" | "bottom" | "leading" | "trailing" | "horizontal" | "vertical";
-+}) => ModifierConfig;
+-export declare function ToolbarItem({ placement, visibilityPriority, children, }: ToolbarItemProps): import("react").JSX.Element;
++export declare function ToolbarItem({ placement, visibilityPriority, spacerBefore, children, }: ToolbarItemProps): import("react").JSX.Element;
  /**
-  * Allows a view to ignore safe area constraints.
-  * @platform iOS 26+
-diff --git a/build/swift-ui/modifiers/index.js b/build/swift-ui/modifiers/index.js
-index 8a4ca4d989001812cfea3d114480fd2d93688d99..07ae1d7ffb83658a88b6dcc944c7638e8725583c 100644
---- a/build/swift-ui/modifiers/index.js
-+++ b/build/swift-ui/modifiers/index.js
-@@ -985,6 +985,11 @@ export function lineLimit(limitOrRange, options) {
-  */ export const badge = (value)=>createModifier('badge', {
-         value
+  * Adds a toolbar to the view it wraps, matching SwiftUI's `toolbar(content:)`.
+  *
+diff --git a/build/swift-ui/Toolbar/index.js b/build/swift-ui/Toolbar/index.js
+index 6b1d39173397dae66068978459c640cb256908c5..79d422dab4f5a175ed15426e9bc71bf6aab7ea50 100644
+--- a/build/swift-ui/Toolbar/index.js
++++ b/build/swift-ui/Toolbar/index.js
+@@ -29,12 +29,13 @@ const ToolbarNativeView = requireNativeView('ExpoUI', 'ToolbarView');
+  *
+  * @platform ios
+  * @platform tvos
+- */ export function ToolbarItem({ placement = 'automatic', visibilityPriority = 'automatic', children }) {
++ */ export function ToolbarItem({ placement = 'automatic', visibilityPriority = 'automatic', spacerBefore, children }) {
+     return /*#__PURE__*/ _jsx(Slot, {
+         name: "item",
+         extraProps: {
+             placement,
+-            visibilityPriority
++            visibilityPriority,
++            spacerBefore
+         },
+         children: children
      });
-+/**
-+ * The margins a scroll view's content stands in, the scroll view keeping its
-+ * whole width (Vespin's patch).
-+ * @see Official [SwiftUI documentation](https://developer.apple.com/documentation/swiftui/view/contentmargins(_:_:for:)).
-+ */ export const scrollContentMargins = (params)=>createModifier('scrollContentMargins', params);
- /**
-  * Allows a view to ignore safe area constraints.
-  * @platform iOS 26+
 diff --git a/ios/ContentUnavailableView.swift b/ios/ContentUnavailableView.swift
 index 56dc559f87456e0b6b86f1b91529d9395d4c6a61..495964269db54444a1344d045cb893a4d2acfa67 100644
 --- a/ios/ContentUnavailableView.swift
@@ -317,97 +327,73 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49
    }
  
    private static func getHashableSetFromEither(_ array: [Either<String, Double>]?) -> Set<AnyHashable> {
-diff --git a/ios/Modifiers/ViewModifierRegistry.swift b/ios/Modifiers/ViewModifierRegistry.swift
-index 07a856574df36a69b802bd483caf4e33ae05a976..96144798f4a0de5176074149fd73e37838609651 100644
---- a/ios/Modifiers/ViewModifierRegistry.swift
-+++ b/ios/Modifiers/ViewModifierRegistry.swift
-@@ -1402,6 +1402,22 @@ internal struct Badge: ViewModifier, Record {
+diff --git a/ios/ToolbarView.swift b/ios/ToolbarView.swift
+index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..c80e790d07f046ac8e39910826b65564e5b943b1 100644
+--- a/ios/ToolbarView.swift
++++ b/ios/ToolbarView.swift
+@@ -38,10 +38,53 @@ private struct ToolbarItemLayer: View {
+   let content: AnyView
+ 
+   var body: some View {
+-    placed(content, on: base, placement: placement(from: props), visibilityPriority: visibilityPriority(from: props))
++    let placement = placement(from: props)
++    let visibilityPriority = visibilityPriority(from: props)
++
++    if spacerBefore(from: props) {
++      spaced(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
++    } else {
++      placed(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
++    }
    }
  }
  
-+// Vespin's patch: the margins a scroll view stands its content in, while the
-+// scroll view itself keeps its whole width, so a plain list framed at a
-+// reading width still scrolls from the ground beside it.
-+internal struct ScrollContentMargins: ViewModifier, Record {
-+  @Field var length: CGFloat?
-+  @Field var edges: EdgeOptions?
-+
-+  func body(content: Content) -> some View {
-+    if #available(iOS 17.0, tvOS 17.0, macOS 14.0, *), let edges {
-+      content.contentMargins(edges.toEdge(), length ?? 0, for: .scrollContent)
-+    } else {
++/// Places the item after a flexible space, the two in one `ToolbarItemGroup`, which lays a `Spacer` out as the bar's own flexible space, so a keyboard toolbar's lone item stands at its trailing edge rather than centered, as iOS 26 stands one alone.
++@ViewBuilder
++private func spaced(
++  _ content: AnyView,
++  on base: AnyView,
++  placement: ToolbarItemPlacement,
++  visibilityPriority: ToolbarItemVisibilityPriorityOptions?
++) -> some View {
++#if compiler(>=6.4) // Xcode 27
++  if #available(iOS 27.0, macOS 26.1, tvOS 27.0, visionOS 27.0, *),
++    let visibilityPriority {
++    base.toolbar {
++      ToolbarItemGroup(placement: placement) {
++        Spacer()
++        content
++      }
++      .visibilityPriority(visibilityPriority.toPriority())
++    }
++  } else {
++    base.toolbar {
++      ToolbarItemGroup(placement: placement) {
++        Spacer()
++        content
++      }
++    }
++  }
++#else
++  base.toolbar {
++    ToolbarItemGroup(placement: placement) {
++      Spacer()
 +      content
 +    }
 +  }
++#endif
 +}
 +
- internal struct ListSectionMargins: ViewModifier, Record {
-   @Field var length: CGFloat?
-   @Field var edges: EdgeOptions?
-@@ -2342,6 +2358,10 @@ extension ViewModifierRegistry {
-       return try Badge(from: params, appContext: appContext)
-     }
+ internal struct ToolbarView: ExpoSwiftUI.View {
+   @ObservedObject var props: ToolbarViewProps
  
-+    register("scrollContentMargins") { params, appContext, _ in
-+      return try ScrollContentMargins(from: params, appContext: appContext)
-+    }
-+
-     register("listSectionMargins") { params, appContext, _ in
-       return try ListSectionMargins(from: params, appContext: appContext)
-     }
-diff --git a/src/swift-ui/List/index.tsx b/src/swift-ui/List/index.tsx
-index a4ebca663b0b1cda3ca92420dd956a012c928567..5902bc8f155b81bc4a2efe566d88c48c2fd9ce2a 100644
---- a/src/swift-ui/List/index.tsx
-+++ b/src/swift-ui/List/index.tsx
-@@ -18,7 +18,9 @@ function transformListProps(props: Omit<ListProps, 'children'>): Omit<NativeList
-     modifiers,
-     ...(modifiers ? createViewModifierEventListener(modifiers) : undefined),
-     ...restProps,
--    onSelectionChange: ({ nativeEvent: { selection } }) => props?.onSelectionChange?.(selection),
-+    onSelectionChange: ({ nativeEvent: { selection, editing } }) => props?.onSelectionChange?.(selection, editing === true),
-+    onEditingChange: ({ nativeEvent: { editing, selection } }) =>
-+      props?.onEditingChange?.(editing, selection),
-   };
+@@ -110,6 +153,10 @@ private func placement(from props: SlotViewProps) -> ToolbarItemPlacement {
+   return placement.toPlacement()
  }
  
-@@ -35,18 +37,35 @@ export interface ListProps extends CommonViewModifierProps {
- 
-   /**
-    * Callback triggered when the selection changes in a list.
--   * Returns an array of selected item tags.
-+   * Returns an array of selected item tags, and whether the list stands in edit mode as they change.
-    */
--  onSelectionChange?: (selection: (string | number)[]) => void;
-+  onSelectionChange?: (selection: (string | number)[], editing: boolean) => void;
++private func spacerBefore(from props: SlotViewProps) -> Bool {
++  return props.extraProps?["spacerBefore"] as? Bool ?? false
++}
 +
-+  /**
-+   * Whether the list stands in edit mode, as a binding the system may switch on itself, such as on a two-finger drag down the rows.
-+   * Requires `selection`. Left out, edit mode follows the environment.
-+   */
-+  editing?: boolean;
-+
-+  /**
-+   * Callback triggered when the system switches edit mode, with the rows selected by then.
-+   */
-+  onEditingChange?: (editing: boolean, selection: (string | number)[]) => void;
- }
- 
- /**
-  * SelectItemEvent represents an event triggered when the selection changes in a list.
-  */
--type SelectItemEvent = ViewEvent<'onSelectionChange', { selection: (string | number)[] }>;
-+type SelectItemEvent = ViewEvent<'onSelectionChange', { selection: (string | number)[]; editing?: boolean }>;
-+
-+type EditingChangeEvent = ViewEvent<
-+  'onEditingChange',
-+  { editing: boolean; selection: (string | number)[] }
-+>;
- 
--type NativeListProps = Omit<ListProps, 'onSelectionChange'> &
--  SelectItemEvent & {
-+type NativeListProps = Omit<ListProps, 'onSelectionChange' | 'onEditingChange'> &
-+  SelectItemEvent &
-+  EditingChangeEvent & {
-     children: React.ReactNode;
-   };
- 
+ private func visibilityPriority(from props: SlotViewProps) -> ToolbarItemVisibilityPriorityOptions? {
+   guard let rawPriority = props.extraProps?["visibilityPriority"] as? String else {
+     return nil

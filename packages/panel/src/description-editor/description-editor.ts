@@ -21,6 +21,7 @@ import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
+import { bareAddresses } from "./bare-addresses.js";
 import { chipSpacing, typedAtChipSpace } from "./chip-spacing.js";
 import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
@@ -483,6 +484,7 @@ export function markdownExtensions(
     mentionNode(drawMention),
     SoftBreak,
     linkLook(namesChip),
+    bareAddresses,
     writingKeys,
     dividerLines,
   ];
@@ -786,7 +788,7 @@ export function mountDescriptionEditor(
   const written = () =>
     withLineEnding(documentMarkdown(manager, editor.state.doc, held, ends), ending);
 
-  const opened = documentOpened(manager, source, mentions?.namesChip);
+  const opened = documentOpened(manager, source, mentions);
   held = { sources: new Map(), lead: opened.lead, ending: opened.ending };
   // The threads the editor carries marks for, and whether they are being laid on, which hands over no draft.
   let carried: readonly string[] = [];
@@ -943,14 +945,7 @@ export function mountDescriptionEditor(
   return {
     ...editorFormatting(editor),
     take: (sent, merged) => {
-      const answer = documentTook(
-        editor,
-        manager,
-        held,
-        withLf(sent),
-        withLf(merged),
-        mentions?.namesChip,
-      );
+      const answer = documentTook(editor, manager, held, withLf(sent), withLf(merged), mentions);
 
       held = answer.held;
 

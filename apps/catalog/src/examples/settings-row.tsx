@@ -1,12 +1,14 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
+  AccountWords,
   AVATAR_SIZE,
   Avatar,
   BUTTON_TYPE,
   BUTTON_VARIANT,
   Button,
   EditActions,
+  GAP,
   Inline,
   JUSTIFY,
   MARK_PROVIDER,
@@ -23,6 +25,7 @@ import {
   SettingsAttentionMark,
   SettingsFacts,
   SettingsFoldRow,
+  SettingsLinkRow,
   SettingsRow,
   SettingsRowActSlot,
   type SettingsRowControl,
@@ -34,11 +37,13 @@ import {
   SettingsSavedMark,
   SettingsSection,
   Shortcut,
+  Stack,
   Switch,
   TEXT_ELEMENT,
   TEXT_FIELD_SIZE,
   TEXT_FIELD_TYPE,
   TEXT_FONT,
+  TEXT_TONE,
   TEXT_VARIANT,
   Text,
   TextField,
@@ -63,10 +68,14 @@ import { CatalogSection } from "../section";
  * its row with a refusal under that, and accounts indented under their
  * provider's row; and accounts that fold their repositories open under
  * their words, one open from the start with a long name among them, one
- * of 24 that scrolls its list, one with a ⋯ before its chevron whose repositories its token reaches, at a page's measure and
- * narrower than 380px; and integrations that fold the rows they own under
- * their own row, closed until pressed, beside one that owns none; and an
- * emptied script's row, a red Delete script standing in its Save's place.
+ * of 24 that scrolls its list, one with its ⋯ after its ⌄ whose repositories its token reaches, at a page's measure and
+ * narrower than 380px, each opened by a press anywhere on its row; and
+ * integrations that fold the rows they own under their own row, closed
+ * until pressed, beside one that owns none; and an
+ * emptied script's row, a red Delete script standing in its Save's place;
+ * and integrations' rows that each open a page, pressed anywhere and ending
+ * in a ›, one connected and one needing its Reconnect, at a page's measure
+ * and narrower than 380px.
  */
 
 /** A note long enough to run to several lines of its row. */
@@ -244,11 +253,7 @@ function StateRows(): React.JSX.Element {
             <Mark provider={MARK_PROVIDER.GITHUB} />
           </SettingsRowMark>
         }
-        description={
-          <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-            Connected
-          </SettingsRowStateLine>
-        }
+        description="2 accounts, 14 repositories"
       >
         {() => <Button variant={BUTTON_VARIANT.OUTLINE}>Manage</Button>}
       </SettingsRow>
@@ -296,9 +301,11 @@ function FactsLine(): React.JSX.Element {
   return (
     <Inline justify={JUSTIFY.BETWEEN}>
       <SettingsFacts>
-        <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>Connected</SettingsRowStateLine>
-        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-          sk-…a1b2
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
+          <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
+            sk-…a1b2
+          </Text>
+          , added Oct 12
         </Text>
       </SettingsFacts>
       <Button variant={BUTTON_VARIANT.OUTLINE}>
@@ -496,11 +503,7 @@ function RowsFoldRows(): React.JSX.Element {
         head={(chevron) => (
           <SettingsRow
             label="GitHub"
-            description={
-              <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                Connected
-              </SettingsRowStateLine>
-            }
+            description="Pull requests and repositories"
             leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
             end={() => chevron}
           >
@@ -544,16 +547,12 @@ function RowsFoldRows(): React.JSX.Element {
         head={(chevron) => (
           <SettingsRow
             label="Slack"
-            description={
-              <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                Connected
-              </SettingsRowStateLine>
-            }
+            description="Agents read and post in your channels"
             leading={<Mark provider={MARK_PROVIDER.SLACK} />}
             end={() => (
               <>
-                <MoreButton thing="Slack" />
                 {chevron}
+                <MoreButton thing="Slack" />
               </>
             )}
           >
@@ -583,22 +582,66 @@ function RowsFoldRows(): React.JSX.Element {
         head={(chevron) => (
           <SettingsRow
             label="Sentry"
-            description={
-              <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                Connected
-              </SettingsRowStateLine>
-            }
+            description="Issues, events, and releases"
             leading={<Mark provider={MARK_PROVIDER.SENTRY} />}
             end={() => (
               <>
-                <MoreButton thing="Sentry" />
                 {chevron}
+                <MoreButton thing="Sentry" />
               </>
             )}
           />
         )}
       />
     </SettingsSection>
+  );
+}
+
+/** Integrations whose rows each open a page: connected, needing a Reconnect whose own press opens nothing, and with no account named. */
+function LinkRows(): React.JSX.Element {
+  const [opened, setOpened] = useState("Nothing opened yet");
+
+  return (
+    <Stack gap={GAP.CONTROL}>
+      <SettingsSection title="Integrations">
+        <SettingsLinkRow
+          label="GitHub"
+          adornment={<AccountWords>ada</AccountWords>}
+          leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
+          description="Repositories, issues, and pull requests"
+          onOpen={() => setOpened("Opened GitHub")}
+        />
+        <SettingsLinkRow
+          label="Linear"
+          adornment={<AccountWords>Acme</AccountWords>}
+          leading={<Mark provider={MARK_PROVIDER.LINEAR} />}
+          description={
+            <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+              Sign-in expired
+            </SettingsRowStateLine>
+          }
+          onOpen={() => setOpened("Opened Linear")}
+          control={(control) => (
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              aria-describedby={control["aria-describedby"]}
+              onClick={() => setOpened("Reconnecting Linear")}
+            >
+              Reconnect
+            </Button>
+          )}
+        />
+        <SettingsLinkRow
+          label="Notion"
+          leading={<Mark provider={MARK_PROVIDER.NOTION} />}
+          description="Personal and Work"
+          onOpen={() => setOpened("Opened Notion")}
+        />
+      </SettingsSection>
+      <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+        {opened}
+      </Text>
+    </Stack>
   );
 }
 
@@ -643,6 +686,16 @@ function SettingsRows(): React.JSX.Element {
       <CatalogSection id="settings-row-rows-fold" title="Folding the rows a row owns">
         <div className="catalog-settings">
           <RowsFoldRows />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="settings-row-link" title="Opening a page">
+        <div className="catalog-settings">
+          <LinkRows />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="settings-row-link-narrow" title="Opening a page narrower than 380px">
+        <div className="catalog-settings catalog-settings-narrow">
+          <LinkRows />
         </div>
       </CatalogSection>
       <CatalogSection id="settings-row-state" title="State, mark, and value">

@@ -17,15 +17,16 @@ export {
 
 export {
   ConfirmAsk,
-  WORDS_ASK_KIND,
-  WordsAsk,
-  type WordsAskAct,
-  type WordsAskKind,
+  QUIET_ROW_QUESTION,
+  type RowAsker,
+  RowAsking,
+  type RowQuestion,
+  useRowAsker,
 } from "./asks.js";
 
 export { AuthPage } from "./auth-page.js";
 
-export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+export { type BarSubtitle, StackSubtitle } from "./bar-title.js";
 
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
@@ -79,13 +80,11 @@ export {
   MenuChip,
 } from "./compose-sheet.js";
 
-export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
+export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
 
 export {
   type AttachedPicture,
   AttachedPictures,
-  type QueuedLine,
-  QueuedLines,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -113,7 +112,9 @@ export {
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
+  PERMISSION_MODE_GLYPH,
   runsOnGlyph,
+  sectionEmoji,
   sectionGlyph,
 } from "./glyph.js";
 
@@ -128,6 +129,8 @@ export {
 } from "./held-call.js";
 
 export { type Keeping, KeepingProvider } from "./held-menu.js";
+
+export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
@@ -158,10 +161,10 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowFold,
   type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
-  type TaskFold,
   TaskRow,
 } from "./list-row.js";
 
@@ -189,13 +192,13 @@ export {
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
-export { useMinute } from "./minute.js";
-
-export { useNoticeFootRoom } from "./notice-lift.js";
+export { useMinute, useToday } from "./minute.js";
 
 export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+
+export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
 
 export { PictureSet, type SetPicture } from "./picture-set.js";
 
@@ -225,6 +228,8 @@ export {
   PullRequestHead,
   WriteNoteRow,
 } from "./pull-request-page.js";
+
+export { type QueuedLine, QueuedLines } from "./queued-lines.js";
 
 export { RemindPickSheet } from "./remind-sheet.js";
 
@@ -273,6 +278,7 @@ export {
   PUSH_ROW_GOES,
   PushRow,
   type PushRowGoes,
+  ScriptRow,
   SettingsForm,
   ToggleRow,
   ValueRow,
@@ -290,20 +296,10 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
-  DetailPage,
-  type DetailStack,
-  type DetailStackPage,
   groupKey,
-  HostedFill,
   isBarMenu,
-  KeptColumns,
-  type KeptView,
   menuWithout,
-  SplitOverTabs,
   SplitView,
-  scopeMenu,
-  scopeSubtitle,
-  UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
 export {
@@ -314,14 +310,22 @@ export {
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareWords } from "./system-asks.js";
+export {
+  askForName,
+  askForWords,
+  type NameAsk,
+  shareWords,
+  WORDS_KIND,
+  type WordsAct,
+  type WordsAsk,
+  type WordsKind,
+} from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
   FailedReadRow,
-  GroupRow,
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
@@ -356,7 +360,7 @@ export {
 
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
-export { MARK_SIZE, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
+export { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
@@ -394,7 +398,7 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
-export { useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+export { useWindowSizeClass } from "./use-window-size-class.js";
 
 export { Video } from "./video.js";
 
@@ -407,11 +411,9 @@ export {
 export {
   newWorkspaceAction,
   SWITCHER_LOOK,
-  SWITCHER_PRESENTATION,
   type SwitcherAccount,
   type SwitcherAction,
   type SwitcherLook,
-  type SwitcherPresentation,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
 } from "./workspace-switcher.js";

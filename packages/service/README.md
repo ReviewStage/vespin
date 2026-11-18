@@ -373,18 +373,24 @@ variables above for every environment that receives its deliveries.
 
 ## The Vespin Slack bot
 
-Vespin's own Slack bot writes to a workspace's members in Slack. It is one
-Slack app, Vercel Connect's managed `slack/vespin` connector, apart from the
-Slack connector each member connects for their agents (`SLACK_CONNECTOR_UID`).
-`src/slack/slack-bot.ts`'s `SlackBot` reads the connector's UID from
-`SLACK_BOT_CONNECTOR_UID` and asks Connect for the bot token under an app
-subject at each call; a deployment without the variable builds the service,
-answers `configured: false`, and writes nothing. Only the deployment's own
-Vercel OIDC token can mint the app token, so the CLI cannot check it: check it
-on a Preview. An owner or admin connects the bot under Settings › Workspace
-(`src/slack/slack-bot-procedures.ts`), which calls `auth.test` and keeps the
-team in `slack_installation`, one per workspace; Disconnect deletes it.
-`SlackBot.dm` finds a member by the Slack id kept in `slack_member`
+Vespin's own Slack bot writes to a workspace's members in Slack. It is our
+own Slack app ("Vespin"), apart from the Slack connector each member connects
+for their agents (`SLACK_CONNECTOR_UID`). An owner or admin adds it to the
+workspace's Slack team with Add to Slack under Settings › Workspace › Slack
+bot, Slack's OAuth v2 (https://docs.slack.dev/authentication/installing-with-oauth/):
+the hosted procedure (`installSlackBot`) answers Slack's authorize address,
+asking for the bot scopes `SLACK_BOT_SCOPES` lists and no user scope, and
+Slack returns the browser to `/api/slack/oauth/callback`
+(`src/slack/slack-install-app.ts`), which exchanges the code
+(`oauth.v2.access`). Each install grants that workspace its own bot token, kept sealed in
+`slack_installation` under `PROVIDER_KEY_ENCRYPTION_KEYS`, one per workspace;
+Disconnect deletes it. `src/slack/slack-bot.ts`'s `SlackBot.forWorkspace`
+opens the workspace's token for each piece of work, and every call made for
+that workspace is made on it; a workspace holding no token, or one that will
+not open, is written nothing, and a deployment without the key ring answers
+`configured: false` and writes nothing. The old Connect button
+(`workspaceSlackBot.connect`) is refused as unavailable.
+`SlackWorkspaceBot.dm` finds a member by the Slack id kept in `slack_member`
 (`@repo/database/models/slack-installation-store`), else through a Slack
 account the member connected for their agents whose `auth.test` answers the
 installed team, else by their email (`users.lookupByEmail`), and keeps the
@@ -407,13 +413,54 @@ reaches our Slack route (`/api/slack/events`) as an `app_mention` or
 (`src/slack/slack-agent-starts.ts`), once the answer has left; Slack's
 retries (`x-slack-retry-num`) and bots' messages are dropped. The writer is
 found by the Slack id the bot kept, else through the Slack accounts members
-connected that no kept id names yet, one `auth.test` each (`SlackBot.memberOf`),
+connected that no kept id names yet, one `auth.test` each (`SlackWorkspaceBot.memberOf`),
 or else by the email Slack holds for them (`users.info`). The bot reacts to
 the message with 👀 (`eyes`), replying in the thread only to refuse, the
 thread is kept against the agent in `slack_agent_thread`, a later mention in
 that thread is sent to the agent instead, and every settled turn of the agent
-is posted back in the thread once, with the agent's link (`SettledTurnListener`). The Slack app must
-subscribe to the `app_mention` and `message.im` bot events.
+is posted back in the thread once, with the agent's link (`SettledTurnListener`).
+
+Slack sends our app's requests, events and interactivity alike, straight to
+`/api/slack/events`, signed with the app's signing secret
+(`SLACK_APP_SIGNING_SECRET`). The route checks `X-Slack-Signature`, the
+`v0` HMAC-SHA256 of `v0:<timestamp>:<raw body>`, in constant time, and
+refuses a request whose `X-Slack-Request-Timestamp` stands more than five
+minutes from its clock, before it reads anything of the body; a deployment
+missing the secret answers unavailable. It answers Slack's `url_verification`
+challenge, and an `app_uninstalled` event, or a `tokens_revoked` event that
+names a bot token, deletes the installation of every workspace connected to
+that team, with its bot token and its members' Slack ids, unless it was linked
+after the event's `event_time`, so a late or repeated delivery never takes a
+reinstall. Every other event is acknowledged unread.
+
+**Setting up the Slack app.** The app lives at `https://api.slack.com/apps`,
+and its manifest (https://docs.slack.dev/reference/app-manifest/) holds:
+
+- Three variables from its Basic Information, for every environment Slack
+  reaches (`SLACK_APP_ENVIRONMENT`, `src/slack/slack-app.ts`):
+  `SLACK_APP_CLIENT_ID` and `SLACK_APP_CLIENT_SECRET`, its App Credentials,
+  which Add to Slack and the code exchange read, and
+  `SLACK_APP_SIGNING_SECRET`, which the events route checks. A deployment
+  missing one still builds: Add to Slack answers unavailable without all
+  three, and the events route without the signing secret.
+- `oauth_config.redirect_urls`: `https://<deployment>/api/slack/oauth/callback`,
+  which must match the `redirect_uri` an install sends.
+- `oauth_config.scopes.bot`: exactly `SLACK_BOT_SCOPES`, since an install
+  asks for that list.
+- `settings.event_subscriptions.request_url`:
+  `https://<deployment>/api/slack/events`, which Slack verifies with its
+  `url_verification` challenge, and the bot events `app_mention`,
+  `message.im`, `reaction_added`, `app_uninstalled`, `tokens_revoked`, and
+  `app_home_opened`
+  (https://docs.slack.dev/reference/events/).
+- `settings.interactivity`: `is_enabled` set to `true`, which Slack requires
+  with any interactivity setting, and `request_url` the same
+  `https://<deployment>/api/slack/events`, where an ask's buttons arrive as
+  `block_actions`.
+- `features.agent_view`, the Agent messaging experience, in which a
+  member's conversation with the bot happens in the app's Messages tab;
+  the older `features.assistant_view` cannot be chosen by a new app, and a
+  switch to `agent_view` cannot be undone.
 
 An owner or admin names the repository a Slack start defaults to under
 Settings › Workspace › Slack bot (`POST /api/workspaces/slack-bot/repository`,
@@ -1398,11 +1445,13 @@ the Stop button's own path (`src/agents/coder-host/stop.ts`), the agent
 staying available and an idle one answered as idle; `update_agent`, which
 renames an agent of the workspace, moves it to another model and effort the
 catalog takes, pins one on no task for the starter, or switches its MCP
-servers, every change asked in one transaction, and archives an idle agent
-of the workspace, never itself or one still working, on the rule the Archive
-agent menu keeps for the agent's starter, recording the archiving agent and
-its reason on the archived agent's row (`archived_by`), or brings one back; `read_page`, a page shown on any task
-of the workspace by its id, its HTML cut on a line to a bound, which a
+servers, every change asked in one transaction; `archive_agent`, which
+archives an agent of the workspace, never itself, on the rule the Archive
+agent menu keeps for the agent's starter, a turn still under way stopped
+first as the Stop button stops it, recording the archiving agent and its
+reason on the archived agent's row (`archived_by`), and `unarchive_agent`,
+which brings one back; `read_page`, a page shown on any task
+of the workspace by its id and the version named, its number or `newest`, its HTML cut on a line to a bound, which a
 mention of a page points the agent at; `list_tasks`, the workspace's
 open tasks, and its archived ones too where asked, each with the sidebar
 section the agent's starter keeps it in, and those sections; `read_task`
@@ -1442,7 +1491,7 @@ through the same guards and start a Run now takes, reaching the new
 agent's session as the deployment acting for the starter; and `list_models`, the models and efforts the agent's starter may
 start one on and their default, read from the one source a start is checked
 against (`accountModelChoices` in `src/agents/coder-host/start.ts`), so a
-choice it lists is one `start_agent` takes. A list, a read, or a start of an agent, a list of tasks,
+choice it lists is one `start_agent` takes; and `list_machines`, where a start may run an agent (the cloud and the starter's own Macs and hosts, each with the `runsOn` to pass) and the machines `run_on_mac` and `computer` may reach from the conversation, by the rule they route by (`src/agents/machines-tool.ts`). A list, a read, or a start of an agent, a list of tasks,
 `show_page`, and `read_page` answer each thing's mention ready to write, `[@name](link)` under
 the workspace's slug (`src/agents/written-mentions.ts`), and the agent's
 instructions show it the mention of every kind it names, under its own
@@ -2776,7 +2825,69 @@ Once a day, at 08:00 UTC, the `workspace-drive-cleanup` schedule calls
 repository no agent of the workspace started in for 30 days
 (`src/agents/workspace-drive-cleanup.ts`). The queue's consumer
 (`src/agents/workspace-drive-builds.ts`) prunes that drive, and comes again
-shortly where a fill holds it.
+shortly where a fill holds it. That daily job's endpoint is
+`src/maintenance/scheduled-call-app.ts` over its own path and job.
+
+Vercel's sandbox sessions are charged to the usage ledger (`usage_charge`)
+and sent to Metronome through two Vercel Queues topics, with no cron
+(`src/billing/usage-queues.ts`; charged in
+`src/billing/sandbox-session-charges.ts`, priced at Vercel's Pro rates for
+the session's region in `src/billing/sandbox-session-price.ts`). Vercel
+forgets a deleted sandbox's sessions, and a resume deletes the stopped sandbox
+it makes again on its own drive, so the Vercel adapter reads a sandbox's ended
+sessions just before any delete of it, stopping a running one first, and
+hands them to `EndedSessionsOnDelete`, which this runtime answers by charging
+them; a read that fails is logged and the delete goes on. For the sandboxes
+never deleted, each open of one, an agent's sandbox or a workspace drive's
+fill, records its `sandbox_owner` row and books a check on the
+`sandbox-usage-checks` topic before the sandbox is opened, delayed past its
+idle stop; an open whose check the queue did not take is refused. The check's
+consumer reads that sandbox's sessions by name, charges those that ended with
+their figures in, and books itself again five minutes on while one is still
+up or awaits its figures; a sandbox gone has nothing left to read. The ledger
+takes an item once by its kind and source id, so the two never double-count,
+and a session no `sandbox_owner` row names is logged and passed by. It always
+runs, whether or not billing is live.
+
+Every charge, the check's and a delete's, publishes the ledger ids of its
+sessions' charges not yet sent to the `usage-sends` topic, whose consumer
+sends them to Metronome (`src/billing/usage-sending.ts`, over
+`src/billing/metronome.ts`), which rates and invoices them: each workspace is
+one Metronome customer, its ingest alias the workspace's id, with one
+contract on our rate card from the 1st of the month of its earliest unsent
+charge, billed on the 1st with a recurring credit of the included usage. Both
+are made the first time a workspace has usage to send and kept in
+`workspace_billing`. Each charge is one event whose transaction id is the
+charge's id, so Metronome counts one sent twice once, and a charge is stamped
+`sent_at` once Metronome took it. A 429, a 5xx, or no answer in time fails
+the delivery and the queue delivers it again; Metronome's other refusals are
+logged and their charges left unsent. Each check also publishes every charge
+of its sandbox still unsent (read by the sandbox's name, which a charge's
+figures carry), so a send a delete failed to publish is published again by
+the sandbox's next check. The queues are Vercel's on production and on a
+Preview, and anywhere else each message is delivered in the process. Without `METRONOME_API_TOKEN`,
+`METRONOME_RATE_CARD_ID`, and `METRONOME_CREDIT_PRODUCT_ID`
+(`src/billing/billing-environment.ts`) nothing is sent, and the ledger is
+written all the same. Metronome's webhook
+(`apps/web/server/routes/billing/metronome-webhook.ts`,
+`src/billing/metronome-webhook-app.ts`) is verified under
+`METRONOME_WEBHOOK_SECRET` and logs an invoice Metronome failed to hand to
+Stripe as an error; every other event is acknowledged unread.
+
+Billing is on only where `BILLING_LIVE` is `true` (`src/billing/billing-environment.ts`),
+and `billing.status` is the one way a client learns it. While it is off,
+usage still reaches Metronome, which keeps its invoices to itself, and
+nothing calls Stripe: `billing.setup` and `billing.portal`
+(`src/billing/billing.ts`) refuse, and Stripe's webhook acknowledges every
+event unread. While it is on, an owner or admin sets billing up on a Stripe
+Checkout page in setup mode, and manages it in Stripe's Customer Portal.
+Stripe's webhook (`apps/web/server/routes/billing/stripe-webhook.ts`,
+`src/billing/stripe-webhook-app.ts`), verified under `STRIPE_WEBHOOK_SECRET`,
+makes the saved card the customer's default, links the workspace's
+Metronome customer and contract to Stripe from the start of the current
+period, and records the Stripe customer; it keeps a default card after a
+Portal change, and sets `workspace_billing.blocked_at` while an invoice is
+marked uncollectible, clearing it once one is paid.
 
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and

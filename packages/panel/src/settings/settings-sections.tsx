@@ -1,3 +1,4 @@
+import { CLOUD_ENVIRONMENT_HEAD } from "@repo/features/cloud-environment-words";
 import { MACHINES_WORDS } from "@repo/features/machines-settings-words";
 import { SKILLS_LINE, workspaceGroupTitle } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -111,6 +112,11 @@ function workspaceShown(input: SettingsSearchInput): boolean {
   return input.workspace !== undefined;
 }
 
+/** Whether the workspace Settings shows has billing on and the reader manages it, as every Billing section needs. */
+function billingShown(input: SettingsSearchInput): boolean {
+  return workspaceShown(input) && input.billing === true;
+}
+
 /** Whether an account is signed in, as every account section needs. */
 function accountDrawn(input: SettingsSearchInput): boolean {
   return input.accountDrawn;
@@ -124,6 +130,8 @@ function accountDrawn(input: SettingsSearchInput): boolean {
 export const SECTION = {
   MEMBERS: SETTINGS_SECTION.MEMBERS,
   WORKSPACE_CONNECTIONS: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+  BILLING_USAGE: SETTINGS_SEARCH_ROW.BILLING_USAGE,
+  BILLING_STATUS: SETTINGS_SEARCH_ROW.BILLING_STATUS,
   ENVIRONMENT_SANDBOX: SETTINGS_SEARCH_ROW.ENVIRONMENT_SANDBOX,
   ENVIRONMENT_VARIABLES: SETTINGS_SEARCH_ROW.ENVIRONMENT_VARIABLES,
   ENVIRONMENT_INSTALL: SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL,
@@ -197,31 +205,45 @@ const SETTINGS_SECTIONS = {
     words: "integrations GitHub repositories connect choose manage disconnect organization",
     drawn: workspaceShown,
   },
+  [SECTION.BILLING_USAGE]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.BILLING,
+    head: "Usage",
+    words: "billing usage this month sandbox included free allowance owed cost spend",
+    drawn: billingShown,
+  },
+  [SECTION.BILLING_STATUS]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.BILLING,
+    head: "Billing",
+    words: "billing set up manage card payment invoices stripe portal failed blocked",
+    drawn: billingShown,
+  },
   [SECTION.ENVIRONMENT_SANDBOX]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Sandbox",
+    head: CLOUD_ENVIRONMENT_HEAD.SANDBOX,
     words: `sandbox size vcpus cpu cores memory ram gb machine larger bigger faster ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_VARIABLES]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Variables",
+    head: CLOUD_ENVIRONMENT_HEAD.VARIABLES,
     words: `environment variables env vars secrets ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_INSTALL]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Install software",
+    head: CLOUD_ENVIRONMENT_HEAD.INSTALL,
     words: `install script sudo apt packages tools ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_SETUP]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Setup scripts",
+    head: CLOUD_ENVIRONMENT_HEAD.SETUP,
     words: `setup script repository checkout ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },

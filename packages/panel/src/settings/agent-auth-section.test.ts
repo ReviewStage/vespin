@@ -34,6 +34,7 @@ import {
 } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handHostReads, handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { ToastHost } from "../toast.js";
 import { AgentConnectSection } from "./agent-auth-section.js";
 import { AgentsPage } from "./agents-page.js";
 
@@ -242,6 +243,22 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       deliverKeys({ rows: held });
 
       return Promise.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: held }));
+    case ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE: {
+      // A Claude plan's provider answers a fresh reading; a Codex plan's answers nothing, so the service keeps what it held.
+      const { subscriptionId } = request.payload;
+
+      held = {
+        ...held,
+        subscriptions: subscriptions.map((one) =>
+          one.id === subscriptionId && one.kind === PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN
+            ? { ...one, usageHeardAt: AT + 1 }
+            : one,
+        ),
+      };
+
+      return written(held);
+    }
+
     case ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT:
       return Promise.resolve(done({ ...held, resetCredit: RESET_CREDIT_OUTCOME.RESET }));
     default:
@@ -298,6 +315,17 @@ async function mount(
   await vi.waitFor(() => assert.equal(harnessRowsStand(container), true));
 
   return container;
+}
+
+/** The window's toasts, mounted beside the page, and the words they stand with. */
+function mountToasts(): () => string {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(withQueryClient(createElement(ToastHost))));
+
+  return () =>
+    [...document.querySelectorAll(".ui-toast")].map((toast) => toast.textContent).join("|");
 }
 
 /** Setup's Connect an agent, and whether either harness stood connected after each answer. */
@@ -513,7 +541,7 @@ test("each card opens on its harness and its Add; each credential says how it st
   assert.ok(button(credential(attention, "ana@work.test"), "Reconnect"));
   leave();
 
-  // A plan at its limit says until when, its bar full in the attention ink; only Codex's ⋯ offers Manage usage in ChatGPT, which opens ChatGPT's usage settings.
+  // A plan at its limit says no words, its bar full in the attention ink; only Codex's ⋯ offers Manage usage in ChatGPT, which opens ChatGPT's usage settings.
   held = {
     keys: [],
     subscriptions: [
@@ -526,14 +554,9 @@ test("each card opens on its harness and its Add; each credential says how it st
     ],
   };
   const limited = await mount();
-  await vi.waitFor(() =>
-    assert.deepEqual(lineOf(credential(limited, "Claude plan")), needsHand("At its limit")),
-  );
-  assert.equal(meterOf(credential(limited, "Claude plan")), "attention");
-  assert.match(
-    lineOf(credential(limited, "ana@work.test"))?.words ?? "",
-    /^At its limit, back at /u,
-  );
+  await vi.waitFor(() => assert.equal(meterOf(credential(limited, "Claude plan")), "attention"));
+  assert.equal(lineOf(credential(limited, "Claude plan")), undefined);
+  assert.equal(lineOf(credential(limited, "ana@work.test")), undefined);
 
   await choose(credential(limited, "ana@work.test"), "ana@work.test", "Manage usage in ChatGPT");
   assert.deepEqual(sentOf(ACT_KIND.WEB_OPEN), [{ url: "https://chatgpt.com/settings/usage" }]);
@@ -571,6 +594,29 @@ test("a Codex plan with room offers its resets as one press, whose question list
   );
 });
 
+test("each plan's ⋯ offers Refresh usage, which asks the service for that plan's usage and says whether it brought back a newer reading", async () => {
+  held = {
+    keys: [],
+    subscriptions: [
+      { ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.VERIFIED },
+      { ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.VERIFIED },
+    ],
+  };
+  const page = await mount();
+  await vi.waitFor(() => credential(page, "ana@work.test"));
+
+  const toasts = mountToasts();
+
+  await choose(credential(page, "Claude plan"), "Claude plan", "Refresh usage");
+  await vi.waitFor(() => assert.match(toasts(), /Usage refreshed/u));
+  await choose(credential(page, "ana@work.test"), "ana@work.test", "Refresh usage");
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE), [
+    { subscriptionId: CLAUDE_PLAN.id },
+    { subscriptionId: "chatgpt-1" },
+  ]);
+  await vi.waitFor(() => assert.match(toasts(), /Couldn't refresh usage/u));
+});
+
 test("each harness's card stands where a link to its section lands", async () => {
   const page = await mount();
 
@@ -582,7 +628,7 @@ test("each harness's card stands where a link to its section lands", async () =>
   assert.ok(landed(SETTINGS_SECTION.CODEX).contains(credential(page, "Codex")));
 });
 
-test("another Claude plan joins the bottom, numbered by when it was added, renamed in place, and reordered from its menu", async () => {
+test("another Claude plan joins the bottom, numbered by when it was added, and renamed in place", async () => {
   held = {
     keys: [],
     subscriptions: [{ ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.LIMIT_REACHED }],
@@ -616,21 +662,9 @@ test("another Claude plan joins the bottom, numbered by when it was added, renam
     },
   ]);
   await vi.waitFor(() => assert.ok(labels(page).includes("Personal Max")));
-
-  await choose(credential(page, "Personal Max"), "Personal Max", "Move up");
-  assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTIONS_REORDER), [
-    {
-      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      subscriptionIds: ["claude-2", "claude-1"],
-    },
-  ]);
-  await vi.waitFor(() =>
-    assert.deepEqual(labels(page).slice(1, 3), ["Personal Max", "Claude plan 1"]),
-  );
 });
 
-test("API keys stand in their plans' order, Add offering another, which joins the bottom, and each is renamed in place and moved from its ⋯ as a plan is", async () => {
+test("API keys stand in their plans' order, Add offering another, which joins the bottom, and each is renamed in place as a plan is", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [CLAUDE_PLAN] };
   const page = await mount();
   await vi.waitFor(() =>
@@ -663,18 +697,6 @@ test("API keys stand in their plans' order, Add offering another, which joins th
   ]);
   await vi.waitFor(() => assert.ok(labels(page).includes("Team credits")));
   assert.deepEqual(lineOf(credential(page, "Team credits")), plain(`API key · sk-ant-…wxyz`));
-
-  await choose(credential(page, "Team credits"), "Team credits", "Move up");
-  assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTIONS_REORDER), [
-    {
-      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      subscriptionIds: ["key-anthropic", "claude-1", "key-anthropic-2"],
-    },
-  ]);
-  await vi.waitFor(() =>
-    assert.deepEqual(labels(page).slice(0, 3), ["Claude", "Team credits", "Claude plan"]),
-  );
 });
 
 test("an API key added from Add opens a masked field under the header, sent once, joining the order, the field going and the focus back on Add; Remove asks first and removes that key", async () => {
@@ -726,7 +748,7 @@ test("an account trying Cursor gets Cursor's card, its Add opening a key's paste
   const header = () => credential(page, "Cursor");
   await press(header(), "Add key to Cursor");
   assert.deepEqual(menuItems(), [], "no plan to choose");
-  assert.ok(header().querySelector('a[href="https://cursor.com/dashboard?tab=integrations"]'));
+  assert.ok(header().querySelector('a[href="https://cursor.com/dashboard/api"]'));
 
   await paste(labeled(header(), "Paste the key"), CURSOR_KEY);
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE), [

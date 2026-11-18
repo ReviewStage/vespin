@@ -11,6 +11,7 @@
 
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { sizeLabel } from "@repo/features/attachment-model";
+import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
@@ -35,6 +36,7 @@ import {
   NOT_RESOLVED,
   REMIND_REFUSED,
 } from "@repo/features/inbox-write-words";
+import type { InboxHeldFile } from "@repo/features/inbox-writes";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
@@ -52,7 +54,7 @@ import {
   selectTaskListStatus,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { BUZZ } from "@repo/ui-native";
+import { BUZZ, heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
@@ -66,6 +68,7 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn } from "./inbox-groups.js";
+import { useInboxShown } from "./inbox-shown.js";
 import {
   refusedWords,
   SETTLE,
@@ -81,7 +84,11 @@ const INBOX_MEDIA_PREFIX = "inbox";
 const INBOX_SCOPE_KEY = "inboxScope";
 
 /** No file of a thread read yet. */
-const NOTHING_READ: ThreadMediaRead = { sources: new Map(), sizes: new Map() };
+const NOTHING_READ: ThreadMediaRead = {
+  sources: new Map(),
+  sizes: new Map(),
+  pictureSizes: new Map(),
+};
 
 /** How one close of a batch resolve came back: taken, answered but not taken, as for a thread settled already, or never answered. */
 const CLOSE_WENT = {
@@ -191,16 +198,82 @@ export function useInboxListing(view: {
   }, [keep, groups, readerId, feed, show, search, chosen]);
 }
 
+/** The threads either side of the thread in front, by id, and how its screen opens one; none at an end. */
+export interface FrontSteps {
+  readonly previous?: string | undefined;
+  readonly next?: string | undefined;
+  readonly go: (id: string) => void;
+}
+
+/** No thread in front to step from. */
+const NO_STEPS: FrontSteps = { go: () => undefined };
+
+/** The steps in front, with the screen that stands them; none where no screen does. */
+interface StoodSteps {
+  readonly owner: symbol | undefined;
+  readonly steps: FrontSteps;
+}
+
+/**
+ * The steps the thread in front offers, which the screen drawing it stands
+ * and the iPad's K and J read. Note that it holds only what that screen draws
+ * now, kept by it and told to every reader as it moves, rather than a list's
+ * order kept for later, so a search or a scope the screen narrows narrows the
+ * steps too, and a screen covered or gone takes its steps with it.
+ */
+const frontSteps = heldValue<StoodSteps>({ owner: undefined, steps: NO_STEPS });
+
+/** Stands `steps` as the front's for `owner`, or takes them down where `steps` is none and `owner` still stands them, telling every reader. */
+function standFrontSteps(owner: symbol, steps: FrontSteps | undefined): void {
+  if (steps === undefined && frontSteps.read().owner !== owner) return;
+  frontSteps.set(steps === undefined ? { owner: undefined, steps: NO_STEPS } : { owner, steps });
+}
+
+/**
+ * Stands the threads either side of the thread a screen draws as the steps
+ * in front while it is `shown`, opening one through `go`, and takes them down
+ * as it is covered or leaves, unless another screen stood its own since.
+ */
+export function useStandFrontSteps(
+  steps: { readonly previous?: string | undefined; readonly next?: string | undefined },
+  go: (id: string) => void,
+  shown: boolean,
+): void {
+  const [owner] = useState(() => Symbol("front steps"));
+  // Note that the screen's latest way to open a thread is read at the press, so the steps stand anew only as the threads either side move.
+  const latestGo = useRef(go);
+  useEffect(() => {
+    latestGo.current = go;
+  });
+
+  const { previous, next } = steps;
+  useEffect(() => {
+    if (!shown) return;
+    standFrontSteps(owner, { previous, next, go: (id) => latestGo.current(id) });
+
+    return () => standFrontSteps(owner, undefined);
+  }, [owner, shown, previous, next]);
+}
+
+/** The steps the thread in front offers, read anew as its screen stands them. */
+export function useFrontSteps(): FrontSteps {
+  return useHeldValue(frontSteps, (stood) => stood.steps);
+}
+
 /**
  * How many threads wait on the reader, which the Inbox's tab carries, as the
  * panel's Inbox counts them (`waitsOnReaderNow`): every open thread that is
  * theirs and not its agent's turn, a notice among them, but one whose
- * reminder is still ahead.
+ * reminder is still ahead; none while the member turned the Inbox off,
+ * since no Inbox stands to carry it.
  */
 export function useInboxBadge(): number {
   const groups = useInboxGroups();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  const shown = useInboxShown();
   const now = Date.now();
+
+  if (!shown) return 0;
 
   return groups.reduce(
     (count, { items }) =>
@@ -672,6 +745,8 @@ interface ThreadMediaRead {
   /** What each file is drawn from, by its attachment: an address once read, `null` once its read failed, and absent while it is on its way. */
   readonly sources: ReadonlyMap<string, string | null>;
   readonly sizes: ReadonlyMap<string, string>;
+  /** The size each picture's header states, in pixels, by its attachment, which it stands at before it decodes. */
+  readonly pictureSizes: ReadonlyMap<string, ImageDimensions>;
 }
 
 /** A thread's files as read, and what reads one that failed again. */
@@ -702,6 +777,29 @@ function sourceOf(
   }
 }
 
+/** A picture's size in pixels, as its header states it, read from a file the service answered; none for any other kind of file. */
+function readPictureSize(each: InboxMessageMedia, base64: string): ImageDimensions | undefined {
+  return each.kind === INBOX_MEDIA.PICTURE ? base64PictureSize(base64) : undefined;
+}
+
+/** The files read with one more landed: what it is drawn from, its size in words, and a picture's size in pixels, as its header states it. */
+function withRead(
+  held: ThreadMediaRead,
+  each: InboxMessageMedia,
+  source: string,
+  base64: string,
+  pictureSize: ImageDimensions | undefined,
+): ThreadMediaRead {
+  return {
+    sources: new Map(held.sources).set(each.attachmentId, source),
+    sizes: new Map(held.sizes).set(each.attachmentId, sizeLabel(base64)),
+    pictureSizes:
+      pictureSize === undefined
+        ? held.pictureSizes
+        : new Map(held.pictureSizes).set(each.attachmentId, pictureSize),
+  };
+}
+
 /**
  * What each of a thread's files is drawn from, by its attachment, read once
  * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
@@ -723,6 +821,7 @@ function sourceOf(
 export function useThreadMedia(
   itemId: string | undefined,
   media: readonly InboxMessageMedia[],
+  pending?: (itemId: string, attachmentId: string) => InboxHeldFile | undefined,
 ): ThreadFiles {
   const acts = useHostActs();
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
@@ -755,10 +854,23 @@ export function useThreadMedia(
 
         if (asked.current.itemId !== itemId) return;
         setRead((held) => ({
+          ...held,
           sources: new Map(held.sources).set(each.attachmentId, null),
-          sizes: held.sizes,
         }));
       };
+
+      // Note that a file of a reply still on its way is drawn from the reply's own bytes, since the service names its files only once a read carries the reply.
+      const held = pending?.(itemId, each.attachmentId);
+
+      if (held !== undefined) {
+        void sourceOf(each, held)
+          .then((source) => {
+            if (asked.current.itemId !== itemId) return;
+            setRead((was) => withRead(was, each, source, held.base64, held.pictureSize));
+          })
+          .catch(failed);
+        continue;
+      }
 
       // A video or a sound clip is asked for as the MP4 copy iOS's player plays, which only a recording or an Ogg clip is kept with: one kept without it, an older recording's WebM or any other clip, is answered as it is.
       const played = each.kind === INBOX_MEDIA.VIDEO || each.kind === INBOX_MEDIA.AUDIO;
@@ -776,15 +888,13 @@ export function useThreadMedia(
           const source = await sourceOf(each, answer);
 
           if (asked.current.itemId !== itemId) return;
-          const size = sizeLabel(answer.base64);
-          setRead((held) => ({
-            sources: new Map(held.sources).set(each.attachmentId, source),
-            sizes: new Map(held.sizes).set(each.attachmentId, size),
-          }));
+          setRead((held) =>
+            withRead(held, each, source, answer.base64, readPictureSize(each, answer.base64)),
+          );
         })
         .catch(failed);
     }
-  }, [acts, itemId, media, retries]);
+  }, [acts, itemId, media, retries, pending]);
 
   const retry = useCallback((attachmentId: string) => {
     asked.current.ids.delete(attachmentId);
@@ -792,10 +902,34 @@ export function useThreadMedia(
       const sources = new Map(held.sources);
       sources.delete(attachmentId);
 
-      return { sources, sizes: held.sizes };
+      return { ...held, sources };
     });
     setRetries((count) => count + 1);
   }, []);
 
-  return { ...read, retry };
+  // Note that a picture of a reply still held is drawn from its bytes, at the size read from its header as it was sent, in the render that first draws it, rather than after the read above lands, so its bubble never stands as a spinner or at another shape first.
+  const drawn = useMemo(
+    () =>
+      media.reduce((was, each) => {
+        const bytes =
+          itemId === undefined ||
+          each.kind !== INBOX_MEDIA.PICTURE ||
+          read.sources.has(each.attachmentId)
+            ? undefined
+            : pending?.(itemId, each.attachmentId);
+
+        return bytes === undefined
+          ? was
+          : withRead(
+              was,
+              each,
+              `data:${bytes.contentType};base64,${bytes.base64}`,
+              bytes.base64,
+              bytes.pictureSize,
+            );
+      }, read),
+    [itemId, media, pending, read],
+  );
+
+  return { ...drawn, retry };
 }

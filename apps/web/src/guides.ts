@@ -22,7 +22,7 @@ export const LLMS_TEXT_FILE = "llms.txt";
 const RELATED_FALLBACK_COUNT = 3;
 
 /** What `llms.txt` says the product is: the home page's own description (`index.html`). */
-const LLMS_SUMMARY = `${PRODUCT_NAME} is an inbox for all your coding agents. They post to it when they need you, and you answer them there.`;
+const LLMS_SUMMARY = `${PRODUCT_NAME} is where your team and its coding agents work through every task together.`;
 
 /** The heading a guide's FAQ stands under, on its page and in its Markdown copy. */
 export const GUIDE_FAQ_HEADING = "Frequently asked questions";
@@ -248,10 +248,15 @@ export function guideMarkdown(guide: Guide): GuideText {
 const llmsLink = (title: string, url: string, about: string) => `- [${title}](${url}): ${about}`;
 
 /**
- * The site's `llms.txt` (llmstxt.org): what the product is, then every guide's
- * Markdown copy, newest first, and the site's other pages an answer engine
- * may want. Generated from the same guides the prerender writes, so a new
- * guide is listed by the build that publishes it.
+ * The site's `llms.txt` (llmstxt.org): what the product is, then the docs a
+ * coding agent needs to set up a machine or the app, every guide's Markdown copy,
+ * newest first, and the site's other pages an answer engine may want.
+ * Generated from the same guides the prerender writes, so a new guide is
+ * listed by the build that publishes it.
+ *
+ * Note that the machine's line carries the install command itself, because
+ * an agent asked to set up a machine should run that script and never reach
+ * for the Mac app (`apps/docs/machines.mdx`).
  */
 export function llmsText(guides: readonly Guide[]): string {
   const listed = guidesInOrder(guides).map((guide) =>
@@ -263,13 +268,26 @@ export function llmsText(guides: readonly Guide[]): string {
     "",
     `> ${LLMS_SUMMARY}`,
     "",
+    "## Docs",
+    "",
+    llmsLink(
+      "Set up a machine",
+      `${LINK_ORIGIN}/docs/machines.md`,
+      `Make a Linux server or a Mac run your agents: run \`curl -fsSL ${LINK_ORIGIN}/install.sh | sh\` on it as the user who runs them, without sudo, and have the person approve the code it prints. It needs no ${PRODUCT_NAME} app.`,
+    ),
+    llmsLink(
+      "Install",
+      `${LINK_ORIGIN}/docs/install.md`,
+      "The Mac app and the web app, and connecting an agent and GitHub.",
+    ),
+    llmsLink("All docs", `${LINK_ORIGIN}/docs/llms.txt`, "Every docs page, as Markdown."),
+    "",
     "## Guides",
     "",
     ...listed,
     "",
     "## Optional",
     "",
-    llmsLink("Docs", `${LINK_ORIGIN}/docs`, `How to install and use ${PRODUCT_NAME}.`),
     llmsLink(
       "Changelog",
       `${LINK_ORIGIN}/changelog`,

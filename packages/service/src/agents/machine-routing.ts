@@ -1,7 +1,7 @@
 /**
  * machine-routing.ts -- which machine an agent's terminal command or action on an app goes to, and why none where it can go nowhere.
  *
- * Three rules decide it. First, whose machines count: the owner's always,
+ * Two rules decide it. First, whose machines count: the owner's always,
  * the task's assignee or, where it has none, its agent's starter
  * (`machineOwnerOf`), and a teammate's only while they follow the task with
  * their "Let agents here use my machines" switch on; a local agent's own
@@ -11,24 +11,22 @@
  * apps is not off. A Mac whose app never carried that switch up keeps it on
  * the Mac itself, so an action on an app may go to it and be refused there.
  *
- * Second, which machine: the one the call names by id; else the agent's
- * own pick (`agent.target_device_id`); else, for a local agent's action on
- * an app, the machine it runs on; else the owner's default machine, as they
- * set it in Settings › Machines (`isDefaultMachine`), read at each call so
- * a change there is followed at once. A machine so chosen that cannot take
- * the call refuses it, rather than moving it to another without a word,
- * and nothing rewrites a pick: a reassignment that leaves one out of reach
- * refuses the next call. A refusal lists the machines that could take it,
- * each by its id: in words for the model, and as data (`why`, `others`) for
- * the transcript, which says why in its own words and offers each to make
- * the agent's pick.
+ * Second, which machine: the agent's own pick (`agent.target_device_id`),
+ * which a member sets from its composer or a refusal's card; else the
+ * owner's default machine, as they set it in Settings › Machines
+ * (`isDefaultMachine`), read at each call so a change there is followed at
+ * once. A call names no machine of its own. A machine so chosen that
+ * cannot take the call refuses it, rather than moving it to another without
+ * a word, and nothing rewrites a pick: a reassignment that leaves one out of
+ * reach refuses the next call. A refusal lists the machines that could take
+ * it: in words for the model, and as data (`why`, `others`) for the
+ * transcript, which says why in its own words and offers each to make the
+ * agent's pick.
  *
- * Third, a local agent runs no terminal command on its own machine through
- * a call, since its own shell runs there already; such a call is refused
- * however it got there. A Mac from before machines claimed commands listens
- * as its account alone, so where the owner's default is out of reach and
- * none of the owner's machines listens as a device but the account does,
- * the call is queued for the account, as it was before.
+ * Third, a Mac from before machines claimed commands listens as its
+ * account alone, so where the owner's default is out of reach and none of
+ * the owner's machines listens as a device but the account does, the call
+ * is queued for the account, as it was before.
  */
 
 import {
@@ -172,9 +170,9 @@ function routed(machine: CommandMachine): RoutedMachine {
   };
 }
 
-/** A machine as a refusal lists it: its name, its owner's, and the id a call names it by. */
+/** A machine as a refusal lists it: its name and its owner's. */
 function listed(machine: CommandMachine): string {
-  return `${machine.name} (${machine.ownerName}), id "${machine.id}"`;
+  return `${machine.name} (${machine.ownerName})`;
 }
 
 /** The machines that could take the call, but the one refused. */
@@ -182,11 +180,11 @@ function othersThan(reachable: readonly CommandMachine[], refused?: CommandMachi
   return reachable.filter((machine) => machine.id !== refused?.id);
 }
 
-/** The machines that could take the call, as a refusal ends: named, with how to choose one; a note that there are none otherwise. */
+/** The machines that could take the call, as a refusal ends: named, with who may choose one; a note that there are none otherwise. */
 function othersWords(rest: readonly CommandMachine[]): string {
   if (rest.length === 0) return " No other machine can take it now.";
 
-  return ` It can go to ${rest.map(listed).join("; ")}: pass one's id in \`machine\`.`;
+  return ` It could go to ${rest.map(listed).join("; ")}, once a member makes one this agent's machine from its composer or this call's card.`;
 }
 
 /** A call refused for the reason given, in the model's words and as data, naming the machines that could take it but the one refused. */
@@ -206,19 +204,11 @@ function refusal(
   };
 }
 
-/** Why the machine given cannot take a call of the kind given from an agent running on the machine of the id given, none where it runs on none, as data and in the model's words; none where it can. */
+/** Why the machine given cannot take a call of the kind given, as data and in the model's words; none where it can. */
 function whyNot(
   machine: Candidate,
   kind: MachineCommandKind,
-  ownId: string | null,
 ): { readonly code: MachineUnreached; readonly words: string } | undefined {
-  if (kind === MACHINE_COMMAND_KIND.SHELL && machine.id === ownId) {
-    return {
-      code: MACHINE_UNREACHED.OWN_SHELL,
-      words: `Not run: you run on ${machine.name} yourself, so run the command from your own shell.`,
-    };
-  }
-
   if (!machine.lets) {
     return {
       code: MACHINE_UNREACHED.NOT_LET,
@@ -251,29 +241,26 @@ function whyNot(
   return undefined;
 }
 
-/** How a call is routed: its kind, the machine it names, whether a Mac of an account listens as its account alone, as one from before machines claimed does, and why it went nowhere where none of the owner's machines could take it. */
+/** How a call is routed: its kind, whether a Mac of an account listens as its account alone, as one from before machines claimed does, and why it went nowhere where none of the owner's machines could take it. */
 export interface RouteAsk {
   readonly kind: MachineCommandKind;
-  readonly machineId?: string | undefined;
   readonly accountListening: (userId: string) => TaskStoreEffect<boolean>;
   readonly noMachine: string;
 }
 
 /**
- * Where a call made in the conversation given goes: the machine it names,
- * else the agent's pick, else a local agent's own machine for an action on
- * an app, else the owner's default machine, as the module says.
+ * Where a call made in the conversation given goes: the agent's pick, else
+ * the owner's default machine, as the module says.
  */
 export function routeOf(
   target: ConversationTarget,
-  { kind, machineId, accountListening, noMachine }: RouteAsk,
+  { kind, accountListening, noMachine }: RouteAsk,
 ): TaskStoreEffect<MachineRoute> {
   return Effect.gen(function* () {
     const routing = yield* machineRoutingOf(target);
     const candidates = yield* candidatesOf(routing);
-    const whyNotHere = (machine: Candidate) => whyNot(machine, kind, routing.deviceId);
+    const whyNotHere = (machine: Candidate) => whyNot(machine, kind);
     const reachable = candidates.filter((machine) => whyNotHere(machine) === undefined);
-    const byId = (id: string | null) => candidates.find((machine) => machine.id === id);
 
     const to = (machine: Candidate): MachineRoute => {
       const why = whyNotHere(machine);
@@ -283,23 +270,9 @@ export function routeOf(
         : refusal(why, reachable, machine);
     };
 
-    if (machineId !== undefined) {
-      const named = byId(machineId);
-
-      if (named !== undefined) return to(named);
-
-      return refusal(
-        {
-          code: MACHINE_UNREACHED.UNKNOWN_MACHINE,
-          words: `Not run: no machine this task's agents may use has the id ${JSON.stringify(machineId)}. Leave \`machine\` out to send it where your calls go by default.`,
-        },
-        reachable,
-      );
-    }
-
     // Note that a pick that cannot take the call refuses it, since moving it to another machine without a word could run it where the developer didn't mean.
     if (routing.targetDeviceId !== null) {
-      const picked = byId(routing.targetDeviceId);
+      const picked = candidates.find((machine) => machine.id === routing.targetDeviceId);
 
       if (picked !== undefined) return to(picked);
 
@@ -312,21 +285,11 @@ export function routeOf(
       );
     }
 
-    const own = byId(routing.deviceId);
-
-    if (own !== undefined && kind === MACHINE_COMMAND_KIND.COMPUTER) return to(own);
-
     const ownersDefault = candidates.find(
       (machine) => machine.userId === routing.userId && machine.isDefault,
     );
 
-    const defaultWhy = ownersDefault === undefined ? undefined : whyNotHere(ownersDefault);
-
-    // Note that a local agent's own machine never takes its terminal command, so no older Mac listening as the account takes it in its place.
-    if (
-      ownersDefault !== undefined &&
-      (defaultWhy === undefined || defaultWhy.code === MACHINE_UNREACHED.OWN_SHELL)
-    ) {
+    if (ownersDefault !== undefined && whyNotHere(ownersDefault) === undefined) {
       return to(ownersDefault);
     }
 

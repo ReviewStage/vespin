@@ -207,35 +207,175 @@ export function agentStillWriting(status: AgentStatus): boolean {
 }
 
 /**
- * Agents in the order a task's Agents group lists them: those waiting on
- * the developer first, then those still writing, then the newest started,
- * each group's order otherwise kept. An entry with no agent, a draft's, is
- * started at none.
+ * Agents in the order a task's Agents group lists them: the oldest started
+ * first, as its sub-tasks read in the order they were made. An entry with
+ * no agent, a draft's, is started at none.
  */
 export function inAgentListOrder<Entry>(
   entries: readonly Entry[],
-  agentOf: (entry: Entry) => Pick<ListedAgent, "status" | "createdAt"> | undefined,
-  waits: (entry: Entry) => boolean,
+  agentOf: (entry: Entry) => Pick<ListedAgent, "createdAt"> | undefined,
 ): readonly Entry[] {
-  const writing = (entry: Entry) => {
-    const agent = agentOf(entry);
-
-    return agent !== undefined && agentStillWriting(agent.status);
-  };
-
   const started = (entry: Entry) => agentOf(entry)?.createdAt ?? 0;
 
-  return entries.toSorted(
-    (a, b) =>
-      Number(waits(b)) - Number(waits(a)) ||
-      Number(writing(b)) - Number(writing(a)) ||
-      started(b) - started(a),
-  );
+  return entries.toSorted((a, b) => started(a) - started(b));
 }
 
-/** What the Runs on menu, its chips, and an agent's row say of where it runs. */
+/** What a task's Agents tree reads of each agent: who started it, what it was started from, and whether it still works. */
+type TreeAgent = Pick<AgentSummary, "id" | "status" | "startedByAgentId" | "from">;
+
+/** How many of the agents nested under a row have finished, of all of them. */
+export interface StartedAgentsCount {
+  readonly finished: number;
+  readonly total: number;
+}
+
+/** One row of a task's Agents tree: its entry, how deep it stands, and the agents it started, counted, where it started any. */
+export interface AgentTreeRow<Entry> {
+  readonly entry: Entry;
+  readonly depth: number;
+  /** The agents nested under it, every one whether or not they stand open; none where it started none. */
+  readonly started?: StartedAgentsCount | undefined;
+  /** The agents its fold passes by, at every depth under it, while it stands folded; none while it stands open or started none. */
+  readonly folded?: readonly Entry[] | undefined;
+}
+
+/**
+ * The agent an agent stands nested under among those listed: the one that
+ * started it, or, where that one is not listed, the listed agent that
+ * continued it, followed along each continuation, as an orchestrator
+ * continued takes on what the one before it started; none where neither is
+ * listed.
+ */
+function listedStarter(
+  agent: TreeAgent,
+  listed: ReadonlySet<string>,
+  continuedBy: ReadonlyMap<string, string>,
+): string | undefined {
+  let starter = agent.startedByAgentId;
+
+  while (starter !== undefined && !listed.has(starter)) starter = continuedBy.get(starter);
+
+  return starter === agent.id ? undefined : starter;
+}
+
+/** Whether walking up from `id` through `starters` comes back to it, as a loop of starters would, which nothing writes but is cut where it closes. */
+function closesLoop(id: string, starters: ReadonlyMap<string, string>): boolean {
+  const passed = new Set<string>();
+
+  for (let up = starters.get(id); up !== undefined; up = starters.get(up)) {
+    if (up === id || passed.has(up)) return true;
+    passed.add(up);
+  }
+
+  return false;
+}
+
+/**
+ * A task's agents as its Agents group draws them: each nested under the
+ * listed agent that started it (`listedStarter`), to any depth, those under
+ * a row not `open` passed by. Siblings keep the order handed in
+ * (`inAgentListOrder`), and each row at the top stands where the first of
+ * the agents under it, itself among them, stands. A row counts the agents nested
+ * directly under it, and how many of them no longer work, and a row
+ * standing folded names every agent its fold passes by, so what waits on
+ * the developer there can still be said on it. A loop of
+ * starters, which nothing writes, is cut where it closes, its agents
+ * standing at the top.
+ */
+export function agentTree<Entry>(
+  ordered: readonly Entry[],
+  agentOf: (entry: Entry) => TreeAgent | undefined,
+  open: (agentId: string) => boolean,
+): readonly AgentTreeRow<Entry>[] {
+  const listed = new Set<string>();
+  const continuedBy = new Map<string, string>();
+
+  for (const entry of ordered) {
+    const agent = agentOf(entry);
+
+    if (agent === undefined) continue;
+    listed.add(agent.id);
+
+    // Note that a fork stands on its own, so only a continue takes on what the agent before it started.
+    if (agent.from !== undefined && agent.from.messageId === undefined) {
+      continuedBy.set(agent.from.agentId, agent.id);
+    }
+  }
+
+  const starters = new Map<string, string>();
+
+  for (const entry of ordered) {
+    const agent = agentOf(entry);
+    const starter = agent === undefined ? undefined : listedStarter(agent, listed, continuedBy);
+
+    if (agent !== undefined && starter !== undefined) starters.set(agent.id, starter);
+  }
+
+  const under = new Map<string, Entry[]>();
+  const tops: Entry[] = [];
+
+  for (const entry of ordered) {
+    const id = agentOf(entry)?.id;
+    const starter = id === undefined ? undefined : starters.get(id);
+
+    if (id === undefined || starter === undefined || closesLoop(id, starters)) tops.push(entry);
+    else under.set(starter, [...(under.get(starter) ?? []), entry]);
+  }
+
+  const kidsOf = (entry: Entry) => {
+    const id = agentOf(entry)?.id;
+
+    return (id === undefined ? undefined : under.get(id)) ?? [];
+  };
+
+  const everyUnder = (entry: Entry): Entry[] => [entry, ...kidsOf(entry).flatMap(everyUnder)];
+  const rank = new Map(ordered.map((entry, at) => [entry, at]));
+
+  const first = (entry: Entry): number =>
+    Math.min(rank.get(entry) ?? 0, ...kidsOf(entry).map(first));
+
+  const firsts = new Map(tops.map((top) => [top, first(top)]));
+  const rows: AgentTreeRow<Entry>[] = [];
+
+  const draw = (entry: Entry, depth: number) => {
+    const kids = kidsOf(entry);
+    const id = agentOf(entry)?.id;
+
+    if (kids.length === 0) {
+      rows.push({ entry, depth });
+
+      return;
+    }
+
+    const finished = kids.filter((kid) => {
+      const agent = agentOf(kid);
+
+      return agent !== undefined && !agentStillWriting(agent.status);
+    }).length;
+
+    const started = { finished, total: kids.length };
+
+    if (id !== undefined && open(id)) {
+      rows.push({ entry, depth, started });
+
+      for (const kid of kids) draw(kid, depth + 1);
+
+      return;
+    }
+
+    rows.push({ entry, depth, started, folded: kids.flatMap(everyUnder) });
+  };
+
+  for (const top of tops.toSorted((a, b) => (firsts.get(a) ?? 0) - (firsts.get(b) ?? 0))) {
+    draw(top, 0);
+  }
+
+  return rows;
+}
+
+/** What the Machine menu, its chips, and an agent's row say of where it runs. */
 export const RUNS_ON_WORDS = {
-  LABEL: "Runs on",
+  LABEL: "Machine",
   CLOUD: "Cloud",
   ONLINE: "Online",
   OFFLINE: "Offline",

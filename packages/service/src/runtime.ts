@@ -22,6 +22,11 @@ import { workspaceDriveBuildsFromEnvironment } from "./agents/workspace-drive-bu
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { signInRevocationFromEnvironment } from "./auth/sign-in-revocation.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
+import { billingEnvironment } from "./billing/billing-environment.js";
+import {
+  endedSessionsChargedOnDelete,
+  usageQueuesFromEnvironment,
+} from "./billing/usage-queues.js";
 import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
 import { productAnalyticsFromEnvironment } from "./events/server-events.js";
@@ -36,6 +41,7 @@ import { cursorModelCatalogLayer } from "./providers/cursor-models.js";
 import { modelCatalogLayer } from "./providers/model-catalog.js";
 import { apnsSenderFromEnvironment } from "./push/apns.js";
 import { apnsHttp2Transport } from "./push/apns-http2.js";
+import { slackAppFromEnvironment } from "./slack/slack-app.js";
 import { slackBotFromEnvironment } from "./slack/slack-bot.js";
 import { syncFromEnvironment } from "./sync/hub.js";
 import { sentryAppFromEnvironment } from "./triggers/sentry/sentry-app-config.js";
@@ -90,6 +96,22 @@ const slackBot = slackBotFromEnvironment.pipe(
 const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transport));
 
 /**
+ * `UsageQueues` publishes each sandbox's usage check and each charge's send
+ * (`billing/usage-queues.ts`); off Vercel it delivers them in this process,
+ * over the ledger, the edge's sandboxes, and Metronome it is built on here.
+ */
+const usageQueues = usageQueuesFromEnvironment.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      webSqlClient,
+      FetchHttpClient.layer,
+      billingEnvironment,
+      Layer.effect(Sandbox, Effect.service(Sandbox)),
+    ),
+  ),
+);
+
+/**
  * The services every web function's and every agent's effects run against. A
  * function reaches this layer only through its edge's runtime, so a service
  * added here is built once per instance rather than once per invocation.
@@ -103,8 +125,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  *
  * `IntegrationConnect` is the one place each integration's connector UID and
  * allowlist are read, for the account routes that connect and disconnect an account and
- * the agents that read its tokens alike. `SlackBot` is the one place the
- * bot's own connector is read (`slack/slack-bot.ts`).
+ * the agents that read its tokens alike. `SlackBot` opens each workspace's
+ * own bot token (`slack/slack-bot.ts`), and `SlackApp` is the one place our
+ * own Slack app's client and signing secrets are (`slack/slack-app.ts`).
  *
  * `SettledTurnListener` is here because the store writer tells it of every
  * coding agent turn it settles, on whichever function the settle ran: it
@@ -146,6 +169,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  * `InvitationMail` is the one place the Resend key and the sender a
  * workspace invitation is emailed from are read (`accounts/invitation-mail.ts`).
  *
+ * `BillingEnvironment` is the one place the Metronome account usage is sent
+ * to, and its webhook's secret, are read (`billing/billing-environment.ts`).
+ *
  * `ApnsSender` is the one place the deployment's APNs key is read
  * (`push/apns.ts`), over one HTTP/2 connection per Apple gateway that the
  * instance keeps for its life (`push/apns-http2.ts`), so every push an
@@ -176,9 +202,13 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
 export const webServices = Layer.mergeAll(
   // The sandboxes are the edge's to pick, which provides its provider's adapter beneath these.
   Layer.effect(Sandbox, Effect.service(Sandbox)),
+  // A deleted sandbox's ended sessions, read by the adapter just before its delete, are charged to the ledger and published to be sent.
+  endedSessionsChargedOnDelete.pipe(Layer.provide(Layer.merge(webSqlClient, usageQueues))),
+  usageQueues,
   FetchHttpClient.layer,
   webSqlClient,
   hostedEnvironment,
+  billingEnvironment,
   githubApp,
   signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(
@@ -189,6 +219,7 @@ export const webServices = Layer.mergeAll(
   sentryAppFromEnvironment,
   integrationConnectFromEnvironment,
   slackBot,
+  slackAppFromEnvironment,
   webLogger,
   syncFromEnvironment,
   bearerCallersLayer,

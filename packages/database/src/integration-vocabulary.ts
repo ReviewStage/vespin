@@ -2,6 +2,9 @@
  * integration-vocabulary.ts -- the status words of an integration row, declared on the wire below this package
  * (`@repo/features/integration-row-wire`) because the admin pages draw them too.
  */
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+
 export {
   INTEGRATION_ROW_STATUS,
   type IntegrationRowStatus,
@@ -20,3 +23,16 @@ export const INTEGRATION_INSTALLATION_STATUS = {
 
 export type IntegrationInstallationStatus =
   (typeof INTEGRATION_INSTALLATION_STATUS)[keyof typeof INTEGRATION_INSTALLATION_STATUS];
+
+/**
+ * The providers an install intent carries an install to: each trigger's app
+ * (`@repo/features/trigger-catalog`), and our Slack app, which an owner or
+ * admin installs into the workspace's Slack for its bot.
+ */
+export const INSTALL_INTENT_PROVIDER = {
+  ...TRIGGER_PROVIDER,
+  SLACK: INTEGRATION_PROVIDER.SLACK,
+} as const;
+
+export type InstallIntentProvider =
+  (typeof INSTALL_INTENT_PROVIDER)[keyof typeof INSTALL_INTENT_PROVIDER];

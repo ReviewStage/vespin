@@ -512,17 +512,9 @@ test("a new automation set to a GitHub event takes its settings as switches in t
   await settle();
 
   pick(page, "Type", "GitHub event");
-  assert.equal(
-    pickerDetail(page, "Type"),
-    "When a pull request by people is opened, marked ready, or pushed to in acme/ledger",
-  );
   act(() => switchNamed("From Vespin's agents").click());
   assert.equal(isOn("Skip drafts"), true);
   assert.equal(isOn("Include forks"), false);
-  assert.equal(
-    pickerDetail(page, "Type"),
-    "When a pull request by people or Vespin's agents is opened, marked ready, or pushed to in acme/ledger",
-  );
   type(page.querySelector("input[aria-label='Automation name']"), "Code review");
   writePrompt(page, "Review this pull request.");
   act(() => button("Create automation").click());
@@ -690,7 +682,7 @@ test("a new secret, asked for first, is shown once on the page that asked, and i
   assert.deepEqual(world.copied, [hooked.webhookUrl]);
   assert.deepEqual(world.secretsAsked, [hooked.id]);
   assert.equal(copyFieldValue(page, "secret")?.textContent, ROTATED_SECRET);
-  assert.match(page.textContent ?? "", /Don't send secrets in the body/u);
+  assert.match(page.textContent ?? "", /keep secrets out of it/u);
 
   act(() => button("Automations").click());
   await settle();
@@ -707,8 +699,7 @@ test("a webhook not yet saved as one says it gets its address once it is saved",
   pick(page, "Type", "Webhook");
 
   assert.equal(copyFieldValue(page, "address"), undefined);
-  assert.match(page.textContent ?? "", /Save it as a webhook to get its address/u);
-  assert.equal(pickerDetail(page, "Type"), "When its webhook is called");
+  assert.match(page.textContent ?? "", /Save to get its address and secret\./u);
 });
 
 test("an automation's ⋯ in its editor, its row's right-click in the list, and the right-click of a run each offer Copy link, copying its link under the listed workspace, a run that started no agent included", async () => {
@@ -1195,10 +1186,6 @@ test("a new Sentry automation is made on the event, filters, and levels picked, 
   type(page.querySelector("input[aria-label='Environments']"), "production");
   act(() => button("Fatal").click());
   act(() => button("Error").click());
-  assert.equal(
-    pickerDetail(page, "Type"),
-    "When a new issue is created in Sentry, for web or api, in production, at error or fatal level",
-  );
   assert.equal(
     page.querySelector<HTMLInputElement>("input[aria-label='Projects']")?.value,
     "web, api,",

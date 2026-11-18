@@ -821,11 +821,11 @@ test("a line's count stands every thread on the line under it, the first open", 
 
 test("a line's count stands centered on the first line its words stand on, though they wrap onto the next", () => {
   // Note that jsdom lays nothing out, so the marked words are given two line boxes 22px apart, the body at the page's top.
-  const lines = Object.getOwnPropertyDescriptor(Element.prototype, "getClientRects");
-  Element.prototype.getClientRects = function (this: Element) {
-    const marked = this.classList.contains("description-comment-mark");
+  const lines = Object.getOwnPropertyDescriptor(Range.prototype, "getClientRects");
+  Range.prototype.getClientRects = function (this: Range) {
+    const marked = this.startContainer.parentElement?.closest(".description-comment-mark") != null;
 
-    // SAFETY: the marks read their rects by index and length alone, as a DOMRectList is read.
+    // SAFETY: the measure reads the rects by spreading them, as a DOMRectList is read.
     return (marked ? [new DOMRect(40, 100, 300, 20), new DOMRect(0, 122, 200, 20)] : []) as never;
   };
 
@@ -834,7 +834,7 @@ test("a line's count stands centered on the first line its words stand on, thoug
     const count = container.querySelector<HTMLElement>(".comment-count");
     assert.equal(count?.style.top, "110px", "the middle of the first line's box");
   } finally {
-    if (lines !== undefined) Object.defineProperty(Element.prototype, "getClientRects", lines);
+    if (lines !== undefined) Object.defineProperty(Range.prototype, "getClientRects", lines);
   }
 });
 
@@ -1080,7 +1080,7 @@ test("a thread at rest draws its comment's mentions as their chips, as it does o
   );
 });
 
-test("a block a thread covers whole offers no button to start another, and one a thread covers in part keeps it", () => {
+test("a block a thread stands on offers no button to start another, whether it covers the block whole or a word of it", () => {
   const onHeading = threadOn(ID.OPEN, "Approach", "Is this the right order?", {
     scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
     section: "Approach",
@@ -1113,8 +1113,8 @@ test("a block a thread covers whole offers no button to start another, and one a
   const { button, approach, goal, paragraph } = blocks(container);
   assert.ok(button(approach) === null, "the heading a thread covers offers none");
   assert.ok(button(goal), "a heading without one does");
-  assert.ok(button(paragraph), "a paragraph with a thread on one word does");
-  assert.ok(button(approach) === null, "and going back takes it away");
+  assert.ok(button(paragraph) === null, "a paragraph with a thread on one word offers none");
+  assert.ok(button(goal), "and going back to one without brings it again");
 
   for (const root of roots.splice(0)) act(() => root.unmount());
   container.remove();
@@ -1151,6 +1151,34 @@ test("a finger's arrival on a block shows no button, so iOS spends no tap on one
   finger("pointerup");
   act(() => paragraph.click());
   assert.ok(button() !== null, "the tap shows it");
+});
+
+test("the pointer in a gutter beside the column shows the button of the block level with it, as Notion's does", () => {
+  const { container } = wide(() => drawn("page", []));
+
+  const paragraph =
+    [...container.querySelectorAll("p")].find((p) =>
+      p.textContent?.startsWith("Admins can withdraw"),
+    ) ?? assert.fail("the paragraph");
+
+  const body = container.querySelector(".description-body") ?? assert.fail("the column");
+  const gutter = body.parentElement ?? assert.fail("the room around the column");
+  // Note that jsdom lays nothing out, so the column stands at a box of its own and the paragraph is what it draws at every height.
+  vi.spyOn(body, "getBoundingClientRect").mockReturnValue(new DOMRect(200, 0, 720, 1000));
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [paragraph, body],
+  });
+
+  try {
+    act(() => {
+      gutter.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientY: 300 }));
+    });
+    assert.ok(container.querySelector(".comment-block-button button"), "the gutter shows it");
+  } finally {
+    Reflect.deleteProperty(document, "elementsFromPoint");
+    vi.restoreAllMocks();
+  }
 });
 
 test("a thread being started goes on a press away and on Esc, and its words come back as it is started on the same words again", () => {
@@ -1414,7 +1442,7 @@ test("the line a thread's ask leaves is not drawn, since the mention in its word
           actor: DESCRIPTION_COMMENT_ACTOR.MEMBER,
           by: { userId: "u-dean", name: "Dean Stratakos" },
         },
-        asked: { actor: DESCRIPTION_COMMENT_ACTOR.APP },
+        asked: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.id },
         at: 2,
       },
     ],

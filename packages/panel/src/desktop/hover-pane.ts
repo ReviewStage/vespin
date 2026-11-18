@@ -9,6 +9,7 @@
  * keyboard back the same way.
  */
 
+import { isComposingKey } from "@repo/ui/composing-key";
 import type React from "react";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -228,9 +229,11 @@ export function useHoverPane(
   }, [state, focusAt, floatsNow, close, ref]);
   // Note that a floating pane need not hold the keyboard, a peek or one a
   // bare press opened leaving it in the work under it, so Escape is heard at
-  // the window before the work's layers hear it. A key aimed into the pane
-  // is left to its own handler, and one aimed into a menu or a dialog to
-  // that layer, which may have been raised from the pane.
+  // the document as it bubbles: after the field the keyboard stands in, so
+  // an @ list or a composer that takes the key keeps it, and before the
+  // window's own Escape, which stands down for the key marked taken here. A
+  // key aimed into the pane is left to its own handler, and one aimed into a
+  // menu or a dialog to that layer, which may have been raised from the pane.
   useEffect(() => {
     if (!floating) return;
 
@@ -238,16 +241,9 @@ export function useHoverPane(
       const held = ref.current;
       const target = event.target instanceof Element ? event.target : null;
 
-      if (event.key !== "Escape" || event.defaultPrevented) return;
+      if (event.key !== "Escape" || event.defaultPrevented || isComposingKey(event)) return;
 
       if (target !== null && (held?.contains(target) || target.closest(KEY_LAYERS) !== null)) {
-        return;
-      }
-
-      // A pane docked again takes no Escape of the window's.
-      if (held !== null && !floatsNow(held)) {
-        close();
-
         return;
       }
 
@@ -255,10 +251,10 @@ export function useHoverPane(
       close();
     };
 
-    window.addEventListener("keydown", putAway, true);
+    document.addEventListener("keydown", putAway);
 
-    return () => window.removeEventListener("keydown", putAway, true);
-  }, [floating, floatsNow, close, ref]);
+    return () => document.removeEventListener("keydown", putAway);
+  }, [floating, close, ref]);
 
   return {
     ref,
@@ -284,7 +280,8 @@ export function useHoverPane(
       onState(PANE_FLOAT.CLOSED);
     },
     onKeyDown: (event) => {
-      if (event.key !== "Escape" || event.defaultPrevented || !floating) return;
+      if (event.key !== "Escape" || event.defaultPrevented || isComposingKey(event) || !floating)
+        return;
       // Note that the window's layered Escape stands down for a key already taken.
       event.preventDefault();
       returning.current = true;

@@ -2,7 +2,7 @@
  * connect-tab.ts -- a connect's address opened in a tab the press itself opened, since the service names it only once asked, and in this tab, coming back through its landing, where the browser refused one.
  *
  * A connect (an integration's sign-in, the account's GitHub, a workspace's
- * GitHub) asks the service for the address to open, and the
+ * GitHub, a workspace's Add to Slack) asks the service for the address to open, and the
  * browser lets a page open a tab only within a moment of a press, which the
  * answer may arrive after. So the press opens an empty tab at once, while
  * it still may, and the address lands in that tab when it comes, keeping
@@ -75,7 +75,7 @@ interface Press {
 }
 
 export interface ConnectTabs {
-  /** The act port's client with each connect's press, the account's GitHub, an integration's, and a workspace's, opening its empty tab before the act goes out. */
+  /** The act port's client with each connect's press, the account's GitHub, an integration's, a workspace's GitHub, and its Add to Slack, opening its empty tab before the act goes out. */
   readonly portClient: (client: ActPortClient) => ActPortClient;
   /** Opens an address: in the oldest connect's tab while one waits, else as a link. */
   readonly open: (url: string) => void;
@@ -119,6 +119,9 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
     const account = client[TASKS_ACT_KIND.GITHUB_CONNECT];
     const integration = client[INTEGRATION_ACT_KIND.INTEGRATIONS_CONNECT];
     const github = client[WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT];
+    const slack = client[WORKSPACE_ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL];
+    const billingSetup = client[WORKSPACE_ACT_KIND.WORKSPACE_BILLING_SETUP];
+    const billingPortal = client[WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL];
 
     // SAFETY: every procedure the contract names is read off the client, so this answers each one the client does.
     const procedures = Object.fromEntries(
@@ -133,6 +136,12 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
         press(() => integration(...args)),
       [WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT]: (...args: Parameters<typeof github>) =>
         press(() => github(...args)),
+      [WORKSPACE_ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL]: (...args: Parameters<typeof slack>) =>
+        press(() => slack(...args)),
+      [WORKSPACE_ACT_KIND.WORKSPACE_BILLING_SETUP]: (...args: Parameters<typeof billingSetup>) =>
+        press(() => billingSetup(...args)),
+      [WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL]: (...args: Parameters<typeof billingPortal>) =>
+        press(() => billingPortal(...args)),
     };
   };
 

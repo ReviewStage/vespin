@@ -577,7 +577,7 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   /**
    * Whether the CLI keeps the main conversation's prompt cache for an hour
    * rather than five minutes (`CLAUDE_CODE_PROMPT_CACHE_TTL`), for an agent
-   * of the half the service runs it on; a runner from before this key ignores it.
+   * the service runs it on (one paid by an API key); a runner from before this key ignores it.
    */
   promptCacheHour: Schema.optionalKey(Schema.Boolean),
   /** Our coder instructions, appended to Claude Code's own system prompt. */
@@ -718,6 +718,9 @@ const CursorPermissionModeSchema = Schema.Literals([
  * Cursor's id for the agent, which the service mints: the launch resumes it
  * where the store holds it and makes it under that id otherwise.
  */
+/** What the id of a Cursor agent we mint begins with, as the SDK's own local ids do. */
+export const CURSOR_AGENT_PREFIX = "agent-";
+
 export const CursorConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CURSOR),
   cwd: Schema.String,
@@ -725,6 +728,10 @@ export const CursorConfigSchema = Schema.Struct({
   agentId: Schema.optionalKey(Schema.String),
   sdk: Schema.String,
   session: Schema.String,
+  /** The service's id of a line a rewind or a fork at a message dropped: the agent is pointed back at the checkpoint marked before it (`cursor-store.ts`), and resumed as it stands where no mark does. */
+  rewindBefore: Schema.optionalKey(Schema.String),
+  /** Whether the agent resumed is another agent's, which a continued or forked agent resumes as its own under an id the launch mints. */
+  fork: Schema.optionalKey(Schema.Boolean),
   model: CursorModelSelectionSchema,
   /** Our coder instructions, which lead the first message an agent made anew is sent, and the first after its conversation is summarized (`cursor.ts`). */
   instructions: Schema.String,
@@ -1135,10 +1142,22 @@ export const RUNNER_CONTROL = {
   ANSWER_MS: 5 * 1_000,
 } as const;
 
-/** How long a launch holds a message a `result` naming no prompt left unanswered, for the CLI to take it up (`runner.ts`'s `watchUnheard`): five minutes, past the CLI's own retries of a failed model call, which put out no turn output. */
+/**
+ * How long a launch lets its harness say nothing before it gives up on the
+ * turn, the one bound every harness shares: five minutes, past the model
+ * call's own retries, which put out nothing. Claude Code's launch holds a
+ * message a `result` naming no prompt left unanswered this long
+ * (`runner.ts`'s `watchUnheard`); Cursor's lets a run stream nothing this
+ * long while none of its tool calls runs (`cursor.ts`'s `watchSilence`),
+ * since Cursor's SDK retries a stalled or failed call itself and says so to
+ * no one.
+ */
 export const RUNNER_UNANSWERED = {
   SILENCE_MS: 5 * 60 * 1_000,
 } as const;
+
+/** What a Cursor launch whose run went silent past `RUNNER_UNANSWERED.SILENCE_MS` ends `FAILED` with: words the member reads. */
+export const CURSOR_SILENT_DETAIL = `Cursor stopped answering for ${RUNNER_UNANSWERED.SILENCE_MS / 60_000} minutes, so the turn was ended. Send a message to try again.`;
 
 /** The END event; `detail` is the CLI's failure, with the launch's secrets taken out, where it failed; `files` the files the turn it ended changed, as IDLE carries them, where a turn ended with it. */
 export interface RunnerEndEvent {

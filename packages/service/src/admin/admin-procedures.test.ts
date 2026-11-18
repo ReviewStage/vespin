@@ -23,6 +23,7 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminBilling } from "@repo/features/admin-billing-wire";
 import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
 import { ADMIN_ERROR, ADMIN_USERS_SEARCH_MAX_LENGTH } from "@repo/features/admin-wire";
@@ -59,6 +60,7 @@ const RELIABILITY = answerOf<AdminReliability>({ generatedAt: 3 });
 const WORKSPACES = answerOf<AdminWorkspaceList>({ generatedAt: 4 });
 const USER = answerOf<AdminUserDetail>({ generatedAt: 5 });
 const WORKSPACE = answerOf<AdminWorkspaceDetail>({ generatedAt: 6 });
+const BILLING = answerOf<AdminBilling>({ generatedAt: 8 });
 
 /** No signed-in browser session. */
 const SIGNED_OUT = null;
@@ -77,6 +79,7 @@ function seams(asked: string[], viewer: AdminViewer | null = ADMIN): AdminProced
     readCatalog: () => record("catalog", CATALOG),
     readMetrics: (_now, scope, windowDays) => record(`metrics ${scope} ${windowDays}`, METRICS),
     readCost: (_now, scope, windowDays) => record(`cost ${scope} ${windowDays}`, COST),
+    readBilling: (month) => record(`billing ${month}`, BILLING),
     readUsers: (now, scope, viewerId, windowDays, search) =>
       record(
         `users ${scope} ${viewerId} ${windowDays} ${search}`,
@@ -386,6 +389,7 @@ it.effect("each read refuses its own malformed query before its seam is touched"
       ["/api/admin/workspace", refused(400, ADMIN_ERROR.MISSING_WORKSPACE_ID)],
       ["/api/admin/day", refused(400, ADMIN_ERROR.INVALID_DAY)],
       ["/api/admin/day?date=2026-02-30", refused(400, ADMIN_ERROR.INVALID_DAY)],
+      ["/api/admin/billing?month=2026-13", refused(400, ADMIN_ERROR.INVALID_MONTH)],
     ];
 
     for (const [path, expected] of cases) {

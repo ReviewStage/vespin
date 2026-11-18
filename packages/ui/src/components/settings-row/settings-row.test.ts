@@ -8,6 +8,7 @@ import { recordedFailure } from "../../testing/reported-failure.js";
 import { Announcer } from "../announcer/announcer.js";
 import { Button } from "../button/button.js";
 import { Switch } from "../switch/switch.js";
+import { SettingsLinkRow } from "./settings-link-row.js";
 import { SettingsRow } from "./settings-row.js";
 import { SettingsRowsFold } from "./settings-row-fold.js";
 
@@ -18,7 +19,8 @@ const { failure: FAILURE } = recordedFailure();
  * settings-row.test.ts -- a row's words are its control's: its label names
  * the control, its description and a failed write describe it, and the
  * failure marks it invalid and is announced in the region that stood empty
- * before it arrived.
+ * before it arrived; and a row that opens a page is one press named by its
+ * label, before its control, whose own press opens nothing.
  */
 
 declare global {
@@ -294,4 +296,62 @@ test("a row folded under another keeps its own state while the fold is closed", 
 
   expect(closed).toBe("false");
   expect(page.textContent).toContain("Pressed 1");
+});
+
+test("a row that opens a page is one press named by its label, and its control's press opens nothing", () => {
+  const opened: string[] = [];
+
+  const page = mount(
+    createElement(SettingsLinkRow, {
+      label: "Linear",
+      description: "Sign-in expired",
+      onOpen: () => opened.push("Linear"),
+      control: () => createElement(Button, { children: "Reconnect" }),
+    }),
+  );
+
+  const [press, reconnect] = [...page.querySelectorAll("button")];
+  expect(press && wordsOf(press, "aria-labelledby")).toBe("Linear");
+  expect(press && wordsOf(press, "aria-describedby")).toBe("Sign-in expired");
+  expect(reconnect?.textContent).toBe("Reconnect");
+
+  act(() => reconnect?.click());
+  expect(opened).toEqual([]);
+
+  act(() => press?.click());
+  expect(opened).toEqual(["Linear"]);
+});
+
+test("a fold's head row folds from a press on its words, and its controls keep their own presses", () => {
+  const page = mount(
+    createElement(SettingsRowsFold, {
+      label: "Slack settings",
+      head: (chevron: React.ReactNode) =>
+        createElement(SettingsRow, {
+          label: "Slack",
+          description: "Connected",
+          children: () => [
+            createElement(Button, { key: "add", onClick: () => undefined, children: "Add" }),
+            chevron,
+          ],
+        }),
+      rows: createElement(SettingsRow, { label: "General" }),
+    }),
+  );
+
+  const chevron = page.querySelector<HTMLButtonElement>('button[aria-label="Slack settings"]');
+
+  const add = [...page.querySelectorAll("button")].find((each) => each.textContent === "Add");
+
+  const words = [...page.querySelectorAll<HTMLElement>("*")].find(
+    (element) => element.children.length === 0 && element.textContent === "Connected",
+  );
+
+  act(() => words?.click());
+  const opened = chevron?.getAttribute("aria-expanded");
+  act(() => add?.click());
+  const kept = chevron?.getAttribute("aria-expanded");
+  act(() => words?.click());
+
+  expect([opened, kept, chevron?.getAttribute("aria-expanded")]).toEqual(["true", "true", "false"]);
 });

@@ -10,7 +10,7 @@ import {
   updateTask,
 } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openTaskAgent, startTask } from "@repo/database/testing";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { TASK_RECORD_READ, type TaskRecordLiveRows } from "@repo/features/task-record-live";
 import { Duration, Effect, Option, Schema } from "effect";
@@ -124,12 +124,23 @@ it.layer(getTestDB())("a task's record followed live", (it) => {
           code: [],
         });
 
+        // The agents that show the pages, each on the task its page is on.
+        const shower = {
+          kind: PAGE_SHOWER.AGENT,
+          agentId: yield* openTaskAgent(owner, task.workspaceId, task.id),
+        } as const;
+
+        const otherShower = {
+          kind: PAGE_SHOWER.AGENT,
+          agentId: yield* openTaskAgent(owner, other.workspaceId, other.id),
+        } as const;
+
         const shown = Option.getOrThrow(
           yield* writePage(
             owner,
             taskPageOwner(task.id),
             { title: "Invite funnel", html: "<p>One</p>" },
-            { kind: PAGE_SHOWER.APP },
+            shower,
           ),
         );
 
@@ -142,7 +153,7 @@ it.layer(getTestDB())("a task's record followed live", (it) => {
             owner,
             taskPageOwner(task.id),
             { pageId: shown.id, title: "Invite funnel", html: "<p>Two</p>" },
-            { kind: PAGE_SHOWER.APP },
+            shower,
           ),
         );
 
@@ -153,7 +164,7 @@ it.layer(getTestDB())("a task's record followed live", (it) => {
             owner,
             taskPageOwner(other.id),
             { title: "Billing funnel", html: "<p>One</p>" },
-            { kind: PAGE_SHOWER.APP },
+            otherShower,
           ),
         );
         assert.deepEqual(yield* liveRecordOf(stranger, task.id), {

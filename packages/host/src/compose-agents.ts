@@ -59,10 +59,7 @@ import { WRITE_UNTAKEN, writeUntakenOf } from "@repo/features/keyed-write";
 import { commitShaSchema } from "@repo/features/link-grammar";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
 import type { ModelsAnswer } from "@repo/features/models-wire";
-import {
-  PULL_REQUEST_CHAPTERS_READ,
-  REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
-} from "@repo/features/pull-request-chapters-live";
+import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
@@ -106,7 +103,7 @@ import {
   OWN_TRANSCRIPT,
   UNREAD,
 } from "./app-state.js";
-import { ChaptersKey, heldChapters, heldRepositoryChapters } from "./chapters-follow.js";
+import { heldRepositoryChapters } from "./chapters-follow.js";
 import type { AccountAsksAgentAct, AccountAsksAgentFollow } from "./compose-account-asks.js";
 import type { Composer } from "./composer.js";
 import {
@@ -119,7 +116,6 @@ import {
   type PULL_REQUEST_ACTS,
   PULL_REQUEST_FOLLOWS,
 } from "./contract/index.js";
-import type { EntityStore } from "./entity-store.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { type AccountHeld, accountHeld, type HeldFetch, heldFetch } from "./held-fetch.js";
 import { type HostActTable, liveTold } from "./host-acts.js";
@@ -152,10 +148,9 @@ import {
 } from "./live-collection.js";
 import { heldAgentOrigins } from "./origin-follow.js";
 import {
+  agentPullRequests,
   type PullRequestListing,
   type PullRequestParts,
-  type PullRequestPartsDependencies,
-  pullRequestParts,
   type RepositoryPullRequestKey,
   type RepositoryPullRequestPartsDependencies,
   repositoryKeyOf,
@@ -229,7 +224,6 @@ const AGENT_QUEUED_WRITE = {
 /** The service's side of the agents, as this concern asks it. */
 export type AgentClient = Pick<
   HostedAgentClient,
-  | "generateChapters"
   | "models"
   | "writeDefault"
   | "writeChaptersProvider"
@@ -263,17 +257,10 @@ export type AgentClient = Pick<
   | "delete"
   | "agent"
   | "pullRequest"
-  | "changes"
   | "turnChanges"
-  | "overviewPullRequest"
-  | "reviewOptions"
   | "workspaceTools"
   | "setDefaultMachine"
-  | "overviewChecks"
-  | "overviewConversation"
   | "githubImage"
-  | "pullRequestAction"
-  | "pullRequestViewed"
   | "answerInbox"
   | "closeInbox"
   | "takeBackInbox"
@@ -338,8 +325,6 @@ export interface AgentsDependencies extends AccountGateDependencies {
   openedOutside?: (agentId: string) => Effect.Effect<void>;
   /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
-  /** The signed-in account's lists kept on disk (`entity-store.ts`), which the Inbox is kept among and drawn from at a launch; none keeps nothing. */
-  entities?: () => EntityStore | undefined;
 }
 
 /** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
@@ -373,15 +358,15 @@ export interface AgentsComposer extends Composer {
   readonly reset: Effect.Effect<void>;
   /** The row writes this composer declares that may wait for the service, which a queue kept on disk is laid back by. */
   readonly queueable: readonly AnyWrite[];
-  /** The messages the service refused, as the account's sealed store keeps them beside the writes waiting (`entity-store.ts`). */
+  /** The messages the service refused, as the account's local database keeps them (`local-copy.ts`). */
   readonly refused: {
-    /** The signed-in account's, as the store keeps them. */
+    /** The signed-in account's, as the database keeps them. */
     readonly kept: () => readonly unknown[];
-    /** Each moving of them, which has the store keep them again. */
+    /** Each moving of them, which has the database keep them again. */
     readonly moves: Stream.Stream<void>;
-    /** The account's, as the store kept them, laid back as a launch opens it. */
+    /** The account's, as the database kept them, laid back as a sign-in opens it. */
     readonly restored: (account: string, kept: readonly unknown[]) => Effect.Effect<void>;
-    /** Every one let go, as a sign-out lets the store go. */
+    /** Every one let go, as a sign-out lets the database go. */
     readonly forgotten: Effect.Effect<void>;
   };
 }
@@ -403,24 +388,6 @@ const INBOX_QUEUED_WRITE = {
 /** The transcript a window holds, as the slice keys it. */
 function transcriptKeyOf({ agentId, callId }: AgentTranscriptKey): TranscriptKey {
   return new TranscriptKey({ agentId, callId });
-}
-
-/** How each part of a Pull request tab is told: on its own slice, which its follow declares beside the pull request's. */
-function partsTold(emit: HostKernel["emit"]): PullRequestPartsDependencies["tell"] {
-  const follow = AGENT_FOLLOWS.AGENTS_PULL_REQUEST_PART_FOLLOW;
-
-  return {
-    [LIVE_READ.PULL_REQUEST]: liveTold(emit, follow),
-    [LIVE_READ.PULL_REQUEST_CHECKS]: liveTold(emit, follow, LIVE_READ.PULL_REQUEST_CHECKS),
-    [LIVE_READ.PULL_REQUEST_CONVERSATION]: liveTold(
-      emit,
-      follow,
-      LIVE_READ.PULL_REQUEST_CONVERSATION,
-    ),
-    [LIVE_READ.PULL_REQUEST_PUBLISHED]: liveTold(emit, follow, LIVE_READ.PULL_REQUEST_PUBLISHED),
-    [LIVE_READ.REVIEW_OPTIONS]: liveTold(emit, follow, LIVE_READ.REVIEW_OPTIONS),
-    [LIVE_READ.PULL_REQUEST_VIEWED]: liveTold(emit, follow, LIVE_READ.PULL_REQUEST_VIEWED),
-  };
 }
 
 /** How each part of a pull request named by its repository and number is told: on its own slice, which its follow declares beside the pull request's. */
@@ -565,20 +532,6 @@ export function composeAgents(
       tell: liveTold(dependencies.kernel.emit, AGENT_INBOX_FOLLOWS.AGENTS_INBOX_FOLLOW),
     });
 
-    const chapters = yield* heldChapters({
-      seal: (key, poll, userId, after) =>
-        asked(
-          client.liveRead(
-            PULL_REQUEST_CHAPTERS_READ,
-            { id: key.agentId, number: String(key.number), userId },
-            poll ? { after } : undefined,
-          ),
-        ),
-      accountId: dependencies.accountId,
-      gate,
-      tell: liveTold(dependencies.kernel.emit, CHAPTERS_FOLLOWS.CHAPTERS_FOLLOW),
-    });
-
     const repositoryChapters = yield* heldRepositoryChapters({
       seal: (key, poll, userId, after) =>
         asked(
@@ -628,9 +581,6 @@ export function composeAgents(
             ),
           pool: dependencies.pool,
           accountWide,
-          ...(dependencies.entities === undefined
-            ? undefined
-            : { entities: dependencies.entities }),
         },
         userId,
         tellItems,
@@ -652,19 +602,12 @@ export function composeAgents(
     const accountFollow = yield* FiberHandle.make();
     const fetched = yield* fetchedReads(dependencies, asked);
 
-    const parts = yield* pullRequestParts({
+    const parts = yield* agentPullRequests({
       gate,
       focus: dependencies.focus,
-      ask: {
-        pullRequest: (key) => asked(client.overviewPullRequest(key.agentId, key.number)),
-        checks: (key) => asked(client.overviewChecks(key.agentId, key.number)),
-        conversation: (key) => asked(client.overviewConversation(key.agentId, key.number)),
-        published: (key) => asked(client.pullRequest(key.agentId, key.number)),
-        reviewOptions: (key) => asked(client.reviewOptions(key.agentId)),
-        viewed: (key) => asked(client.pullRequestViewed(key.agentId, key.number)),
-      },
+      ask: (agentId) => asked(client.pullRequest(agentId)),
       listings: dependencies.pullRequestListings ?? Effect.succeed(Stream.empty),
-      tell: partsTold(dependencies.kernel.emit),
+      tell: liveTold(dependencies.kernel.emit, AGENT_FOLLOWS.AGENTS_PULL_REQUEST_FOLLOW),
     });
 
     const { pullRequests } = dependencies;
@@ -707,7 +650,7 @@ export function composeAgents(
       { inboxes, holders, accountWide },
       { accounts, followed: accountFollow },
       { reads: sessionReads, followItems, preferences, holdPreferences },
-      { chapters, repositoryChapters, origins },
+      { repositoryChapters, origins },
       fetched,
       { parts, repositoryParts },
     );
@@ -747,17 +690,15 @@ interface SessionReads {
 
 /** The live follows' reads the windows hold (`contract/live-follow.ts`), each held through its stream's scope. */
 interface LiveFollows {
-  /** Every agent's pull request's chapters, by the agent and the number. */
-  readonly chapters: HeldSlice<ChaptersKey>;
   /** Every pull request's chapters named by its repository and number, by the workspace, the repository, and the number. */
   readonly repositoryChapters: HeldSlice<RepositoryPullRequestKey>;
   /** Every agent's origin, by the agent. */
   readonly origins: HeldSlice<string>;
 }
 
-/** The parts of the pull requests the windows' Pull request tabs hold: through an agent, and by the repository and number. */
+/** The pull requests the windows hold: what each agent published, and every Pull request tab's parts by the repository and number. */
 interface PartsHeld {
-  readonly parts: PullRequestParts;
+  readonly parts: PullRequestParts<{ readonly agentId: string }>;
   readonly repositoryParts: PullRequestParts<RepositoryPullRequestPartParams>;
 }
 
@@ -829,7 +770,7 @@ function composed(
   /** The session's account reads, every item the account reaches and its preferences among them. */
   { reads: sessionReads, followItems, preferences, holdPreferences }: SessionReads,
   /** The pull requests' chapters and the agents' origins the windows hold. */
-  { chapters, repositoryChapters, origins }: LiveFollows,
+  { repositoryChapters, origins }: LiveFollows,
   { tools, models, modelsHold }: FetchedReads,
   /** The parts of the pull requests the windows' Pull request tabs hold. */
   { parts, repositoryParts }: PartsHeld,
@@ -1228,7 +1169,6 @@ function composed(
 
   /** The Inbox's acts, the agents' (`AGENT_ACTS`), and a pull request's chapters generated (`CHAPTERS_ACTS`), answered as the panel's port asks them. */
   const acts: AgentsActs = {
-    CHAPTERS_GENERATE: ({ agentId, number }) => asked(client.generateChapters(agentId, number)),
     CHAPTERS_REPOSITORY_GENERATE: (key) => asked(pullRequests.generateChapters(key)),
     // A pull request named by its repository and number (`PULL_REQUEST_ACTS`), asked with no agent.
     PULL_REQUESTS_CHANGES: (key) => asked(pullRequests.changes(key)),
@@ -1338,10 +1278,7 @@ function composed(
       asked(client.stopRunAction(agentId, actionId)),
     AGENTS_DELETE: declaredWrite(dependencies.pool, deleted),
     AGENTS_PAGE: ({ agentId }) => asked(client.agent(agentId)),
-    AGENTS_CHANGES: ({ agentId, number }) => asked(client.changes(agentId, number)),
     AGENTS_TURN_CHANGES: ({ agentId, messageId }) => asked(client.turnChanges(agentId, messageId)),
-    AGENTS_PULL_REQUEST_ACTION: ({ agentId, number, request }) =>
-      asked(client.pullRequestAction(agentId, request, number)),
     AGENTS_GITHUB_IMAGE: ({ agentId, src }) => {
       const call = client.githubImage(agentId, src);
 
@@ -1383,11 +1320,6 @@ function composed(
       hold: ({ agentId }) => origins.hold(agentId),
       retry: ({ agentId }) => origins.retry(agentId),
     },
-    // A pull request's chapters are held for a window while its Pull request tab reads them.
-    CHAPTERS_FOLLOW: {
-      hold: ({ agentId, number }) => chapters.hold(new ChaptersKey({ agentId, number })),
-      retry: ({ agentId, number }) => chapters.retry(new ChaptersKey({ agentId, number })),
-    },
     CHAPTERS_REPOSITORY_FOLLOW: {
       hold: (key) => repositoryChapters.hold(repositoryKeyOf(key)),
       retry: (key) => repositoryChapters.retry(repositoryKeyOf(key)),
@@ -1412,8 +1344,8 @@ function composed(
         ),
       retry: (transcript) => transcriptSlice.retry(transcriptKeyOf(transcript)),
     },
-    // A Pull request tab's parts are held for the windows while the tab shows.
-    AGENTS_PULL_REQUEST_PART_FOLLOW: { hold: parts.hold, retry: parts.retry },
+    // What an agent published is held for the windows while its card shows.
+    AGENTS_PULL_REQUEST_FOLLOW: { hold: parts.hold, retry: parts.retry },
     // A Pull request tab's parts of a pull request named by its repository and number, held as an agent's are.
     PULL_REQUESTS_PART_FOLLOW: { hold: repositoryParts.hold, retry: repositoryParts.retry },
     // An agent's own tools are held for the windows while its servers popover shows.
@@ -1470,7 +1402,6 @@ function composed(
   const reset = Effect.gen(function* () {
     yield* transcriptSlice.end;
     yield* holders.end;
-    yield* chapters.end;
     yield* repositoryChapters.end;
     yield* origins.end;
     yield* FiberHandle.clear(accountFollow);
@@ -1495,7 +1426,6 @@ function composed(
     yield* sessionReads.open(LIVE_READ.ACCOUNT_PREFERENCES, holdPreferences);
     yield* transcriptSlice.open;
     yield* holders.open;
-    yield* chapters.open;
     yield* repositoryChapters.open;
     yield* origins.open;
     yield* modelsHold.open;

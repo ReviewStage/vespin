@@ -33,12 +33,14 @@ env:
 # instead, its Filter button, so the flow opens it first there, whether or
 # not a thread stands beside it. Note that it is found by "Filter", its whole
 # name on iOS 26.5, where it is a glyph alone, and the start of it on iOS 27,
-# where the scope chosen follows.
+# where the scope chosen follows; and that the word must end there, because a
+# narrowing scope stands "Filtered by: …" under the column's title, which a
+# bare "Filter.*" matches first.
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
@@ -60,7 +62,7 @@ env:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "Open.*"
 # The thread comes first, before the row's swipes and its long press: a row
 # a swipe opened takes the next tap to close its actions, and its files, the
@@ -86,12 +88,12 @@ env:
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread
+# The picture opens in the system's Quick Look, whose Done closes it.
 - tapOn: "The invite page"
-- assertVisible:
-    id: "markdown-picture-done"
+- assertVisible: "Done"
+- waitForAnimationToEnd
 - takeScreenshot: inbox-picture
-- tapOn:
-    id: "markdown-picture-done"
+- tapOn: "Done"
 - scrollUntilVisible:
     element: "invite-flow.webm.*"
     direction: DOWN
@@ -131,16 +133,14 @@ env:
       ABOVE: composer-field
 - takeScreenshot: inbox-file
 - tapOn: "invite-test-plan.pdf, PDF.*"
-# The viewer stands as file-viewer only once WebKit has drawn the PDF, so the
-# flow waits for it rather than shooting the spinner.
+# The PDF opens in the system's Quick Look, titled with its name, and its Done
+# closes it.
 - extendedWaitUntil:
-    visible:
-      id: "file-viewer"
+    visible: "Done"
     timeout: 15000
 - waitForAnimationToEnd
 - takeScreenshot: inbox-pdf
-- tapOn:
-    id: "file-viewer-done"
+- tapOn: "Done"
 - waitForAnimationToEnd
 # Remind me's times stand in a menu: a compact window's ⋯ holds it as a
 # submenu, and a regular window's detail bar stands it as its own clock
@@ -226,7 +226,7 @@ env:
           element: "Who can withdraw an invite\\?"
           direction: UP
 # Remind me, which a row's trailing swipe and its long press both open, offers
-# the panel's times in a submenu, each saying when it comes due; In 1 hour puts
+# the panel's times in a submenu, Tomorrow and Next week saying when; In 1 hour puts
 # the thread away, out of Open and under Reminders, its time in the row's
 # time's place. The long press is used, since a regular window's sidebar
 # stands its rows elsewhere. Open is chosen again for the search below.
@@ -258,7 +258,7 @@ env:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "Reminders"
 - assertVisible: "Recorded the invite flow"
 - assertVisible: "Reminder .*"
@@ -268,7 +268,7 @@ env:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "Open.*"
 - waitForAnimationToEnd
 # The search, a round glass button in the bar, narrows the list to

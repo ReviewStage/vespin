@@ -1,5 +1,6 @@
 import { ADMIN_METRICS_WINDOW, type AdminMetricsWindow } from "@repo/features/admin-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { formatMonth } from "@repo/features/time-format";
 import {
   ErrorState,
   GAP,
@@ -11,7 +12,7 @@ import {
   Tooltip,
   useMenu,
 } from "@repo/ui";
-import { CalendarRangeIcon, SlidersHorizontalIcon } from "lucide-react";
+import { CalendarIcon, CalendarRangeIcon, SlidersHorizontalIcon } from "lucide-react";
 import { unreadShown } from "../../failure-report.js";
 
 /** Every range a view may read, shortest first. */
@@ -86,7 +87,8 @@ export function windowWords(windowDays: AdminMetricsWindow): string {
  * range a view reads, a submenu with the one standing checked, and whether
  * admins' own accounts are counted, a switch. A view offers only what it
  * reads: an account's page its range alone, a day's the admins switch alone,
- * and the Workspaces list whether it keeps shared workspaces only beside it. The range standing is said after the title
+ * and the Workspaces list whether it keeps shared workspaces only beside it;
+ * the Billing screen its UTC month alone. The range or month standing is said after the title
  * (`windowWords`), since the button does not show it.
  */
 export function AdminViewOptions({
@@ -97,6 +99,9 @@ export function AdminViewOptions({
   onHideAdminsChange,
   sharedOnly,
   onSharedOnlyChange,
+  month,
+  months,
+  onMonthChange,
 }: {
   windowDays?: AdminMetricsWindow | undefined;
   onWindowDaysChange?: ((windowDays: AdminMetricsWindow) => void) | undefined;
@@ -107,6 +112,10 @@ export function AdminViewOptions({
   /** Whether a list of workspaces keeps the shared ones alone, its personal ones left out. */
   sharedOnly?: boolean | undefined;
   onSharedOnlyChange?: ((sharedOnly: boolean) => void) | undefined;
+  /** The UTC month a view reads, as `YYYY-MM`, among the months it offers, newest first. */
+  month?: string | undefined;
+  months?: readonly string[] | undefined;
+  onMonthChange?: ((month: string) => void) | undefined;
 }): React.JSX.Element {
   const menu = useMenu(true);
   const groups: MenuEntry[][] = [];
@@ -120,6 +129,20 @@ export function AdminViewOptions({
           label: windowWords(each),
           checked: each === windowDays,
           onSelect: () => onWindowDaysChange(each),
+        })),
+      },
+    ]);
+  }
+
+  if (month !== undefined && months !== undefined && onMonthChange !== undefined) {
+    groups.push([
+      {
+        label: "Month",
+        icon: <CalendarIcon />,
+        items: months.map((each) => ({
+          label: formatMonth(each),
+          checked: each === month,
+          onSelect: () => onMonthChange(each),
         })),
       },
     ]);

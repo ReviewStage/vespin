@@ -73,11 +73,14 @@
         "group": "Guides",
         "pages": [
           "cloud-environment",
+          "machines",
           "ports-and-terminal",
+          "integrations",
           "vespin-mcp",
           "cli",
           "automations",
-          "slack"
+          "slack",
+          "voice-calls"
         ]
       },
       {

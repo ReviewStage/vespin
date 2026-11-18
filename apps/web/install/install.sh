@@ -7,6 +7,13 @@
 #
 #   curl -fsSL https://vespin.dev/install.sh | sh
 #
+# A coding agent asked to set up Vespin on a machine runs exactly that, and
+# installs no app, on a Mac either. The script waits up to 10 minutes for a
+# person to approve the code it prints, so an agent whose shell shows output
+# only once a command ends runs it in the background with its output in a
+# file, hands the person the link and the code from that file, and waits for
+# "Ready". The steps for an agent: https://vespin.dev/docs/machines
+#
 # Before it changes anything it checks the computer and says what is missing:
 # Linux x64 or arm64 with a systemd user manager it can reach, or an Apple
 # silicon Mac on macOS MAC_MIN_VERSION or later, and git. On Windows it runs
@@ -722,9 +729,9 @@ main() {
   # Note that nothing says how to upgrade, because the host updates itself to each release.
   printf '\n'
   if [ "${SETUP_PENDING:-false}" = true ]; then
-    ok "Installed and connected. It reads Online under a task's Runs on in Vespin once setup finishes."
+    ok "Installed and connected. It reads Online under a task's Machine menu in Vespin once setup finishes."
   else
-    ok "Ready. Pick it under a task's Runs on in Vespin."
+    ok "Ready. Pick it under a task's Machine menu in Vespin."
   fi
   printf 'To remove it: %s uninstall\n' "$TYPED_LINK"
   # Note that a systemd service does not keep a WSL distro up: WSL stops it about

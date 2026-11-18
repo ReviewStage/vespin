@@ -1,4 +1,4 @@
-// asks.tsx -- the questions an act asks first, as the system asks them: an action sheet rising from the screen's foot in a compact window, an alert in a regular one or where words must be typed, and the alert that asks for words, such as a rename or an address.
+// asks.tsx -- the questions an act asks first, as the system asks them: one a row's act raises standing by that row, UIKit's own action sheet rising from the screen's foot in a compact window, its alert in a regular one, SwiftUI's alert where words must be typed, and the alert that asks for words, such as a rename or an address.
 
 import {
   Alert,
@@ -16,21 +16,30 @@ import {
   keyboardType,
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { ActionSheetIOS, type ActionSheetIOSOptions, Alert as SystemAlert } from "react-native";
+import { WORDS_KIND, type WordsKind } from "./system-asks.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** What an act that asks first offers beside its act, and the role the system draws it in. */
 const CANCEL = { LABEL: "Cancel", ROLE: "cancel" } as const;
 
-/** A width past any window's, so the sheet's anchor fills the screen's foot whatever its width. */
-const FULL_WIDTH = 10_000;
+/** The role the system draws an act that takes something away in: red. */
+const DESTRUCTIVE_ROLE = "destructive";
 
 /** Where an ask's host stands: the size of nothing, so a screen draws it beside whatever it shows. */
 const NO_SIZE = { position: "absolute" } as const;
 
-/** Where an action sheet's host stands: along the screen's foot, so the sheet rises from there. */
-const FOOT = { position: "absolute", left: 0, right: 0, bottom: 0, height: 1 } as const;
+/** Where an action sheet's act and Cancel stand among its buttons: the act first, as iOS leads with it. */
+const SHEET_BUTTON = { ACT: 0, CANCEL: 1 } as const;
 
 type ConfirmAskProps = {
   /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
@@ -48,7 +57,7 @@ type ConfirmAskProps = {
    */
   readonly gate?: string | undefined;
   /** What the gate's words are, which picks the keyboard its field raises, such as the address keyboard for an account's address. */
-  readonly gateKind?: WordsAskKind | undefined;
+  readonly gateKind?: WordsKind | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
   /** Called as the ask goes, by its act or Cancel. */
@@ -56,26 +65,18 @@ type ConfirmAskProps = {
 };
 
 /** An ask's trigger, which a screen never sees: the ask is presented by its `presented`, from a press anywhere. */
-function HiddenTrigger({ wide }: { readonly wide: boolean }): ReactNode {
-  return (
-    <Text
-      modifiers={[
-        wide ? frame({ maxWidth: FULL_WIDTH, maxHeight: 0 }) : frame({ width: 0, height: 0 }),
-      ]}
-    >
-      {""}
-    </Text>
-  );
+function HiddenTrigger(): ReactNode {
+  return <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>;
 }
 
-/** The ask as the system's alert: its question, what it costs, the typed gate's field, Cancel, and its act, dimmed until the gate's words are typed. */
-function AlertConfirm({
+/** The ask whose act is gated by typed words, as SwiftUI's alert: its question, what it costs, the gate's field, Cancel, and its act, dimmed until the gate's words are typed, which UIKit's own alert can't do from React Native. */
+function GatedConfirm({
   title,
   message,
   act,
   destructive = false,
   gate,
-  gateKind = WORDS_ASK_KIND.NAME,
+  gateKind = WORDS_KIND.NAME,
   presented,
   onAct,
   onDismiss,
@@ -100,7 +101,7 @@ function AlertConfirm({
         }}
       >
         <Alert.Trigger>
-          <HiddenTrigger wide={false} />
+          <HiddenTrigger />
         </Alert.Trigger>
         <Alert.Actions>
           {gate === undefined ? null : (
@@ -109,7 +110,7 @@ function AlertConfirm({
               placeholder={gate}
               onTextChange={setWords}
               modifiers={[
-                ...(gateKind === WORDS_ASK_KIND.EMAIL ? [keyboardType("email-address")] : []),
+                ...(gateKind === WORDS_KIND.EMAIL ? [keyboardType("email-address")] : []),
                 autocorrectionDisabled(),
                 textInputAutocapitalization("never"),
               ]}
@@ -133,8 +134,16 @@ function AlertConfirm({
   );
 }
 
-/** The ask as the system's action sheet, rising from the screen's foot: its question and what it costs, its act first, and the system's own Cancel. */
-function SheetConfirm({
+/**
+ * The ask as UIKit's own question, raised as it's presented: in a compact
+ * window an action sheet from the screen's foot, its act first, red where
+ * it takes something away, and the system's own Cancel; in a regular one an
+ * alert with Cancel and its act. Note that it's raised once each time
+ * `presented` turns true, and that an answer coming after the caller let
+ * the question go, after the ask unmounted, or to an earlier question acts
+ * on nothing, since UIKit's question can't be taken down from React Native.
+ */
+function SystemConfirm({
   title,
   message,
   act,
@@ -142,36 +151,70 @@ function SheetConfirm({
   presented,
   onAct,
   onDismiss,
-}: ConfirmAskProps) {
-  return (
-    <Host style={FOOT}>
-      <ConfirmationDialog
-        title={title}
-        titleVisibility="visible"
-        isPresented={presented}
-        onIsPresentedChange={(shown) => {
-          if (!shown) onDismiss();
-        }}
-      >
-        <ConfirmationDialog.Trigger>
-          <HiddenTrigger wide />
-        </ConfirmationDialog.Trigger>
-        <ConfirmationDialog.Actions>
-          <SwiftUIButton
-            label={act}
-            role={destructive ? "destructive" : "default"}
-            onPress={onAct}
-          />
-          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
-        </ConfirmationDialog.Actions>
-        {message === undefined ? null : (
-          <ConfirmationDialog.Message>
-            <Text>{message}</Text>
-          </ConfirmationDialog.Message>
-        )}
-      </ConfirmationDialog>
-    </Host>
-  );
+  compact,
+}: ConfirmAskProps & { readonly compact: boolean }) {
+  // The newest answers, which an answer reads as it lands.
+  const live = useRef({ onAct, onDismiss });
+  useEffect(() => {
+    live.current = { onAct, onDismiss };
+  });
+  // The question raised and still answerable, by its own token: none once `presented` turns false or the ask unmounts, so a second run of the effect never raises it twice, and an answer to an earlier question, or one landing after the ask went, acts on nothing.
+  const standing = useRef<symbol | undefined>(undefined);
+
+  // Note that the token is let go during the commit that lets the question go or unmounts the ask, in a layout effect, so no native answer landing before the passive effects run can still act.
+  useLayoutEffect(() => {
+    if (!presented) standing.current = undefined;
+
+    return () => {
+      standing.current = undefined;
+    };
+  }, [presented]);
+
+  useEffect(() => {
+    if (!presented || standing.current !== undefined) return;
+
+    const raise = Symbol("raise");
+    standing.current = raise;
+
+    const answer = (acted: boolean) => {
+      if (standing.current !== raise) return;
+
+      const now = live.current;
+
+      if (acted) now.onAct();
+
+      now.onDismiss();
+    };
+
+    if (compact) {
+      // Note that a sheet with nothing taken away names no button red, the act standing first in the system's own ink.
+      const sheet: ActionSheetIOSOptions = {
+        title,
+        message,
+        options: [act, CANCEL.LABEL],
+        cancelButtonIndex: SHEET_BUTTON.CANCEL,
+        destructiveButtonIndex: destructive ? SHEET_BUTTON.ACT : [],
+      };
+
+      ActionSheetIOS.showActionSheetWithOptions(sheet, (index) =>
+        answer(index === SHEET_BUTTON.ACT),
+      );
+
+      return;
+    }
+
+    SystemAlert.alert(title, message, [
+      { text: CANCEL.LABEL, style: CANCEL.ROLE, onPress: () => answer(false) },
+      {
+        text: act,
+        style: destructive ? DESTRUCTIVE_ROLE : "default",
+        isPreferred: true,
+        onPress: () => answer(true),
+      },
+    ]);
+  }, [presented, compact, title, message, act, destructive]);
+
+  return null;
 }
 
 /**
@@ -183,121 +226,92 @@ function SheetConfirm({
  * iPad draws an action sheet as a popover from the view that presents it,
  * and the act is pressed in a bar, a menu or the menu bar, which no view of
  * ours stands on; an alert stands centered whatever presents it, as Apple's
- * own iPad asks with no source do. It stands in a host of its own, so a
- * screen draws it beside whatever it shows: beside its `Screen`, never
- * inside that host, where an ask once took every press and key on the
- * screen.
+ * own iPad asks with no source do. Both are UIKit's own, raised through
+ * React Native (`Alert.alert`, `ActionSheetIOS`), with no view of ours;
+ * only an ask gated by typed words stands as SwiftUI's alert, in a host of
+ * its own, so a screen draws it beside whatever it shows: beside its
+ * `Screen`, never inside that host, where an ask once took every press and
+ * key on the screen.
  */
 export function ConfirmAsk(props: ConfirmAskProps) {
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
 
-  return compact && props.gate === undefined ? (
-    <SheetConfirm {...props} />
+  return props.gate === undefined ? (
+    <SystemConfirm {...props} compact={compact} />
   ) : (
-    <AlertConfirm {...props} />
+    <GatedConfirm {...props} />
   );
 }
 
-/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
-export const WORDS_ASK_KIND = {
-  /** A name, such as a rename's, its first word capitalized and corrected as Files' rename does. */
-  NAME: "name",
-  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
-  EMAIL: "email",
-} as const;
-
-export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
-
-/** One of a `WordsAsk`'s acts beside Cancel, handed the words typed. */
-export interface WordsAskAct {
-  readonly label: string;
-  readonly onAct: (words: string) => void;
-}
-
-type WordsAskProps = {
+/** A question a row's own act asks first, such as a task's Permanently delete or an agent's Archive, which stands by that row. */
+export interface RowQuestion {
   readonly title: string;
   readonly message?: string | undefined;
-  readonly placeholder: string;
-  /** The words the field holds as the alert opens, such as the name a rename starts from. */
-  readonly initial?: string | undefined;
-  readonly kind: WordsAskKind;
-  /** Its acts, the last the one Return presses; each dimmed while the field is empty. */
-  readonly acts: readonly WordsAskAct[];
+  readonly act: string;
   readonly presented: boolean;
-  /** Called as the alert goes, by an act or Cancel. */
+  readonly onAct: () => void;
+  /** Called as the question goes, by its act, Cancel, or a tap outside it. */
   readonly onDismiss: () => void;
+}
+
+/** What a row that asks nothing now stands by: no question, never shown. */
+export const QUIET_ROW_QUESTION: RowQuestion = {
+  title: "",
+  act: "",
+  presented: false,
+  onAct: () => undefined,
+  onDismiss: () => undefined,
 };
 
+/** One drawn row, which a question its acts raise names, so the question stands by that row and not by another drawing the same task, as Pinned and its section both do. */
+export interface RowAsker {
+  readonly row: symbol;
+}
+
+/** The drawn row a question its acts raise names, the same for as long as the row stands. */
+export function useRowAsker(): RowAsker {
+  const [asker] = useState<RowAsker>(() => ({ row: Symbol("row") }));
+
+  return asker;
+}
+
 /**
- * Words asked for in the system's alert, as iOS asks a rename or an
- * address, as Files and Notes rename a folder: its field, Cancel, and its
- * acts, each dimmed until something is typed. The field starts from
- * `initial` each time the alert opens. It stands in a host of its own, the
- * size of nothing, as `ConfirmAsk` does.
+ * A row's content with the question its own acts ask first standing by it,
+ * as iOS 26 stands a confirmation from the view that raised it: SwiftUI's
+ * confirmation dialog with the row as its source, its glass by the row on
+ * an iPhone and a popover from it on an iPad, its act red, and Cancel or a
+ * tap outside letting it go. Note that it stands around every row that can
+ * ask, asking or not, because wrapping a row only as it asks would draw
+ * its long press menu anew as the menu went, and a question raised from a
+ * screen's foot pointed at the tab bar rather than at the row it is about.
+ * It stands inside the row's own SwiftUI tree, never beside a `Screen`.
  */
-export function WordsAsk({
-  title,
-  message,
-  placeholder,
-  initial = "",
-  kind,
-  acts,
-  presented,
-  onDismiss,
-}: WordsAskProps) {
-  const typed = useNativeState(initial);
-  const [words, setWords] = useState(initial);
-  useEffect(() => {
-    if (!presented) return;
-    typed.value = initial;
-    setWords(initial);
-  }, [presented, initial, typed]);
-  const empty = words.trim().length === 0;
-
-  const field =
-    kind === WORDS_ASK_KIND.EMAIL
-      ? [
-          keyboardType("email-address"),
-          autocorrectionDisabled(),
-          textInputAutocapitalization("never"),
-        ]
-      : [textInputAutocapitalization("sentences")];
-
+export function RowAsking({
+  question,
+  children,
+}: {
+  readonly question: RowQuestion;
+  readonly children: ReactElement;
+}): ReactElement {
   return (
-    <Host matchContents style={NO_SIZE}>
-      <Alert
-        title={title}
-        isPresented={presented}
-        onIsPresentedChange={(shown) => {
-          if (!shown) onDismiss();
-        }}
-      >
-        <Alert.Trigger>
-          <HiddenTrigger wide={false} />
-        </Alert.Trigger>
-        <Alert.Actions>
-          <TextField
-            text={typed}
-            placeholder={placeholder}
-            onTextChange={setWords}
-            modifiers={field}
-          />
-          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
-          {acts.map((act) => (
-            <SwiftUIButton
-              key={act.label}
-              label={act.label}
-              onPress={() => act.onAct(words.trim())}
-              modifiers={[disabled(empty)]}
-            />
-          ))}
-        </Alert.Actions>
-        {message === undefined ? null : (
-          <Alert.Message>
-            <Text>{message}</Text>
-          </Alert.Message>
-        )}
-      </Alert>
-    </Host>
+    <ConfirmationDialog
+      title={question.title}
+      titleVisibility="visible"
+      isPresented={question.presented}
+      onIsPresentedChange={(shown) => {
+        if (!shown) question.onDismiss();
+      }}
+    >
+      <ConfirmationDialog.Trigger>{children}</ConfirmationDialog.Trigger>
+      <ConfirmationDialog.Actions>
+        <SwiftUIButton label={question.act} role={DESTRUCTIVE_ROLE} onPress={question.onAct} />
+        <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={question.onDismiss} />
+      </ConfirmationDialog.Actions>
+      {question.message === undefined ? null : (
+        <ConfirmationDialog.Message>
+          <Text>{question.message}</Text>
+        </ConfirmationDialog.Message>
+      )}
+    </ConfirmationDialog>
   );
 }

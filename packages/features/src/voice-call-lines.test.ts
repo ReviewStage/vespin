@@ -3,7 +3,7 @@ import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
 import { test } from "vitest";
 import { placedMessages } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
-import { CALL_ITEM, type CallItem, callItemsOf } from "./voice-call-lines.js";
+import { CALL_ITEM, type CallItem, callItemsOf, delegatedTurnsOf } from "./voice-call-lines.js";
 
 /**
  * Each edge a call leaves in a transcript, as the rows the service stores in
@@ -216,4 +216,20 @@ test.each<{
   },
 ])("$case", ({ script, standing = [], drawn: expected }) => {
   assert.deepEqual(drawing(script, standing), expected);
+});
+
+test("a turn a call's delegation opened is delegated, whether or not the voice said its reply, and a turn a typed line opened is not", () => {
+  const script: Script = [
+    caller("ask", true),
+    turn("retold"),
+    voice("retell"),
+    typed("typed ask"),
+    turn("typed turn"),
+    caller("small talk"),
+    voice("small talk answer"),
+    caller("last ask", true, "call-2"),
+    turn("hung up on"),
+  ];
+
+  assert.deepEqual([...delegatedTurnsOf(placedMessages(script))].sort(), ["hung up on", "retold"]);
 });

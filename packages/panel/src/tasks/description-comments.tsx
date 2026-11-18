@@ -93,7 +93,7 @@ import {
   usePressAway,
   VisuallyHidden,
 } from "@repo/ui";
-import { type Actor, APP_ACTOR, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
+import { type Actor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import {
   type DescriptionCommentsControl,
@@ -236,11 +236,10 @@ import {
 /**
  * The words a thread is on, quoted over it in the quote's face every quote
  * wears (`@repo/ui/quote-face`), a message's and the message box's alike:
- * whole where they are words chosen, as a selection or a Reply chooses
- * them, and two lines at most where they are a whole block or element,
- * which may run on for a section; struck out where the words are gone.
+ * whole, words chosen and a whole block or element alike, so a comment
+ * always says all of what it is on; struck out where the words are gone.
  */
-const COMMENT_QUOTE_CLASS = `${QUOTE_CLASS} comment-quote data-[clipped=true]:line-clamp-2 data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike`;
+const COMMENT_QUOTE_CLASS = `${QUOTE_CLASS} comment-quote data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike`;
 
 /**
  * A card's place in the margin: a card already there travels to its next
@@ -339,6 +338,7 @@ function MarginSlot({
   slotRef,
   onGone,
   flows = false,
+  onPointed,
   children,
 }: {
   card: DrawnCard;
@@ -346,6 +346,8 @@ function MarginSlot({
   slotRef: (element: HTMLDivElement | null) => void;
   onGone: (id: string) => void;
   flows?: boolean;
+  /** Says which card the pointer is on, and that it left; none where nothing answers it. */
+  onPointed?: ((id: string | undefined) => void) | undefined;
   children: ReactNode;
 }): React.JSX.Element | null {
   const shown = useDisclosure(!card.leaving);
@@ -368,6 +370,10 @@ function MarginSlot({
       data-leaving={card.leaving ? "true" : undefined}
       inert={card.leaving}
       style={flows ? undefined : { transform: `translateY(${card.top}px)` }}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch" && !card.leaving) onPointed?.(id);
+      }}
+      onPointerLeave={() => onPointed?.(undefined)}
     >
       {children}
     </div>
@@ -391,6 +397,9 @@ const MENTION_REF = "[data-mention-ref]";
 
 /** The button a block under the pointer shows at the column's end. */
 const BLOCK_BUTTON_CLASS = "comment-block-button";
+
+/** The class of the box the comments draw over the body, their cards and buttons. */
+const COMMENT_LAYER_CLASS = "comment-layer";
 
 /** The `over` of the block under the pointer's comment command, which answers only where no words selected offer it. */
 const YIELDS_TO_SELECTION = (): boolean => false;
@@ -518,10 +527,6 @@ function useWriter(
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
 
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) {
-    return { author: commentAuthor(APP_ACTOR), nameRef: <ActorRef actor={APP_ACTOR} nameOnly /> };
-  }
-
   if (written !== undefined && agents !== undefined) {
     const { agentId, subject, elsewhere } = written;
 
@@ -586,10 +591,7 @@ function WriterMark({
 }): ReactNode {
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
-  let actor: Actor = person;
-
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) actor = APP_ACTOR;
-  else if (written !== undefined) actor = written.subject.tile;
+  const actor: Actor = written === undefined ? person : written.subject.tile;
 
   return <ActorMark actor={actor} />;
 }
@@ -1509,31 +1511,28 @@ function GoneQuote({
   );
 }
 
-/** A quote line over a comment: the words it is on, whole where they were chosen, or a press that shows them where they stand, labeled `label`, where one is offered. */
+/** A quote line over a comment: the words it is on, whole, or a press that shows them where they stand, labeled `label`, where one is offered. */
 function QuoteLine({
   words,
   label,
-  whole = false,
   gone = false,
   onShow,
 }: {
   words: string;
   label: string;
-  /** Whether the words were chosen, a few of a block's, so they are quoted whole rather than cut to two lines. */
-  whole?: boolean;
   gone?: boolean;
   onShow?: (() => void) | undefined;
 }): React.JSX.Element {
   if (onShow === undefined) {
     return (
-      <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
+      <blockquote className={COMMENT_QUOTE_CLASS} data-gone={gone}>
         {words}
       </blockquote>
     );
   }
 
   return (
-    <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
+    <blockquote className={COMMENT_QUOTE_CLASS} data-gone={gone}>
       <Tooltip label={label}>
         <LineButton look={LINE_BUTTON_LOOK.QUOTE} onClick={onShow}>
           {words}
@@ -1557,7 +1556,6 @@ function ThreadQuote({
     <QuoteLine
       words={thread.quote}
       label={thread.page === undefined ? COMMENT_WORDS.SHOW_WORDS : COMMENT_WORDS.SHOW_ELEMENT}
-      whole={thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS}
       gone={gone}
       onShow={onShowWords}
     />
@@ -1967,24 +1965,17 @@ function ownRange(block: HTMLElement): Range {
 }
 
 /**
- * Whether threads' marks cover every one of the block's own words, as a
- * thread on the block does, so it is commented on through them; a thread on
- * a few of its words, or on a bullet nested under it, leaves it its button.
+ * Whether a thread stands on any of the block's own words, as Notion's
+ * blocks do once commented on: its card stands beside it in the button's
+ * place, and more words of it are commented on by selecting them. A thread
+ * on a bullet nested under it leaves it its button.
  */
-function threadedWhole(block: HTMLElement): boolean {
+function threaded(block: HTMLElement): boolean {
   const own = ownRange(block);
 
-  const marked = [...block.querySelectorAll(`.${COMMENT_MARK_CLASS}[data-threads]`)]
-    .flatMap((mark) =>
-      own.intersectsNode(mark) && mark.parentElement?.closest(`.${COMMENT_MARK_CLASS}`) === null
-        ? [mark.textContent]
-        : [],
-    )
-    .join("");
-
-  const words = own.toString().replace(/\s+/gu, "");
-
-  return words !== "" && marked.replace(/\s+/gu, "") === words;
+  return [...block.querySelectorAll(`.${COMMENT_MARK_CLASS}[data-threads]`)].some((mark) =>
+    own.intersectsNode(mark),
+  );
 }
 
 /** A thread started on the editor's words, its quote held to the bound the service keeps. */
@@ -2030,27 +2021,36 @@ function topIn(body: HTMLElement, element: Element): number {
   return element.getBoundingClientRect().top - body.getBoundingClientRect().top;
 }
 
+/** Where a line stands in the description body's own box: its top and its middle. */
+interface LineAt {
+  readonly top: number;
+  readonly middle: number;
+}
+
 /**
- * Where the middle of the first line `element`'s words stand on, in the description
- * body's own box: a count or a block's button stands centered on it, so it
- * reads as that line's whether the words go on past it or not. Note that the
- * element holding the first words is measured: an inline one by the first
- * of its line boxes, and a block by its top and half its line, because a
+ * Where the first line `element`'s words stand on starts and where its
+ * middle is, in the description body's own box: a margin card stands level
+ * with its top, as does a block's button beside the cards, so the button
+ * stands where the card it opens will; a count or a folded button stands
+ * centered on its middle, so it reads as that line's whether the words go on
+ * past it or not. Note that the first words are measured themselves, the
+ * first of their line boxes, as a thread's mark around them is, because a
  * box wrapping onto more lines spans them all.
  */
-function lineMiddleIn(body: HTMLElement, element: Element): number {
+function firstLineIn(body: HTMLElement, element: Element): LineAt {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, (node) =>
     (node.textContent ?? "").trim() === "" ? NodeFilter.FILTER_SKIP : NodeFilter.FILTER_ACCEPT,
   );
 
-  const holder = walker.nextNode()?.parentElement ?? element;
-  const style = getComputedStyle(holder);
-  const line = style.display === "inline" ? holder.getClientRects()[0] : undefined;
+  const words = walker.nextNode();
+  const range = document.createRange();
+  range.selectNodeContents(words ?? element);
+  const line = [...range.getClientRects()].find((rect) => rect.height > 0);
+  const top = body.getBoundingClientRect().top;
 
-  if (line !== undefined) return (line.top + line.bottom) / 2 - body.getBoundingClientRect().top;
-  const height = Number.parseFloat(style.lineHeight);
+  if (line === undefined) return { top: topIn(body, element), middle: topIn(body, element) };
 
-  return topIn(body, holder) + (Number.isFinite(height) ? height / 2 : 0);
+  return { top: line.top - top, middle: (line.top + line.bottom) / 2 - top };
 }
 
 /** The part of the scroller in view, inside its edges, in the description body's own box; none before either is drawn. */
@@ -2059,6 +2059,22 @@ function viewIn(scroller: HTMLElement | null, body: HTMLElement | null): MarginV
   const at = topIn(body, scroller) + scroller.clientTop;
 
   return { top: at + VIEW_EDGE, bottom: at + scroller.clientHeight - VIEW_EDGE };
+}
+
+/**
+ * What the column draws at the middle of its width, level with a height in
+ * the window, past the comments' own boxes over it; none above or below the
+ * column. Note that a block's box spans the column's width, a short line's
+ * and a bullet's alike, so its middle stands on whichever block is there.
+ */
+function levelWith(body: HTMLElement, y: number): Element | undefined {
+  const box = body.getBoundingClientRect();
+
+  if (y < box.top || y >= box.bottom) return undefined;
+
+  return document
+    .elementsFromPoint(box.left + box.width / 2, y)
+    .find((each) => body.contains(each) && each.closest(`.${COMMENT_LAYER_CLASS}`) === null);
 }
 
 /** The block a point is over, one of a section's own: a paragraph, a list, a heading, a quote, a table, or code. */
@@ -2090,29 +2106,33 @@ function blockAt(
  * from the scroller around it, whose width says whether a margin fits.
  */
 /**
- * The sheet naming the open thread's words in the editor, built once; a
- * constructed sheet, since the window's policy takes no inline style. It
- * names the thread's id, so it is written withheld from the screen
- * recording (`@repo/ui/session-replay-marks`), from before it is adopted.
+ * The sheet naming the threads whose words are drawn lit by a rule rather
+ * than their marks' own `data-active`, built once; a constructed sheet,
+ * since the window's policy takes no inline style. It names the threads'
+ * ids, so it is written withheld from the screen recording
+ * (`@repo/ui/session-replay-marks`), from before it is adopted.
  */
-let openThreadSheet: CSSStyleSheet | undefined;
+let litThreadsSheet: CSSStyleSheet | undefined;
 
-/** The open thread's words drawn open in the editor, as the read view draws its marks with `data-active`; none where no thread is open. */
-function editorOpenThread(thread: string | undefined): void {
+/** The threads' words drawn as an open thread's are, as the read view draws its marks with `data-active`; none where the list is empty. */
+function drawLitThreads(threads: readonly string[]): void {
   if (!("CSSStyleSheet" in globalThis) || !("adoptedStyleSheets" in document)) return;
 
-  if (openThreadSheet === undefined) {
-    openThreadSheet = new CSSStyleSheet();
-    writeWithheldSheet(openThreadSheet, "");
-    document.adoptedStyleSheets = [...document.adoptedStyleSheets, openThreadSheet];
+  if (litThreadsSheet === undefined) {
+    litThreadsSheet = new CSSStyleSheet();
+    writeWithheldSheet(litThreadsSheet, "");
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, litThreadsSheet];
   }
 
   // Note that a thread's id is the service's UUID, which a selector takes as it is; the rule draws the edge whole, so words inside another thread's mark, which draws none of its own, show it too.
   writeWithheldSheet(
-    openThreadSheet,
-    thread === undefined
-      ? ""
-      : `.description-document-text .${COMMENT_MARK_CLASS}[data-threads~="${thread}"] { padding-bottom: 1px; border-bottom: 1.5px solid var(--comment-mark-active-edge); background: var(--comment-mark-active); }`,
+    litThreadsSheet,
+    threads
+      .map(
+        (thread) =>
+          `.description-document-body .${COMMENT_MARK_CLASS}[data-threads~="${thread}"] { padding-bottom: 1px; border-bottom: 1.5px solid var(--comment-mark-active-edge); background: var(--comment-mark-active); }`,
+      )
+      .join("\n"),
   );
 }
 
@@ -2182,6 +2202,8 @@ export function DescriptionCommentLayer({
   const [onBlocks, setOnBlocks] = useState(false);
   // The thread whose words the pointer is on, whose card answers it before a press.
   const [pointed, setPointed] = useState<string | undefined>(undefined);
+  // The thread whose card the pointer is on, whose words answer it before a press.
+  const [cardPointed, setCardPointed] = useState<string | undefined>(undefined);
   // Whether the open thread was opened by the editor's caret standing in its words, which closes it as the caret leaves them.
   const caretOpened = useRef(false);
   // Whether a pointer is down, whose press moves the focus before its own rule says what becomes of the thread.
@@ -2272,19 +2294,47 @@ export function DescriptionCommentLayer({
     [body, sections, unitClass],
   );
 
+  // The line a thread was started on from the editor, with what it began, which the editor draws no mark on.
+  const startedOn = useRef<(LineAt & { pending: PendingThread }) | undefined>(undefined);
+
+  const startedLine = useCallback(
+    (element: HTMLElement): LineAt => {
+      const line = startedOn.current;
+
+      if (line !== undefined && line.pending === pending) return line;
+      const selection = window.getSelection();
+
+      const words =
+        selection === null || selection.rangeCount === 0 || selection.isCollapsed
+          ? undefined
+          : selection.getRangeAt(0).getBoundingClientRect();
+
+      if (words === undefined || pending === undefined) return { top: 0, middle: 0 };
+      const top = words.top - element.getBoundingClientRect().top;
+      // Note that the selection collapses as the card takes the caret, so the words' line is kept for the thread they began.
+      startedOn.current = { pending, top, middle: top + words.height / 2 };
+
+      return startedOn.current;
+    },
+    [pending],
+  );
+
   const anchorAt = useCallback(
-    (thread: string, section: string): { top: number; middle: number } | undefined => {
+    (thread: string, section: string): LineAt | undefined => {
       const element = body.current;
       const anchor = anchorOf(thread, section);
 
       if (element === null || anchor === undefined) return undefined;
 
+      // Note that the editor marks no words a thread is being started on, so its card stands by the line it was started from, or the words selected, until the read view draws them, rather than at the top.
+      if (thread === PENDING_THREAD && anchor === element) return startedLine(element);
+
       return {
         top: anchor === element ? 0 : topIn(element, anchor),
-        middle: lineMiddleIn(element, anchor),
+        middle: firstLineIn(element, anchor).middle,
       };
     },
-    [body, anchorOf],
+    [body, anchorOf, startedLine],
   );
 
   // Note that the margin is measured again only when what it stands on
@@ -2417,20 +2467,14 @@ export function DescriptionCommentLayer({
     setListTop((held) => (Math.abs(held - top) < 1 ? held : top));
   });
 
-  // A block under the pointer, or the one a finger last tapped, shows its button at the column's end; words selected raise the bubble over them.
+  // A block under the pointer, or level with it in a gutter, or the one a finger last tapped, shows its button at the column's end; words selected raise the bubble over them.
   useEffect(() => {
     const element = body.current;
+    const room = scroller.current;
 
     if (element === null) return;
 
-    const point = (target: EventTarget | null) => {
-      const marked =
-        target instanceof Element
-          ? target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)
-          : null;
-
-      setPointed(marked?.dataset.threads?.split(" ")[0]);
-
+    const pointBlock = (target: EventTarget | null) => {
       // A divider holds no words for a thread to stand on, so it offers no button, and the block's it came from goes.
       if (target instanceof HTMLHRElement) {
         setHovered(undefined);
@@ -2442,8 +2486,8 @@ export function DescriptionCommentLayer({
 
       if (found === undefined) return;
 
-      // Note that a block whose words a thread already covers is commented on through that thread, so it offers no button.
-      if (threadedWhole(found.block)) {
+      // Note that a block a thread already stands on is commented on through that thread, so it offers no button.
+      if (threaded(found.block)) {
         setHovered(undefined);
 
         return;
@@ -2451,13 +2495,14 @@ export function DescriptionCommentLayer({
 
       if (editor !== undefined) {
         setHovered({
-          top: topIn(element, found.block),
-          middle: lineMiddleIn(element, found.block),
+          ...firstLineIn(element, found.block),
           start: () => {
             const span = editor.current?.blockSpan(found.block);
 
-            if (span !== undefined)
-              setPending(editorPending(span, DESCRIPTION_COMMENT_SCOPE.BLOCK));
+            if (span === undefined) return;
+            const begun = editorPending(span, DESCRIPTION_COMMENT_SCOPE.BLOCK);
+            startedOn.current = { pending: begun, ...firstLineIn(element, found.block) };
+            setPending(begun);
           },
         });
 
@@ -2470,8 +2515,7 @@ export function DescriptionCommentLayer({
       if (section === undefined) return;
       const { quote, from, to } = ownWords(found.unit, found.block);
       setHovered({
-        top: topIn(element, found.block),
-        middle: lineMiddleIn(element, found.block),
+        ...firstLineIn(element, found.block),
         start: () => {
           const begun = pendingOf(
             found.unit,
@@ -2486,6 +2530,16 @@ export function DescriptionCommentLayer({
       });
     };
 
+    const point = (target: EventTarget | null) => {
+      const marked =
+        target instanceof Element
+          ? target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)
+          : null;
+
+      setPointed(marked?.dataset.threads?.split(" ")[0]);
+      pointBlock(target);
+    };
+
     // Note that a finger's arrival names no block, because iOS plays a tap's
     // arrival as a hover and spends the tap on a button that comes in with
     // it, a link's in the block among them; its tap names the block once
@@ -2498,6 +2552,32 @@ export function DescriptionCommentLayer({
         blockAt(target, unitClass) !== undefined ||
           (target instanceof Element && target.closest(`.${BLOCK_BUTTON_CLASS}`) !== null),
       );
+    };
+
+    // Note that the gutters beside the column name the block level with the pointer, as Notion's do, so its button comes without the pointer reaching the words; what the column draws there is read again only as it changes, not on every move.
+    let beside: Element | undefined;
+
+    const alongside = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+
+      if (event.target instanceof Node && element.contains(event.target)) {
+        beside = undefined;
+
+        return;
+      }
+
+      const found = levelWith(element, event.clientY);
+
+      if (found === beside) return;
+      beside = found;
+      setPointed(undefined);
+      pointBlock(found ?? null);
+      setOnBlocks(blockAt(found ?? null, unitClass) !== undefined);
+    };
+
+    const leftGutter = () => {
+      beside = undefined;
+      setOnBlocks(false);
     };
 
     const tapped = (event: MouseEvent) => {
@@ -2664,6 +2744,8 @@ export function DescriptionCommentLayer({
     };
 
     element.addEventListener("pointerover", over);
+    room?.addEventListener("pointermove", alongside);
+    room?.addEventListener("pointerleave", leftGutter);
     element.addEventListener("click", tapped);
     element.addEventListener("pointerleave", left);
     element.addEventListener("focusout", blurred);
@@ -2692,6 +2774,8 @@ export function DescriptionCommentLayer({
     return () => {
       hiding.disconnect();
       element.removeEventListener("pointerover", over);
+      room?.removeEventListener("pointermove", alongside);
+      room?.removeEventListener("pointerleave", leftGutter);
       element.removeEventListener("click", tapped);
       element.removeEventListener("pointerleave", left);
       element.removeEventListener("focusout", blurred);
@@ -2702,7 +2786,7 @@ export function DescriptionCommentLayer({
       element.removeEventListener("click", pressed);
       document.removeEventListener("selectionchange", selected);
     };
-  }, [body, editor, sections, unitClass, setPending, onActive, active]);
+  }, [body, scroller, editor, sections, unitClass, setPending, onActive, active]);
 
   // While the bubble stands, its command starts the thread as a press on it does.
   useAppCommand(APP_COMMAND.COMMENT_ON_SELECTION, bubble?.start);
@@ -2721,13 +2805,25 @@ export function DescriptionCommentLayer({
   useEffect(() => {
     settled.current = new Set(tops.keys());
   });
-  // The editor's marks are the editor's own, so the open thread's words are drawn open there by a rule naming them.
+  // The editor's marks are the editor's own, so the open thread's words are drawn open there by a rule naming them, as are the words of the card the pointer is on, in either view, as Notion's are.
   const editorActive = editor !== undefined && active !== PENDING_THREAD ? active : undefined;
-  useEffect(() => {
-    editorOpenThread(editorActive);
 
-    return () => editorOpenThread(undefined);
-  }, [editorActive]);
+  // Note that a card closed or gone under the pointer hears no leave, so its words are lit only while it is drawn: in the margin, or in the open thread's float where it folds.
+  const litPointed =
+    cardPointed !== undefined &&
+    (wide
+      ? marginCards.drawn.some((card) => card.id === cardPointed && !card.leaving)
+      : active !== undefined && active !== PENDING_THREAD)
+      ? cardPointed
+      : undefined;
+
+  useEffect(() => {
+    drawLitThreads(
+      [editorActive, litPointed].filter((thread): thread is string => thread !== undefined),
+    );
+
+    return () => drawLitThreads([]);
+  }, [editorActive, litPointed]);
   // A press anywhere but the thread, its words, or what it opened over the page closes it, its words kept as its draft; a thread being started goes too, but while its words are sent or it holds files or a dictation, which no draft keeps.
   usePressAway(NO_LAYER, () => undefined, {
     onPressAway:
@@ -2775,7 +2871,7 @@ export function DescriptionCommentLayer({
       <div
         className={BLOCK_BUTTON_CLASS}
         data-beside-cards={wide ? "" : undefined}
-        style={{ top: hovered.middle }}
+        style={{ top: wide ? hovered.top : hovered.middle }}
       >
         <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
           {/* Note that the press takes no focus, so an open editor stays to measure the block through. */}
@@ -2827,7 +2923,7 @@ export function DescriptionCommentLayer({
   // Listed, every thread of the kind chosen stands under the toggle in the margin's place, or over the words where it folds; no card stands beside its words meanwhile, so none is drawn twice.
   if (listing !== undefined) {
     return (
-      <div className="comment-layer" style={layerStyle}>
+      <div className={COMMENT_LAYER_CLASS} style={layerStyle}>
         {blockButton}
         {bubbleDrawn}
         <DescriptionCommentList
@@ -2845,7 +2941,7 @@ export function DescriptionCommentLayer({
 
   if (wide) {
     return (
-      <div className="comment-layer" style={layerStyle}>
+      <div className={COMMENT_LAYER_CLASS} style={layerStyle}>
         {blockButton}
         {bubbleDrawn}
         <div className="comment-margin absolute top-0 left-comment-margin w-comment-card">
@@ -2856,6 +2952,7 @@ export function DescriptionCommentLayer({
               moves={settled.current.has(card.id)}
               slotRef={cardRef(card.id)}
               onGone={marginCards.gone}
+              onPointed={setCardPointed}
             >
               {card.thread !== undefined ? (
                 <ThreadCard
@@ -2900,7 +2997,7 @@ export function DescriptionCommentLayer({
   const shownTop = shown === undefined ? undefined : anchors.get(shown.id);
 
   return (
-    <div className="comment-layer" style={layerStyle}>
+    <div className={COMMENT_LAYER_CLASS} style={layerStyle}>
       {blockButton}
       {bubbleDrawn}
       {[...counts].map(([top, threads]) => {
@@ -2942,7 +3039,16 @@ export function DescriptionCommentLayer({
         >
           {/* Note that a line holding more threads than the view has room for scrolls them all, so no card is pressed below its own reply field. */}
           <ScrollArea size={SCROLL_SIZE.CONTENT} overscroll={SCROLL_OVERSCROLL.CHAIN}>
-            <div className="comment-float-cards">
+            {/* Note that the card the pointer is on lights its words, as a margin's card does (`MarginSlot`). */}
+            <div
+              className="comment-float-cards"
+              onPointerOver={(event) => {
+                if (event.pointerType === "touch" || !(event.target instanceof Element)) return;
+                const card = event.target.closest<HTMLElement>(".comment-card[data-thread]");
+                setCardPointed(card?.dataset.thread);
+              }}
+              onPointerLeave={() => setCardPointed(undefined)}
+            >
               {(counts.get(shownTop) ?? [shown]).map((thread) => (
                 <ThreadCard
                   key={thread.id}
@@ -3821,9 +3927,7 @@ function PreviewComment({
 
   return (
     <Comment {...head}>
-      {quote === undefined ? null : (
-        <QuoteLine words={quote} label={COMMENT_WORDS.SHOW_ELEMENT} whole />
-      )}
+      {quote === undefined ? null : <QuoteLine words={quote} label={COMMENT_WORDS.SHOW_ELEMENT} />}
       <CommentWords words={words} files={shown.named} />
     </Comment>
   );
@@ -4026,7 +4130,6 @@ export function PendingPageComment({
           <QuoteLine
             words={quoted}
             label={COMMENT_WORDS.SHOW_ELEMENT}
-            whole={comment.reply === undefined && element?.words === true}
             onShow={
               shownPath === undefined || onShow === undefined ? undefined : () => onShow(shownPath)
             }

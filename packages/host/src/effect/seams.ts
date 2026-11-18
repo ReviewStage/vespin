@@ -5,7 +5,7 @@
  * so a composer states the seams it reaches in its own requirements instead of
  * taking a kernel that holds all of them.
  */
-import type { OpenConsent } from "@repo/credentials";
+import type { AccountRenewalWindow, OpenConsent } from "@repo/credentials";
 import type { ProductClientPlatform } from "@repo/features/analytics";
 import type {
   DeviceArch,
@@ -34,7 +34,7 @@ import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
 import type { LaunchdJob } from "../daemon/launchd-job.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
-import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
+import type { SecretCipher as SecretCipherSeam, TokenVault } from "../settings-store.js";
 
 /** The app's own application-state root, given explicitly. */
 export class StateRoot extends Context.Service<StateRoot, string>()("@repo/host/StateRoot") {}
@@ -47,6 +47,13 @@ export interface AppIdentityFacts {
   readonly appVersion: string;
   readonly packaged: boolean;
   readonly platform: ProductClientPlatform;
+  /**
+   * The IANA zone the member's own device reads its clock in now, which the
+   * host names to the service for their agents' turns
+   * (`time-zone-keeper.ts`); none on a machine whose zone is not the
+   * member's, which names none.
+   */
+  readonly deviceZone?: () => string;
 }
 
 export class AppIdentity extends Context.Service<AppIdentity, AppIdentityFacts>()(
@@ -71,6 +78,28 @@ export class Environment extends Context.Service<Environment, ConfigProvider.Con
 export class SecretCipher extends Context.Service<SecretCipher, SecretCipherSeam>()(
   "@repo/host/SecretCipher",
 ) {}
+
+/**
+ * Where the platform keeps the account's tokens itself, as the iPhone's
+ * Keychain does through `expo-secure-store`, which the OAuth source hands the
+ * settings store in its cipher's place where the shell provides one. The
+ * desktop provides none, so its tokens stay sealed by `SecretCipher`.
+ */
+export class PlatformTokenVault extends Context.Service<PlatformTokenVault, TokenVault>()(
+  "@repo/host/PlatformTokenVault",
+) {}
+
+/**
+ * When the account may renew, as the platform answers it: the iPhone renews
+ * only while its app stands in the foreground and keeps the app running
+ * through a renewal, since an answer it never keeps leaves a rotated refresh
+ * token that the service takes as a replay. The desktop provides none, so it
+ * renews whenever a call asks.
+ */
+export class PlatformRenewalWindow extends Context.Service<
+  PlatformRenewalWindow,
+  AccountRenewalWindow
+>()("@repo/host/PlatformRenewalWindow") {}
 
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {
@@ -104,19 +133,6 @@ export class SettingsChangedElsewhere extends Context.Service<
   SettingsChangedElsewhere,
   Stream.Stream<void>
 >()("@repo/host/SettingsChangedElsewhere") {}
-
-/**
- * Each moment the shell asks the account's kept lists written
- * (`entity-store.ts`): on the phone, the app going to the background. A host
- * handed it writes the lists that moved only then and as the store closes,
- * never on the store's own timer, because the phone seals the file in
- * JavaScript, about half a second a save for a large account, which a timer
- * firing while the member taps would stand in front of the tap. It is
- * optional: the desktop seals with the system's own cipher and provides none.
- */
-export class KeptListsDue extends Context.Service<KeptListsDue, Stream.Stream<void>>()(
-  "@repo/host/KeptListsDue",
-) {}
 
 /**
  * A terminal's relay WebSocket. It arrives rather than being built here,

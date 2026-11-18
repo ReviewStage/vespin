@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { NodePath } from "@effect/platform-node";
+import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
 import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
@@ -28,11 +28,8 @@ import {
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
-import {
-  PULL_REQUEST_ACTION,
-  PULL_REQUEST_WRITE_OUTCOME,
-} from "@repo/features/pull-request-write-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
+import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -48,17 +45,15 @@ import {
   SubscriptionRef,
 } from "effect";
 import { TestClock } from "effect/testing";
-import { KEPT_CHARACTERS } from "./account-items-follow.js";
 import type { AppTranscript } from "./app-state.js";
-import { KEPT_READ, openEntityStore } from "./entity-store.js";
+import { localCopy } from "./local-copy.js";
+import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
   type ACCOUNT_PARTS,
   AGENT,
   AGENT_ID,
   ATTACHMENT_ID,
-  CHANGES,
-  CHAPTERS,
   FOLLOWED,
   GATE_CLOSED_SIGNED_OUT,
   holding,
@@ -79,10 +74,8 @@ import {
   WAITING,
   WORKSPACE_ID,
 } from "./testing/agents-subject.js";
-import { memoryFileSystem } from "./testing/memory-file-system.js";
 import type { PolledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
-import { testCipher } from "./testing/test-cipher.js";
 import { HELD_TRANSCRIPTS } from "./transcript-follow.js";
 
 it.effect("each method asks the service once and answers what it said, whole", () =>
@@ -192,18 +185,9 @@ it.effect("each method asks the service once and answers what it said, whole", (
     assert.deepEqual(yield* acts.AGENTS_PAGE({ agentId: AGENT_ID }), {
       agent: PAGE,
     });
-    assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID }), CHANGES);
-    assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID, number: 11 }), CHANGES);
     assert.deepEqual(
       yield* acts.AGENTS_TURN_CHANGES({ agentId: AGENT_ID, messageId: "line-1" }),
       TURN_CHANGES,
-    );
-    assert.deepEqual(
-      yield* acts.CHAPTERS_GENERATE({
-        agentId: AGENT_ID,
-        number: 11,
-      }),
-      CHAPTERS,
     );
     assert.deepEqual(
       yield* acts.AGENTS_GITHUB_IMAGE({
@@ -211,14 +195,6 @@ it.effect("each method asks the service once and answers what it said, whole", (
         src: "https://camo.githubusercontent.com/abc",
       }),
       { contentType: GITHUB_IMAGE_TYPE.PNG, base64: "iVBORw0KGgo=" },
-    );
-    assert.deepEqual(
-      yield* acts.AGENTS_PULL_REQUEST_ACTION({
-        agentId: AGENT_ID,
-        number: 11,
-        request: { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW },
-      }),
-      { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE },
     );
     assert.deepEqual(
       yield* acts.AGENTS_INBOX_ATTACHMENT({
@@ -353,12 +329,8 @@ it.effect("each method asks the service once and answers what it said, whole", (
       `pin:${AGENT_ID}:true`,
       `delete:${AGENT_ID}`,
       `page:${AGENT_ID}`,
-      `changes:${AGENT_ID}`,
-      `changes:${AGENT_ID}#11`,
       `turn-changes:${AGENT_ID}:line-1`,
-      `chapters-generate:${AGENT_ID}#11`,
       `github-image:${AGENT_ID}:https://camo.githubusercontent.com/abc`,
-      `pull-request-action:${AGENT_ID}#11:${PULL_REQUEST_ACTION.READY_FOR_REVIEW}`,
       `attachment:${ITEM.id}:${ATTACHMENT_ID}`,
       `picture:${AGENT_ID}:${PICTURE_ID}:call-worker`,
       `part:${AGENT_ID}:message-1:2:`,
@@ -993,31 +965,81 @@ it.effect(
     }),
 );
 
+/** The platform a local database stands on here: Node's SQLite over a disk of the test's own. */
+const localPlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
+
+/** Dana's local database over `stateRoot` opened as a sign-in opens it, laying back `harness`'s refused messages. */
+function signedInLocal(
+  stateRoot: string,
+  harness: Effect.Success<ReturnType<typeof queueFollowed>>,
+) {
+  return Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    const local = yield* localCopy(stateRoot).pipe(Scope.provide(scope));
+    yield* local.open("user-dana", harness.refused);
+    yield* settled;
+
+    return { local, quit: Scope.close(scope, Exit.void) };
+  });
+}
+
+/** The refused messages the agent's held transcript last drew. */
+function refusedDrawn(harness: Effect.Success<ReturnType<typeof queueFollowed>>) {
+  return (harness.held().at(-1)?.sending ?? []).map(({ text, clientKey, refused }) => ({
+    text,
+    clientKey,
+    failure: refused?.failure,
+  }));
+}
+
+/** `SENT` as it is drawn refused, under the key it went under. */
+const SENT_REFUSED = {
+  text: SENT.text,
+  clientKey: SENT.clientKey,
+  failure: AGENT_CALL_FAILURE.UNANSWERED,
+};
+
+/** A held transcript whose message `SENT` the service refused. */
+const refusedSent = Effect.gen(function* () {
+  const harness = yield* queueFollowed();
+  harness.answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+  yield* harness.acts.AGENTS_MESSAGE(SENT);
+  yield* settled;
+
+  return harness;
+});
+
 it.effect(
-  "a message the service refused is drawn where it went again after a relaunch, from what the account's store kept, its key the one it went under",
+  "a message the service refused is drawn where it went again after a relaunch, from the account's local database, its key the one it went under",
   () =>
     Effect.gen(function* () {
+      const stateRoot = yield* temporaryDirectoryScoped("compose-agents-local-");
       const before = yield* queueFollowed();
+      const first = yield* signedInLocal(stateRoot, before);
       before.answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       yield* before.acts.AGENTS_MESSAGE(SENT);
       yield* settled;
-      // Note that what the store keeps goes through JSON, as the sealed file does.
-      const kept = JSON.parse(JSON.stringify(before.refused.kept()));
+      yield* first.quit;
 
       const after = yield* queueFollowed();
-      yield* after.refused.restored("user-dana", kept);
-      yield* settled;
+      yield* (yield* signedInLocal(stateRoot, after)).quit;
+      assert.deepEqual(refusedDrawn(after), [SENT_REFUSED]);
+    }).pipe(Effect.provide(localPlatform)),
+);
 
-      const drawn = after.held().at(-1)?.sending ?? [];
-      assert.deepEqual(
-        drawn.map(({ text, clientKey, refused }) => ({
-          text,
-          clientKey,
-          failure: refused?.failure,
-        })),
-        [{ text: SENT.text, clientKey: SENT.clientKey, failure: AGENT_CALL_FAILURE.UNANSWERED }],
-      );
-    }),
+it.effect("a message refused is let go at a sign-out, and drawn no more at the next sign-in", () =>
+  Effect.gen(function* () {
+    const stateRoot = yield* temporaryDirectoryScoped("compose-agents-local-");
+    const before = yield* refusedSent;
+    const first = yield* signedInLocal(stateRoot, before);
+    yield* before.refused.forgotten;
+    yield* first.local.forget;
+    yield* first.quit;
+
+    const after = yield* queueFollowed();
+    yield* (yield* signedInLocal(stateRoot, after)).quit;
+    assert.deepEqual(refusedDrawn(after), []);
+  }).pipe(Effect.provide(localPlatform)),
 );
 
 it.effect(
@@ -2187,83 +2209,6 @@ it.effect(
         [true, true],
       );
     }),
-);
-
-/** A store of the account's lists over a disk of the test's own, opened in `scope`, as a launch opens it. */
-const keptStore = (scope: Scope.Scope) =>
-  Scope.provide(scope)(
-    openEntityStore({ directory: "/state", cipher: testCipher(), accountId: "user-dana" }),
-  );
-
-it.effect(
-  "the account's items kept on disk are drawn as the gate opens, before the service answers, and the answer takes their place: an item it no longer holds leaves, and a changed one is drawn as it answered",
-  () =>
-    Effect.gen(function* () {
-      const earlier = yield* Scope.make();
-      const kept = { ...HELD_ITEM, title: "Push to staging?" };
-
-      yield* (yield* keptStore(earlier)).keep(KEPT_READ.INBOX, {
-        items: [
-          { item: kept, taskId: TASK_ID },
-          { item: OTHER_ITEM, taskId: OTHER_TASK_ID },
-        ],
-        at: "7",
-      });
-      yield* Scope.close(earlier, Exit.void);
-
-      const { open, asked, sealItems, live, accountItems } = yield* subject({
-        entities: yield* keptStore(yield* Scope.make()),
-      });
-
-      sealItems(LIVE_ANSWERED);
-      deliverItems(live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
-      yield* open;
-      yield* settled;
-
-      assert.deepEqual(accountItems(), [
-        byPlan({ [TASK_ID]: [kept], [OTHER_TASK_ID]: [OTHER_ITEM] }),
-        byPlan({ [TASK_ID]: [HELD_ITEM] }),
-      ]);
-      assert.equal(asked.includes("account-items-live:user-dana"), false, "asked past the kept id");
-    }).pipe(Effect.provide(Layer.merge(memoryFileSystem().layer, NodePath.layer))),
-);
-
-it.effect(
-  "the account's items are kept on disk only as far as the newest that fit, and then without the sync id, so the next launch reads them whole",
-  () =>
-    Effect.gen(function* () {
-      const quit = yield* Scope.make();
-
-      const { open, sealItems, live, accountItems } = yield* subject({
-        entities: yield* keptStore(quit),
-      });
-
-      // Each a little over a quarter of what fits, so the newest three fit and the oldest two do not.
-      const many = Array.from({ length: 5 }, (_, index) => ({
-        ...OTHER_ITEM,
-        id: `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-        title: "x".repeat(KEPT_CHARACTERS / 4),
-        updatedAt: OTHER_ITEM.updatedAt + index,
-      }));
-
-      sealItems(LIVE_ANSWERED);
-      deliverItems(
-        live,
-        many.map((item) => stampOf(item, OTHER_TASK_ID)),
-        many,
-      );
-      yield* open;
-      yield* toldTimes(accountItems, 1);
-      yield* Scope.close(quit, Exit.void);
-
-      const stored = (yield* keptStore(yield* Scope.make())).stored(KEPT_READ.INBOX);
-
-      assert.deepEqual(
-        stored?.items.map((each) => each.item.id),
-        [many[4]?.id, many[3]?.id, many[2]?.id],
-      );
-      assert.equal(stored?.at, undefined);
-    }).pipe(Effect.provide(Layer.merge(memoryFileSystem().layer, NodePath.layer))),
 );
 
 it.effect("an item no stamp names any more is dropped, its plan told no more", () =>

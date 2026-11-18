@@ -16,7 +16,7 @@ env:
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Memory"
@@ -75,5 +75,8 @@ env:
 - assertVisible: "Delete this memory?"
 - waitForAnimationToEnd
 - takeScreenshot: settings-memory-delete
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Delete this memory?"
 - assertVisible: "The staging database is reset every Sunday night."

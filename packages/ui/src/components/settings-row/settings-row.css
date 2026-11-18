@@ -9,7 +9,7 @@
    (`@container/ui-settings-row`), so under 380px the name keeps to one
    line, fading where it is cut. A compact row keeps its controls beside its
    words at any width, and a row that labels its switch keeps the switch
-   beside them. */
+   beside them. A row pressed whole stands its controls over its press. */
 
 @layer components {
   /* The mark a provider's or a service's row leads with, which an indented
@@ -26,6 +26,24 @@
 
   .ui-settings-row[data-led="true"] {
     --ui-settings-row-drop-inset: var(--ui-settings-row-words-inset);
+  }
+
+  /* What a row grows under its line (`below`) stands a step under the
+     row's gap. A fold's (`SettingsFoldRow`) stands its body in that room
+     instead, the gap and the step drawn as the body's own padding, so the
+     room the fold takes is its body's alone: pressed shut, it gives all of
+     it up at once (`--disclosure-rise`, disclosure.css) rather than leaving
+     the step for what stands under it to travel after it has rolled up. */
+  .ui-settings-row-below {
+    margin-block-start: var(--ui-space-8);
+  }
+
+  .ui-settings-row-below:has(> .ui-settings-row-fold) {
+    margin-block-start: calc(-1 * var(--ui-space-4));
+  }
+
+  .ui-settings-row-fold > .ui-disclosure-body {
+    padding-block-start: calc(var(--ui-space-4) + var(--ui-space-8));
   }
 
   /* A meter under a row's words (`SettingsRowMeter`): its gap above and its
@@ -46,6 +64,14 @@
   .ui-settings-row-meter {
     max-inline-size: calc(var(--ui-space-96) + var(--ui-space-32));
     margin-block-end: calc(-1 * var(--ui-settings-row-meter-block));
+  }
+
+  /* Note that the end's display stays here rather than in a utility,
+     because its section takes it away where it holds only the room of a
+     glyph no row of the section draws (settings-section.css), and a rule in
+     this layer cannot undo a utility. */
+  .ui-settings-row-end {
+    display: flex;
   }
 
   /* Note that the gaps, the subject's share of the line, and the title's
@@ -228,6 +254,56 @@
       position: relative;
       z-index: 1;
     }
+  }
+
+  /* A row pressed whole (`SettingsLinkRow`) is the box its press reaches
+     over, its controls, a link in its description, and its error's copy
+     standing over the press, so a press on one is that control's own and
+     opens nothing. Note that the press's reach is lifted over the words,
+     because a narrow row's name fades under a mask, which stacks it over
+     a reach left in place, so a press on the name would miss the row; and
+     that the row is isolated, so neither stands over what the page lays
+     above the row. */
+  .ui-settings-row[data-pressed-whole="true"] {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .ui-settings-row[data-pressed-whole="true"] > .ui-card-press > .ui-card-press-reach {
+    z-index: 1;
+  }
+
+  .ui-settings-row[data-pressed-whole="true"]
+    :is(
+      .ui-settings-row-controls,
+      .ui-settings-row-description :is(a, button),
+      .ui-error-line-copy
+    ) {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* The card's hover wash, on the press's reach, a step inside the card's
+     edge, while the pointer rests on the row and not on a control standing
+     over it. Note that it is a rule rather than a utility, because the
+     reach is the press's own box; its pressed fill, a utility, wins over it. */
+  @media (hover: hover) {
+    .ui-settings-row[data-pressed-whole="true"]
+      > .ui-card-press:not(:disabled):hover
+      > .ui-card-press-reach {
+      background-color: var(--ui-color-fill-hover);
+    }
+  }
+
+  /* A fold's head row is pressed whole (`SettingsFoldRow`,
+     `SettingsRowsFold`), so the pointer says so over all of it but what it
+     grows below, the fold's body among them, which folds nothing. */
+  .ui-settings-row[data-folds="true"] {
+    cursor: var(--ui-cursor-press);
+  }
+
+  .ui-settings-row[data-folds="true"] .ui-settings-row-below {
+    cursor: auto;
   }
 
   /* Note that the glyph a mark holds is sized here rather than by a utility

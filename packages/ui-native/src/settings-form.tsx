@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a script read whole, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
   Circle,
@@ -38,22 +38,23 @@ import {
   menuIndicator,
   menuStyle,
   multilineTextAlignment,
+  padding,
   resizable,
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
-  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
-import { Avatar } from "./marks.js";
+import { Avatar, HarnessMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
@@ -88,6 +89,14 @@ export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
 
 /** What VoiceOver hears a row's ⋯ as. */
 const ROW_MORE_LABEL = "More";
+
+/**
+ * How far the ⋯'s 44 pt target reaches past the glyph into the row's own
+ * room above, below and after it, in points: about half of what 44 pt
+ * stands past the glyph's line, so the target is Apple's minimum while
+ * the row stands no taller and the glyph keeps its place at the row's end.
+ */
+const ROW_MORE_REACH = 12;
 
 /** The size of the glyph leading a `MenuRow`, as a list's leading mark stands. */
 const GLYPH_SIZE = 15;
@@ -125,16 +134,30 @@ export function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
  * The ⋯ at the end of a row whose acts would otherwise hide behind a long
  * press and a swipe, such as a connection with nothing to press at its end:
  * the system's menu of them under the glyph alone, in the secondary ink, so
- * the row says it holds acts, as the panel's ⋯ does.
+ * the row says it holds acts, as the panel's ⋯ does. Note that the glyph's
+ * label takes a 44 pt frame and its shape, since only a label's shape
+ * answers a press and the glyph alone stood about 20 pt; the menu then
+ * gives back that reach (`ROW_MORE_REACH`), so the target stretches into
+ * the row's own room rather than growing it.
  */
 function RowMoreMenu({ acts }: { readonly acts: readonly MenuRowAct[] }) {
   return (
     <Menu
-      label={<Image {...glyphImage(GLYPH.MORE)} modifiers={[foregroundStyle(VALUE_INK)]} />}
+      label={
+        <Image
+          {...glyphImage(GLYPH.MORE)}
+          modifiers={[
+            foregroundStyle(VALUE_INK),
+            frame({ width: PRESS_SIZE, height: PRESS_SIZE }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        />
+      }
       modifiers={[
         menuStyle("button"),
         buttonStyle("plain"),
         menuIndicator("hidden"),
+        padding({ vertical: -ROW_MORE_REACH, trailing: -ROW_MORE_REACH }),
         accessibilityLabel(ROW_MORE_LABEL),
       ]}
     >
@@ -235,7 +258,6 @@ function PressedRow({
  * half-height sheet's own glass.
  */
 export function SettingsForm({
-  onContentHeight,
   clear = false,
   spacing = FORM_SPACING.REGULAR,
   children,
@@ -244,22 +266,13 @@ export function SettingsForm({
   readonly clear?: boolean | undefined;
   /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
   readonly spacing?: FormSpacing;
-  /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
-  readonly onContentHeight?: ((height: number) => void) | undefined;
   readonly children: ReactNode;
 }) {
   const colors = useColors();
 
-  const measured = useScrollGeometryChange(
-    onContentHeight === undefined
-      ? undefined
-      : (geometry) => onContentHeight(geometry.contentHeight),
-  );
-
   return (
     <Form
       modifiers={[
-        ...(measured === null ? [] : [measured]),
         ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
@@ -576,6 +589,50 @@ export function CodeRow({ code, testId }: { readonly code: string; readonly test
   );
 }
 
+/**
+ * A script as it is saved, read and never edited here, such as a
+ * workspace's install script: its name, the script whole under it in the
+ * monospaced face, and a quiet line under that where one is given, such as
+ * how it last ran. VoiceOver hears it as one element, its name then the
+ * script and the line.
+ */
+export function ScriptRow({
+  name,
+  script,
+  line,
+}: {
+  readonly name: string;
+  readonly script: string;
+  readonly line?: string | undefined;
+}) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[listRowBackground(colors.RAISED), accessibilityElement("combine")]}
+    >
+      <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
+          foregroundStyle(colors.TEXT_BODY),
+        ]}
+      >
+        {script}
+      </Text>
+      {line === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {line}
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
 type ActionRowProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
@@ -664,11 +721,15 @@ export type PickOption = {
   readonly label: string;
   /** What picking it does, in the muted ink under its name, such as a permission mode's; none for none. */
   readonly hint?: string | undefined;
+  /** The panel's glyph the option leads with in a menu, such as a permission mode's; none for none. */
+  readonly symbol?: Glyph | undefined;
 };
 
 type PickRowsProps = {
   readonly options: readonly PickOption[];
-  readonly picked: string | undefined;
+  /** The one option picked, or, for a choice that takes any that apply, each one picked. */
+  readonly picked: string | readonly string[] | undefined;
+  /** Called with the option pressed; a choice that takes several hands its holder the press, which adds or takes back the pick. */
   readonly onPick: (id: string) => void;
 };
 
@@ -702,10 +763,13 @@ export function PickedCheck() {
  * the form's tint, which stands in the ink, and neither a tint on the picker
  * nor one on a group around it reached the check. VoiceOver hears each row
  * as a button by its words, the picked one selected, under the section's
- * title.
+ * title. Handed several picks, such as setup's survey questions, which take
+ * any answers that apply, it checks each, as Settings checks a list's
+ * several choices.
  */
 export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
+  const pickedIds: readonly (string | undefined)[] = [picked].flat();
 
   // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
@@ -717,7 +781,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
           modifiers={[
             accessibilityLabel(option.label),
             ...(option.hint === undefined ? [] : [accessibilityValue(option.hint)]),
-            ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
+            ...(pickedIds.includes(option.id) ? [accessibilityAddTraits(["isSelected"])] : []),
             listRowBackground(colors.RAISED),
           ]}
         >
@@ -736,7 +800,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
               )}
             </VStack>
             <Spacer />
-            {option.id === picked ? <PickedCheck /> : null}
+            {pickedIds.includes(option.id) ? <PickedCheck /> : null}
           </HStack>
         </SwiftUIButton>
       ))}
@@ -1113,6 +1177,8 @@ type NoteAct = { readonly label: string; readonly onPress: () => void };
 type NoteRowProps = {
   /** The glyph before the words, in the muted ink, such as a machine's kind. */
   readonly symbol?: Glyph | undefined;
+  /** The harness a credential's row stands for, whose mark leads it in the glyph's place, as the panel leads a plan's and a key's rows with its provider's logo. */
+  readonly harness?: ModelProvider | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
   /** What it is, under its words in the body's ink, such as a skill's description. */
@@ -1140,7 +1206,16 @@ type NoteRowProps = {
  * VoiceOver hears the row as one element, its words then its line, and
  * offers its acts among its actions.
  */
-export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: NoteRowProps) {
+export function NoteRow({
+  symbol,
+  harness,
+  words,
+  detail,
+  line,
+  onPress,
+  edit,
+  remove,
+}: NoteRowProps) {
   const colors = useColors();
   const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
 
@@ -1170,7 +1245,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       spacing={SPACE.ROW}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
-      {symbol === undefined ? null : (
+      {harness !== undefined ? (
+        <HarnessMark provider={harness} size={leadSize} />
+      ) : symbol === undefined ? null : (
         <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
       )}
       {lines}

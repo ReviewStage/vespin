@@ -1,17 +1,36 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { INTEGRATION_STATUS_WORDS } from "@repo/features/integration-status-words";
-import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
-import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  CREDENTIAL_WORDS,
+  type CredentialProvider,
+  HARNESS_INFO,
+  HARNESS_PLAN,
+  HARNESSES,
+  HARNESSES_WITH_CURSOR,
+  type HarnessInfo,
+  harnessReady,
+  keepsPlan,
+  keyLineWords,
+  keyRejectionWords,
+  keyRemovalWords,
+  keyStanding,
+  keysOf,
+  PLAN_DISCONNECT_WORDS,
+  type PlanProvider,
+  plansOf,
+  signInFix,
+  signInWords,
+  planStanding as standing,
+  tokenRejectionWords,
+  tokenWords,
+} from "@repo/features/agent-credentials-model";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   apiKeyName,
-  PLAN_NAME,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
   PROVIDER_KEY_STATUS,
   type ProviderKeyRejection,
-  type ProviderKeyStatus,
   type ProviderKeySummary,
   type ProviderKeysAnswer,
   pastedKeyFits,
@@ -20,8 +39,7 @@ import {
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { dueText } from "@repo/features/time-format";
-import { readingWords, SIGNED_OUT_WORDS, VERB } from "@repo/features/words";
+import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
@@ -67,6 +85,7 @@ import {
   SettingsRowUsage,
   SettingsSection,
   SettingsSectionsSkeleton,
+  STATUS_TONE,
   Stack,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -83,6 +102,7 @@ import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/u
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ActResult } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
@@ -95,6 +115,7 @@ import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { renameWrite } from "../rename-write.js";
 import { ResetCreditCard, useResetCreditOffer } from "../reset-credit.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
+import { useWorkingToast } from "../toast.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
 import { ChatGptDeviceLogin } from "./chatgpt-device-login.js";
@@ -119,7 +140,7 @@ import { ReadFailed } from "./marks.js";
  * Under its name it says how much of its usage window it has used, with a
  * bar, nothing before a turn has said, or that it is at its limit until
  * when, its bar full in the attention ink, or what is wrong with it in the
- * attention tint; and ends in a ⋯ holding Rename, Move up and down, Replace
+ * attention tint; and ends in a ⋯ holding Rename, Replace
  * token, and Disconnect, the fix its state asks for standing beside it:
  * Replace token for a Claude token Anthropic refused, Reconnect for a
  * Codex plan whose sign-in expired (Sign in again for one whose plan has no
@@ -129,7 +150,7 @@ import { ReadFailed } from "./marks.js";
  * (`reset-credit.tsx`). A key is named by the name the
  * account gave it, else API key and its hint, renamed in place as a Claude
  * plan is; says what is wrong with it, if anything; and ends in a ⋯ holding
- * Rename, Move up and down, Replace key, and Remove key. With neither a plan nor a key, no agent
+ * Rename, Replace key, and Remove key. With neither a plan nor a key, no agent
  * starts on that provider's models, since our key pays for no coding agent.
  * Calls and dictation run on the OpenAI API key alone, so every answer here
  * is handed to the window too (`../openai-key.tsx`), and removing that key
@@ -165,39 +186,13 @@ import { ReadFailed } from "./marks.js";
 const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
 
 /** The providers whose harness Agents draws a card for: Claude Code's, Codex's, and Cursor's. */
-type SettingsProvider =
-  | typeof PROVIDER_KEY_PROVIDER.ANTHROPIC
-  | typeof PROVIDER_KEY_PROVIDER.OPENAI
-  | typeof PROVIDER_KEY_PROVIDER.CURSOR;
+type SettingsProvider = CredentialProvider;
 
-/** The harnesses that keep a plan here as well as API keys: Claude's setup-token and Codex's ChatGPT sign-in. Cursor keeps none. */
-type PlanProvider = typeof PROVIDER_KEY_PROVIDER.ANTHROPIC | typeof PROVIDER_KEY_PROVIDER.OPENAI;
-
-/** What a harness's section and its keys' rows are drawn from. */
-interface Harness {
-  /** What its header row names it. */
-  readonly name: string;
-  /** The mark its header row leads with. */
-  readonly mark: ModelProvider;
+/** What a harness's section and its keys' rows are drawn from: its words, with the logo its rows lead with and the section a search or a remedy lands on. */
+interface Harness extends HarnessInfo {
   /** The logo its plans' rows and its keys' rows lead with. */
   readonly rowMark: React.JSX.Element;
-  readonly keyName: string;
-  /** Its key named with its article, as a refusal says it isn't one: "an Anthropic key". */
-  readonly keyNoun: string;
-  readonly keyUrl: string;
-  /** What the site a key is made on is called, which its link names. */
-  readonly keySite: string;
-  /** How a key of its begins, which its empty field shows. */
-  readonly keyExample: string;
-  /** What deleting one of its keys costs, which the question says. */
-  readonly keyLoss: string;
   readonly anchor: string;
-}
-
-/** What a harness that keeps a plan adds: the plan's name, wherever a surface names the credential, and its kind. */
-interface HarnessPlan {
-  readonly planName: string;
-  readonly plan: SubscriptionKeySummary["kind"];
 }
 
 /**
@@ -207,79 +202,29 @@ interface HarnessPlan {
  */
 const HARNESS = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
-    name: "Claude",
-    mark: MODEL_PROVIDER.ANTHROPIC,
+    ...HARNESS_INFO[PROVIDER_KEY_PROVIDER.ANTHROPIC],
     rowMark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
-    keyName: "Anthropic",
-    keyNoun: "an Anthropic key",
-    keyUrl: "https://console.anthropic.com/settings/keys",
-    keySite: "Anthropic Console",
-    keyExample: "sk-ant-api03-…",
-    keyLoss: `Agents on Anthropic models won't start without a ${PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC]}.`,
     anchor: SETTINGS_SECTION.CLAUDE,
   },
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
-    name: "Codex",
-    mark: MODEL_PROVIDER.OPENAI,
+    ...HARNESS_INFO[PROVIDER_KEY_PROVIDER.OPENAI],
     rowMark: (
       <SettingsRowMark>
         <HarnessMark provider={MODEL_PROVIDER.OPENAI} />
       </SettingsRowMark>
     ),
-    keyName: "OpenAI",
-    keyNoun: "an OpenAI key",
-    keyUrl: "https://platform.openai.com/api-keys",
-    keySite: "OpenAI Platform",
-    keyExample: "sk-proj-…",
-    keyLoss: `Agents on OpenAI models won't start without a ${PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI]}. Calls and dictation will be off.`,
     anchor: SETTINGS_SECTION.CODEX,
   },
   [PROVIDER_KEY_PROVIDER.CURSOR]: {
-    name: "Cursor",
-    mark: MODEL_PROVIDER.CURSOR,
+    ...HARNESS_INFO[PROVIDER_KEY_PROVIDER.CURSOR],
     rowMark: (
       <SettingsRowMark>
         <HarnessMark provider={MODEL_PROVIDER.CURSOR} />
       </SettingsRowMark>
     ),
-    keyName: "Cursor",
-    keyNoun: "a Cursor key",
-    keyUrl: "https://cursor.com/dashboard?tab=integrations",
-    keySite: "Cursor's dashboard",
-    keyExample: "crsr_…",
-    keyLoss: "Cursor agents won't start without a Cursor API key.",
     anchor: SETTINGS_SECTION.CURSOR,
   },
 } as const satisfies Record<SettingsProvider, Harness>;
-
-/** The plan of each harness that keeps one, Claude's and Codex's. */
-const HARNESS_PLAN = {
-  [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
-    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC],
-    plan: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-  },
-  [PROVIDER_KEY_PROVIDER.OPENAI]: {
-    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI],
-    plan: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-  },
-} as const satisfies Record<PlanProvider, HarnessPlan>;
-
-/** Whether the harness keeps a plan here, so a plan's rows, its Add, and its steps may stand on its card. */
-function keepsPlan(provider: SettingsProvider): provider is PlanProvider {
-  return provider !== PROVIDER_KEY_PROVIDER.CURSOR;
-}
-
-/** The harnesses every account's Agents draws, in their order. */
-const HARNESSES: readonly SettingsProvider[] = [
-  PROVIDER_KEY_PROVIDER.ANTHROPIC,
-  PROVIDER_KEY_PROVIDER.OPENAI,
-];
-
-/** The harnesses an account trying Cursor draws: Cursor's card after the others. */
-const HARNESSES_WITH_CURSOR: readonly SettingsProvider[] = [
-  ...HARNESSES,
-  PROVIDER_KEY_PROVIDER.CURSOR,
-];
 
 /** The rows a harness's section draws with nothing connected: its header alone. */
 const SECTION_ROWS = 1;
@@ -291,56 +236,7 @@ const CREDENTIAL_ROW_SKELETON: SettingsRowSkeletonLayout = {
   controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
 };
 
-const WORDS = {
-  READ_FAILED: "Your keys could not be read.",
-  SIGNED_OUT: SIGNED_OUT_WORDS,
-  ADD: "Add plan or key",
-  ADD_KEY: "Add key",
-  AT_LIMIT: "At its limit",
-  BACK_AT: "back at",
-  RENAME: "Rename",
-  PLAN_NAME: "Plan name",
-  KEY_NAME: "Key name",
-  MOVE_UP: "Move up",
-  MOVE_DOWN: "Move down",
-  RECONNECT: VERB.RECONNECT,
-  SIGN_IN_AGAIN: "Sign in again",
-  MANAGE_USAGE: "Manage usage in ChatGPT",
-  USING_RESET: "Using reset",
-  API_KEY: "API key",
-  CANCEL: "Cancel",
-  TOKEN_EXAMPLE: "sk-ant-oat01-…",
-  SAVING_TOKEN: "Saving the token",
-  CHECKING_KEY: "Checking the key",
-  DISCONNECT: "Disconnect",
-  DISCONNECTING: "Disconnecting",
-  DELETE_KEY: "Delete key",
-  DELETING: "Deleting",
-  REPLACE_KEY: "Replace key",
-  REPLACE_TOKEN: "Replace token",
-  RUN_SETUP_TOKEN: "Run this in a terminal",
-  PASTE_TOKEN: "Paste the token it prints",
-  CREATE_KEY: "Create an API key",
-  PASTE_KEY: "Paste the key",
-  SETUP_TOKEN_COMMAND: "claude setup-token",
-  SETUP_TOKEN_COMMAND_LABEL: "Setup-token command",
-  COMMAND: "command",
-  TOKEN_INVALID: "Anthropic rejected this token. Paste a new one.",
-  TOKEN_QUOTA: "Out of usage on your Claude plan.",
-  TOKEN_UNREADABLE: "This token can no longer be read. Paste a new one.",
-  CHATGPT_EXPIRED: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.EXPIRED],
-  CHATGPT_UNREADABLE: "This sign-in can no longer be read.",
-  CHATGPT_INELIGIBLE:
-    "OpenAI says this account's plan doesn't include Codex. Sign in again to use another.",
-  REVOCATION_UNCONFIRMED: `${PRODUCT_NAME} signed out of Codex, but OpenAI didn't confirm it ended. To end it there too, remove ${PRODUCT_NAME} in your ChatGPT settings.`,
-  SAVE_TOKEN_FAILED: "Couldn't save the token. Try again.",
-  SAVE_KEY_FAILED: "Couldn't save the key. Try again.",
-  DELETE_KEY_FAILED: "Couldn't delete the key. Try again.",
-  CLAUDE_DISCONNECT_FAILED: "Couldn't disconnect your Claude plan. Try again.",
-  CHATGPT_DISCONNECT_FAILED: "Couldn't disconnect your Codex plan. Try again.",
-  REORDER_FAILED: "Couldn't reorder. Try again.",
-  RENAME_FAILED: "Couldn't rename it. Try again.",
-} as const;
+const WORDS = CREDENTIAL_WORDS;
 
 /** What a confirmed removal answers where it went. */
 const ACCEPTED_KEY: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
@@ -365,104 +261,14 @@ const KEY_REMOVE_REFUSED: ActionResult = {
 /** What disconnecting each harness's plan asks. */
 const PLAN_DISCONNECT = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
-    title: "Disconnect your Claude plan?",
-    body: `Claude agents stop running on your Claude plan, and ${PRODUCT_NAME} deletes its token.`,
-    verb: "Disconnect Claude plan",
-    running: WORDS.DISCONNECTING,
+    ...PLAN_DISCONNECT_WORDS[PROVIDER_KEY_PROVIDER.ANTHROPIC],
     loss: CONFIRM_LOSS.IRREVERSIBLE,
   },
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
-    title: "Disconnect your Codex plan?",
-    body: `Codex agents stop running on this plan, and ${PRODUCT_NAME} signs out of it.`,
-    verb: "Disconnect Codex plan",
-    running: WORDS.DISCONNECTING,
+    ...PLAN_DISCONNECT_WORDS[PROVIDER_KEY_PROVIDER.OPENAI],
     loss: CONFIRM_LOSS.IRREVERSIBLE,
   },
 } as const satisfies Record<PlanProvider, DialogQuestion>;
-
-/* ----- Reading the credentials ----- */
-
-/** The harness's plans among the account's subscriptions, in the account's order; none for a harness that keeps no plan. */
-function plansOf(
-  answer: ProviderKeysAnswer,
-  provider: SettingsProvider,
-): readonly SubscriptionKeySummary[] {
-  if (!keepsPlan(provider)) return [];
-  const { plan } = HARNESS_PLAN[provider];
-
-  return (answer.subscriptions ?? [])
-    .filter((one) => one.kind === plan)
-    .toSorted((a, b) => a.position - b.position);
-}
-
-/** The provider's API keys among the account's keys. */
-function keysOf(
-  answer: ProviderKeysAnswer,
-  provider: SettingsProvider,
-): readonly ProviderKeySummary[] {
-  return answer.keys.filter((one) => one.provider === provider);
-}
-
-/** Whether a stored plan still stands: kept, answered, or only waiting on its limit to reset. */
-function standing(plan: SubscriptionKeySummary): boolean {
-  return (
-    plan.status === PROVIDER_KEY_STATUS.UNVERIFIED ||
-    plan.status === PROVIDER_KEY_STATUS.VERIFIED ||
-    plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
-  );
-}
-
-/** Whether a stored key is one its provider has not refused. */
-function keyStanding(status: ProviderKeyStatus): boolean {
-  return status === PROVIDER_KEY_STATUS.VERIFIED || status === PROVIDER_KEY_STATUS.UNVERIFIED;
-}
-
-/** Whether the harness can start an agent now: a plan short of its limit, or a key that stands. */
-function harnessReady(answer: ProviderKeysAnswer, provider: SettingsProvider): boolean {
-  return (
-    plansOf(answer, provider).some(
-      (plan) => standing(plan) && plan.status !== PROVIDER_KEY_STATUS.LIMIT_REACHED,
-    ) || keysOf(answer, provider).some((key) => keyStanding(key.status))
-  );
-}
-
-/* ----- What a credential says ----- */
-
-/** A reached limit's words, with when it resets where the provider named it: "At its limit · back at 3:40 PM". */
-function limitWords(plan: SubscriptionKeySummary, now: number): string {
-  return plan.limitResetsAt === undefined
-    ? WORDS.AT_LIMIT
-    : `${WORDS.AT_LIMIT}, ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
-}
-
-/** What a Claude token that does not stand says. */
-function tokenWords(plan: SubscriptionKeySummary): string {
-  switch (plan.status) {
-    case PROVIDER_KEY_STATUS.QUOTA_EXCEEDED:
-      return WORDS.TOKEN_QUOTA;
-    case PROVIDER_KEY_STATUS.UNREADABLE:
-      return WORDS.TOKEN_UNREADABLE;
-    default:
-      return WORDS.TOKEN_INVALID;
-  }
-}
-
-/** What a Codex sign-in that does not stand says. */
-function signInWords(plan: SubscriptionKeySummary): string {
-  switch (plan.status) {
-    case PROVIDER_KEY_STATUS.UNREADABLE:
-      return WORDS.CHATGPT_UNREADABLE;
-    case PROVIDER_KEY_STATUS.INELIGIBLE:
-      return WORDS.CHATGPT_INELIGIBLE;
-    default:
-      return WORDS.CHATGPT_EXPIRED;
-  }
-}
-
-/** What mends a Codex sign-in that does not stand: Sign in again as another account where the plan has no Codex, else Reconnect. */
-function signInFix(plan: SubscriptionKeySummary): string {
-  return plan.status === PROVIDER_KEY_STATUS.INELIGIBLE ? WORDS.SIGN_IN_AGAIN : WORDS.RECONNECT;
-}
 
 /**
  * A plan's line under its name: its words, whether they need a hand, and
@@ -483,7 +289,6 @@ function planLine(provider: PlanProvider, plan: SubscriptionKeySummary, now: num
 
   if (plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
     return {
-      words: limitWords(plan, now),
       ok: false,
       ...(usage === undefined
         ? { meter: { value: 100, tone: PROGRESS_TONE.ATTENTION } }
@@ -497,61 +302,36 @@ function planLine(provider: PlanProvider, plan: SubscriptionKeySummary, now: num
   return { words, ok: false };
 }
 
-/** What an API key's line says, by the provider it names: nothing where it stands, but its hint where its name hides it, or what is wrong with it. */
-function keyLineWords(provider: SettingsProvider, key: ProviderKeySummary): string | undefined {
-  const name = HARNESS[provider].keyName;
+/** Whether a refresh's answer holds a newer reading of the plan than the one it was pressed over. */
+function refreshedIn(
+  answer: ActResult<typeof ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE>,
+  plan: SubscriptionKeySummary,
+): boolean {
+  if ("failure" in answer) return false;
+  const heardAt = answer.subscriptions?.find((one) => one.id === plan.id)?.usageHeardAt;
 
-  switch (key.status) {
-    case PROVIDER_KEY_STATUS.VERIFIED:
-    case PROVIDER_KEY_STATUS.UNVERIFIED:
-      return key.label === undefined ? undefined : `${WORDS.API_KEY} · ${key.hint}`;
-    case PROVIDER_KEY_STATUS.INVALID:
-      return `${name} rejected this key.`;
-    case PROVIDER_KEY_STATUS.QUOTA_EXCEEDED:
-    // Note that a plan's limit and eligibility are a subscription's words, which no API key is answered with.
-    case PROVIDER_KEY_STATUS.LIMIT_REACHED:
-    case PROVIDER_KEY_STATUS.INELIGIBLE:
-      return `Out of credit at ${name}.`;
-    case PROVIDER_KEY_STATUS.UNREADABLE:
-      return "This key can no longer be read.";
-  }
+  return heardAt !== undefined && heardAt > (plan.usageHeardAt ?? Number.NEGATIVE_INFINITY);
 }
 
-/** Why an API key's save kept nothing, in words the developer can act on. */
-function keyRejectionWords(provider: SettingsProvider, rejection: ProviderKeyRejection): string {
-  const name = HARNESS[provider].keyName;
-
-  switch (rejection) {
-    case PROVIDER_KEY_REJECTION.INVALID:
-      return `${name} didn't accept this key. Check it and try again.`;
-    case PROVIDER_KEY_REJECTION.WRONG_PROVIDER:
-      return `This isn't ${HARNESS[provider].keyNoun}. Paste it under the provider it's for.`;
-
-    case PROVIDER_KEY_REJECTION.UNREACHABLE:
-      return `Couldn't reach ${name} to check this key. Try again.`;
-    case PROVIDER_KEY_REJECTION.TOO_MANY_TRIES:
-      return "Too many tries in the last hour. Try again later.";
-  }
-}
-
-/** Why a Claude token's save kept nothing. */
-function tokenRejectionWords(rejection: ProviderKeyRejection): string {
-  return rejection === PROVIDER_KEY_REJECTION.TOO_MANY_TRIES
-    ? "Too many tries in the last hour. Try again later."
-    : "That isn't a Claude setup-token. Run claude setup-token and paste what it prints.";
+/** What a refresh's toast settles into: refreshed, or that it brought back no newer reading, whatever kept it: the service, the provider, or the way there. */
+function refreshOutcome(refreshed: boolean, cause: unknown) {
+  return refreshed
+    ? { words: WORDS.USAGE_REFRESHED, replayUnmasked: true, tone: STATUS_TONE.COMPLETE }
+    : {
+        words: WORDS.REFRESH_USAGE_FAILED,
+        replayUnmasked: true,
+        tone: STATUS_TONE.DANGER,
+        failure: {
+          surface: FAILURE_SURFACE.ACT,
+          act: ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE,
+          cause,
+        },
+      };
 }
 
 /** What removing a provider's key asks. */
 function keyRemovalQuestion(provider: SettingsProvider): DialogQuestion {
-  const harness = HARNESS[provider];
-
-  return {
-    title: `Delete your ${harness.keyName} ${WORDS.API_KEY}?`,
-    body: harness.keyLoss,
-    verb: WORDS.DELETE_KEY,
-    running: WORDS.DELETING,
-    loss: CONFIRM_LOSS.IRREVERSIBLE,
-  };
+  return { ...keyRemovalWords(provider), loss: CONFIRM_LOSS.IRREVERSIBLE };
 }
 
 /* ----- Small parts ----- */
@@ -950,17 +730,22 @@ type UseCredentialOrderResult = {
 /**
  * The harness's credentials in the order the account keeps, a reorder drawn
  * at once and sent as the whole order, its key's place among it; the list
- * rests on the order sent until the service answers, and says why under the
- * list where it was refused.
+ * rests on the order the newest reorder asks for while it is out, as the
+ * docs' Optimistic Updates guide draws a mutation's `variables`, and says
+ * why under the list where that reorder was refused.
  */
 function useCredentialOrder(
   provider: SettingsProvider,
   credentials: readonly Credential[],
 ): UseCredentialOrderResult {
-  const { mutateAsync: sendReorder } = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
-  const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
-  const [refused, setRefused] = useState<string | undefined>(undefined);
+  const reordering = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
+  const sentOrder = reordering.isPending ? reordering.variables.subscriptionIds : undefined;
   const byId = new Map(credentials.map((credential) => [credential.id, credential]));
+
+  const refused =
+    reordering.isError || (reordering.data !== undefined && "failure" in reordering.data)
+      ? WORDS.REORDER_FAILED
+      : undefined;
 
   // Note that a credential added or removed meanwhile is drawn where the service says, after those sent.
   const ordered =
@@ -980,15 +765,7 @@ function useCredentialOrder(
 
     if (moved === undefined || from === to) return;
     ids.splice(to, 0, moved);
-    setSentOrder(ids);
-    setRefused(undefined);
-    void sendReorder({ provider, kind, subscriptionIds: ids })
-      .catch(() => undefined)
-      .then((answer) => {
-        setSentOrder(undefined);
-
-        if (answer === undefined || "failure" in answer) setRefused(WORDS.REORDER_FAILED);
-      });
+    reordering.mutate({ provider, kind, subscriptionIds: ids });
   };
 
   return { ordered, move, refused };
@@ -1021,18 +798,6 @@ function useCredentialRename(
     asked: ({ subscriptionId, label }) => ({ subjectId: subscriptionId, name: label ?? "" }),
     refused: (answer) => "failure" in answer,
   });
-}
-
-/** A row's Move up and Move down, where it has somewhere to go. */
-function moveActions(
-  at: number,
-  count: number,
-  onMove: (from: number, to: number) => void,
-): readonly MenuAction[] {
-  return [
-    ...(at > 0 ? [{ label: WORDS.MOVE_UP, onSelect: () => onMove(at, at - 1) }] : []),
-    ...(at < count - 1 ? [{ label: WORDS.MOVE_DOWN, onSelect: () => onMove(at, at + 1) }] : []),
-  ];
 }
 
 /* ----- A harness's list ----- */
@@ -1194,19 +959,16 @@ function renameIn(rename: InlineRename, onClose: () => void): void {
  * One plan's row in its harness's order: its logo, its name, renamed by
  * pressing it for a Claude plan (`RenamableName`), and its line, how much
  * of its window it has used with a bar under it, or how it stands; its fix where its state asks for
- * one, and a ⋯ holding Rename, Move up and down, Replace token, and
+ * one, and a ⋯ holding Rename, Replace token, and
  * Disconnect. Its replace's steps open under it.
  */
 function PlanRow({
   provider,
   plan,
   name,
-  at,
-  count,
   open,
   onOpen,
   onClose,
-  onMove,
   renames,
   onUnconfirmed,
   alignWith,
@@ -1216,12 +978,9 @@ function PlanRow({
   name: string;
   /** Every plan's meter rows on the page, which its meters line up with. */
   alignWith: readonly UsageMeterRow[];
-  at: number;
-  count: number;
   open: typeof STEPS.REPLACE | undefined;
   onOpen: (steps: typeof STEPS.REPLACE) => void;
   onClose: () => void;
-  onMove: (from: number, to: number) => void;
   /** The harness's renames, of which this row's is the one asked for its credential. */
   renames: RenameWrite;
   onUnconfirmed: (unconfirmed: boolean) => void;
@@ -1234,10 +993,27 @@ function PlanRow({
   const offer = useResetCreditOffer(claude ? undefined : plan);
   const rename = useInlineRename(plan.id, renames);
   const openLink = useOpenLink();
+  const refresh = useMutation(actMutation(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE));
+  const working = useWorkingToast();
+
+  // Note that a refresh the service answered still fails where it holds no newer reading, since the service keeps what it held when the provider answers nothing.
+  // Note that the toast settles on the promise, not on `mutate`'s own callbacks, which are dropped once the row unmounts, as it does when Settings closes mid-refresh.
+  const refreshUsage = () => {
+    const settle = working(WORDS.REFRESHING_USAGE);
+
+    void refresh.mutateAsync({ subscriptionId: plan.id }).then(
+      (answer) => settle(refreshOutcome(refreshedIn(answer, plan), answer)),
+      (cause: unknown) => settle(refreshOutcome(false, cause)),
+    );
+  };
 
   const own = [
+    {
+      label: WORDS.REFRESH_USAGE,
+      disabled: refresh.isPending,
+      onSelect: refreshUsage,
+    },
     ...(claude ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }] : []),
-    ...moveActions(at, count, onMove),
     ...(claude ? [{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }] : []),
     ...(claude ? [] : [{ label: WORDS.MANAGE_USAGE, onSelect: () => openLink(CHATGPT_USAGE_URL) }]),
   ];
@@ -1262,7 +1038,7 @@ function PlanRow({
             {line.usage !== undefined ? (
               <SettingsRowUsage
                 rows={line.usage.rows}
-                heard={line.usage.heard}
+                heard={line.usage.updated}
                 alignWith={alignWith}
               />
             ) : line.meter === undefined ? null : (
@@ -1328,28 +1104,22 @@ function PlanRow({
  * One of the harness's API keys' rows in the same order: its provider's
  * logo, its name, renamed by pressing it as a Claude plan's is, and what is
  * wrong with it, if anything; Replace key beside a ⋯ where its provider refused it,
- * and a ⋯ holding Rename, Move up and down, Replace key, and Remove key.
+ * and a ⋯ holding Rename, Replace key, and Remove key.
  * Its replace's steps open under it.
  */
 function KeyRow({
   provider,
   apiKey,
-  at,
-  count,
   open,
   onOpen,
   onClose,
-  onMove,
   renames,
 }: {
   provider: SettingsProvider;
   apiKey: ProviderKeySummary;
-  at: number;
-  count: number;
   open: typeof STEPS.REPLACE | undefined;
   onOpen: (steps: typeof STEPS.REPLACE) => void;
   onClose: () => void;
-  onMove: (from: number, to: number) => void;
   /** The harness's renames, of which this row's is the one asked for its credential. */
   renames: RenameWrite;
 }): React.JSX.Element {
@@ -1400,7 +1170,6 @@ function KeyRow({
                 ...(named
                   ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }]
                   : []),
-                ...moveActions(at, count, onMove),
                 { label: WORDS.REPLACE_KEY, onSelect: () => onOpen(STEPS.REPLACE) },
               ],
               [
@@ -1555,7 +1324,7 @@ function HarnessCredentials({
           label={harness.name}
           onPointerDown={drag}
           gutter={aligned.gutter}
-          rows={order.ordered.map((credential, at) => {
+          rows={order.ordered.map((credential) => {
             const rowOpen =
               open !== undefined &&
               "subscriptionId" in open &&
@@ -1574,12 +1343,9 @@ function HarnessCredentials({
                   <KeyRow
                     provider={provider}
                     apiKey={credential.key}
-                    at={at}
-                    count={order.ordered.length}
                     open={rowOpen}
                     onOpen={onRowOpen}
                     onClose={onClose}
-                    onMove={order.move}
                     renames={renames}
                   />
                 ) : planProvider === undefined ? null : (
@@ -1587,12 +1353,9 @@ function HarnessCredentials({
                     provider={planProvider}
                     plan={credential.plan}
                     name={names.get(credential.id) ?? HARNESS_PLAN[planProvider].planName}
-                    at={at}
-                    count={order.ordered.length}
                     open={rowOpen}
                     onOpen={onRowOpen}
                     onClose={onClose}
-                    onMove={order.move}
                     renames={renames}
                     onUnconfirmed={setUnconfirmed}
                     alignWith={aligned.meters}

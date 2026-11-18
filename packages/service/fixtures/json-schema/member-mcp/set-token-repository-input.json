@@ -5,11 +5,12 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace to list, by the slug list_workspaces answered."
     },
     "repository": {
       "type": "string",
       "maxLength": 140,
+      "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$",
       "description": "The repository, by its full name (owner/name), as list_repositories lists it."
     },
     "added": {
@@ -18,6 +19,7 @@
     }
   },
   "required": [
+    "workspace",
     "repository",
     "added"
   ],

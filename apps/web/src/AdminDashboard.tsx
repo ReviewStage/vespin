@@ -1,4 +1,5 @@
 import type { AdminMetricsWindow } from "@repo/features/admin-wire";
+import type { AdminFixture } from "@repo/panel/admin/admin-fixture";
 import { useAdminSignOut } from "@repo/panel/admin/admin-queries";
 import { AdminShell } from "@repo/panel/admin/chrome/admin-shell";
 import type { ViewerAccount } from "@repo/panel/admin/chrome/page-header";
@@ -18,6 +19,7 @@ import {
 } from "@repo/panel/admin/routing";
 import { AccountScreen } from "@repo/panel/admin/screens/account";
 import { AgentsScreen } from "@repo/panel/admin/screens/agents";
+import { BillingScreen } from "@repo/panel/admin/screens/billing";
 import { CostScreen } from "@repo/panel/admin/screens/cost";
 import { DashboardScreen } from "@repo/panel/admin/screens/dashboard";
 import { DayScreen } from "@repo/panel/admin/screens/day";
@@ -33,16 +35,28 @@ import { SignInCard } from "./admin/chrome/gate-cards";
 import { WebAdminDoors } from "./admin/web-admin-doors";
 import { authClient } from "./auth-client";
 
-/** The standalone page: the dashboard under this page's own doors (`web-admin-doors.tsx`). */
-export function AdminDashboard(): React.JSX.Element {
+/**
+ * The standalone page: the dashboard under this page's own doors
+ * (`web-admin-doors.tsx`), or, under a development tab's fixture, on its
+ * staged reads with its admin signed in (`admin-fixture.ts`).
+ */
+export function AdminDashboard({
+  fixture,
+}: {
+  fixture?: AdminFixture | undefined;
+}): React.JSX.Element {
   return (
-    <WebAdminDoors>
-      <AdminDashboardPage />
+    <WebAdminDoors fixtureReads={fixture?.reads}>
+      <AdminDashboardPage fixtureViewer={fixture?.viewer} />
     </WebAdminDoors>
   );
 }
 
-function AdminDashboardPage(): React.JSX.Element {
+function AdminDashboardPage({
+  fixtureViewer,
+}: {
+  fixtureViewer: ViewerAccount | undefined;
+}): React.JSX.Element {
   // Admin accounts are the maintainers' own; their traffic reads as noise in
   // every count, so admins start hidden and the toggle is the explicit ask to
   // include them, remembered across visits. The scope is the server's filter —
@@ -115,13 +129,15 @@ function AdminDashboardPage(): React.JSX.Element {
   // Note that Better Auth answers a refused sign-out as a result rather than a
   // throw, so the refusal is thrown here: the session still stands, and
   // nothing past this may say it is gone. Each screen withdraws its reads
-  // around it (`useAdminSignOut`).
+  // around it (`useAdminSignOut`). The fixture's admin holds no session, so
+  // its Sign out ends none, leaving whatever session the tab holds standing.
   const signOut = useCallback(async () => {
+    if (fixtureViewer !== undefined) return;
     const { error } = await authClient.signOut();
 
     if (error) throw new Error("The sign-out was refused.");
     SIGN_IN_CHOSEN.write(false);
-  }, []);
+  }, [fixtureViewer]);
 
   const withdraw = useAdminSignOut(signOut);
 
@@ -137,9 +153,11 @@ function AdminDashboardPage(): React.JSX.Element {
     setLoggedOut(true);
   }, [withdrawSession]);
 
-  const viewer: ViewerAccount | undefined = account
-    ? { name: account.name, email: account.email, image: account.image ?? undefined }
-    : undefined;
+  const viewer: ViewerAccount | undefined =
+    fixtureViewer ??
+    (account
+      ? { name: account.name, email: account.email, image: account.image ?? undefined }
+      : undefined);
 
   // The gate's cards — sign-in and the non-admin refusal — stand alone on
   // every view: navigation drawn beside a consent card would pose as
@@ -215,6 +233,17 @@ function AdminDashboardPage(): React.JSX.Element {
         onSignOut={signOut}
         onOpenAccount={openAccount}
         frame={(content) => shell(ADMIN_TAB.COST, content)}
+      />
+    );
+  }
+
+  if (view.kind === ADMIN_TAB.BILLING) {
+    return (
+      <BillingScreen
+        account={viewer}
+        onSignOut={signOut}
+        onOpenWorkspace={openWorkspace}
+        frame={(content) => shell(ADMIN_TAB.BILLING, content)}
       />
     );
   }

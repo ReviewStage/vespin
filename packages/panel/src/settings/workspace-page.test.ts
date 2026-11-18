@@ -20,7 +20,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
-import { dayAndTimeText } from "@repo/features/time-format";
+import { dayText } from "@repo/features/time-format";
 import type { WorkspaceSlack } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
 import {
@@ -428,12 +428,13 @@ function answer(request: Asked): Promise<Answered> {
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_SENTRY_INSTALL:
       return Promise.resolve(done(undefined));
-    // Note that the host draws each write over the workspace's held integrations, so the window reads it there.
-    case ACT_KIND.WORKSPACE_SLACK_BOT_CONNECT:
+    // Note that Add to Slack lands in the browser, and the held read then carries the team, as the fake lays it here.
+    case ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL:
       slackBot = { configured: true, team: SLACK_TEAM, notifications: true };
       layIntegrations(request.payload.workspaceId);
 
-      return Promise.resolve(done(slackBot));
+      return Promise.resolve(done(undefined));
+    // Note that the host draws each write over the workspace's held integrations, so the window reads it there.
     case ACT_KIND.WORKSPACE_SLACK_BOT_DISCONNECT:
       slackBot = { configured: true };
       layIntegrations(request.payload.workspaceId);
@@ -2411,7 +2412,7 @@ test("the owner invites an address as a role, sees it pending with its link to c
   ]);
   assert.deepEqual(listed, [
     "alan@example.com",
-    `Invited as Admin · Expires ${dayAndTimeText(Date.parse("2026-10-16T12:00:00.000Z"))}`,
+    `Invited as Admin, expires ${dayText(Date.parse("2026-10-16T12:00:00.000Z"))}`,
   ]);
   assert.equal(
     face,
@@ -2761,7 +2762,7 @@ test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, 
 
 const SLACK_TEAM = { id: "T0001", name: "Acme Slack" };
 
-test("an admin connects the Slack bot, which then says Connected, and disconnects it after asking; a member sees it read only", async () => {
+test("an admin connects the Slack bot with Add to Slack, which then says Connected once the install lands, and disconnects it after asking; a member sees it read only", async () => {
   slackBot = { configured: true };
   const admin = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   const slackRow = () => rowNamed(githubGroup(admin.page), "Slack");
@@ -2786,6 +2787,12 @@ test("an admin connects the Slack bot, which then says Connected, and disconnect
   const memberRow = await vi.waitFor(() => rowNamed(githubGroup(member.page), "Slack"));
 
   assert.deepEqual(before, ["Slack", "Not connected."]);
+  assert.deepEqual(
+    sent.flatMap((request) =>
+      request.kind === ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL ? [request.payload] : [],
+    ),
+    [{ workspaceId: ACME.id }],
+  );
   assert.deepEqual(connected, ["Slack", "Connected"]);
   assert.deepEqual(acts, ["Disconnect"]);
   assert.deepEqual(after, before);

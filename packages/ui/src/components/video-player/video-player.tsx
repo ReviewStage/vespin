@@ -102,11 +102,12 @@ import { Tooltip } from "../tooltip/hint.js";
  * its size is read it says it as `--ui-video-natural-width` and
  * `--ui-video-natural-height`, plain numbers the place may fit it by.
  *
- * A recording keeps its place wherever it is drawn (`useMediaPlace`, as a
- * sound clip's does), so the same recording drawn again, in the viewer an
- * Expand opens or in a player drawn anew, starts where it was left, and a
- * player played again after another moved the same recording, as the
- * inline one after the viewer closes, goes on from there.
+ * A recording keeps its place and its speed wherever it is drawn
+ * (`useMediaPlace`, as a sound clip's does), so the same recording drawn
+ * again, in the viewer an Expand opens or in a player drawn anew, starts
+ * where it was left at the speed it played at, and a player played again
+ * after another moved the same recording, as the inline one after the
+ * viewer closes, goes on from there.
  *
  * Until its first frame's size is read, the frame holds the shape it will
  * take, its known size or a screenshot's (`LOADING_SIZE`), on the veil, the
@@ -565,23 +566,25 @@ function KeyFlash({ flash, onGone }: { flash: Flash; onGone: () => void }): Reac
  * stands across the frame: narrow, it lets its extras go first and its
  * playhead after them (`BAR_EXTRA`, `BAR_TIME`), so Play, the scrubber,
  * Expand, and Full screen stay in reach on a phone-shaped video in a row of
- * them rather than running off its edge.
+ * them rather than running off its edge. The scrubber's track is centered
+ * in the 16px it stands in, the press's room, on the row's line.
  */
 const BAR =
   "ui-video-player-bar @container/video-bar absolute right-0 bottom-0 left-0 flex items-center gap-ui-4 bg-[linear-gradient(transparent,var(--color-veil))] px-ui-6 pt-ui-24 pb-ui-4 text-on-veil transition-opacity duration-(--ui-duration-fast) ease-motion-exit " +
   "group-data-[playing=true]/video-frame:[@media(hover:hover)]:opacity-0 group-data-[playing=true]/video-frame:group-hover/video-frame:opacity-100 group-data-[playing=true]/video-frame:[@media(hover:hover)]:group-focus-within/video-frame:opacity-100 " +
-  "[&_.ui-slider]:mx-ui-4 [&_.ui-slider]:h-ui-16 [&_.ui-slider]:accent-on-veil";
+  "[&_.ui-slider]:mx-ui-4 [&_.ui-slider]:h-ui-16 [&_.ui-slider>*]:h-full [&_.ui-slider]:accent-on-veil";
 
 /**
  * The bar's extras, a frame back and on and the speed, which a narrow bar
- * lets go, their keys still reaching them: off-scale, 360px, where they
- * would leave the scrubber no room beside the rest.
+ * lets go, their keys still reaching them: off-scale, 480px, below which,
+ * beside Mute, the playhead's longest "88:88 / 88:88", and the 44px
+ * buttons, they would squeeze the scrubber under 64px.
  */
-const BAR_EXTRA = "contents @max-[360px]/video-bar:hidden";
+const BAR_EXTRA = "contents @max-[480px]/video-bar:hidden";
 
-/** How far the video has run of how long, which the narrowest bar lets go for the scrubber: off-scale, 200px. */
+/** How far the video has run of how long, which a narrower bar lets go for the scrubber, at 360px off-scale by the same sum. */
 const BAR_TIME =
-  "ui-video-player-time flex-none text-caption tabular-nums @max-[200px]/video-bar:hidden";
+  "ui-video-player-time flex-none text-caption tabular-nums @max-[360px]/video-bar:hidden";
 
 /**
  * The frame the video and its bar stand in, on the veil while its first
@@ -743,7 +746,7 @@ export function VideoPlayer({
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
 
-  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which must not claim another player's place.
+  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which keeps the speed alone so it claims no other player's place.
   const read = (shown: HTMLVideoElement, moved = true) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
     // Note that the time is held within the length, because the seek that reads a length stands past it a moment.
@@ -755,6 +758,7 @@ export function VideoPlayer({
     });
 
     if (moved) kept.keep(shown);
+    else kept.keepSpeed(shown);
   };
 
   // While it plays, its place is read on every frame, so the scrubber and the playhead glide rather than step at each `timeupdate`.

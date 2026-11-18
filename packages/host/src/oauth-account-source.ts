@@ -1,4 +1,9 @@
-import { AccountClient, AccountSessionManager, type StoredAccount } from "@repo/credentials";
+import {
+  AccountClient,
+  type AccountRenewalWindow,
+  AccountSessionManager,
+  type StoredAccount,
+} from "@repo/credentials";
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import {
   AccountRefreshFailed,
@@ -7,10 +12,12 @@ import {
   sessionBearer,
 } from "@repo/features";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import type { AccountSession, AccountSourceHost } from "./account-source.js";
 import {
   AccountSource,
+  PlatformRenewalWindow,
+  PlatformTokenVault,
   SecretCipher,
   SignInConsent,
   type SignInConsentSeam,
@@ -49,10 +56,15 @@ export const oauthAccountSourceLayerFor = (
     Effect.gen(function* () {
       const cipher = yield* SecretCipher;
       const consent = yield* SignInConsent;
+      const vault = yield* Effect.serviceOption(PlatformTokenVault);
+      const window = yield* Effect.serviceOption(PlatformRenewalWindow);
+      const renewalWindow = Option.getOrUndefined(window);
 
       return {
         tokenCipher: cipher,
-        open: (host: AccountSourceHost) => openOAuthSession(host, consent.open, client),
+        ...(Option.isSome(vault) ? { tokenVault: vault.value } : undefined),
+        open: (host: AccountSourceHost) =>
+          openOAuthSession(host, consent.open, client, renewalWindow),
       };
     }),
   );
@@ -68,6 +80,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   host: AccountSourceHost,
   openConsent: SignInConsentSeam["open"],
   oauthClient: OAuthAccountClient,
+  renewalWindow: AccountRenewalWindow | undefined,
 ): Effect.fn.Return<AccountSession> {
   const { store, runMode } = host;
 
@@ -84,7 +97,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     // be read before the host has linked it.
     store: {
       readAccount: () => Effect.orDie(store.readAccount()),
-      setAccount: (stored) => Effect.orDie(store.setAccount(stored)),
+      setAccount: (stored, write) => Effect.orDie(store.setAccount(stored, write)),
       clearAccount: () => Effect.orDie(store.clearAccount()),
     },
     hostedServiceBaseUrl: host.hostedServiceBaseUrl,
@@ -94,6 +107,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     report: host.report,
     startCapabilities: host.startCapabilities,
     stopCapabilities: host.stopCapabilities,
+    ...(renewalWindow === undefined ? undefined : { renewalWindow }),
   });
 
   /**

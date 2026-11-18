@@ -99,32 +99,32 @@ function labelWhile(ages: Readonly<Record<string, number>> | undefined): Promise
 
 test("a device the presence read finds beating reads online though the agent's own read is old, its glyph's dot saying so as its row's does", async () => {
   const label = await labelWhile({ [DEVICE]: 5_000 });
-  assert.equal(label, "Runs on: Charles's MacBook Air");
+  assert.equal(label, "Machine: Charles's MacBook Air");
   assert.equal(document.querySelector('[role="img"]')?.getAttribute("aria-label"), "Online");
 });
 
 test("a device the presence read finds silent reads offline", async () => {
   const label = await labelWhile({ [DEVICE]: 90_000 });
-  assert.equal(label, "Runs on: Charles's MacBook Air · Offline");
+  assert.equal(label, "Machine: Charles's MacBook Air · Offline");
 });
 
 test("a presence read that fails says the status cannot be checked, never offline", async () => {
   await labelWhile(undefined);
   // Note that the read's failure reaches the presence query a moment after the document does.
   await vi.waitFor(() =>
-    assert.equal(document.body.textContent, "Runs on: Charles's MacBook Air · Can't check status"),
+    assert.equal(document.body.textContent, "Machine: Charles's MacBook Air · Can't check status"),
   );
 });
 
 test("a device the account does not own, which the read does not name, shows its name alone", async () => {
   const label = await labelWhile({});
-  assert.equal(label, "Runs on: Charles's MacBook Air");
+  assert.equal(label, "Machine: Charles's MacBook Air");
 });
 
 /** The chip whose press opens where the agent works, which a reader hears as its label says. */
 function placeChip(): HTMLButtonElement {
   return (
-    document.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
+    document.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]') ??
     assert.fail("the place chip stands")
   );
 }
@@ -156,7 +156,7 @@ test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's sta
 
   await placeOf({ sandbox: running, sandboxVcpus: 4 }, undefined);
   assert.equal(placeChip().textContent, "Cloud");
-  assert.equal(placeChip().getAttribute("aria-label"), "Runs on: Cloud, Running");
+  assert.equal(placeChip().getAttribute("aria-label"), "Machine: Cloud, Running");
 
   act(() => placeChip().click());
   assert.deepEqual(factsShown(), [
@@ -167,7 +167,7 @@ test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's sta
   assert.deepEqual(optionsOf("Where this agent works"), ["Agent runs inCloud"]);
 
   await placeOf({}, undefined);
-  assert.equal(placeChip().getAttribute("aria-label"), "Runs on: Cloud, Off");
+  assert.equal(placeChip().getAttribute("aria-label"), "Machine: Cloud, Off");
 });
 
 /** The cloud agent's chip drawn with the move given, opened on its Agent runs in row, and the places its submenu lists, the settings the window was asked to open kept. */
@@ -196,7 +196,7 @@ async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTM
     ),
   );
   await settle();
-  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
+  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]')?.click());
   act(() => document.querySelector<HTMLElement>('[role="option"]')?.click());
 
   return [
@@ -233,7 +233,7 @@ test("where a move is offered, Agent runs in opens the places, Cloud wearing its
   assert.equal(moved.length, 1);
 });
 
-test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it; a local agent's chip opens the same rows", async () => {
+test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it, named from the press while the service has yet to answer and no longer once a newer pick answered; a local agent's chip opens the same rows", async () => {
   const sent: unknown[] = [];
   const owner = { userId: "user-ada", name: "Ada Lovelace" };
 
@@ -241,7 +241,8 @@ test("the Default machine row names the agent's default with its dot, offline as
     [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: (payload) => {
       sent.push(payload);
 
-      return Promise.resolve({});
+      // Note that the service never answers a pick of the studio, so it is still out when the chip opens again, and answers a later pick of the laptop at once.
+      return payload.machineId === "studio" ? new Promise(() => undefined) : Promise.resolve({});
     },
   });
 
@@ -305,6 +306,28 @@ test("the Default machine row names the agent's default with its dot, offline as
     mac: { name: "Mini", seenAt: Date.now(), deviceId: DEVICE },
   };
 
+  act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: local }))));
+  await settle();
+  act(() => placeChip().click());
+  assert.deepEqual(optionsOf("Where this agent works"), [
+    "Agent runs inMini",
+    "Terminal and computer useAStudio",
+  ]);
+
+  // Note that the laptop is picked back while the studio's pick is still out, and its answer comes first; the service's default stands then, never the older pick.
+  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());
+  act(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="listbox"][aria-label="Terminal commands and computer use go here"] [role="option"]',
+      ),
+    ][0]?.click(),
+  );
+  await settle();
+  assert.deepEqual(sent, [
+    { agentId: AGENT_ID, machineId: "studio" },
+    { agentId: AGENT_ID, machineId: "laptop" },
+  ]);
   act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: local }))));
   await settle();
   act(() => placeChip().click());

@@ -142,6 +142,7 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
+import { useInboxOn } from "../inbox-on.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useMergeQueueOn } from "../merge-queue-route.js";
 import {
@@ -204,7 +205,7 @@ import {
 import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
-import { useInboxWaiting } from "./places-waiting.js";
+import { useInboxViewCount } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
 import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
@@ -2147,7 +2148,8 @@ function SidebarColumn({
     inAdmin ||
     (onTasks && tasks.agentView.agentId !== undefined);
 
-  const waiting = useInboxWaiting(tasks);
+  const inboxCount = useInboxViewCount(tasks);
+  const inboxOn = useInboxOn();
 
   // A press in the list is always about tasks, so it brings the Tasks tab
   // forward from Settings as well as choosing; a task's row goes back to work
@@ -2179,6 +2181,10 @@ function SidebarColumn({
   // composer is on it, so its row draws no Draft pencil for the words shown there.
   const atHome = onTasks && tasks.atHome;
   const newTaskIn = (repository: string) => newTaskOver(() => tasks.newTask.onOpenIn(repository));
+
+  const newTaskInSection = (sectionId: string) =>
+    newTaskOver(() => tasks.newTask.onOpenInSection(sectionId));
+
   const folds = useFoldedGroups(sidebar.staged);
   const taskView = useTaskListView(tasks.workspace?.id, sidebar.staged);
   // The Tasks head's New section button, which the focus goes back to where the naming ends by a key.
@@ -2558,13 +2564,15 @@ function SidebarColumn({
               onOpen={chosen(goHome)}
               onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
             />
-            <SidebarInboxRow
-              waiting={waiting}
-              current={inInbox}
-              disabled={!tasks.signedIn}
-              onOpen={chosen(openInbox)}
-              onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
-            />
+            {inboxOn ? (
+              <SidebarInboxRow
+                count={inboxCount}
+                current={inInbox}
+                disabled={!tasks.signedIn}
+                onOpen={chosen(openInbox)}
+                onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
+              />
+            ) : null}
           </>
         )}
         {phone ? null : (
@@ -2797,6 +2805,7 @@ function SidebarColumn({
                         onDropRow: dropRow,
                         runs: runsPlace,
                         onCarried: setCarrying,
+                        onNewTaskIn: chosen(newTaskInSection),
                       }}
                     />
                     <nav

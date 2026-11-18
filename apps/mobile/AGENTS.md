@@ -225,16 +225,6 @@ none added, since an added highlight drew a second platter of glass over a
 button's own on iPadOS 26. No Maestro flow can drag or hover, so these are
 checked by hand on an iPad with a trackpad.
 
-## The photo scaler
-
-A workspace's photo is picked in the system's photo picker, cropped there to
-a square, and drawn at the panel's size (`WORKSPACE_PHOTO_EDGE`) as a JPEG
-within the service's bound by the app's own native module, autolinked from
-`modules/photo-scale/`, through ImageIO as the share extension scales a
-shared picture, so a HEIC from the library is read and no metadata goes with
-it (`src/workspace-photo.ts`). A build without the module says the photo
-could not be read rather than sending one at full size.
-
 ## The rich copy module
 
 A draft's Copy message puts one pasteboard item holding the body's HTML, the
@@ -323,8 +313,8 @@ A flow is written one way throughout:
 
 - **Native components only.** The tab bar is expo-router's `NativeTabs`, a
   screen stack is its native `Stack` with the system's headers, search, and
-  toolbars, glass is `expo-glass-effect` through `@repo/ui-native`'s
-  `GlassBar`, and everything else is `@expo/ui`.
+  toolbars, and everything else, glass included (`glassEffect` and the
+  `glass` button style, through `@repo/ui-native`), is `@expo/ui`.
   Never a tab bar or header drawn in JavaScript, never a hand-drawn copy of
   glass, and never a DOM component (`'use dom'`).
 - **SwiftUI first.** A screen is drawn by SwiftUI through `@expo/ui` (`Host`,
@@ -337,10 +327,9 @@ A flow is written one way throughout:
   with no network and no navigation.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
-  screen composes its components and imports neither `@expo/ui` nor
-  `expo-glass-effect`, which lint refuses
-  (`vespin/no-raw-press-outside-ui-native`); the app still declares both,
-  since Expo links a native module from the app's own dependencies.
+  screen composes its components and never imports `@expo/ui`, which lint
+  refuses (`vespin/no-raw-press-outside-ui-native`); the app still declares
+  it, since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends
   in `.js`, as the packages' do (`scripts/repository-checks.sh` holds it), and
@@ -354,21 +343,12 @@ A flow is written one way throughout:
   the compose button leading the detail's bar, as Mail stands compose over
   the message, rather than the tab bar's round +, which only a compact
   window keeps (Search's own two columns hold it in Search's bar).
-  Where the window is wide enough for three columns, an iPad's in
-  landscape, it hides the tab bar and stands the app sidebar first, as
-  Mail stands its mailboxes (`src/screens/app-sidebar.tsx`): the workspace
-  switcher heading the list, the Inbox with its count, Tasks, and Search,
-  then Pinned, Following, and each of the member's sections as one row with
-  its count, never a task's own row. A row fills the list column (Tasks
-  every group, a collection only its own tasks), the detail shows the
-  list's selection, and a task dragged onto Pinned or a section is put
-  there. The sidebar's bar holds only the system's toggle: Settings opens
-  from the switcher's menu and ⌘,. The last pick is kept
-  (`src/sidebar-pick.ts`), so a rotation and the next launch come back to
-  it. A portrait iPad and the open Duo keep the tab bar, and their Tasks
-  list draws Pinned, Following, and the sections as groups. Whether the
-  first column stands is one answer every tab shares
-  (`src/sidebar-shown.ts`).
+  The tab bar is `sidebarAdaptable`, so a regular window stands iPadOS's
+  own tab sidebar beside each tab's list and detail, as Apple's tab
+  guidance has it, and the Tasks list draws Pinned, Following, and the
+  member's sections as groups atop its list. Settings opens from the
+  switcher's menu and ⌘,. Whether the list stands beside its detail is one
+  answer every tab shares (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
 - **Every write goes through `useWrite`** (`src/use-write.ts`). What went

@@ -175,6 +175,33 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
   );
 
   it.effect(
+    "a Start's copy re-keyed to a new checkout moves the CLI's transcript to it and leaves each project kept where it stands",
+    () =>
+      Effect.gen(function* () {
+        const source = yield* openAgent;
+        const started = yield* openAgent;
+        const cursor = { projectKey: "cursor", sessionId: "agent-cursor" };
+        const moved = { ...MAIN, projectKey: "-workspace-elsewhere" };
+        yield* appendSessionEntries(source.userId, source.conversationId, MAIN, [root("a")]);
+        yield* appendSessionEntries(source.userId, source.conversationId, cursor, [entry("c")]);
+
+        yield* copySessionEntries(source, started.conversationId, {
+          projectKey: moved.projectKey,
+          keptProjects: ["codex", "cursor"],
+        });
+
+        assert.deepEqual(yield* loaded(started.userId, started.conversationId, moved), [root("a")]);
+        assert.deepEqual(yield* loaded(started.userId, started.conversationId, MAIN), []);
+        assert.deepEqual(
+          yield* loadSessionEntries(started.userId, started.conversationId, cursor).pipe(
+            Effect.map(Option.getOrElse(() => [])),
+          ),
+          [entry("c")],
+        );
+      }),
+  );
+
+  it.effect(
     "a session larger than one page loads whole and in order across its pages, and another account pages none of it",
     () =>
       Effect.gen(function* () {

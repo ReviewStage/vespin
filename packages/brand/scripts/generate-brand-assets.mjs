@@ -25,26 +25,15 @@ import { PRODUCT_NAME } from "../../features/src/product-name.ts";
 import { bayerAt } from "../src/dither.ts";
 import { ARTWORK_BRAND as BRAND } from "./brand-palette.mjs";
 import { DMG_WINDOW } from "./dmg-window.mjs";
+import { MARK } from "./keel-mark.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, "..", "assets");
 const SURFACE = join(HERE, "..", "src", "generated");
 
 // ---------- The mark ----------
-// Keel H, on a 100-unit disc of radius 50 centered at (50, 50), built from
-// straight lines and circular arcs only and booleaned into one outline: the
-// V's arms open 25 degrees off vertical and meet on a round join 70% down,
-// the channel is 10.5% of the disc, and every corner where the channel meets
-// the rim, and the island's tip, is rounded at 3%. Its one color fills it,
-// the body and the island alike. Below 32 pixels the small cut takes over,
-// its channel opened to 13.5% so the V still reads at 16, the way a typeface
-// has optical sizes.
-const MARK = {
-  VIEW_BOX: "0 0 100 100",
-  PATH: "M0,50c0,-13.55 5.39,-25.84 14.14,-34.84c0.54,-0.56 1.30,-0.90 2.15,-0.90c1.22,0 2.28,0.73 2.74,1.79l26.14,56.07c0.81,1.84 2.65,3.13 4.80,3.13c2.14,0 3.99,-1.29 4.80,-3.13l26.14,-56.07c0.46,-1.05 1.51,-1.79 2.74,-1.79c0.84,0 1.60,0.34 2.15,0.90c8.75,9.00 14.14,21.29 14.14,34.84c0,27.61 -22.38,50 -50,50c-27.61,0 -50,-22.38 -50,-50zM28.66,4.76c6.46,-3.05 13.70,-4.76 21.33,-4.76c7.63,0 14.86,1.70 21.33,4.76l-0.00,0.01c1.01,0.48 1.72,1.51 1.72,2.71c0,0.47 -0.11,0.92 -0.30,1.32l-19.99,42.87c-0.46,1.05 -1.51,1.79 -2.74,1.79c-1.22,0 -2.28,-0.73 -2.74,-1.79l-19.99,-42.87c-0.19,-0.39 -0.30,-0.84 -0.30,-1.32c0,-1.19 0.70,-2.23 1.72,-2.71z",
-  SMALL_PATH:
-    "M0,50c0,-12.93 4.91,-24.71 12.96,-33.59l0.00,0.00c0.54,-0.60 1.34,-0.98 2.22,-0.98c1.22,0 2.28,0.73 2.74,1.79l25.88,55.50c1.04,2.37 3.41,4.03 6.18,4.03c2.76,0 5.13,-1.65 6.18,-4.03l25.88,-55.50c0.46,-1.05 1.51,-1.79 2.74,-1.79c0.88,0 1.67,0.37 2.22,0.98l0.00,-0.00c8.05,8.87 12.96,20.66 12.96,33.59c0,27.61 -22.38,50 -50,50c-27.61,0 -50,-22.38 -50,-50zM30.12,4.10c6.09,-2.64 12.81,-4.10 19.87,-4.10c7.06,0 13.78,1.46 19.87,4.10l-0.00,0.01c1.06,0.46 1.80,1.52 1.80,2.75c0,0.47 -0.11,0.92 -0.30,1.32l-18.16,38.95c-0.54,1.23 -1.77,2.09 -3.20,2.09c-1.43,0 -2.66,-0.86 -3.20,-2.09l-18.16,-38.95c-0.19,-0.39 -0.30,-0.84 -0.30,-1.32c0,-1.23 0.74,-2.29 1.80,-2.75z",
-};
+// The Keel, described once in keel-mark.mjs, which the iOS app's symbol of it
+// is drawn from too.
 
 // ---------- The wordmark ----------
 // The name set in Geist SemiBold at -2% tracking and outlined, so no asset

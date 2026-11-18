@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses,, `-sentryTest <js|native>`, which sends a test crash report, and `-sealCheck true`, which checks the native sealer against the JavaScript one and times both (`seal-check.ts`).
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-connect <code>`, which hands the app a machine's pairing as its link would, `-liveActivity true`, which starts a fixture run's Live Activity, `-machineAsk true`, which has a fixture run's machine ask for an agent's command, `-setupOwed true`, which stands a fixture run's account as one owed setup, `-inboxOff true`, which stands a fixture run's account with its Inbox turned off, `-updateNeeded true`, which stands a fixture run as the service's refusal of an old build leaves it, `-refuseWrites true`, which has a fixture run refuse the writes a flow presses,, `-sentryTest <js|native>`, which sends a test crash report, and `-sealCheck true`, which checks the native sealer against the JavaScript one and times both (`seal-check.ts`).
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -22,6 +22,8 @@ const LAUNCH_ARGUMENT = {
   CONNECT: "connect",
   LIVE_ACTIVITY: "liveActivity",
   MACHINE_ASK: "machineAsk",
+  SETUP_OWED: "setupOwed",
+  INBOX_OFF: "inboxOff",
   UPDATE_NEEDED: "updateNeeded",
   REFUSE_WRITES: "refuseWrites",
   SENTRY_TEST: "sentryTest",
@@ -96,6 +98,16 @@ export function launchLiveActivity(): boolean {
 /** Whether this launch's fixture run holds an ask of Ada's MacBook for an agent's command, as `-machineAsk true` asks (`maestro/machine-ask.yaml`); never on any other platform. */
 export function launchMachineAsk(): boolean {
   return launchSaysTrue(LAUNCH_ARGUMENT.MACHINE_ASK);
+}
+
+/** Whether this launch's fixture run stands its account as one that started setup and hasn't finished it, as `-setupOwed true` asks (`maestro/setup.yaml`); never on any other platform. */
+export function launchSetupOwed(): boolean {
+  return launchSaysTrue(LAUNCH_ARGUMENT.SETUP_OWED);
+}
+
+/** Whether this launch's fixture run stands its account with its Inbox turned off, as `-inboxOff true` asks (`maestro/inbox-off.yaml`); never on any other platform. */
+export function launchInboxOff(): boolean {
+  return launchSaysTrue(LAUNCH_ARGUMENT.INBOX_OFF);
 }
 
 /** Whether this launch stands a fixture run as the service's refusal of an old build leaves it, as `-updateNeeded true` asks (`maestro/update-needed.yaml`); never on any other platform. */

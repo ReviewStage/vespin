@@ -162,9 +162,11 @@
     display: inline-flex;
     flex: none;
     color: var(--ui-color-text-muted);
-    /* The chevron turns on the beat the body unrolls on, so the fold reads
-       as one gesture rather than two that settle apart. */
-    transition: transform var(--ui-duration-pane) var(--ui-motion-pane);
+    /* The chevron turns on the beat the body moves on, so the fold reads as
+       one gesture rather than two that settle apart: back on the exit's
+       tokens as the body goes, and open on the spring the body unrolls on
+       (below). */
+    transition: transform var(--ui-duration-exit) var(--ui-motion-exit);
   }
 
   .ui-disclosure-turn > svg {
@@ -175,23 +177,51 @@
 
   .ui-disclosure-turn[data-open="true"] {
     transform: rotate(90deg);
+    transition: transform var(--ui-duration-shape) var(--ui-spring);
   }
 
-  /* A fold a press opens or closes (`use-disclosure.ts`). Its body lands in
-     the layout at once and rides in on the pair an arriving element rides: a
-     fade, and a clip unrolling it from its top edge, on the panes' plain
-     ease-out, since a clip that overshot would cut nothing. Closing, it fades
-     out first and the layout lands once the fade is done. Nothing moves a
-     height, so the words never re-wrap mid-motion, and a body still growing
-     as it streams is unrolled by a fraction of its own box rather than a size
-     it was measured at. Only the press marks the root, so a find opening a
-     fold onto a match, or a row drawn again, appears at once. */
+  /* A chevron pointing down while closed (`DISCLOSURE_TURN.DOWN`) turns to
+     point up while open, on the same beats. */
+  .ui-disclosure-turn[data-turn="down"][data-open="true"] {
+    transform: rotate(180deg);
+  }
+
+  /* A fold a press opens or closes (`use-disclosure.ts`), on the beats a
+     setting's revealed rows ride (`reveal.tsx`), so every fold in the app,
+     a sidebar group's or a pull request's section, moves alike whatever it
+     holds. Its body lands in the layout at once and rides in on the pair an
+     arriving element rides: a fade, and a clip unrolling it from its top
+     edge on the spring, the very beat what stands under it glides down on
+     (`ListMotion`), so the clip's foot and what it pushes travel as one edge
+     and a tall body is never seen through the block still sliding off it.
+     Nothing moves a height, so the words never re-wrap mid-motion, and a
+     body still growing as it streams is unrolled by a fraction of its own
+     box rather than a size it was measured at. Only the press marks the
+     root, so a find opening a fold onto a match, or a row drawn again,
+     appears at once. */
   [data-disclosure="opening"] > .ui-disclosure-body {
     animation:
       ui-disclosure-fade var(--ui-duration-quick) var(--ui-motion-pane) backwards,
-      ui-disclosure-unroll var(--ui-duration-pane) var(--ui-motion-pane) backwards;
+      ui-disclosure-unroll var(--ui-duration-shape) var(--ui-spring) backwards;
   }
 
+  /* Pressed shut under a list's motion, the body gives up its room at once,
+     the height measured as the press lands (`--disclosure-rise`), and rolls
+     up from its foot as it fades, on the exit's tokens, while what stands
+     under it closes over it on those same tokens (`LIST_MOTION_REPLAY`):
+     one quick edge rising, never an empty gap a block then travels the
+     spring across. */
+  [data-disclosure="folding"] > .ui-disclosure-body {
+    margin-block-end: calc(-1 * var(--disclosure-rise, 0px));
+    animation:
+      ui-disclosure-leave var(--ui-duration-exit) var(--ui-motion-exit) forwards,
+      ui-disclosure-roll-up var(--ui-duration-exit) var(--ui-motion-exit) forwards;
+    /* Note that the hold waits on every motion the body runs, as below. */
+    transition: none;
+  }
+
+  /* Closing where nothing glides, the body fades out where it stands and
+     the layout lands once the fade is done. */
   [data-disclosure="closing"] > .ui-disclosure-body {
     animation: ui-disclosure-leave var(--ui-duration-exit) var(--ui-motion-exit) forwards;
     /* Note that the hold waits on every motion the body runs, and a body that
@@ -214,6 +244,15 @@
     }
     to {
       clip-path: inset(0);
+    }
+  }
+
+  @keyframes ui-disclosure-roll-up {
+    from {
+      clip-path: inset(0);
+    }
+    to {
+      clip-path: inset(0 0 100% 0);
     }
   }
 

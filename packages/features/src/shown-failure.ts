@@ -240,6 +240,8 @@ export const FAILURE_SURFACE = {
   WORKSPACE_REPOSITORY_REMOVE: "workspace_repository.remove",
   WORKSPACE_SANDBOX_SETUP_READ: "workspace_sandbox_setup.read",
   WORKSPACE_SANDBOX_SETUP_SAVE: "workspace_sandbox_setup.save",
+  WORKSPACE_BILLING: "workspace.billing",
+  WORKSPACE_BILLING_READ: "workspace_billing.read",
   WORKSPACE_SANDBOX_SIZE_READ: "workspace_sandbox_size.read",
   WORKSPACE_SENTRY: "workspace.sentry",
   WORKSPACE_SENTRY_DISCONNECT: "workspace_sentry.disconnect",

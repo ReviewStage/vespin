@@ -1815,6 +1815,8 @@ export function InboxList({
   const footed = head.phone !== undefined || (head.tab === true && phone);
   // Note that E resolves every item chosen where several are, else the item open beside the list, as U and H act on it.
   const resolvable = picks.length > 0 ? picks : drawn.filter(({ item }) => item.id === chosen);
+  // Escape chooses none wherever the keyboard stands, while any is chosen and nothing nearer takes it (`window-escape.ts`).
+  useAppCommand(APP_COMMAND.CLEAR_SELECTION, head.shown && picks.length > 0 ? unpick : undefined);
   // U, H, and E act on the chosen item, so only its menus name their chords.
   useShortcutTarget(chosen === undefined ? undefined : inboxItemSubject(chosen), INBOX_ITEM_KEYS);
   useAppCommand(

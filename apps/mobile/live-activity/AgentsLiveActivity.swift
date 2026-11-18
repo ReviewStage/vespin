@@ -4,11 +4,13 @@
 // (`AgentsActivityAttributes`). The compact and minimal presentations say
 // how many are working. The expanded one and the Lock Screen list up to
 // three, each with its title, a timer from its turn's start, and Stop
-// (`StopAgentIntent`). Where an ask waits on the member, the count is drawn
-// in the brand's copper (`Attention`) and a tap opens the Inbox, else a tap
-// opens the newest running agent. The colors are the brand's, written
-// into this target's asset catalog by `app.config.ts`. Every presentation
-// has a preview at the end of the file.
+// (`StopAgentIntent`). The count stands by the panel's status mark in the
+// working blue, and copper (`Attention`) marks only what wants the member:
+// the asks waiting, the compact presentation's Inbox glyph, and the keyline
+// while one waits. A tap opens the Inbox while an ask waits, else the newest
+// running agent. The colors are the brand's, written into this target's
+// asset catalog by `app.config.ts`. Every presentation has a preview at the
+// end of the file.
 
 import ActivityKit
 import AppIntents
@@ -39,21 +41,18 @@ struct AgentsLiveActivity: Widget {
           WaitingLabel(state: state).padding(.trailing, 4)
         }
         DynamicIslandExpandedRegion(.bottom) {
-          AgentList(state: state)
+          // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
+          AgentList(state: state).padding(.horizontal, ExpandedInset.side)
         }
       } compactLeading: {
-        Image(systemName: state.symbol).foregroundStyle(state.tint)
+        CompactMark(state: state)
       } compactTrailing: {
-        LimitedWidthReader { limited in
-          Text(limited ? "\(state.running)" : state.countText)
-            .monospacedDigit()
-            .foregroundStyle(state.tint)
-        }
+        RunningCount(state: state)
       } minimal: {
-        Text("\(state.running)").monospacedDigit().foregroundStyle(state.tint)
+        RunningCount(state: state)
       }
       .widgetURL(state.opens)
-      .keylineTint(state.tint)
+      .keylineTint(state.keyline)
     }
     .supplementalActivityFamilies([.small])
   }
@@ -93,29 +92,37 @@ struct ActivityContentView: View {
   }
 }
 
-/// How many agents are working, or that they all finished, in the count's tint.
+/// How many agents are working, or that they all finished, by the panel's status mark, in the working blue or the done green.
 struct CountLabel: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
-    Label(state.countText, systemImage: state.symbol)
-      .font(.subheadline.weight(.semibold))
-      .monospacedDigit()
-      .foregroundStyle(state.tint)
-      .lineLimit(1)
+    Label {
+      Text(state.countText).contentTransition(.numericText(value: Double(state.running)))
+    } icon: {
+      Image(state.mark)
+    }
+    .font(.subheadline.weight(.semibold))
+    .monospacedDigit()
+    .foregroundStyle(state.tone)
+    .lineLimit(1)
   }
 }
 
-/// How many asks wait on the member, in copper; nothing while none does.
+/// How many asks need the member, in the panel's words and copper; nothing while none does.
 struct WaitingLabel: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
     if state.waiting > 0 {
-      Label { Text("\(state.waiting) waiting on you") } icon: { Image("Inbox") }
-        .font(.caption.weight(.medium))
-        .foregroundStyle(Color("Attention"))
-        .lineLimit(1)
+      Label {
+        Text(state.waitingText).contentTransition(.numericText(value: Double(state.waiting)))
+      } icon: {
+        Image("Inbox")
+      }
+      .font(.caption.weight(.medium))
+      .foregroundStyle(Color("Attention"))
+      .lineLimit(1)
     }
   }
 }
@@ -138,6 +145,7 @@ struct AgentList: View {
 
 /// One running agent: its title and the time its turn has run, opening its page, and Stop.
 struct AgentRow: View {
+  @Environment(\.isLuminanceReduced) private var dimmed
   let agent: AgentsActivityAttributes.Agent
 
   var body: some View {
@@ -157,11 +165,18 @@ struct AgentRow: View {
       }
       Button(intent: StopAgentIntent(agentId: agent.id)) {
         // The panel's Stop is a filled square, which SF Symbols' stop.fill draws, in the ground on an ink circle, as the composer's Stop stands.
+        // Note that with the screen dimmed, as Always On stands it, Stop is drawn as an outline, so no bright disc stands on the dark Lock Screen.
         Image(systemName: "stop.fill")
           .font(.caption)
-          .foregroundStyle(Color("Ground"))
+          .foregroundStyle(dimmed ? Color("Text") : Color("Ground"))
           .frame(width: StopTarget.mark, height: StopTarget.mark)
-          .background(Color("Text"), in: Circle())
+          .background {
+            if dimmed {
+              Circle().strokeBorder(Color("Text"), lineWidth: 1.5)
+            } else {
+              Circle().fill(Color("Text"))
+            }
+          }
           // Note that the target is wider and taller than the circle, but gives its height back to the row, so three rows still fit the expanded island; it reaches halfway into the gap between rows, never into the next row's Stop.
           .frame(width: StopTarget.width, height: StopTarget.height)
           .contentShape(Rectangle())
@@ -180,25 +195,34 @@ enum StopTarget {
   static let height: CGFloat = mark + AgentList.spacing
 }
 
-/// Whether the Dynamic Island cannot widen its compact and minimal presentations, as in landscape and beside another activity on iOS 27; never before it.
-struct LimitedWidthReader<Content: View>: View {
-  @ViewBuilder let content: (Bool) -> Content
+/// How far the expanded island's rows stand in from its sides, in points, clear of the curve of its corners.
+enum ExpandedInset {
+  static let side: CGFloat = 8
+}
+
+/// The compact island's leading mark: the Inbox glyph in copper while an ask needs the member, else the status mark in its tone.
+struct CompactMark: View {
+  let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
-    if #available(iOS 27.0, *) {
-      LimitedWidthEnvironment(content: content)
+    if state.waiting > 0 {
+      Image("Inbox").foregroundStyle(Color("Attention"))
     } else {
-      content(false)
+      Image(state.mark).foregroundStyle(state.tone)
     }
   }
 }
 
-@available(iOS 27.0, *)
-private struct LimitedWidthEnvironment<Content: View>: View {
-  @Environment(\.isDynamicIslandLimitedInWidth) private var limited
-  let content: (Bool) -> Content
+/// The count alone, as the compact island's trailing side and its minimal presentation stand it, rolling as it changes.
+struct RunningCount: View {
+  let state: AgentsActivityAttributes.ContentState
 
-  var body: some View { content(limited) }
+  var body: some View {
+    Text("\(state.running)")
+      .monospacedDigit()
+      .contentTransition(.numericText(value: Double(state.running)))
+      .foregroundStyle(state.tone)
+  }
 }
 
 // MARK: - The state as drawn
@@ -207,14 +231,17 @@ extension AgentsActivityAttributes.ContentState {
   /// The count's words: how many are working, or that they all finished.
   var countText: String { running > 0 ? "\(running) working" : "Done" }
 
-  /// The panel's glyph: a half-filled ring while agents work, a check once none does. Note that these stay SF Symbols, because the panel draws its status ring itself rather than with Lucide, as the app's own status marks do.
-  var symbol: String { running > 0 ? "circle.righthalf.filled" : "checkmark.circle.fill" }
+  /// How many asks need the member, in the panel's words (`NEEDS_YOU` in `@repo/features/inbox-list-model`): "1 needs you", "3 need you".
+  var waitingText: String { "\(waiting) \(waiting == 1 ? "needs" : "need") you" }
 
-  /// Copper while an ask waits on the member, else the working or the finished tone.
-  var tint: Color {
-    if waiting > 0 { return Color("Attention") }
-    return Color(running > 0 ? "Working" : "Complete")
-  }
+  /// The panel's own status mark, from its asset catalog: in progress while agents work, done once none does.
+  var mark: String { running > 0 ? "TaskStatusInProgress" : "TaskStatusDone" }
+
+  /// The count's tone: the working blue, or the done green once none works. Copper is left for what needs the member.
+  var tone: Color { Color(running > 0 ? "Working" : "Complete") }
+
+  /// The island's keyline: copper while an ask needs the member, else the count's tone.
+  var keyline: Color { waiting > 0 ? Color("Attention") : tone }
 
   /// Where a tap opens: the Inbox while an ask waits, else the newest running agent, else the Tasks tab.
   var opens: URL {
@@ -223,14 +250,8 @@ extension AgentsActivityAttributes.ContentState {
     return URL(string: "vespin://tasks")!
   }
 
-  /// An agent's page in the app.
-  static func route(agent id: String) -> URL {
-    var components = URLComponents()
-    components.scheme = "vespin"
-    components.host = "tasks"
-    components.path = "/agent/\(id)"
-    return components.url!
-  }
+  /// An agent's page in the app, as Stop opens it where it can't send.
+  static func route(agent id: String) -> URL { StopAgentIntent.page(agent: id) }
 }
 
 // MARK: - Previews

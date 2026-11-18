@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { TASKS_PAGE } from "@repo/features/tasks-model";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { type FileStripTab, fileTab } from "@repo/ui/tab-strip-model";
 import { test } from "vitest";
 import { liveStepTitle, NAMED_STEP, stepTitle } from "./history-titles.js";
@@ -50,20 +51,21 @@ function onTask(
   });
 }
 
-test("a task's step is named by the task, with the side panel's tab while it is open", () => {
+test("a task's step is named by the task, with its description on the column's Overview and the side panel's tab while it is open", () => {
   assert.deepEqual(titleOf(undefined, onTask(SIDE_PANEL_TAB.COMMENTS), VIEWS_AWAY), {
     label: "Auth refactor",
-    detail: "Comments",
-    panes: { column: undefined, side: "Comments" },
+    detail: "Description · Comments",
+    panes: { column: "Description", side: "Comments" },
   });
   assert.deepEqual(titleOf(undefined, onTask(fileTab("apps/web/session-store.ts")), VIEWS_AWAY), {
     label: "Auth refactor",
-    detail: "session-store.ts",
-    panes: { column: undefined, side: "session-store.ts" },
+    detail: "Description · session-store.ts",
+    panes: { column: "Description", side: "session-store.ts" },
   });
   assert.deepEqual(titleOf(undefined, onTask(undefined), VIEWS_AWAY), {
     label: "Auth refactor",
-    detail: undefined,
+    detail: "Description",
+    panes: { column: "Description", side: undefined },
   });
 });
 
@@ -72,24 +74,25 @@ test("a task on its way, its strips still another's, is named by the task alone"
   assert.deepEqual(titleOf(undefined, opening, VIEWS_AWAY), { label: "Auth refactor" });
 });
 
-test("a task's step listed later on its Overview is named by the task and its panel's tab, Overview being the task itself", () => {
+test("a task's step listed later on its Overview is named by the task, its description, and its panel's tab, so it reads apart from the agent it was opened over", () => {
   const step = {
     kind: NAMED_STEP.TASK,
     taskId: TASK.id,
     column: MAIN_TAB.OVERVIEW,
     side: SIDE_PANEL_TAB.COMMENTS,
+    threads: false,
   } as const;
 
   assert.deepEqual(
     liveStepTitle(step, undefined, { ...tasksControl(), rows: listedRows([TASK]) }, undefined),
     {
       label: "Auth refactor",
-      detail: "Comments",
+      detail: "Description · Comments",
     },
   );
 });
 
-test("the Inbox's step names the task its item is of, Settings and Home are named alone, and Admin's step as the place under it", () => {
+test("the Inbox's step names the task its item is of, Home is named alone, and a Settings page under Settings", () => {
   const chosen: InboxChoice = { itemId: "item-1", taskId: TASK.id };
   const base = tasksControl({ tasks: [TASK] });
   const inbox = { ...VIEWS_AWAY, inbox: { open: true, chosen, narrowed: undefined } };
@@ -98,6 +101,9 @@ test("the Inbox's step names the task its item is of, Settings and Home are name
     detail: "Auth refactor",
   });
   assert.deepEqual(titleOf(ROUTED_PLACE.SETTINGS, base, VIEWS_AWAY), { label: "Settings" });
+  assert.deepEqual(
+    titleOf(ROUTED_PLACE.SETTINGS, base, { ...VIEWS_AWAY, settings: SETTINGS_VIEW.SHORTCUTS }),
+    { label: "Settings", detail: "Keyboard shortcuts" },
+  );
   assert.deepEqual(titleOf(undefined, base, VIEWS_AWAY), { label: "Home" });
-  assert.deepEqual(titleOf(ROUTED_PLACE.ADMIN, base, VIEWS_AWAY), { label: "Home" });
 });

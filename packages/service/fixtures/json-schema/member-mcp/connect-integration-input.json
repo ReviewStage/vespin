@@ -25,17 +25,45 @@
       ],
       "description": "The provider to sign in to."
     },
-    "connection": {
-      "type": "string",
-      "description": "An account the member holds, by the connection name list_integrations answered, to sign it in again; leave it out for the provider's first account."
-    },
-    "add": {
-      "type": "boolean",
-      "description": "true to sign in another account at the provider, where it takes more than one."
+    "account": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "connection": {
+              "type": "string",
+              "pattern": "^(executor|github|gmail|google-calendar|google-drive|granola|linear|mercury|neon|notion|posthog|resend|sentry|slack|stripe|supabase|vercel|ycombinator)(?:-([2-9]|[1-9][0-9]{1,2}))?$",
+              "description": "The account to sign in, by the connection name list_integrations answered to sign it in again, or the provider's own name, such as notion, for its first account."
+            }
+          },
+          "required": [
+            "connection"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "add": {
+              "type": "boolean",
+              "enum": [
+                true
+              ],
+              "description": "true to sign in another account at the provider, where it takes more than one."
+            }
+          },
+          "required": [
+            "add"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Which account: {connection} to sign one in by its name, or {add: true} for a new one."
     }
   },
   "required": [
-    "provider"
+    "provider",
+    "account"
   ],
   "additionalProperties": false
 }

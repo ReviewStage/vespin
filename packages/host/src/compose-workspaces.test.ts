@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { WORKSPACE_CALL_FAILURE } from "@repo/features";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
@@ -14,9 +13,8 @@ import {
   type WorkspaceMember,
 } from "@repo/features/workspace-wire";
 import { GATEWAY_EVENT, GATEWAY_METHOD } from "@repo/gateway";
-import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { isRecord, type WireValue } from "@repo/wire";
-import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope } from "effect";
+import { Deferred, Duration, Effect, Exit, Fiber, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import {
   GITHUB_LAST_SIGN_IN_REFUSAL,
@@ -24,7 +22,6 @@ import {
   WORKSPACE_SLUG_REFUSAL,
 } from "./acts.js";
 import { WORKSPACE_ACTS } from "./contract/index.js";
-import { KEPT_READ, openEntityStore } from "./entity-store.js";
 import { ActRefused } from "./host-acts.js";
 import {
   ACME,
@@ -41,7 +38,6 @@ import {
   task,
   workspacesLiveRows,
 } from "./testing/tasks-subject.js";
-import { testCipher } from "./testing/test-cipher.js";
 
 it.effect(
   "the first refresh follows the account's workspaces with their GitHub organizations, and a sign-out clears them",
@@ -129,35 +125,6 @@ it.effect(
       assert.equal(last()?.workspacesStatus, TASKS_READ.READY);
       assert.deepEqual(last()?.workspaces, [PERSONAL]);
     }),
-);
-
-it.effect("a workspace list of none kept on disk is not drawn as ready at launch", () =>
-  Effect.gen(function* () {
-    const directory = yield* temporaryDirectoryScoped("tasks-entities-");
-    const earlier = yield* Scope.make();
-
-    const kept = yield* Scope.provide(earlier)(
-      openEntityStore({ directory, cipher: testCipher(), accountId: "user-dana" }),
-    );
-
-    yield* kept.keep(KEPT_READ.WORKSPACES, []);
-    yield* Scope.close(earlier, Exit.void);
-
-    const entities = yield* openEntityStore({
-      directory,
-      cipher: testCipher(),
-      accountId: "user-dana",
-    });
-
-    const service = fakeService([]);
-    service.workspacesFail = true;
-    const { last, settled, open } = yield* subject(service, { entities });
-
-    yield* open;
-    yield* settled;
-
-    assert.equal(last()?.workspacesStatus, TASKS_READ.READING);
-  }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
 );
 
 it.effect(
@@ -607,28 +574,6 @@ function toldOn(pushed: readonly (readonly [string, WireValue])[], read: LiveRea
 function heldMembers(pushed: readonly (readonly [string, WireValue])[]): WireValue[] {
   return toldOn(pushed, LIVE_READ.WORKSPACE_MEMBERS);
 }
-
-it.effect(
-  "a workspace's people kept on disk are drawn as a window holds them, before the service answers them",
-  () =>
-    Effect.gen(function* () {
-      const directory = yield* temporaryDirectoryScoped("tasks-people-");
-      const opened = openEntityStore({ directory, cipher: testCipher(), accountId: "user-dana" });
-      const earlier = yield* Scope.make();
-      const kept = yield* Scope.provide(earlier)(opened);
-      yield* kept.keepIn(KEPT_READ.MEMBERS, ACME.id, { members: [memberRow(DANA)], former: [] });
-      yield* Scope.close(earlier, Exit.void);
-      const service = fakeService([]);
-      service.memberships = [PERSONAL, ACME];
-      service.members[ACME.id] = [];
-      const { workspaces, pushed, settled } = yield* subject(service, { entities: yield* opened });
-
-      yield* workspaces.acts.WORKSPACE_MEMBERS_FOLLOW.hold({ workspaceId: ACME.id });
-      yield* settled;
-
-      assert.deepEqual(heldMembers(pushed).at(-1), { [ACME.id]: { rows: { members: [DANA] } } });
-    }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
-);
 
 it.effect(
   "a role change, a removal, and a handover stand until the held read carries them, through a poll answered before them",

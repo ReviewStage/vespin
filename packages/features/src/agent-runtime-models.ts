@@ -11,7 +11,9 @@
  * `ultrafast` tier, since OpenAI offers Ultrafast on few plans; on a Mac's
  * own sign-in, whatever it is signed in with, it runs neither. Cursor takes
  * Cursor's models, a fast version among them where the model has one,
- * which it runs as the model with Cursor's `fast` parameter on. A runtime's
+ * which it runs as the model with Cursor's `fast` parameter on, and a choice
+ * of context window where the model lists two, which it runs as Cursor's
+ * `context` parameter. A runtime's
  * rule is one row of `NATIVE_MODEL_RULE`, Codex's on the plan
  * (`CODEX_FAST`) and on an API key (`CODEX_ON_API_KEY`) its own; no runtime, or
  * one with no row, offers everything (`ANY_MODEL`).
@@ -87,7 +89,7 @@ const NATIVE_MODEL_RULE: Partial<Record<AgentRuntime, RuntimeModelRule>> = {
     provider: MODEL_PROVIDER.CURSOR,
     fast: true,
     ultrafast: false,
-    contextWindow: false,
+    contextWindow: true,
     name: "Cursor",
   },
 };

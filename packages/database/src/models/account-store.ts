@@ -103,6 +103,8 @@ export interface AccountPreferencesWrite {
   onboardingSurvey?: string;
   /** The intros the write dismisses, as the JSON list of their ids, stored as their union with what stood. */
   introsSeen?: string;
+  githubWakesOff?: string;
+  inbox?: boolean;
   agent?: ModelChoice;
   chaptersModel?: ChaptersPick;
   experiments?: ExperimentChoices;
@@ -127,6 +129,8 @@ const PREFERENCE_COLUMNS = {
   turnNotifications: accountPreference.turnNotifications,
   onboardingSurvey: accountPreference.onboardingSurvey,
   introsSeen: accountPreference.introsSeen,
+  githubWakesOff: accountPreference.githubWakesOff,
+  inbox: accountPreference.inbox,
   agentModel: accountPreference.agentModel,
   agentEffort: accountPreference.agentEffort,
   agentContextWindow: accountPreference.agentContextWindow,
@@ -150,6 +154,8 @@ const PreferenceRowSchema = Schema.Struct({
   turnNotifications: Schema.NullOr(Schema.Boolean),
   onboardingSurvey: Schema.NullOr(Schema.String),
   introsSeen: Schema.NullOr(Schema.String),
+  githubWakesOff: Schema.NullOr(Schema.String),
+  inbox: Schema.NullOr(Schema.Boolean),
   agentModel: Schema.NullOr(Schema.String),
   agentEffort: Schema.NullOr(Schema.String),
   agentContextWindow: Schema.NullOr(contextWindowSchema),
@@ -188,6 +194,8 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
           : { turnNotifications: row.turnNotifications }),
         ...(row.onboardingSurvey ? { onboardingSurvey: row.onboardingSurvey } : undefined),
         ...(introsSeen === undefined ? undefined : { introsSeen }),
+        ...(row.githubWakesOff ? { githubWakesOff: row.githubWakesOff } : undefined),
+        ...(row.inbox === null ? undefined : { inbox: row.inbox }),
       }) ?? {},
     agent: storedAgentChoice(row),
     // Note that a stored model no build lists any more reads as Haiku, as a row never written does.
@@ -326,6 +334,8 @@ const PreferenceWriteSchema = Schema.Struct({
   turnNotifications: Schema.optionalKey(Schema.Boolean),
   onboardingSurvey: Schema.optionalKey(Schema.String),
   introsSeen: Schema.optionalKey(Schema.String),
+  githubWakesOff: Schema.optionalKey(Schema.String),
+  inbox: Schema.optionalKey(Schema.Boolean),
   agent: Schema.optionalKey(
     Schema.Struct({
       model: Schema.String,
@@ -369,6 +379,8 @@ function writtenColumns(write: PreferenceWrite) {
       ? undefined
       : { onboardingSurvey: write.onboardingSurvey }),
     ...(write.introsSeen === undefined ? undefined : { introsSeen: write.introsSeen }),
+    ...(write.githubWakesOff === undefined ? undefined : { githubWakesOff: write.githubWakesOff }),
+    ...(write.inbox === undefined ? undefined : { inbox: write.inbox }),
     ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
     ...(write.updatedAt === undefined ? undefined : { updatedAt: write.updatedAt }),
     ...(write.agent === undefined
@@ -468,6 +480,10 @@ export function writeAccountPreferences(
         ? undefined
         : { onboardingSurvey: write.onboardingSurvey }),
       ...(write.introsSeen === undefined ? undefined : { introsSeen: write.introsSeen }),
+      ...(write.githubWakesOff === undefined
+        ? undefined
+        : { githubWakesOff: write.githubWakesOff }),
+      ...(write.inbox === undefined ? undefined : { inbox: write.inbox }),
       ...(write.agent === undefined ? undefined : { agent: write.agent }),
       ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
       ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),

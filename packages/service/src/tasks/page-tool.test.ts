@@ -65,27 +65,25 @@ const openTask = Effect.gen(function* () {
 function sandboxWith(files: Readonly<Record<string, string>>) {
   const reads: string[] = [];
 
-  const sandbox: NonNullable<PageToolBinding["sandbox"]> = {
-    checkout: CHECKOUT,
-    door: () =>
-      Promise.resolve({
-        readFile: ({ path }: { path: string }) => {
-          reads.push(path);
-          const text = files[path];
+  const sandbox: NonNullable<PageToolBinding["sandbox"]> = () =>
+    Promise.resolve({
+      checkout: CHECKOUT,
+      readFile: ({ path }: { path: string }) => {
+        reads.push(path);
+        const text = files[path];
 
-          if (text === undefined) return Promise.resolve(null);
+        if (text === undefined) return Promise.resolve(null);
 
-          return Promise.resolve(
-            new ReadableStream<Uint8Array>({
-              start(controller) {
-                controller.enqueue(new TextEncoder().encode(text));
-                controller.close();
-              },
-            }),
-          );
-        },
-      }),
-  };
+        return Promise.resolve(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(text));
+              controller.close();
+            },
+          }),
+        );
+      },
+    });
 
   return { sandbox, reads };
 }

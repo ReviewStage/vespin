@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { writeAccountTimeZone } from "@repo/database/models/account-time-zone";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
+import type { DescriptionWriter } from "@repo/database/models/description-revisions";
 import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { type MemoryOutcome, rememberMemory } from "@repo/database/models/memory-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -13,6 +15,7 @@ import {
   startTask,
 } from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
+import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { RUN_STATUS, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { EXPERIMENT } from "@repo/settings";
@@ -41,7 +44,9 @@ import { coderTurnMessage } from "./turn-message.js";
  * agent's first turn, then only where someone other than the agent saved
  * the description after its previous turn started, never on its first turn or for
  * its own notes; and an agent's first turn alone, with Memory on, is handed
- * the memories of its own workspace its task's words find. Synthetic
+ * the memories of its own workspace its task's words find; and a turn whose
+ * request names no zone reads the developer's day in the zone their account
+ * keeps, and in UTC, said to be so, only where it keeps none. Synthetic
  * accounts, tasks, and words throughout.
  */
 
@@ -52,6 +57,9 @@ const STALE_WORDS = "before the most recent work; check it against the code befo
 
 /** When the agent's first turn starts, which a test reads against its own clock, which starts at nothing. */
 const TURN_STARTS_AT = 10 * 60_000;
+
+/** The developer, as the writer of our notes. */
+const DEVELOPER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.DEVELOPER };
 
 /** A sandbox door no call of notes alone opens: one that fails if it is. */
 const noSandbox: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
@@ -147,6 +155,37 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
   );
 
   it.effect(
+    "a turn whose request names no zone reads the zone the account keeps, one that names its own reads that, and one with neither reads UTC and says so",
+    () =>
+      Effect.gen(function* () {
+        const { userId, agent, admitted } = yield* openAgent;
+
+        const timeOf = (zone: string | undefined) =>
+          Effect.map(
+            coderTurnMessage(
+              { ...admitted, timeZone: zone },
+              agent,
+              { kind: SESSION_TURN.TYPED, turnId: undefined },
+              {},
+              TURN_STARTS_AT,
+            ),
+            (message) => message.text ?? "",
+          );
+
+        const unknown = yield* timeOf(undefined);
+        assert.ok(unknown.includes("Their time zone is unknown, so read it as UTC."), unknown);
+
+        yield* writeAccountTimeZone(userId, "America/New_York");
+        const kept = yield* timeOf(undefined);
+        assert.ok(kept.includes("7:10 PM America/New_York (UTC 00:10), offset -05:00"), kept);
+        assert.ok(!kept.includes("unknown"), kept);
+
+        const named = yield* timeOf("Asia/Tokyo");
+        assert.ok(named.includes("9:10 AM Asia/Tokyo (UTC 00:10), offset +09:00"), named);
+      }),
+  );
+
+  it.effect(
     "a typed turn's message hands the task as it stands once after the agent's first turn, then only once someone other than the agent saved the description after its previous turn started, even where the agent then wrote over the same section, and never on its first turn, for its own notes, or once its workspace turned Task descriptions off, and says so where its last edit predates Task descriptions going back on",
     () =>
       Effect.gen(function* () {
@@ -191,7 +230,7 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
 
         // Our notes before the agent's first turn: that turn opens on the description as its first message.
         yield* TestClock.adjust("1 minute");
-        yield* saveNotes(binding, [added("Context", "Invites go by email.")]);
+        yield* saveNotes(binding, [added("Context", "Invites go by email.")], DEVELOPER);
         assert.equal(yield* typedAt(firstTurn), undefined);
         // The first turn runs, started after our notes.
         yield* ranTurn(admitted, firstTurn, TURN_STARTS_AT);
@@ -210,7 +249,11 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         // Our notes while that turn ran, and the agent's after them in the same section, which
         // leave the agent the section's last writer: the next typed turn is handed the description all the same.
         yield* TestClock.adjust("1 minute");
-        yield* saveNotes(binding, [added("Approach", "- A withdrawn invite never grants access.")]);
+        yield* saveNotes(
+          binding,
+          [added("Approach", "- A withdrawn invite never grants access.")],
+          DEVELOPER,
+        );
         yield* TestClock.adjust("1 minute");
         assert.equal(
           yield* agentNotes([added("Approach", "- Resending renews the link.")]),
@@ -224,7 +267,11 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         // With Task descriptions off a save hands nothing, and the description is never what a turn reads.
         yield* experimentInTestWorkspace(userId, EXPERIMENT.DESCRIPTIONS, false);
         yield* TestClock.adjust("1 minute");
-        yield* saveNotes(binding, [added("Approach", "- Only admins withdraw invites.")]);
+        yield* saveNotes(
+          binding,
+          [added("Approach", "- Only admins withdraw invites.")],
+          DEVELOPER,
+        );
         assert.equal(yield* typedAt(nextTurn), undefined);
 
         // A turn runs after that save, and Task descriptions goes back on: the next turn is handed the description it was not.

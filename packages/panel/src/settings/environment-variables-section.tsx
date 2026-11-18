@@ -1,5 +1,12 @@
-import { RUNNER_ENV } from "@repo/agent-runner/protocol";
-import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  SECRET_VARIABLE_WORDS,
+  setByVespinNote,
+  VARIABLE_WORDS,
+  variableChanger,
+  variableChangeWord,
+  variableCreatedAt,
+  variableDeleteTitle,
+} from "@repo/features/cloud-environment-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
 import {
@@ -145,7 +152,7 @@ const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 /** The words the section says. */
 const WORDS = {
-  CAPTION: "Cloud agents, setup scripts, and run actions start with these.",
+  CAPTION: VARIABLE_WORDS.CAPTION,
   ADD: "Add variables",
   ADD_ANOTHER: "Add another",
   IMPORT: "Import .env",
@@ -154,17 +161,14 @@ const WORDS = {
   UPDATED_BY: "Updated by",
   VIEW_OPTIONS: "View options",
   ORDER_BY: "Order by",
-  NONE: "No variables yet.",
+  NONE: VARIABLE_WORDS.NONE,
   NO_MATCH: "No variables match.",
   KIND: "Type",
   MAKE_SECRET: "Make secret",
   /** What a save or an edit says once it lands: when the agents already running take it. */
   SAVED: "Saved. Agents pick it up from their next message.",
-  NAME_SPELLING: "Use letters, digits, and _, not starting with a digit.",
+  NAME_SPELLING: VARIABLE_WORDS.NAME_SPELLING,
   SEALS_CONFIG: "Choose Config to replace its value, or make it secret from its row.",
-  ADDED: "Added",
-  UPDATED: "Updated",
-  BY: "by",
   MASKED: "••••••••",
 } as const;
 
@@ -179,8 +183,8 @@ type Kind = (typeof KIND)[keyof typeof KIND];
 /** Each kind's name in Add's choice, and the one line under it saying what the kind chosen does. */
 const KIND_SHOWN = {
   [KIND.SECRET]: {
-    label: "Secret",
-    detail: "Its value is hidden once it's saved. Agents still get it.",
+    label: SECRET_VARIABLE_WORDS.LABEL,
+    detail: SECRET_VARIABLE_WORDS.DETAIL,
   },
   [KIND.CONFIG]: {
     label: "Config",
@@ -202,30 +206,6 @@ const ORDER_SHOWN = {
 
 /** The key the filter files a variable no member is named for under: one from before who set it was kept. */
 const NOBODY_KEY = "nobody";
-
-/**
- * The names we set for our own agents as each launches, which replace
- * a workspace variable of the same name (`runner-sessions.ts`'s launch, its
- * own after the workspace's), each with what its mark says.
- */
-const SET_BY_VESPIN: ReadonlyMap<string, string> = new Map([
-  [
-    RUNNER_ENV.API_KEY,
-    `${PRODUCT_NAME} sets ${RUNNER_ENV.API_KEY} for agents on an Anthropic API key, replacing this value.`,
-  ],
-  [
-    RUNNER_ENV.OPENAI_API_KEY,
-    `${PRODUCT_NAME} sets ${RUNNER_ENV.OPENAI_API_KEY} for agents on an OpenAI API key, replacing this value.`,
-  ],
-  [
-    RUNNER_ENV.CLAUDE_TOKEN,
-    `${PRODUCT_NAME} sets ${RUNNER_ENV.CLAUDE_TOKEN} for Claude agents on a plan, replacing this value.`,
-  ],
-  [
-    RUNNER_ENV.BEARER,
-    `${PRODUCT_NAME} sets ${RUNNER_ENV.BEARER} for every agent, so agents never see this value.`,
-  ],
-]);
 
 function rejected(cause: unknown): ActionResult {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason: actFailureWords(cause) };
@@ -249,21 +229,6 @@ async function drawAnswer(
   const { queryKey } = environmentQuery(workspaceId);
   await queries.cancelQueries({ queryKey, exact: true });
   queries.setQueryData(queryKey, answer);
-}
-
-/** When a variable was added, or last set where a service before it answers no add. */
-function createdOf(variable: WorkspaceVariable): number {
-  return variable.createdAt ?? variable.updatedAt;
-}
-
-/** Whether a variable changed since it was added, which its line says as Updated. */
-function changed(variable: WorkspaceVariable): boolean {
-  return variable.updatedBy !== undefined || variable.updatedAt > createdOf(variable);
-}
-
-/** The member a variable's line names: who last changed it, or who added it until it changed. */
-function changerOf(variable: WorkspaceVariable): WorkspaceVariable["createdBy"] {
-  return changed(variable) ? variable.updatedBy : variable.createdBy;
 }
 
 /** A name's problem among the other names it is saved beside, in the words its line says. */
@@ -296,7 +261,7 @@ function ordered(variables: readonly WorkspaceVariable[], order: Order): Workspa
   return [...variables].sort((one, other) => {
     if (order === ORDER.UPDATED) return other.updatedAt - one.updatedAt;
 
-    if (order === ORDER.CREATED) return createdOf(other) - createdOf(one);
+    if (order === ORDER.CREATED) return variableCreatedAt(other) - variableCreatedAt(one);
 
     return one.name.localeCompare(other.name);
   });
@@ -320,11 +285,11 @@ function ChangeLine({
   return (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN} block wrap>
       <ActorLine>
-        {`${changed(variable) ? WORDS.UPDATED : WORDS.ADDED} `}
+        {`${variableChangeWord(variable)} `}
         <Time at={variable.updatedAt} look={TIME_LOOK.AGO} />
         {actor === undefined ? null : (
           <>
-            {` ${WORDS.BY} `}
+            {` ${VARIABLE_WORDS.BY} `}
             <ActorRef actor={actor} />
           </>
         )}
@@ -450,7 +415,7 @@ function VariableRow({
       ]
     : [copies];
 
-  const note = SET_BY_VESPIN.get(name);
+  const note = setByVespinNote(name);
 
   return (
     <>
@@ -497,8 +462,8 @@ function VariableRow({
             open
             confirm={deletion}
             question={{
-              title: `Delete ${name}?`,
-              verb: "Delete variable",
+              title: variableDeleteTitle(name),
+              verb: VARIABLE_WORDS.DELETE,
               running: "Deleting",
               loss: CONFIRM_LOSS.IRREVERSIBLE,
               replayUnmasked: true,
@@ -692,7 +657,7 @@ function useAddDialog(
       name: draft.name,
       value: draft.value,
       problem: problem ?? sealsConfig,
-      note: SET_BY_VESPIN.get(name) ?? replacesNote(name, saved, secret),
+      note: setByVespinNote(name) ?? replacesNote(name, saved, secret),
     };
   });
 
@@ -920,7 +885,7 @@ function VariableList({
   const [order, setOrder] = useState<Order>(ORDER.NAME);
 
   const shown = variables.map((variable): ShownVariable => {
-    const changer = changerOf(variable);
+    const changer = variableChanger(variable);
 
     if (changer === undefined) return { variable, actor: undefined, key: NOBODY_KEY };
     const actor = personActor(changer, members, readerId, former);
@@ -1017,7 +982,7 @@ export function EnvironmentVariablesSection({
         {environment.isError ? (
           <SettingsSection>
             <ReadFailed
-              line="The variables could not be read."
+              line={VARIABLE_WORDS.READ_FAILED}
               surface={FAILURE_SURFACE.WORKSPACE_ENVIRONMENT_READ}
               onRetry={() => void environment.refetch()}
             />

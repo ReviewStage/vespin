@@ -1,17 +1,18 @@
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import type { ReactNode } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../icons/icons.js";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  ComposeIcon,
   GearIcon,
   SearchIcon,
   SidebarIcon,
   SidePanelIcon,
 } from "../../icons/lucide-glyphs.js";
 import { HarnessMark } from "../../marks/harness-mark.js";
+import { ProductMark } from "../../marks/product-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
@@ -38,13 +39,14 @@ import { MINUTE, STORY_NOW, still } from "./landing-story.js";
  * The sidebar is the desktop's own: the title bar's sidebar toggle and way
  * back and forward over the workspace, the places, and My tasks under each
  * task's repository, with the hidden statuses' line and the account's foot
- * with its settings. Its tasks and the workspace are one made-up team's,
- * acme, building teammate invitations. Every part is a `@repo/ui` component
+ * with its settings. The workspace and its member are our own team's,
+ * building teammate invitations. Every part is a `@repo/ui` component
  * placed as the panel places it (`packages/panel/src/desktop/desktop-sidebar.tsx`).
  */
 
 /** The page on show, which the sidebar marks among its places. */
 export const DESKTOP_PLACE = {
+  HOME: "home",
   INBOX: "inbox",
   TASK: "task",
   AUTOMATIONS: "automations",
@@ -65,7 +67,7 @@ type SidebarTask = {
 const MY_TASKS: readonly { readonly repository: string; readonly tasks: readonly SidebarTask[] }[] =
   [
     {
-      repository: "relay",
+      repository: "vespin",
       tasks: [
         {
           id: "invites",
@@ -84,7 +86,7 @@ const MY_TASKS: readonly { readonly repository: string; readonly tasks: readonly
       ],
     },
     {
-      repository: "ledger",
+      repository: "stage-cli",
       tasks: [
         {
           id: "export",
@@ -97,8 +99,59 @@ const MY_TASKS: readonly { readonly repository: string; readonly tasks: readonly
     },
   ];
 
-/** The member at the account's foot. */
-export const MEMBER = "Sam Reyes";
+/** A person in the mockups: their name, and their picture's address on the site that mounts them. */
+export type LandingPerson = {
+  readonly name: string;
+  readonly picture?: string | undefined;
+};
+
+/** The people the mockups are drawn for: the member at the account's foot, who writes the answers, and the teammate they bring in. */
+export type LandingCast = {
+  readonly member: LandingPerson;
+  readonly teammate: LandingPerson;
+};
+
+/** The cast a page names none for: our own, by their letters. */
+const OWN_CAST: LandingCast = {
+  member: { name: "Charles Pan" },
+  teammate: { name: "Dean Stratakos" },
+};
+
+const LandingCastContext = createContext<LandingCast>(OWN_CAST);
+
+/** Hands every mockup under it the people it is drawn for. */
+export const LandingCastProvider = LandingCastContext.Provider;
+
+/** The member the mockups are drawn for (`LandingCastProvider`). */
+export function useLandingMember(): LandingPerson {
+  return useContext(LandingCastContext).member;
+}
+
+/** The teammate the member brings in (`LandingCastProvider`). */
+export function useLandingTeammate(): LandingPerson {
+  return useContext(LandingCastContext).teammate;
+}
+
+/** The workspace's face at `size`: the product's own mark on its copper tile, since the workspace is ours. */
+export function WorkspaceFace({
+  size,
+}: {
+  size: (typeof AVATAR_SIZE)[keyof typeof AVATAR_SIZE];
+}): React.JSX.Element {
+  return (
+    <Avatar
+      name={PRODUCT_NAME}
+      size={size}
+      outline={AVATAR_OUTLINE.TILE}
+      glyph={<ProductMark inherit />}
+      branded
+      decorative
+    />
+  );
+}
+
+/** The repository the tasks work in, as its chip names it. */
+export const REPOSITORY = "ReviewStage/vespin";
 
 /** An agent's face: its name on the square of the harness it runs in. */
 export function agentFace(
@@ -140,6 +193,51 @@ export function SidePanelToggle(): React.JSX.Element {
   );
 }
 
+/**
+ * The sidebar's places as the panel lists them: Search, Home, the Inbox
+ * with how many of its items wait on the reader, Tasks, Automations, and the Merge queue,
+ * `place` marked, each of Home, the Inbox, and Automations going where
+ * `go` says where it is given.
+ */
+export function DesktopPlaces({
+  place,
+  needYou = 2,
+  go,
+}: {
+  place: DesktopPlace;
+  needYou?: number | undefined;
+  go?: ((place: DesktopPlace) => void) | undefined;
+}): React.JSX.Element {
+  const current = (shown: DesktopPlace) => (place === shown ? NAV_CURRENT.PAGE : undefined);
+  const press = (to: DesktopPlace) => (go === undefined ? undefined : () => go(to));
+
+  return (
+    <SidebarPlaces label="Places">
+      <NavItem icon={<SearchIcon />}>Search</NavItem>
+      <NavItem
+        icon={<GLYPH.HOME />}
+        current={current(DESKTOP_PLACE.HOME)}
+        onClick={press(DESKTOP_PLACE.HOME)}
+      >
+        Home
+      </NavItem>
+      <NavItem
+        icon={<InboxIcon />}
+        current={current(DESKTOP_PLACE.INBOX)}
+        count={{ value: needYou, noun: "need you", tone: STATUS_TONE.ATTENTION }}
+        onClick={press(DESKTOP_PLACE.INBOX)}
+      >
+        Inbox
+      </NavItem>
+      <NavItem icon={<ListTodoIcon />}>Tasks</NavItem>
+      <NavItem icon={<ZapIcon />} current={current(DESKTOP_PLACE.AUTOMATIONS)}>
+        Automations
+      </NavItem>
+      <NavItem icon={<GLYPH.QUEUED />}>Merge queue</NavItem>
+    </SidebarPlaces>
+  );
+}
+
 /** The desktop's sidebar, `place` marked among its places and `openTask` among My tasks. */
 export function DesktopSidebar({
   place,
@@ -148,37 +246,22 @@ export function DesktopSidebar({
   place: DesktopPlace;
   openTask?: string | undefined;
 }): React.JSX.Element {
+  const member = useLandingMember();
+
   return (
     <aside className="ui-landing-sidebar">
       <TitleBarControls />
       <div className="ui-landing-workspace">
         <NavItem variant={NAV_ITEM_VARIANT.IDENTITY} mark={<ChevronDownIcon />}>
           <span className="ui-landing-workspace-ref">
-            <Avatar name="acme" size={AVATAR_SIZE.CARD} outline={AVATAR_OUTLINE.TILE} decorative />
+            <WorkspaceFace size={AVATAR_SIZE.CARD} />
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.SECTION}>
-              acme
+              {PRODUCT_NAME}
             </Text>
           </span>
         </NavItem>
       </div>
-      <SidebarPlaces label="Places">
-        <NavItem icon={<ComposeIcon />}>New task</NavItem>
-        <NavItem icon={<SearchIcon />}>Search</NavItem>
-        <NavItem
-          icon={<InboxIcon />}
-          current={place === DESKTOP_PLACE.INBOX ? NAV_CURRENT.PAGE : undefined}
-          count={{ value: 2, noun: "need you", tone: STATUS_TONE.ATTENTION }}
-        >
-          Inbox
-        </NavItem>
-        <NavItem icon={<ListTodoIcon />}>Tasks</NavItem>
-        <NavItem
-          icon={<ZapIcon />}
-          current={place === DESKTOP_PLACE.AUTOMATIONS ? NAV_CURRENT.PAGE : undefined}
-        >
-          Automations
-        </NavItem>
-      </SidebarPlaces>
+      <DesktopPlaces place={place} />
       <SidebarRule />
       <nav className="ui-landing-sidebar-group" aria-label="My tasks">
         <GroupHeader heading={GROUP_HEADING.NONE} label="My tasks" />
@@ -215,9 +298,11 @@ export function DesktopSidebar({
       <div className="ui-landing-sidebar-foot">
         <NavItem
           variant={NAV_ITEM_VARIANT.IDENTITY}
-          icon={<Avatar name={MEMBER} size={AVATAR_SIZE.ACCOUNT} decorative />}
+          icon={
+            <Avatar name={member.name} src={member.picture} size={AVATAR_SIZE.ACCOUNT} decorative />
+          }
         >
-          {MEMBER}
+          {member.name}
         </NavItem>
         <IconButton icon={<GearIcon />} label="Settings" onClick={still} />
       </div>

@@ -61,7 +61,8 @@
               ]
             },
             "at": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
             },
             "timezone": {
               "type": "string",
@@ -85,18 +86,89 @@
                 "github"
               ]
             },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
+              "type": "boolean"
+            },
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
             "event": {
               "type": "string",
               "enum": [
                 "pull-request-opened",
                 "pull-request-labeled",
-                "pull-request-updated",
-                "issue-opened",
-                "issue-labeled",
-                "check-failed",
-                "push",
-                "pull-request-merged",
-                "release-published"
+                "pull-request-updated"
+              ]
+            },
+            "senders": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "people",
+                  "app-agents",
+                  "other-bots"
+                ]
+              }
+            },
+            "drafts": {
+              "type": "boolean"
+            },
+            "forks": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders",
+            "drafts",
+            "forks"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
               ]
             },
             "labels": {
@@ -120,6 +192,32 @@
             "defaultBranch": {
               "type": "boolean"
             },
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "event": {
+              "type": "string",
+              "enum": [
+                "pull-request-merged"
+              ]
+            },
             "senders": {
               "type": "array",
               "items": {
@@ -130,6 +228,48 @@
                   "other-bots"
                 ]
               }
+            },
+            "forks": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders",
+            "forks"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
+              ]
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
+              "type": "boolean"
             },
             "moments": {
               "type": "array",
@@ -142,11 +282,82 @@
                 ]
               }
             },
-            "drafts": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "event": {
+              "type": "string",
+              "enum": [
+                "issue-opened",
+                "issue-labeled",
+                "push"
+              ]
+            },
+            "senders": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "people",
+                  "app-agents",
+                  "other-bots"
+                ]
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
+              ]
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
               "type": "boolean"
             },
-            "forks": {
-              "type": "boolean"
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
             },
             "tags": {
               "type": "array",
@@ -157,8 +368,90 @@
               },
               "maxItems": 10
             },
+            "event": {
+              "type": "string",
+              "enum": [
+                "release-published"
+              ]
+            },
+            "senders": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "people",
+                  "app-agents",
+                  "other-bots"
+                ]
+              }
+            },
             "prereleases": {
               "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders",
+            "prereleases"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
+              ]
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
+              "type": "boolean"
+            },
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "event": {
+              "type": "string",
+              "enum": [
+                "check-failed"
+              ]
             }
           },
           "required": [
@@ -237,22 +530,23 @@
           "additionalProperties": false
         }
       ],
-      "description": "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is \"Send a notification via Vespin\"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page."
+      "description": "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub: senders names whose events fire it, of people, app-agents (our agents), and other-bots (for pull-request-merged, whose pull request it is), on every event but check-failed; drafts on pull-request-opened, -labeled, and -updated, forks on every pull-request event, and prereleases on release-published say whether a draft, a fork's pull request, or a prerelease fires it. moments (pull-request-updated only) left out is every moment; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is \"Send a notification via Vespin\"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page."
     },
     "repositories": {
       "type": "array",
       "items": {
         "type": "string",
-        "maxLength": 140
+        "maxLength": 140,
+        "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$"
       },
       "maxItems": 10,
-      "description": "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none."
+      "description": "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take."
     },
     "model": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Catalog id from list_models, given with effort; neither for the creator's default."
+      "description": "Catalog id from list_models, given with effort."
     },
     "effort": {
       "type": "string",
@@ -287,15 +581,77 @@
         "personal",
         "workspace"
       ],
-      "description": "personal, the default, is its creator's; workspace is every member's."
+      "description": "personal is its creator's alone; workspace is every member's."
     },
     "archiveSuccessful": {
       "type": "boolean",
-      "description": "Archive each run's agent once it succeeds and leaves no thread open."
+      "description": "Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open."
     },
     "slackDelivery": {
       "type": "boolean",
       "description": "Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected."
+    },
+    "runsOn": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "type": "string",
+              "enum": [
+                "vercel"
+              ]
+            }
+          },
+          "required": [
+            "machine"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "type": "string",
+              "enum": [
+                "device"
+              ]
+            },
+            "deviceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36
+            }
+          },
+          "required": [
+            "machine",
+            "deviceId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "type": "string",
+              "enum": [
+                "device"
+              ]
+            },
+            "device": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "machine",
+            "device"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Where each run's agent starts: {\"machine\":\"vercel\"} for the cloud, or {\"machine\":\"device\",\"device\":\"<name>\"} for one of the automation's creator's own devices (a Mac or a host) by its name, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id; list_machines lists each place with the runsOn to pass. A run that fires while its device is offline fails. It places each agent a run starts: a run handed to the one agent named runs where that agent already runs."
     }
   },
   "required": [

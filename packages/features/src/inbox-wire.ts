@@ -15,6 +15,7 @@ import {
   hasWordsOrFiles,
 } from "./agent-wire.js";
 import { AUDIO_TYPE } from "./audio-signature.js";
+import { taskRefSchema } from "./cli-task-ref.js";
 import { markersAsNames } from "./file-marker.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
@@ -582,45 +583,6 @@ const inboxOptionSchema = EffectSchema.Struct({
 
 export type InboxOption = typeof inboxOptionSchema.Type;
 
-/**
- * One piece of an option's media as the agent posts it: a file by its path
- * in the agent's sandbox, which the service reads and keeps as a file of the
- * message, with the words that say what it shows; a page it showed, by the
- * id and the version `show_page` answered, its newest where it names none;
- * or an https address, with the words it is named by.
- */
-const inboxPostOptionMediaSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    path: filledText(INBOX_BOUNDS.MAX_PATH_CHARS),
-    caption: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_ALT_CHARS)),
-  }),
-  EffectSchema.Struct({
-    page: wireUuidSchema,
-    version: EffectSchema.optionalKey(pageVersionNumberSchema),
-  }),
-  EffectSchema.Struct({
-    url: EffectSchema.String.check(
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_URL_CHARS),
-      EffectSchema.isPattern(SECURE_WEB_ADDRESS),
-    ),
-    label: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_LABEL_CHARS)),
-  }),
-]);
-
-export type InboxPostOptionMedia = typeof inboxPostOptionMediaSchema.Type;
-
-/** One option of a choice as the agent posts it: those it is kept by, its media named as the agent names them. */
-const inboxPostOptionSchema = EffectSchema.Struct({
-  label: inboxOptionSchema.fields.label,
-  detail: inboxOptionSchema.fields.detail,
-  media: EffectSchema.optionalKey(
-    EffectSchema.Array(inboxPostOptionMediaSchema).check(
-      EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_POSTED_OPTION_MEDIA),
-    ),
-  ),
-});
-
 /** One field of a form: its type, its label, which names its value in the answer, whether it must be filled, and a select's options, one perhaps recommended. */
 const inboxFieldSchema = EffectSchema.Struct({
   type: EffectSchema.Literals(Object.values(INBOX_FIELD)),
@@ -637,6 +599,25 @@ const inboxFieldSchema = EffectSchema.Struct({
 });
 
 export type InboxField = typeof inboxFieldSchema.Type;
+
+/** A field's own keys whatever its type: its label and whether it must be filled. */
+const FIELD_INPUT_KEYS = {
+  label: inboxFieldSchema.fields.label,
+  required: inboxFieldSchema.fields.required,
+};
+
+/** A field as the agent posts it, one variant per type: a select names its options, one perhaps recommended, and no other type takes either. */
+const inboxFieldInputSchema = EffectSchema.Union([
+  EffectSchema.Struct({ type: EffectSchema.Literal(INBOX_FIELD.TEXT), ...FIELD_INPUT_KEYS }),
+  EffectSchema.Struct({ type: EffectSchema.Literal(INBOX_FIELD.NUMBER), ...FIELD_INPUT_KEYS }),
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(INBOX_FIELD.SELECT),
+    ...FIELD_INPUT_KEYS,
+    options: inboxFieldSchema.fields.options.schema,
+    recommended: inboxFieldSchema.fields.recommended,
+  }),
+  EffectSchema.Struct({ type: EffectSchema.Literal(INBOX_FIELD.BOOLEAN), ...FIELD_INPUT_KEYS }),
+]);
 
 /**
  * What an agent recommends of a choice's options as it posts the choice:
@@ -757,14 +738,17 @@ export const inboxPostInputSchema = EffectSchema.Struct({
 export type InboxPost = typeof inboxPostInputSchema.Type;
 
 /**
- * What a list's tool part carries as its input: nothing for the agent's own
- * threads, or one other agent of its workspace by `agentId`, or one task of
- * it by `taskId`, whose threads it reads and never writes; and where the
- * threads listed stand, every one where it names none.
+ * What a list's tool part carries as its input: whose threads, always
+ * named, as one agent of its workspace by `agentId`, the agent's own
+ * included, or one task of it by `taskId`, its id or its key, another's of which it reads and
+ * never writes; and where the threads listed stand, every one where it
+ * names none.
  */
 export const inboxListInputSchema = EffectSchema.Struct({
-  agentId: EffectSchema.optionalKey(wireUuidSchema),
-  taskId: EffectSchema.optionalKey(wireUuidSchema),
+  of: EffectSchema.Union([
+    EffectSchema.Struct({ agentId: wireUuidSchema }),
+    EffectSchema.Struct({ taskId: taskRefSchema }),
+  ]),
   status: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(INBOX_STATUS))),
 });
 
@@ -848,17 +832,6 @@ const DECIDE_FIELDS = {
   ...RECOMMENDED_FIELDS,
 };
 
-/** A `decide` ask's own keys as the agent posts it: those it is kept by, but its options' media named as the agent names them and its recommendation one label or a list of them. */
-const DECIDE_INPUT_FIELDS = {
-  type: DECIDE_FIELDS.type,
-  options: EffectSchema.Array(inboxPostOptionSchema).check(
-    EffectSchema.isMinLength(2),
-    EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_OPTIONS),
-  ),
-  multiple: DECIDE_FIELDS.multiple,
-  recommended: EffectSchema.optionalKey(recommendedInputSchema),
-};
-
 /**
  * A `do` ask's own keys: its steps in Markdown, in order. Note that none is
  * a `do` ask too, because a version 4 to-do named no step and its item's
@@ -872,15 +845,20 @@ const DO_FIELDS = {
 };
 
 /** An `answer` ask's own keys: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
-const ANSWER_FIELDS = {
-  type: EffectSchema.Literal(INBOX_ASK.ANSWER),
-  fields: EffectSchema.optionalKey(
-    EffectSchema.Array(inboxFieldSchema).check(
-      EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_FIELDS),
+const ANSWER_FIELDS = answerFields(inboxFieldSchema);
+
+/** An `answer` ask's own keys, its fields each read by `field`: as kept, or as the agent posts them. */
+function answerFields<F extends EffectSchema.Top>(field: F) {
+  return {
+    type: EffectSchema.Literal(INBOX_ASK.ANSWER),
+    fields: EffectSchema.optionalKey(
+      EffectSchema.Array(field).check(
+        EffectSchema.isMinLength(1),
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_FIELDS),
+      ),
     ),
-  ),
-};
+  };
+}
 
 /** What a message asks of its reader, one of three: decide among options, do steps, or answer. */
 const inboxAskSchema = EffectSchema.Union([
@@ -891,14 +869,72 @@ const inboxAskSchema = EffectSchema.Union([
 
 export type InboxAsk = typeof inboxAskSchema.Type;
 
-/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them. */
-const inboxAskInputSchema = EffectSchema.Union([
-  EffectSchema.Struct(DECIDE_INPUT_FIELDS),
-  EffectSchema.Struct(DO_FIELDS),
-  EffectSchema.Struct(ANSWER_FIELDS),
-]);
+/**
+ * An ask as the agent posts it: one it is kept as, but a `decide`'s
+ * recommendation one label or a list of them, and each option's media
+ * named as the agent names it: a file by its path in the agent's sandbox,
+ * which the service reads and keeps as a file of the message, with the
+ * words that say what it shows; a page it showed, by the id and the version
+ * `show_page` answered, required where the model posts one and optional
+ * where a panel reads a stored post; or an https address, with the words it
+ * is named by. An `answer`'s fields are read by `field`: one variant per
+ * type where the model posts them, and as kept where a panel reads a stored
+ * post, which may name a select's options loosely.
+ */
+function askInputSchema<V extends EffectSchema.Top, F extends EffectSchema.Top>(
+  pageVersion: V,
+  field: F,
+) {
+  const media = EffectSchema.Union([
+    EffectSchema.Struct({
+      path: filledText(INBOX_BOUNDS.MAX_PATH_CHARS),
+      caption: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_ALT_CHARS)),
+    }),
+    EffectSchema.Struct({ page: wireUuidSchema, version: pageVersion }),
+    EffectSchema.Struct({
+      url: EffectSchema.String.check(
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_URL_CHARS),
+        EffectSchema.isPattern(SECURE_WEB_ADDRESS),
+      ),
+      label: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_LABEL_CHARS)),
+    }),
+  ]);
+
+  const option = EffectSchema.Struct({
+    label: inboxOptionSchema.fields.label,
+    detail: inboxOptionSchema.fields.detail,
+    media: EffectSchema.optionalKey(
+      EffectSchema.Array(media).check(
+        EffectSchema.isMinLength(1),
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_POSTED_OPTION_MEDIA),
+      ),
+    ),
+  });
+
+  return EffectSchema.Union([
+    EffectSchema.Struct({
+      type: DECIDE_FIELDS.type,
+      options: EffectSchema.Array(option).check(
+        EffectSchema.isMinLength(2),
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_OPTIONS),
+      ),
+      multiple: DECIDE_FIELDS.multiple,
+      recommended: EffectSchema.optionalKey(recommendedInputSchema),
+    }),
+    EffectSchema.Struct(DO_FIELDS),
+    EffectSchema.Struct(answerFields(field)),
+  ]);
+}
+
+/** An ask as the agent posts it, a page option naming its version and each field one variant per type. */
+const inboxAskInputSchema = askInputSchema(pageVersionNumberSchema, inboxFieldInputSchema);
 
 export type InboxAskInput = typeof inboxAskInputSchema.Type;
+
+/** One piece of an option's media as the agent posts it. */
+export type InboxPostOptionMedia = NonNullable<
+  Extract<InboxAskInput, { type: typeof INBOX_ASK.DECIDE }>["options"][number]["media"]
+>[number];
 
 /**
  * A posted ask as a message keeps it: a `decide`'s recommendation its first
@@ -952,6 +988,25 @@ export const inboxThreadPostInputSchema = EffectSchema.Struct({
 });
 
 export type InboxThreadPostInput = typeof inboxThreadPostInputSchema.Type;
+
+/**
+ * A post's tool part as a panel reads one already stored: the input the
+ * model is shown, but a page option's version optional and an answer's
+ * fields read as kept, because a post from before the version was required
+ * named none, and one from before each field took one variant per type may
+ * name a select's options loosely, and its row still reads.
+ */
+export const inboxThreadPostReadSchema = EffectSchema.Struct({
+  ...inboxThreadPostInputSchema.fields,
+  ask: EffectSchema.optionalKey(
+    askInputSchema(EffectSchema.optionalKey(pageVersionNumberSchema), inboxFieldSchema),
+  ),
+});
+
+export type InboxThreadPostRead = typeof inboxThreadPostReadSchema.Type;
+
+/** An ask as a panel reads a stored post's, which every ask an agent posts reads as. */
+export type InboxAskRead = NonNullable<InboxThreadPostRead["ask"]>;
 
 /** What a withdrawal's tool part carries as its input: the thread's key, and why the agent takes its open ask back. */
 export const inboxWithdrawInputSchema = EffectSchema.Struct({

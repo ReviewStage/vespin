@@ -5,6 +5,8 @@ import { wordsWithoutMarkers } from "@repo/features/file-marker";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import type { TaskSection } from "@repo/features/task-section-wire";
+import { REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import { TASK_CREATE_RELATION_KIND, type TaskCreateRelationKind } from "@repo/features/task-wire";
 import { workspaceReaches } from "@repo/features/tasks-model";
 import { TERM } from "@repo/features/words";
@@ -12,13 +14,18 @@ import { EXPERIMENT } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { SHORTCUT_KEY, type ShortcutChord, shortcutMatches } from "@repo/settings/shortcuts";
 import {
+  CHIP_LOOK,
   CHIP_WIDTH,
+  Chip,
+  ChipName,
   POPOVER_ALIGN,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
   VisuallyHidden,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -33,10 +40,12 @@ import {
   useDraftWriter,
 } from "../composer-drafts.js";
 import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
+import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
 import { unrunnableChoice } from "./agent-model.js";
@@ -66,6 +75,7 @@ import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-m
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import { MODELS_READ } from "./use-agents.js";
 import type { AgentAsk, NewTaskPress, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
+import { useTaskSections } from "./use-pin-writes.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -121,8 +131,13 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * the default Settings holds as Start is pressed, which may be newer than
  * the one the chip read, as on Home's card left standing; a draft
  * handed over on a refusal names none either, and its tab reads the
- * default afresh. A call starts only from an agent's own tab, so starting
- * a task never opens one.
+ * default afresh. A Start on words opens no call. Talk, in the round
+ * button's place while the box is empty, starts the task and its agent
+ * blank, handed nothing, on the card's chips, opens the task on the agent's
+ * tab as any start does, and calls the agent once it lands, so its first
+ * words are the caller's (`agent-talk.tsx`); a call that ends with nothing
+ * said lets the agent and its empty task go. An automation's card offers no
+ * Talk.
  *
  * An agent's start carries a key the card mints, and a press asking the
  * same again, as Retry after a start the service never answered does,
@@ -180,6 +195,13 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * relation must share it, and the start leaves the repository to the
  * service. A sub-task holds no place to run, as no task does, so its card
  * draws Runs on as any other.
+ *
+ * A section's + and its menu's New task open the card on that section of
+ * the account's, drawn as a chip beside the repository's whose × lets it go;
+ * the start files the task on top of it (`use-new-task.ts`), and a refused
+ * card opened again keeps it. A plain New task draws no such chip. The
+ * section is the card's workspace's, so a switch of workspace, as Home's,
+ * lets it go.
  *
  * The Automations page's Create with an agent opens this same card for the
  * agent that makes an automation (`NEW_TASK_PURPOSE.AUTOMATION`), so making
@@ -287,6 +309,24 @@ function newTaskPlace(workspaceId: string | undefined, purpose: NewTaskPurpose):
   return { kind, workspaceId: workspaceId ?? null };
 }
 
+/** The section a card files its task in, its icon and name, whose × files it in none. */
+function SectionChip({
+  section,
+  onRemove,
+}: {
+  section: TaskSection;
+  onRemove: () => void;
+}): React.JSX.Element {
+  return (
+    <Chip look={CHIP_LOOK.FIELD} onRemove={onRemove} removeLabel={REMOVE_FROM_SECTION}>
+      {sectionGlyph(section.icon) ?? <GLYPH.SECTION />}
+      <ChipName>
+        <ReplayMask>{section.title}</ReplayMask>
+      </ChipName>
+    </Chip>
+  );
+}
+
 /**
  * The model chip's choice: what it shows, the chip's pick over the account's
  * default as the host holds it (`useAgentDefault`), and the pick alone,
@@ -362,6 +402,27 @@ export function NewTaskComposer({
 
   const [choice, pickedModel, choose] = useDefaultChoice(refused?.card.choice);
 
+  // The section the press that opened the card chose, or the refused card's, which the chip's × lets go.
+  const [sectionId, setSectionId] = useState<string | undefined>(
+    refused !== undefined ? refused.card.sectionId : newTask.preset?.sectionId,
+  );
+
+  // A section is the card's workspace's, so the owner's switch, as Home's, lets it go for good, in the render that
+  // brings it; the workspace first resolving keeps one chosen before the workspaces were read.
+  const [sectionScope, setSectionScope] = useState(workspaceId);
+
+  if (workspaceId !== sectionScope) {
+    if (sectionScope !== undefined) setSectionId(undefined);
+    setSectionScope(workspaceId);
+  }
+
+  const sections = useTaskSections();
+
+  // Note that a section deleted meanwhile, or another workspace's, files nothing.
+  const section = forAutomation
+    ? undefined
+    : sections.sections.find((each) => each.id === sectionId && each.workspaceId === workspaceId);
+
   // The servers the + menu switched off, a refused card's as it was pressed.
   const [disabledServers, setDisabledServers] = useState<readonly string[]>(
     refused?.card.press.ask.agent.disabledServers ?? NONE_OFF,
@@ -380,7 +441,7 @@ export function NewTaskComposer({
 
   const openSettings = useOpenSettings();
 
-  // Note that no agent has started, so the popover offers no Built in section (`luke`).
+  // Note that no agent has started, so the popover offers no Built in section.
   const servers: AgentServersControl = {
     disabled: disabledServers,
     onSwitch: setDisabledServers,
@@ -617,6 +678,7 @@ export function NewTaskComposer({
           ...(runsOn === undefined ? undefined : { runsOn }),
           ...(device === undefined ? undefined : { device }),
           ...(relations.length === 0 ? undefined : { relations: relationsAsked(relations) }),
+          ...(section === undefined ? undefined : { sectionId: section.id }),
           ...handing,
         })
         .then((refused) => {
@@ -667,12 +729,51 @@ export function NewTaskComposer({
         ...(forAutomation ? { purpose } : undefined),
         relations,
         repository,
+        sectionId: section?.id,
         choice: pickedModel,
         press,
         words,
       },
     });
   };
+
+  // Note that each press mints its own key, since a blank start carries nothing a Retry could ask again.
+  const talk = (call: CallWhenStarted) => {
+    if (devicesUnread || unpaid !== undefined) return call(undefined);
+
+    const ask: AgentAsk = {
+      repository,
+      workspaceId,
+      deviceId: device?.deviceId,
+      relations: relationsAsked(relations),
+      agent: {
+        prompt: "",
+        attachments: [],
+        choice: pickedModel,
+        disabledServers,
+        ...(pickedMode === undefined ? undefined : { permissionMode: pickedMode }),
+      },
+    };
+
+    const press = { ask, key: crypto.randomUUID() };
+    // Note that a refused Talk opens the card again on why, as a refused Start does, with its box empty.
+    begin({
+      handed: { idempotencyKey: press.key, ...ask.agent, talk: call },
+      card: {
+        relations,
+        repository,
+        sectionId: section?.id,
+        choice: pickedModel,
+        press,
+        words: "",
+      },
+    });
+  };
+
+  // An automation's agent is handed its brief, so it starts on words alone and offers no Talk.
+  const startsTalk = forAutomation
+    ? undefined
+    : { start: talk, starting: starting || devicesUnread || unpaid !== undefined };
 
   // ⌘Return on a box with nothing in it starts a bare task: no call and no agent.
   const bare = () => begin();
@@ -778,6 +879,9 @@ export function NewTaskComposer({
             <VisuallyHidden id={titleId}>{PURPOSE_HEADING[purpose]}</VisuallyHidden>
           )}
           {repositoryChip}
+          {section === undefined ? null : (
+            <SectionChip section={section} onRemove={() => setSectionId(undefined)} />
+          )}
         </div>
       </div>
       {relations.length === 0 ? null : (
@@ -806,6 +910,7 @@ export function NewTaskComposer({
         plus={relationPlus}
         skills={skills}
         onStop={() => Promise.resolve(false)}
+        startsTalk={startsTalk}
         followsUp={false}
         onKey={onKey}
         onLeave={onLeave}

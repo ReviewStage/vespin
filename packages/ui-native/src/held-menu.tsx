@@ -1,15 +1,10 @@
-// held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted, and the full-screen viewer's share button holding the same acts.
+// held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted.
 
-import { Button, ContextMenu, Host, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
-import {
-  accessibilityIdentifier,
-  accessibilityLabel,
-  menuOrder,
-} from "@expo/ui/swift-ui/modifiers";
+import { Button, ContextMenu, RNHostView } from "@expo/ui/swift-ui";
 import type { DraftCopy } from "@repo/features/draft-text";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { type Glyph, glyphImage } from "./glyph.js";
+import type { Glyph } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
 import {
@@ -20,13 +15,9 @@ import {
   type Kept,
   keepActs,
 } from "./keep-model.js";
-import { MARK_SIZE } from "./tokens/space.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
-
-/** What the viewer's share button is heard as. */
-const SHARE_LABEL = "Share";
 
 const styles = StyleSheet.create({
   // Note that the menu and its host span the width they stand in, since a host sized by its SwiftUI alone would stand no wider than nothing.
@@ -37,18 +28,23 @@ const styles = StyleSheet.create({
 export interface HeldAct {
   readonly label: string;
   readonly symbol: Glyph;
+  /** Whether it takes something away for good, which the system draws red, as a queued message's Delete. */
+  readonly destructive?: boolean | undefined;
   readonly onPress: () => void;
 }
 
 /**
- * What the app does with what is held: copies a picture or a text file's
- * words, saves a picture or a recording to Photos, or shares any of them in
- * the system's share sheet; copies a message's words; and copies a draft's
- * body as rich text, its marks and links kept. The app answers them with
- * the device's own pasteboard, Photos, and share sheet, and says what did
- * not go; nothing here reaches the device.
+ * What the app does with what is held: opens a picture or a file full
+ * screen in the system's Quick Look;
+ * copies a picture or a text file's words, saves a picture or a recording to
+ * Photos, or shares any of them in the system's share sheet; copies a
+ * message's words; and copies a draft's body as rich text, its marks and
+ * links kept. The app answers them with the device's own Quick Look,
+ * pasteboard, Photos, and share sheet, and says what did not go; nothing
+ * here reaches the device.
  */
 export interface Keeping {
+  readonly open: (kept: Kept) => void;
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
   readonly copyRich: (copy: DraftCopy) => void;
@@ -80,6 +76,22 @@ export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
   }));
 }
 
+/**
+ * A thumbnail's press that opens a picture or a file full screen in the
+ * system's Quick Look, as Messages and Mail open one; none where nothing is
+ * held yet or no app answers it. Note that the preview opens with the
+ * system's plain transition rather than growing from the thumbnail, since
+ * grown from it Quick Look stood in its immersive mode, its bar and Done
+ * hidden until a tap, on the iOS 27.2 iPhone and the iPad alike.
+ */
+export function useQuickLook(kept: Kept | undefined): (() => void) | undefined {
+  const keeping = useContext(KeepingDoor);
+
+  if (keeping === undefined || kept === undefined) return undefined;
+
+  return () => keeping.open(kept);
+}
+
 /** A message's Copy, which copies its words as they were written, Markdown and all, as the panel's does; none for a message of no words. */
 function useCopyWordsActs(words: string): readonly HeldAct[] {
   const keeping = useContext(KeepingDoor);
@@ -102,7 +114,12 @@ export function useKeeping(): Keeping | undefined {
 
 function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
   return acts.map((act) => (
-    <Button key={act.label} {...actContent(act.label, act.symbol)} onPress={act.onPress} />
+    <Button
+      key={act.label}
+      {...actContent(act.label, act.symbol)}
+      onPress={act.onPress}
+      {...(act.destructive === true ? { role: "destructive" as const } : {})}
+    />
   ));
 }
 
@@ -143,12 +160,17 @@ export function HeldSwiftMenu({
  */
 export function HeldMenu({
   acts,
+  width: known,
   children,
 }: {
   readonly acts: readonly HeldAct[];
+  /** The width the held views stand in where the caller knows it before they are laid out, as a transcript's row does, so they are bounded from their first frame; else the width the menu measures where it stands. */
+  readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
-  const [width, setWidth] = useState<number | undefined>(undefined);
+  const [measured, setWidth] = useState<number | undefined>(undefined);
+  // Note that a width known up front bounds the views on their first layout, since one measured comes a frame later, and the views laid out unbounded in that frame stood one line wide past the screen, their host's height a step behind their words.
+  const width = known ?? measured;
 
   if (acts.length === 0) return children;
 
@@ -165,42 +187,22 @@ export function HeldMenu({
   );
 }
 
-/** The full-screen viewer's share button: the system's share glyph in white, opening the same acts as the held thing's menu; nothing where it offers none. */
-export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) {
-  if (acts.length === 0) return null;
-
-  return (
-    <Host matchContents>
-      <Menu
-        label={
-          <Image
-            {...glyphImage(KEEP_SYMBOL[KEEP_ACT.SHARE])}
-            size={MARK_SIZE.LEAD + 4}
-            color="white"
-          />
-        }
-        modifiers={[
-          accessibilityLabel(SHARE_LABEL),
-          accessibilityIdentifier("viewer-share"),
-          // Note that the menu keeps its acts in the held thing's own order, Copy, Save to Photos, then Share…, though it opens upward from the viewer's foot, where the system would turn it over.
-          menuOrder("fixed"),
-        ]}
-      >
-        <HeldActButtons acts={acts} />
-      </Menu>
-    </Host>
-  );
-}
-
 /** A message's React Native views, whose long press offers Copy message; the views alone for a message of no words. */
 export function CopyWordsMenu({
   words,
+  width,
   children,
 }: {
   readonly words: string;
+  /** The width the message stands in where the caller knows it before it is laid out (`HeldMenu`'s `width`). */
+  readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
-  return <HeldMenu acts={useCopyWordsActs(words)}>{children}</HeldMenu>;
+  return (
+    <HeldMenu acts={useCopyWordsActs(words)} width={width}>
+      {children}
+    </HeldMenu>
+  );
 }
 
 /** A message drawn in SwiftUI, such as a thread's, whose long press offers Copy message; the message alone where it has no words. */

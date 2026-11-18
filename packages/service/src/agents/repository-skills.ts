@@ -111,13 +111,15 @@ function rootFolders(
   repository: { readonly fullName: string; readonly defaultBranch: string },
   root: SkillRoot,
 ): Effect.Effect<readonly SkillFolder[], GitHubFailure> {
-  return Effect.map(readRepositoryFolder(bearer, repository, root), (folder) =>
-    folder.found
-      ? folder.entries
-          .filter((entry) => entry.type === GIT_ENTRY.TREE && SKILL_NAME_RULE.test(entry.name))
-          .map((entry) => ({ root, name: entry.name }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-      : [],
+  return Effect.map(
+    readRepositoryFolder(bearer, repository, repository.defaultBranch, root),
+    (folder) =>
+      folder.found
+        ? folder.entries
+            .filter((entry) => entry.type === GIT_ENTRY.TREE && SKILL_NAME_RULE.test(entry.name))
+            .map((entry) => ({ root, name: entry.name }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+        : [],
   );
 }
 

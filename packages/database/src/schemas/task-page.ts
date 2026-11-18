@@ -35,7 +35,7 @@ export const taskPageVersion = pgTable(
     taskId: uuid("task_id")
       .notNull()
       .references(() => task.id, { onDelete: "cascade" }),
-    /** The coding agent that showed the version; null for one the brain showed, or one shown before it was kept. */
+    /** The coding agent that showed the version; null for one shown before it was kept. */
     agentId: uuid("agent_id").references(() => agentTable.id, { onDelete: "set null" }),
     /** The page the version is of, the same on each of its versions. */
     pageId: uuid("page_id").notNull(),
@@ -44,7 +44,7 @@ export const taskPageVersion = pgTable(
     title: text("title").notNull(),
     /** The page's whole HTML document, as the agent wrote it. */
     html: text("html").notNull(),
-    /** Who showed the version, the brain or a coding agent by its id (`PageShower`); null for one shown before it was kept. */
+    /** Who showed the version, a coding agent by its id (`PageShower`); null for one shown before it was kept. */
     shownBy: jsonb("shown_by").$type<PageShower>(),
     at: timestamptz("at").notNull(),
   },

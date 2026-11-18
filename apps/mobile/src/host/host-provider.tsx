@@ -19,14 +19,17 @@ import {
   useSyncExternalStore,
 } from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
+import { noteHostStarting, noteHostStood } from "../launch-phases.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
   launchFixtureProfile,
+  launchInboxOff,
   launchMachineAsk,
   launchRefusesWrites,
+  launchSetupOwed,
   launchStubsAuthServer,
   launchUpdateNeeded,
 } from "./launch-arguments.js";
@@ -183,6 +186,8 @@ function launchOptions(): MobileHostStartOptions {
     fixture: launchFixtureProfile(),
     fixtureUpdateNeeded: launchUpdateNeeded(),
     fixtureMachineAsk: launchMachineAsk(),
+    fixtureSetupOwed: launchSetupOwed(),
+    fixtureInboxOff: launchInboxOff(),
     fixtureRefusesWrites: launchRefusesWrites(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),
@@ -224,6 +229,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     let started: StandingMobileHost | undefined;
     let stopFollowing: (() => void) | undefined;
     setStanding(undefined);
+    noteHostStarting();
     startMobileHost(launchOptions()).then(
       async (host) => {
         started = host;
@@ -241,6 +247,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         }
 
         if (live) {
+          noteHostStood();
           setStanding({
             client,
             taskList: following.taskList,

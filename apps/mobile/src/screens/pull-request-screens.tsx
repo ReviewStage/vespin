@@ -1,4 +1,4 @@
-// pull-request-screens.tsx -- one agent's pull request on its own screen: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and Open on GitHub in the bar's ⋯.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks and reviews held live, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and Open on GitHub in the bar's ⋯.
 
 import { githubAvatarUrl } from "@repo/features/account-picture";
 import {
@@ -7,7 +7,9 @@ import {
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { iosAgentPullRequestOf } from "@repo/features/ios-app-links";
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
+import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -43,9 +45,7 @@ import {
   buzz,
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
-  type ColumnBar,
   ConfirmAsk,
-  DetailPage,
   EmptyState,
   FACE_KIND,
   GLYPH,
@@ -70,8 +70,7 @@ import {
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
-import { useAgentPullRequests, useFollowedAgent } from "../agents/use-agent.js";
-import { PUSHED_PAGE, useHandToDetail } from "../detail-stack.js";
+import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
   type PullRequestKey,
@@ -96,6 +95,15 @@ const COMMENTS_ROW = "comments";
 
 /** The least a check must have run to say how long, as the panel's checks say it. */
 const RAN_AT_LEAST_MS = 1_000;
+
+/** A pull request's own page on GitHub, by its repository and number. */
+function gitHubPullRequestUrl(key: PullRequestKey): string {
+  return gitHubPageLink({
+    kind: GITHUB_PAGE.PULL_REQUEST,
+    repository: key.repository,
+    number: key.number,
+  });
+}
 
 /** What a read holds once it landed; none while it is on its way or failed. */
 function landedOf<Answer extends object>(
@@ -232,8 +240,9 @@ interface ShownPress {
   readonly request: PullRequestActionRequest;
 }
 
-/** A press whose question stands, as it was when pressed: what the pull request offered, the change it sends, and its question's words, so a live read landing under the question changes neither what it says nor what it sends. */
+/** A press whose question stands, as it was when pressed: the pull request it was pressed on, what that offered, the change it sends, and its question's words, so neither a live read landing under the question nor an older route turning to another pull request changes what it says or where it sends. */
 interface AskedPress {
+  readonly on: PullRequestKey;
   readonly action: MergeAction;
   readonly request: PullRequestActionRequest;
   readonly words: string;
@@ -343,46 +352,82 @@ function PullRequestToolbar({
  * head stands Merge under the title, and as a split button where the
  * repository merges more than one way.
  * The bar's ⋯ menu opens it on GitHub, where its diff and comments are
- * read. In a window wide enough for three columns it stands pushed over
- * the split view's detail instead (`PullRequestPage`'s `inColumn`).
+ * read. Opened from a split view's detail, it is pushed on the tab's own
+ * stack over the whole window, as a compact window pushes it.
  */
 export function PullRequestScreen() {
-  const { id = "", number = "" } = useLocalSearchParams<{ id: string; number: string }>();
+  const {
+    workspace = "",
+    owner = "",
+    name = "",
+    number = "",
+    agent,
+  } = useLocalSearchParams<{
+    workspace: string;
+    owner: string;
+    name: string;
+    number: string;
+    /** The agent it was opened from, which names it for Handoff. */
+    agent?: string;
+  }>();
 
-  const handed = useHandToDetail({
-    kind: PUSHED_PAGE.PULL_REQUEST,
-    agentId: id,
+  const key: PullRequestKey = {
+    workspaceId: workspace,
+    repository: `${owner}/${name}`,
     number: Number(number),
-  });
+  };
 
-  if (handed) return null;
-
-  return <PullRequestPage agentId={id} number={Number(number)} />;
+  return <PullRequestPage pullRequest={key} agentId={agent} />;
 }
 
 /**
- * One agent's pull request as `PullRequestScreen` describes it, by the
- * agent and its number: on a stack over the window, or, `inColumn`, pushed
- * over a split view's detail under the column's own bar, its path, and its
- * ⋯ opening it on GitHub and reading it again, the merge standing under the
- * checks as a regular window's does.
+ * An agent's pull request by the agent and its number, as an older link,
+ * handoff, or launch names it (`iosPullRequestRoute`): opened by its
+ * repository and number once the agent is read, as every other way in
+ * opens one, so it shows exactly the pull request the agent's repository
+ * holds under that number.
  */
-export function PullRequestPage({
-  agentId: id,
-  number: pulled,
-  inColumn = false,
+export function AgentPullRequestScreen() {
+  const { id = "", number = "" } = useLocalSearchParams<{ id: string; number: string }>();
+  const pulled = Number(number);
+  const agent = useShownAgent(id);
+  const [listed] = useAgentPullRequests(id);
+  const key = iosAgentPullRequestOf(agent, listed, pulled);
+
+  if (key === undefined) {
+    return (
+      <Screen>
+        <EmptyState title={PULL_REQUEST_READ_WORDS.READING} symbol={GLYPH.PULL_REQUEST} loading />
+      </Screen>
+    );
+  }
+
+  return <PullRequestPage pullRequest={key} agentId={id} />;
+}
+
+/**
+ * One pull request as `PullRequestScreen` describes it, by its workspace,
+ * its repository, and its number, on its tab's stack. The agent it was
+ * opened from, where one was, names it for Handoff and draws its title from
+ * the task list's line while the pull request is read.
+ */
+function PullRequestPage({
+  pullRequest: key,
+  agentId = "",
 }: {
-  readonly agentId: string;
-  readonly number: number;
-  /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
-  readonly inColumn?: boolean | undefined;
+  readonly pullRequest: PullRequestKey;
+  readonly agentId?: string | undefined;
 }) {
-  const key: PullRequestKey = { agentId: id, number: pulled };
-  useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(pulled));
+  const id = agentId;
+  useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(key.number));
   const colors = useColors();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(key.workspaceId);
   const agent = useFollowedAgent(id);
-  const listed = useAgentPullRequests(id).find((each) => each.number === key.number);
+
+  const listed = useAgentPullRequests(id).find(
+    (each) => each.number === key.number && samePullRequest(each.url, gitHubPullRequestUrl(key)),
+  );
+
   const parts = usePullRequestParts(key);
   const retry = usePullRequestRetry(key);
   const writes = usePullRequestWrites(key);
@@ -398,14 +443,21 @@ export function PullRequestPage({
   const queued = pullRequest?.merging?.queued ?? null;
   const title = pullRequest?.title ?? listed?.title;
   const state = pullRequest?.state ?? listed?.state;
-  const url = pullRequest?.url ?? listed?.url;
+  const url = pullRequest?.url ?? listed?.url ?? gitHubPullRequestUrl(key);
   const press = shownPressOf(pullRequest, method, writes.pending);
   const offered = offeredActionOf(pullRequest);
 
+  const asks =
+    asked !== undefined &&
+    asked.action === offered &&
+    asked.on.workspaceId === key.workspaceId &&
+    asked.on.repository === key.repository &&
+    asked.on.number === key.number;
+
   // Note that a question is dropped as soon as the pull request no longer offers what it asks about, rather than only when its alert says it went, so it never stands again by itself the next time it offers that.
   useEffect(() => {
-    if (asked !== undefined && asked.action !== offered) setAsked(undefined);
-  }, [asked, offered]);
+    if (asked !== undefined && !asks) setAsked(undefined);
+  }, [asked, asks]);
   useScreenActivity((workspaces) =>
     agent === undefined || title === undefined
       ? undefined
@@ -420,53 +472,15 @@ export function PullRequestPage({
           workspaces,
         ),
   );
-  const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
+  const path = [key.repository, `#${key.number}`];
 
-  // Note that a column's bar stands the page's two main acts as glyphs, as Mail stands a message's, and keeps Copy GitHub link in its ⋯, as the stack's ⋯ offers it; the merge stays under the heading.
-  const columnBar: ColumnBar = {
-    path: { path },
-    menu:
-      url === undefined
-        ? undefined
-        : {
-            label: MENU_WORDS.MORE,
-            symbol: GLYPH.MORE,
-            choices: [],
-            actions: [
-              {
-                label: MENU_WORDS.COPY_GITHUB_LINK,
-                symbol: GLYPH.LINK,
-                onPress: () => copyLink(url),
-              },
-            ],
-          },
-    acts: [
-      ...(url === undefined
-        ? []
-        : [
-            {
-              label: MENU_WORDS.OPEN_ON_GITHUB,
-              symbol: GLYPH.OPEN_EXTERNALLY,
-              onPress: () => openInSafari(url),
-            },
-          ]),
-      { label: MENU_WORDS.REFRESH, symbol: GLYPH.RETRY, onPress: () => void retry() },
-    ],
-  };
-
-  // Note that a page in a split view's column draws its bar in its column, and a stack's page in the stack's bar.
-  const page = (view: ReactNode, asks?: ReactNode) =>
-    inColumn ? (
-      <DetailPage bar={columnBar} asks={asks}>
-        {view}
-      </DetailPage>
-    ) : (
-      <>
-        {bar}
-        <Screen>{view}</Screen>
-        {asks}
-      </>
-    );
+  const page = (view: ReactNode, asks?: ReactNode) => (
+    <>
+      {bar}
+      <Screen>{view}</Screen>
+      {asks}
+    </>
+  );
 
   const bar = (
     <>
@@ -578,6 +592,7 @@ export function PullRequestPage({
                 void writes.write(press.request);
               } else {
                 setAsked({
+                  on: key,
                   action: offered,
                   request: press.request,
                   words: press.words,
@@ -665,11 +680,11 @@ export function PullRequestPage({
       title={asked?.ask.title ?? MERGE_WORDS.MERGE_QUESTION}
       message={asked?.ask.message ?? `#${key.number} ${title}`}
       act={asked?.words ?? ""}
-      presented={asked !== undefined && asked.action === offered}
+      presented={asks}
       onAct={() => {
         setAsked(undefined);
 
-        if (asked !== undefined) void writes.write(asked.request);
+        if (asked !== undefined && asks) void writes.write(asked.request);
       }}
       onDismiss={() => setAsked(undefined)}
     />,

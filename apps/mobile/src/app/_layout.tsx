@@ -1,8 +1,9 @@
-// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, an agent's model sheet, and a task's Task relation sheet once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
+// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, an agent's model sheet, and a task's Task relation sheet once an account is signed in, or setup in their place while the account owes it, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
 
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { SETUP_GATE } from "@repo/settings";
 import {
   BAR_TITLE,
   type BrandColors,
@@ -18,10 +19,11 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
-import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
+import { useFocusShown } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
@@ -31,6 +33,7 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useSetupGate } from "../setup/use-setup-gate.js";
 import { useShareSheet } from "../share-sheet.js";
 import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { holdSplash } from "../splash.js";
@@ -79,6 +82,9 @@ const SHEET_ROUTE = {
   TASK_FOLLOWING: "task-following",
   ADD_FOLLOWER: "add-follower",
   NEW_WORKSPACE: "new-workspace",
+  AGENT_KEY: "agent-key",
+  CHATGPT_SIGN_IN: "chatgpt-sign-in",
+  VARIABLE_VALUE: "variable-value",
 } as const;
 
 /** The sheets, each drawn on the lifted ground in dark. */
@@ -87,38 +93,9 @@ const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
 const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
 
-/** What a root screen's layout is told of its screen's place in the stack: whether it is the one in front, and when that changes. */
-interface ScreenFocus {
-  readonly isFocused: () => boolean;
-  readonly addListener: (event: "focus" | "blur", listener: () => void) => () => void;
-}
-
-/** Whether the screen `navigation` names is the one in front, followed as it comes forward and goes behind. */
-function useScreenInFront(navigation: ScreenFocus): boolean {
-  const [inFront, setInFront] = useState(() => navigation.isFocused());
-
-  useEffect(() => {
-    const comes = navigation.addListener("focus", () => setInFront(true));
-    const goes = navigation.addListener("blur", () => setInFront(false));
-
-    return () => {
-      comes();
-      goes();
-    };
-  }, [navigation]);
-
-  return inFront;
-}
-
-/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. */
-function SheetNoticeLayer({
-  navigation,
-  children,
-}: {
-  readonly navigation: ScreenFocus;
-  readonly children: ReactNode;
-}) {
-  return <FailureNoticeLayer inFront={useScreenInFront(navigation)}>{children}</FailureNoticeLayer>;
+/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useFocusShown` hears the sheet's own focus. */
+function SheetNoticeLayer({ children }: { readonly children: ReactNode }) {
+  return <FailureNoticeLayer inFront={useFocusShown()}>{children}</FailureNoticeLayer>;
 }
 
 /**
@@ -134,7 +111,6 @@ function SheetNoticeLayer({
 function screenLayout({
   route,
   options,
-  navigation,
   children,
 }: {
   readonly route: { readonly name: string };
@@ -142,11 +118,10 @@ function screenLayout({
     readonly presentation?: string | undefined;
     readonly sheetAllowedDetents?: unknown;
   };
-  readonly navigation: ScreenFocus;
   readonly children: ReactElement;
 }): ReactElement {
   const placed = SHEET_PRESENTATIONS.has(options.presentation) ? (
-    <SheetNoticeLayer navigation={navigation}>{children}</SheetNoticeLayer>
+    <SheetNoticeLayer>{children}</SheetNoticeLayer>
   ) : (
     children
   );
@@ -160,7 +135,9 @@ function screenLayout({
  * The screens, each behind the account's standing: the tabs, Settings, and
  * the sheets that start a task or an agent or change an agent's model while an account is signed in, and the sign-in screen otherwise, so a
  * sign-out anywhere, Settings' or a refused renewal's, lands on it and a
- * sign-in lands on the Inbox. A fixture run stands signed in as its
+ * sign-in lands on the Inbox, or on setup while the account owes it
+ * (`use-setup-gate.ts`), which stands alone in the tabs' place until it is
+ * finished, with only the sheets its steps open. A fixture run stands signed in as its
  * profile's account. While the service refuses this build as older than it
  * serves (`network.updateNeeded`), the update screen stands in front of
  * both, signed in or not, since every call either would make is refused;
@@ -204,6 +181,8 @@ function GuardedScreens() {
   useNoticeForAccount();
   useShareSheet(updateNeeded);
   useHostConnectLink(signedIn && !updateNeeded);
+  const app = signedIn && !updateNeeded;
+  const gate = useSetupGate(app);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -236,9 +215,10 @@ function GuardedScreens() {
         }}
         screenLayout={screenLayout}
       >
-        <Stack.Protected guard={signedIn && !updateNeeded}>
+        <Stack.Protected guard={app && gate === SETUP_GATE.NONE}>
           <Stack.Screen name="index" />
-          <Stack.Screen name="(tabs)" />
+          {/* Note that the tabs stand at once, with no push, because the launch reaches them by the index route's redirect, which the stack animated as a push: the Inbox's list was laid out again on every frame of the slide, holding the splash and the first frame about 1.5 s on a cold launch; a sign-in reaches them the same way, and a link opens inside them, so nothing else ever slid them in. */}
+          <Stack.Screen name="(tabs)" options={{ animation: "none" }} />
           {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
           <Stack.Screen
             name={SHEET_ROUTE.SETTINGS}
@@ -280,6 +260,25 @@ function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.NEW_WORKSPACE}
             options={{ presentation: sheetPresentation, title: "New workspace" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.VARIABLE_VALUE}
+            options={{ ...shortSheet, title: "Add variable" }}
+          />
+        </Stack.Protected>
+        {/* Note that setup stands with no push, in the tabs' place, as the tabs do, since nothing slides it in. */}
+        <Stack.Protected guard={app && gate !== SETUP_GATE.NONE}>
+          <Stack.Screen name="setup" options={{ animation: "none", gestureEnabled: false }} />
+        </Stack.Protected>
+        {/* The sheets setup's Connect an agent opens, as Settings › Agents does. */}
+        <Stack.Protected guard={app}>
+          <Stack.Screen
+            name={SHEET_ROUTE.AGENT_KEY}
+            options={{ presentation: sheetPresentation, title: "Agent key" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.CHATGPT_SIGN_IN}
+            options={{ presentation: sheetPresentation, title: "Codex plan" }}
           />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn && !updateNeeded}>

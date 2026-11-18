@@ -21,7 +21,6 @@ import {
   INBOX_TOOL,
   type InboxAnswers,
   type InboxAskInput,
-  type InboxField,
   type InboxItem,
   type InboxMessage,
   type InboxOptionMedia,
@@ -47,10 +46,18 @@ import {
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result } from "effect";
-import { ACTION_RESULT_STATUS, EXCESS_KEYS, type UnparsedWireValue } from "../../core.js";
+import {
+  ACTION_RESULT_STATUS,
+  EXCESS_KEYS,
+  isWireString,
+  type UnparsedWireValue,
+  type WireRecord,
+  wireRecord,
+} from "../../core.js";
 import { afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import {
+  agentInboxItemOfKey,
   agentInboxItems,
   agentReachedInboxItems,
   closeInboxItem,
@@ -69,7 +76,8 @@ import {
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
 import { placeholderLinksWords } from "../link-rule.js";
-import { CODER } from "./bounds.js";
+import { taskIdOfInput } from "../task-ref.js";
+
 import {
   type InboxSandboxDoor,
   readSandboxBodyFile,
@@ -126,10 +134,11 @@ const MAX_VIDEO_MB = (INBOX_BOUNDS.MAX_VIDEO_BYTES / 1_000_000).toFixed(1);
 const MAX_PDF_MB = (AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1);
 
 const POST_THREAD_WORDS =
-  "Post a message on a thread in the inbox, apart from your transcript. " +
+  "Post a message to the developer's inbox, which is where they look for anything that needs them. " +
+  "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. " +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
   "and a later one adds a message to that thread, a title it names renaming it. " +
-  "to is the member the ask waits on, by their [@Name](link) mention; without it, the task's assignee, or the developer who started you. " +
+  `to is the member the thread waits on, by their [@Name](link) mention as ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers it: the first post under a key must name it, and a later one without it keeps the thread's. ` +
   `body is Markdown, at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters. ` +
   `Write a file, a pull request, or an issue in it as a mention, such as [@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>), so ${PRODUCT_NAME} draws it as a chip, ` +
   "and put a link alone on its own line to show it as a card, its mention never followed by its bare address. " +
@@ -155,6 +164,7 @@ const POST_THREAD_WORDS =
   `since the reply box under every ask already takes their words, and picks among more than ${INBOX_BOUNDS.MAX_OPTIONS} are asked as an answer in their own words); ` +
   "never ask for a credential or a secret in a form, since the answer reaches your transcript: that is a do. " +
   "A post without ask asks nothing: a note, or your reply on the thread. " +
+  "A post on a settled thread opens it again, as a note waiting on them where it asks nothing. " +
   "A thread holds one open ask, and a newer ask replaces it; every answer reaches you as a message. " +
   "The call answers with the thread and one line for each other thread of yours still open.";
 
@@ -169,14 +179,15 @@ export const INBOX_TOOLS = {
     name: INBOX_TOOL.WITHDRAW,
     description:
       "Withdraw the open ask of one of your threads, by its key, with why: you no longer need it, you found the answer yourself, " +
-      "or you checked that the to-do is done. The thread and its messages stay.",
+      "or you checked that the to-do is done. That closes the thread, and its messages stay; a thread " +
+      "already answered, closed, or withdrawn answers how it was.",
     inputSchema: inboxWithdrawInputSchema,
   },
   LIST: {
     name: INBOX_TOOL.LIST,
     description:
       `List threads one line each: every one still open, then the latest ${INBOX_BOUNDS.MAX_SETTLED_TOLD} settled, each the latest changed first, with its id, which ${INBOX_TOOL.READ} takes, where it stands, and an open ask or an answer. ` +
-      `With nothing named it lists your own; name another agent of your workspace by agentId, or a task by taskId, to list its threads, and status to list only those standing there. ` +
+      `of names whose threads: an agent of your workspace as {agentId}, your own agentId for your own threads, or a task as {taskId}, by its id or its key, such as ACME-42; status lists only those standing there. ` +
       `You only read another agent's threads: ${INBOX_TOOL.POST} and ${INBOX_TOOL.WITHDRAW} keep to your own, and a member's answer there reaches that agent, never you. ` +
       "List them to learn what the developer already decided or is still asked, rather than asking again.",
     inputSchema: inboxListInputSchema,
@@ -306,6 +317,8 @@ export type InboxWriteResult =
       readonly status: typeof ACTION_RESULT_STATUS.ACCEPTED;
       readonly thread: AgentInboxLine;
       readonly open: readonly AgentThreadRow[];
+      /** Why a withdrawal changed nothing: how the thread's ask was settled before it. */
+      readonly note?: string;
     }
   | InboxRefused;
 
@@ -331,7 +344,9 @@ export const INBOX_REFUSAL = {
     "Not posted: the post does not read. key is a lowercase slug of letters, digits, dots, dashes, and underscores; " +
     `body is Markdown of at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters; title is one line of at most ${INBOX_BOUNDS.MAX_TITLE_CHARS}; ` +
     `ask is decide with two to ${INBOX_BOUNDS.MAX_OPTIONS} options, do with at most ${INBOX_BOUNDS.MAX_STEPS} steps, ` +
-    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none.`,
+    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none, each {type, label, required} with type text, number, select, or boolean, ` +
+    `a select also naming two to ${INBOX_BOUNDS.MAX_OPTIONS} options and perhaps the one it recommends, and no other type taking options or recommended; ` +
+    "an option's media is {path, caption}, {page, version} with the version show_page answered, or {url, label}.",
   NO_TITLE:
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
   TOO_MANY_PICTURES: `Not posted: a message draws at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} pictures from your sandbox.`,
@@ -344,26 +359,38 @@ export const INBOX_REFUSAL = {
   SEVERAL_RECOMMENDED:
     "Not posted: recommended names each label once, and several only where multiple lets them pick several.",
   FIELD_LABELS: "Not posted: an answer names each field by a label of its own.",
-  SELECT_OPTIONS:
-    "Not posted: a select field offers its options, each once, and no other field offers options.",
-  SELECT_RECOMMENDATION:
-    "Not posted: a select field's recommended names one of its options, and no other field recommends one.",
+  SELECT_OPTIONS: "Not posted: a select field names each of its options once.",
+  SELECT_RECOMMENDATION: "Not posted: a select field's recommended names one of its options.",
+  NOT_SELECT: (label: string, type: string) =>
+    `Not posted: field "${label}" is ${type}, yet names options or recommended, which only a select takes; make it a select, or leave both out.`,
   UNREADABLE_WITHDRAW: "Not withdrawn: name the thread's key and why you withdraw its ask.",
   UNREADABLE_LIST:
-    "Not listed: name nothing for your own threads, or one agent of your workspace by agentId, or one task of it by taskId, each by its id, and status as open, answered, or closed.",
-  BOTH_NAMED: "Not listed: name agentId or taskId, not both.",
+    'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id or key>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
   UNREADABLE_READ:
     "Not read: name the thread by threadId as list_threads answered it, and before only as a page's older answered it.",
   NO_THREAD:
     "Not read: no thread of your workspace that the developer may see has that id; list_threads lists them.",
-  NO_OPEN_ASK: "Not withdrawn: you have no thread under that key with an open ask.",
+  NO_OPEN_ASK:
+    "Not withdrawn: your thread under that key is a notice, which asks nothing; a member settles it.",
+  NO_KEYED_THREAD: "Not withdrawn: you have no thread under that key; list_threads lists them.",
   NO_MEMBER:
     "Not posted: to names no member; write a member of your workspace by their mention link, [@Name](link), as a person's chip is written.",
+  NO_ADDRESSEE_NAMED:
+    "Not posted: you have no thread under that key, and the first post under a key names to, the member it waits on, " +
+    `by their mention link, [@Name](link), as ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers it.`,
   NO_ADDRESSEE: "Not posted: the member you addressed is not in your workspace.",
-  ADDRESSEE_CANNOT_SEE:
-    "Not posted: the member you addressed cannot see your task, so they would never see the thread; address someone who can, or leave to out.",
+  ADDRESSEE_CANNOT_SEE: `Not posted: the member you addressed cannot see your task, so they would never see the thread; address someone who can, by a mention ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers.`,
   NO_AGENT: "Not done: this conversation is no agent's.",
   UNAVAILABLE: "Not done: the service could not reach its store.",
+} as const;
+
+/** Why a withdrawal changed nothing on a thread whose ask was settled before it, in the words the model reads. */
+const ALREADY_SETTLED = {
+  ANSWERED: (by: string) =>
+    `Nothing withdrawn: ${by} already answered the ask; their answer is on the thread.`,
+  CLOSED: (by: string) =>
+    `Nothing withdrawn: ${by} already closed the thread without answering it.`,
+  WITHDRAWN: (reason: string) => `Nothing withdrawn: the ask was already withdrawn: ${reason}`,
 } as const;
 
 /** How many of a settled thread's latest messages its read carries: enough to see what came of it. */
@@ -372,7 +399,7 @@ const SETTLED_MESSAGES_TOLD = 3;
 const readPost = readEither(inboxThreadPostInputSchema, { excess: EXCESS_KEYS.DROP });
 const readWithdraw = readEither(inboxWithdrawInputSchema, { excess: EXCESS_KEYS.DROP });
 
-// Note that a list refuses a key it did not name, because a misspelled agentId dropped would answer the agent's own threads as though they were the other's.
+// Note that a list refuses a key it did not name, so a misspelled status or an of naming both is refused rather than read as less than was asked.
 const readList = readEither(inboxListInputSchema);
 const readThreadAsked = readEither(inboxReadThreadInputSchema);
 
@@ -588,8 +615,12 @@ function rowsOf(items: readonly InboxItem[], readerId: string): readonly AgentTh
   );
 }
 
-/** What a post or a withdrawal answers once it is taken: the thread it changed, and one line for each other thread of the agent's still open. */
-function written(agent: InboxAgent, item: InboxItem): InboxStoreEffect<InboxWriteResult> {
+/** What a post or a withdrawal answers once it is taken: the thread it changed, one line for each other thread of the agent's still open, and why it changed nothing, where it did not. */
+function written(
+  agent: InboxAgent,
+  item: InboxItem,
+  note?: string,
+): InboxStoreEffect<InboxWriteResult> {
   return Effect.map(agentInboxItems(agent), (items) => ({
     status: ACTION_RESULT_STATUS.ACCEPTED,
     thread: lineOf(item, agent.agentId),
@@ -597,6 +628,7 @@ function written(agent: InboxAgent, item: InboxItem): InboxStoreEffect<InboxWrit
       items.filter((each) => each.status === INBOX_STATUS.OPEN && each.id !== item.id),
       agent.agentId,
     ),
+    ...(note === undefined ? undefined : { note }),
   }));
 }
 
@@ -654,27 +686,47 @@ function distinct(labels: readonly string[]): boolean {
   return new Set(labels).size === labels.length;
 }
 
-/** An answer's fields' own refusal: a label used twice, a select with no options or one twice, options on a field that takes none, or a recommendation naming none of a select's options. */
-function fieldsRefusal(fields: readonly InboxField[]): string | undefined {
+/** The fields of an `answer` ask as the agent posts them, one variant per type. */
+type PostedFields = NonNullable<
+  Extract<InboxAskInput, { type: typeof INBOX_ASK.ANSWER }>["fields"]
+>;
+
+/** An answer's fields' own refusal: a label used twice, a select's option named twice, or a select's recommendation naming none of its options. */
+function fieldsRefusal(fields: PostedFields): string | undefined {
   if (!distinct(fields.map((field) => field.label))) return INBOX_REFUSAL.FIELD_LABELS;
 
   for (const field of fields) {
-    const options = field.options;
-    const select = field.type === INBOX_FIELD.SELECT;
+    if (field.type !== INBOX_FIELD.SELECT) continue;
 
-    if (select ? options === undefined || !distinct(options) : options !== undefined) {
-      return INBOX_REFUSAL.SELECT_OPTIONS;
-    }
+    if (!distinct(field.options)) return INBOX_REFUSAL.SELECT_OPTIONS;
 
-    if (
-      field.recommended !== undefined &&
-      !(select && options?.includes(field.recommended) === true)
-    ) {
+    if (field.recommended !== undefined && !field.options.includes(field.recommended)) {
       return INBOX_REFUSAL.SELECT_RECOMMENDATION;
     }
   }
 
   return undefined;
+}
+
+/**
+ * The first field of a post's answer that names options or a recommendation
+ * though it is no select, read from the post as sent, since the post's read
+ * drops a key a field's type does not take and would post it without them.
+ */
+function strayChoiceField(input: UnparsedWireValue): WireRecord | undefined {
+  const ask = wireRecord(wireRecord(input)?.ask);
+  const fields = ask?.type === INBOX_ASK.ANSWER ? ask.fields : undefined;
+
+  if (!Array.isArray(fields)) return undefined;
+
+  return fields
+    .map(wireRecord)
+    .find(
+      (field) =>
+        field !== undefined &&
+        field.type !== INBOX_FIELD.SELECT &&
+        ("options" in field || "recommended" in field),
+    );
 }
 
 /** An ask's own refusal, before the store is asked: a decide's label used twice, a recommendation naming none, one twice, or several where one may be picked, or an answer's fields. */
@@ -749,7 +801,7 @@ function bodyFiles(
     const read: InboxBodyPicture[] = [];
 
     for (const path of paths) {
-      const file = yield* readSandboxBodyFile(sandbox, CODER.CHECKOUT_PATH, path, PICTURE_REFUSALS);
+      const file = yield* readSandboxBodyFile(sandbox, path, PICTURE_REFUSALS);
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
       read.push({ ...file.success, path, name: posix.basename(path) || path });
@@ -775,7 +827,7 @@ interface KeptOptionMedia {
  * One piece of an option's media as the store keeps it, or the refusal of
  * it: a file read from the sandbox as a body's picture is, under an id
  * minted for it; a page the agent showed on its task, at the version it
- * names, or its newest; or the address as posted.
+ * names; or the address as posted.
  */
 function keptOptionMedia(
   agent: InboxAgent,
@@ -798,7 +850,7 @@ function keptOptionMedia(
   const { path } = posted;
 
   return Effect.map(
-    readSandboxMedia(sandbox, CODER.CHECKOUT_PATH, path, OPTION_FILE_REFUSALS),
+    readSandboxMedia(sandbox, path, OPTION_FILE_REFUSALS),
     Result.map((read) => {
       const file = { ...read, id: randomUUID(), name: posix.basename(path) || path };
       const caption = posted.caption === undefined ? {} : { caption: posted.caption };
@@ -815,11 +867,11 @@ function keptOptionMedia(
   );
 }
 
-/** A page an option names as the store keeps it: one shown on the agent's own task, at the version named, the one the agent was shown, or its newest; refused where the agent's account reaches no such page or version there. */
+/** A page an option names as the store keeps it: one shown on the agent's own task, at the version named; refused where the agent's account reaches no such page or version there. */
 function keptOptionPage(
   agent: InboxAgent,
   pageId: string,
-  version: number | undefined,
+  version: number,
 ): Effect.Effect<
   Result.Result<{ readonly media: InboxOptionMedia }, string>,
   never,
@@ -890,7 +942,7 @@ function optionMedia(
   });
 }
 
-/** Whom a post waits on, as the store takes it: the member's account, absent where the post names none. */
+/** Whom a post waits on, as the store takes it: the member's account, absent on a reply to a thread addressed to nobody. */
 interface ThreadPlace {
   readonly addresseeId?: string;
 }
@@ -921,17 +973,34 @@ function addresseeOf(to: string): string | undefined {
 
 /**
  * Whom a post waits on, or why it is refused: the member its mention link
- * names, refused where it names no person. Note that whether that person is
- * of the workspace is the store's to say, under the lock it writes the post
- * under (`postInboxThread`).
+ * names, refused where it names no person; or, where it names none, the
+ * member the thread under its key was addressed to, kept as it stands, and
+ * refused where no thread stands under the key, since a first post names
+ * whom it waits on. Note that whether that person is of the workspace is the
+ * store's to say, under the lock it writes the post under (`postInboxThread`).
  */
-function placeOf(post: InboxThreadPostInput): Result.Result<ThreadPlace, string> {
-  if (post.to === undefined) return Result.succeed({});
-  const addresseeId = addresseeOf(post.to.trim());
+function placeOf(
+  agent: InboxAgent,
+  post: InboxThreadPostInput,
+): InboxStoreEffect<Result.Result<ThreadPlace, string>> {
+  if (post.to !== undefined) {
+    const addresseeId = addresseeOf(post.to.trim());
 
-  return addresseeId === undefined
-    ? Result.fail(INBOX_REFUSAL.NO_MEMBER)
-    : Result.succeed({ addresseeId });
+    return Effect.succeed(
+      addresseeId === undefined
+        ? Result.fail(INBOX_REFUSAL.NO_MEMBER)
+        : Result.succeed({ addresseeId }),
+    );
+  }
+
+  return Effect.map(agentInboxItemOfKey(agent, post.key), (standing) => {
+    if (Option.isNone(standing)) return Result.fail(INBOX_REFUSAL.NO_ADDRESSEE_NAMED);
+    const { addressed, waitsOn } = standing.value;
+
+    return Result.succeed(
+      addressed === true && waitsOn !== undefined ? { addresseeId: waitsOn.userId } : {},
+    );
+  });
 }
 
 /** Runs one post: whom it waits on, its pictures and PDFs read from the sandbox, the message written on the thread under its key, and the agent's threads answered, or why not. */
@@ -946,6 +1015,15 @@ export function postToInbox(
   const post = read.success;
 
   if (post.body.trim() === "") return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_POST));
+  const stray = strayChoiceField(input);
+
+  if (stray !== undefined) {
+    const label = isWireString(stray.label) ? stray.label : "";
+    const type = isWireString(stray.type) ? stray.type : "untyped";
+
+    return Effect.succeed(inboxRejected(INBOX_REFUSAL.NOT_SELECT(label, type)));
+  }
+
   const refused = askRefusal(post.ask);
 
   if (refused !== undefined) return Effect.succeed(inboxRejected(refused));
@@ -955,12 +1033,11 @@ export function postToInbox(
     return Effect.succeed(inboxRejected(`Not posted: ${placeholderLinksWords(unread)}`));
   }
 
-  // A place refused is said before any picture is read, since mending it reads them again.
-  const place = placeOf(post);
-
-  if (Result.isFailure(place)) return Effect.succeed(inboxRejected(place.failure));
-
   return Effect.gen(function* () {
+    // A place refused is said before any picture is read, since mending it reads them again.
+    const place = yield* placeOf(agent, post);
+
+    if (Result.isFailure(place)) return inboxRejected(place.failure);
     const named = yield* bodyFiles(post.body, sandbox);
 
     if (Result.isFailure(named)) return inboxRejected(named.failure);
@@ -995,6 +1072,39 @@ export function postToInbox(
   );
 }
 
+/** How a settled thread's ask was settled, in the words the model reads: answered, or closed by a member, or withdrawn with why. */
+function settledNote(item: InboxItem): string {
+  if (item.status === INBOX_STATUS.ANSWERED) {
+    return ALREADY_SETTLED.ANSWERED(item.answeredBy?.name ?? "a former member");
+  }
+
+  const { closedBy } = closerOf(item);
+
+  if (closedBy !== undefined) return ALREADY_SETTLED.CLOSED(closedBy);
+
+  return ALREADY_SETTLED.WITHDRAWN(item.closedReason ?? "");
+}
+
+/**
+ * A withdrawal that closed nothing, answered by what stands under the key.
+ * Note that a thread whose ask was settled first, answered or closed or
+ * withdrawn before, is answered as taken with how, because the agent's
+ * intent already holds and a refusal would only cost it a step; only a key
+ * with no thread, or a notice, which asks nothing, is refused.
+ */
+function notWithdrawn(agent: InboxAgent, key: string): InboxStoreEffect<InboxWriteResult> {
+  return Effect.gen(function* () {
+    const standing = yield* agentInboxItemOfKey(agent, key);
+
+    if (Option.isNone(standing)) return inboxRejected(INBOX_REFUSAL.NO_KEYED_THREAD);
+    const item = standing.value;
+
+    if (item.status === INBOX_STATUS.OPEN) return inboxRejected(INBOX_REFUSAL.NO_OPEN_ASK);
+
+    return yield* written(agent, item, settledNote(item));
+  });
+}
+
 /** Runs one withdrawal: the open ask of the thread under the key withdrawn with why, and the agent's inbox answered, or why not. */
 export function withdrawAsk(
   agent: InboxAgent,
@@ -1011,7 +1121,7 @@ export function withdrawAsk(
   return Effect.gen(function* () {
     const withdrawn = yield* closeInboxItem(agent, key, reason);
 
-    if (Option.isNone(withdrawn)) return inboxRejected(INBOX_REFUSAL.NO_OPEN_ASK);
+    if (Option.isNone(withdrawn)) return yield* notWithdrawn(agent, key);
     yield* afterResponse("a withdrawn thread's Slack DM", settleThreadDms(withdrawn.value.id));
     yield* afterResponse("a withdrawn thread's push", pushThreadSettled(withdrawn.value.id));
 
@@ -1032,11 +1142,17 @@ function orUnavailable<A>(
   );
 }
 
+/** A list's answer: its threads one line each, as the agent reads them. */
+function listedOf(read: readonly InboxItem[], agent: ThreadPoster): InboxListResult {
+  return { status: ACTION_RESULT_STATUS.ACCEPTED, threads: rowsOf(read, agent.agentId) };
+}
+
 /**
- * Lists threads as the agent, one line each: its own, or one other agent's
- * or one task's of its own workspace, as the member it acts for may read
- * them, which it may read and never write; only those standing where
- * status names, where it names one.
+ * Lists threads as the agent, one line each, of the agent or task its input
+ * names: its own, by its own agentId, or one other agent's or one task's of
+ * its own workspace, as the member it acts for may read them, which it may
+ * read and never write; only those standing where status names, where it
+ * names one.
  */
 export function listThreads(
   agent: ThreadPoster,
@@ -1045,26 +1161,34 @@ export function listThreads(
   const asked = readList(input);
 
   if (Result.isFailure(asked)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_LIST));
-  const { agentId, taskId, status } = asked.success;
-
-  if (agentId !== undefined && taskId !== undefined) {
-    return Effect.succeed(inboxRejected(INBOX_REFUSAL.BOTH_NAMED));
-  }
-
+  const { of, status } = asked.success;
   const reader = { userId: agent.userId, workspaceId: agent.organizationId };
 
-  const items =
-    taskId !== undefined
-      ? agentReachedInboxItems(reader, { taskId }, status)
-      : agentId === undefined || agentId === agent.agentId
-        ? agentInboxItems(agent, status)
-        : agentReachedInboxItems(reader, { agentId }, status);
-
   return orUnavailable(
-    Effect.map(items, (read) => ({
-      status: ACTION_RESULT_STATUS.ACCEPTED,
-      threads: rowsOf(read, agent.agentId),
-    })),
+    Effect.gen(function* () {
+      if ("agentId" in of && of.agentId === agent.agentId) {
+        return listedOf(yield* agentInboxItems(agent, status), agent);
+      }
+
+      if ("agentId" in of) {
+        return listedOf(yield* agentReachedInboxItems(reader, of, status), agent);
+      }
+
+      // A task named by its key is read in the agent's workspace alone.
+      const task = yield* taskIdOfInput(
+        agent.userId,
+        agent.organizationId,
+        { opening: "Not listed", field: "of.taskId" },
+        of.taskId,
+      );
+
+      if (Result.isFailure(task)) return inboxRejected(task.failure);
+
+      return listedOf(
+        yield* agentReachedInboxItems(reader, { taskId: task.success }, status),
+        agent,
+      );
+    }),
   );
 }
 

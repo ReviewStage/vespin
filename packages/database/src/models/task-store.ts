@@ -132,10 +132,24 @@ export class TaskIdTaken extends Data.TaggedError("TaskIdTaken") {}
 /** A coding agent stands at work that a delete was not told was stopped: one started on the task, or handed a message, while it or the others were stopped. */
 export class TaskAgentUnstopped extends Data.TaggedError("TaskAgentUnstopped") {}
 
-/** What a delete that stopped the task's agents first tells it. */
-export interface TaskDeleteGuard {
-  /** The agents the caller stopped; any other standing refuses the delete. */
+/** What a delete tells it of the task's agents: the ones it stopped or found stopped, and, where it stopped none itself, how it reads them stopped under their locks. */
+export interface TaskDeleteGuard<R = never> {
+  /** The agents the caller stopped, or read as stopped; any other standing refuses the delete. */
   readonly stoppedAgentIds: ReadonlySet<string>;
+  /** Left out where the caller stopped each agent itself and retired their sessions before. */
+  readonly standing?: TaskStandingGuard<R>;
+}
+
+/** How a delete that stopped no agent itself reads every agent of the task under their conversations' locks, and what it runs there before anything is deleted. */
+export interface TaskStandingGuard<R> {
+  /** Whether they all stand stopped; false refuses the delete, nothing run. */
+  readonly standsStopped: (
+    agents: readonly TaskStandingAgent[],
+  ) => Effect.Effect<boolean, StoreFailure, R>;
+  /** Run under those locks once they read stopped, given every agent's conversation. */
+  readonly beforeDelete: (
+    conversationIds: readonly string[],
+  ) => Effect.Effect<void, StoreFailure, R>;
 }
 
 /**
@@ -214,8 +228,6 @@ export interface NewTask {
   readonly origin?: TaskOrigin;
   /** The task it is a child of, which the caller confirmed it reaches in the same workspace, and whose repository it took; none for a task at the top. */
   readonly parentTaskId?: string;
-  /** Whether `start_agent` made it for the agent it started, its caller on no task; not where none is named. */
-  readonly madeByStart?: boolean;
   /** The description's text as it starts; empty where none is named. */
   readonly text?: string;
 }
@@ -241,6 +253,8 @@ export interface TaskChanges {
   readonly priority?: TaskPriority;
   /** The member the task is assigned to, who must be a member of its workspace, or of the one it moves to; null for no one. */
   readonly assigneeId?: string | null;
+  /** False where a move into progress assigns no one the change does not name, as a tool's `update_task` asks; the app's own change leaves it out and assigns its mover. */
+  readonly assignsMover?: boolean;
 }
 
 /** How a task's repository was reached, as a write takes it. */
@@ -269,7 +283,6 @@ function newestAgentColumn<T>(column: typeof agentTable.machine | typeof agentTa
 /** Who made a task, as its row holds it. */
 const TaskCreatorActorSchema = Schema.Literals([
   DESCRIPTION_ACTOR.DEVELOPER,
-  DESCRIPTION_ACTOR.NOTETAKER,
   DESCRIPTION_ACTOR.AGENT,
 ]);
 
@@ -832,7 +845,6 @@ const TaskInsertSchema = Schema.Struct({
   parentTaskId: Schema.NullOr(Schema.String),
   description: Schema.String,
   brief: Schema.NullOr(Schema.String),
-  madeByStart: Schema.Boolean,
   now: Schema.Date,
 });
 
@@ -863,7 +875,6 @@ function taskValues(write: typeof TaskInsertSchema.Type) {
     assigneeId: write.assigneeId,
     creatorActor: write.creatorActor,
     creatorAgentId: write.creatorAgentId,
-    madeByStart: write.madeByStart,
     repository: write.repository,
     githubAccess: write.githubAccess,
     parentTaskId: write.parentTaskId,
@@ -1241,7 +1252,6 @@ const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =
       assigneeId: started.assigneeId ?? null,
       creatorActor: started.origin?.actor ?? DESCRIPTION_ACTOR.DEVELOPER,
       creatorAgentId: started.origin?.agentId ?? null,
-      madeByStart: started.madeByStart ?? false,
       number: yield* nextTaskNumber(started.organizationId),
       now,
     };
@@ -1724,16 +1734,21 @@ const TaskArchivedAgentSchema = Schema.Struct({
 
 /**
  * The task's agents still standing unarchived, or the one named among them,
- * each with its conversation locked, the lock every write of its lines and
+ * or every agent of it, archived ones too, where `withArchived` asks, each
+ * with its conversation locked, the lock every write of its lines and
  * turns takes, in the conversations' order, so two turns ending on one task
  * never wait on each other. A line handed to an agent stands awaiting from before
  * its runtime hears it (`dispatch-claim.ts`), so the caller's guard reads
  * such an agent at work.
  */
 const lockStandingAgents = SqlSchema.findAll({
-  Request: Schema.Struct({ taskId: Schema.String, agentId: Schema.optionalKey(Schema.String) }),
+  Request: Schema.Struct({
+    taskId: Schema.String,
+    agentId: Schema.optionalKey(Schema.String),
+    withArchived: Schema.optionalKey(Schema.Boolean),
+  }),
   Result: TaskStandingAgentSchema,
-  execute: ({ taskId, agentId }) =>
+  execute: ({ taskId, agentId, withArchived }) =>
     Database.use((db) =>
       db
         .select({
@@ -1748,7 +1763,7 @@ const lockStandingAgents = SqlSchema.findAll({
           and(
             eq(agentTable.taskId, taskId),
             agentId === undefined ? undefined : eq(agentTable.id, agentId),
-            isNull(agentTable.archivedAt),
+            withArchived === true ? undefined : isNull(agentTable.archivedAt),
           ),
         )
         .orderBy(conversations.id)
@@ -1992,7 +2007,7 @@ const taskStatusMoved = Effect.fnUntraced(function* <R, E2, R2>(
  * not a save: the document's `updatedAt` and the list's order stand. The pin
  * and the read mark are the account's own and no other member's. A task no one is assigned to
  * that the change moves into progress is assigned to the account, unless the
- * change names an assignee of its own. A change that moves the task to Done
+ * change names an assignee of its own or `assignsMover` is false. A change that moves the task to Done
  * or Canceled settles its open inbox items, and one that moves it off them
  * to work again leaves those items settled (`inbox-settle.ts`).
  *
@@ -2100,6 +2115,7 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
         // A task no one is on is its mover's once it moves into progress, as Linear's start assigns;
         // an assignee the change names wins, and one taken off a task already in progress stays off.
         const startedBy =
+          changes.assignsMover !== false &&
           changes.assigneeId === undefined &&
           changes.status === TASK_STATUS.IN_PROGRESS &&
           locked.value.status !== TASK_STATUS.IN_PROGRESS &&
@@ -2372,6 +2388,40 @@ export function beginTaskWorkCommitted(
   );
 }
 
+/**
+ * Moves a task an automation's run made for itself to Done, as "Archive
+ * finished runs" puts the run away (`run-archive.ts`), and answers whether
+ * it moved: one still open moves, by no one by hand, and one already Done or
+ * Canceled, or one the account does not reach, stands as it was. The row is
+ * read under its lock and written in one transaction. Note that the move
+ * archives and settles nothing, as a move by hand to Done does, because the
+ * run is put away only once every agent of it is archived and holds nothing
+ * open in the inbox.
+ */
+export function finishRunTask(userId: string, taskId: string): TaskStoreEffect<boolean> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const locked = yield* lockTask({ userId, taskId });
+
+        if (Option.isNone(locked) || isTaskSettled(locked.value.status)) return false;
+        const now = yield* DateTime.nowAsDate;
+
+        yield* applyChanges({
+          userId,
+          taskId,
+          ...statusColumnsOf(TASK_STATUS.DONE, now, undefined),
+        }).pipe(
+          // The row is held under this transaction's lock, so an update that missed it is the database breaking its own contract.
+          Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
+        );
+
+        return true;
+      }),
+    ),
+  );
+}
+
 /** Where the task stands and who moved it to Done by hand, its row locked until the caller commits; none where the account reaches no such task. */
 const lockDoneBy = SqlSchema.findOneOption({
   Request: TaskKeySchema,
@@ -2436,29 +2486,34 @@ export function archiveAgentOfDoneTask<R = never>(
  * and the delete fails with `TaskAgentUnstopped` where any other stands. The
  * task's row is locked before the agents are read, so a Start racing the
  * delete either landed its agent before the read, which then refuses, or
- * waits on the lock and finds no task to start on. Nothing here reaches
- * past the database, so the lock is held only for these statements: what a
- * caller does to the agents it stopped, such as retiring their sessions,
- * it does before, and the stopped set re-checked here is what keeps an
- * agent started meanwhile, whose session it never touched, standing.
+ * waits on the lock and finds no task to start on. A caller that stopped
+ * the agents itself keeps the lock to these statements: what it does to
+ * them, such as retiring their sessions, it does before, and the stopped
+ * set re-checked here is what keeps an agent started meanwhile, whose
+ * session it never touched, standing. A
+ * caller that stopped none itself has every agent of the task, archived
+ * ones too, read again under their conversations' locks, so one a message set to work
+ * after the caller read it stopped refuses the delete, and runs what it
+ * does to them, such as retiring their sessions, under those locks once they
+ * read stopped, so a refused delete has touched no session.
  */
-export function deleteTask(
+export function deleteTask<R = never>(
   userId: string,
   taskId: string,
-  guard?: TaskDeleteGuard,
-): Effect.Effect<boolean, TaskStoreFailure | TaskAgentUnstopped, DatabaseServices> {
+  guard?: TaskDeleteGuard<R>,
+): Effect.Effect<boolean, TaskStoreFailure | TaskAgentUnstopped, DatabaseServices | R> {
   return Effect.map(deleteTaskCommitted(userId, taskId, guard), Option.isSome);
 }
 
 /** A task deleted, as `deleteTask` deletes one, and the transaction its row went in; none where the account reached no such task. */
-export function deleteTaskCommitted(
+export function deleteTaskCommitted<R = never>(
   userId: string,
   taskId: string,
-  guard?: TaskDeleteGuard,
+  guard?: TaskDeleteGuard<R>,
 ): Effect.Effect<
   Option.Option<{ readonly txid: string }>,
   TaskStoreFailure | TaskAgentUnstopped,
-  DatabaseServices
+  DatabaseServices | R
 > {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -2473,6 +2528,18 @@ export function deleteTaskCommitted(
         }
 
         const conversationIds = agents.map((agent) => agent.conversationId);
+
+        if (guard?.standing !== undefined) {
+          // Note that archived agents are locked and read too, because a message may bring one back meanwhile.
+          const standing = yield* lockStandingAgents({ taskId, withArchived: true });
+
+          if (!(yield* guard.standing.standsStopped(standing))) {
+            return yield* new TaskAgentUnstopped();
+          }
+
+          yield* guard.standing.beforeDelete(conversationIds);
+        }
+
         const removed = yield* removeTask({ userId, taskId });
 
         if (Option.isNone(removed)) return Option.none();

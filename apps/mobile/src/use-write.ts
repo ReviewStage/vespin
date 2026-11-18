@@ -91,6 +91,7 @@ export const WRITE_SUBJECT = {
   TASK_PRIORITY: "task-priority",
   TASK_ASSIGNEE: "task-assignee",
   TASK_PIN: "task-pin",
+  AGENT_PIN: "agent-pin",
   TASK_READ: "task-read",
   TASK_NAME: "task-name",
   TASK_REPOSITORY: "task-repository",
@@ -99,11 +100,12 @@ export const WRITE_SUBJECT = {
   TASK_FOLLOWING: "task-following",
   TASK_COMMENT: "task-comment",
   TASK_WORKSPACE: "task-workspace",
+  SANDBOX_SIZE: "sandbox-size",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
 
-/** One thing a write sets: its kind, and the thread's or the task's id. */
+/** One thing a write sets: its kind, and the thread's, task's, or agent's id. */
 export interface WriteSubject {
   readonly kind: WriteSubjectKind;
   readonly id: string;

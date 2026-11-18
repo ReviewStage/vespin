@@ -72,7 +72,7 @@ const PLACES: readonly MenuRow[] = [
 function WithMoveTo(): React.JSX.Element {
   return (
     <ChipPopover
-      label="Runs on"
+      label="Machine"
       glyph={cloudGlyph("Running", STATUS_TONE.COMPLETE)}
       words="Cloud"
       said="Running"
@@ -180,7 +180,7 @@ function ChipPopovers(): React.JSX.Element {
           {STATES.map((state) => (
             <ChipPopover
               key={state.id}
-              label="Runs on"
+              label="Machine"
               glyph={cloudGlyph(state.words, state.tone)}
               words="Cloud"
               said={state.words}

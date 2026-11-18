@@ -1,4 +1,3 @@
-import { LEGACY_APP_WORD, literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 
@@ -52,25 +51,20 @@ export const pageWriteSchema = EffectSchema.Struct({
 
 export type PageWrite = typeof pageWriteSchema.Type;
 
-/** Who showed a version of a page: the app, from a call, or one of the plan's coding agents. */
+/** Who showed a version of a page: one of the task's coding agents. */
 export const PAGE_SHOWER = {
-  APP: "app",
   AGENT: "agent",
 } as const;
 
 /**
- * Who showed a version of a page: the app, or a coding agent by its id alone,
- * so whoever reads it names the agent by what its row says now, as a plan's
- * agent edits are named (`description-notes.ts`'s `descriptionAgentEditSchema`). Note
- * that a version shown before the app was named `app` names it `luke`, which
- * still reads as the app (a legacy read).
+ * Who showed a version of a page: a coding agent by its id alone, so whoever
+ * reads it names the agent by what its row says now, as a plan's agent edits
+ * are named (`description-notes.ts`'s `descriptionAgentEditSchema`).
  */
-export const pageShowerSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    kind: literalsReadingLegacy([PAGE_SHOWER.APP], LEGACY_APP_WORD, PAGE_SHOWER.APP),
-  }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(PAGE_SHOWER.AGENT), agentId: wireUuidSchema }),
-]);
+export const pageShowerSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(PAGE_SHOWER.AGENT),
+  agentId: wireUuidSchema,
+});
 
 export type PageShower = typeof pageShowerSchema.Type;
 

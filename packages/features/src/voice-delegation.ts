@@ -247,6 +247,8 @@ interface VoiceState {
   readonly working: boolean;
   /** The delegation the running turn answers, or null for a turn none opened. */
   readonly answering: string | null;
+  /** The running turn's newest step, which a request made while it runs is told, never the voice by itself; null between turns. */
+  readonly step: string | null;
 }
 
 /** An input as the loop reads it, GPT-Live's event read. */
@@ -337,6 +339,13 @@ function tell(
 }
 
 type Step = readonly [VoiceState, readonly VoiceOutput[]];
+
+/** What a request made while the agent works is told: that the agent is still on the earlier work, and its newest step where one is known. */
+function workingLine(step: string | null): string {
+  return step === null
+    ? "The agent is still working on the earlier request. Your request is queued for when it finishes."
+    : `The agent is still working on the earlier request; its latest step: ${step}. Your request is queued for when it finishes.`;
+}
 
 const SPEAKER_OF_DELTA = {
   [LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA]: VOICE_SPEAKER.CALLER,
@@ -527,8 +536,16 @@ function delegated(state: VoiceState, delegationId: string): Step {
   const message = { text, delegationId, lines: lines.map((line) => line.id) };
   const taken = { ...closed, heard: [] };
 
+  // Note that a request made while the agent works is told where the turn stands, so "what's it doing?" has a real answer though no step is spoken by itself.
   if (state.working) {
-    return [taken, [...closing, { kind: VOICE_OUTPUT.QUEUE, ...message }]];
+    return [
+      taken,
+      [
+        ...closing,
+        { kind: VOICE_OUTPUT.QUEUE, ...message },
+        ...tell(LIVE_CLIENT_EVENT.THINKING_APPEND, delegationId, workingLine(state.step)),
+      ],
+    ];
   }
 
   return [
@@ -555,15 +572,16 @@ function followedAgent(state: VoiceState, event: AgentTurnEvent): Step {
     // just sent, since that send is what opened it; a turn's end clears it.
     case AGENT_TURN.STARTED:
       return [{ ...state, working: true, answering: event.delegationId ?? state.answering }, []];
+    // Note that a step is kept rather than told, because the voice says each thing it is handed, and a step told by itself was read out after every tool call (Dean, Nov 17).
     case AGENT_TURN.PROGRESS:
-      return [state, tell(LIVE_CLIENT_EVENT.THINKING_APPEND, state.answering, event.step)];
+      return [{ ...state, step: event.step }, []];
     case AGENT_TURN.REPLY:
       return [
         state,
         tell(LIVE_CLIENT_EVENT.COMMENTARY_APPEND, state.answering, event.text, REPLY_MAX_APPENDS),
       ];
     case AGENT_TURN.ENDED:
-      return [{ ...state, working: false, answering: null }, []];
+      return [{ ...state, working: false, answering: null, step: null }, []];
   }
 }
 
@@ -636,6 +654,7 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
     open: newest === undefined || newest.delegated ? null : newest.speaker,
     working: start.agentWorking,
     answering: start.answering,
+    step: null,
   };
 }
 

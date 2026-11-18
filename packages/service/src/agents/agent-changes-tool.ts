@@ -4,8 +4,8 @@
  * The agent is found as `read_agent` finds it (`workspaceAgentOf`), on the
  * caller's member's standing now, so an agent of another workspace, even one
  * the member is also in, is none. What it published is the branch and pull
- * request its row holds as GitHub holds them now (`agentPublished`), its
- * state and checks among it, which the Pull request tab reads
+ * request its row holds as GitHub holds them now, written nowhere
+ * (`agentPublishedUnwritten`), its state and checks among it, which the Pull request tab reads
  * (`GET /api/agents/{id}/pull-request`); its files, reviewers, and reviews
  * that said something are read afresh on a token minted for its repository
  * (`pullRequestChangesRead`), as the Changes tab reads them
@@ -22,6 +22,7 @@
 
 import { hasRepository } from "@repo/database/models/agent-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { CHANGED_FILE_STATUS, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import {
@@ -41,9 +42,9 @@ import {
   orStoreRefusal,
   workspaceAgentOf,
 } from "./agent-tools.js";
-import { pullRequestChangesRead } from "./agents-procedures.js";
 import { githubReadRefusal } from "./asked-pull-request.js";
-import { agentPublished, agentPullRequestReach } from "./coder-host/published.js";
+import { agentPublishedUnwritten, agentPullRequestReach } from "./coder-host/published.js";
+import { pullRequestChangesRead } from "./pull-request-changes.js";
 
 /** The most characters of one file's patch a read answers, about ten thousand tokens: the rest is counted, never sent. */
 const PATCH_READ_CHARS = 40_000;
@@ -81,6 +82,29 @@ export const READ_AGENT_CHANGES_INPUT = Schema.Struct({
 
 const readChangesAsked = Schema.decodeUnknownResult(READ_AGENT_CHANGES_INPUT);
 
+/** What a read of an agent's changes answers, which the coding agent's and the member MCP's descriptions share. */
+export const READ_AGENT_CHANGES_WORDS =
+  "as its Pull request and Changes tabs show it: the repository it works in, the branch it " +
+  "pushed, and the pull request from it as GitHub holds it now, with its number, title, link, " +
+  `state (${Object.values(PULL_REQUEST_STATE).join(", ")}), the head commit it stands on ` +
+  `(headSha), which a merge names, its checks (${Object.values(CHECK_SUMMARY).join(", ")}), ` +
+  "the lines it adds and removes, who opened it, its reviewers and where each stands, its " +
+  "reviews that said something, and every file it changes in the order GitHub lists them, " +
+  `each with what became of it (${Object.values(CHANGED_FILE_STATUS).join(", ")}) and the ` +
+  "lines it adds and removes, truncated true where the list was cut short; the pull request " +
+  "is null where the agent opened none yet. Name a path among its files to read that file's " +
+  `patch as well, cut on a line at ${PATCH_READ_CHARS} characters with how many were left ` +
+  "out, or why GitHub carried none. It only reads: the agent is not told.";
+
+/** `read_agent_changes` as a coding agent is offered it, which reads any agent of its workspace's pull request, its own among them. */
+export const READ_AGENT_CHANGES_TOOL = {
+  name: AGENT_TOOL.READ_AGENT_CHANGES,
+  description:
+    "Read what an agent of your workspace published, by its id, on any task and started by " +
+    `any member, your own agent id included, ${READ_AGENT_CHANGES_WORDS}`,
+  inputSchema: READ_AGENT_CHANGES_INPUT,
+} as const;
+
 /** A read of GitHub that did not land, in the model's words: the repository out of the installation's reach, or GitHub or the store not answering. */
 function unreadWords(error: string): string {
   return error === HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE
@@ -108,7 +132,10 @@ export function runReadAgentChanges(
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { agent } = found.value;
       const userId = callerUserId(call.caller);
-      const published = yield* Effect.result(githubReadRefusal(agentPublished(userId, agent)));
+
+      const published = yield* Effect.result(
+        githubReadRefusal(agentPublishedUnwritten(userId, agent)),
+      );
 
       if (Result.isFailure(published)) {
         return agentToolRejected(unreadWords(published.failure.error));

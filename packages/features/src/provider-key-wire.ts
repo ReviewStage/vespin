@@ -214,6 +214,13 @@ const providerKeySummarySchema = EffectSchema.Struct({
 
 export type ProviderKeySummary = typeof providerKeySummarySchema.Type;
 
+/** Whether the keys hold an OpenAI API key the service can open, which dictation and voice run on. */
+export function savesOpenAiKey(keys: readonly ProviderKeySummary[]): boolean {
+  const key = keys.find((one) => one.provider === PROVIDER_KEY_PROVIDER.OPENAI);
+
+  return key !== undefined && key.status !== PROVIDER_KEY_STATUS.UNREADABLE;
+}
+
 /** How much of its usage window a plan has used, as a turn on it last heard its harness report. */
 const planUsageSchema = EffectSchema.Struct({
   /** The share of the window used, in percent. */
@@ -366,6 +373,11 @@ const subscriptionLabelSchema = EffectSchema.NullOr(
 export const providerKeyResetCreditRequestSchema = EffectSchema.Struct({
   subscriptionId: subscriptionIdSchema,
   idempotencyKey: wireUuidSchema,
+});
+
+/** A plan's usage checked again now, however fresh its reading (POST): the plan. */
+export const planUsageRefreshRequestSchema = EffectSchema.Struct({
+  subscriptionId: subscriptionIdSchema,
 });
 
 /**

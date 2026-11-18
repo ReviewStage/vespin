@@ -7,6 +7,7 @@
   "exports": {
     "./act": "./src/act.js",
     "./admin/admin-doors": "./src/admin/admin-doors.js",
+    "./admin/admin-fixture": "./src/admin/admin-fixture.js",
     "./admin/charts/activity-chart": "./src/admin/charts/activity-chart.js",
     "./admin/charts/signups-chart": "./src/admin/charts/signups-chart.js",
     "./admin/charts/stat-card": "./src/admin/charts/stat-card.js",
@@ -20,6 +21,7 @@
     "./admin/screens/prompts": "./src/admin/screens/prompts.js",
     "./admin/screens/tools": "./src/admin/screens/tools.js",
     "./admin/screens/account": "./src/admin/screens/account.js",
+    "./admin/screens/billing": "./src/admin/screens/billing.js",
     "./admin/screens/cost": "./src/admin/screens/cost.js",
     "./admin/screens/limits": "./src/admin/screens/limits.js",
     "./admin/screens/dashboard": "./src/admin/screens/dashboard.js",
@@ -38,6 +40,7 @@
     "./bundle-loader": "./src/bundle-loader.js",
     "./call/call-card-of": "./src/call/call-card-of.js",
     "./composer-drafts": "./src/composer-drafts.js",
+    "./entities/entity-glyph": "./src/entities/entity-glyph.js",
     "./failure-report": "./src/failure-report.js",
     "./keyboard-modality": "./src/keyboard-modality.js",
     "./live-reads": "./src/live-reads.js",
@@ -118,7 +121,7 @@
     "posthog-js": "1.418.3",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "recharts": "3.10.1",
+    "recharts": "3.11.0",
     "rehype-raw": "7.0.0",
     "remark-breaks": "4.0.0",
     "unicode-emoji-json": "0.9.0"

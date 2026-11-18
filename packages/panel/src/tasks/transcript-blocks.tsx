@@ -137,6 +137,7 @@ import {
   ScrollTextIcon,
   SearchIcon,
   SendIcon,
+  SmilePlusIcon,
   TerminalIcon,
   TimerIcon,
   UnlinkIcon,
@@ -1253,11 +1254,17 @@ const CALL_ICON = {
   [CALL_KIND.LIST_AGENTS]: LayoutListIcon,
   [CALL_KIND.READ_AGENT]: ScrollTextIcon,
   [CALL_KIND.MESSAGE_AGENT]: SendIcon,
+  [CALL_KIND.SLACK_MESSAGE]: SendIcon,
+  [CALL_KIND.SLACK_CHANNELS]: LayoutListIcon,
+  [CALL_KIND.WORKSPACE_MEMBERS]: LayoutListIcon,
+  [CALL_KIND.SLACK_READ]: ScrollTextIcon,
+  [CALL_KIND.SLACK_REACT]: SmilePlusIcon,
   [CALL_KIND.START_AGENT]: PlayIcon,
   [CALL_KIND.ADD_SUGGESTION]: CornerDownRightIcon,
   [CALL_KIND.ARCHIVE_AGENT]: ArchiveIcon,
   [CALL_KIND.UNARCHIVE_AGENT]: ArchiveRestoreIcon,
   [CALL_KIND.LIST_MODELS]: CpuIcon,
+  [CALL_KIND.LIST_MACHINES]: LaptopIcon,
   [CALL_KIND.STOP_AGENT]: CircleStopIcon,
   [CALL_KIND.LIST_PORTS]: PlugIcon,
   [CALL_KIND.SHARE_PORT]: LinkIcon,
@@ -2162,7 +2169,7 @@ const SUBAGENT_HINT = "Open the subagent";
 /**
  * A subagent's row on a coding agent's tab, running
  * or finished: one line drawn as a call's row is, in its muted ink, wearing
- * the mark of the harness its model runs in (the worker's robot where the
+ * the mark of the harness its model runs in (the worker's hard hat where the
  * model is unknown), the job in the full ink as a call's verb is, fading
  * where the line cuts it, the model and effort it runs on as every pair is
  * drawn (`model-label.tsx`), and the mark a call's
@@ -2174,7 +2181,8 @@ const SUBAGENT_HINT = "Open the subagent";
  * place. Where it
  * opens no tab it is the same line, pressed by nothing, or, given the task
  * and the answer, a fold that opens onto them as a call's row does. A call that failed
- * says why in red under the line, open from the start.
+ * says why in red under the line, open from the start, set in under the
+ * job's words as a call's failure is, unless its error only repeats the job.
  */
 export function TranscriptSubagent({
   callId,
@@ -2231,13 +2239,20 @@ export function TranscriptSubagent({
       </Tooltip>
     );
 
+  // Note that an error that only repeats the job says nothing the row's failed mark does not.
+  const failure =
+    errorText === undefined || errorText.trim() === job.trim() ? undefined : errorText;
+
   return (
     <div className="subagent-row @container/subagent-row text-caption-inline" {...FIND_DETAIL}>
       {row}
-      {errorText === undefined ? null : (
-        <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
-          {errorText}
-        </FailureNote>
+      {failure === undefined ? null : (
+        // Set in under the job's words, where a call's failure stands under its line.
+        <div className="subagent-failure ml-transcript-gutter">
+          <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
+            {failure}
+          </FailureNote>
+        </div>
       )}
     </div>
   );

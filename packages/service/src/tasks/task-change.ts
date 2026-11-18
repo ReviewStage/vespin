@@ -41,7 +41,10 @@ import { archiveAskedStatus } from "./archive-settle.js";
 const STOPPER = storeWriter({ tools: CODER_TOOL_SET });
 
 /** A change as a door asks for it: the app's own, bar the place a released desktop still names, which goes nowhere. */
-export type TaskChangeRequest = Omit<TaskUpdateRequest, "runsOn">;
+export type TaskChangeRequest = Omit<TaskUpdateRequest, "runsOn"> & {
+  /** False for a tool's change, which assigns no one it does not name on a move into progress (`TaskChanges`); the app's leaves it out. */
+  readonly assignsMover?: boolean;
+};
 
 /** A move the workspace's GitHub refused under the task's lock, carried out of the store's change as the refusal. */
 class MoveRefused extends Data.TaggedError("MoveRefused")<{ readonly refusal: HostedRefusal }> {}
@@ -67,7 +70,7 @@ export interface TaskChangeConfirmed {
 }
 
 /**
- * Every agent of the task but `caller` stopped for good, its ids answered;
+ * Every agent of the task stopped for good, its ids answered;
  * refused as not ready, every agent standing, where one cannot be stopped
  * yet, since every agent is read before any is stopped and a refusal
  * cancels no one's work.
@@ -75,10 +78,8 @@ export interface TaskChangeConfirmed {
 const everyAgentStopped = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   taskId: string,
-  caller: string | undefined,
 ) {
-  const listed = yield* hostedStoreOrUnavailable(listAgents(userId, taskId));
-  const agents = listed.filter((agent) => agent.id !== caller);
+  const agents = yield* hostedStoreOrUnavailable(listAgents(userId, taskId));
 
   if (!(yield* everyStopsForGood(agents))) {
     return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
@@ -96,9 +97,8 @@ const everyAgentStopped = /* @__PURE__ */ Effect.fnUntraced(function* (
  * reached in the workspace the task ends up in, a teammate's on the App
  * alone, since a task on a token is its owner's, and held to the task's
  * tree; a new assignee is a member. Both are held again under the row's lock.
- * An archive an older caller asks for stops every agent of the task but
- * `caller`, the calling agent, which never stops itself, then settles the
- * task, or puts it back to work for an unarchive (`archive-settle.ts`), as
+ * An archive an older desktop build asks for stops every agent of the
+ * task, then settles the task, or puts it back to work for an unarchive (`archive-settle.ts`), as
  * a move to Done or Canceled with `stopAgents` does before its write
  * archives them; an agent no Stop can name yet refuses either as not ready,
  * every agent standing.
@@ -107,7 +107,6 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   taskId: string,
   asked: TaskChangeRequest,
-  caller?: string,
 ): Effect.fn.Return<
   TaskChangeConfirmed,
   HostedRefusal,
@@ -162,12 +161,12 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
   }
 
-  if (asked.archived === true) yield* everyAgentStopped(userId, taskId, caller);
+  if (asked.archived === true) yield* everyAgentStopped(userId, taskId);
 
   // Note that a settle asked again of a task already there stops nothing, because a turn begun since was never confirmed.
   const stopped: ReadonlySet<string> =
     isTaskSettled(asked.status) && asked.status !== standing && asked.stopAgents === true
-      ? yield* everyAgentStopped(userId, taskId, caller)
+      ? yield* everyAgentStopped(userId, taskId)
       : new Set();
 
   // Note that the archive stamp is never written, because a task is archived no longer.
@@ -189,6 +188,7 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
       ...(status === undefined ? undefined : { status }),
       ...(asked.priority === undefined ? undefined : { priority: asked.priority }),
       ...(assigneeId === undefined ? undefined : { assigneeId }),
+      ...(asked.assignsMover === undefined ? undefined : { assignsMover: asked.assignsMover }),
     },
     moveGuard:
       organizationId === undefined ? undefined : movedRepositoryReached(organizationId, userId),

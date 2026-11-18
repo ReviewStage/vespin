@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   IOS_APP_LINK_COMPONENTS,
+  iosAgentPullRequestOf,
   iosAppRouteOf,
   iosAppRouteOfAddress,
   iosHostConnectCode,
@@ -60,27 +61,45 @@ it("a machine's pairing link opens in the app with its code", () => {
   expect(iosHostConnectCode("https://vespin.dev/acme/task/42")).toBeUndefined();
 });
 
-// Note that the regression these catch is a pull request a chip names leaving the app for GitHub
-// though the app draws it, or its diff, which the app does not draw, opening on the app's screen.
+// Note that the regression these catch is a pull request a link names opening another pull request, as one agent's
+// two did, or leaving the app for GitHub though it stands in a workspace, or its diff, which the app does not draw,
+// opening on the app's screen.
 describe("a pull request's address", () => {
-  const opened = [
-    { agentId: "agent-1", pullRequest: { url: "https://github.com/acme/relay/pull/42" } },
-  ];
-
   it.each([
-    ["https://github.com/acme/relay/pull/42", "/tasks/agent/agent-1/pull/42"],
-    ["https://github.com/Acme/Relay/pull/42/", "/tasks/agent/agent-1/pull/42"],
-    ["https://github.com/acme/relay/pull/42/files", undefined],
-    ["https://github.com/acme/relay/pull/43", undefined],
-    ["https://github.com/acme/other/pull/42", undefined],
-  ])("%s opens in the app at %s", (address, route) => {
-    expect(iosAppRouteOfAddress(address, opened)).toBe(route);
+    ["https://github.com/acme/relay/pull/42", "acme-ws", "/tasks/pull/acme-ws/acme/relay/42"],
+    ["https://github.com/Acme/Relay/pull/43/", "acme-ws", "/tasks/pull/acme-ws/Acme/Relay/43"],
+    ["https://github.com/acme/relay/pull/42/files", "acme-ws", undefined],
+    ["https://github.com/acme/relay/pull/42", undefined, undefined],
+  ])("%s in %s opens in the app at %s", (address, workspaceId, route) => {
+    expect(iosAppRouteOfAddress(address, workspaceId)).toBe(route);
   });
 
   it("names a vespin.dev place by the route its link opens", () => {
-    expect(iosAppRouteOfAddress("https://vespin.dev/acme/task/42", opened)).toBe(
+    expect(iosAppRouteOfAddress("https://vespin.dev/acme/task/42", undefined)).toBe(
       "/tasks/42?workspace=acme",
     );
+  });
+});
+
+// Note that the regression this catches is an older link to an agent's pull request opening another pull
+// request than the one it names, as the agent's two pull requests from two branches once did.
+describe("an agent's pull request by its number", () => {
+  const agent = { workspaceId: "acme-ws", repository: "acme/relay" };
+  const listed = { number: 42, url: "https://github.com/Acme/Other/pull/42" };
+
+  it.each([
+    ["its listed pull request", listed, 42, { repository: "Acme/Other", number: 42 }],
+    ["another of its numbers", listed, 41, { repository: "acme/relay", number: 41 }],
+    ["one while none is listed", undefined, 41, { repository: "acme/relay", number: 41 }],
+  ])("opens %s by its repository", (_name, line, number, opened) => {
+    expect(iosAgentPullRequestOf(agent, line, number)).toEqual({
+      workspaceId: "acme-ws",
+      ...opened,
+    });
+  });
+
+  it("names none while the agent is read", () => {
+    expect(iosAgentPullRequestOf(undefined, listed, 42)).toBeUndefined();
   });
 });
 
@@ -93,6 +112,7 @@ describe("the tab bar on a route", () => {
     ["/tasks/task-1", false],
     ["/tasks/agent/agent-1", true],
     ["/tasks/agent/agent-1/pull/42", true],
+    ["/tasks/pull/acme-ws/acme/relay/42", true],
     ["/tasks/agent/agent-1/page", false],
     ["/tasks/page/page-1", false],
     ["/tasks/comments/thread-1", true],

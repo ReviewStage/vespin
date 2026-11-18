@@ -48,7 +48,8 @@ import {
   runLookAtThreadPicture,
 } from "../../tasks/picture-look.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
-import { CODER, CODER_REFUSAL } from "./bounds.js";
+import { taskIdOfInput } from "../task-ref.js";
+import { CODER_REFUSAL } from "./bounds.js";
 import {
   DESCRIPTION_EDIT_REFUSAL,
   type DescriptionEditResult,
@@ -99,21 +100,36 @@ function agentHeaderOfConversation(admitted: AdmittedConversation) {
 }
 
 /**
- * The task a call names, where it stands in the agent's own workspace, as
- * the member whose turn this is reaches it; nothing otherwise, which each
- * tool refuses as no task in its own words. Note that a task of another
- * workspace the member is also in is none of the agent's, as `read_task`
- * reads one, and answers as no task at all.
+ * The task a call names by its id or key, where it stands in the agent's own
+ * workspace, as the member whose turn this is reaches it; or why not, in the
+ * tool's words: a key read nowhere else (`taskIdOfRef`), and an id of no task
+ * there as the tool's own `noTask`. Note that a task of another workspace the
+ * member is also in is none of the agent's, as `read_task` reads one, and
+ * answers as no task at all.
  */
 function agentTaskOf(
   admitted: AdmittedConversation,
   agent: Pick<Agent, "organizationId">,
-  taskId: string,
+  written: string,
+  words: { readonly opening: string; readonly noTask: string },
 ) {
-  return Effect.map(
-    readTaskHeader(admitted.caller, taskId),
-    Option.filter((task) => task.workspaceId === agent.organizationId),
-  );
+  return Effect.gen(function* () {
+    const named = yield* taskIdOfInput(
+      admitted.caller,
+      agent.organizationId,
+      { opening: words.opening, field: "taskId" },
+      written,
+    );
+
+    if (Result.isFailure(named)) return named;
+
+    const task = Option.filter(
+      yield* readTaskHeader(admitted.caller, named.success),
+      (header) => header.workspaceId === agent.organizationId,
+    );
+
+    return Option.isSome(task) ? named : Result.fail(words.noTask);
+  });
 }
 
 /** Takes one `edit_description` call's notes into the description of the task it names, given how many notes the turn has taken already, its pictures read through the sandbox door given. */
@@ -131,12 +147,16 @@ export function runAgentEditDescription(
 
     if (taskId === undefined)
       return descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.NO_TASK_NAMED);
-    const task = yield* agentTaskOf(admitted, found.success, taskId);
 
-    if (Option.isNone(task)) return descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.NO_TASK);
+    const task = yield* agentTaskOf(admitted, found.success, taskId, {
+      opening: "Not saved",
+      noTask: DESCRIPTION_EDIT_REFUSAL.NO_TASK,
+    });
+
+    if (Result.isFailure(task)) return descriptionEditRejected(task.failure);
     const agentId = found.success.id;
     // The description is written as the member whose turn this is, whoever started the agent.
-    const binding = { userId: admitted.caller, taskId };
+    const binding = { userId: admitted.caller, taskId: task.success };
 
     return yield* recordDescriptionEdit(binding, { agentId }, input, takenInTurn, sandbox);
   }).pipe(
@@ -225,9 +245,13 @@ export function runAgentLookAtPicture(
     // A description's picture is none an agent is told of where its workspace has Task descriptions off.
     if (!descriptionsOn) return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
 
-    if (Option.isNone(yield* agentTaskOf(admitted, found.success, taskId))) {
-      return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
-    }
+    // The address names its task by id, so the only miss is a task out of the agent's workspace.
+    const task = yield* agentTaskOf(admitted, found.success, taskId, {
+      opening: "Not looked at",
+      noTask: PICTURE_LOOK_REFUSAL.ELSEWHERE,
+    });
+
+    if (Result.isFailure(task)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
 
     const writePdf = taskId === found.success.taskId ? pdfWriteThrough(sandbox) : pdfElsewhere;
 
@@ -282,9 +306,13 @@ export function runAgentComment(
     const taskId = commentedTaskOf(input);
 
     if (taskId === undefined) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK_NAMED);
-    const task = yield* agentTaskOf(admitted, found.success, taskId);
 
-    if (Option.isNone(task)) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK);
+    const task = yield* agentTaskOf(admitted, found.success, taskId, {
+      opening: "Not run",
+      noTask: COMMENT_TOOL_REFUSAL.NO_TASK,
+    });
+
+    if (Result.isFailure(task)) return commentToolRejected(task.failure);
     const agentId = found.success.id;
 
     // The comments are read and written as the member whose turn this is, as `editDescription` writes the description.
@@ -295,7 +323,7 @@ export function runAgentComment(
     } as const;
 
     // A page's threads stand whatever the workspace's Task descriptions; the description's are left out while it is off.
-    return yield* runCommentTool(name, { taskId, writer, descriptionsOn }, input);
+    return yield* runCommentTool(name, { taskId: task.success, writer, descriptionsOn }, input);
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(commentToolRejected(COMMENT_TOOL_REFUSAL.UNAVAILABLE))),
@@ -317,7 +345,7 @@ export function runAgentShowPage(
     const binding = {
       userId: admitted.target.userId,
       taskId,
-      sandbox: { door: sandbox, checkout: CODER.CHECKOUT_PATH },
+      sandbox,
     };
 
     return yield* runShowPage(binding, input, {
@@ -336,5 +364,5 @@ export function runAgentShowMedia(
   input: UnparsedWireValue,
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return runShowMedia({ target: admitted.target, sandbox, checkout: CODER.CHECKOUT_PATH }, input);
+  return runShowMedia({ target: admitted.target, sandbox }, input);
 }

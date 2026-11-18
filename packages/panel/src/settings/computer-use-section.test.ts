@@ -88,8 +88,11 @@ async function mount(): Promise<HTMLElement> {
 test("a grant that stands says so, the one that does not offers Allow, which asks macOS for it", async () => {
   const page = await mount();
   await vi.waitFor(() => assert.ok(page.textContent?.includes("Screen RecordingTo let agents")));
-  assert.ok(page.textContent?.includes("apps you allow.Allowed"), "Screen Recording stands");
-  assert.ok(page.textContent?.includes("apps you allow.Not allowed"), "Accessibility does not");
+  assert.ok(
+    page.textContent?.includes("Not allowed. To let agents click"),
+    "Accessibility does not",
+  );
+  assert.equal(page.textContent?.split("Not allowed.").length, 2, "Screen Recording stands");
 
   act(() => button("Allow…").click());
 

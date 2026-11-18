@@ -1,3 +1,4 @@
+import { CHATGPT_DEVICE_WORDS } from "@repo/features/agent-credentials-model";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   CHATGPT_DEVICE_FAILURE_MESSAGE,
@@ -56,20 +57,7 @@ import { useOpenLink } from "../tasks/use-open-link.js";
  * code, which is masked.
  */
 
-const WORDS = {
-  TURN_ON: "In ChatGPT Settings → Security, turn on device code authorization for Codex",
-  TURN_ON_HINT:
-    "If you don't see this option, ask your workspace admin to enable device code authentication for Codex CLI",
-  CODE: "Code",
-  ENTER_CODE:
-    "Sign in with your Codex account, select your workspace if prompted, and enter the code:",
-  VERIFICATION_PAGE: "Open the verification page",
-  WAITING: "Waiting for Codex",
-  GETTING_CODE: "Getting a code",
-  START_FAILED: "Couldn't reach Codex for a code. Try again.",
-  WAIT_FAILED: "Couldn't reach Codex to finish connecting. Try again.",
-  RETRY: "Retry",
-} as const;
+const WORDS = CHATGPT_DEVICE_WORDS;
 
 /** Where the dialog stands: getting a code, waiting on it, or ended in a failure Retry starts over from. */
 const STANDING = {

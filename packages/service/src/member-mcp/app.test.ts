@@ -7,7 +7,7 @@ import { it } from "@effect/vitest";
 import type { Client } from "@modelcontextprotocol/client";
 import { Database } from "@repo/database/core/query";
 import { queueAgentMessage } from "@repo/database/models/agent-queue-store";
-import { createAgent, readAgent } from "@repo/database/models/agent-store";
+import { archiveAgent, createAgent, readAgent } from "@repo/database/models/agent-store";
 import {
   createAutomation,
   listAutomationRuns,
@@ -23,17 +23,16 @@ import { listMemories, rememberMemory } from "@repo/database/models/memory-store
 import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
-import { createTask, readTask } from "@repo/database/models/task-store";
+import { createTask, readTask, updateTask } from "@repo/database/models/task-store";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import {
   readRunActions,
   setRunActions,
 } from "@repo/database/models/workspace-sandbox-script-store";
-import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
-import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
   joinWorkspace,
@@ -57,16 +56,14 @@ import {
 } from "@repo/features/description-comment-wire";
 import { NOTE_KIND } from "@repo/features/description-notes";
 import { INBOX_ANSWER_LEAD, INBOX_ASK, INBOX_REPLY, INBOX_STATUS } from "@repo/features/inbox-wire";
+import { SKILL_PASTE_KIND } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
-import {
-  DESCRIPTION_ACTOR,
-  TASK_RELATION_KIND,
-  TASK_STATUS,
-  UNTITLED_TASK_NAME,
-} from "@repo/features/task-wire";
+import { DESCRIPTION_ACTOR, TASK_RELATION_KIND, TASK_STATUS } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
@@ -75,9 +72,7 @@ import { Clock, DateTime, Effect, Option, Predicate, Result, Schema } from "effe
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
-import { START_AGENT_REFUSAL } from "../agents/agent-tools.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
-import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { EXPERIMENT_OFF_REFUSAL } from "../agents/workspace-experiment-on.js";
 import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
@@ -89,6 +84,7 @@ import {
   freshInstallation,
   type GraphqlCall,
   graphqlAnswering,
+  messagedAgent,
   mutationOf,
   openAskOf,
   openTask,
@@ -376,6 +372,18 @@ const ORIGIN = MEMBER_MCP_TEST.ORIGIN;
 
 /** The server over its seeded rows and a GitHub nobody reaches, as most tests here stand it up. */
 const standing = memberMcpStanding();
+
+/** The server as most tests stand it, its catalog offering Claude Opus 5.5, for a tool that names a model. */
+const offering = memberMcpStanding({
+  catalog: [
+    {
+      id: "anthropic/claude-opus-5.5",
+      name: "Claude Opus 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["high"],
+    },
+  ],
+});
 
 /** The metadata document's address a challenge must name for the resource (RFC 9728). */
 const METADATA_URL = `${ORIGIN}/.well-known/oauth-protected-resource${MEMBER_MCP_PATH}`;
@@ -690,7 +698,7 @@ it.effect(
 
       const slugOf = (workspaceId: string) => `workspace-${workspaceId}`;
 
-      const unnamed = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, {});
+      const unnamed = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, { workspace: "nowhere" });
       const tasks = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, { workspace: slugOf(rows.own) });
       const agents = yield* call(MEMBER_MCP_TOOL.LIST_AGENTS, { workspace: slugOf(rows.own) });
       const inbox = yield* call(MEMBER_MCP_TOOL.READ_INBOX, { workspace: slugOf(rows.own) });
@@ -709,8 +717,7 @@ it.effect(
             {
               threadId: rows.strangerItem,
               askId: openAskOf(strangerAsk),
-              reply: INBOX_REPLY.CHOSE,
-              choices: ["Approve"],
+              answer: { reply: INBOX_REPLY.CHOSE, choices: ["Approve"] },
             },
           ],
           [MEMBER_MCP_TOOL.REPLY_TO_THREAD, { threadId: rows.strangerItem, text: "Approve it." }],
@@ -752,7 +759,7 @@ it.effect(
 
       yield* Effect.promise(() => client.close());
 
-      // A list that names no workspace is refused where the member has two, naming both and no other.
+      // A list that names none of the member's workspaces is refused, naming both of theirs and no other.
       assert.equal(unnamed.refused, true);
       assert.ok(
         unnamed.text.includes(slugOf(rows.own)) && unnamed.text.includes(slugOf(rows.second)),
@@ -904,7 +911,10 @@ it.effect(
 
       const answers = yield* Effect.forEach(
         [
-          [MEMBER_MCP_TOOL.CREATE_TASK, { workspace, name: "Planted" }],
+          [
+            MEMBER_MCP_TOOL.CREATE_TASK,
+            { workspace, name: "Planted", repository: null, status: TASK_STATUS.TODO },
+          ],
           [MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.DELETE_TASK, { taskId }],
           [
@@ -917,16 +927,16 @@ it.effect(
           [MEMBER_MCP_TOOL.CREATE_SECTION, { workspace, title: "Planted" }],
           [MEMBER_MCP_TOOL.DELETE_SECTION, { sectionId: rows.sectionId }],
           [MEMBER_MCP_TOOL.START_AGENT, { taskId }],
-          [MEMBER_MCP_TOOL.START_AGENT, { workspace, prompt: "Go." }],
-          [MEMBER_MCP_TOOL.START_AGENT, { from: { agentId } }],
-          [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello." }],
+          [MEMBER_MCP_TOOL.START_AGENT, { taskId, from: { agentId, mode: "continue" } }],
+          [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: false }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: true }],
           [
             MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
             { agentId, change: { change: QUEUE_CHANGE.RESUME } },
           ],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
-          [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
+          [MEMBER_MCP_TOOL.ARCHIVE_AGENT, { agentId, reason: "Planted." }],
+          [MEMBER_MCP_TOOL.UNARCHIVE_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.WAKE_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
           [MEMBER_MCP_TOOL.SHARE_AGENT_PORT, { agentId, port: 3000 }],
@@ -934,14 +944,14 @@ it.effect(
           [MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB, { agentId, address: "https://example.com/" }],
           [MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
           [MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
-          [MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }],
+          [MEMBER_MCP_TOOL.READ_COMMENTS, { taskId, status: DESCRIPTION_COMMENT_STATUS.OPEN }],
           [
             MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION,
             { taskId, quote: DESCRIPTION_NOTE.text, words: "Planted." },
           ],
           [MEMBER_MCP_TOOL.REPLY_TO_COMMENT, { taskId, thread: threadId, words: "Planted." }],
           [MEMBER_MCP_TOOL.UPDATE_COMMENT, { taskId, thread: threadId, resolved: true }],
-          [MEMBER_MCP_TOOL.SEARCH_MEMORY, { workspace }],
+          [MEMBER_MCP_TOOL.SEARCH_MEMORY, { workspace, query: "planted" }],
           [MEMBER_MCP_TOOL.SAVE_MEMORY, { workspace, text: "Planted." }],
           // Note that the member's own workspace holds no memory of that id, so a correction of it is refused.
           [
@@ -954,20 +964,43 @@ it.effect(
           [MEMBER_MCP_TOOL.LIST_AUTOMATIONS, { automationId }],
           [
             MEMBER_MCP_TOOL.CREATE_AUTOMATION,
-            { workspace, name: "Planted", prompt: "Go.", trigger: WEEKLY },
+            {
+              workspace,
+              name: "Planted",
+              prompt: "Go.",
+              trigger: WEEKLY,
+              repositories: [],
+              model: "anthropic/claude-opus-5.5",
+              effort: "high",
+              scope: "personal",
+              archiveSuccessful: false,
+              slackDelivery: false,
+              runsOn: { machine: "vercel" },
+            },
           ],
           [MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
-          [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
           [
-            MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
-            { workspace, repository: "acme/relay", actionId: rows.runActionId, remove: true },
+            MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
+            { workspace, target: { kind: "workspace" }, script: "Planted." },
           ],
           [
             MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
-            { workspace, repository: "acme/relay", label: "Planted", command: "pnpm planted" },
+            {
+              workspace,
+              repository: "acme/relay",
+              edit: { operation: "remove", actionId: rows.runActionId },
+            },
+          ],
+          [
+            MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
+            {
+              workspace,
+              repository: "acme/relay",
+              edit: { operation: "add", label: "Planted", command: "pnpm planted" },
+            },
           ],
           // Note that the member's own workspace holds no action of that id, so an edit of it there is refused.
           [
@@ -975,8 +1008,7 @@ it.effect(
             {
               workspace: `workspace-${rows.own}`,
               repository: "acme/relay",
-              actionId: rows.runActionId,
-              label: "Planted",
+              edit: { operation: "change", actionId: rows.runActionId, label: "Planted" },
             },
           ],
           [MEMBER_MCP_TOOL.RUN_ACTION, { agentId, actionId: rows.runActionId }],
@@ -1063,18 +1095,68 @@ it.effect(
     }),
 );
 
+it.effect("edit_run_action adds, changes, and removes a run action by its operation", () =>
+  Effect.gen(function* () {
+    const { auth, fetch, services } = yield* standing;
+    const member = yield* Effect.promise(() => signUp(auth));
+    const own = yield* openWorkspace(member.userId).pipe(Effect.provide(services));
+
+    const token = yield* Effect.promise(() =>
+      mintedToken(auth, member.cookie, {
+        clientId: MCP_CLIENT.id,
+        scope: [MEMBER_MCP_SCOPE.MCP],
+        resource: RESOURCE,
+      }),
+    );
+
+    const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
+    const edit = (args: ToolArguments) =>
+      Effect.promise(async () => {
+        const answer = decodeAnswer(
+          await client.callTool({
+            name: MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
+            arguments: { workspace: `workspace-${own}`, repository: "acme/relay", edit: args },
+          }),
+        );
+
+        assert.notEqual(answer.isError, true, answer.content[0].text);
+      });
+
+    const listed = readRunActions(own, "acme/relay").pipe(
+      Effect.map((actions) => actions.map(({ label, command }) => [label, command])),
+      Effect.provide(services),
+    );
+
+    yield* edit({ operation: "add", label: "Dev", command: "pnpm dev" });
+    yield* edit({ operation: "add", label: "Test", command: "pnpm test" });
+    const [dev] = yield* readRunActions(own, "acme/relay").pipe(Effect.provide(services));
+    assert.ok(dev !== undefined);
+    yield* edit({ operation: "change", actionId: dev.id, command: "pnpm dev --open" });
+    const changed = yield* listed;
+    yield* edit({ operation: "remove", actionId: dev.id });
+
+    assert.deepEqual(changed, [
+      ["Dev", "pnpm dev --open"],
+      ["Test", "pnpm test"],
+    ]);
+    assert.deepEqual(yield* listed, [["Test", "pnpm test"]]);
+    yield* Effect.promise(() => client.close());
+  }),
+);
+
 it.effect(
   "a task a member makes, its description's notes, an agent they archive, and an automation they make, change, run, and delete are the member's own, as the desktop shows them",
   () =>
     Effect.gen(function* () {
-      const { auth, fetch, services } = yield* standing;
+      const { auth, fetch, services } = yield* offering;
       const member = yield* Effect.promise(() => signUp(auth));
 
-      const agentId = yield* Effect.gen(function* () {
+      const { agentId, own } = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         yield* descriptionsIn(own, member.userId, true);
 
-        return yield* openAgentOnOwnTask(member.userId, own);
+        return { agentId: yield* openAgentOnOwnTask(member.userId, own), own };
       }).pipe(Effect.provide(services));
 
       const token = yield* Effect.promise(() =>
@@ -1097,7 +1179,10 @@ it.effect(
 
       const made = decodeMade(
         yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
           name: "Seat billing",
+          repository: null,
+          status: TASK_STATUS.TODO,
           description: "## Problem\n\nSeats drift.",
         }),
       );
@@ -1125,11 +1210,16 @@ it.effect(
         /`comment_on_description`/u,
       );
       assert.match(
-        yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Seat billing", plan: "## Problem" }),
+        yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
+          name: "Seat billing",
+          plan: "## Problem",
+        }),
         /named description, not plan/u,
       );
       assert.match(
         yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
           name: "Seat billing",
           relation: { kind: "blocks", taskId },
         }),
@@ -1139,12 +1229,35 @@ it.effect(
         taskId,
         notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Invoices lag too." }],
       });
-      yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, status: TASK_STATUS.IN_PROGRESS });
-      // A task found by its key is the one made; a blocker of it moved to its sub-task in one call.
-      const found = decodeMade(yield* call(MEMBER_MCP_TOOL.FIND_TASK, { task: made.task.key }));
+      // A key without its workspace is refused; one read in its workspace is the task made, and a blocker of it moved to its sub-task in one call.
+      assert.match(
+        yield* refused(MEMBER_MCP_TOOL.UPDATE_TASK, {
+          taskId: made.task.key,
+          status: TASK_STATUS.IN_PROGRESS,
+        }),
+        /name that workspace in workspace/u,
+      );
+      yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, {
+        workspace: own,
+        taskId: made.task.key,
+        status: TASK_STATUS.IN_PROGRESS,
+      });
+      assert.match(
+        yield* refused(MEMBER_MCP_TOOL.READ_TASK, { taskId: made.task.key }),
+        /name that workspace in workspace/u,
+      );
+
+      const found = decodeMade(
+        yield* call(MEMBER_MCP_TOOL.READ_TASK, { workspace: own, taskId: made.task.key }),
+      );
 
       const blockerId = decodeMade(
-        yield* call(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Invoice lag" }),
+        yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
+          name: "Invoice lag",
+          repository: null,
+          status: TASK_STATUS.TODO,
+        }),
       ).task.id;
 
       yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, blockedBy: { add: [blockerId] } });
@@ -1155,13 +1268,21 @@ it.effect(
         to: TASK_RELATION_KIND.SUB_TASK,
       });
       const related = decodeRelated(yield* call(MEMBER_MCP_TOOL.READ_TASK, { taskId }));
-      yield* call(MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true, reason: "Done." });
+      yield* call(MEMBER_MCP_TOOL.ARCHIVE_AGENT, { agentId, reason: "Done." });
 
       const automationId = decodeAutomation(
         yield* call(MEMBER_MCP_TOOL.CREATE_AUTOMATION, {
+          workspace: own,
           name: "Weekly sweep",
           prompt: "Sweep.",
           trigger: WEEKLY,
+          repositories: [],
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          scope: "personal",
+          archiveSuccessful: false,
+          slackDelivery: false,
+          runsOn: { machine: "vercel" },
         }),
       ).automation.id;
 
@@ -1290,7 +1411,7 @@ it.effect(
           decodeAnswer(
             await client.callTool({
               name: MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION,
-              arguments: { agentId, change },
+              arguments: { agentId, number: PUBLISHED.number, change },
             }),
           ),
         );
@@ -1346,7 +1467,7 @@ it.effect(
 );
 
 it.effect(
-  "an outside agent reads a pull request by its repository and number or by the agent that opened it, its files with the member's viewed marks, and marks them on the member's own GitHub sign-in",
+  "an outside agent reads a pull request by its repository and number or by the agent that opened it and its number, refusing one that names no number, its files with the member's viewed marks, and marks them on the member's own GitHub sign-in",
   () =>
     Effect.gen(function* () {
       const calls: GraphqlCall[] = [];
@@ -1420,7 +1541,7 @@ it.effect(
         });
 
         const published = yield* openTaskAgent(member.userId, workspaceId, task.id);
-        // One agent pushed the branch its pull request stands open from; the other has opened none yet.
+        // The agent pushed the branch its pull request stands open from.
         yield* Database.use((db) =>
           db
             .update(agentTable)
@@ -1428,10 +1549,7 @@ it.effect(
             .where(eq(agentTable.id, published)),
         );
 
-        return {
-          published,
-          unpublished: yield* openTaskAgent(member.userId, workspaceId, task.id),
-        };
+        return { published, workspaceId };
       }).pipe(Effect.provide(services));
 
       const token = yield* Effect.promise(() =>
@@ -1443,7 +1561,12 @@ it.effect(
       );
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
-      const named = { repository: RELAY_FULL_NAME, number: PUBLISHED.number };
+
+      const named = {
+        workspace: agents.workspaceId,
+        repository: RELAY_FULL_NAME,
+        number: PUBLISHED.number,
+      };
 
       const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
@@ -1459,18 +1582,23 @@ it.effect(
 
       const agentChanges = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
         agentId: agents.published,
+        number: PUBLISHED.number,
         part: "changes",
       });
 
       const agentMarked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
         agentId: agents.published,
+        number: PUBLISHED.number,
         paths: ["src/invite.ts"],
         viewed: false,
       });
 
-      const unopened = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
-        agentId: agents.unpublished,
+      const unnumbered = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
+        agentId: agents.published,
       });
+
+      const { workspace: _workspace, ...unplaced } = named;
+      const placeless = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, unplaced);
 
       yield* Effect.promise(() => client.close());
 
@@ -1488,8 +1616,13 @@ it.effect(
         );
       }
 
-      assert.equal(unopened.isError, true);
-      assert.match(unopened.content[0].text, /opened no pull request yet/u);
+      // A repository's pull request is never read in a workspace guessed for it: one naming none is refused, naming workspace.
+      assert.equal(placeless.isError, true);
+      assert.match(placeless.content[0].text, /pass workspace by the slug list_workspaces/u);
+
+      // No pull request is read in the number's place: a call naming none is refused, naming it.
+      assert.equal(unnumbered.isError, true);
+      assert.match(unnumbered.content[0].text, /number/u);
       // A number the repository holds no pull request under is refused as the hosted read refuses it.
       assert.equal(missing.isError, true);
       assert.match(missing.content[0].text, /no pull request of that number/u);
@@ -1518,47 +1651,27 @@ it.effect(
 );
 
 it.layer(getTestDB())("a member's start_agent on no task", (it) => {
-  it.effect(
-    "starts the agent on a task made for it, untitled for the agent's title to name, assigned to the member, in progress with a blank description, in the repository named, and refuses a branch with no repository",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-        const { owner, mcpFetch } = yield* openTask({ agentSessions });
-        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+  it.effect("is refused naming taskId, and starts nothing", () =>
+    Effect.gen(function* () {
+      const agentSessions = fakeAgentSessions();
+      const { owner, mcpFetch } = yield* openTask({ agentSessions });
+      const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
-        const call = (args: ToolArguments) =>
-          Effect.promise(async () =>
-            decodeAnswer(
-              await client.callTool({ name: MEMBER_MCP_TOOL.START_AGENT, arguments: args }),
-            ),
-          );
+      const refused = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.START_AGENT,
+            arguments: { prompt: "Sweep the stale invitations.", repository: RELAY_FULL_NAME },
+          }),
+        ),
+      );
 
-        const prompt = "Sweep the stale invitations.";
-        const started = yield* call({ prompt, repository: RELAY_FULL_NAME });
-        const bare = yield* call({ prompt, repository: null, branch: "release" });
-        yield* Effect.promise(() => client.close());
+      yield* Effect.promise(() => client.close());
 
-        assert.notEqual(started.isError, true, started.content[0].text);
-        const agentId: unknown = JSON.parse(started.content[0].text).agent?.id;
-        assert.ok(Predicate.isString(agentId), started.content[0].text);
-        const agent = Option.getOrThrow(yield* readAgent(owner, agentId));
-        assert.ok(agent.prompt?.includes(prompt), "the prompt is handed to the agent");
-        const made = Option.getOrThrow(yield* readTask(owner, agent.taskId));
-        assert.deepEqual(
-          [
-            made.task.name,
-            made.task.assignee?.userId,
-            made.task.status,
-            made.task.repository,
-            made.text,
-          ],
-          [UNTITLED_TASK_NAME, owner, TASK_STATUS.IN_PROGRESS, RELAY_FULL_NAME, ""],
-        );
-        assert.ok(
-          bare.content[0].text.includes(START_AGENT_REFUSAL.BRANCH_NO_REPOSITORY),
-          bare.content[0].text,
-        );
-      }),
+      assert.equal(refused.isError, true, refused.content[0].text);
+      assert.ok(refused.content[0].text.includes("taskId"), refused.content[0].text);
+      assert.equal(agentSessions.opened.length, 0);
+    }),
   );
 });
 
@@ -1596,13 +1709,18 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
             decodeAnswer(await client.callTool({ name, arguments: args })),
           );
 
-        const read = yield* call(MEMBER_MCP_TOOL.READ_INBOX, {});
+        const read = yield* call(MEMBER_MCP_TOOL.READ_INBOX, { workspace: task.workspaceId });
+
+        const unpicked = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
+          threadId: posted.success.id,
+          askId,
+          answer: { reply: INBOX_REPLY.CHOSE },
+        });
 
         const answered = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
           threadId: posted.success.id,
           askId,
-          reply: INBOX_REPLY.CHOSE,
-          choices: ["30 days"],
+          answer: { reply: INBOX_REPLY.CHOSE, choices: ["30 days"] },
         });
 
         yield* Effect.promise(() => client.close());
@@ -1618,6 +1736,9 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           ],
           [posted.success.id, askId, true, ["7 days", "30 days"]],
         );
+        // A reply left without its field is refused naming what each reply takes, so one retry fixes it.
+        assert.equal(unpicked.isError, true);
+        assert.match(unpicked.content[0].text, /answer\.reply "chose" takes choices/u);
         assert.notEqual(answered.isError, true, answered.content[0].text);
         assert.equal(
           decodeWritten(JSON.parse(answered.content[0].text)).thread.status,
@@ -1685,21 +1806,14 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
   );
 
   it.effect(
-    "an outside agent rewinds the member's agent to just before a line by the lineId read_agent names, dropping it, then deletes the agent for good",
+    "an outside agent rewinds the member's agent to just before a line by the lineId read_agent_transcript names, dropping it, then deletes the agent for good",
     () =>
       Effect.gen(function* () {
-        const { owner, task, ask, mcpFetch } = yield* openTask({});
-        const { agent, target } = yield* startedAgent(owner, task.id, ask);
-        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-        yield* writer.writeAwaitingLine(
-          target,
-          {
-            text: "Why does it stall?",
-            clientKey: randomUUID(),
-            sender: { kind: MESSAGE_SENDER.MEMBER, userId: owner },
-          },
-          Effect.succeed(true),
-        );
+        // The Start's line opened a turn that has ended, so nothing of the agent runs.
+        const { owner, agent, mcpFetch } = yield* messagedAgent(fakeAgentSessions(), {
+          running: false,
+        });
+
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
         const call = (name: string, args: ToolArguments) =>
@@ -1711,12 +1825,12 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           decodeTranscript(JSON.parse(read.content[0].text)).transcript;
 
         const before = transcript(
-          yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
+          yield* call(MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: agent.id, from: "start" }),
         );
 
         const line = before.at(-1);
         assert.ok(line?.lineId !== undefined, "a line sent to the agent names its lineId");
-        assert.match(line.text, /Why does it stall\?/u);
+        assert.match(line.text, /Teammate invitations/u);
 
         const rewound = yield* call(MEMBER_MCP_TOOL.REWIND_AGENT, {
           agentId: agent.id,
@@ -1726,7 +1840,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         assert.notEqual(rewound.isError, true, rewound.content[0].text);
 
         const after = transcript(
-          yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
+          yield* call(MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: agent.id, from: "start" }),
         );
 
         const deleted = yield* call(MEMBER_MCP_TOOL.DELETE_AGENT, { agentId: agent.id });
@@ -1737,6 +1851,130 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         assert.notEqual(deleted.isError, true, deleted.content[0].text);
         assert.ok(Option.isNone(yield* readAgent(owner, agent.id)), "the agent is deleted");
         assert.match(gone.content[0].text, /rejected/u);
+      }),
+  );
+
+  it.effect(
+    "an outside agent's reply to a thread of an agent whose task is done is refused, naming update_task, and nothing reaches the agent",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, task, ask, mcpFetch } = yield* openTask({ agentSessions });
+        const { agent } = yield* startedAgent(owner, task.id, ask);
+
+        const notice = yield* postInboxThread(
+          { userId: owner, taskId: task.id, agentId: agent.id },
+          { key: "deploy-done", title: "Deployed to staging", body: "Staging runs the new build." },
+        );
+
+        assert.ok(Result.isSuccess(notice));
+        yield* updateTask(owner, task.id, { status: TASK_STATUS.DONE });
+        const before = agentSessions.sent.length;
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
+        const replied = yield* Effect.promise(async () =>
+          decodeAnswer(
+            await client.callTool({
+              name: MEMBER_MCP_TOOL.REPLY_TO_THREAD,
+              arguments: { threadId: notice.success.id, text: "Ship it to production too." },
+            }),
+          ),
+        );
+
+        yield* Effect.promise(() => client.close());
+
+        assert.equal(replied.isError, true, replied.content[0].text);
+        assert.ok(
+          replied.content[0].text.includes(`${MEMBER_MCP_TOOL.UPDATE_TASK} (taskId ${task.id}`),
+          replied.content[0].text,
+        );
+        assert.equal(agentSessions.sent.length, before);
+        const after = Option.getOrThrow(yield* readTask(owner, task.id));
+        assert.equal(after.task.status, TASK_STATUS.DONE);
+      }),
+  );
+
+  it.effect(
+    "an outside agent's reply to a thread of an archived agent is refused, naming unarchive_agent, and leaves the agent archived and untold",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, task, ask, mcpFetch } = yield* openTask({ agentSessions });
+        const { agent } = yield* startedAgent(owner, task.id, ask);
+
+        const notice = yield* postInboxThread(
+          { userId: owner, taskId: task.id, agentId: agent.id },
+          { key: "deploy-done", title: "Deployed to staging", body: "Staging runs the new build." },
+        );
+
+        assert.ok(Result.isSuccess(notice));
+        yield* archiveAgent(owner, agent.id, true);
+        const before = agentSessions.sent.length;
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
+        const replied = yield* Effect.promise(async () =>
+          decodeAnswer(
+            await client.callTool({
+              name: MEMBER_MCP_TOOL.REPLY_TO_THREAD,
+              arguments: { threadId: notice.success.id, text: "Ship it to production too." },
+            }),
+          ),
+        );
+
+        yield* Effect.promise(() => client.close());
+
+        assert.equal(replied.isError, true, replied.content[0].text);
+        assert.ok(
+          replied.content[0].text.includes(
+            `${MEMBER_MCP_TOOL.UNARCHIVE_AGENT} (agentId ${agent.id}`,
+          ),
+          replied.content[0].text,
+        );
+        assert.equal(agentSessions.sent.length, before);
+        assert.notEqual(Option.getOrThrow(yield* readAgent(owner, agent.id)).archivedAt, null);
+      }),
+  );
+
+  it.effect(
+    "an outside agent's rewind_agent, delete_agent, and delete_task each refuse the member's agent while its turn runs, naming stop_agent, and stop nothing",
+    () =>
+      Effect.gen(function* () {
+        const { owner, agent, task, agentSessions, mcpFetch } = yield* messagedAgent(
+          fakeAgentSessions(),
+          { running: true },
+        );
+
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
+        const call = (name: string, args: ToolArguments) =>
+          Effect.promise(async () =>
+            decodeAnswer(await client.callTool({ name, arguments: args })),
+          );
+
+        const read = yield* call(MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, {
+          agentId: agent.id,
+          from: "start",
+        });
+
+        const lineId = decodeTranscript(JSON.parse(read.content[0].text)).transcript.at(-1)?.lineId;
+        assert.ok(lineId !== undefined, "the Start's line names its lineId");
+
+        const refused = [
+          yield* call(MEMBER_MCP_TOOL.REWIND_AGENT, { agentId: agent.id, lineId }),
+          yield* call(MEMBER_MCP_TOOL.DELETE_AGENT, { agentId: agent.id }),
+          yield* call(MEMBER_MCP_TOOL.DELETE_TASK, { taskId: task.id }),
+        ];
+
+        yield* Effect.promise(() => client.close());
+
+        for (const answer of refused) {
+          assert.equal(answer.isError, true, answer.content[0].text);
+          assert.ok(answer.content[0].text.includes(MEMBER_MCP_TOOL.STOP_AGENT));
+        }
+
+        assert.deepEqual(agentSessions.canceled, [], "no turn was stopped");
+        assert.ok(Option.isSome(yield* readAgent(owner, agent.id)), "the agent stands");
+        assert.ok(Option.isSome(yield* readTask(owner, task.id)), "the task stands");
       }),
   );
 
@@ -1863,7 +2101,13 @@ it.effect(
       );
 
       yield* call(MEMBER_MCP_TOOL.REPLY_TO_COMMENT, { taskId, thread, words: "Invoices too." });
-      const open = decodeThreads(yield* call(MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }));
+
+      const open = decodeThreads(
+        yield* call(MEMBER_MCP_TOOL.READ_COMMENTS, {
+          taskId,
+          status: DESCRIPTION_COMMENT_STATUS.OPEN,
+        }),
+      );
 
       const resolved = decodeThread(
         yield* call(MEMBER_MCP_TOOL.UPDATE_COMMENT, { taskId, thread, resolved: true }),
@@ -2073,6 +2317,67 @@ it.effect(
 );
 
 it.effect(
+  "update_preferences refuses a model of two context windows named without one, naming both, and a model of one named with one",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* memberMcpStanding({
+        catalog: [
+          {
+            id: "anthropic/claude-opus-5.5",
+            name: "Claude Opus 5.5",
+            provider: MODEL_PROVIDER.ANTHROPIC,
+            efforts: ["high"],
+            contextWindows: { standardTokens: 200_000, longTokens: 1_000_000 },
+          },
+          {
+            id: "anthropic/claude-haiku-5.5",
+            name: "Claude Haiku 5.5",
+            provider: MODEL_PROVIDER.ANTHROPIC,
+            efforts: ["high"],
+          },
+        ],
+      });
+
+      const member = yield* Effect.promise(() => signUp(auth));
+
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
+      const call = (args: ToolArguments) =>
+        Effect.promise(async () => {
+          const answer = decodeAnswer(
+            await client.callTool({ name: MEMBER_MCP_TOOL.UPDATE_PREFERENCES, arguments: args }),
+          );
+
+          return { refused: answer.isError === true, text: answer.content[0].text };
+        });
+
+      const unnamed = yield* call({ model: "anthropic/claude-opus-5.5", effort: "high" });
+
+      const named = yield* call({
+        model: "anthropic/claude-haiku-5.5",
+        effort: "high",
+        contextWindow: "standard",
+      });
+
+      yield* Effect.promise(() => client.close());
+
+      assert.equal(unnamed.refused, true);
+      assert.match(unnamed.text, /contextWindow is required/u);
+      assert.match(unnamed.text, /standard \(200000 tokens\) or long \(1000000 tokens\)/u);
+      assert.equal(named.refused, true);
+      assert.match(named.text, /takes no contextWindow/u);
+    }),
+);
+
+it.effect(
   "an admin acting through the server reads the workspace's members and sets its photo but is refused its slug, which the owner changes",
   () =>
     Effect.gen(function* () {
@@ -2108,17 +2413,22 @@ it.effect(
           return answer;
         });
 
-      const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {});
+      const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {
+        workspace: workspaceId,
+      });
 
       const refused = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        workspace: workspaceId,
         slug: "seats",
       });
 
       const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        workspace: workspaceId,
         slug: "seats",
       });
 
       const photo = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO, {
+        workspace: "seats",
         photo: "data:image/png;base64,iVBORw0KGgo=",
       });
 
@@ -2151,9 +2461,12 @@ it.effect(
       const { auth, fetch, services } = yield* standing;
       const owner = yield* Effect.promise(() => signUp(auth));
       const admin = yield* Effect.promise(() => signUp(auth));
-      yield* Effect.gen(function* () {
+
+      const workspace = yield* Effect.gen(function* () {
         const workspaceId = yield* openWorkspace(owner.userId);
         yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+
+        return workspaceId;
       }).pipe(Effect.provide(services));
 
       const callAs = (cookie: string, name: string, args: ToolArguments) =>
@@ -2184,28 +2497,36 @@ it.effect(
         ]);
 
       const invited = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE, {
+        workspace,
         email: "Newcomer@Example.com",
         role: WORKSPACE_ROLE.MEMBER,
       });
 
       const invitation = JSON.parse(invited.content[0].text).invitation;
-      const listed = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS, {});
+
+      const listed = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS, {
+        workspace,
+      });
 
       const canceled = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION, {
+        workspace,
         invitationId: invitation.id,
       });
 
       const unranked = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        workspace,
         userId: owner.userId,
         role: WORKSPACE_ROLE.MEMBER,
       });
 
       const demoted = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        workspace,
         userId: admin.userId,
         role: WORKSPACE_ROLE.MEMBER,
       });
 
       const removed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER, {
+        workspace,
         userId: admin.userId,
       });
 
@@ -2258,7 +2579,10 @@ it.effect(
         yield* Effect.promise(() =>
           client.callTool({
             name: MEMBER_MCP_TOOL.CONNECT_INTEGRATION,
-            arguments: { provider: INTEGRATION_PROVIDER.NOTION },
+            arguments: {
+              provider: INTEGRATION_PROVIDER.NOTION,
+              account: { connection: INTEGRATION_PROVIDER.NOTION },
+            },
           }),
         ),
       );
@@ -2280,7 +2604,7 @@ it.effect(
 );
 
 it.effect(
-  "install_skill refuses a GitHub install without the commit its preview pinned, before reading the source",
+  "install_skill refuses a GitHub source installed as text, naming the kind and the commit it takes, before reading the source",
   () =>
     Effect.gen(function* () {
       const { auth, fetch } = yield* standing;
@@ -2301,9 +2625,10 @@ it.effect(
           client.callTool({
             name: MEMBER_MCP_TOOL.INSTALL_SKILL,
             arguments: {
+              workspace: "acme",
               source: "anthropics/skills",
               scope: INSTALLED_SKILL_SCOPE.PERSONAL,
-              skills: ["pdf"],
+              install: { kind: SKILL_PASTE_KIND.TEXT, name: "pdf", summary: "Read PDFs." },
             },
           }),
         ),
@@ -2312,7 +2637,10 @@ it.effect(
       yield* Effect.promise(() => client.close());
 
       assert.equal(answer.isError, true);
-      assert.match(answer.content[0].text, /call it first/u);
+      assert.match(
+        answer.content[0].text,
+        /install\.kind is source, with install\.skills and install\.sha/u,
+      );
     }),
 );
 
@@ -2323,6 +2651,36 @@ const decodeVariableNames = Schema.decodeUnknownSync(
 
 /** The server standing with a ring a set variable is sealed under, as a deployment's. */
 const keyedStanding = memberMcpStanding({ keyRing: AGENT_KEY_RING });
+
+it.effect(
+  "list_models names the providers a member may generate chapters on, by the API keys they saved alone",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* keyedStanding;
+      const member = yield* Effect.promise(() => signUp(auth));
+
+      yield* connectAgentApiKeys(member.userId, {
+        providers: [PROVIDER_KEY_PROVIDER.OPENAI],
+      }).pipe(Effect.provide(services));
+
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
+      const answer = yield* Effect.promise(async () =>
+        decodeAnswer(await client.callTool({ name: MEMBER_MCP_TOOL.LIST_MODELS, arguments: {} })),
+      );
+
+      yield* Effect.promise(() => client.close());
+      assert.deepEqual(JSON.parse(answer.content[0].text).chaptersProviders, ["openai"]);
+    }),
+);
 
 it.effect(
   "an owner sets and deletes a workspace environment variable its agents are handed, no answer carrying its value; a plain member reads its name and is refused a set",

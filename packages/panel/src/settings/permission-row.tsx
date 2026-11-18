@@ -3,23 +3,34 @@ import {
   BUTTON_VARIANT,
   Button,
   ExternalIcon,
+  MoreButton,
+  moreLabel,
+  SETTINGS_ROW_STATE,
   SettingsRow,
+  SettingsRowActSlot,
   SettingsRowMark,
-  SettingsRowValue,
+  type SettingsRowState,
+  SettingsRowStateLine,
+  SettingsSavedMark,
+  useMenu,
+  VisuallyHidden,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
+import { ActionMenu } from "../desktop/action-menu.js";
 
 /**
  * permission-row.tsx -- one thing macOS lets the app do, as This Mac's Permissions lists each: notifications, the microphone, Screen Recording, and Accessibility alike.
  *
  * Every permission reads the same way: its glyph, its name, and under it
- * what the app needs it for, whatever macOS answered. Where it stands is
- * said at the row's end, a word before the one press that changes it:
- * Allow… where macOS has not been asked, which raises its own prompt or its
- * pane, or Open System Settings where it has answered, the one place its
- * answer changes, allowed or not. One whose standing cannot be read says
- * so, and offers nothing.
+ * what the app needs it for. One that is allowed says nothing more and ends
+ * in a green ✓ and a ⋯ holding Open System Settings, the one place its answer changes.
+ * One that is not says so first, "Not allowed." in the attention tint before
+ * its purpose, and ends in the one press that fixes it: Allow… where macOS
+ * has not been asked, which raises its own prompt or its pane, or Open
+ * System Settings where it has answered no. One whose standing cannot be
+ * read says so, and offers nothing. No standing stands in a column of its
+ * own at the row's end.
  */
 
 /** Where a permission stands, as its row reads it. */
@@ -36,13 +47,44 @@ export const PERMISSION_STANDING = {
 
 export type PermissionStanding = (typeof PERMISSION_STANDING)[keyof typeof PERMISSION_STANDING];
 
-/** The word each standing is said by at the row's end. */
-const STANDING_WORDS = {
-  [PERMISSION_STANDING.ALLOWED]: "Allowed",
-  [PERMISSION_STANDING.ASK]: "Not allowed",
-  [PERMISSION_STANDING.DENIED]: "Not allowed",
-  [PERMISSION_STANDING.UNKNOWN]: "Unknown",
-} as const satisfies Record<PermissionStanding, string>;
+/** What a standing that is not allowed says before the purpose, and the tint it says it in; an allowed one says nothing. */
+const STANDING_LINE = {
+  [PERMISSION_STANDING.ALLOWED]: undefined,
+  [PERMISSION_STANDING.ASK]: { words: "Not allowed.", state: SETTINGS_ROW_STATE.ATTENTION },
+  [PERMISSION_STANDING.DENIED]: { words: "Not allowed.", state: SETTINGS_ROW_STATE.ATTENTION },
+  [PERMISSION_STANDING.UNKNOWN]: { words: "Unknown.", state: SETTINGS_ROW_STATE.PLAIN },
+} as const satisfies Record<
+  PermissionStanding,
+  { words: string; state: SettingsRowState } | undefined
+>;
+
+/** An allowed permission's ⋯, holding Open System Settings. */
+function PermissionMenu({
+  thing,
+  onOpenSettings,
+}: {
+  thing: string;
+  onOpenSettings: () => void;
+}): React.JSX.Element {
+  const menu = useMenu(true);
+
+  return (
+    <>
+      <MoreButton thing={thing} {...menu.trigger()} />
+      {menu.drawn === undefined ? null : (
+        <ActionMenu
+          label={moreLabel(thing)}
+          menu={menu.drawn}
+          groups={[
+            [{ label: "Open System Settings", icon: <ExternalIcon />, onSelect: onOpenSettings }],
+          ]}
+          replayUnmasked
+          onClose={menu.close}
+        />
+      )}
+    </>
+  );
+}
 
 /** Allow…, resting until macOS's prompt or pane answers the ask. */
 function AllowButton({ onAllow }: { onAllow: () => Promise<void> | void }): React.JSX.Element {
@@ -70,7 +112,19 @@ function PermissionPress({
   onAllow: (() => Promise<void> | void) | undefined;
   onOpenSettings: (() => void) | undefined;
 }): React.JSX.Element | null {
-  if (standing === PERMISSION_STANDING.UNKNOWN) return null;
+  if (standing === PERMISSION_STANDING.UNKNOWN) {
+    return null;
+  }
+
+  // Note that the ✓ names itself "Allowed", because an allowed row's description says nothing of its standing.
+  if (standing === PERMISSION_STANDING.ALLOWED) {
+    return (
+      <>
+        <SettingsSavedMark />
+        <VisuallyHidden>Allowed</VisuallyHidden>
+      </>
+    );
+  }
 
   if (standing === PERMISSION_STANDING.ASK && onAllow !== undefined) {
     return <AllowButton onAllow={onAllow} />;
@@ -108,18 +162,33 @@ export function PermissionRow({
   /** Opens its pane of System Settings. */
   onOpenSettings?: (() => void) | undefined;
 }): React.JSX.Element {
+  const line = STANDING_LINE[standing];
+  const menued = standing === PERMISSION_STANDING.ALLOWED && onOpenSettings !== undefined;
+
   const row = (
     <SettingsRow
       leading={<SettingsRowMark>{icon}</SettingsRowMark>}
       label={label}
-      description={purpose}
+      description={
+        line === undefined ? (
+          purpose
+        ) : (
+          <>
+            <SettingsRowStateLine state={line.state}>{line.words}</SettingsRowStateLine> {purpose}
+          </>
+        )
+      }
       error={error}
+      end={() =>
+        menued ? (
+          <PermissionMenu thing={label} onOpenSettings={onOpenSettings} />
+        ) : (
+          <SettingsRowActSlot />
+        )
+      }
     >
       {() => (
-        <>
-          <SettingsRowValue>{STANDING_WORDS[standing]}</SettingsRowValue>
-          <PermissionPress standing={standing} onAllow={onAllow} onOpenSettings={onOpenSettings} />
-        </>
+        <PermissionPress standing={standing} onAllow={onAllow} onOpenSettings={onOpenSettings} />
       )}
     </SettingsRow>
   );

@@ -1,6 +1,11 @@
 import { Schema as EffectSchema } from "effect";
 import { agentStatusAt, type StatusTurn, statusClockEdge } from "./agent-status.js";
-import { AGENT_STATUS, agentFailureSchema } from "./agent-wire.js";
+import {
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentRunsOnRequest,
+  agentFailureSchema,
+} from "./agent-wire.js";
 import {
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -88,7 +93,8 @@ const automationLiveRowSchema = EffectSchema.Struct({
   enabled: EffectSchema.Boolean,
   trigger: automationTriggerSchema,
   action: automationActionSchema,
-  guards: automationGuardsSchema,
+  /** The limits it once ran under, which nothing reads; a service still sends them for the builds before it that require them. */
+  guards: EffectSchema.optionalKey(automationGuardsSchema),
   nextRunAt: EffectSchema.NullOr(countedNumber),
   organizationId: EffectSchema.NullOr(EffectSchema.String),
   scope: automationScopeSchema,
@@ -101,6 +107,9 @@ const automationLiveRowSchema = EffectSchema.Struct({
   slackDelivery: EffectSchema.Boolean,
   /** The suggestion it was made from, as any text, since a row may hold a preset this release does not know. */
   preset: EffectSchema.NullOr(EffectSchema.String),
+  /** The machine its runs start on, as any text, and a device's id beside it; absent from a service before them. */
+  runsOnMachine: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  runsOnDeviceId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   createdAt: countedNumber,
   mine: EffectSchema.Boolean,
   runId: EffectSchema.NullOr(EffectSchema.String),
@@ -296,6 +305,24 @@ export function withWebhookUrl(
   return { ...automation, webhookUrl: `${serviceBaseUrl}${automationWebhookPath(automation.id)}` };
 }
 
+/** The machine a row names, as the held list answers it: null where it names none, or one this release does not know. */
+function runsOnOfRow(row: {
+  readonly runsOnMachine?: string | null;
+  readonly runsOnDeviceId?: string | null;
+}): AgentRunsOnRequest | null {
+  if (row.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
+
+  if (
+    row.runsOnMachine === AGENT_MACHINE.DEVICE &&
+    row.runsOnDeviceId !== null &&
+    row.runsOnDeviceId !== undefined
+  ) {
+    return { machine: AGENT_MACHINE.DEVICE, deviceId: row.runsOnDeviceId };
+  }
+
+  return null;
+}
+
 /**
  * A workspace's automations as the held list answers them through a client
  * of the service at `serviceBaseUrl`, as the live rows stand at `now`:
@@ -317,7 +344,7 @@ export function automationsOfLiveRows(
       pausedReason: null,
       trigger: row.trigger,
       action: row.action,
-      guards: row.guards,
+      ...(row.guards === undefined ? undefined : { guards: row.guards }),
       nextRunAt: row.nextRunAt,
       lastRun: lastRunOf(row, now),
       createdAt: row.createdAt,
@@ -333,6 +360,7 @@ export function automationsOfLiveRows(
       archiveSuccessful: row.archiveSuccessful,
       slackDelivery: row.slackDelivery,
       preset: row.preset,
+      runsOn: runsOnOfRow(row),
       mine: row.mine,
       creatorId: row.userId,
     }),

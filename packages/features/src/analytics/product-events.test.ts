@@ -5,7 +5,9 @@ import {
   PRODUCT_EVENT_PROPERTY,
   PRODUCT_EXPERIMENT,
   PRODUCT_EXPERIMENT_SCOPE,
+  PRODUCT_REPLY_KIND,
   PRODUCT_SETTING_VALUE,
+  productDrawnMilliseconds,
   productEventBuildFromWire,
   productEventFromWire,
   productLaunchSeconds,
@@ -163,6 +165,64 @@ test("a launch travels its time to the first rows on a rung, never as the raw ti
       name: PRODUCT_EVENT.APP_READY,
       at: AT,
       properties: { [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 6.4 },
+    }),
+    undefined,
+  );
+});
+
+test("a launch may add when its host stood, which rows it first showed and its build number, each read strictly", () => {
+  const phases = {
+    [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 8,
+    [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: 1,
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52",
+    [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: "feed",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({ name: PRODUCT_EVENT.APP_READY, at: AT, properties: phases }),
+    { name: PRODUCT_EVENT.APP_READY, at: AT, properties: phases },
+  );
+  // A build number is digits alone, so a word sent in its place refuses the event rather than travel.
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_READY,
+      at: AT,
+      properties: { ...phases, [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52 beta" },
+    }),
+    undefined,
+  );
+});
+
+test("a reply's wait to stand in its thread travels on a rung, with what it carried, never its words or the raw time", () => {
+  assert.equal(productDrawnMilliseconds(640), 500);
+  assert.equal(productDrawnMilliseconds(40), 0);
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.REPLY_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 500,
+        [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: PRODUCT_REPLY_KIND.PICTURES,
+        words: "Here's the screenshot",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.REPLY_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 500,
+        [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: PRODUCT_REPLY_KIND.PICTURES,
+      },
+    },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.REPLY_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 640,
+        [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: PRODUCT_REPLY_KIND.WORDS,
+      },
     }),
     undefined,
   );

@@ -20,7 +20,7 @@ appId: dev.vespin.ios
 # heard as Settings and its address, opens it.
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 # The account heads the list, pushing to Account.
 - assertVisible: "Ada Lovelace"
@@ -42,7 +42,7 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 # Note that the row is one element, its name and value heard together, and a
 # text matches an element's whole words.
-- assertVisible: "Push notifications, Working"
+- assertVisible: "Notifications, On"
 - assertVisible: "Open iOS notification settings"
 - takeScreenshot: settings-notifications
 # A choice is drawn at once, as the fixture takes it.
@@ -94,7 +94,7 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - tapOn:
     id: "settings-workspace"
@@ -124,7 +124,7 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Agents"

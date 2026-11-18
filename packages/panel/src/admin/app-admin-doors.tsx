@@ -16,8 +16,6 @@
  * (`useOpenLink`), since the window opens no browser tab of its own.
  */
 
-import type { AdminReadParams, AdminRefused } from "@repo/features/admin-wire";
-import { ADMIN_UNANSWERED } from "@repo/features/admin-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { COLLECTION_STATE, ERROR_STATE_PLACEMENT, ErrorState } from "@repo/ui";
@@ -28,8 +26,8 @@ import { useOpenLink } from "../tasks/use-open-link.js";
 import {
   type AdminDoors,
   AdminDoorsProvider,
-  AdminReadRefused,
   type AdminReads,
+  adminReadsAnswering,
 } from "./admin-doors.js";
 import { AdminCollectionPage } from "./chrome/page-header.js";
 
@@ -39,40 +37,11 @@ const GATE_WORDS = {
   FORBIDDEN: "This account does not have the admin role, which is set in the database.",
 } as const;
 
-/**
- * One admin read through the host: the service's answer, the shape the
- * procedure answers, or a refusal by its word; a read that failed for any
- * other reason rejects as the screen's own failure.
- */
-async function readThroughHost<T, Query extends object>(
-  procedure: AdminReadParams["procedure"],
-  query: Query,
-): Promise<T> {
-  // SAFETY: every admin query is a set of optional string parameters (`admin-wire.ts`).
-  const params: AdminReadParams = { procedure, query: query as Record<string, string> };
-  const answered = await askAct(ACT_KIND.ADMIN_READ, params);
-
-  if ("refused" in answered) {
-    if (answered.refused === ADMIN_UNANSWERED) throw new Error("The admin read was not answered.");
-    throw new AdminReadRefused(answered.refused satisfies AdminRefused);
-  }
-
-  // SAFETY: the host passes the service's answer through as it came, which is the shape `admin-answer-wire.ts` names for this procedure.
-  return answered.answer as T;
-}
-
-const APP_ADMIN_READS: AdminReads = {
-  catalog: () => readThroughHost("catalog", {}),
-  metrics: (query) => readThroughHost("metrics", query),
-  cost: (query) => readThroughHost("cost", query),
-  reliability: (query) => readThroughHost("reliability", query),
-  users: (query) => readThroughHost("users", query),
-  user: (query) => readThroughHost("user", query),
-  day: (query) => readThroughHost("day", query),
-  workspaces: (query) => readThroughHost("workspaces", query),
-  workspace: (query) => readThroughHost("workspace", query),
-  favorite: (id, favorite) => askAct(ACT_KIND.ADMIN_FAVORITE, { id, favorite }).catch(() => false),
-};
+/** The service's admin reads through the host, each `admin.read` on the window's act port, and the star `admin.favorite`. */
+const APP_ADMIN_READS: AdminReads = adminReadsAnswering(
+  (params) => askAct(ACT_KIND.ADMIN_READ, params),
+  (id, favorite) => askAct(ACT_KIND.ADMIN_FAVORITE, { id, favorite }).catch(() => false),
+);
 
 /** A refusal standing in the view's place, as the app's centered failure, under the place's own toolbar and sections. */
 function GateRefusal({ words }: { words: string }): React.JSX.Element {

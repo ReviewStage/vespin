@@ -45,9 +45,11 @@ export { SELECT_BOX_PLACE, type SelectBoxPlace } from "../selection/select-box.j
  * mention's chip opens its thread while it shows what it names.
  *
  * Either way the button is the keyboard's way in, so Enter and Space press
- * it and Tab stops on it, and the reader hears it named by its words or
- * `label`. Its ring is drawn on its reach, around the whole card at the
- * card's corner (`CARD_PRESS_CORNER`), and only once the keyboard has moved
+ * it and Tab stops on it, and the reader hears it named by its words,
+ * `label`, or the words elsewhere in the card it names (`labelledBy`). Its
+ * ring is drawn on its reach, around the whole card at the card's corner
+ * (`CARD_PRESS_CORNER`), or a step inside a box flush to its card's edge,
+ * clear of that corner, and only once the keyboard has moved
  * the focus, as every control's is (`data-focus-ring`). Pressed over the
  * card, the reach takes the pressed fill under the pointer.
  *
@@ -92,7 +94,7 @@ const PRESS =
  * clicks instead.
  */
 const REACH =
-  "ui-card-press-reach absolute inset-0 rounded-control outline-offset-[calc(-1*var(--ui-focus-ring-width))] transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit group-data-[corner=menu]/card-press:rounded-menu group-data-[reach=card]/card-press:pointer-events-none group-data-[selected=true]/card-press:bg-fill-selected group-[:active:not(:disabled)]/card-press:bg-fill-pressed";
+  "ui-card-press-reach absolute inset-0 rounded-control outline-offset-[calc(-1*var(--ui-focus-ring-width))] transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit group-data-[corner=menu]/card-press:rounded-menu group-data-[corner=within]/card-press:inset-ui-2 group-data-[corner=within]/card-press:rounded-control-compact group-data-[reach=card]/card-press:pointer-events-none group-data-[selected=true]/card-press:bg-fill-selected group-[:active:not(:disabled)]/card-press:bg-fill-pressed";
 
 /** How a press reaches its card: lying over it, or hearing through it. */
 export const CARD_PRESS_REACH = {
@@ -110,6 +112,8 @@ export const CARD_PRESS_CORNER = {
   CONTROL: "control",
   /** A menu's corner: a card standing on a menu's surface, as a comment thread does. */
   MENU: "menu",
+  /** A step inside the box it covers, clear of the card's corner: a row flush to its card, as a settings row that opens a page is. */
+  WITHIN: "within",
 } as const;
 
 export type CardPressCorner = (typeof CARD_PRESS_CORNER)[keyof typeof CARD_PRESS_CORNER];
@@ -164,6 +168,7 @@ export function CardPress({
   alsoPressedBy,
   corner = CARD_PRESS_CORNER.CONTROL,
   label,
+  labelledBy,
   disabled = false,
   selectKey,
   selectBox,
@@ -189,6 +194,8 @@ export function CardPress({
   corner?: CardPressCorner | undefined;
   /** Its accessible name where its words say less, or say nothing visible. */
   label?: string | undefined;
+  /** The id of words elsewhere in the card that name it, where the card draws its name outside the press, as a settings row its label. */
+  labelledBy?: string | undefined;
   /** Whether its press is unavailable: refused, and out of the tab order. */
   disabled?: boolean | undefined;
   /** What the card is chosen by in a `SelectionRegion`; a press with none is never chosen. */
@@ -258,6 +265,7 @@ export function CardPress({
         data-corner={corner}
         {...{ [CARD_PRESS_ATTRIBUTE]: "" }}
         aria-label={label}
+        aria-labelledby={labelledBy}
         aria-description={chosen ? SELECTION_WORDS.SELECTED : undefined}
         data-selected={chosen ? "true" : undefined}
         {...(choosable ? selectableRow(selectKey) : {})}

@@ -1186,7 +1186,15 @@ test("a post from version 5 is a row naming its thread's title, or its key where
       body: "\nThe plan leaves this open.\n\nI set 7 days, its assumption.",
       ask: {
         type: "decide",
-        options: [{ label: "7 days", detail: "Matches password resets." }, { label: "14 days" }],
+        options: [
+          {
+            label: "7 days",
+            detail: "Matches password resets.",
+            // A page option from before its version was required still reads.
+            media: [{ page: "5f0c6f43-8a54-4c8e-9a43-6b7f3e2d1c0a" }],
+          },
+          { label: "14 days" },
+        ],
         recommended: "7 days",
       },
       waits: true,
@@ -1357,4 +1365,34 @@ test("withdraw_ask is a row naming the thread's key and saying why, opening the 
 
   assert.equal(closed.kind, CALL_KIND.INBOX_CLOSE);
   assert.deepEqual(closed.input, { kind: TOOL_BLOCK.TEXT, text: "Settled." });
+});
+
+test("a Slack message says it sent its words, and one refused says it sent none and shows why", () => {
+  const sent = toolCallView({
+    tool: "send_slack_message",
+    input: { text: "Yes, it counts." },
+    output: { status: "accepted", channelId: "C0001", threadTs: "1700000000.000001" },
+  });
+
+  const refused = toolCallView({
+    tool: "send_slack_message",
+    input: { text: "Yes, it counts." },
+    output: { status: "rejected", reason: "Not sent: no Slack thread speaks for you." },
+  });
+
+  assert.deepEqual(callLine(sent.kind, sent.subject, sent.description), {
+    verb: "Sent on Slack:",
+    subject: "Yes, it counts.",
+    code: false,
+  });
+  assert.deepEqual(callLine(refused.kind, refused.subject, refused.description), {
+    verb: "Didn't send on Slack:",
+    subject: "Yes, it counts.",
+    code: false,
+  });
+  assert.equal(refused.refused, true);
+  assert.deepEqual(refused.output, {
+    kind: TOOL_BLOCK.TEXT,
+    text: "Not sent: no Slack thread speaks for you.",
+  });
 });

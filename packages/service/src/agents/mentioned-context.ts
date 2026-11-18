@@ -34,6 +34,7 @@ import {
 import type { PageLine } from "@repo/features/page-wire";
 import type { Task } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
+import { READ_PAGE_VERSION } from "./agent-tools.js";
 
 /**
  * mentioned-context.ts -- what a coding agent's message mentions that the agent cannot read for itself, as it stood when the message was sent.
@@ -100,10 +101,11 @@ import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wir
  * it. Someone the send did not find among the members, who left or was never
  * in it, is named as not a member.
  *
- * A machine of the workspace is named by its id, which `run_on_mac` and
- * `computer` take as `machine`, and handed as its name and that id, so a
- * call the message asks for goes to it; a mention lets no call through that
- * routing would refuse (`machine-routing.ts`).
+ * A machine of the workspace is handed as its name and id, so the agent
+ * knows which the developer means. Note that it routes nothing: `run_on_mac`
+ * and `computer` go to the agent's pick or its owner's default
+ * (`machine-routing.ts`), so the agent asks for the machine to be picked
+ * where a call lands elsewhere.
  */
 
 export const MENTIONED_BOUNDS = {
@@ -294,7 +296,7 @@ function pageNoteOf(pageId: string, name: string, reads: MentionedReads): string
 
   if (page === undefined) return `The page "${name}": no longer on this task.`;
 
-  return `The developer pointed you at the page "${page.title}" (id \`${page.id}\`, version ${page.version}) shown on this task. Read it as the developer saw it with \`${AGENT_TOOL.READ_PAGE}\`, \`pageId: "${page.id}"\`, and \`version: ${page.version}\`, or leave the version out for its newest. To change it, show it again with \`${AGENT_TOOL.SHOW_PAGE}\` and \`page: "${page.id}"\`, which writes its next version in its place.`;
+  return `The developer pointed you at the page "${page.title}" (id \`${page.id}\`, version ${page.version}) shown on this task. Read it as the developer saw it with \`${AGENT_TOOL.READ_PAGE}\`, \`pageId: "${page.id}"\`, and \`version: ${page.version}\`, or \`version: "${READ_PAGE_VERSION.NEWEST}"\` for its newest. To change it, show it again with \`${AGENT_TOOL.SHOW_PAGE}\` and \`page: "${page.id}"\`, which writes its next version in its place.`;
 }
 
 /** How the agent reads another agent's work: its pull request's diff, else its branch's, by the repository the agent shares with it or names. */
@@ -374,9 +376,12 @@ function personNoteOf(userId: string, name: string, reads: MentionedReads): stri
  * nothing: the Mac still asks the developer about an app not yet allowed.
  */
 function macAppNoteOf({ app, machine }: MacAppMention, name: string): string {
-  const on = machine === undefined ? "" : ` and \`machine: "${machine}"\``;
+  const on =
+    machine === undefined
+      ? ""
+      : ` It is on the machine of id \`${machine}\`: where your call's answer names another, ask the developer to make that one this agent's machine in its composer.`;
 
-  return `The developer pointed you at the app ${name} on their Mac (\`${app}\`) for this message: use \`${AGENT_TOOL.COMPUTER}\` on it with \`app: "${app}"\`${on}, ahead of the other routes its description puts first, for this app alone. Where it is not running, your first \`get_app_state\` opens it behind their windows; their Mac may still ask them to allow it.`;
+  return `The developer pointed you at the app ${name} on their Mac (\`${app}\`) for this message: use \`${AGENT_TOOL.COMPUTER}\` on it with \`app: "${app}"\`, ahead of the other routes its description puts first, for this app alone. Where it is not running, your first \`get_app_state\` opens it behind their windows; their Mac may still ask them to allow it.${on}`;
 }
 
 /** What a mention of the developer's Mac as a whole is handed as: that `computer` is welcome on it for this message, ahead of the routing its description gives, and how to start. */
@@ -384,13 +389,11 @@ const COMPUTER_NOTE = `The developer pointed you at their Mac for this message: 
 
 /**
  * What a mention of a machine of the workspace is handed as: its name and
- * the id `run_on_mac` and `computer` take as `machine`, so a call the
- * message asks for goes there. Note that it makes nothing reachable: a
- * machine whose owner does not let the task's agents use it, or that is
- * away, refuses the call, and the refusal names the machines that can.
+ * id, and that the agent's calls go to its own machine, which a member
+ * picks, so it asks for this one to be picked where a call lands elsewhere.
  */
 function machineNoteOf({ machineId }: MachineMention, name: string): string {
-  return `The developer pointed you at the machine "${name}" (id \`${machineId}\`) for this message: where it asks for a terminal command or an app there, pass \`machine: "${machineId}"\` to \`${AGENT_TOOL.RUN_ON_MAC}\` or \`${AGENT_TOOL.COMPUTER}\`. A machine its owner doesn't let this task's agents use, or that is offline, refuses the call, naming the machines that can take it.`;
+  return `The developer pointed you at the machine "${name}" (id \`${machineId}\`) for this message. \`${AGENT_TOOL.RUN_ON_MAC}\` and \`${AGENT_TOOL.COMPUTER}\` take no machine: they go to this agent's machine, which a member picks in its composer, or else to the default Mac of your task's assignee. Where a call's answer names another machine than "${name}", ask the developer to make "${name}" this agent's machine in its composer, and try again once they have.`;
 }
 
 /** What a mention of a file's lines is handed as: the lines, the commit they were read at, and how to read just those; nothing for a whole file. */

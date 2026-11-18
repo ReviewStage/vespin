@@ -380,7 +380,7 @@ test.each([
       "Simulator",
       PLACE,
     ),
-    note: /`computer` on it with `app: "com\.apple\.iphonesimulator"` and `machine: "6f1c0d2e-studio"`/u,
+    note: /`computer` on it with `app: "com\.apple\.iphonesimulator"`.*on the machine of id `6f1c0d2e-studio`: where your call's answer names another, ask the developer/u,
   },
   {
     mentioned: "their Mac as a whole",
@@ -397,7 +397,7 @@ test.each([
   },
 );
 
-test("a machine is handed the id run_on_mac and computer take, with Computer use on or off", () => {
+test("a machine is handed by its name and id, with how to have it picked, Computer use on or off", () => {
   const link = mentionMarkdown(
     { kind: MENTION_KIND.MACHINE, machineId: "6f1c0d2e-machine" },
     "Ada's Mac mini",
@@ -407,7 +407,7 @@ test("a machine is handed the id run_on_mac and computer take, with Computer use
   const words = `Run the tests on ${link}.`;
 
   const note =
-    /pointed you at the machine "Ada's Mac mini" \(id `6f1c0d2e-machine`\).*pass `machine: "6f1c0d2e-machine"` to `run_on_mac` or `computer`/u;
+    /pointed you at the machine "Ada's Mac mini" \(id `6f1c0d2e-machine`\).*take no machine.*ask the developer to make "Ada's Mac mini" this agent's machine/u;
 
   assert.match(mentionedContext(words, TASK) ?? "", note);
   assert.match(mentionedContext(words, TASK, undefined, true, false) ?? "", note);
@@ -554,7 +554,7 @@ test("a page of the plan the words mention is handed by its title, id, and versi
 
   assert.equal(
     part,
-    `${MENTIONED_HEADING}\n\nThe developer pointed you at the page "Invites by week" (id \`${PAGE_ID}\`, version 3) shown on this task. Read it as the developer saw it with \`read_page\`, \`pageId: "${PAGE_ID}"\`, and \`version: 3\`, or leave the version out for its newest. To change it, show it again with \`show_page\` and \`page: "${PAGE_ID}"\`, which writes its next version in its place.`,
+    `${MENTIONED_HEADING}\n\nThe developer pointed you at the page "Invites by week" (id \`${PAGE_ID}\`, version 3) shown on this task. Read it as the developer saw it with \`read_page\`, \`pageId: "${PAGE_ID}"\`, and \`version: 3\`, or \`version: "newest"\` for its newest. To change it, show it again with \`show_page\` and \`page: "${PAGE_ID}"\`, which writes its next version in its place.`,
   );
 });
 

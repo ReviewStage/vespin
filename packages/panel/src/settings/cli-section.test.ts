@@ -13,6 +13,7 @@ import { fakeActPort } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handState, signedInAs, stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
+import { chooseMenuItem } from "../testing/phone-head.js";
 import { CliSection } from "./cli-section.js";
 
 /**
@@ -127,7 +128,7 @@ test("the desktop's Install says why it failed, then the version installed, and 
   assert.ok(!pageText().includes("Installed"), "a failed install never says it landed");
 
   await press("Install");
-  assert.ok(pageText().includes("Installed · v0.3.0"), pageText());
+  assert.ok(pageText().includes("Installed, version 0.3.0"), pageText());
   assert.ok(!pageText().includes("Could not download"), pageText());
   assert.ok(drawn("Reinstall"), "an installed command offers Reinstall");
 });
@@ -154,9 +155,22 @@ test("Sign out everywhere revokes the command's grant and leaves the sign-in to 
   assert.ok(pageText().includes(EMAIL), pageText());
   assert.ok(!pageText().includes("vespin login"), "a signed-in command offers no sign-in");
 
-  await press("Sign out everywhere");
+  assert.equal(
+    drawn("Sign out everywhere"),
+    false,
+    "the sign-out is in the row's ⋯, not beside it",
+  );
+
+  const more = document.querySelector<HTMLButtonElement>(
+    '[aria-label="Command-line sign-in actions"]',
+  );
+
+  assert.ok(more !== null, "the row has a ⋯");
+  act(() => more.click());
+  act(() => chooseMenuItem("Sign out everywhere"));
+  await settle();
   await press("Sign out everywhere", dialog());
   assert.deepEqual(revoked, [VESPIN_CLI.clientId]);
-  assert.equal(drawn("Sign out everywhere"), false, "a signed-out command offers no sign-out");
+  assert.ok(!pageText().includes(EMAIL), "a signed-out command's row is gone");
   assert.ok(pageText().includes("vespin login"), pageText());
 });

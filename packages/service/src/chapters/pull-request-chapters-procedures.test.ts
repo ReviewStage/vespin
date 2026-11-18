@@ -11,9 +11,13 @@ import {
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
-import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
+import { CHAPTERS_MODEL, type ChaptersModelId } from "@repo/features/chapters-model-choice";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
-import { PROVIDER_KEY_PROVIDER, type ProviderKeyProvider } from "@repo/features/provider-key-wire";
+import {
+  type ModelApiProvider,
+  PROVIDER_KEY_PROVIDER,
+  type ProviderKeyProvider,
+} from "@repo/features/provider-key-wire";
 import { CHAPTER_KIND, CHAPTER_RISK } from "@repo/features/pull-request-chapters";
 import {
   PULL_REQUEST_CHAPTERS_FAILURE_KIND,
@@ -26,10 +30,13 @@ import { readEither } from "@repo/wire/effect";
 import { MockLanguageModelV4 } from "ai/test";
 import { Clock, type Context, Effect, Layer, Option, Result } from "effect";
 import { SqlClient } from "effect/sql";
+import type { OwnKey } from "../agents/coder-host/model.js";
+import { instancePublishedCache } from "../agents/coder-host/published.js";
 import { requestUserId } from "../auth/bearer.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
+import { HOSTED_REFUSAL } from "../http/http-effect.js";
 import { hostedFetch } from "../orpc/handler.js";
 import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
 import type { WebServices } from "../runtime.js";
@@ -42,7 +49,10 @@ import {
   type RepositoryScript,
 } from "../testing/github-app-fake.js";
 import { type ChaptersModel, chaptersModelOf } from "./chapters-generator.js";
-import { pullRequestChaptersProcedures } from "./pull-request-chapters-procedures.js";
+import {
+  agentChaptersGenerate,
+  pullRequestChaptersProcedures,
+} from "./pull-request-chapters-procedures.js";
 
 /**
  * pull-request-chapters-procedures.test.ts -- a pull request's chapters read and generated through the hosted oRPC router, over a real dialect.
@@ -286,6 +296,12 @@ const standing = (
     const webServices = services as Context.Context<WebServices>;
     const bearers = new Map([owner, teammate, stranger].map((id) => [`Bearer ${id}`, id]));
 
+    // The scripted model answers under the provider's id production would reach on the member's key, as the store then names it.
+    const chaptersModel = (own: OwnKey, modelId: ChaptersModelId) => ({
+      ...model.chaptersModel,
+      id: chaptersModelOf(own, modelId).id,
+    });
+
     const handle = hostedFetch({
       pullRequestChapters: pullRequestChaptersProcedures({
         resolveUserId: (incoming: Request) =>
@@ -298,13 +314,20 @@ const standing = (
             },
             () => Effect.succeed(Option.none()),
           ),
-        // The scripted model answers under the provider's id production would reach on the member's key, as the store then names it.
-        chaptersModel: (own, modelId) => ({
-          ...model.chaptersModel,
-          id: chaptersModelOf(own, modelId).id,
-        }),
+        chaptersModel,
       }),
     });
+
+    /** A Generate of the pull request as a tool names it, on the provider named. */
+    const generateOn = (as: string, provider: ModelApiProvider) =>
+      agentChaptersGenerate(
+        { chaptersModel },
+        instancePublishedCache(),
+        as,
+        agent,
+        String(NUMBER),
+        provider,
+      ).pipe(Effect.provide(webServices), Effect.result);
 
     const ask = (
       as: string | undefined,
@@ -353,6 +376,7 @@ const standing = (
       model,
       analytics,
       ask,
+      generateOn,
       moveHead: (to: string) => {
         head = to;
       },
@@ -647,6 +671,24 @@ it.layer(getTestDB())("a pull request's chapters", (it) => {
         const chapters = answer.pullRequest?.chapters;
         assert.equal(chapters?.status, PULL_REQUEST_CHAPTERS_STATE.READY);
         assert.equal("model" in chapters ? chapters.model : undefined, "gpt-6-luna");
+      }),
+  );
+
+  it.effect(
+    "a Generate naming its provider runs on that provider's key over the one last picked, and one naming a provider the member saved no key of is refused without falling back to the other",
+    () =>
+      Effect.gen(function* () {
+        const { owner, generateOn } = yield* standing();
+        const named = yield* generateOn(owner, MODEL_PROVIDER.OPENAI);
+        assert.ok(Result.isSuccess(named), "the named provider's key runs it");
+        const chapters = named.success.pullRequest?.chapters;
+        assert.equal(chapters?.status, PULL_REQUEST_CHAPTERS_STATE.READY);
+        assert.equal("model" in chapters ? chapters.model : undefined, "gpt-6-luna");
+
+        const anthropicOnly = yield* standing({ keys: [PROVIDER_KEY_PROVIDER.ANTHROPIC] });
+        const missing = yield* anthropicOnly.generateOn(anthropicOnly.owner, MODEL_PROVIDER.OPENAI);
+        assert.deepEqual(missing, Result.fail(HOSTED_REFUSAL.UNAVAILABLE));
+        assert.equal(anthropicOnly.model.asked(), 0);
       }),
   );
 });

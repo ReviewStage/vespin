@@ -1,4 +1,4 @@
-# settings-mcp.yaml -- Settings › MCP on the Inbox fixture: the apps the account allowed, each by its name and where it signs in from, and Disconnect asked first and canceled.
+# settings-mcp.yaml -- Settings › Vespin MCP & CLI on the Inbox fixture: the apps the account allowed, each by its name and where it signs in from, Disconnect asked first and canceled, and the CLI section's commands to copy.
 #
 # Launched on the host's Inbox fixture, whose account allowed two apps
 # (`@repo/host/fixture-inbox`), so no server is reached.
@@ -13,18 +13,27 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:
-    element: "MCP"
-- tapOn: "MCP"
+    element: "Vespin MCP & CLI"
+- tapOn: "Vespin MCP & CLI"
 - waitForAnimationToEnd
 - assertVisible: "Claude Code"
 - assertVisible: "ChatGPT"
 - takeScreenshot: settings-mcp
+# The CLI section under the apps: the install's command, and the sign-in's
+# while the command has none, each to copy.
+- scrollUntilVisible:
+    element: "Install the vespin command"
+- assertVisible: "npm i -g vespin"
+- takeScreenshot: settings-mcp-cli
 - longPressOn: "ChatGPT"
 - tapOn: "Disconnect"
 - assertVisible: "Disconnect ChatGPT?"
 - waitForAnimationToEnd
 - takeScreenshot: settings-mcp-disconnect
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Disconnect ChatGPT?"

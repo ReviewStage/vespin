@@ -133,18 +133,32 @@ env:
 - takeScreenshot: tasks-rename
 - tapOn: "Cancel"
 - waitForAnimationToEnd
-# Permanently delete asks first, in the panel's words, and Cancel keeps the
+# Permanently delete asks first, in the panel's words, and putting it away keeps the
 # task.
 - runFlow:
     file: subflows/row-menu.yaml
     env:
       ROW: Weekly digest email
       ITEM: Permanently delete
-- tapOn: "Permanently delete"
+# Note that the menu is scrolled until its last act stands whole before the
+# tap, because after the steps above a tap on it as soon as the menu showed
+# it closed the menu with no question, even tapped once and waited on for
+# 5 s, while the same steps scrolled first asked every time (jtdel and
+# jndel, Nov 18). The tap is never retried, because a retry once the menu
+# has closed lands behind the question and puts it away.
+- scrollUntilVisible:
+    element: "Permanently delete"
+    direction: DOWN
+- tapOn:
+    text: "Permanently delete"
+    retryTapIfNoChange: false
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-delete-ask
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Permanently delete task?"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
 # Copy link copies the task's address at once, as Safari's and Notes' do,
@@ -179,7 +193,10 @@ env:
 - assertVisible: "Mark as Done?"
 - assertVisible: "Stop agent"
 - takeScreenshot: tasks-mark-done-ask
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Mark as Done?"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
 # Opening the task reads it, so its dot is gone once the list shows again.
@@ -239,9 +256,14 @@ env:
       - takeScreenshot: task-agent-swipe
       - tapOn: "Created by .*"
       - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Goal"
-    direction: DOWN
+# Note that the task's page is scrolled by drags inside it on an iPad
+# (`BESIDE`), since a scroll at the window's middle lands on a landscape
+# window's list column beside it, and the page never moved.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Goal"
+      BESIDE: ${FLOATING_TABS}
 - takeScreenshot: task-description
 # A page in its Pages opens whole on the app's own page screen, its ⋯
 # offering Open in browser, and back leads to the Overview. A tap off the
@@ -251,43 +273,74 @@ env:
 # that the page is scrolled to in short steps until it stands clear under
 # the task's name in the bar (`scroll-to.yaml`'s `BELOW`), because a scroll
 # that stops once it shows leaves it under the bar, where the tap misses it.
-- runFlow:
-    file: subflows/scroll-to.yaml
-    env:
-      ELEMENT: "Invite funnel"
-      BELOW: "relay › AL-42"
-- tapOn: "Invite funnel"
-- extendedWaitUntil:
-    visible: "Invites sent in the staging workspace.*"
-    timeout: 90000
-- takeScreenshot: task-page
-# Note that a page pushed over an iPad's detail column stands Open in
-# browser in the column's bar itself, and a compact window keeps it in ⋯
-# (`PageScreen`'s `inColumn`), so ⋯ is opened, and closed, only there.
-- runFlow:
-    file: subflows/bar-act.yaml
-    env:
-      ACT: Open in browser
-- assertVisible: "Open in browser"
-- takeScreenshot: task-page-menu
+# Note that an iPad's detail column stands its path in the bar as a title of
+# its own, with no bar named for it in the tree, so there the card is
+# scrolled up and then drawn a step further down instead, clear of the bar.
 - runFlow:
     when:
       true: ${FLOATING_TABS != 'true'}
     commands:
       - runFlow:
-          file: subflows/dismiss.yaml
+          file: subflows/scroll-to.yaml
+          env:
+            ELEMENT: "Invite funnel"
+            BELOW: "relay › AL-42"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-to.yaml
+          env:
+            ELEMENT: "Invite funnel"
+            DIRECTION: UP
+            BESIDE: "true"
+- tapOn: "Invite funnel"
+- extendedWaitUntil:
+    visible: "Invites sent in the staging workspace.*"
+    timeout: 90000
+- takeScreenshot: task-page
+# Note that the page is pushed over the whole window in every window, on
+# the tab's own stack, so its ⋯ holds Open in browser on an iPad too.
+- tapOn: "More"
+- assertVisible: "Open in browser"
+- takeScreenshot: task-page-menu
+- runFlow:
+    file: subflows/dismiss.yaml
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Goal"
-    direction: DOWN
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Goal"
+      BESIDE: ${FLOATING_TABS}
 # Its status chip opens the menu of statuses, the one it stands at checked,
 # and a pick says at once on the chip. Its priority and assignee chips open
 # theirs the same way; a tap off a menu closes it.
-- scrollUntilVisible:
-    element: "Created by .*"
-    direction: UP
+# Note that the page is scrolled up to the status chip itself, and on an
+# iPad a step further, because a scroll up stops once its element peeks in,
+# and there "Created by" peeked in under the floating bar with the chips
+# above it, out of sight.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: "Status, .*"
+            DIRECTION: UP
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-to.yaml
+          env:
+            ELEMENT: "Status, .*"
+            DIRECTION: UP
+            BESIDE: "true"
 - tapOn: "Status, .*"
 - takeScreenshot: task-status-menu
 - tapOn: "Todo"
@@ -323,18 +376,27 @@ env:
 - assertVisible: "Copy link"
 - assertVisible: "Permanently delete"
 - takeScreenshot: task-more-menu
-- tapOn: "Permanently delete"
+# Note that the tap is never retried, because a retry once the menu has
+# closed lands behind the question and puts it away.
+- tapOn:
+    text: "Permanently delete"
+    retryTapIfNoChange: false
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
 - takeScreenshot: task-delete-ask
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Permanently delete task?"
 - waitForAnimationToEnd
 # Sub-tasks' + offers New sub-task and Link existing task; New sub-task
 # opens New task as a sub-task of it, its repository the task's own; Cancel
 # on a sheet with nothing typed closes it.
-- scrollUntilVisible:
-    element: "Add sub-task"
-    direction: DOWN
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Add sub-task"
+      BESIDE: ${FLOATING_TABS}
 - tapOn: "Add sub-task"
 - assertVisible: "Link existing task"
 - takeScreenshot: task-sub-task-add
@@ -360,6 +422,7 @@ env:
     file: subflows/scroll-to.yaml
     env:
       ELEMENT: "Should an owner be able to resend.*"
+      BESIDE: ${FLOATING_TABS}
 - takeScreenshot: task-comments
 - tapOn: "Should an owner be able to resend.*"
 - assertVisible: "Yes: Resend stands beside each expired invite.*"
@@ -378,7 +441,7 @@ env:
     id: "BackButton"
 - waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: on an iPad
-# the app sidebar, the list, and the task side by side.
+# the system's tab sidebar beside the list and the task.
 - runFlow:
     file: subflows/tab.yaml
     env:
@@ -412,31 +475,32 @@ env:
 # first, as the agent page's ⋯ does. The search above leaves "Ledger
 # rounding" found, whose agent finished, so its swipe offers Archive where a
 # working agent's offers Open and Stop. Note that the swipe starts on the
-# row, one element whose center is the row's, and takes 900 ms, as the
-# leading swipe above does, since a quick one reads as a tap and opens the
-# agent. A full swipe only asks, since Archive never runs on one, so the
-# ask is what the flow waits for.
+# row, one element whose center is the row's, and keeps Maestro's own
+# duration, because on the iPhone a 900 ms swipe held long enough to start
+# the row's long-press preview and never opened it (jswipe2 and jswipe3,
+# Nov 18). A full swipe only opens the row, since Archive never runs on one,
+# so the flow taps Archive and waits for its ask.
 - tapOn: "Ledger rounding"
 - extendedWaitUntil:
     visible: "Created by .*"
     timeout: 20000
-- scrollUntilVisible:
-    element: "Fix ledger rounding"
-    direction: DOWN
-    centerElement: true
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Fix ledger rounding"
+      BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - swipe:
     from:
       text: "Fix ledger rounding"
     direction: LEFT
-    duration: 900
 - waitForAnimationToEnd
 - takeScreenshot: task-agent-swipe-resting
-- tapOn:
-    text: "Archive"
-    optional: true
+- tapOn: "Archive"
 - assertVisible: "Archive agent?"
 - takeScreenshot: task-agent-archive-ask
-- tapOn: "Cancel"
-- assertNotVisible: "Archive agent?"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Archive agent?"
 - assertVisible: "Fix ledger rounding"

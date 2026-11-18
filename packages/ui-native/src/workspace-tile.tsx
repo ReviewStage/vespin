@@ -24,6 +24,10 @@ export type SwitcherWorkspace = {
   readonly photo?: string | undefined;
   /** Its owner's sign-in picture, which a personal workspace with no photo stands. */
   readonly picture?: string | undefined;
+  /** What it stands as in a system menu, its photo or its owner's picture as a file on this device; its letter in its hue while it has none. */
+  readonly menuPhoto?: string | undefined;
+  /** Whether that file is still on its way, so its menu row stands with no image meanwhile rather than its letter. */
+  readonly menuPhotoComing?: boolean | undefined;
 };
 
 /** The picture a tile draws over its letter: the photo as held, else the owner's picture asked for at the tile's size; none while the letter stands alone. */
@@ -38,9 +42,10 @@ function tilePicture(workspace: SwitcherWorkspace, size: number): string | undef
  * A workspace's tile, as the panel's is: its photo, its owner's picture on a
  * personal one, or the first character of its name on one of six hues read
  * off its id, on a softened square, since a square says a team as a circle
- * says a person. Note that the hue and the letter stand only until the
- * picture has drawn, so they show while it loads and once it fails, which
- * takes the picture away, but never through a picture's transparent pixels.
+ * says a person. Note that the hue and the letter stand only where there is
+ * no picture or it failed, never while one loads, so a workspace with a
+ * photo never shows its letter first, nor through the photo's transparent
+ * pixels.
  * It is never heard, since the name beside it says the workspace.
  */
 export function WorkspaceTile({
@@ -54,13 +59,12 @@ export function WorkspaceTile({
   const dark = useColorScheme() === "dark";
   const picture = tilePicture(workspace, size);
   const [failed, setFailed] = useState<string | undefined>(undefined);
-  const [drawn, setDrawn] = useState<string | undefined>(undefined);
-  const pictureDrawn = picture !== undefined && picture === drawn && picture !== failed;
+  const pictured = picture !== undefined && picture !== failed;
   const corner = size * TILE_ROUNDING;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
-      {pictureDrawn ? null : (
+      {pictured ? null : (
         <>
           <RoundedRectangle
             cornerRadius={corner}
@@ -76,15 +80,14 @@ export function WorkspaceTile({
           </Text>
         </>
       )}
-      {picture === undefined || picture === failed ? null : (
+      {pictured ? (
         <AvatarPhoto
           address={picture}
           size={size}
           corner={corner}
-          onLoad={() => setDrawn(picture)}
           onFail={() => setFailed(picture)}
         />
-      )}
+      ) : null}
     </ZStack>
   );
 }

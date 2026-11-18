@@ -7,7 +7,7 @@ import type {
 } from "@repo/features/sentry-install-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
+import { dayText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
 import type { WorkspaceSlack } from "@repo/features/workspace-integrations-live";
 import {
@@ -54,6 +54,7 @@ import {
   MENU_DETAIL,
   OneLine,
   PhotoPick,
+  PlusIcon,
   ProviderMark,
   RenamableName,
   SETTINGS_ROW_MARK_WIDTH,
@@ -952,7 +953,7 @@ function InviteButton({ workspace }: { workspace: Workspace }): React.JSX.Elemen
 
   return (
     <div {...searchAnchorProps(SETTINGS_SECTION.INVITATIONS)}>
-      <Button variant={BUTTON_VARIANT.OUTLINE} onClick={invite.ask}>
+      <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={invite.ask}>
         Invite
       </Button>
       {invite.dialog}
@@ -1032,8 +1033,8 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
             ),
             description: (
               <>
-                {INVITATION_WORDS.INVITED_AS(ROLE_WORDS[one.role])} · Expires{" "}
-                <ReplayMask>{dayAndTimeText(Date.parse(one.expiresAt))}</ReplayMask>
+                {INVITATION_WORDS.INVITED_AS(ROLE_WORDS[one.role])}, expires{" "}
+                <ReplayMask>{dayText(Date.parse(one.expiresAt))}</ReplayMask>
               </>
             ),
             // The service mails the accept link where the deployment names a sender; Copy link sends it by hand.
@@ -1101,7 +1102,7 @@ function ManagedGitHub({
   add: React.ReactNode;
   /** What the last add was refused with, said under the row. */
   addRefusal: string | undefined;
-  /** The chevron folding GitHub's accounts under the row, last in its end. */
+  /** The chevron folding GitHub's accounts under the row, last among its controls, before its ⋯. */
   chevron: React.ReactNode;
 }): React.JSX.Element {
   const { mutateAsync: sendWorkspaceGithubConnect } = useMutation(
@@ -1155,9 +1156,9 @@ function ManagedGitHub({
                   {CONNECT}
                 </Button>
               )}
+              {chevron}
             </>
           ),
-          end: chevron,
         }}
       />
     </Stack>
@@ -1194,6 +1195,7 @@ function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Ele
   return (
     <SettingsRowsFold
       label={GITHUB_FOLD}
+      room={false}
       head={(chevron) =>
         managesWorkspace(workspace) ? (
           <ManagedGitHub
@@ -1209,9 +1211,13 @@ function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Ele
             label="GitHub"
             description={connectionLine(connections.length > 0, false)}
             error={replayMaskedError(refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB))}
-            end={() => chevron}
           >
-            {() => add}
+            {() => (
+              <>
+                {add}
+                {chevron}
+              </>
+            )}
           </SettingsRow>
         )
       }
@@ -1318,8 +1324,6 @@ function ManagedSentry({
                 {CONNECT}
               </Button>
             ),
-          // Note that Sentry folds nothing, so it keeps the chevron's room for its end to stand in GitHub's and Slack's column.
-          end: <SettingsRowActSlot />,
         }}
       />
       <ConfirmDialog
@@ -1382,8 +1386,10 @@ function WorkspaceSentryRow({ workspace }: { workspace: Workspace }): React.JSX.
 
 /**
  * The workspace's Slack bot, for an owner or an admin: Connect
- * while it is not connected, which asks Slack which team the bot answers
- * for and keeps it, a connect that failed saying why under the row; and
+ * while it is not connected, which opens Slack's Add to Slack in the
+ * browser, an install that could not be begun saying why under the row,
+ * as Sentry's does: the browser's landing says how the install ended, and
+ * the row says Connected once the held read carries the team; and
  * once it is, a ⋯ whose menu disconnects it, which asks first. A disconnect stops the bot writing to
  * the workspace's members; the bot stays installed in Slack, which the
  * dialog says. Add channel stands beside the ⋯ once Slack has listed the
@@ -1398,11 +1404,11 @@ function ManagedSlackBot({
   workspace: Workspace;
   slack: WorkspaceSlack;
   channels: readonly SlackListedChannel[] | undefined;
-  /** The chevron folding the bot's rows under its row, last in its end. */
+  /** The chevron folding the bot's rows under its row, last among its controls, before its ⋯. */
   chevron: React.ReactNode;
 }): React.JSX.Element {
-  const { mutateAsync: sendWorkspaceSlackBotConnect } = useMutation(
-    actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_CONNECT),
+  const { mutateAsync: sendWorkspaceSlackBotInstall } = useMutation(
+    actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL),
   );
 
   const { mutateAsync: sendWorkspaceSlackBotDisconnect, ...slackLeaving } = useMutation(
@@ -1411,10 +1417,10 @@ function ManagedSlackBot({
 
   const workspaceId = workspace.id;
   const [addRefusal, setAddRefusal] = useState<string>();
-  const connecting = useAsyncAction(rejectionWords);
+  const installing = useAsyncAction(rejectionWords);
 
-  const connect = () =>
-    void connecting.run(() => sendWorkspaceSlackBotConnect({ workspaceId }).then(() => undefined));
+  const install = () =>
+    void installing.run(() => sendWorkspaceSlackBotInstall({ workspaceId }).then(() => undefined));
 
   const disconnectAct = useConfirmAct(slackLeaving, {
     send: () => sendWorkspaceSlackBotDisconnect({ workspaceId }),
@@ -1451,29 +1457,32 @@ function ManagedSlackBot({
           label: "Slack",
           description: connectionLine(slack.team !== undefined, true),
           error: replayMaskedError(
-            refusedShown(connecting.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
+            refusedShown(installing.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
               refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT_CHANNEL),
           ),
-          control:
-            slack.team !== undefined ? (
-              channels === undefined ? null : (
-                <AddSlackChannel
-                  workspaceId={workspaceId}
-                  channels={channels}
-                  onRefused={setAddRefusal}
-                />
-              )
-            ) : (
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                busy={connecting.running}
-                busyLabel="Connecting"
-                onClick={connect}
-              >
-                {CONNECT}
-              </Button>
-            ),
-          end: chevron,
+          control: (
+            <>
+              {slack.team !== undefined ? (
+                channels === undefined ? null : (
+                  <AddSlackChannel
+                    workspaceId={workspaceId}
+                    channels={channels}
+                    onRefused={setAddRefusal}
+                  />
+                )
+              ) : (
+                <Button
+                  variant={BUTTON_VARIANT.OUTLINE}
+                  busy={installing.running}
+                  busyLabel="Opening Slack"
+                  onClick={install}
+                >
+                  {CONNECT}
+                </Button>
+              )}
+              {chevron}
+            </>
+          ),
         }}
       />
       <ConfirmDialog
@@ -1510,6 +1519,7 @@ function ManagedSlackBotRows({
   return (
     <SettingsRowsFold
       label={SLACK_BOT_FOLD}
+      room={false}
       head={(chevron) => (
         <ManagedSlackBot
           workspace={workspace}
@@ -1538,18 +1548,11 @@ function SlackBotRows({
   if (managesWorkspace(workspace))
     return <ManagedSlackBotRows workspace={workspace} slack={slack} />;
 
-  // Note that a member's row folds nothing, but stands in the fold so its end keeps the chevron's room, as every row of the card does.
   return (
-    <SettingsRowsFold
-      label={SLACK_BOT_FOLD}
-      head={(chevron) => (
-        <SettingsRow
-          leading={SLACK_MARK}
-          label="Slack"
-          description={connectionLine(slack.team !== undefined, false)}
-          end={() => chevron}
-        />
-      )}
+    <SettingsRow
+      leading={SLACK_MARK}
+      label="Slack"
+      description={connectionLine(slack.team !== undefined, false)}
     />
   );
 }

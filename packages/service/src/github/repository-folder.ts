@@ -73,14 +73,15 @@ const NO_FOLDER: RepositoryFolder = { found: false };
 const UNPROCESSABLE = 422;
 
 /**
- * The repository's folder at the path on the branch named, the root for an
- * empty path, as the git trees API lists it: its own entries, or with
- * `recursive` everything under it, each named by its path from the folder.
- * A commit's sha names the commit as a branch's name does.
+ * The repository's folder at the path on the branch or at the commit named,
+ * the root for an empty path, as the git trees API lists it: its own
+ * entries, or with `recursive` everything under it, each named by its path
+ * from the folder. A commit's sha names the commit as a branch's name does.
  */
 export function readRepositoryFolder(
   bearer: GitHubBearer,
-  repository: { readonly fullName: string; readonly defaultBranch: string },
+  repository: { readonly fullName: string },
+  ref: string,
   path: string,
   recursive = false,
 ): Effect.Effect<RepositoryFolder, GitHubFailure> {
@@ -91,7 +92,7 @@ export function readRepositoryFolder(
       githubRead(
         bearer.client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
           ...repositoryParts(repository.fullName),
-          tree_sha: `${repository.defaultBranch}:${path}`,
+          tree_sha: `${ref}:${path}`,
           ...(recursive && { recursive: "1" }),
         }),
         TreeSchema,

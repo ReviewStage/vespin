@@ -19,7 +19,7 @@ import {
 import { accountLabel } from "@repo/ui/account-initials";
 import { createContext, useContext } from "react";
 import { PhoneHead } from "../../desktop/phone-head.js";
-import type { AdminTab } from "../routing.js";
+import type { AdminTab, AdminView } from "../routing.js";
 import { adminPlace } from "./places.js";
 
 /** The signed-in account the sidebar's foot names; read from the session, shown as-is. */
@@ -73,14 +73,17 @@ export interface AdminWayBack {
  * (`desktop-admin.tsx`), as Automations heads its tabs: the place's name, which
  * titles a section's toolbar where the web page titles it by the section; the
  * bar of sections under that toolbar; the place's own acts before a view's
- * controls; and whether a phone's header stands for the toolbar. None on the
- * web page, whose own sidebar lists the sections.
+ * controls; whether a phone's header stands for the toolbar; and the way a
+ * phone's ‹ goes back to a section, the window's Back. None on the web page,
+ * whose own sidebar lists the sections.
  */
 export interface AdminPlaceFrame {
   readonly title: string;
   readonly sections: React.ReactNode;
   readonly acts: React.ReactNode;
   readonly phone: boolean;
+  /** A phone's ‹ back to the section `view`: one step back, else the section in the page's step. */
+  readonly back: (view: AdminView) => void;
 }
 
 const AdminPlaceFrameContext = createContext<AdminPlaceFrame | undefined>(undefined);
@@ -133,7 +136,7 @@ function AdminToolbar({
             <BackButton
               label={section.label}
               place={section.label.toLowerCase()}
-              onBack={back.onBack}
+              onBack={() => frame.back({ kind: back.tab })}
             />
           )
         }

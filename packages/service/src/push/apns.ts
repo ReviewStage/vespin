@@ -201,6 +201,8 @@ interface ApnsAps {
   /** A push-to-start's activity type, as the app's Swift names it, and its static attributes. */
   readonly "attributes-type"?: string;
   readonly attributes?: WireRecord;
+  /** A push-to-start's ask, on iOS 18 and later, that the activity it starts take an update push token and hand it to the app. */
+  readonly "input-push-token"?: 1;
 }
 
 /** The JSON Apple delivers: its `aps`, and the app's own keys at the top level. */

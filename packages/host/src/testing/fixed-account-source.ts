@@ -3,17 +3,21 @@ import { type CallCredential, NO_CREDENTIAL } from "@repo/features";
 import { Effect, Layer, Stream } from "effect";
 import type { AccountSession, AccountSourceHost } from "../account-source.js";
 import { AccountSource } from "../effect/seams.js";
+import type { SecretCipher } from "../settings-store.js";
 
 /**
  * An account source that stands on the one account and credential a test
  * hands it and keeps nothing of its own: no tokens in the settings file, so
- * it hands the store no cipher, and no sign-in, so it needs no consent. What
- * a host assembled over a source other than the desktop's stands on.
+ * it hands the store no cipher unless the test hands it one, and no
+ * sign-in, so it needs no consent. What a host assembled over a source
+ * other than the desktop's stands on.
  */
 export function fixedAccountSource(
   input: {
     readonly account?: AccountSnapshot;
     readonly credential?: CallCredential;
+    /** The cipher the account's lists are sealed with; none keeps none. */
+    readonly tokenCipher?: SecretCipher;
     /** Hears the host the account composer opens the source over, whose gate a test may close as a sign-out does. */
     readonly opened?: (host: AccountSourceHost) => void;
   } = {},
@@ -38,7 +42,7 @@ export function fixedAccountSource(
   };
 
   return Layer.succeed(AccountSource, {
-    tokenCipher: undefined,
+    tokenCipher: input.tokenCipher,
     open: (host) =>
       Effect.sync(() => {
         input.opened?.(host);

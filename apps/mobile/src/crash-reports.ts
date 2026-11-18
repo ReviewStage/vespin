@@ -28,18 +28,28 @@
  * Info.plist), so its stack traces arrive symbolicated.
  */
 
-import { signedInAccountId } from "@repo/credentials/snapshot";
+import { RENEWAL_REFUSED } from "@repo/credentials";
+import { type AccountProvider, signedInAccountId } from "@repo/credentials/snapshot";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { sentryUser } from "@repo/features/sentry-account";
 import { eventWithoutAccessTokens, withoutAccessTokens } from "@repo/features/sentry-breadcrumbs";
 import { sentryReporterLayer } from "@repo/features/sentry-reporting";
+import type { SignInFailure } from "@repo/features/words";
 import { sentryReportingEnabled } from "@repo/host";
 import { SENTRY_ENVIRONMENT, type SentryEnvironment } from "@repo/host/sentry-environment";
-import { captureException, init, nativeCrash, setTag, setUser } from "@sentry/react-native";
+import {
+  addBreadcrumb,
+  captureException,
+  init,
+  nativeCrash,
+  setTag,
+  setUser,
+} from "@sentry/react-native";
 import { useQuery } from "@tanstack/react-query";
 import { type Layer, Option, Schema } from "effect";
 import Constants from "expo-constants";
 import { useEffect } from "react";
+import { AppState } from "react-native";
 import { appStateQuery } from "./host/app-state-query.js";
 import {
   LAUNCH_SENTRY_TEST,
@@ -64,7 +74,16 @@ const MECHANISM = {
   SCREEN: { type: "auto.expo_router.error_boundary", handled: false },
   /** A host that could not stand, so the app drew Try again in every screen's place. */
   HOST: { type: "auto.ios.host_start", handled: false },
+  /** A sign-in from the sign-in screen that ended without an account. */
+  SIGN_IN: { type: "auto.ios.sign_in", handled: true },
+  /** A renewal the service refused, which signs the account out. */
+  RENEWAL: { type: "auto.ios.renewal", handled: true },
 } as const;
+
+/** How a sign-in that ended without an account ended: its sheet closed, or a failure the screen says in words. */
+export const SIGN_IN_END = { CLOSED: "closed" } as const;
+
+type SignInEnd = (typeof SIGN_IN_END)[keyof typeof SIGN_IN_END] | SignInFailure;
 
 /** What the test report says, so it is found in Sentry by its words. */
 const TEST_REPORT_WORDS = `A test report from ${PRODUCT_NAME}'s iOS app (-sentryTest js)`;
@@ -141,6 +160,50 @@ export function useScreenFailureReport(error: Error): void {
 /** Reports a host that could not stand, so the app drew Try again in every screen's place. */
 export function reportHostFailure(cause: unknown): void {
   captureException(cause, { mechanism: MECHANISM.HOST });
+}
+
+/**
+ * Keeps one of the host's own lines on the trail the next report carries, as
+ * a breadcrumb, so a report says what the host said before it: why a
+ * sign-in did not finish, in the host's words and the service's refusal.
+ * The line a refused renewal writes is reported as an event besides.
+ * Note that the trail's filter drops a line that names an access token.
+ */
+export function keepHostLine(message: string): void {
+  addBreadcrumb({ category: "host", level: "warning", message });
+
+  // Note that a refused renewal signs the phone out with nothing on screen to say why, so it is an event of its own, naming whether the app stood in the foreground.
+  if (message === RENEWAL_REFUSED) {
+    captureException(new Error(message), {
+      mechanism: MECHANISM.RENEWAL,
+      captureContext: {
+        level: "error",
+        fingerprint: ["ios.renewal_refused"],
+        tags: { app_state: AppState.currentState },
+      },
+    });
+  }
+}
+
+/**
+ * Reports a sign-in from the sign-in screen that ended without an account:
+ * its sheet closed, or a failure the screen says, by the end's kind and the
+ * provider, each its own issue, with the host's lines before it on its trail
+ * and, where the act was refused, the refusal's stack. Note that a phone
+ * signed out sends no counted event, since those go out under the account,
+ * so this report is the only word of a sign-in that never lands.
+ */
+export function reportSignInEnd(provider: AccountProvider, end: SignInEnd, refusal?: Error): void {
+  const error = refusal ?? new Error(`A sign-in ended without an account: ${end}`);
+
+  captureException(error, {
+    mechanism: MECHANISM.SIGN_IN,
+    captureContext: {
+      level: end === SIGN_IN_END.CLOSED ? "info" : "error",
+      fingerprint: ["ios.sign_in", end],
+      tags: { sign_in_end: end, sign_in_provider: provider },
+    },
+  });
 }
 
 /** Effect's reporters with Sentry's beside them, for the host's runtime to stand on, so a failure one of its boundaries reports is an event. */

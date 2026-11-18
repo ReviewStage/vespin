@@ -1,6 +1,11 @@
 import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
-import { agentFailureSchema, agentStatusSchema, disabledServersSchema } from "./agent-wire.js";
+import {
+  agentFailureSchema,
+  agentRunsOnRequestSchema,
+  agentStatusSchema,
+  disabledServersSchema,
+} from "./agent-wire.js";
 import { AUTOMATION_PRESET } from "./automation-preset-name.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { modelChoiceSchema } from "./models-wire.js";
@@ -575,7 +580,8 @@ const automationSummarySchema = EffectSchema.Struct({
   pausedReason: EffectSchema.optionalKey(EffectSchema.Null),
   trigger: automationTriggerSchema,
   action: automationActionSchema,
-  guards: automationGuardsSchema,
+  /** The limits it once ran under, which nothing reads; a service still sends them for the builds before it that require them. */
+  guards: EffectSchema.optionalKey(automationGuardsSchema),
   nextRunAt: EffectSchema.NullOr(countedNumber),
   lastRun: EffectSchema.NullOr(automationRunSummarySchema),
   createdAt: countedNumber,
@@ -593,6 +599,12 @@ const automationSummarySchema = EffectSchema.Struct({
    * newer service added, or one since retired, never refuses the list.
    */
   preset: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  /**
+   * The machine its runs start on, the cloud or one of its creator's devices
+   * by id, as `create_automation` named it; null where none was named, which
+   * places a run as a Start naming none is, and absent from a service before it.
+   */
+  runsOn: EffectSchema.optionalKey(EffectSchema.NullOr(agentRunsOnRequestSchema)),
   /**
    * The address a webhook trigger's caller posts to, as the client that read
    * the automation reaches the service; the service sends none, since the

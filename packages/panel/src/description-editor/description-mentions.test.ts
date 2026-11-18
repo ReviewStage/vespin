@@ -87,6 +87,7 @@ function mounted(markdown: string) {
       },
       retarget: (target, change) => retargetedMention(TASK_ID, PLACE, target, change),
       namesChip: () => false,
+      keyTargets: new Map(),
       // The panel reads the one page of an integration's this description is pasted.
       pasted: (words) => (words.trim() === ISSUE_URL ? ISSUE : undefined),
     },

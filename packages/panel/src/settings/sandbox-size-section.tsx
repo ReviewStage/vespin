@@ -1,3 +1,4 @@
+import { SANDBOX_SIZE_WORDS as WORDS } from "@repo/features/cloud-environment-words";
 import {
   SANDBOX_SIZE,
   SANDBOX_VCPU_SIZES,
@@ -32,15 +33,6 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * section's caption says. A member who is no owner or admin sees the size
  * locked, the reason its hover, as a locked switch says it.
  */
-
-/** The words the section and its row say. */
-const WORDS = {
-  CAPTION:
-    "Applies to every cloud agent in this workspace: new agents use it right away, and existing ones the next time they start.",
-  SIZE: "Size",
-  DEFAULT: "Default",
-  LOCKED: "Only an owner or admin can change this",
-} as const;
 
 /** The size row while the size is read. */
 const SIZE_ROW_SKELETON: SettingsRowSkeletonLayout = {
@@ -92,7 +84,7 @@ export function SandboxSizeSection({ workspace }: { workspace: Workspace }): Rea
     <SettingsSection {...settingsSectionHead(SECTION.ENVIRONMENT_SANDBOX)} caption={WORDS.CAPTION}>
       {size.isError ? (
         <ReadFailed
-          line="The sandbox size could not be read."
+          line={WORDS.READ_FAILED}
           surface={FAILURE_SURFACE.WORKSPACE_SANDBOX_SIZE_READ}
           onRetry={() => void size.refetch()}
         />

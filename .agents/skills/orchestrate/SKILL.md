@@ -24,19 +24,20 @@ below as that one. You and the workers talk by `message_agent`.
 | Tell the user | `post_thread` without an ask, and your reply; where another coding agent started you, also send it the thread's mention, as above |
 | Valid model ids | `list_models` |
 | Your id, for reports | Nothing to record: a started agent is told your id and your mention link |
-| Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, and the PR's scope as `description` |
+| Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, `status` set to `todo`, and the PR's scope as `description` |
 | Draw a dependency | `update_task` on the subtask of the PR that builds on another, with `blockedBy: { add: [<the other PR's subtask id>] }` |
-| Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below) |
-| Start a helper | `start_agent` on your own task (no `taskId`, or the rollout task's id where you work on none), with the brief as `prompt` |
+| Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below), `permissionMode` set to `full_access` unless the user named another mode (no one watches a worker to answer its asks), and `runsOn` set to your own from your instructions' own values unless the user named another machine |
+| Start a helper | `start_agent` on your own task (`taskId` set to your own, from your instructions' own values), with the brief as `prompt`, a `model` and `effort` from `list_models`, `permissionMode` set to `full_access`, and your own `runsOn` |
 | Worker's base branch | `start_agent`'s `branch` |
-| Open a PR | `open_pull_request` with `base` |
+| Open a PR | `open_pull_request` with `repository`, `base`, and `draft: false` |
 | Message a worker | `message_agent` with the worker's agent id |
 | Worker reports back | `message_agent` with the orchestrator's agent id |
 | Check on a silent worker | `read_agent` with its agent id |
+| Read a worker's PR | `read_agent_changes` with its agent id |
 | Stop a worker | `stop_agent` with its agent id |
-| Continue a dead or stalled worker | `start_agent` with `from: { agentId }` and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
+| Continue a dead or stalled worker | `start_agent` with `from: { agentId, mode: "continue" }` (which stops that worker), `taskId` set to that worker's subtask, the `permissionMode` it ran on, and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
 | Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless its worker already marked it done, or `canceled` for a PR cut from the plan, once its worker is stopped and its PR closed; then archive its worker |
-| Archive a worker | `update_agent` with `archived: true` and a short `reason`, once the agent is idle |
+| Archive a worker | `archive_agent` with a short `reason`, which stops a turn still under way first |
 | List the rollout's agents | `list_agents` with a subtask's `taskId` for its workers, and with `thisTask` (or the rollout task's `taskId`) for the helpers |
 | Point the user at a subtask, worker, or PR | The mentions `create_task` and `start_agent` answered, and the PR's URL |
 
@@ -123,11 +124,11 @@ worker started earlier would have nothing to build on. Then start it with
 that PR's branch as its base.
 
 Start each worker on its PR's subtask, as the table's "Start a worker" row
-says, `title` at most 80 characters. Set `branch` to the base branch when it
-is not `main`; the worker starts on it and is told to pass it as `base` when
-it opens its PR. Give the rest of the brief (its items 2 to 5) as `note`,
-which holds at most 64,000 characters, and the chosen `model` and `effort`,
-checked against `list_models`. The call carries everything the worker is
+says, `title` at most 80 characters. Set `branch` to its base branch, `main`
+or the PR it builds on (a start on a task with a repository names one); the
+worker starts on it and is told to pass it as `base` when it opens its PR. Give the rest of the brief (its items 2 to 5) as `note`,
+which holds at most 64,000 characters, the chosen `model` and `effort`,
+checked against `list_models`, and its `permissionMode`. The call carries everything the worker is
 told; do not follow it with a message.
 
 Every brief must contain:
@@ -252,7 +253,7 @@ Run one restack at a time per stack. Tell every worker in the stack, and in
 each branch-off stack based on it, that a restack is pending, and wait for
 each to reply "holding"; stop one that does not hold, as the table says. Then
 start a short-lived restack worker (the table's "Start a helper" row, named
-"Restack <stack title>"; without `branch`, on
+"Restack <stack title>"; with `branch` set to
 `main`, since a Vespin agent never pushes the branch it was started on, so its
 checkout is a single-branch clone of `main`, possibly shallow, and its brief
 has it first run `git remote set-branches origin '*'`, then `git fetch

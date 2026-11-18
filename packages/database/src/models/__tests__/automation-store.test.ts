@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import {
   AUTOMATION_ACTION,
@@ -22,6 +23,7 @@ import { member, organization, user } from "../../schemas/auth.js";
 import { getTestDB, openAgentOnOwnTask } from "../../testing/index.js";
 import {
   attachRunAgent,
+  automationRunsOn,
   automationRunToAct,
   claimAutomationRun,
   createAutomation,
@@ -177,7 +179,7 @@ it.layer(getTestDB())("the automation store", (it) => {
   );
 
   it.effect(
-    "a new automation takes the workspace and repositories named, its owner's alone, a new agent each run, and no preset where the maker names none",
+    "a new automation takes the workspace, repositories, and machine named, its owner's alone, a new agent each run, and no preset or machine where the maker names none",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
@@ -210,6 +212,43 @@ it.layer(getTestDB())("the automation store", (it) => {
           ],
         );
         assert.equal(fromCard.preset, AUTOMATION_PRESET.MEMORY_DIGEST);
+
+        const deviceId = randomUUID();
+
+        const onDevice = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            ...nightly(workspaceId),
+            runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
+          }),
+        );
+
+        const inCloud = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            ...nightly(workspaceId),
+            runsOn: { machine: AGENT_MACHINE.VERCEL },
+          }),
+        );
+
+        assert.deepEqual(
+          [automationRunsOn(made), automationRunsOn(onDevice), automationRunsOn(inCloud)],
+          [null, { machine: AGENT_MACHINE.DEVICE, deviceId }, { machine: AGENT_MACHINE.VERCEL }],
+        );
+
+        // A change of machine replaces the one standing, and one naming none leaves it.
+        const moved = Option.getOrThrow(
+          yield* updateAutomation(owner, onDevice.id, {
+            runsOn: { machine: AGENT_MACHINE.VERCEL },
+          }),
+        );
+
+        const renamed = Option.getOrThrow(
+          yield* updateAutomation(owner, onDevice.id, { name: "Renamed" }),
+        );
+
+        assert.deepEqual(
+          [automationRunsOn(moved), automationRunsOn(renamed)],
+          [{ machine: AGENT_MACHINE.VERCEL }, { machine: AGENT_MACHINE.VERCEL }],
+        );
       }),
   );
 

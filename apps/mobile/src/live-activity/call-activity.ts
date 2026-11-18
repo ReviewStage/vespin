@@ -97,8 +97,6 @@ export function useCallLiveActivity(
   useEffect(() => {
     const module = liveActivityModule;
 
-    if (module === null) return;
-
     const after = (next: () => Promise<void>) => {
       queue.current = (queue.current ?? module.endCall())
         .then(next)
@@ -127,8 +125,6 @@ export function useCallLiveActivity(
   }, [agentId, state]);
 
   useEffect(() => {
-    if (liveActivityModule === null) return;
-
     // The activity left from a launch that ended mid-call goes as the app starts.
     queue.current ??= liveActivityModule.endCall().catch(() => undefined);
 

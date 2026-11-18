@@ -1,4 +1,4 @@
-// task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the app sidebar, the tree, and the task side by side in a regular one.
+// task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
 import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -7,19 +7,29 @@ import type { DescriptionCommentThread } from "@repo/features/description-commen
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { INBOX_LINE, INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import {
+  iosAgentRoute,
+  iosAppRouteOf,
+  iosRepositoryPullRequestRoute,
+} from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  pullRequestAddressOf,
   readLink,
   taskLinkStep,
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
-import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
+import {
+  agentRunsOnWords,
+  agentStillWriting,
+  agentTree,
+  type StartedAgentsCount,
+} from "@repo/features/task-agents-model";
 import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
@@ -37,6 +47,7 @@ import {
   TASK_RELATION_ORDER,
   TASK_RELATION_VERBS,
 } from "@repo/features/task-relation-model";
+import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -51,11 +62,8 @@ import {
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
-  taskTreeCollection,
-  taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
-  TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
@@ -93,12 +101,10 @@ import {
   buzz,
   type ColumnBar,
   ConfirmAsk,
-  DetailPage,
   EmptyState,
   FailedReadRow,
   GLYPH,
   type Glyph,
-  GroupRow,
   glyphSymbol,
   LINK_ROW_TONE,
   LIST_LOOK,
@@ -111,12 +117,16 @@ import {
   PATH_PART,
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
+  QUIET_ROW_QUESTION,
   RelationRow,
   ROW_ACTION_TONE,
   type RowAction,
+  type RowAsker,
+  type RowFold,
   RowForEach,
   RowList,
   type RowMenuGroup,
+  type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
   runsOnGlyph,
@@ -124,15 +134,14 @@ import {
   SplitView,
   STATUS_MARK_SYMBOL,
   type StandingMenus,
+  sectionEmoji,
   sectionGlyph,
-  type TaskFold,
   TaskHead,
   TaskPreview,
   TaskRow,
-  UNDER_SPLIT_SCREEN,
   useColors,
   useMinute,
-  useThreeColumns,
+  useRowAsker,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
   WordsRow,
@@ -140,32 +149,24 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, type ReactNode, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useDeferredValue, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import {
-  PUSHED_PAGE,
-  useDetailLeave,
-  useDetailPush,
-  useStackRoot,
-  useStandFocusedDetailFront,
-} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useKeeping } from "../keeping.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { useHandColumns } from "../place-columns.js";
 import { usePushStood } from "../push-stood.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
-import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useOnOwnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -181,6 +182,7 @@ import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
+  type RowAsks,
   type StatusQuestion,
   type TaskAgentLine,
   type TaskOverview,
@@ -198,16 +200,7 @@ import {
   useTaskWrites,
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import {
-  PLUS_TAB,
-  SIDEBAR_PLACE,
-  type SidebarPlace,
-  type SidebarTasks,
-  useComposeAction,
-  useListColumn,
-  usePortraitDetailBar,
-} from "./app-sidebar.js";
-import { useDetailStackColumn } from "./detail-stack-column.js";
+import { PLUS_TAB, useComposeAction, useDetailColumnBar, useListColumn } from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -357,6 +350,22 @@ function settleSwipes(
 }
 
 /**
+ * How a section leads its choice in Move to section's menu, as the panel's
+ * menu leads each with its icon: its glyph, or its emoji set before its
+ * name, since a menu item's image takes a symbol alone.
+ */
+function sectionChoiceLead(
+  title: string,
+  icon: TaskSectionIcon | undefined,
+): { readonly label: string; readonly symbol?: Glyph | undefined } {
+  const emoji = sectionEmoji(icon);
+
+  return emoji === undefined
+    ? { label: title, symbol: sectionGlyph(icon) }
+    : { label: `${emoji} ${title}` };
+}
+
+/**
  * A task's Move to section as a menu, as the panel's offers it: the member's
  * sections of its workspace, the one it stands in checked, a press putting it
  * on top of another, and Remove from section under them while it stands in
@@ -371,8 +380,8 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     label: MOVE_TO_SECTION,
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
-      label: section.title,
-      symbol: sectionGlyph(section.icon),
+      ...sectionChoiceLead(section.title, section.icon),
+      id: section.id,
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -504,6 +513,7 @@ type RowActsResult = {
   readonly leadingActions: readonly RowSwipe[];
   readonly menuActions: readonly RowAction[];
   readonly menuGroups: readonly RowMenuGroup[];
+  readonly question: RowQuestion;
 };
 
 /**
@@ -518,7 +528,9 @@ type RowActsResult = {
  * system's name alert, and Copy link, which raises the share sheet; then
  * More, holding its repository, its version history and Move to workspace
  * where offered, and Open in browser; and Permanently delete alone, last,
- * which asks first.
+ * which asks first. What asks first, Done or Canceled where it stops agents
+ * and Permanently delete, asks by the row pressed (`asks`), as Mail stands
+ * its question by the message.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -526,12 +538,14 @@ function rowActs(
   task: TaskSummary,
   unread: boolean,
   listing: TasksListing,
+  asks: RowAsks,
   openRelation: OpenRelation,
 ): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
   return {
-    trailingActions: settleSwipes(task, listing.setStatus),
+    question: asks.question(task.id),
+    trailingActions: settleSwipes(task, asks.setStatus),
     leadingActions: [
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
@@ -599,7 +613,7 @@ function rowActs(
             label: WORDS.DELETE,
             symbol: GLYPH.DELETE,
             tone: ROW_ACTION_TONE.DESTRUCTIVE,
-            onPress: () => listing.askDelete(task),
+            onPress: () => asks.askDelete(task),
           },
         ],
       },
@@ -628,7 +642,7 @@ function taskPreview(task: TaskSummary, listing: TasksListing) {
   );
 }
 
-/** The question Done or Canceled asks first while a task's agents work, as the system's alert: every list of tasks draws it, the Search tab's among them. */
+/** A task's question as a page raised it, Done or Canceled while its agents work or Permanently delete, as the system asks it: every list of tasks draws it, the Search tab's among them. One a row raised stands by that row instead (`RowAsks`). */
 export function StatusQuestionAsk({ question }: { readonly question: StatusQuestion }) {
   return (
     <ConfirmAsk
@@ -636,7 +650,7 @@ export function StatusQuestionAsk({ question }: { readonly question: StatusQuest
       message={question.words.body}
       act={question.words.verb}
       destructive
-      presented={question.presented}
+      presented={question.presented && question.asker === undefined}
       onAct={question.confirm}
       onDismiss={question.dismiss}
     />
@@ -676,18 +690,19 @@ export function TaskListRow({
   readonly task: TaskSummary;
   readonly listing: TasksListing;
   readonly depth?: number;
-  readonly fold?: TaskFold | undefined;
+  readonly fold?: RowFold | undefined;
   readonly keyed: boolean;
 }) {
   const look = listing.lookOf(task);
   const openRelation = useOpenRelation();
+  const asker = useRowAsker();
+  const asks = listing.rowAsks(asker);
 
   return (
     <TaskRow
       id={task.id}
       name={task.name}
       status={task.status ?? TASK_STATUS.TODO}
-      priority={task.priority ?? TASK_PRIORITY.NONE}
       unread={look.unread}
       finished={taskFinished(task)}
       needsYou={look.needsYou}
@@ -695,7 +710,8 @@ export function TaskListRow({
       blocked={task.blocked === true}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
-      {...rowActs(task, look.unread, listing, openRelation)}
+      {...rowActs(task, look.unread, listing, asks, openRelation)}
+      statusMenu={statusSubmenu(task, asks.setStatus)}
       preview={taskPreview(task, listing)}
       link={
         listing.workspace === undefined
@@ -836,8 +852,7 @@ type TreeHold = {
  * Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo, or a
  * rotation across the split's cutoff, swaps one layout for the other and
  * would lose what the reader opened. It is handed to the tree as a prop,
- * never a context, because a three-column window draws the tree in the
- * tabs' one split view, above this root screen.
+ * so each layout's tree reads the one hold.
  */
 function useTreeHoldState(): TreeHold {
   const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
@@ -910,27 +925,6 @@ function FoldedRows({
   );
 }
 
-/** One collection's rows alone, under no header, as the app sidebar picked it. */
-function CollectionRows({
-  collection,
-  listing,
-  hold,
-}: {
-  readonly collection: TaskTreeGroup;
-  readonly listing: TasksListing;
-  readonly hold: TreeHold;
-}) {
-  return (
-    <ListSection>
-      <FoldedRows
-        rows={collection.rows}
-        listing={listing}
-        parents={groupParents(hold, collection.key)}
-      />
-    </ListSection>
-  );
-}
-
 /**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
@@ -950,6 +944,7 @@ function GroupSection({
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
       foldable
@@ -995,13 +990,6 @@ function notRead(
   return <EmptyState title={READING_TASKS} symbol={GLYPH.TASK} loading />;
 }
 
-/** Whether a task stands among a collection's rows, a sub-task under one of them included. */
-function inCollection(collection: TaskTreeGroup): (task: TaskSummary) => boolean {
-  const ids = new Set(collection.rows.map((row) => row.task.id));
-
-  return (task) => ids.has(task.id);
-}
-
 /** Whether the tree lists no task at all. */
 function treeEmpty(tree: TaskTree): boolean {
   return [
@@ -1018,8 +1006,6 @@ type TasksTreeProps = {
   readonly hold: TreeHold;
   readonly look: ListLook;
   readonly search: string;
-  /** The collection the app sidebar picked, Pinned, Following, or a section, whose rows alone the list draws; every group where none is. */
-  readonly collection?: TaskTreeGroup | undefined;
   readonly selected?: string | undefined;
   readonly onSelect: (id: string) => void;
   /** Reads the list again, on a pull. */
@@ -1029,27 +1015,14 @@ type TasksTreeProps = {
 /**
  * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
  * the member's sections, and the repository groups, each folding under its
- * header and count, a task's sub-tasks folded under it; or one collection's
- * rows alone, under no header, where the app sidebar picked it; or, while a
- * search is typed, every task it finds, of the workspace or of the picked
- * collection. A pull reads it again.
+ * header and count, a task's sub-tasks folded under it; or, while a search
+ * is typed, every task it finds. A pull reads it again.
  */
-function TasksTree({
-  listing,
-  hold,
-  look,
-  search,
-  collection,
-  selected,
-  onSelect,
-  onRefresh,
-}: TasksTreeProps) {
+function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree } = listing;
   const read = useTasksReadStatus();
 
-  // Note that a search under a picked collection finds only that collection's tasks, as its title says.
-  const found =
-    collection === undefined ? listing.found : listing.found.filter(inCollection(collection));
+  const found = listing.found;
 
   if (search.trim() !== "") {
     if (found.length === 0) {
@@ -1073,22 +1046,6 @@ function TasksTree({
     );
   }
 
-  if (collection !== undefined) {
-    if (collection.rows.length === 0) {
-      return (
-        (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
-          <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />
-        )
-      );
-    }
-
-    return (
-      <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-        <CollectionRows collection={collection} listing={listing} hold={hold} />
-      </RowList>
-    );
-  }
-
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
   if (treeEmpty(tree)) {
     return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
@@ -1102,7 +1059,7 @@ function TasksTree({
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
-      {/* Note that a section holding no task stands only in the app sidebar, where a task is dropped onto it, as Reminders keeps an empty list off a grouped view. */}
+      {/* Note that a section holding no task is left out, as Reminders keeps an empty list off a grouped view. */}
       {tree.sections
         .filter((group) => group.rows.length > 0)
         .map((group) => (
@@ -1141,38 +1098,6 @@ function headPicture(group: TaskTreeGroup): string | undefined {
     group.key !== NO_REPOSITORY_KEY
     ? group.key
     : undefined;
-}
-
-/** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
-function collectionGlyph(group: TaskTreeGroup): Glyph {
-  if (group.kind === TASK_TREE_GROUP.PINNED) return GLYPH.PIN;
-
-  return group.kind === TASK_TREE_GROUP.FOLLOWING ? GLYPH.FOLLOW : sectionGlyph(group.icon);
-}
-
-/**
- * The collections a window's app sidebar lists under its places, as Mail
- * lists its mailboxes: Pinned, Following, and each of the member's
- * sections, one row each with its count, which a task dragged onto Pinned
- * or a section is put in, as onto the Tasks list's headers.
- */
-export function useSidebarTasks(): SidebarTasks {
-  const listing = useTasksListing("");
-  const collections = taskTreeCollections(listing.tree);
-
-  return {
-    rows: collections.map((group) => (
-      <GroupRow
-        key={group.key}
-        id={group.key}
-        title={group.title ?? listing.tree.tasksHead}
-        symbol={collectionGlyph(group)}
-        count={group.rows.length}
-        onDropLink={dropOnto(group, listing)}
-      />
-    )),
-    keys: new Set(collections.map((group) => group.key)),
-  };
 }
 
 /** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
@@ -1318,10 +1243,8 @@ function useNewAgent(): (task: TaskSummary) => void {
 /** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
 function useHistoryDoor(
   workspaceId: string | undefined,
-  place?: SidebarPlace | undefined,
 ): ((task: TaskSummary) => void) | undefined {
   const router = useRouter();
-  const toDetail = useDetailPush(place);
   const onOwnTab = useOnOwnTab();
 
   const { data: descriptions = false } = useQuery({
@@ -1331,10 +1254,7 @@ function useHistoryDoor(
 
   if (!descriptions) return undefined;
 
-  return (task) => {
-    if (toDetail({ kind: PUSHED_PAGE.HISTORY, taskId: task.id })) return;
-    router.push({ pathname: onOwnTab(HISTORY_ROUTE), params: { id: task.id } });
-  };
+  return (task) => router.push({ pathname: onOwnTab(HISTORY_ROUTE), params: { id: task.id } });
 }
 
 /** The doors a list's task rows open past it, opened once for the whole list rather than on each recycled row. */
@@ -1553,6 +1473,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             name={sub.name}
             status={sub.status}
             faded={taskFinished(sub)}
+            statusMenu={statusSubmenu(sub, overview.setStatus)}
             // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
             trailingActions={[
               ...settleSwipes(sub, overview.setStatus),
@@ -1588,6 +1509,9 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   name={other?.name ?? WORDS.UNLISTED_TASK}
                   status={other?.status}
                   faded={other !== undefined && taskFinished(other)}
+                  statusMenu={
+                    other === undefined ? undefined : statusSubmenu(other, overview.setStatus)
+                  }
                   relation={TASK_RELATION_WORDS[kind]}
                   relationMark={{
                     glyph: RELATION_KIND_SYMBOL[kind],
@@ -1670,54 +1594,66 @@ function agentMenuActs(
       ];
 }
 
-type UseAgentArchiveAskResult = {
-  readonly archive: (agentId: string) => void;
-  readonly ask: ReactElement;
-};
+/** Archive on agents' rows, asked first by the row pressed. */
+export interface AgentArchiving {
+  /** Raises the question for an agent by the drawn row `asker` names. */
+  readonly archive: (agentId: string, asker: RowAsker) => void;
+  /** The question standing by the drawn row `asker` names for an agent, `QUIET_ROW_QUESTION` where it raised none about it. */
+  readonly question: (agentId: string, asker: RowAsker) => RowQuestion;
+}
+
+/** An agent's Archive question as it stands: the agent, the row that raised it, and whether it is shown. */
+interface AskedArchive {
+  readonly agentId: string;
+  readonly asker: RowAsker;
+  readonly presented: boolean;
+}
 
 /**
- * Archive on an agent's row, asked first: `archive` raises the question for
- * an agent, and `ask` is the system's alert that asks it, which the screen
- * stands beside its `<Screen>`, as every list's questions stand. Note that
- * the question reads where the agent stands now, as the agent page's menu
- * asks (`useArchiveAsk`), raised at once on where the list holds it and
- * checked afresh as its act is pressed, because one that starts working
- * while the alert is up would otherwise be stopped and archived without a
- * word of it.
+ * Archive on an agent's row, asked first by the row pressed, as Mail stands
+ * its question by the message: `archive` raises the question for an agent
+ * by its row, and `question` is what stands by that row. Note that the
+ * question reads where the agent stands now, as the agent page's menu asks
+ * (`useArchiveAsk`), raised at once on where the list holds it and checked
+ * afresh as its act is pressed, because one that starts working while the
+ * question is up would otherwise be stopped and archived without a word of
+ * it.
  */
-export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
+export function useAgentArchiveAsk(): AgentArchiving {
   const acts = useAgentRowActs();
-  const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
+  const [asked, setAsked] = useState<AskedArchive>();
   const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) => {
+    archive: (agentId, asker) => {
       // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
       letGo();
       void readAfresh(agentId).then((stands) => {
-        if (stands) setAsked({ agentId, presented: true });
+        if (stands) setAsked({ agentId, asker, presented: true });
       });
     },
-    ask: (
-      <ConfirmAsk
-        title={question.title}
-        message={question.message}
-        act={question.act}
-        destructive
-        presented={asked?.presented === true}
-        onAct={() => {
-          if (asked === undefined || !asked.presented) return;
-          const { agentId } = asked;
+    question: (agentId, asker) => {
+      if (asked === undefined || asked.agentId !== agentId || asked.asker !== asker) {
+        return QUIET_ROW_QUESTION;
+      }
+
+      return {
+        title: question.title,
+        message: question.message,
+        act: question.act,
+        presented: asked.presented,
+        onAct: () => {
+          if (!asked.presented) return;
           letGo();
           answered(
             () => acts.archive(agentId),
-            () => setAsked({ agentId, presented: true }),
+            () => setAsked({ agentId, asker, presented: true }),
           );
-        }}
-        onDismiss={letGo}
-      />
-    ),
+        },
+        onDismiss: letGo,
+      };
+    },
   };
 }
 
@@ -1732,20 +1668,23 @@ export function TaskAgentRow({
   line,
   task,
   named = false,
-  onArchive,
+  archiving,
+  nest,
 }: {
   readonly line: TaskAgentLine;
+  /** Where it stands in its task's tree of agents: how deep under the agent that started it, the fold of those it started, and how many of them finished; at the top, folding nothing, where none is given. */
+  readonly nest?: AgentNest | undefined;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
   /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
   readonly named?: boolean | undefined;
-  /** Asks to archive the agent, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
-  readonly onArchive?: ((agentId: string) => void) | undefined;
+  /** Archive asked first, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
+  readonly archiving?: AgentArchiving | undefined;
 }) {
   const router = useRouter();
-  const toDetail = useDetailPush();
-  const onTab = useOnTab();
+  const onOwnTab = useOnOwnTab();
   const acts = useAgentRowActs();
+  const asker = useRowAsker();
   const { agent, waiting, pullRequest } = line;
   const step = useHeldAgentStep(agent.id, agent.status);
   const name = agentName(agent);
@@ -1772,6 +1711,9 @@ export function TaskAgentRow({
       runsOn={runsOn}
       runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
+      depth={nest?.depth}
+      fold={nest?.fold}
+      started={nest?.started}
       task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
@@ -1781,18 +1723,26 @@ export function TaskAgentRow({
               state: pullRequest.state,
               queued: pullRequest.queued,
               onPress: () => {
-                const opened = {
-                  kind: PUSHED_PAGE.PULL_REQUEST,
-                  agentId: agent.id,
-                  number: pullRequest.number,
-                } as const;
+                const named = pullRequestAddressOf(pullRequest.url);
 
-                if (!toDetail(opened))
-                  router.push(onTab(iosPullRequestRoute(agent.id, pullRequest.number)));
+                // Note that a line whose address names no pull request of GitHub's opens it there, as Safari reads it.
+                if (named === undefined) {
+                  openInSafari(pullRequest.url);
+
+                  return;
+                }
+
+                const key = { workspaceId: agent.workspaceId, ...named };
+                router.push(onOwnTab(iosRepositoryPullRequestRoute(key, agent.id)));
               },
             }
       }
-      trailingActions={agentSwipes(agent, acts, onArchive)}
+      trailingActions={agentSwipes(
+        agent,
+        acts,
+        archiving === undefined ? undefined : (agentId) => archiving.archive(agentId, asker),
+      )}
+      question={archiving?.question(agent.id, asker)}
       menuActions={agentMenuActs(link, keeping.copyWords)}
       preview={
         <AgentPreview
@@ -1811,16 +1761,48 @@ export function TaskAgentRow({
   );
 }
 
-/** The task's agents as the panel's Agents group lists them, counted while it has any, its header's + New agent, which opens its sheet, and the line of its threads that need you. */
+/** Where an agent's row stands in its task's tree of agents (`agentTree`). */
+type AgentNest = {
+  readonly depth: number;
+  readonly fold: RowFold | undefined;
+  readonly started: StartedAgentsCount | undefined;
+};
+
+/**
+ * The task's agents as the panel's Agents group lists them, each nested
+ * under the agent that started it (`agentTree`), folded under it until
+ * opened, as a task's sub-tasks are, a folded row counting the threads that
+ * wait on the reader under it too, so none waits unsaid; counted while it
+ * has any, its header's + New agent, which opens its sheet, and the line of
+ * its threads that need you, which opens the Inbox, so none while the
+ * member turned it off.
+ */
 function OverviewAgents({
   overview,
-  onArchiveAgent,
+  archiving,
 }: {
   readonly overview: TaskOverview;
-  readonly onArchiveAgent: (agentId: string) => void;
+  readonly archiving: AgentArchiving;
 }) {
   const router = useRouter();
+  const inboxShown = useInboxShown();
   const { task } = overview;
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const tree = agentTree(
+    overview.agents,
+    (line) => line.agent,
+    (agentId) => opened.has(agentId),
+  );
+
+  const toggle = (agentId: string) =>
+    setOpened((held) => {
+      const next = new Set(held);
+
+      if (!next.delete(agentId)) next.add(agentId);
+
+      return next;
+    });
 
   return (
     <ListSection
@@ -1837,10 +1819,26 @@ function OverviewAgents({
         ],
       }}
     >
-      {overview.agents.map((line) => (
-        <TaskAgentRow key={line.agent.id} line={line} task={task} onArchive={onArchiveAgent} />
+      {tree.map(({ entry, depth, started, folded }) => (
+        <TaskAgentRow
+          key={entry.agent.id}
+          line={{
+            ...entry,
+            waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
+          }}
+          task={task}
+          archiving={archiving}
+          nest={{
+            depth,
+            fold:
+              started === undefined
+                ? undefined
+                : { open: opened.has(entry.agent.id), onToggle: () => toggle(entry.agent.id) },
+            started,
+          }}
+        />
       ))}
-      {overview.waitingElsewhere === 0 ? null : (
+      {overview.waitingElsewhere === 0 || !inboxShown ? null : (
         <LinkRow
           symbol={GLYPH.INBOX}
           label={threadsWaitingWords(overview.waitingElsewhere)}
@@ -1856,7 +1854,6 @@ function OverviewAgents({
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   const now = useMinute();
   const router = useRouter();
-  const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const { task, pages } = overview;
 
@@ -1870,17 +1867,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           symbol={GLYPH.PAGE}
           label={page.title}
           detail={provenanceText(page.at, now)}
-          onPress={() => {
-            const opened = {
-              kind: PUSHED_PAGE.TASK_PAGE,
-              pageId: page.id,
-              taskId: task.id,
-              workspaceId: task.workspaceId,
-              version: page.version,
-              title: page.title,
-            } as const;
-
-            if (toDetail(opened)) return;
+          onPress={() =>
             router.push({
               pathname: onOwnTab("/tasks/page/[id]"),
               params: {
@@ -1890,8 +1877,8 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
                 version: String(page.version),
                 title: page.title,
               },
-            });
-          }}
+            })
+          }
         />
       ))}
     </ListSection>
@@ -1920,9 +1907,8 @@ function OverviewDescription({
   readonly body: string;
 }) {
   const router = useRouter();
-  const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(overview.task.workspaceId);
   const { task } = overview;
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
@@ -1937,13 +1923,11 @@ function OverviewDescription({
     workspaces.find((each) => each.id === task.workspaceId),
   );
 
-  const openThread = (threadId: string) => {
-    if (toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId, taskId: task.id })) return;
+  const openThread = (threadId: string) =>
     router.push({
       pathname: onOwnTab("/tasks/comments/[id]"),
       params: { id: threadId, task: task.id },
     });
-  };
 
   if (blocks.length === 0) {
     return (
@@ -1990,16 +1974,6 @@ function OverviewDescription({
                         const quote = block.quote ?? "";
                         const from = `${block.from}`;
                         const to = `${block.to}`;
-
-                        const opened = {
-                          kind: PUSHED_PAGE.NEW_COMMENT,
-                          taskId: task.id,
-                          from,
-                          to,
-                          quote,
-                        } as const;
-
-                        if (toDetail(opened)) return;
                         router.push({
                           pathname: onOwnTab("/tasks/comments/new"),
                           params: { task: task.id, from, to, quote },
@@ -2153,22 +2127,42 @@ function OverviewComments({
  * read-only and the comment threads that stand open on it. A pull reads the
  * task list again.
  */
+/**
+ * Whether a task's page draws the sections under its head yet: not on the
+ * render that opens it, and on the next, which React renders after the
+ * first is committed and drops if another task opens first. Note that the
+ * first render is the head alone, from what the task's row already holds,
+ * so a push or a column's swap starts at once, and the sections, which
+ * cost most of the page, follow behind it.
+ */
+function useSectionsShown(taskId: string): boolean {
+  // Note that the first value is null, since React reads an undefined one as none given and defers nothing.
+  return useDeferredValue<string | null>(taskId, null) === taskId;
+}
+
 function OverviewPage({
   overview,
   onRefresh,
-  onArchiveAgent,
+  archiving,
+  entered,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
-  /** Asks to archive one of its agents (`useAgentArchiveAsk`), whose question the screen stands beside its `<Screen>`. */
-  readonly onArchiveAgent: (agentId: string) => void;
+  /** Archive on its agents' rows, asked first by the row pressed (`useAgentArchiveAsk`). */
+  readonly archiving: AgentArchiving;
+  /**
+   * Whether the page has come in: a pushed page once its push has ended
+   * (`usePushStood`), and a split view's detail, which slides in nothing,
+   * at once. Note that a pushed page's sections wait for it, since their
+   * mount during the push dropped its frames.
+   */
+  readonly entered: boolean;
 }) {
   const router = useRouter();
-  const toDetail = useDetailPush();
-  const onTab = useOnTab();
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
+  const sections = useSectionsShown(task.id) && entered;
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -2183,13 +2177,9 @@ function OverviewPage({
   // A related task opens on its own Overview, an agent on its page, where its transcript and its composer stand, and a comment thread on its own.
   const open = (id: string) => {
     if (related.has(id))
-      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
-    else if (agents.has(id) && !toDetail({ kind: PUSHED_PAGE.AGENT, agentId: id }))
-      router.push(onTab(iosAgentRoute(id)));
-    else if (
-      commented.has(id) &&
-      !toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: id, taskId: task.id })
-    )
+      router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
+    else if (agents.has(id)) router.push(onOwnTab(iosAgentRoute(id)));
+    else if (commented.has(id))
       router.push({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id, task: task.id } });
   };
 
@@ -2198,10 +2188,10 @@ function OverviewPage({
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>
-      <OverviewRelations overview={overview} />
-      <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
-      <OverviewPages overview={overview} />
-      {!descriptions ? null : overview.documentRetry !== undefined ? (
+      {sections ? <OverviewRelations overview={overview} /> : null}
+      {sections ? <OverviewAgents overview={overview} archiving={archiving} /> : null}
+      {sections ? <OverviewPages overview={overview} /> : null}
+      {!sections || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
@@ -2212,7 +2202,7 @@ function OverviewPage({
       ) : (
         <OverviewDescription overview={overview} body={document.description.body} />
       )}
-      {descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
+      {sections && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
   );
 }
@@ -2297,49 +2287,35 @@ function TasksStackList({
 /** What a task's page in a split view's detail sets through its list's own asks, so a list beside it asks once for both. */
 type TaskDetailDoors = Pick<TasksListing, "setStatus" | "askDelete">;
 
-/** A task's page as a split view's detail draws it: the page, its bar, and the questions it asks in, which stand in React Native's tree beside it. */
+/** A task's page as a split view's detail draws it: the page and its bar. */
 type TaskDetail = {
   readonly detail: ReactNode;
   readonly detailBar: ColumnBar;
-  readonly asks: ReactNode;
 };
 
 /** What a task's status set asks through before its Overview is read. */
 const NO_STATUS_DOORS = { setStatus: () => undefined, workingAgents: () => 0 } as const;
 
 /**
- * A task's page as a split view's detail draws it, wherever it stands: the
- * Tasks list's pick, Search's, or a task a thread opened, pushed over the
- * Inbox's detail. It is the task's Overview under the detail's bar, its
- * path, New agent and New sub-task as glyphs and its ⋯; Select a task with
- * none picked, and the reading state or Task not found for one not read.
- * Its status set and its delete ask through `doors` where a list beside it
- * asks for them, else through asks of its own, which `asks` draws with its
- * agents' Archive question, a delete going on to `onDeleted`. `place` names
- * the detail its bar opens History over where the caller draws the bar from
- * outside that detail, as a split view's root does.
+ * A task's page as the Tasks split view's detail draws its list's pick: the
+ * task's Overview under the detail's bar, its path, New agent and New
+ * sub-task as glyphs and its ⋯; Select a task with none picked, and the
+ * reading state or Task not found for one not read. Its status set and its
+ * delete ask through `doors`, the list beside it, so it asks once for both;
+ * its agents' Archive asks by their rows.
  */
-export function useTaskDetail(
-  selected: string | undefined,
-  doors?: TaskDetailDoors | undefined,
-  onDeleted?: (() => void) | undefined,
-  place?: SidebarPlace | undefined,
-): TaskDetail {
+function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): TaskDetail {
   const newSubTask = useNewSubTask();
   const newAgent = useNewAgent();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const found = useFoundTask(selected, undefined);
   const held = useTaskOverview(selected);
-  const own = useStatusAsk(held ?? NO_STATUS_DOORS);
-  const { remove } = useTaskWrites();
-  const deletion = useDeleteAsk(remove, onDeleted);
-  const setStatus = doors?.setStatus ?? own.setStatus;
-  const askDelete = doors?.askDelete ?? deletion.askDelete;
+  const { setStatus, askDelete } = doors;
   const overview = held === undefined ? undefined : { ...held, setStatus };
-  const history = useHistoryDoor(overview?.task.workspaceId, place);
+  const history = useHistoryDoor(overview?.task.workspaceId);
   const read = useTasksRead();
-  const archiveAsk = useAgentArchiveAsk();
+  const archiving = useAgentArchiveAsk();
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -2350,7 +2326,8 @@ export function useTaskDetail(
         key={overview.task.id}
         overview={overview}
         onRefresh={refreshTasks}
-        onArchiveAgent={archiveAsk.archive}
+        archiving={archiving}
+        entered
       />
     ) : selected === undefined ? (
       <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
@@ -2377,40 +2354,13 @@ export function useTaskDetail(
           },
         };
 
-  const asks = (
-    <>
-      {doors === undefined ? (
-        <>
-          <StatusQuestionAsk question={own.question} />
-          <StatusQuestionAsk question={deletion.question} />
-        </>
-      ) : null}
-      {archiveAsk.ask}
-    </>
-  );
-
-  return { detail, detailBar, asks };
-}
-
-/** A task's page pushed over a split view's detail, as a thread's Open task opens it beside the Inbox's list, which goes back once the task is deleted. */
-export function TaskColumnPage({ taskId }: { readonly taskId: string }) {
-  const leave = useDetailLeave();
-  const { detail, detailBar, asks } = useTaskDetail(taskId, undefined, leave?.leave);
-
-  return (
-    <DetailPage bar={detailBar} asks={asks}>
-      {detail}
-    </DetailPage>
-  );
+  return { detail, detailBar };
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
-// and the picked task side by side. Where the window is wide enough for three
-// columns, the two are handed to the tabs' one split view, which stands them
-// beside the app sidebar, as Mail stands its mailboxes, a mailbox's mail, and
-// a message, and this root draws nothing of its own under it; otherwise the
-// root stands its own split view. The Stack's header steps aside, since the
-// split view draws each column's navigation bar itself.
+// and the picked task side by side in the tab's own split view, beside the
+// system's tab sidebar. The Stack's header steps aside, since the split view
+// draws each column's navigation bar itself.
 function TasksSplitScreen({
   selected,
   select,
@@ -2423,67 +2373,38 @@ function TasksSplitScreen({
   readonly hold: TreeHold;
 }) {
   const { search, setSearch, listing, refreshTasks } = screen;
-  const threeColumns = useThreeColumns();
-  const picked = useTasksCollection();
 
-  const { detail, detailBar, asks } = useTaskDetail(
-    selected,
-    listing,
-    undefined,
-    SIDEBAR_PLACE.TASKS,
-  );
-
-  // Note that a collection the sidebar picked fills the list only where the sidebar stands, and a portrait window's list keeps every group.
-  const collection =
-    threeColumns && picked !== undefined ? taskTreeCollection(listing.tree, picked) : undefined;
+  const { detail, detailBar } = useTaskDetail(selected, listing);
 
   const list = {
+    chosen: selected !== undefined,
     view: (
       <TasksTree
         listing={listing}
         hold={hold}
         look={LIST_LOOK.PLAIN}
         search={search}
-        collection={collection}
         selected={selected}
         onSelect={select}
         onRefresh={refreshTasks}
       />
     ),
     bar: {
-      title: collection?.title ?? TASKS_TITLE,
+      title: TASKS_TITLE,
       search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
     },
   };
 
   const first = useListColumn(list);
-  useStackRoot(SIDEBAR_PLACE.TASKS, selected);
-  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
-  const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
-  // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
-  useStandFocusedDetailFront(SIDEBAR_PLACE.TASKS, !threeColumns);
-  const firstDetailBar = usePortraitDetailBar(detailBar);
-  useHandColumns(
-    SIDEBAR_PLACE.TASKS,
-    threeColumns
-      ? { content: list.view, contentBar: list.bar, detail, detailBar, root: selected }
-      : undefined,
-  );
+  const firstDetailBar = useDetailColumnBar(detailBar);
 
   return (
     <>
-      <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
-      {threeColumns ? null : (
-        <Screen>
-          <SplitView
-            {...first}
-            detail={stack.wrap(detail)}
-            detailBar={firstDetailBar}
-            detailStack={stack.detailStack}
-          />
-        </Screen>
-      )}
-      {asks}
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
+      <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
+      <Screen>
+        <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
+      </Screen>
     </>
   );
 }
@@ -2549,7 +2470,7 @@ export function TaskScreen() {
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
-  const archiveAsk = useAgentArchiveAsk();
+  const archiving = useAgentArchiveAsk();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
 
@@ -2603,7 +2524,8 @@ export function TaskScreen() {
           <OverviewPage
             overview={overview}
             onRefresh={refreshTasks}
-            onArchiveAgent={archiveAsk.archive}
+            archiving={archiving}
+            entered={stood}
           />
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
@@ -2613,7 +2535,6 @@ export function TaskScreen() {
       </Screen>
       <StatusQuestionAsk question={question} />
       <StatusQuestionAsk question={deletion.question} />
-      {archiveAsk.ask}
     </>
   );
 }

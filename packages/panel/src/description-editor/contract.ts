@@ -473,10 +473,15 @@ export interface DescriptionEditorMentions {
   readonly pasted: (words: string) => MentionNode | undefined;
   /** Whether a link's target is one the read view draws as a chip, so the editor opens the link as that chip, and draws one laid in while editing in a chip's light look. */
   readonly namesChip: NamesChip;
+  /** The link each listed task's key names its task by, so a key written among words opens as that task's chip, as the read view draws it. */
+  readonly keyTargets: ReadonlyMap<string, string>;
 }
 
 /** Whether a link's target is one the read view draws as a chip. */
 export type NamesChip = (target: string) => boolean;
+
+/** What the editor opens as chips, as the read view draws them: a link by its target, and a listed task's key written among words. */
+export type ChipsRead = Pick<DescriptionEditorMentions, "namesChip" | "keyTargets">;
 
 /** Words of the editor a thread is started on: where they stand in `text`, the Markdown the editor would hand over now, and the words themselves. */
 export interface EditorSpan {

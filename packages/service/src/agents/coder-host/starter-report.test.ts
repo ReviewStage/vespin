@@ -9,7 +9,7 @@ import { SettledTurnListener } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
-import { AGENT_PAYER, agentMessageReplyLine } from "@repo/features/agent-wire";
+import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS } from "@repo/wire";
@@ -25,9 +25,11 @@ import { lastSaid, reportToStarter } from "./starter-report.js";
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
- * A started agent's final message handed to its starter as the store writer
- * settles its turn, where the starter, which takes a turn only when a
- * message reaches it, would otherwise wait on a report that never comes.
+ * A started agent's failed turn handed to its starter as the store writer
+ * settles it, where the starter, which takes a turn only when a message
+ * reaches it, would otherwise wait on a report the agent could not send;
+ * a turn completed or stopped hands nothing, since the agent messages its
+ * starter itself.
  * Over a real dialect, the agents' sessions a recording fake, the writer told
  * to hand each settled turn here as the deployment's listener does.
  * Synthetic accounts and agents.
@@ -96,13 +98,18 @@ const reporting = (agentSessions: ReturnType<typeof recordingSessions>) =>
 
 it.layer(SUITE)("a started agent's final message handed to its starter", (it) => {
   it.effect(
-    "a completed turn hands its last words to the starter once, under the agent's name and how it ended, however many times the settle is heard",
+    "a completed turn hands the starter nothing, and a failed one its last words once, under the agent's name and why it failed, however many times the settle is heard",
     () =>
       Effect.gen(function* () {
         const agentSessions = recordingSessions();
         const { agent, sessionId } = yield* openStarted();
 
-        const turnId = yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0, REPORT).pipe(
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0, REPORT).pipe(
+          Effect.provide(reporting(agentSessions)),
+        );
+        assert.deepEqual(sentTo(agentSessions, sessionId), []);
+
+        const turnId = yield* endedAt(agent, RUN_STATUS.FAILED, T0 + 1_000, REPORT).pipe(
           Effect.provide(reporting(agentSessions)),
         );
 
@@ -111,18 +118,17 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
         assert.ok(told !== undefined);
         assert.match(
           told,
-          /^Message · \[@Record the starter\]\(.*\), an agent you started, finished its turn\. Its final message:\n\n/u,
+          /^Message · \[@Record the starter\]\(.*\), an agent you started, failed its turn \(.+\)\. Its final message:\n\n/u,
         );
-        assert.ok(told.includes(`\n\n${REPORT}\n\n`), told);
-        assert.ok(told.endsWith(agentMessageReplyLine(agent.id)), told);
+        assert.ok(told.endsWith(`\n\n${REPORT}`), told);
 
         // The settle heard again, as a retried batch or a second listener would, sends nothing twice.
         yield* reportToStarter(agentSessions.sessionsFor, {
           userId: agent.userId,
           conversationId: agent.conversationId,
           turnId,
-          status: TURN_STATUS.SETTLED,
-          failure: null,
+          status: TURN_STATUS.FAILED,
+          failure: TURN_FAILURE.MODEL,
           ranMs: 1,
         }).pipe(Effect.provide(githubReaching([]).layer));
         assert.equal(sentTo(agentSessions, sessionId).length, 1);
@@ -130,7 +136,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
   );
 
   it.effect(
-    "a failed turn that said nothing hands its failure, a stopped one that it was stopped, and one the plan's limit stopped that limit",
+    "a failed turn that said nothing hands its failure, one the plan's limit stopped that limit, and one stopped nothing",
     () =>
       Effect.gen(function* () {
         const agentSessions = recordingSessions();
@@ -148,16 +154,13 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
           TURN_FAILURE.PLAN_LIMIT,
         ).pipe(Effect.provide(reporting(agentSessions)));
 
-        const [failed, stopped, limited] = sentTo(agentSessions, sessionId);
+        const [failed, limited, ...more] = sentTo(agentSessions, sessionId);
+        assert.equal(more.length, 0, more.join("\n"));
         assert.ok(
           failed?.includes(
             `failed its turn (${TURN_FAILURE.MODEL}). Its final message:\n\n(it said nothing)`,
           ),
           failed ?? "nothing was sent",
-        );
-        assert.ok(
-          stopped?.includes("was stopped before it finished. Its final message:\n\nStopping."),
-          stopped ?? "nothing was sent",
         );
         // One its plan's usage limit stopped says so, never as a failure word.
         assert.ok(
@@ -175,7 +178,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
       const { member, starter, agent } = yield* openStarted();
       yield* archiveAgent(member, starter.id, true);
 
-      yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0, REPORT).pipe(
+      yield* endedAt(agent, RUN_STATUS.FAILED, T0, REPORT).pipe(
         Effect.provide(reporting(agentSessions)),
       );
 

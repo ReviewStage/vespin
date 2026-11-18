@@ -74,6 +74,8 @@ export const TurnHandedSchema = Schema.Struct({
       replyButtonsOn: Schema.optionalKey(Schema.Boolean),
       // Note that a session opened before Computer use was an experiment names none, having been offered no computer tool.
       computerUseOn: Schema.optionalKey(Schema.Boolean),
+      /** Absent for a session opened before the Inbox could be turned off, which opened with it on. */
+      inboxOn: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });
@@ -131,18 +133,26 @@ const SPOKEN_WORDS = `## This turn is spoken
 
 The developer is speaking to you through a voice that reads your replies aloud, so this turn's message is what they said, and your final reply is what they hear. Answer short, in plain facts: no Markdown, code blocks, or tables, and no file paths or links read out. Lead with the result and any decision waiting on the developer, a sentence or two at a time, and leave the detail to what you write to the task.`;
 
+/** What a spoken turn is told beside them where the agent ends its turns with `end_turn`, whose summary the voice reads aloud. */
+const SPOKEN_END_TURN = `On a call, write \`${AGENT_TOOL.END_TURN}\`'s summary as plain sentences, not bullets or links.`;
+
 /** The line a turn opens with after a spoken one, whose call's words still stand in the history. */
 const TYPED_AFTER_CALL =
   'This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: your words are read, and a question for the developer goes in a thread.';
 
 /**
  * What a turn opens with of its kind: on a spoken turn the words for a reply
- * read aloud, handed every time since they are short; on a typed turn after
- * a spoken one, a line saying those words in its history no longer hold; and
- * nothing for a typed turn otherwise.
+ * read aloud, with how to write `end_turn`'s summary where the agent ends its
+ * turns with it, handed every time since they are short; on a typed turn
+ * after a spoken one, a line saying those words in its history no longer
+ * hold; and nothing for a typed turn otherwise.
  */
-export function turnKindWords(handed: TurnHanded, spoken: boolean): string | undefined {
-  if (spoken) return SPOKEN_WORDS;
+export function turnKindWords(
+  handed: TurnHanded,
+  spoken: boolean,
+  endsTurns: boolean,
+): string | undefined {
+  if (spoken) return endsTurns ? `${SPOKEN_WORDS} ${SPOKEN_END_TURN}` : SPOKEN_WORDS;
 
   return handed.spoken === true ? TYPED_AFTER_CALL : undefined;
 }

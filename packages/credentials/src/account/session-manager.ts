@@ -14,6 +14,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
+import { identity } from "effect/Function";
 import {
   LOOPBACK_CONSENT_CANCELED,
   type LoopbackConsent,
@@ -123,9 +124,18 @@ type SessionLifecycle = AccountLifecycle<{
 
 const IDLE: SessionLifecycle = { kind: ACCOUNT_LIFECYCLE.IDLE };
 
+/** What a write of the account is: a renewal's, whose tokens the service already rotated, or any other. */
+export interface AccountWrite {
+  /** A renewal's: where it can't be written, the store keeps it for the run rather than lose a pair the service no longer takes back. */
+  readonly renewal: boolean;
+}
+
+/** The write a renewal's grant and its identity read keep their answer with. */
+const RENEWAL_WRITE: AccountWrite = { renewal: true };
+
 interface AccountSessionStore {
   readAccount(): Effect.Effect<StoredAccount | undefined>;
-  setAccount(account: StoredAccount): Effect.Effect<AccountSnapshot>;
+  setAccount(account: StoredAccount, write?: AccountWrite): Effect.Effect<AccountSnapshot>;
   clearAccount(): Effect.Effect<AccountSnapshot>;
 }
 
@@ -136,6 +146,9 @@ class SignInCanceled extends Data.TaggedError("SignInCanceled") {}
  * A sign-in that could not be completed: `failure` is the key the panel says
  * it in, and `message` the consent's own reason, for the host's log alone.
  */
+/** The line a renewal the service refused writes down before it signs the account out. */
+export const RENEWAL_REFUSED = "The service refused the account's renewal, so it signs out.";
+
 export class SignInFailed extends Data.TaggedError("SignInFailed")<{
   readonly failure: SignInFailure;
   readonly message: string;
@@ -196,6 +209,21 @@ function reportingFailure<A, E>(
   ).pipe(Effect.asVoid);
 }
 
+/**
+ * When a renewal may run, on a platform that can stop the app mid-request:
+ * a refresh grant rotates the refresh token, so a renewal whose answer is
+ * never kept presents the rotated token next time, a replay the service
+ * answers by revoking every token the account holds on this client. The
+ * iPhone opens it only while the app stands in the foreground, and keeps the
+ * app running through a renewal's grant and its store write.
+ */
+export interface AccountRenewalWindow {
+  /** Whether a renewal may start now, as the platform reads its app's own state. */
+  readonly open: () => boolean;
+  /** Runs a renewal's grant and the write that keeps its answer, while the platform keeps the app running through both. */
+  readonly whileFinishing: <A, E>(effect: Effect.Effect<A, E>) => Effect.Effect<A, E>;
+}
+
 interface AccountSessionManagerOptions {
   client: AccountClient;
   store: AccountSessionStore;
@@ -211,6 +239,8 @@ interface AccountSessionManagerOptions {
   report: (line: string) => void;
   startCapabilities: Effect.Effect<void>;
   stopCapabilities: Effect.Effect<void>;
+  /** When a renewal may run; always, and with nothing held, where the platform names no window. */
+  renewalWindow?: AccountRenewalWindow;
 }
 
 export class AccountSessionManager {
@@ -474,6 +504,10 @@ export class AccountSessionManager {
 
       if (Result.isSuccess(identity)) {
         if (sameIdentity(stored, identity.success)) return;
+        const current = yield* this.#options.store.readAccount();
+
+        // Note that an identity read a renewal overtook writes nothing, since its pair is the one the renewal rotated away; the renewal's own identity read keeps the identity.
+        if (current?.refreshToken !== stored.refreshToken) return;
 
         if (!(yield* this.#storeCurrent(generation, mergedIdentity(stored, identity.success))))
           return;
@@ -513,28 +547,48 @@ export class AccountSessionManager {
       const stored = yield* this.#options.store.readAccount();
 
       if (!stored || !this.#options.requiresAccount || !this.#isCurrent(generation)) return;
-      const renewed = yield* Effect.result(this.#options.client.refresh(stored.refreshToken));
+      const window = this.#options.renewalWindow;
 
-      if (Result.isFailure(renewed)) {
-        if (accountFailureAction(renewed.failure) === ACCOUNT_FAILURE_ACTION.SIGN_OUT) {
+      // Note that a renewal waits for the window rather than risk an answer the platform never lets the app keep; the caller's refused call fails as it would offline.
+      if (window !== undefined && !window.open()) return;
+      const finishing = window?.whileFinishing ?? identity;
+
+      // The grant and the write that keeps its answer run as one, so the platform holds the app through both.
+      const granted = yield* finishing(
+        Effect.gen({ self: this }, function* () {
+          const renewed = yield* Effect.result(this.#options.client.refresh(stored.refreshToken));
+
+          if (Result.isFailure(renewed)) return { failure: renewed.failure };
+          const account = { ...stored, ...renewed.success };
+
+          return { account, kept: yield* this.#storeCurrent(generation, account, RENEWAL_WRITE) };
+        }),
+      );
+
+      if ("failure" in granted) {
+        if (accountFailureAction(granted.failure) === ACCOUNT_FAILURE_ACTION.SIGN_OUT) {
+          this.#options.report(RENEWAL_REFUSED);
           yield* this.#signOutRefused(generation);
         }
 
         return;
       }
 
-      const renewedAccount = { ...stored, ...renewed.success };
+      const renewedAccount = granted.account;
 
       // The renewed tokens are already stored by the time the identity read
       // below is made, so a read that fails leaves the account signed in on
       // them rather than undoing the renewal; it is written down, not held.
-      if (!(yield* this.#storeCurrent(generation, renewedAccount))) return;
+      if (!granted.kept) return;
 
       const next = yield* Effect.result(
         this.#options.client.userInfo(renewedAccount.accessToken, stored.provider),
       );
 
       if (Result.isSuccess(next)) {
+        // Note that an unchanged identity writes nothing more, so a renewal whose pair the store holds for the run never fails on a second write.
+        if (sameIdentity(renewedAccount, next.success)) return;
+
         if (!(yield* this.#storeCurrent(generation, mergedIdentity(renewedAccount, next.success))))
           return;
         yield* this.#publishChange();
@@ -973,10 +1027,14 @@ export class AccountSessionManager {
     );
   }
 
-  #storeCurrent(generation: number, stored: StoredAccount): Effect.Effect<boolean> {
+  #storeCurrent(
+    generation: number,
+    stored: StoredAccount,
+    write?: AccountWrite,
+  ): Effect.Effect<boolean> {
     return Effect.gen({ self: this }, function* () {
       if (!this.#isCurrent(generation)) return false;
-      const next = yield* this.#options.store.setAccount(stored);
+      const next = yield* this.#options.store.setAccount(stored, write);
 
       if (!this.#isCurrent(generation)) return false;
       this.#account = next;

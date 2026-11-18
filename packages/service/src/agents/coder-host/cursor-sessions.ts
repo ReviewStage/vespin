@@ -27,10 +27,9 @@
  * - Cursor runs Full access and Auto (Cursor's own Auto-review) alone;
  *   Ask is never offered (`harnessTakesMode`), and an agent somehow on it
  *   is refused rather than run unasked.
- * - Rewind and fork are not Cursor's yet: a Cursor agent is never rewound
- *   (`rewind.ts`), and a continued or forked one carries no session of its
- *   source's (`takeover.ts`), so it starts a fresh one handed the source's
- *   steps.
+ * - A rewind or a fork at a message hands the launch its cut as the other
+ *   harnesses' launches are handed theirs, and the runner points the agent
+ *   back at the checkpoint it marked before that line (`cursor-store.ts`).
  * - A local agent runs on its Mac's own Cursor sign-in
  *   (`AGENT_PAYER.MAC_SIGN_IN`), the key Cursor's SDK keeps there once the
  *   member signs in (`vespin-host cursor-login`), so its launch is handed no
@@ -43,6 +42,7 @@
 
 import { randomUUID } from "node:crypto";
 import {
+  CURSOR_AGENT_PREFIX,
   type CursorConfig,
   INPUT_LINE,
   type InputLine,
@@ -95,9 +95,6 @@ const CURSOR_API = {
   API: { domain: "api.cursor.com" },
 } as const;
 
-/** What the id of a Cursor agent we mint begins with, as the SDK's own local ids do. */
-const CURSOR_AGENT_PREFIX = "agent-";
-
 /** The account's Cursor API key as a launch declares it: sent to Cursor's two hosts, fixed for the launch. */
 function apiKeyCredential(key: Redacted.Redacted<string>): RunnerCredential {
   return {
@@ -110,10 +107,16 @@ function apiKeyCredential(key: Redacted.Redacted<string>): RunnerCredential {
   };
 }
 
-/** The agent's model as Cursor's SDK takes it, read against the Cursor models its starter is offered; refused where it is none of them. */
+/** The agent's model, on its window, as Cursor's SDK takes it, read against the Cursor models its starter is offered; refused where it is none of them. */
 const selectionOf = Effect.fnUntraced(function* (agent: Agent) {
   const cursorModels = yield* (yield* CursorModelCatalog).forAccount(agent.userId);
-  const selection = cursorModelSelectionOf(cursorModels, agent.model, agent.effort);
+
+  const selection = cursorModelSelectionOf(
+    cursorModels,
+    agent.model,
+    agent.effort,
+    agent.contextWindow,
+  );
 
   if (selection === undefined) return yield* new LaunchRefused({ reason: "model" });
 
@@ -170,8 +173,7 @@ function cursor(options: RunnerSessionsOptions): RunnerHarness<{ readonly _tag: 
     layout: MachineLayout,
     resume: string | undefined,
     firstSequence: number,
-    // Note that no cut reaches a Cursor launch, since a Cursor agent is never rewound (`rewind.ts`).
-    _rewindBefore: string | undefined,
+    rewindBefore: string | undefined,
   ) =>
     Effect.gen(function* () {
       const model = yield* selectionOf(agent);
@@ -192,6 +194,7 @@ function cursor(options: RunnerSessionsOptions): RunnerHarness<{ readonly _tag: 
         agentId: agent.id,
         sdk: layout.cursorSdk,
         session: resume ?? `${CURSOR_AGENT_PREFIX}${randomUUID()}`,
+        ...(rewindBefore === undefined ? undefined : { rewindBefore }),
         model,
         instructions: yield* options.instructions(agent, layout),
         firstSequence,

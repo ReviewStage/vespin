@@ -31,6 +31,7 @@ import {
   useTaskListCollections,
   useTaskListRows,
 } from "../host/host-provider.js";
+import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
 import {
   agentLine,
@@ -70,7 +71,8 @@ export interface SearchFound {
 
 /**
  * The tasks, Inbox items, and agents of the chosen workspace that `typed`
- * finds; none of any while nothing is typed. Note that they are found for a
+ * finds; none of any while nothing is typed, and no Inbox item while the
+ * member turned the Inbox off. Note that they are found for a
  * deferred copy of what is typed, as ⌘K ranks its rows, so a key typed
  * draws at once and the finding that follows gives way to the next key.
  */
@@ -78,6 +80,7 @@ export function useSearchFound(typed: string): SearchFound {
   const query = useDeferredValue(typed);
   const listing = useTasksListing(query);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
+  const inboxShown = useInboxShown();
   const collections = useTaskListCollections();
   const listedTasks = useListedTasks();
   const listedAgents = useListedAgents();
@@ -101,7 +104,7 @@ export function useSearchFound(typed: string): SearchFound {
         taskSearchSubject(task, workspace?.name),
       ),
       // Note that a blank query ranks nothing, so the Inbox's every item, which it lists with nothing typed, stays out.
-      inbox: rankedBySearch(inbox.listed, query, inboxSearchSubject),
+      inbox: inboxShown ? rankedBySearch(inbox.listed, query, inboxSearchSubject) : [],
       agents: rankedBySearch(agents, query, (agent) =>
         agentSearchSubject(agent, tasksById.get(agent.taskId)?.name),
       ).map((agent) => agentLine(agent, waiting.byAgent, pullRequests)),
@@ -110,6 +113,7 @@ export function useSearchFound(typed: string): SearchFound {
   }, [
     listing.found,
     inbox.listed,
+    inboxShown,
     listedTasks,
     listedAgents,
     pullRequests,
@@ -118,7 +122,7 @@ export function useSearchFound(typed: string): SearchFound {
     query,
   ]);
 
-  const inboxReading = inbox.feed === INBOX_FEED.READING;
+  const inboxReading = inboxShown && inbox.feed === INBOX_FEED.READING;
 
   // Note that a task or agent found past the list held comes only with the service's search, and one on a list not yet read with its first read.
   const tasksReading =

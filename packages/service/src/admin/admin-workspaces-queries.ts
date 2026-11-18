@@ -72,7 +72,7 @@ const ScopeSchema = Schema.Literals([ADMIN_METRICS_SCOPE.NON_ADMINS, ADMIN_METRI
 const KindSchema = Schema.Literals([ADMIN_WORKSPACES_KIND.SHARED, ADMIN_WORKSPACES_KIND.ALL]);
 
 /** Whether the workspace is the personal one made for some account. */
-const PERSONAL = sql<boolean>`exists(select 1 from ${personalWorkspace} where ${personalWorkspace.organizationId} = ${organization.id})`;
+export const PERSONAL = sql<boolean>`exists(select 1 from ${personalWorkspace} where ${personalWorkspace.organizationId} = ${organization.id})`;
 
 const MEMBER_COUNT = sql<number>`(select count(*)::int from ${member} where ${member.organizationId} = ${organization.id})`;
 

@@ -44,6 +44,7 @@ import { actContent } from "./glyph-label.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
+import type { MediaSize } from "./media-frame.js";
 import { PictureSet, type SetPicture } from "./picture-set.js";
 import {
   BAR_ITEM_MENU,
@@ -90,6 +91,8 @@ export type ThreadMedia =
       readonly source: string | null | undefined;
       readonly onRetry?: (() => void) | undefined;
       readonly alt: string;
+      /** The size its header states, in pixels, where its bytes are held, which it stands at before it decodes. */
+      readonly size?: MediaSize | undefined;
     }
   | {
       readonly kind: typeof THREAD_MEDIA.VIDEO;
@@ -321,7 +324,9 @@ function setPicture(media: ThreadMedia): readonly SetPicture[] {
 function MediaView({ media }: { readonly media: ThreadMedia }) {
   switch (media.kind) {
     case THREAD_MEDIA.PICTURE:
-      return <Picture source={media.source} alt={media.alt} onRetry={media.onRetry} />;
+      return (
+        <Picture source={media.source} alt={media.alt} size={media.size} onRetry={media.onRetry} />
+      );
     case THREAD_MEDIA.VIDEO:
       return (
         <Video
@@ -561,7 +566,7 @@ function MessageView({
             ]}
           >
             {writer.agent ? (
-              <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
+              <AgentTile harness={writer.harness} size={MARK_SIZE.WRITER} />
             ) : (
               <Avatar
                 name={writer.name}

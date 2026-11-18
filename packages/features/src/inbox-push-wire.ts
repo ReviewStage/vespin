@@ -8,7 +8,7 @@
  * `inboxPushResponseOf` turns a tap or an action into the screen it opens
  * and what the app sends there. A decide's buttons are named by each
  * option's place in the payload's `options`, 0 first, which the app's
- * Notification Service Extension writes as each action's identifier; a
+ * Notification Content Extension writes as each action's identifier; a
  * reply typed in place comes back under `INBOX_PUSH_ACTION.REPLY`. The
  * app's share extension posts one notification of its own, a local one
  * naming the task it started (`PUSH_KIND.SHARE_STARTED`), which a tap opens
@@ -25,7 +25,7 @@ export const PUSH_KIND = {
   ASK: "ask",
   /** Any other post of an agent's on a thread that waits on the member. */
   POST: "post",
-  /** A turn of an agent the member started that failed. */
+  /** A turn of an agent the member started that failed, or that finished where the member keeps no Inbox: either opens the agent. */
   RUN_FAILED: "run-failed",
   /** A thread settled, so its delivered notification is removed; a background push. */
   SETTLED: "settled",
@@ -33,13 +33,13 @@ export const PUSH_KIND = {
   SHARE_STARTED: "share-started",
 } as const;
 
-/** The actions the app offers on an alert, as its `aps.category` names them; the app registers each. */
+/** The actions the app offers on an alert, as its `aps.category` names them; the app registers each, and its config names the decide and reply for its content extension (`apps/mobile/app.config.ts`). */
 export const PUSH_CATEGORY = {
   /** A decide that takes one option: a button per option, labeled from the payload's `options`. */
   DECIDE: "inbox-decide",
   /** Any other post: a reply typed in place. */
   REPLY: "inbox-reply",
-  /** A failed run: no action but opening the agent. */
+  /** A turn that ended, failed or finished: no action but opening the agent. */
   RUN_FAILED: "agent-run-failed",
 } as const;
 
@@ -80,7 +80,7 @@ const threadPushSchema = EffectSchema.Struct({
   recommended: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
 });
 
-/** A push about an agent's failed turn. */
+/** A push about an agent's turn that failed, or finished where its member keeps no Inbox. */
 const runFailedPushSchema = EffectSchema.Struct({
   kind: EffectSchema.Literal(PUSH_KIND.RUN_FAILED),
   agentId: idSchema,

@@ -374,6 +374,8 @@ export * from "./components/settings-ordered-rows/settings-ordered-rows.js";
 
 export * from "./components/settings-page/settings-page.js";
 
+export * from "./components/settings-row/settings-link-row.js";
+
 export * from "./components/settings-row/settings-row.js";
 
 export * from "./components/settings-row/settings-row-fold.js";

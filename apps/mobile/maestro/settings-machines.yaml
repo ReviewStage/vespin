@@ -14,7 +14,7 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Machines"
@@ -30,5 +30,8 @@ appId: dev.vespin.ios
 - assertVisible: "Remove build-box?"
 - waitForAnimationToEnd
 - takeScreenshot: settings-machines-remove
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Remove build-box?"
 - assertVisible: "build-box"

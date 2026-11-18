@@ -52,6 +52,7 @@ import {
   type WriteDeclaration,
 } from "@repo/sync";
 import { Effect, Equal, Schema, type Scope } from "effect";
+import { KEPT_LIST } from "./kept-lists.js";
 import { confirmWrite, type TxWait } from "./live-follow.js";
 import { callKey, TASK_QUEUED_WRITE, untaken, type WriteAnswers } from "./queued-writes.js";
 
@@ -139,7 +140,7 @@ export interface SidebarCollections {
   readonly keep: (txid: string | undefined, kept: TaskSections) => Effect.Effect<void>;
 }
 
-/** The account's sidebar, empty until its follow first answers or a pin is drawn. */
+/** The account's sidebar, empty until its follow first answers or a pin is drawn, where the local database held none of it. */
 export function sidebarCollections(
   dependencies: SidebarDependencies,
 ): Effect.Effect<SidebarCollections, never, Scope.Scope> {
@@ -160,13 +161,19 @@ export function sidebarCollections(
     };
 
     const redraw = () => Effect.sync(() => drawn());
-    const sections: HeldRows<SectionsRow> = yield* pool.stand(SECTIONS, { redraw, confirmation });
+
+    const sections: HeldRows<SectionsRow> = yield* pool.stand(SECTIONS, {
+      redraw,
+      confirmation,
+      kept: KEPT_LIST.SIDEBAR_SECTIONS,
+    });
 
     // Note that every pin made is the sidebar's, since it holds every repository the account pinned.
     const pins: HeldRows<RepositoryPin> = yield* pool.stand(REPOSITORY_PIN, {
       redraw,
       confirmation,
       adopts: () => true,
+      kept: KEPT_LIST.SIDEBAR_PINS,
     });
 
     /** Draws the sidebar as it stands now, what every standing write drew among it. */
@@ -178,6 +185,9 @@ export function sidebarCollections(
         repositoryPins: pinsInOrder(pins.rows()),
       });
     };
+
+    // Note that what the local database held of the sidebar is drawn at once, before its follow answers, with any pin a write laid back made.
+    if (sections.loaded || pins.loaded || pins.rows().length > 0) drawn();
 
     /** The sections answered, as the account's one row; none while nobody is signed in. */
     const sectionsRows = (answered: TaskSections): readonly SectionsRow[] => {

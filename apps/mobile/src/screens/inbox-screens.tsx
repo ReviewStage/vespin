@@ -37,6 +37,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import type { TaskSummary } from "@repo/features/task-wire";
 import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
@@ -56,6 +57,7 @@ import {
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
+  GlassDock,
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
@@ -76,31 +78,20 @@ import {
   type Scope,
   Screen,
   SplitView,
-  scopeMenu,
-  scopeSubtitle,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
-  UNDER_SPLIT_SCREEN,
   useColors,
-  useMinute,
-  useThreeColumns,
+  useToday,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
-import {
-  PUSHED_PAGE,
-  useDetailPush,
-  useStackRoot,
-  useStandFocusedDetailFront,
-} from "../detail-stack.js";
-import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -111,29 +102,24 @@ import {
   useInboxScope,
   useInboxThread,
   useReadOnOpen,
+  useStandFrontSteps,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
-import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { pendingThreadFile, useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
+import { NotificationAsk } from "../notification-ask.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { useHandColumns, useInFront } from "../place-columns.js";
+import { useReplyDrawnCount } from "../reply-drawn.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import {
-  PLUS_TAB,
-  SIDEBAR_PLACE,
-  useComposeAction,
-  useListColumn,
-  usePortraitDetailBar,
-} from "./app-sidebar.js";
-import { useDetailStackColumn } from "./detail-stack-column.js";
+import { PLUS_TAB, useComposeAction, useDetailColumnBar, useListColumn } from "./app-sidebar.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -158,12 +144,6 @@ const SCOPE_LABEL = "Filter";
 
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
-
-/** The scopes that narrow Open, which the filter button stands filled for and the bar names under its title, as Mail's filters do; All widens it instead, so it names no filter. */
-const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
-  INBOX_SHOW.NEEDS_ME,
-  INBOX_SHOW.REMINDERS,
-]);
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
@@ -220,7 +200,7 @@ type InboxRowsProps = {
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
-  /** The Inbox's scopes, standing as the list's first row; none beside the app sidebar, where they stand as the bar's filter. */
+  /** The Inbox's scopes, standing as the list's first row. */
   readonly scopes?: ListScopes | undefined;
   /** What stands over the list while it lists no thread: why, and the way on. */
   readonly empty?: ReactNode | undefined;
@@ -261,6 +241,7 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      lead={<NotificationAsk />}
       scopes={scopes}
       empty={empty}
       onChooseStart={onChooseStart}
@@ -276,6 +257,22 @@ function InboxRows({
     </RowList>
   );
 }
+
+/**
+ * The thread a row draws: its item, and of the task holding it only what the
+ * row says (its id and workspace for the link, its name and status for the
+ * line above the title). Note that the row takes them one by one rather than
+ * the task, because a task read or moved anew, such as by the read an opened
+ * task sends, is a new object, which drew every row of the task again for
+ * words that stood as they were.
+ */
+type InboxRowThread = {
+  readonly item: InboxItem;
+  readonly taskId: string;
+  readonly workspaceId: TaskSummary["workspaceId"];
+  readonly taskName: string;
+  readonly taskStatus: TaskSummary["status"];
+};
 
 type InboxRowActs = {
   readonly readerId: string | undefined;
@@ -300,7 +297,16 @@ export function InboxItemRows({
 }: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
   return (
     <RowForEach data={listed} keyOf={(each) => each.item.id}>
-      {(each) => <InboxRow listed={each} {...acts} />}
+      {({ holder: { task }, item }) => (
+        <InboxRow
+          item={item}
+          taskId={task.id}
+          workspaceId={task.workspaceId}
+          taskName={task.name}
+          taskStatus={task.status}
+          {...acts}
+        />
+      )}
     </RowForEach>
   );
 }
@@ -315,26 +321,29 @@ export function InboxItemRows({
  * On an iPad it drags out as its vespin.dev link.
  */
 function InboxRowView({
-  listed,
+  item,
+  taskId,
+  workspaceId,
+  taskName,
+  taskStatus,
   readerId,
   pictureOf,
   onMark,
   remindMenu,
   onResolve,
-}: InboxRowActs & { readonly listed: InboxListed }) {
-  // Note that the row reads the minute itself, so a row whose thread did not move still moves its time and Remind me's times as the minute turns.
-  const now = useMinute();
-  const { holder, item } = listed;
+}: InboxRowActs & InboxRowThread) {
+  // Note that the row is drawn again as the day turns, so Remind me's Tomorrow and Next week say their days rightly; its time moves on with the minute inside `ListRow`, so the minute draws no Inbox row again.
+  useToday();
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+  const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
   const keeping = useKeeping();
 
   const link = linkOf(
-    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId, itemId: item.id },
     workspaceStep,
   );
 
@@ -370,8 +379,8 @@ function InboxRowView({
       id={item.id}
       title={title}
       task={{
-        name: holder.task.name,
-        status: holder.task.status,
+        name: taskName,
+        status: taskStatus,
       }}
       line={inboxLineKind(item)}
       summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
@@ -384,7 +393,6 @@ function InboxRowView({
       }
       at={item.updatedAt}
       due={item.remindAt}
-      now={now}
       trailingActions={[...resolve, remindMenu(item)]}
       leadingActions={[
         {
@@ -407,7 +415,7 @@ function InboxRowView({
       preview={
         <ThreadPreview
           title={title}
-          task={{ name: holder.task.name, status: holder.task.status }}
+          task={{ name: taskName, status: taskStatus }}
           messages={messages}
         />
       }
@@ -419,9 +427,9 @@ function InboxRowView({
  * An Inbox item's row, drawn again only where its props moved. Note that
  * every delivery to the Inbox drew every row again, a list off screen's
  * among them, which held the JS thread under a working agent's posts; its
- * props keep their identity while its own thread stands (`inboxListed`, the
- * acts' and the menus' hooks), so a row is now drawn again only where its
- * thread moved.
+ * props keep their identity while its own thread stands (the item, the
+ * task's words it says, and the acts' and the menus' hooks), so a row is now
+ * drawn again only where its thread or those words moved.
  */
 const InboxRow = memo(InboxRowView);
 
@@ -664,7 +672,8 @@ function ThreadDetail({
 }) {
   const colors = useColors();
   const { holder, item } = listed;
-  const openLink = useOpenLink();
+  // Note that a pull request a thread names opens in the app by its task's workspace.
+  const openLink = useOpenLink(holder.task.workspaceId);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
@@ -745,13 +754,18 @@ function ThreadDetail({
     openInSafari(linkOf(place, workspaceStep));
   };
 
-  const { sources, sizes, retry } = useThreadMedia(item.id, media);
+  // Note that a reply's files sent from the phone are drawn from their own bytes until the read carries it and after, so a sent photo never waits on a read of itself.
+  const pending = useCallback(
+    (itemId: string, attachmentId: string) => pendingThreadFile(itemId, attachmentId, item.thread),
+    [item.thread],
+  );
+
+  const { sources, sizes, pictureSizes, retry } = useThreadMedia(item.id, media, pending);
+  useReplyDrawnCount(item.thread);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
-  const onTab = useOnTab();
-  const toDetail = useDetailPush();
 
   // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
   const shown = useRef(false);
@@ -764,17 +778,10 @@ function ThreadDetail({
   }, []);
 
   const navigation = useNavigation();
-  const inFront = useInFront();
 
-  // Whether this thread stands in front now, read when a start answers rather than when it was sent, since the reader may have switched tabs meanwhile.
-  const front = useRef(inFront);
-  useEffect(() => {
-    front.current = inFront;
-  }, [inFront]);
-
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front, read when the start answers rather than when it was sent, since the reader may have switched tabs or pushed a page over it meanwhile: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
   const openStarted = (id: string) => {
-    if (!shown.current || !navigation.isFocused() || !front.current) return;
+    if (!shown.current || !navigation.isFocused()) return;
 
     if (place.inStack) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
     else place.onOpen(id);
@@ -786,6 +793,10 @@ function ThreadDetail({
     handedOrders.set(id, place.steps.order);
     router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
   };
+
+  // Note that a pushed thread stands its arrows' steps for the iPad's K and J while it's the screen in front; a split view's list stands its own (`InboxSplitScreen`).
+  const focused = useIsFocused();
+  useStandFrontSteps(place.inStack ? place.steps : {}, stepTo, place.inStack && focused);
 
   const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemind();
@@ -810,23 +821,20 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them, inside the detail's own column beside the list where the window stands three, where the path heads the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
+  // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
-      onPress: () => {
-        if (toDetail({ kind: PUSHED_PAGE.TASK, taskId: holder.task.id })) return;
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })));
-      },
+      onPress: () =>
+        router.push(
+          onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })),
+        ),
     },
     {
       label: PATH_OPENS.AGENT,
       symbol: GLYPH.AGENT,
-      onPress: () => {
-        if (toDetail({ kind: PUSHED_PAGE.AGENT, agentId: item.agentId })) return;
-        router.push(onTab(iosAgentRoute(item.agentId)));
-      },
+      onPress: () => router.push(onOwnTab(iosAgentRoute(item.agentId))),
     },
   ] as const;
 
@@ -879,7 +887,14 @@ function ThreadDetail({
         };
       }
 
-      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name, onRetry };
+      return {
+        kind: THREAD_MEDIA.PICTURE,
+        key,
+        source,
+        alt: each.name,
+        size: pictureSizes.get(key),
+        onRetry,
+      };
     }),
   }));
 
@@ -968,14 +983,7 @@ function ThreadDetail({
             pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
-            foot: (
-              <ThreadComposer
-                item={item}
-                answer={answer}
-                agentName={agentName}
-                inColumn={{ inFront }}
-              />
-            ),
+            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
           })}
     />
   );
@@ -993,20 +1001,19 @@ function ThreadDetail({
       />
       <Stack.Toolbar placement="right">
         {/* Note that the arrows and ⋯ stand in one bar, since a screen's last `Stack.Toolbar` of a placement replaces the ones before it, and an arrow at the list's end stands dimmed rather than gone, so the other one never moves under the thumb, as Mail's do. */}
+        {/* Note that a glyph here is named as a symbol, as ⋯'s is, because a top bar loads an `xcasset` as a React Native image, which drew our Lucide symbol sets as empty glass. */}
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.PREVIOUS}
           disabled={place.steps.previous === undefined}
+          icon={glyphSymbol(GLYPH.PREVIOUS_ITEM)}
           onPress={() => stepTo(place.steps.previous)}
-        >
-          <Stack.Toolbar.Icon xcasset={GLYPH.PREVIOUS_ITEM} renderingMode="template" />
-        </Stack.Toolbar.Button>
+        />
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.NEXT}
           disabled={place.steps.next === undefined}
+          icon={glyphSymbol(GLYPH.NEXT_ITEM)}
           onPress={() => stepTo(place.steps.next)}
-        >
-          <Stack.Toolbar.Icon xcasset={GLYPH.NEXT_ITEM} renderingMode="template" />
-        </Stack.Toolbar.Button>
+        />
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           <Stack.Toolbar.Menu inline title={path.join(PATH_PART)}>
             {pathActions.map((action) => (
@@ -1031,9 +1038,9 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <FocusedDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
+      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
-      </FocusedDock>
+      </GlassDock>
       {remind.sheet}
     </>
   );
@@ -1068,7 +1075,7 @@ function ThreadNotDrawn({
  * pushed screen reads it, so a link to a thread of a workspace the list does
  * not show still opens it, and one still read, refused, or missing says so.
  */
-export function ThreadColumn({
+function ThreadColumn({
   id,
   remindMenu,
   onOpen,
@@ -1302,12 +1309,9 @@ function InboxStackList(held: InboxHeld) {
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
 // under its scopes' menu picker, since the column cuts segments short, with
-// its search and ⋯ menu in its bar and the selected thread beside it. Where
-// the window is wide enough for three columns, the two are handed to the
-// tabs' one split view, which stands them beside the app sidebar, as Mail
-// stands its mailboxes, a mailbox's mail, and a message, and this root draws
-// nothing of its own under it; otherwise the root stands its own split view.
-// The Stack's header steps aside, since the split view draws each column's
+// its search and ⋯ menu in its bar and the selected thread beside it, in the
+// tab's own split view beside the system's tab sidebar, as Mail stands a
+// mailbox's mail beside a message. The Stack's header steps aside, since the split view draws each column's
 // navigation bar itself.
 function InboxSplitScreen({
   selected,
@@ -1332,12 +1336,21 @@ function InboxSplitScreen({
     chooseStart,
   } = useInboxScreen(held, selected);
 
-  const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
+
+  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; only while the Inbox's root is focused, never under a page pushed over it on the tab's stack.
+  const focused = useIsFocused();
+  const shownIds = listing.listed.map(({ item }) => item.id);
+  const at = selected === undefined ? -1 : shownIds.indexOf(selected);
+  useStandFrontSteps(
+    at < 0 ? {} : { previous: shownIds[at - 1], next: shownIds[at + 1] },
+    select,
+    focused && at >= 0,
+  );
 
   const rows = (
     <InboxRows
-      scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
+      scopes={{ label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
       look={LIST_LOOK.PLAIN}
       listed={listing.listed}
       readerId={listing.readerId}
@@ -1364,8 +1377,8 @@ function InboxSplitScreen({
     />
   );
 
-  // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
+    chosen: selected !== undefined,
     // Note that the list stands its scopes as its first row, so they scroll away with the rows, over its empty state too, which stands as its one row.
     view: rows,
     // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
@@ -1373,11 +1386,6 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
-            // Note that beside the app sidebar the scope leaves the list for the filter button, so the bar names a narrowing one under its title, as Mail's "Filtered by: Unread"; elsewhere the scopes stand over the list and say it themselves.
-            titleLine: threeColumns ? scopeSubtitle(scopes, NARROWING_SCOPES.has(show)) : undefined,
-            filter: threeColumns
-              ? scopeMenu(SCOPE_LABEL, scopes, NARROWING_SCOPES.has(show))
-              : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
@@ -1400,32 +1408,15 @@ function InboxSplitScreen({
   const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
 
   const first = useListColumn(list);
-  useStackRoot(SIDEBAR_PLACE.INBOX, selected);
-  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
-  const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
-  // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
-  useStandFocusedDetailFront(SIDEBAR_PLACE.INBOX, !threeColumns);
-  const firstDetailBar = usePortraitDetailBar(detailBar);
-  useHandColumns(
-    SIDEBAR_PLACE.INBOX,
-    threeColumns
-      ? { content: list.view, contentBar: list.bar, detail, detailBar, root: selected }
-      : undefined,
-  );
+  const firstDetailBar = useDetailColumnBar(detailBar);
 
   return (
     <>
-      <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
-      {threeColumns ? null : (
-        <Screen>
-          <SplitView
-            {...first}
-            detail={stack.wrap(detail)}
-            detailBar={firstDetailBar}
-            detailStack={stack.detailStack}
-          />
-        </Screen>
-      )}
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
+      <Stack.Screen options={{ headerShown: false, title: INBOX_TITLE }} />
+      <Screen>
+        <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
+      </Screen>
     </>
   );
 }

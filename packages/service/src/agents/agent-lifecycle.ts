@@ -10,10 +10,12 @@
  *
  * The agent is reached as every agent procedure reaches it
  * (`agent-reach.ts`): one of a workspace the account is a member of, every
- * other read as none. A delete is any reaching member's, as a task's is,
- * and stops the agent for good first, so a turn under way is no refusal of
- * its own: only a Stop that does not take is. A rewind is the agent's
- * controller's (`coder-host/rewind.ts`). A warm launches the runner only
+ * other read as none. A delete is any reaching member's, as a task's is.
+ * The app's delete stops the agent for good first, so a turn under way is
+ * no refusal of its own: only a Stop that does not take is. The member MCP
+ * server's `delete_agent` and `rewind_agent` stop nothing, since only
+ * `stop_agent` stops an agent: each is refused while the agent is starting
+ * or running. A rewind is the agent's controller's (`coder-host/rewind.ts`). A warm launches the runner only
  * for its controller and answers anyone else the same; a resume takes the
  * Terminal tab's rule (`terminal/sandbox-reach.ts`).
  */
@@ -22,7 +24,12 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, deleteAgent } from "@repo/database/models/agent-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { AGENT_SANDBOX_BEAT_KIND } from "@repo/database/schemas/agent-sandbox";
-import { AGENT_CHAT, type AgentChatHold, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  AGENT_CHAT,
+  AGENT_STATUS,
+  type AgentChatHold,
+  type AgentSummary,
+} from "@repo/features/agent-wire";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
@@ -39,8 +46,8 @@ import { rewoundAgent } from "./coder-host/rewind.js";
 import { sandboxLetGo } from "./coder-host/runner-sessions.js";
 import { runnerWarmed } from "./coder-host/runtime-sessions.js";
 import { startedBlank } from "./coder-host/status.js";
-import { standsStopped, stoppedForGood, summaryOf } from "./coder-host/stop.js";
-import { retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
+import { standsStopped, statusOf, stoppedForGood, summaryOf } from "./coder-host/stop.js";
+import { type Retiring, retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
 import { recordedSandboxBeat, recordedSandboxBeatReleased } from "./sandbox-use.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
@@ -80,6 +87,38 @@ export const deletedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   const retiring = yield* retiringReach(userId);
   yield* stoppedForGood(writer, userId, agent);
 
+  return yield* deletedStopped(userId, agent, retiring);
+});
+
+/**
+ * The agent deleted for good as `deletedAgent` deletes one, stopping
+ * nothing: refused as not ready where it is starting or running, read
+ * under its conversation's lock at the delete itself.
+ */
+export const deletedStoppedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
+  account: string,
+  id: string,
+): Effect.fn.Return<
+  { readonly deleted: true; readonly txid: string },
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient
+> {
+  const { userId, agent } = yield* reachedAgentById(account, id);
+  const retiring = yield* retiringReach(userId);
+
+  return yield* deletedStopped(userId, agent, retiring);
+});
+
+/** The agent, stopped already, deleted under its conversation's lock, its session retired; refused as not ready where it stands at work there. */
+const deletedStopped = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agent: Agent,
+  retiring: Retiring,
+): Effect.fn.Return<
+  { readonly deleted: true; readonly txid: string },
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient
+> {
   const deleted = yield* hostedStoreOrUnavailable(
     deleteAgent(userId, agent.id, {
       standsStopped: agentStandsStopped,
@@ -119,6 +158,28 @@ export const rewoundAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
 > {
   const { userId, agent } = yield* reachedAgentById(account, id);
   yield* rewoundAgent(userId, agent, messageId, restoreFiles);
+
+  return yield* summaryOf(userId, agent);
+});
+
+/** The agent rewound as `rewoundAgentById` rewinds one, stopping no turn: refused as not ready where it is starting or running. */
+export const rewoundStoppedAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
+  account: string,
+  id: string,
+  messageId: string,
+): Effect.fn.Return<
+  AgentSummary,
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | Sandbox | AgentSandbox
+> {
+  const { userId, agent } = yield* reachedAgentById(account, id);
+  const status = yield* statusOf(agent);
+
+  if (status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING) {
+    return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+  }
+
+  yield* rewoundAgent(userId, agent, messageId);
 
   return yield* summaryOf(userId, agent);
 });

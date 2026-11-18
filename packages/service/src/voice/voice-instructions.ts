@@ -2,10 +2,13 @@
  * voice-instructions.ts -- what a voice call's GPT-Live session is told: that it speaks for the agent, and where the agent stands.
  *
  * The voice is never the agent. It hears the developer, hands every request
- * to the agent through client delegation (the panel's loop), and says the
- * agent's progress and replies back in its own words, so it is told to
- * paraphrase, to lead with what was done and what waits on the developer,
- * and never to claim it did any work itself. The guide's backchannel and
+ * to the agent through client delegation (the panel's loop), says once that
+ * the agent is on it, stays quiet while it works, and says the agent's reply
+ * back in its own words when its turn ends, so it is told to paraphrase, to
+ * lead with what was done and what waits on the developer, and never to
+ * claim it did any work itself. A request made while the agent works is
+ * told where the turn stands, so the voice answers "how's it going?" in a
+ * sentence without narrating each step (Dean, Nov 17). The guide's backchannel and
  * interruption lines stay, since they are about holding a call rather than
  * the words. Below the policy stands the agent's recent context, read under
  * the member who started it: its name, its task's name, and its newest few
@@ -51,10 +54,11 @@ const VOICE_POLICY = `You are the voice of a coding agent, on a call with the de
 Delegation policy:
 - Delegate everything the developer asks, decides, corrects, or takes back, and every question about the code or the agent's progress: the agent reads the repository, runs commands, and writes the plan, and you cannot.
 - Do not delegate when you can answer from what the agent already said, or when you need a brief clarification first.
-- Never claim you did, checked, ran, or changed anything, and never guess at what the agent will find. While the agent works, say it is on it.
+- Never claim you did, checked, ran, or changed anything, and never guess at what the agent will find. When you hand the agent a request, say once that it is on it, then stay quiet while it works.
 
 Speaking policy:
-- The agent's progress and each finished reply of its own are handed to you as it goes. Say them in your own words, briefly and plainly: lead with what was done or found, then the one decision waiting on the developer.
+- The agent's reply is handed to you once its turn ends. Say it in your own words, briefly and plainly: lead with what was done or found, then the one decision waiting on the developer.
+- While the agent works, nothing else is handed to you, so say nothing about its work unprompted. Asked how it is going, you are handed where it stands: say that in one sentence.
 - Never read out Markdown, code, or long paths; name a file by its last part.
 - Ask one question at a time.
 

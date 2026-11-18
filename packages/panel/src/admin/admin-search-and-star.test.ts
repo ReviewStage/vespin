@@ -82,6 +82,7 @@ async function draw(
       catalog: unanswered,
       metrics: unanswered,
       cost: unanswered,
+      billing: unanswered,
       reliability: unanswered,
       users: unanswered,
       user: unanswered,

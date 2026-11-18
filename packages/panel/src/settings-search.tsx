@@ -65,6 +65,7 @@ import {
   Stack,
   useComboboxField,
 } from "@repo/ui";
+import { isComposingKey } from "@repo/ui/composing-key";
 import { land } from "@repo/ui/landed";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
@@ -137,6 +138,8 @@ export interface SettingsSearchEntry {
  */
 export type SettingsSearchInput = SettingsRowsInput & {
   workspace?: Workspace | undefined;
+  /** Whether the Billing page stands: billing is on and the reader manages the workspace shown. */
+  billing?: boolean | undefined;
 };
 
 /**
@@ -163,8 +166,8 @@ const EXPERIMENT_WORDS = "experiment preview beta labs early try";
 /** The words every window shortcut answers to, which change nothing and so offer no removal. */
 const WINDOW_SHORTCUT_WORDS = "keyboard shortcut key chord";
 
-/** The words the one Escape row answers to besides, which stands for every layer the key steps back from. */
-const ESCAPE_WORDS = "escape esc exit leave back";
+/** The words the one Escape row answers to besides, which stands for every layer the key closes. */
+const ESCAPE_WORDS = "escape esc exit dismiss deselect";
 
 /** The words every writing chord and Markdown rule answers to besides. */
 const WRITING_WORDS = "format formatting markdown editor text";
@@ -399,8 +402,12 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Workspace URL", "Change URL slug link address workspace"],
         }
       : undefined,
-    // The window's own chords, fixed rather than chosen, listed below them; a gated feature's only while its experiment is on.
-    ...shownShortcutGroups(input.settings.experiments, input.capabilities).flatMap((group) => [
+    // The window's own chords, fixed rather than chosen, listed below them; a gated feature's only while its experiment is on, and the Inbox's only while the account keeps one.
+    ...shownShortcutGroups(
+      input.settings.experiments,
+      input.capabilities,
+      input.settings.inbox !== false,
+    ).flatMap((group) => [
       ...group.commands.map((command) => ({
         id: command,
         label: shortcutLabel(command, input.settings.experiments),
@@ -491,7 +498,7 @@ export function settingsSearchEntries(input: SettingsSearchInput): readonly Sett
   const fixed = [...settingsSectionEntries(input), ...fixedEntries(input)];
 
   const pages = SETTINGS_PAGE_LIST.filter((page) =>
-    settingsPageShown(page, input.capabilities, input.settings.experiments),
+    settingsPageShown(page, input.capabilities, input.settings.experiments, input.billing === true),
   );
 
   return pages
@@ -516,7 +523,12 @@ export interface SettingsSearchCorpus {
 export function settingsSearchCorpus(input: SettingsSearchInput): SettingsSearchCorpus {
   return {
     pages: SETTINGS_PAGE_LIST.filter((page) =>
-      settingsPageShown(page, input.capabilities, input.settings.experiments),
+      settingsPageShown(
+        page,
+        input.capabilities,
+        input.settings.experiments,
+        input.billing === true,
+      ),
     ),
     entries: settingsSearchEntries(input),
   };
@@ -796,7 +808,7 @@ export function SettingsSearchField({
         // Note that an Escape is stopped even mid-composition, because the
         // input method spends that press dismissing its candidates, and the
         // window's own Escape would turn the page behind the field.
-        if (event.key === "Escape" && event.nativeEvent.isComposing) event.stopPropagation();
+        if (event.key === "Escape" && isComposingKey(event)) event.stopPropagation();
       }}
     >
       <SearchField

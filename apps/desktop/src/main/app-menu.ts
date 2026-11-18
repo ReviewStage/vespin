@@ -36,6 +36,7 @@ import {
   type ShortcutChord,
   shortcutAccelerator,
   shortcutLabel,
+  shortcutOfInbox,
   shortcutShown,
   shortcutWorkspaceExperiment,
 } from "@repo/settings/shortcuts";
@@ -525,7 +526,8 @@ type MenuGateResult = {
  * own experiments, the platform's capabilities, and the commands the focused
  * panel offers. A workspace experiment's command stands only where that panel
  * offers it, which it does only while its own workspace has the experiment
- * on, so another workspace's choice never shows it; and a command an
+ * on, so another workspace's choice never shows it, and an Inbox command
+ * stands the same way, since a window keeping no Inbox offers none; and a command an
  * experiment renames is called as the focused window's workspace has it, as
  * the commands that panel offers show. The account's own store of a
  * workspace experiment is never read.
@@ -540,7 +542,8 @@ function menuGate(
   return {
     shown: (command) =>
       shortcutShown(command, choices, capabilities) &&
-      (shortcutWorkspaceExperiment(command) === undefined || offered?.includes(command) === true),
+      ((shortcutWorkspaceExperiment(command) === undefined && !shortcutOfInbox(command)) ||
+        offered?.includes(command) === true),
     named: (command) => shortcutLabel(command, choices),
   };
 }

@@ -31,15 +31,15 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { sendAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { githubTokenQuery, githubTokenRetryMutation } from "../live-reads.js";
 import { showToast } from "../toast.js";
-import { useHeldThroughExit } from "../use-held-through-exit.js";
-import { GitHubTokenDialog, TokenFacts } from "./github-dialog.js";
+import { GitHubTokenDialog, TokenFacts, useGitHubTokenDisconnect } from "./github-dialog.js";
+import { MenuRow } from "./menu-row.js";
 
 /** The row's name. */
 const TOKEN_LABEL = "GitHub personal access token";
@@ -70,72 +70,65 @@ export async function signOutSayingFailure(onSignOut: () => Promise<void>): Prom
 }
 
 /**
- * The member's own GitHub personal access token: its hint, login, and
- * expiry once one is saved, and Manage or Add, which
- * opens the token's dialog (`github-dialog.tsx`). The token is the one the
- * host holds for the account the row is drawn for (`LIVE_READ.GITHUB_TOKEN`),
- * where a save's and a removal's own answer lands too; a read that fails
- * says so under the row in a `FailureNote` whose Retry asks again, and draws
- * neither Add nor Manage, since what stands is unknown.
+ * The member's own GitHub personal access token: whose it is, its end, and
+ * its expiry once one is saved, with Disconnect in the row's ⋯, and Add,
+ * which opens the paste's dialog (`github-dialog.tsx`), where none is. The
+ * token is the one the host holds for the account the row is drawn for
+ * (`LIVE_READ.GITHUB_TOKEN`), where a save's and a removal's own answer
+ * lands too; a read that fails says so under the row in a `FailureNote`
+ * whose Retry asks again, and draws neither Add nor ⋯, since what stands is
+ * unknown.
  */
 function GitHubTokenRow({ accountId }: { accountId: string | undefined }): React.JSX.Element {
   const read = useQuery(githubTokenQuery(accountId));
   const retry = useMutation(githubTokenRetryMutation());
   const token = read.data?.token;
-  const [managing, setManaging] = useState(false);
-
-  // Note that the card is drawn for the token it opened over until its fade has run, so it does not change under its own exit.
-  const { held: drawn, onExited } = useHeldThroughExit(
-    managing && token !== undefined ? token : undefined,
-  );
+  const [adding, setAdding] = useState(false);
+  const disconnect = useGitHubTokenDisconnect();
+  // Note that the dialog closes once the token it saved reaches the row, so a later Disconnect does not find it open again.
+  const kept = Boolean(token);
+  useEffect(() => {
+    if (kept) setAdding(false);
+  }, [kept]);
 
   return (
     <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.GITHUB_ACCESS)}>
-      <SettingsRow
-        // Note that the row stands under the account's own, whose face is wider than a mark, so its words start where the account's do.
-        lead={SETTINGS_ROW_LEAD.FACE}
-        leading={
-          <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} size={PROVIDER_MARK_SIZE.ROW} />
-        }
-        label={<OneLine hint={wholeWordsHint(TOKEN_LABEL)}>{TOKEN_LABEL}</OneLine>}
-        description={
-          // Note that the token's facts are masked, because Settings shows its own words and the hint ends the token.
-          token ? (
-            <ReplayMask>
-              <TokenFacts token={token} />
-            </ReplayMask>
-          ) : undefined
-        }
-        // Note that a row with nothing below draws no `below` at all, since its box keeps a margin.
-        below={
-          read.isError
-            ? () => (
-                <FailureNote
-                  failure={unreadShown(FAILURE_SURFACE.ACCOUNT_TOKEN_READ)}
-                  onRetry={() => retry.mutate()}
-                >
-                  {TOKEN_READ_FAILED}
-                </FailureNote>
-              )
-            : undefined
-        }
-      >
-        {() =>
-          token === undefined ? null : (
-            <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => setManaging(true)}>
-              {token === null ? "Add" : "Manage"}
-            </Button>
-          )
-        }
-      </SettingsRow>
-      {drawn === undefined ? null : (
+      <MenuRow
+        thing={TOKEN_LABEL}
+        actions={token ? [disconnect.act] : []}
+        row={{
+          // Note that the row stands under the account's own, whose face is wider than a mark, so its words start where the account's do.
+          lead: SETTINGS_ROW_LEAD.FACE,
+          leading: (
+            <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} size={PROVIDER_MARK_SIZE.ROW} />
+          ),
+          label: <OneLine hint={wholeWordsHint(TOKEN_LABEL)}>{TOKEN_LABEL}</OneLine>,
+          description: token ? <TokenFacts token={token} /> : undefined,
+          control:
+            token === null ? (
+              <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => setAdding(true)}>
+                Add
+              </Button>
+            ) : undefined,
+          // Note that a row with nothing below draws no `below` at all, since its box keeps a margin.
+          below: read.isError ? (
+            <FailureNote
+              failure={unreadShown(FAILURE_SURFACE.ACCOUNT_TOKEN_READ)}
+              onRetry={() => retry.mutate()}
+            >
+              {TOKEN_READ_FAILED}
+            </FailureNote>
+          ) : undefined,
+        }}
+      />
+      {token ? disconnect.question : null}
+      {token === null ? (
         <GitHubTokenDialog
-          open={managing && token !== undefined}
-          token={drawn}
-          onClose={() => setManaging(false)}
-          onExited={onExited}
+          open={adding}
+          onClose={() => setAdding(false)}
+          onExited={() => setAdding(false)}
         />
-      )}
+      ) : null}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
+import { removeWorkspaceMember } from "../organization-store.js";
 import {
   addWorkspaceTokenRepository,
   listWorkspaceTokenRepositories,
@@ -16,8 +17,9 @@ import {
  * The repositories members add to a workspace on their own tokens, over a
  * real dialect: every member of the workspace reads them, an account
  * outside it reads, adds, and removes none, adding twice however the name
- * is cased keeps the first adder, and a removal takes only the row of the
- * adder it names.
+ * is cased keeps the first adder, a removal takes only the row of the
+ * adder it names, and an adder who left the workspace takes theirs with
+ * them until another member adds it again.
  *
  * Synthetic accounts, workspaces, and repositories throughout.
  */
@@ -68,6 +70,30 @@ it.layer(getTestDB())("a workspace's token repositories", (it) => {
           (yield* listWorkspaceTokenRepositories(charles, workspace)).map((row) => row.repository),
           ["acme/site"],
         );
+      }),
+  );
+
+  it.effect(
+    "an adder who left the workspace stands for none of their repositories, and another member's add takes one over",
+    () =>
+      Effect.gen(function* () {
+        const [dean, charles] = [yield* openAccount, yield* openAccount];
+        const workspace = yield* openWorkspace(dean);
+        yield* joinWorkspace(workspace, charles);
+
+        yield* addWorkspaceTokenRepository(charles, workspace, "acme/relay", new Date(1));
+        yield* removeWorkspaceMember(workspace, charles);
+
+        assert.deepEqual(yield* listWorkspaceTokenRepositories(dean, workspace), []);
+        assert.ok(
+          Option.isNone(yield* workspaceTokenRepositoryAdder(dean, workspace, "acme/relay")),
+        );
+
+        yield* addWorkspaceTokenRepository(dean, workspace, "Acme/Relay", new Date(2));
+
+        assert.deepEqual(yield* listWorkspaceTokenRepositories(dean, workspace), [
+          { repository: "Acme/Relay", addedByUserId: dean, addedAt: 2 },
+        ]);
       }),
   );
 });

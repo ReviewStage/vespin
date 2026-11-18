@@ -1,21 +1,17 @@
-// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the panel's list of every workspace by its tile or photo, then New workspace and Workspace settings, and the account by its photo opening Settings where nothing else leads there, in a popover on an iPad and a sheet on an iPhone.
+// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the system's menu of every workspace by its photo or tile, then New workspace and Workspace settings, and the account by its photo opening Settings.
 
 import {
-  BottomSheet,
-  Group,
   Host,
   HStack,
   Image,
-  Popover,
+  Menu,
   Section,
-  Spacer,
   Button as SwiftUIButton,
   Text,
-  VStack,
+  Toggle,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  accessibilityAddTraits,
   accessibilityHidden,
   accessibilityIdentifier,
   accessibilityLabel,
@@ -24,31 +20,26 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
-  listRowBackground,
-  onDisappear,
-  presentationBackground,
-  presentationDetents,
-  presentationDragIndicator,
+  menuIndicator,
+  menuStyle,
 } from "@expo/ui/swift-ui/modifiers";
-import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
-import { memo, type ReactNode, useEffect, useState } from "react";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { Avatar } from "./marks.js";
-import { ActionRow, SettingsForm } from "./settings-form.js";
-import { ElevatedGround, useColors } from "./tokens/colors.js";
+import { identityLetter, WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
+import { memo } from "react";
+import { useColorScheme } from "react-native";
+import { useScaledSize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphImage, letterTileGlyph } from "./glyph.js";
+import { actContent, menuActContent } from "./glyph-label.js";
+import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
+import { tileHue } from "./workspace-tile-model.js";
 
 /** The tile in a bar, beside the workspace's name. */
 const BAR_TILE_SIZE = 22;
 
 /** The widest the name stands in a bar, so a long one is cut short rather than pushing the bar's other buttons off it. */
 const NAME_MAX_WIDTH = 180;
-
-/** The check on the chosen workspace's row. */
-const CHECK_SIZE = 14;
 
 /** The chevron after the name, which says the name opens a list, in the body's ink, since the muted ink faded into a dark bar's glass. */
 const CHEVRON_SIZE = 10;
@@ -61,23 +52,6 @@ export const SWITCHER_LOOK = {
 
 export type SwitcherLook = (typeof SWITCHER_LOOK)[keyof typeof SWITCHER_LOOK];
 
-/** The heights the switcher's sheet stands at: half the screen first, then the whole, or the whole alone. */
-const SHEET_DETENTS = {
-  WHOLE: ["large"],
-} as const;
-
-/** The room over the list's rows a sheet keeps for its grabber, which the rows' own reckoning leaves out. */
-const SHEET_GRABBER_ROOM = 24;
-
-/** How the switcher's list opens: a popover over its button, in a regular window such as an iPad's, or a sheet from the screen's foot, in a compact one such as an iPhone's, as Notion's switcher opens on each. Note that `@expo/ui`'s popover keeps itself a popover in a compact window too, so the caller says which the window takes. */
-export const SWITCHER_PRESENTATION = {
-  POPOVER: "popover",
-  SHEET: "sheet",
-} as const;
-
-export type SwitcherPresentation =
-  (typeof SWITCHER_PRESENTATION)[keyof typeof SWITCHER_PRESENTATION];
-
 /** What a flow finds the switcher by. */
 const SWITCHER_ID = "workspace-switcher";
 
@@ -85,8 +59,10 @@ const SWITCHER_ID = "workspace-switcher";
 export type SwitcherAccount = {
   /** The account's name, or its address where it has none. */
   readonly name: string;
-  /** The account's sign-in picture, which its row leads with; its letters where it has none. */
+  /** The account's sign-in picture, which the landscape iPad's sidebar draws; its letters where it has none. */
   readonly picture?: string | undefined;
+  /** That picture as a file on this device, which its row in the menu leads with; the gear while it has none. */
+  readonly menuPhoto?: string | undefined;
   /** The account's email address, which its row says under Settings where it has one, as Mail and Notes name an account, so it never reads as a personal workspace of the same name and face. */
   readonly address?: string | undefined;
   readonly onPress: () => void;
@@ -94,25 +70,6 @@ export type SwitcherAccount = {
 
 /** What the account's row is named: where it goes, ahead of whose it is, so it never reads as a third workspace. */
 const SETTINGS = "Settings";
-
-/** A workspace's tile, and the account's photo, at the head of their rows. */
-const ROW_MARK_SIZE = 30;
-
-/** How wide the popover stands, near the width iOS's own popovers of a list keep. */
-const POPOVER_WIDTH = 320;
-
-/**
- * How tall the popover's rows and their gaps stand, in points, at the
- * default text size: its least height, which the list's own measure raises
- * once it has laid out, since a list has no height of its own for a popover
- * to fit. A row with its mark and two lines, one with a line, and the
- * gap above and below the list and between its sections. `POPOVER_TALLEST` keeps a long list of workspaces, or a
- * large text size, on the screen, scrolling inside it.
- */
-const POPOVER_ROW = { MARKED: 52, PLAIN: 44, EDGE: 20, BETWEEN: 32 } as const;
-
-/** The tallest the popover stands, so a long list of workspaces scrolls inside it rather than running off an iPad's screen. */
-const POPOVER_TALLEST = 560;
 
 /** An act under the list's workspaces, such as New workspace. */
 export type SwitcherAction = {
@@ -137,8 +94,6 @@ type WorkspaceSwitcherProps = {
   readonly look?: SwitcherLook | undefined;
   /** How large the tile stands where the look is the tile alone; the bar's face where none is given. */
   readonly tileSize?: number | undefined;
-  /** How its list opens; a popover where none is given. */
-  readonly presentation?: SwitcherPresentation | undefined;
 };
 
 /** What the switcher is heard as: the workspace and who shares it, as the panel's head says it. */
@@ -146,354 +101,149 @@ function heardAs(chosen: SwitcherWorkspace): string {
   return [`Workspace: ${chosen.name}`, chosen.line].filter((part) => part !== undefined).join(", ");
 }
 
-/** What a row of the list is heard as: its name and its line together, as a flow finds a workspace by both. */
-function rowHeard(name: string, line: string | undefined): string {
-  return line === undefined ? name : `${name}, ${line}`;
-}
-
-/** The popover's least height for the rows it holds, reckoned as `POPOVER_ROW` says, which its list's measure only ever raises. */
-function popoverHeight({
-  workspaces,
-  account,
-  actions,
-  onWorkspaceSettings,
-}: WorkspaceSwitcherProps) {
-  const marked = workspaces.length + (account === undefined ? 0 : 1);
-  const plain = actions.length + (onWorkspaceSettings === undefined ? 0 : 1);
-  const gaps = (plain > 0 ? 1 : 0) + (account === undefined ? 0 : 1);
-
-  const height =
-    POPOVER_ROW.EDGE * 2 +
-    marked * POPOVER_ROW.MARKED +
-    plain * POPOVER_ROW.PLAIN +
-    gaps * POPOVER_ROW.BETWEEN;
-
-  return height;
-}
-
-/** A row of the list: what leads it, its name and the line under it, and the copper check on the one chosen, the whole row pressed. */
-function SwitcherRow({
-  mark,
-  name,
-  line,
-  checked = false,
-  onPress,
-}: {
-  readonly mark: ReactNode;
-  readonly name: string;
-  readonly line?: string | undefined;
-  readonly checked?: boolean | undefined;
-  readonly onPress: () => void;
-}) {
-  const colors = useColors();
-  const checkSize = useScaledSize(CHECK_SIZE);
-  // Note that at an accessibility size a name and its line wrap rather than cut, as the package's rows do, since a cut name can't tell two workspaces apart.
-  const stacked = useAccessibilitySize();
-  const lines = stacked ? [] : [lineLimit(1)];
-
-  const words = (
-    <VStack alignment="leading" spacing={1}>
-      <Text modifiers={[foregroundStyle(colors.TEXT), ...lines]}>{name}</Text>
-      {line === undefined ? null : (
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE }),
-            foregroundStyle(colors.TEXT_MUTED),
-            ...lines,
-          ]}
-        >
-          {line}
-        </Text>
-      )}
-    </VStack>
-  );
-
-  return (
-    <SwiftUIButton
-      onPress={onPress}
-      modifiers={[
-        buttonStyle("plain"),
-        accessibilityLabel(rowHeard(name, line)),
-        ...(checked ? [accessibilityAddTraits(["isSelected"])] : []),
-        listRowBackground(colors.RAISED),
-      ]}
-    >
-      <HStack
-        spacing={SPACE.ROW + 2}
-        modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
-      >
-        {/* Note that at an accessibility size the mark stands above the words, so a name takes the row's whole width and wraps between its words, never inside one, as Apple asks a row to stack at those sizes. */}
-        {stacked ? (
-          <VStack alignment="leading" spacing={SPACE.ROW}>
-            {mark}
-            {words}
-          </VStack>
-        ) : (
-          <>
-            {mark}
-            {words}
-          </>
-        )}
-        <Spacer />
-        {checked ? (
-          <Image
-            {...glyphImage(GLYPH.CHECK)}
-            size={checkSize}
-            color={colors.ACCENT}
-            modifiers={[accessibilityHidden()]}
-          />
-        ) : null}
-      </HStack>
-    </SwiftUIButton>
-  );
-}
-
 /**
- * The list the switcher opens, as Notion's opens: every workspace by its own
- * tile or photo, its name, and who shares it, the chosen one checked in
- * copper; then the acts, such as New workspace, and Workspace settings, in
- * the panel's two groups and its words (`workspaceMenuGroups`); and last,
- * where a caller hands one, the row into Settings, led by the account's
- * photo with its address, or its name, under it. Each row closes the list
- * and says what it does through `closed`, which runs it once the list has
- * gone.
+ * A workspace as the menu holds it: its name over who shares it, led by its
+ * photo, or else its letter in the system's filled square in its tile's hue,
+ * as Notion's switcher leads each workspace with its icon.
  */
-function SwitcherList({
-  props,
-  closed,
-  onContentHeight,
-}: {
-  readonly props: WorkspaceSwitcherProps;
-  readonly closed: (then: () => void) => void;
-  /** Told the height its rows stand in, for the popover or the sheet to fit them. */
-  readonly onContentHeight?: ((height: number) => void) | undefined;
-}) {
-  const { workspaces, chosen, onChoose, account, actions, onWorkspaceSettings } = props;
-  const markSize = useScaledSize(ROW_MARK_SIZE);
-
-  return (
-    <SettingsForm onContentHeight={onContentHeight}>
-      <Section>
-        {workspaces.map((workspace) => (
-          <SwitcherRow
-            key={workspace.id}
-            mark={<WorkspaceTile workspace={workspace} size={markSize} />}
-            name={workspace.name}
-            line={workspace.line}
-            checked={workspace.id === chosen.id}
-            onPress={() => closed(() => onChoose(workspace.id))}
-          />
-        ))}
-      </Section>
-      {actions.length === 0 && onWorkspaceSettings === undefined ? null : (
-        <Section>
-          {actions.map((action) => (
-            <ActionRow
-              key={action.label}
-              label={action.label}
-              symbol={action.symbol}
-              onPress={() => closed(action.onPress)}
-            />
-          ))}
-          {onWorkspaceSettings === undefined ? null : (
-            <ActionRow
-              label={WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS}
-              symbol={GLYPH.SETTINGS}
-              onPress={() => closed(onWorkspaceSettings)}
-            />
-          )}
-        </Section>
-      )}
-      {account === undefined ? null : (
-        <Section>
-          <SwitcherRow
-            mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
-            name={SETTINGS}
-            line={account.address || account.name}
-            onPress={() => closed(account.onPress)}
-          />
-        </Section>
-      )}
-    </SettingsForm>
+function workspaceChoice(workspace: SwitcherWorkspace, dark: boolean) {
+  // Note that a row whose photo is still on its way stands with no image rather than its letter, so the letter never shows where a photo is coming.
+  return menuActContent(
+    workspace.name,
+    workspace.menuPhotoComing === true
+      ? undefined
+      : letterTileGlyph(identityLetter(workspace.name)),
+    workspace.line,
+    tileHue(workspace.id, dark),
+    workspace.menuPhoto,
   );
 }
 
-/** The switcher's own button: the chosen workspace's tile, alone or with its name and ⌄, heard as the workspace. */
+/** The switcher's own face: the chosen workspace's tile, alone or with its name and ⌄. */
 function SwitcherFace({
   chosen,
   look,
   tileSize,
-  onPress,
 }: {
   readonly chosen: SwitcherWorkspace;
   readonly look: SwitcherLook;
   readonly tileSize: number;
-  readonly onPress: () => void;
 }) {
   const colors = useColors();
   const tile = useScaledSize(BAR_TILE_SIZE);
   const chevron = useScaledSize(CHEVRON_SIZE);
   const nameWidth = useScaledSize(NAME_MAX_WIDTH);
 
+  if (look === SWITCHER_LOOK.TILE) return <WorkspaceTile workspace={chosen} size={tileSize} />;
+
   // Note that the named face heads the sidebar's list rather than a bar, so it grows with Dynamic Type as the rows under it do.
   return (
-    <SwiftUIButton
-      onPress={onPress}
-      modifiers={[
-        buttonStyle("plain"),
-        accessibilityLabel(heardAs(chosen)),
-        accessibilityIdentifier(SWITCHER_ID),
-      ]}
+    <HStack
+      spacing={SPACE.TIGHT + 2}
+      modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
-      {look === SWITCHER_LOOK.TILE ? (
-        <WorkspaceTile workspace={chosen} size={tileSize} />
-      ) : (
-        <HStack
-          spacing={SPACE.TIGHT + 2}
-          modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
-        >
-          <WorkspaceTile workspace={chosen} size={tile} />
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE, weight: "semibold" }),
-              foregroundStyle(colors.TEXT),
-              lineLimit(1),
-              frame({ maxWidth: nameWidth, alignment: "leading" }),
-            ]}
-          >
-            {chosen.name}
-          </Text>
-          <Image
-            {...glyphImage(GLYPH.UNFOLDED)}
-            size={chevron}
-            color={colors.TEXT_BODY}
-            modifiers={[accessibilityHidden()]}
-          />
-        </HStack>
-      )}
-    </SwiftUIButton>
+      <WorkspaceTile workspace={chosen} size={tile} />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE, weight: "semibold" }),
+          foregroundStyle(colors.TEXT),
+          lineLimit(1),
+          frame({ maxWidth: nameWidth, alignment: "leading" }),
+        ]}
+      >
+        {chosen.name}
+      </Text>
+      <Image
+        {...glyphImage(GLYPH.UNFOLDED)}
+        size={chevron}
+        color={colors.TEXT_BODY}
+        modifiers={[accessibilityHidden()]}
+      />
+    </HStack>
   );
 }
 
 /**
  * The switcher for a bar SwiftUI draws, such as a split view's sidebar or
  * column bar: the chosen workspace's tile and name and a chevron, or its tile
- * alone, opening the list of every workspace (`SwitcherList`), as Notion's
- * one workspace button does, in a popover over the button in a regular
- * window and in a sheet from the screen's foot in a compact one, half the
- * screen tall and dragged to its whole height. It replaced the system's menu,
- * which draws its rows' images as templates in one ink, so no workspace's
- * photo or the account's showed in it. Note that a row's act, a workspace
- * chosen or Settings, runs only once the list has gone, since a screen
- * presented while the popover or the sheet is still leaving is refused, and
- * a choice redrawing every screen as it left made it stutter.
+ * alone, opening the system's menu, as Notion's one workspace button does:
+ * every workspace by its photo or tile, its name and who shares it, the
+ * chosen one checked; then the acts, such as New workspace, and Workspace
+ * settings, in the panel's groups and words (`workspaceMenuGroups`); and
+ * last, where a caller hands one, the row into Settings, led by the
+ * account's photo with its address, or its name, under it. A menu runs a
+ * row's act once it has closed, so a screen it opens is never presented
+ * over it as it leaves.
  */
 export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
   props: WorkspaceSwitcherProps,
 ) {
   const {
+    workspaces,
     chosen,
+    onChoose,
+    account,
+    actions,
+    onWorkspaceSettings,
     look = SWITCHER_LOOK.NAMED,
     tileSize = MARK_SIZE.BAR_FACE,
-    presentation = SWITCHER_PRESENTATION.POPOVER,
   } = props;
 
-  // Note that the sheet and the popover stand over the window, so in dark they draw on the lifted ground, their list with them, as iOS lifts what it presents.
-  const lifted = useColors(true);
-
-  const [presented, setPresented] = useState(false);
-  // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
-  const [opened, setOpened] = useState(false);
-  const [after, setAfter] = useState<{ readonly act: () => void } | undefined>(undefined);
-  // Note that the popover and the sheet grow to the height their list's rows lay out at, since a reckoning at the default text size cut the last section off, but never stand shorter than the reckoning, since the list measures nothing (0) before it first draws, and a popover of no height never draws.
-  const [measured, setMeasured] = useState<number | undefined>(undefined);
-  // Note that the sheet's reckoning grows with the reader's text, so its first open, before its list has measured, still holds the account's row at a larger size; once measured, the sheet stands as tall as its rows lay out, with no band under them.
-  const reckoned = useScaledSize(popoverHeight(props));
-  const sheetRows = measured !== undefined && measured > 0 ? measured : reckoned;
-
-  // Note that the sheet first stands as tall as its rows rather than half the screen, so the account's row, the way into Settings, shows on a short screen such as the folded Duo's; at an accessibility size it opens at its full height, since the rows outgrow any reckoning.
-  const fitted = useAccessibilitySize()
-    ? SHEET_DETENTS.WHOLE
-    : [{ height: sheetRows + SHEET_GRABBER_ROOM }, "large" as const];
-
-  // Note that the act is taken off as it runs, so a second dismissal never runs it again.
-  const gone = () => {
-    setAfter(undefined);
-    after?.act();
-  };
-
-  // Note that every row's act, a workspace chosen among them, runs once the list has gone, because a choice redraws every screen that reads the workspace, which made the list's leaving stutter, and a screen presented while it leaves is refused; the first row pressed is the one that runs.
-  const closed = (then: () => void) => {
-    setAfter((held) => held ?? { act: then });
-    setPresented(false);
-  };
-
-  // Note that a window crossing between a sheet and a popover drops the list without telling it gone, so an act left waiting is dropped with it rather than run by a later close, and the other list's height with it.
-  useEffect(() => {
-    setAfter(undefined);
-    setMeasured(undefined);
-  }, [presentation]);
-
-  const face = (
-    <SwitcherFace
-      chosen={chosen}
-      look={look}
-      tileSize={tileSize}
-      onPress={() => {
-        // Note that an open starts with no act waiting, so one a missed dismissal left never runs on a later row's press.
-        setAfter(undefined);
-        setOpened(true);
-        setPresented(true);
-      }}
-    />
-  );
-
-  if (presentation === SWITCHER_PRESENTATION.SHEET) {
-    return (
-      <BottomSheet
-        anchor={face}
-        isPresented={presented}
-        onIsPresentedChange={setPresented}
-        onDismiss={gone}
-      >
-        <Group
-          modifiers={[
-            presentationDetents([...fitted]),
-            presentationDragIndicator("visible"),
-            presentationBackground(lifted.GROUPED),
-          ]}
-        >
-          <ElevatedGround>
-            <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
-          </ElevatedGround>
-        </Group>
-      </BottomSheet>
-    );
-  }
+  const dark = useColorScheme() === "dark";
 
   return (
-    <Popover isPresented={presented} onIsPresentedChange={setPresented} arrowEdge="top">
-      <Popover.Trigger>{face}</Popover.Trigger>
-      <Popover.Content>
-        <Group
-          modifiers={[
-            frame({
-              width: POPOVER_WIDTH,
-              height: Math.min(Math.max(measured ?? 0, popoverHeight(props)), POPOVER_TALLEST),
-            }),
-            // Note that the popover stands on the list's own ground, its arrow and rim too, rather than the system's glass around a solid list.
-            presentationBackground(lifted.GROUPED),
-            onDisappear(gone),
-          ]}
-        >
-          {opened || presented ? (
-            <ElevatedGround>
-              <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
-            </ElevatedGround>
-          ) : null}
-        </Group>
-      </Popover.Content>
-    </Popover>
+    <Menu
+      label={<SwitcherFace chosen={chosen} look={look} tileSize={tileSize} />}
+      modifiers={[
+        menuStyle("button"),
+        buttonStyle("plain"),
+        menuIndicator("hidden"),
+        accessibilityLabel(heardAs(chosen)),
+        accessibilityIdentifier(SWITCHER_ID),
+      ]}
+    >
+      <Section>
+        {workspaces.map((workspace) => (
+          <Toggle
+            key={workspace.id}
+            {...workspaceChoice(workspace, dark)}
+            isOn={workspace.id === chosen.id}
+            onIsOnChange={() => onChoose(workspace.id)}
+          />
+        ))}
+      </Section>
+      {actions.length === 0 && onWorkspaceSettings === undefined ? null : (
+        <Section>
+          {actions.map((action) => (
+            <SwiftUIButton
+              key={action.label}
+              {...actContent(action.label, action.symbol)}
+              onPress={action.onPress}
+            />
+          ))}
+          {onWorkspaceSettings === undefined ? null : (
+            <SwiftUIButton
+              {...actContent(WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, GLYPH.SETTINGS)}
+              onPress={onWorkspaceSettings}
+            />
+          )}
+        </Section>
+      )}
+      {account === undefined ? null : (
+        <Section>
+          <SwiftUIButton
+            {...menuActContent(
+              SETTINGS,
+              GLYPH.SETTINGS,
+              account.address || account.name,
+              undefined,
+              account.menuPhoto,
+            )}
+            onPress={account.onPress}
+          />
+        </Section>
+      )}
+    </Menu>
   );
 });
 
@@ -503,7 +253,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
  * its button, standing as the one bar item at the bar's leading edge: the
  * tile alone, at the size the account's photo stood, in the round glass the
  * bar stands it in, as the App Store and Gmail stand a photo that opens a
- * list, so the screen's own title keeps its place in the bar and the list
+ * list, so the screen's own title keeps its place in the bar and the menu
  * names the workspace, checked. Note that it stands as a bar item rather
  * than the bar's title view, because a host sized to its contents drew at
  * no size at all in the native stack's title on iOS 27.
@@ -516,7 +266,7 @@ export const WorkspaceSwitcher = memo(function WorkspaceSwitcher(props: Workspac
   );
 });
 
-/** The list's act that makes a workspace, as the panel words it. */
+/** The menu's act that makes a workspace, as the panel words it. */
 export function newWorkspaceAction(onPress: () => void): SwitcherAction {
   return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: GLYPH.ADD, onPress };
 }

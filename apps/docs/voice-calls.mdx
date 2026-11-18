@@ -1,0 +1,39 @@
+---
+title: "Voice calls"
+description: "Talk to an agent out loud"
+---
+
+A voice call lets you talk to an agent instead of typing. A voice answers you, passes what you ask on to the agent, and tells you what the agent did.
+
+## Start a call
+
+When an agent's message box is empty, **Talk** appears in place of **Send**. Press it to call the agent.
+
+You can also call from the box that starts a new agent. Your first words become the agent's first message, and if you hang up without saying anything, the agent is deleted.
+
+Calls work in the Mac app and on the web, one call per window at a time.
+
+## What you need
+
+Calls run on your own OpenAI API key. Add one to the **Codex** card in **Settings › Agents**. A ChatGPT plan doesn't work for calls. Without a key, **Talk** reads **Add an OpenAI API key**.
+
+You can pick the voice under **Voice** on the same page. In the Mac app, **Prefer the Mac's microphone** in **Settings › This Mac** applies to calls too.
+
+## During a call
+
+<Frame>
+  <img src="/images/voice-call.png" alt="An agent's transcript during a call: Dean Stratakos started a call, his spoken requests on the right, the voice's replies on the left, and the agent's tool calls between them" />
+</Frame>
+
+The voice knows the agent's name, its task, and its latest messages. It passes along every request, decision, and correction you make. As the agent works, the voice tells you what it did and what it needs from you. Anything you say while the agent is mid-turn is queued for when the turn ends.
+
+- **Mute microphone** stops the voice from hearing you. **Mute speaker** mutes the voice on this device only.
+- **End call** hangs up and leaves the agent working. To stop the agent, press **Stop**.
+- You can still type to the agent during a call.
+- If you leave the agent's page, the call moves to a card at the bottom of the sidebar. In the Mac app, the card floats above other windows.
+
+Closing the window ends the call.
+
+## What's kept
+
+Audio goes only between your window and OpenAI, and is never stored. What you and the voice say is kept as text in the agent's transcript. Your words reach the agent as messages. The voice's words appear in the transcript but are never sent to the agent's model. Call time counts toward your daily usage.

@@ -19,7 +19,7 @@
         "standard",
         "long"
       ],
-      "description": "The default context window, standard or long; leave it out for the model's standard one."
+      "description": "The default context window, standard or long: required where list_models lists the model's contextWindows, and refused where it lists none, since that model runs on one window."
     }
   },
   "required": [

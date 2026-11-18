@@ -74,9 +74,10 @@ export function useRemind(): UseRemindResult {
     (items: readonly InboxItem[], after?: () => void): RemindMenu => {
       const now = Date.now();
 
+      // Note that only a time that holds through the day says when, since a row's menu is built once a day, as Mail's "In 1 hour" says no time.
       const times: RowAction[] = REMIND_TIMES.map((time) => ({
         label: time.label,
-        detail: remindWords(time.at(now), now),
+        detail: time.steady ? remindWords(time.at(now), now) : undefined,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => send(items, time.at(Date.now()), after),
       }));

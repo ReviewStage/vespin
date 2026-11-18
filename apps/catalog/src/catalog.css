@@ -615,6 +615,11 @@ body {
   max-width: 400px;
 }
 
+/* Tall enough for a card's fold to open without the page scrolling under it. */
+.catalog-settings-frame-tall {
+  height: 640px;
+}
+
 /* Wide enough for a page at the wide measure to stand at it. */
 .catalog-settings-frame-wide {
   max-width: 1120px;

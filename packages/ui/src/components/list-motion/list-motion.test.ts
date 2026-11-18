@@ -5,7 +5,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { leavingPlace } from "../../testing/leaving-place.js";
 import { useDisclosureFold } from "../disclosure/disclosure.js";
-import { LIST_MOTION_WAY, ListMotion, motionKey, motionRows, useLeaving } from "./list-motion.js";
+import {
+  LIST_MOTION_WAY,
+  ListMotion,
+  type ListMotionWay,
+  motionKey,
+  motionRows,
+  useLeaving,
+} from "./list-motion.js";
 
 /**
  * list-motion.test.ts -- a row arriving in a list slides in as it fades in,
@@ -56,6 +63,17 @@ interface Played {
 let root: Root | undefined;
 let played: Played[] = [];
 
+/** How far each row is drawn from its place by the glides it was handed, where a test draws them (`drawGlides`): each glide's first frame, added onto the last, as a browser draws a row the frame a glide starts. */
+let drawGlides = false;
+const shifted = new Map<Element, number>();
+
+/** Draws `row` `y` from its place, where its rect and its transform both say it, as a browser draws a row mid-glide. */
+function drawShift(row: Element, y: number): void {
+  shifted.set(row, y);
+
+  if (row instanceof HTMLElement) row.style.transform = `matrix(1, 0, 0, 1, 0, ${y})`;
+}
+
 type Motion = { onfinish: (() => void) | null; cancel: () => void };
 
 beforeEach(() => {
@@ -71,6 +89,12 @@ beforeEach(() => {
           canceled = true;
         },
       };
+
+      const glide = /^translate\(0px, (-?[\d.]+)px\)$/.exec(String(keyframes[0]?.transform ?? ""));
+
+      if (drawGlides && glide !== null) {
+        drawShift(this, (shifted.get(this) ?? 0) + Number(glide[1]));
+      }
 
       played.push({
         element: this,
@@ -101,11 +125,14 @@ beforeEach(() => {
     const column = [...(list.parentElement?.children ?? [])].indexOf(list);
     const top = topOf(this) ?? laidOut.indexOf(this) * ROW;
 
-    return new DOMRect(column * COLUMN, top, COLUMN, ROW);
+    return new DOMRect(column * COLUMN, top + (shifted.get(this) ?? 0), COLUMN, ROW);
   });
 });
 
 afterEach(() => {
+  drawGlides = false;
+  shifted.clear();
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = undefined;
   document.body.replaceChildren();
@@ -152,19 +179,21 @@ function Rows({
   );
 }
 
-/** Lists side by side, each by its rows' keys, under one motion where `moving`, still being read where `reading`, as the scene `scene`, their rows placed by the lists where `placed`. */
+/** Lists side by side, each by its rows' keys, under one motion where `moving`, still being read where `reading`, as the scene `scene`, their rows placed by the lists where `placed`, arriving and leaving `way`. */
 function Lists({
   lists,
   moving,
   reading,
   scene,
   placed,
+  way,
 }: {
   lists: readonly (readonly string[])[];
   moving: boolean;
   reading: boolean;
   scene?: string | undefined;
   placed: boolean;
+  way: ListMotionWay;
 }): React.JSX.Element {
   const box = useRef<HTMLDivElement>(null);
 
@@ -174,7 +203,9 @@ function Lists({
     lists.map((keys, at) => createElement(Rows, { key: String(at), keys, placed })),
   );
 
-  return moving ? createElement(ListMotion, { root: box, reading, scene, children: drawn }) : drawn;
+  return moving
+    ? createElement(ListMotion, { root: box, reading, scene, way, children: drawn })
+    : drawn;
 }
 
 /** Draws `lists`, the motion's tokens set where `tokens`, their rows placed by the lists where `placed`, and hands back a way to draw others, still being read where it says, as the scene it names. */
@@ -186,12 +217,14 @@ function draw(
     reading = false,
     scene,
     placed = false,
+    way = LIST_MOTION_WAY.SLIDE,
   }: {
     moving?: boolean;
     tokens?: boolean;
     reading?: boolean;
     scene?: string;
     placed?: boolean;
+    way?: ListMotionWay;
   } = {},
 ): (next: readonly (readonly string[])[], stillReading?: boolean, nextScene?: string) => void {
   if (tokens) {
@@ -202,7 +235,7 @@ function draw(
 
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(createElement(Lists, { lists, moving, reading, scene, placed })));
+  act(() => root?.render(createElement(Lists, { lists, moving, reading, scene, placed, way })));
 
   return (next, stillReading = false, nextScene = scene) =>
     act(() =>
@@ -213,6 +246,7 @@ function draw(
           reading: stillReading,
           scene: nextScene,
           placed,
+          way,
         }),
       ),
     );
@@ -237,6 +271,13 @@ function motionsOf(element: Element | undefined): Keyframe[][] {
   return played.filter((each) => each.element === element).map((each) => each.keyframes);
 }
 
+/** The clip a row is drawn behind, by its key; none for a row not drawn. */
+function clipOf(key: string): string | undefined {
+  const row = rowOf(key);
+
+  return row instanceof HTMLElement ? row.style.clipPath : undefined;
+}
+
 test("nothing plays the first time a list is drawn", () => {
   draw([["A", "B"]]);
 
@@ -256,6 +297,52 @@ test("a row arriving fades in and slides in from the leading edge, and the row i
     [{ transform: `translate(0px, ${-ROW}px)` }, { transform: "none" }],
   ]);
   expect(motionsOf(rowOf("A"))).toEqual([]);
+});
+
+test("a row arriving is clipped each frame at the top of the row it pushed down, where that row is drawn, and given its own clip back once that row has come to rest", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  drawGlides = true;
+  const show = draw([["A", "B"]]);
+
+  show([["A", "N", "B"]]);
+
+  const under = rowOf("B");
+  expect(clipOf("N")).toBe(`inset(0 0 ${ROW}px 0)`);
+
+  if (under !== undefined) drawShift(under, -ROW / 2);
+  vi.advanceTimersToNextFrame();
+
+  expect(clipOf("N")).toBe(`inset(0 0 ${ROW / 2}px 0)`);
+
+  if (under !== undefined) drawShift(under, 0);
+  vi.advanceTimersByTime(500);
+
+  expect(clipOf("N")).toBe("");
+});
+
+test("rows arriving together, and a row arriving while the row under them still glides, never stand over it", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  drawGlides = true;
+  const show = draw([["A", "B"]]);
+
+  show([["A", "M", "B"]]);
+  show([["A", "M", "N", "B"]]);
+
+  // Note that B is drawn where it stood before either change, both glides it was handed at their first frame.
+  expect(clipOf("M")).toBe(`inset(0 0 ${ROW}px 0)`);
+  expect(clipOf("N")).toBe(`inset(0 0 ${2 * ROW}px 0)`);
+});
+
+test("an arriving row stops standing behind the row it pushed down once a later change stands that row above it", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  drawGlides = true;
+  const show = draw([["A", "B"]]);
+
+  show([["A", "N", "B"]]);
+  show([["B", "A", "N"]]);
+  vi.advanceTimersToNextFrame();
+
+  expect(clipOf("N")).toBe("");
 });
 
 test("a row pushed down in a list a transform around it draws at half its size glides as far as its layout moved it, not as far as it is drawn", () => {
@@ -460,7 +547,7 @@ test("a row arriving or leaving below the window's foot plays nothing, and one l
 
   show([["A", ...many]]);
 
-  expect(motionsOf(rowOf("R0"))).toHaveLength(2);
+  expect(motionsOf(rowOf("R0"))).not.toEqual([]);
   expect(motionsOf(rowOf("R39"))).toEqual([]);
 
   played = [];
@@ -567,4 +654,24 @@ test("the rows under a fold glide down as a press opens it, and up once its body
   expect(motionsOf(rowOf("Under"))).toEqual([
     [{ transform: `translate(0px, ${ROW}px)` }, { transform: "none" }],
   ]);
+});
+
+test("rows that unroll in together arrive at once, one edge across them, as a fold's body does", () => {
+  // Note that each row stands a row tall, as the rows' rects say, so the edge travels from the top of B to the foot of C.
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(ROW);
+  const show = draw([["A", "D"]], { way: LIST_MOTION_WAY.UNROLL });
+
+  show([["A", "B", "C", "D"]]);
+
+  expect(motionsOf(rowOf("B"))[1]).toEqual([
+    { clipPath: `inset(0px 0px ${ROW}px 0px)` },
+    { clipPath: `inset(0px 0px ${-ROW}px 0px)` },
+  ]);
+  expect(motionsOf(rowOf("C"))[1]).toEqual([
+    { clipPath: `inset(0px 0px ${2 * ROW}px 0px)` },
+    { clipPath: "inset(0px 0px 0px 0px)" },
+  ]);
+  expect(
+    ["B", "C"].map((key) => played.find((each) => each.element === rowOf(key))?.timing.delay),
+  ).toEqual([0, 0]);
 });

@@ -18,7 +18,7 @@ export interface AdmittedConversation {
   readonly target: ConversationTarget;
   /** The session id the conversation row last recorded, where one has been. */
   readonly runtimeSessionId: string | undefined;
-  /** The time zone the current request named, which the turn reads the developer's day in; none reads UTC. */
+  /** The time zone the current request named, which the turn reads the developer's day in; none reads the zone their account keeps, else UTC. */
   readonly timeZone: string | undefined;
 }
 

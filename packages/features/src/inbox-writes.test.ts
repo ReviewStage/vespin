@@ -8,7 +8,12 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "./inbox-wire.js";
-import { INBOX_SENDING, inboxSendingDrawn } from "./inbox-writes.js";
+import {
+  INBOX_SENDING,
+  inboxSendingDrawn,
+  inboxSendingFile,
+  inboxSendingFiles,
+} from "./inbox-writes.js";
 
 const ASK = "b1b2c3d4-0000-4000-8000-000000000001";
 const READER = { userId: "user-ada", name: "Ada Lovelace" };
@@ -63,6 +68,91 @@ describe("inboxSendingDrawn", () => {
     };
 
     expect(inboxSendingDrawn(carried, sending, READER)).toBe(carried);
+  });
+
+  it("draws a reply's pictures at once, alone or with an answer, their bytes read back from the send", () => {
+    const picture = {
+      attachmentId: "d1b2c3d4-0000-4000-8000-000000000001",
+      name: "Picture 1",
+      mediaType: "image/jpeg",
+      base64: "/9j/",
+    };
+
+    const sending = [
+      { kind: INBOX_SENDING.REPLY, key: "key-2", text: "", files: [picture], at: 2_000 },
+    ];
+
+    const drawn = inboxSendingDrawn(ITEM, sending, READER);
+
+    expect(drawn.thread?.at(-1)?.files).toEqual([
+      { attachmentId: picture.attachmentId, name: "Picture 1", mediaType: "image/jpeg" },
+    ]);
+
+    expect(inboxSendingFile(sending, picture.attachmentId)).toEqual({
+      contentType: "image/jpeg",
+      base64: "/9j/",
+    });
+
+    // The read that carries the reply names its picture under the service's own attachment, which is still drawn from the send's bytes.
+    const read = [
+      ...(ITEM.thread ?? []),
+      {
+        id: "message-2",
+        author: INBOX_MESSAGE_AUTHOR.MEMBER,
+        text: "",
+        files: [{ attachmentId: "service-file-1", name: "Picture 1", mediaType: "image/jpeg" }],
+        clientKey: "key-2",
+        createdAt: 2_100,
+      },
+    ];
+
+    expect(inboxSendingFile(sending, "service-file-1", read)).toEqual({
+      contentType: "image/jpeg",
+      base64: "/9j/",
+    });
+
+    // A reply that answers the ask carries its picture at once too.
+    const answered = inboxSendingDrawn(
+      ITEM,
+      [
+        {
+          kind: INBOX_SENDING.REPLY,
+          key: "key-3",
+          text: "",
+          answers: { ask: ASK, reply: INBOX_REPLY.CHOSE, choices: ["Friday"] },
+          files: [picture],
+          at: 2_000,
+        },
+      ],
+      READER,
+    );
+
+    expect(answered.thread?.at(-1)?.files).toEqual([
+      { attachmentId: picture.attachmentId, name: "Picture 1", mediaType: "image/jpeg" },
+    ]);
+  });
+
+  it("hands a sent picture back with the size its header states, read as it was sent", () => {
+    // A PNG's signature, then its IHDR chunk stating 640 by 480 pixels, written out by hand.
+    const png = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+      0x52, 0x00, 0x00, 0x02, 0x80, 0x00, 0x00, 0x01, 0xe0, 0x08, 0x06, 0x00, 0x00, 0x00,
+    ]);
+
+    const base64 = Buffer.from(png).toString("base64");
+
+    const files = inboxSendingFiles("key-4", [
+      { name: "Picture 1", mediaType: "image/png", data: base64 },
+    ]);
+
+    const sending = [{ kind: INBOX_SENDING.REPLY, key: "key-4", text: "", files, at: 2_000 }];
+    const [file] = files;
+
+    expect(file === undefined ? undefined : inboxSendingFile(sending, file.attachmentId)).toEqual({
+      contentType: "image/png",
+      base64,
+      pictureSize: { width: 640, height: 480 },
+    });
   });
 
   it("settles the open ask with an answer and a close while each still stands open, and leaves an item settled since as it is", () => {

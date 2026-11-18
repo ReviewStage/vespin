@@ -2,9 +2,9 @@
  * legacy-app-word.ts -- the word the app's own actor was stored and sent under before it was named `app`, read and never written.
  *
  * Rows, lines, and links written before the rename name the app as `luke`:
- * who sent a line, who paid for an agent or archived one, who showed a page
- * version or was asked in a comment, the channel of a wakeup line, the key a
- * kept picture is named under, and the step of a comment's mention link.
+ * who sent a line, who paid for an agent or archived one, the channel of a
+ * wakeup line, the key a kept picture is named under, and the step of a
+ * comment's mention link.
  * Those rows stay as they were stored, so every reader of one reads the old
  * word as `app`, and every writer writes `app` alone.
  */

@@ -14,7 +14,7 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Integrations"
@@ -43,4 +43,7 @@ appId: dev.vespin.ios
 - assertVisible: "Disconnect Linear?"
 - waitForAnimationToEnd
 - takeScreenshot: settings-integrations-disconnect
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Disconnect Linear?"

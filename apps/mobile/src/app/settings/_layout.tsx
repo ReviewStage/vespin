@@ -2,7 +2,6 @@
 
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { HOST_CONNECT_WORDS } from "@repo/features/host-connect-words";
-import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
 import { PUSH_NOTIFICATIONS_TITLE } from "@repo/features/push-device-model";
 import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { BAR_TITLE, useBarScheme, useColors } from "@repo/ui-native";
@@ -67,7 +66,11 @@ export default function SettingsLayout() {
         />
         <Stack.Screen name="skill" />
         <Stack.Screen name="skill-add" />
-        <Stack.Screen name="mcp" options={{ title: MCP_CLIENTS_WORDS.TITLE }} />
+        <Stack.Screen name="mcp" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MCP] }} />
+        <Stack.Screen
+          name="cloud-environment"
+          options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.ENVIRONMENT] }}
+        />
         <Stack.Screen
           name="memory"
           options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }}

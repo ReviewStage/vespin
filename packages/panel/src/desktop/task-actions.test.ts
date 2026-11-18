@@ -551,7 +551,7 @@ test("a sidebar task no one is on wears no face in a workspace of the reader alo
   assert.deepEqual(await faces(uncounted, undefined), [["unassigned"], "(unassigned)"]);
 });
 
-test("a sidebar task Vespin or a coding agent made wears who is on it rather than their square, and its ⋯ says who made it for whom", () => {
+test("a sidebar task a coding agent made wears who is on it rather than its square, and its ⋯ says who made it for whom", () => {
   /** Each mark the row wears, by its kind. */
   const marks = (task: TaskSummary) => {
     const { tasks, asked } = openTab();
@@ -582,10 +582,9 @@ test("a sidebar task Vespin or a coding agent made wears who is on it rather tha
     origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" },
   } as const;
 
-  const byApp = { ...deans, origin: { actor: DESCRIPTION_ACTOR.NOTETAKER } } as const;
   assert.deepEqual(marks(byAgent), ["unassigned"]);
-  assert.deepEqual(marks({ ...byApp, assignee: DEAN }), []);
-  assert.deepEqual(marks({ ...byApp, assignee: CHARLES }), ["person"]);
+  assert.deepEqual(marks({ ...byAgent, assignee: DEAN }), []);
+  assert.deepEqual(marks({ ...byAgent, assignee: CHARLES }), ["person"]);
 
   const { asked } = openTab();
   const listed = tasksControl({ me: DEAN.userId, tasks: [byAgent] });

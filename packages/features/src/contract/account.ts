@@ -2,7 +2,8 @@
  * account.ts -- the signed-in account's own reads and writes (`account-wire.ts`, `provider-key-wire.ts`), as procedures.
  *
  * Its deletion, its preferences snapshot, its access, a beat that it is
- * active at a client (`presence-wire.ts`), its own sounds
+ * active at a client (`presence-wire.ts`), the zone its device reads its
+ * clock in (`time-zone-wire.ts`), its own sounds
  * (`sound-clip-wire.ts`), the commands it always allows its coding agents
  * to run (`allowed-command-wire.ts`), its own provider
  * keys, its workspace's memories, and its ChatGPT credentials, each on the path
@@ -65,6 +66,7 @@ import {
   chatGptDeviceStartRequestSchema,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_QUERY,
+  planUsageRefreshRequestSchema,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeyResetCreditRequestSchema,
@@ -89,6 +91,7 @@ import {
   soundStateSchema,
 } from "../sound-clip-wire.js";
 import { workspaceIdSchema } from "../task-wire.js";
+import { timeZoneDoneAnswerSchema, timeZoneWriteSchema } from "../time-zone-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
 /** A key's save is a provider and a key bounded at 512 characters, so a body past this is not one. */
@@ -109,6 +112,9 @@ const SOUND_RENAME_BODY_BYTES = 1_024;
 /** An always-allowed command's add or edit is at most eight tokens of at most 128 characters each at JSON's widest escape, so a body past this is not one. */
 const ALLOWED_COMMAND_BODY_BYTES = 8_192;
 
+/** A zone's write is one IANA name of at most 64 characters at JSON's widest escape, so a body past this is not one. */
+const TIME_ZONE_BODY_BYTES = 1_024;
+
 /** A device-code login's poll or cancel is one login id of at most 64 characters, so a body past this is not one. */
 const CHATGPT_DEVICE_LOGIN_BODY_BYTES = 512;
 
@@ -127,6 +133,12 @@ export const accountContract = {
   active: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_PRESENCE }))
     .output(EffectSchema.flip(presenceDoneAnswerSchema)),
+  /** The zone the member's device reads its clock in, kept on the account for an agent's turn to read their day in (`time-zone-wire.ts`). */
+  writeTimeZone: declaredProcedure
+    .meta(bodyCap(TIME_ZONE_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.PUT, path: HOSTED_SERVICE_PATH.ACCOUNT_TIME_ZONE }))
+    .input(exactInput(timeZoneWriteSchema))
+    .output(EffectSchema.flip(timeZoneDoneAnswerSchema)),
   providerKeys: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_PROVIDER_KEYS }))
     .output(EffectSchema.flip(providerKeysAnswerSchema)),
@@ -143,6 +155,11 @@ export const accountContract = {
   useResetCredit: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_RESET_CREDIT }))
     .input(exactInput(providerKeyResetCreditRequestSchema))
+    .output(EffectSchema.flip(providerKeysAnswerSchema)),
+  /** A plan's usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's read from the rate-limit headers of a one-token quota check on its token. Answers the keys as they then stand; a plan the account does not hold, or one whose provider answered nothing, keeps what it held. */
+  refreshPlanUsage: declaredProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_PLAN_USAGE }))
+    .input(exactInput(planUsageRefreshRequestSchema))
     .output(EffectSchema.flip(providerKeysAnswerSchema)),
   renameSubscription: declaredProcedure
     .meta(bodyCap(PROVIDER_KEY_BODY_BYTES))

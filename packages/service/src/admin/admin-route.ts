@@ -9,6 +9,8 @@ import {
   socialClientConfigured,
 } from "../auth/auth-deployment.js";
 import { sessionCredential } from "../auth/session-credential.js";
+import { BILLING_ENVIRONMENT } from "../billing/billing-environment.js";
+import { text } from "../core.js";
 import { INTEGRATION, type IntegrationDefinition } from "../integrations/integrations.js";
 import { CRON_ENVIRONMENT } from "../maintenance/maintenance-bounds.js";
 import { SENTRY_ENVIRONMENT } from "../observability/sentry.js";
@@ -19,6 +21,11 @@ import {
 } from "../providers/posthog.js";
 import type { AdminViewer } from "./admin-access.js";
 import { readAdminAccountSource } from "./admin-account-queries.js";
+import {
+  readAdminAccountSandboxUsage,
+  readAdminBilling,
+  readAdminWorkspaceBilling,
+} from "./admin-billing-queries.js";
 import { buildAdminCatalog } from "./admin-catalog.js";
 import { readAdminCost } from "./admin-cost-queries.js";
 import { buildAdminDayDetail } from "./admin-day.js";
@@ -136,6 +143,9 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
   // presence booleans above are still the only thing said about the keys.
   const projectId = (process.env[POSTHOG_ENVIRONMENT.PROJECT_ID] ?? "").trim();
 
+  // Stage's own workspace, which the start gate never refuses, as the billing environment reads it.
+  const exemptWorkspaceId = text(process.env[BILLING_ENVIRONMENT.BILLING_EXEMPT_WORKSPACE_ID]);
+
   const analyticsConsoleUrl = projectId
     ? posthogProjectConsoleUrl(projectId, process.env[POSTHOG_ENVIRONMENT.API_HOST])
     : undefined;
@@ -152,6 +162,7 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
         overview: buildAdminOverview(sources.overview, now, windowDays),
       })),
     readCost: (now, scope, windowDays) => readAdminCost({ now, scope, windowDays }),
+    readBilling: (month, now) => readAdminBilling(month, now, exemptWorkspaceId),
     readUsers: (now, scope, viewerId, windowDays, search) =>
       Effect.map(readAdminUsersSource({ now, scope, search, viewerId, windowDays }), (source) =>
         buildAdminUserList(source, now, windowDays, search),
@@ -162,12 +173,14 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
           [
             readAdminUserSource({ userId, now, windowDays }),
             readAdminAccountSource({ userId, now, windowDays }),
+            readAdminAccountSandboxUsage(userId, now),
           ],
           { concurrency: "unbounded" },
         ),
-        ([source, support]) =>
+        ([source, support, sandboxUsage]) =>
           source && {
             ...buildAdminUserDetail(source, support, now, windowDays),
+            sandboxUsage,
             analyticsPersonUrl:
               analyticsConsoleUrl && posthogPersonConsoleUrl(analyticsConsoleUrl, userId),
           },
@@ -187,8 +200,16 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
       ),
     readWorkspace: (id, now) =>
       Effect.map(
-        readAdminWorkspaceSource({ now, id }),
-        (source) => source && buildAdminWorkspaceDetail(source, now),
+        Effect.all(
+          [
+            readAdminWorkspaceSource({ now, id }),
+            readAdminWorkspaceBilling(id, now, exemptWorkspaceId),
+          ],
+          {
+            concurrency: "unbounded",
+          },
+        ),
+        ([source, billing]) => source && { ...buildAdminWorkspaceDetail(source, now), billing },
       ),
     writeFavorite: (adminId, userId, favorite) => writeAdminFavorite({ adminId, userId, favorite }),
   };

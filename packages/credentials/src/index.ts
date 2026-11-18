@@ -8,9 +8,14 @@ export {
   moveAccountLifecycle,
 } from "./account/lifecycle.js";
 
+export { type RenewalHold, renewalHeldBy } from "./account/renewal-hold.js";
+
 export {
+  type AccountRenewalWindow,
   AccountSessionManager,
+  type AccountWrite,
   DeletionUnconfirmed,
+  RENEWAL_REFUSED,
   SignInFailed,
 } from "./account/session-manager.js";
 

@@ -6,7 +6,7 @@ import { startDescriptionCommentThread } from "@repo/database/models/description
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openTaskAgent, openWorkspace } from "@repo/database/testing";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   DESCRIPTION_COMMENT_ACTOR,
@@ -73,7 +73,7 @@ const openThreadedTask = Effect.gen(function* () {
 
   assert.ok("answer" in started && "thread" in started.answer);
 
-  return { owner, taskId, thread: started.answer.thread };
+  return { owner, workspace, taskId, thread: started.answer.thread };
 });
 
 /** A call made as the owner, with Plans on unless said. */
@@ -85,7 +85,7 @@ const asOwner = (owner: string, taskId: string, descriptionsOn = true) => ({
 
 it.layer(getTestDB())("the comment tools", (it) => {
   it.effect(
-    "the open threads read with their words and comments, a reply written as its writer's, and a resolved thread read only when asked for",
+    "the open threads read with their words and comments, a reply written as its writer's, a resolved thread read only when asked for, and a read naming no status refused",
     () =>
       Effect.gen(function* () {
         const { owner, taskId, thread } = yield* openThreadedTask;
@@ -104,7 +104,7 @@ it.layer(getTestDB())("the comment tools", (it) => {
         const read = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
-          unparsedWire({ taskId }),
+          unparsedWire({ taskId, status: DESCRIPTION_COMMENT_STATUS.OPEN }),
         );
 
         yield* runCommentTool(
@@ -116,7 +116,7 @@ it.layer(getTestDB())("the comment tools", (it) => {
         const openAfter = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
-          unparsedWire({ taskId }),
+          unparsedWire({ taskId, status: DESCRIPTION_COMMENT_STATUS.OPEN }),
         );
 
         const resolved = yield* runCommentTool(
@@ -149,6 +149,10 @@ it.layer(getTestDB())("the comment tools", (it) => {
         assert.ok(
           "threads" in resolved && Array.isArray(resolved.threads) && resolved.threads.length === 1,
         );
+        assert.deepEqual(
+          yield* runCommentTool(AGENT_TOOL.READ_COMMENTS, writer, unparsedWire({ taskId })),
+          { status: ACTION_RESULT_STATUS.REJECTED, reason: COMMENT_TOOL_REFUSAL.NO_STATUS },
+        );
       }),
   );
 
@@ -156,15 +160,16 @@ it.layer(getTestDB())("the comment tools", (it) => {
     "a page's threads are read by naming the page, each with its version and element, and a resolved one takes no reply; with Plans off the page's alone are reached",
     () =>
       Effect.gen(function* () {
-        const { owner, taskId, thread } = yield* openThreadedTask;
+        const { owner, workspace, taskId, thread } = yield* openThreadedTask;
         const writer = asOwner(owner, taskId);
+        const agentId = yield* openTaskAgent(owner, workspace, taskId);
 
         const page = Option.getOrThrow(
           yield* writePage(
             owner,
             taskPageOwner(taskId),
             { title: "Invite funnel", html: "<p>12 sent</p>" },
-            { kind: PAGE_SHOWER.APP },
+            { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
 
@@ -180,13 +185,13 @@ it.layer(getTestDB())("the comment tools", (it) => {
         const onPage = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
-          unparsedWire({ taskId, page: page.id }),
+          unparsedWire({ taskId, page: page.id, status: DESCRIPTION_COMMENT_STATUS.OPEN }),
         );
 
         const onPlan = yield* runCommentTool(
           AGENT_TOOL.READ_COMMENTS,
           writer,
-          unparsedWire({ taskId }),
+          unparsedWire({ taskId, status: DESCRIPTION_COMMENT_STATUS.OPEN }),
         );
 
         assert.deepEqual(
@@ -213,7 +218,7 @@ it.layer(getTestDB())("the comment tools", (it) => {
           yield* runCommentTool(
             AGENT_TOOL.READ_COMMENTS,
             descriptionsOff,
-            unparsedWire({ taskId }),
+            unparsedWire({ taskId, status: DESCRIPTION_COMMENT_STATUS.OPEN }),
           ),
           offRefused,
         );
@@ -237,7 +242,7 @@ it.layer(getTestDB())("the comment tools", (it) => {
           yield* runCommentTool(
             AGENT_TOOL.READ_COMMENTS,
             descriptionsOff,
-            unparsedWire({ taskId, page: page.id }),
+            unparsedWire({ taskId, page: page.id, status: DESCRIPTION_COMMENT_STATUS.OPEN }),
           ),
           onPage,
         );

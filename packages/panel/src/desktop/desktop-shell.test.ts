@@ -2,6 +2,14 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import {
+  INBOX_ASK,
+  INBOX_ASK_STATUS,
+  INBOX_MESSAGE_AUTHOR,
+  INBOX_STATUS,
+  INBOX_WIRE_VERSION,
+  type InboxItem,
+} from "@repo/features/inbox-wire";
 import { DESCRIPTION_ACTOR, type Task } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
@@ -32,6 +40,7 @@ import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { type PlaceLeave, usePlaceLeave } from "../places/place-leave.js";
+import type { StepTitle } from "../places/window-steps.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
@@ -58,6 +67,7 @@ import {
   newTaskControl,
   type TasksControlOverrides,
   tasksControl,
+  waitingOf,
 } from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
@@ -438,6 +448,8 @@ function drawLoadingNarrow(
               ...props.history,
               canGoBack: true,
               onBack: () => went.push("back"),
+              away: { title: { label: "Inbox" } },
+              onLeave: () => went.push("leave"),
               steps: {
                 back: [
                   {
@@ -474,7 +486,7 @@ async function mountLoadingNarrow(
   return drawn;
 }
 
-test("on a phone, while Settings is still loading, its list and its page stand headed as they will be: the way out or back, and the title centered", async () => {
+test("on a phone, while Settings is still loading, its list and its page stand headed as they will be: the way out, which leaves Settings past its pages, or back, and the title centered", async () => {
   const list = await mountLoadingNarrow(PANEL_TAB.SETTINGS, {}, true);
   assert.deepEqual(readPhoneHead(list.page, "settings-pages"), {
     start: ["Back"],
@@ -482,7 +494,7 @@ test("on a phone, while Settings is still loading, its list and its page stand h
     end: [],
   });
   pressInPhoneHead(list.page, "settings-pages", "Back");
-  assert.deepEqual(list.went, ["back"]);
+  assert.deepEqual(list.went, ["leave"]);
   act(() => root?.unmount());
 
   const page = await mountLoadingNarrow(PANEL_TAB.SETTINGS, {}, false);
@@ -1027,20 +1039,46 @@ function spokenName(item: HTMLElement): string {
   return heard.textContent ?? "";
 }
 
-test("on a phone the bar's Inbox wears the count of what needs the reader, named in the sidebar's words, and none at zero", async () => {
-  // Note that main lists the three questions it counts, as its read of the account does.
-  const asks = ["q-1", "q-2", "q-3"].map((id) => ({ id, agentId: "a-1", title: id, postedAt: 0 }));
-  handInbox({
-    waiting: [{ taskId: DOCUMENT_TASK.id, items: asks }],
-    tasks: [{ taskId: DOCUMENT_TASK.id, items: 3, toDo: 3, updatedAt: 0 }],
-  });
+test("on a phone the bar's Inbox wears the count of what the Inbox's view lists, named in the sidebar's words, and none at zero", async () => {
+  // Note that the account's feed holds the three open questions, which Open, the view a fresh profile shows, lists.
+  window.localStorage.clear();
+
+  const asks: readonly InboxItem[] = ["q-1", "q-2", "q-3"].map((id) => ({
+    id,
+    agentId: "a-1",
+    key: id,
+    revision: 1,
+    version: INBOX_WIRE_VERSION,
+    title: id,
+    needsReply: true,
+    status: INBOX_STATUS.OPEN,
+    thread: [
+      {
+        id: `m-${id}`,
+        author: INBOX_MESSAGE_AUTHOR.AGENT,
+        text: id,
+        ask: { type: INBOX_ASK.ANSWER, status: INBOX_ASK_STATUS.OPEN },
+        createdAt: 0,
+      },
+    ],
+    postedAt: 0,
+    updatedAt: 0,
+  }));
+
+  handInbox(
+    {
+      waiting: [{ taskId: DOCUMENT_TASK.id, items: asks.map(waitingOf) }],
+      tasks: [{ taskId: DOCUMENT_TASK.id, items: 3, toDo: 3, updatedAt: 0 }],
+    },
+    { [DOCUMENT_TASK.id]: asks },
+  );
 
   const page = await mountNarrow(
     { at: SHELL_AT.BOARD, tasks: [DOCUMENT_TASK] },
     { overlay: SIDEBAR_OVERLAY.OPEN },
   );
 
-  const inbox = barItems(page).find((item) => spokenName(item) === "Inbox, 3 need you");
+  const inbox = barItems(page).find((item) => spokenName(item) === "Inbox, 3 open");
   assert.ok(inbox, "the bar's Inbox is named with its count");
   assert.match(inbox.textContent ?? "", /3/u, "the Inbox's count is drawn");
   act(() => root?.unmount());
@@ -1137,11 +1175,9 @@ test("⇧⌘B opens the Tasks page, bringing the Tasks tab forward from Settings
   assert.equal(placeRow(page, "Tasks")?.getAttribute("aria-keyshortcuts"), "Meta+Shift+B");
 });
 
-test("while the Automations pages are still loading their frame stands the list as quiet rows, and Escape closes Automations as the list does once it stands", async () => {
-  const closed: string[] = [];
-  const leave = () => closed.push("closed");
+test("while the Automations pages are still loading their frame stands the list as quiet rows", async () => {
   handState({});
-  mount(false, { workspaces: [ACME], workspace: ACME, leave }, PANEL_TAB.TASKS, ignore, {});
+  mount(false, { workspaces: [ACME], workspace: ACME }, PANEL_TAB.TASKS, ignore, {});
   await settle();
   act(() => root?.unmount());
   document.body.innerHTML = "";
@@ -1149,7 +1185,7 @@ test("while the Automations pages are still loading their frame stands the list 
   // Note that the window's state has landed in the test's Query client, so Automations opens within one render, before their chunk can.
   const page = mount(
     false,
-    { workspaces: [ACME], workspace: ACME, at: SHELL_AT.AUTOMATIONS, leave },
+    { workspaces: [ACME], workspace: ACME, at: SHELL_AT.AUTOMATIONS },
     PANEL_TAB.TASKS,
     ignore,
     {},
@@ -1170,20 +1206,16 @@ test("while the Automations pages are still loading their frame stands the list 
     true,
     "their chunk has not loaded yet",
   );
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS), "Automations' way out is offered");
-  });
-
-  assert.deepEqual(closed, ["closed"]);
 });
 
-test("while a version history's chunk is still loading, its Back row and Escape leave the history, as they do once it stands, and on a phone its list stands headed as it will be, by the way out and its title", async () => {
+test("while a version history's chunk is still loading, its Back row and Escape leave the history for its task in its step, with no step behind it, as they do once it stands, and on a phone its list stands headed as it will be, by the way out and its title", async () => {
   const closed: string[] = [];
   const history = { ...tasksControl().history, open: true };
   // The history's chunk is held on its way for the whole case, so its frame stands by construction rather than by timing.
   routed().router.routesById["/version-history"].lazy(() => Promise.withResolvers<never>().promise);
   handState({});
   const page = mount(false, { history, leave: () => closed.push("closed") });
+  const { history: entries } = routed().router;
   // The router goes to the history, whose frame stands while its chunk is read.
   await act(async () => {
     await Promise.resolve();
@@ -1201,23 +1233,31 @@ test("while a version history's chunk is still loading, its Back row and Escape 
   );
 
   assert.ok(back, "the Back row stands");
-  act(() => back.click());
+  const entered = entries.length;
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.EXIT_VERSION_HISTORY), "Escape leaves the history");
   });
-  assert.deepEqual(closed, ["closed", "closed"]);
+  await settle();
+  assert.equal(entries.location.pathname, "/acme/task/1");
+  assert.equal(entries.length, entered, "the task takes the history's step");
+  assert.deepEqual(closed, [], "rather than a step after it");
   act(() => root?.unmount());
 
-  // Note that the chunk is still on its way, so the phone's frame is drawn in the same turn.
-  const phone = drawLoadingNarrow(PANEL_TAB.TASKS, { history: { ...history, listed: true } }, true);
+  // Note that the chunk is still on its way, so the phone's frame stands once the router is back on the history.
+  const phone = await mountLoadingNarrow(
+    PANEL_TAB.TASKS,
+    { history: { ...history, listed: true } },
+    true,
+  );
+
   assert.deepEqual(readPhoneHead(phone.page, "version-log"), {
     start: ["Back"],
     title: "Version history",
     end: [],
   });
   pressInPhoneHead(phone.page, "version-log", "Back");
-  assert.deepEqual(phone.went, ["back"]);
   await settle();
+  assert.equal(entries.location.pathname, "/acme/task/1");
 });
 
 test("the Automations page stands in the plan's place, titled for the listed workspace", async () => {
@@ -1540,7 +1580,12 @@ test("a plan's chip in a description's version history hangs the plan's card, as
       viewing: {
         line: {
           seq: 2,
-          lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 0, duringCall: false },
+          lastEdit: {
+            actor: DESCRIPTION_ACTOR.DEVELOPER,
+            by: { userId: "user-charles", name: "Charles Pan" },
+            at: 0,
+            duringCall: false,
+          },
           startedAt: 0,
           changes: 1,
         },
@@ -1682,10 +1727,10 @@ test("the sign-in, which needs the network, says over it when the Mac is offline
   await vi.waitFor(() => assert.equal(titleBarOffline(container)?.textContent, "Offline"));
 });
 
-test("on a phone an open task leads its own row with the way back the window's history names, in the sidebar toggle's place, and a wide window keeps the toggle", async () => {
+test("on a phone an open task leads its own row with its way back, the window's Back, named for the step behind, in the sidebar toggle's place, and a wide window keeps the toggle", async () => {
   const left: string[] = [];
 
-  const render = (away: Parameters<typeof DesktopShell>[0]["history"]["away"], room: ShellRoom) => {
+  const render = (behind: StepTitle | undefined, room: ShellRoom) => {
     const container = document.body.appendChild(document.createElement("div"));
     root = createRoot(container);
 
@@ -1701,7 +1746,18 @@ test("on a phone an open task leads its own row with the way back the window's h
           underRouter(
             createElement(DesktopShell, {
               ...props,
-              history: { ...props.history, away, onLeave: () => left.push("left") },
+              history: {
+                ...props.history,
+                canGoBack: behind !== undefined,
+                onBack: () => left.push("back"),
+                steps: {
+                  back:
+                    behind === undefined
+                      ? []
+                      : [{ number: 0, title: behind, page: { kind: "routed", of: "/acme/inbox" } }],
+                  forward: [],
+                },
+              },
               room,
             }),
           ),
@@ -1716,12 +1772,12 @@ test("on a phone an open task leads its own row with the way back the window's h
     page.querySelector<HTMLButtonElement>(".task-head .ui-toolbar-lead button") ??
     assert.fail("a way back");
 
-  const fromInbox = render({ title: { label: "Inbox" } }, SHELL_ROOM.NARROW);
+  const fromInbox = render({ label: "Inbox" }, SHELL_ROOM.NARROW);
   await settle();
   assert.equal(back(fromInbox).textContent, "Inbox");
   assert.equal(fromInbox.querySelector(".desktop-shell > .title-bar-controls") === null, true);
   act(() => back(fromInbox).click());
-  assert.deepEqual(left, ["left"]);
+  assert.deepEqual(left, ["back"]);
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
@@ -1731,7 +1787,7 @@ test("on a phone an open task leads its own row with the way back the window's h
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const wide = render({ title: { label: "Inbox" } }, SHELL_ROOM.WIDE);
+  const wide = render({ label: "Inbox" }, SHELL_ROOM.WIDE);
   await settle();
   assert.equal(wide.querySelector(".task-head") === null, true);
   assert.ok(

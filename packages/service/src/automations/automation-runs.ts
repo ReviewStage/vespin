@@ -7,6 +7,7 @@ import {
   adoptAutomationAgent,
   attachRunAgent,
   attachRunTask,
+  automationRunsOn,
   claimAutomationRun,
   creatorStillMember,
   failClaimedRun,
@@ -691,10 +692,13 @@ const startRunAgent = Effect.fnUntraced(function* (
 
   if (Option.isNone(taskId)) return yield* failedRun(run, AUTOMATION_RUN_REASON.CREATOR_LEFT);
   const where: StartWhere = { taskId: taskId.value };
+  // The machine the automation names, where it names one; a device gone since is the start's to refuse.
+  const runsOn = automationRunsOn(automation);
 
   const start = yield* Effect.result(
     startAgent(sessionsFor(automation.userId), automation.userId, {
       ...where,
+      ...(runsOn === null ? undefined : { runsOn }),
       idempotencyKey: run.id,
       choice: automation.action.choice,
       // The servers its owner switched off for it, as a Start switches them off for its agent.

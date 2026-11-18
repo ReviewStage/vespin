@@ -47,16 +47,7 @@ export const MARK_SIZE = {
    * wider than the ⋯ beside it.
    */
   COLUMN_BAR_FACE: 26,
-  /** The column a sidebar row's glyph stands centered in, as wide as Mail's mailbox glyphs, so every place's name starts at one edge. */
-  SIDEBAR_LEAD: 28,
 } as const;
-
-/**
- * The room the system's tab bar floats over at a compact window's foot, past
- * the safe area, which what stands at the foot, such as a transcript's newest
- * row or the app's notice, stands clear of.
- */
-export const TAB_BAR_ROOM = 64;
 
 /** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
 export const PRESS_SIZE = 44;
@@ -76,20 +67,6 @@ export const RADIUS = {
 } as const;
 
 /**
- * A sidebar row's measures, as Mail's mailboxes stand on iPadOS 26: about
- * 38 pt tall at the standard size, its selection's fill set in from the
- * sidebar's edges, and its glyph and words padded inside that fill.
- */
-export const SIDEBAR_ROW = {
-  /** Between the sidebar's edge and the row's selection fill. */
-  EDGE: 10,
-  /** Between the selection fill's side and the glyph or the count. */
-  SIDE: 10,
-  /** The row's top and bottom inside its fill. */
-  VERTICAL: 8,
-} as const;
-
-/**
  * A row's layout across the screen: the unread dot in the margin, the
  * leading mark's column, and the words, where the row's hairline starts, so
  * every row's text and rule line up whatever its mark.
@@ -97,6 +74,8 @@ export const SIDEBAR_ROW = {
 export const ROW_INSET = {
   /** The row's own leading inset, the dot's margin. */
   LEADING: SPACE.EDGE - MARK_SIZE.UNREAD - SPACE.TIGHT,
+  /** A row that draws no unread dot, such as a task's: the list's own edge, so its lead mark stands where a dotted row's does. */
+  PLAIN: SPACE.EDGE,
   /** Where the words, and the hairline under them, start from the screen's edge. */
   TEXT: SPACE.EDGE + MARK_SIZE.LEAD + SPACE.ROW,
   /** A row's top and bottom. */

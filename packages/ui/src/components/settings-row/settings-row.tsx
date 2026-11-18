@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from "react";
+import { type MouseEvent, type ReactNode, useContext, useId } from "react";
 import { cn } from "../../cn.js";
 import { AlertIcon, CheckIcon } from "../../icons/lucide-glyphs.js";
 import type { ShownError } from "../../reported-failure.js";
@@ -12,6 +12,7 @@ import {
   ItemTitle,
 } from "../../shadcn/item.js";
 import { ANNOUNCE } from "../announcer/announcer.js";
+import { pressOnBareGround } from "../disclosure/disclosure.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
@@ -20,6 +21,7 @@ import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";
 import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
+import { SettingsRowFoldPress } from "./settings-row-press.js";
 
 /**
  * settings-row.tsx -- one setting on a line: its name and what it does on the left, the control that sets it at the end, and what went wrong with its last write under both.
@@ -101,6 +103,17 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * a press anywhere on the row does; and the control, as narrow as a word,
  * stays beside the words at any width rather than dropping under them. The
  * control wears the id the row hands it (`controlId`).
+ *
+ * A row pressed anywhere to open what it names, a page of its own, draws
+ * that press first (`press`, `settings-link-row.tsx`): a press reaching
+ * every edge of the row, under its controls, which stand over it.
+ *
+ * A row that heads a fold (`SettingsFoldRow`, `SettingsRowsFold`) opens and
+ * closes it from a press anywhere on it, its words, its mark, its padding,
+ * as a finger finds it on a phone; its controls, a picker, a switch, its ⋯,
+ * and its label where that sets a switch, keep their own presses, and what
+ * it grows `below` it, the fold's body among them, folds nothing. The
+ * fold's glyph stays the keyboard's one stop for it.
  *
  * A row that just arrived, a skill just installed, says so (`landed`): it
  * is lit as every place landed on is (`../landed/landed.ts`), its wash a
@@ -246,6 +259,25 @@ function RowLabel({
   );
 }
 
+/**
+ * A press on a fold's head row, which folds it where it lands on the row's
+ * bare ground (`pressOnBareGround`) and the row's own line, rather than in
+ * what it grows below; and not at the end of a drag that chose its words,
+ * which the reader means to copy.
+ */
+function foldPress(event: MouseEvent<HTMLElement>, toggle: () => void): void {
+  if (!pressOnBareGround(event)) return;
+
+  const below =
+    event.target instanceof Element ? event.target.closest(".ui-settings-row-below") : null;
+
+  if (below !== null && event.currentTarget.contains(below)) return;
+
+  if (window.getSelection()?.isCollapsed === false) return;
+
+  toggle();
+}
+
 /** A setting named `label`, described by `description`, set by `children`, and failed by `error` while it says something. */
 export function SettingsRow({
   label,
@@ -264,6 +296,7 @@ export function SettingsRow({
   children,
   end,
   below,
+  press,
 }: {
   label: ReactNode;
   description?: ReactNode;
@@ -295,8 +328,11 @@ export function SettingsRow({
   end?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** What the row grows under its words and owns alone, handed the same ids; never a page's layout. */
   below?: ((control: SettingsRowControl) => ReactNode) | undefined;
+  /** The one press the whole row is, handed its ids, drawn before its words so Tab reaches it before its controls (`SettingsLinkRow`). */
+  press?: ((control: SettingsRowControl) => ReactNode) | undefined;
 }): React.JSX.Element {
   const id = useId();
+  const fold = useContext(SettingsRowFoldPress);
   const labelId = `${id}label`;
   const descriptionId = `${id}description`;
   const errorId = `${id}error`;
@@ -352,8 +388,12 @@ export function SettingsRow({
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a fold's head row folds from a press on its bare ground for the pointer alone; the fold's glyph is the keyboard's.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: a key on a control inside reaches it as a click, which the row leaves to the control.
     <div
       className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent data-[indent=mark-twice]:ms-settings-row-indent-twice data-[editing=true]:rounded-control data-[editing=true]:ring-1 data-[editing=true]:ring-accent-fill data-[editing=true]:ring-inset"
+      data-folds={fold === undefined ? undefined : true}
+      onClick={fold === undefined ? undefined : (event) => foldPress(event, fold)}
       data-invalid={failed}
       data-editing={editing || undefined}
       data-density={density}
@@ -361,38 +401,42 @@ export function SettingsRow({
       data-labels-control={labelsControl}
       data-controls={controls}
       data-led={led}
+      data-pressed-whole={press === undefined ? undefined : "true"}
       {...landedMark(landed, LANDED.WITHIN)}
     >
-      <Item size={density} className={indent === SETTINGS_ROW_INDENT.NONE ? undefined : "ps-0"}>
-        {end === undefined ? (
-          <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
-        ) : (
-          <div className={cn("ui-settings-row-line flex items-center", top)}>
-            <div className={cn(wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN, top)}>{words}</div>
-            <div
-              className={cn(
-                "ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden",
-                top,
-              )}
-            >
-              {end(control)}
+      {press?.(control)}
+      <SettingsRowFoldPress.Provider value={undefined}>
+        <Item size={density} className={indent === SETTINGS_ROW_INDENT.NONE ? undefined : "ps-0"}>
+          {end === undefined ? (
+            <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
+          ) : (
+            <div className={cn("ui-settings-row-line flex items-center", top)}>
+              <div className={cn(wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN, top)}>{words}</div>
+              <div
+                className={cn(
+                  "ui-settings-row-end flex-none items-center gap-control-gap empty:hidden",
+                  top,
+                )}
+              >
+                {end(control)}
+              </div>
             </div>
-          </div>
-        )}
-        {below === undefined ? null : (
-          <div
-            className={
-              led
-                ? "ui-settings-row-below mt-ui-8 min-w-0 ps-settings-row-words-inset"
-                : "ui-settings-row-below mt-ui-8 min-w-0"
-            }
-            data-led={led}
-          >
-            {below(control)}
-          </div>
-        )}
-        <ErrorLine id={errorId} level={ANNOUNCE.ALERT} error={failed ? error : undefined} />
-      </Item>
+          )}
+          {below === undefined ? null : (
+            <div
+              className={
+                led
+                  ? "ui-settings-row-below min-w-0 ps-settings-row-words-inset"
+                  : "ui-settings-row-below min-w-0"
+              }
+              data-led={led}
+            >
+              {below(control)}
+            </div>
+          )}
+          <ErrorLine id={errorId} level={ANNOUNCE.ALERT} error={failed ? error : undefined} />
+        </Item>
+      </SettingsRowFoldPress.Provider>
     </div>
   );
 }
@@ -462,17 +506,21 @@ export const SETTINGS_ROW_STATE = {
 
 export type SettingsRowState = (typeof SETTINGS_ROW_STATE)[keyof typeof SETTINGS_ROW_STATE];
 
-/** What each state draws: the finished session's dot before the words, the attention tint, or nothing. */
+/**
+ * What each state draws: the attention tint, or nothing. Note that a
+ * connected line draws as a plain one, because a row that is fine says
+ * nothing of its health beyond its words; the state stays only for the
+ * integration lists that still name it.
+ */
 const STATE_CLASS = {
-  [SETTINGS_ROW_STATE.CONNECTED]:
-    "before:size-settings-row-state-dot before:flex-none before:rounded-ui-full before:bg-complete",
+  [SETTINGS_ROW_STATE.CONNECTED]: "",
   [SETTINGS_ROW_STATE.ATTENTION]: "text-attention",
   [SETTINGS_ROW_STATE.PLAIN]: "",
 } as const satisfies Record<SettingsRowState, string>;
 
 /**
- * Where a row's subject stands, under its name: connected with the dot a
- * finished session wears, what needs a hand in the attention tint, or plain.
+ * Where a row's subject stands, under its name: what needs a hand in the
+ * attention tint, or plain, with no dot either way.
  * `block` stands it on a line of its own under the row's description, and
  * `wrap` lets its parts break between each other, never inside one.
  */
@@ -493,13 +541,10 @@ export function SettingsRowStateLine({
     <span
       className={cn(
         "ui-settings-row-state items-center gap-ui-6",
-        // Note that an inline line stands at the top of its own line box, because on the baseline a connected line takes its baseline from the dot, a flex item with none of its own, and sits a pixel low, growing the row as its words land.
         // Note that a block line stands no wider than its row's words, so a part that cannot wrap, an actor's chip, shrinks to its ellipsis rather than running under the row's controls.
-        block ? "flex w-fit max-w-full" : "inline-flex align-top",
-        // Note that the parts of a wrapping line are spaced by the spaces written between them, kept by `pre`: a flex gap beside the space a part ends in, trimmed at its end, would leave a wider gap after a separator than before it. The state's dot keeps its own.
+        block ? "flex w-fit max-w-full" : "inline-flex",
+        // Note that the parts of a wrapping line are spaced by the spaces written between them, kept by `pre`: a flex gap beside the space a part ends in, trimmed at its end, would leave a wider gap after a separator than before it.
         wrap && "flex-wrap gap-x-0 whitespace-pre",
-        // Note that only the connected line draws a dot, so only its dot keeps its step off the words; another line's empty marker would push its words in.
-        wrap && state === SETTINGS_ROW_STATE.CONNECTED && "before:me-ui-6",
         STATE_CLASS[state],
       )}
       data-state={state}
@@ -521,7 +566,11 @@ export function SettingsRowValue({ children }: { children: ReactNode }): React.J
   );
 }
 
-/** The room of a row's ⋯ on a row with none, so every row's value ends in one column. */
+/**
+ * The room of a row's ⋯ on a row with none, so every row's value ends in one
+ * column; where no row of its section ends in a glyph, it and the row's end
+ * stand nowhere (`settings-section.css`), so no row keeps blank room.
+ */
 export function SettingsRowActSlot(): React.JSX.Element {
   return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;
 }

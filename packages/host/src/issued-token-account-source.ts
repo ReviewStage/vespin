@@ -14,7 +14,7 @@
  * using it would revoke the account's tokens and sign the client out.
  */
 
-import type { StoredAccount } from "@repo/credentials";
+import type { AccountWrite, StoredAccount } from "@repo/credentials";
 import { Clock, Effect, Layer } from "effect";
 import type { AccountSourceHost } from "./account-source.js";
 import { AccountSource } from "./effect/seams.js";
@@ -67,8 +67,8 @@ function tellingStore(store: AccountStore, sink: IssuedTokenSink): AccountStore 
 
   return {
     readAccount: () => store.readAccount().pipe(Effect.tap(afterRead)),
-    setAccount: (account: StoredAccount) =>
-      store.setAccount(account).pipe(Effect.tap(() => issue(account))),
+    setAccount: (account: StoredAccount, write?: AccountWrite) =>
+      store.setAccount(account, write).pipe(Effect.tap(() => issue(account))),
     clearAccount: () => store.clearAccount().pipe(Effect.tap(() => tell(undefined))),
     accountSnapshot: () => store.accountSnapshot(),
     settleSessionAccount: (accountEmail: string) => store.settleSessionAccount(accountEmail),
@@ -87,6 +87,7 @@ export function issuedTokenAccountSourceLayer<E, R>(
 
       return {
         tokenCipher: opened.tokenCipher,
+        ...(opened.tokenVault === undefined ? undefined : { tokenVault: opened.tokenVault }),
         open: (host: AccountSourceHost) =>
           opened.open({ ...host, store: tellingStore(host.store, sink) }),
       };

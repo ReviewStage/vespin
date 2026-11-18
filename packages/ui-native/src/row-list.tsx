@@ -40,7 +40,6 @@ import {
   padding,
   refreshable,
   scrollContentBackground,
-  scrollContentMargins,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -60,10 +59,16 @@ import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropLink } from "./interactions.js";
+import { dropLink, sideMargins } from "./interactions.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
-import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
+import { useRollingCount } from "./rolling-count.js";
+import {
+  RowChoosingContext,
+  RowOpenContext,
+  RowSearchedContext,
+  RowSelectedContext,
+} from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -91,12 +96,11 @@ const FOLD_SECONDS = 0.25;
  * stand rather than as grouped cards; a page of one thing's sections, such
  * as a task's, whose headers scroll away with their rows, as Reminders' and
  * Settings' do, rather than pinning to the bar as a long list's do, its rows
- * still plain on the ground; or a split view's sidebar.
+ * still plain on the ground.
  */
 export const LIST_LOOK = {
   PLAIN: "plain",
   DETAIL: "grouped",
-  SIDEBAR: "sidebar",
 } as const;
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
@@ -126,6 +130,8 @@ type RowListProps = {
   readonly choosing?: RowChoosing | undefined;
   /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
   readonly searched?: string | undefined;
+  /** What stands above everything else in it, such as a `PermissionAsk`, scrolling away with the rows; none where nothing does. */
+  readonly lead?: ReactNode | undefined;
   /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
   readonly scopes?: ListScopes | undefined;
   /** What the list says while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
@@ -182,13 +188,9 @@ function selectedId(selection: readonly (string | number)[]): string | undefined
   return Predicate.isString(first) ? first : undefined;
 }
 
-/**
- * What a list paints under itself: the brand's ground, never the system's
- * grays, but nothing for a sidebar, which stands clear on the system's own
- * floating glass pane, as Mail's and Notes' do on iPadOS 26 and 27.
- */
-function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfig[] {
-  return look === LIST_LOOK.SIDEBAR ? [] : [background(colors.GROUND)];
+/** What a list paints under itself: the brand's ground, never the system's grays. */
+function listGround(colors: BrandColors): readonly ModifierConfig[] {
+  return [background(colors.GROUND)];
 }
 
 /**
@@ -243,8 +245,8 @@ function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
  * the reading width stands its rows in a centered column of that width, as
  * iOS's readable content guide stands a page, so a pull request's page across
  * a landscape iPad reads as a column rather than rows 1,400 pt long. Note
- * that the column is the list's content margins (`scrollContentMargins`,
- * SwiftUI's `contentMargins` through the app's `@expo/ui` patch), never a
+ * that the column is the list's content margins (`sideMargins`, SwiftUI's
+ * `contentMargins` through the app's own module), never a
  * frame, so the list keeps the whole width and a drag, a trackpad or a pull
  * to refresh in the ground beside the column scrolls it, as Mail's and
  * Settings' do; `listSectionMargins` moved no plain list's rows. In
@@ -265,6 +267,7 @@ export function RowList({
   onRefresh,
   choosing,
   searched,
+  lead,
   scopes,
   empty,
   onChooseStart,
@@ -273,8 +276,8 @@ export function RowList({
   const colors = useColors();
   const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
-  // Note that a page's grouped list stands in the reading column too, as a plain one does; only the app sidebar keeps its width.
-  const sides = look === LIST_LOOK.SIDEBAR ? 0 : Math.max(0, (width - READING_WIDTH) / 2);
+  // Note that a page's grouped list stands in the reading column too, as a plain one does.
+  const sides = Math.max(0, (width - READING_WIDTH) / 2);
   // Whether a two-finger drag started Select mode before the list was drawn in it.
   const dragged = useRef(false);
   const chooses = choosing !== undefined;
@@ -330,9 +333,9 @@ export function RowList({
       modifiers={[
         listStyle(look),
         scrollContentBackground("hidden"),
-        ...listGround(colors, look),
+        ...listGround(colors),
         onGeometryChange(({ width: next }) => setWidth(next)),
-        ...(sides > 0 ? [scrollContentMargins({ edges: "horizontal", length: sides })] : []),
+        ...(sides > 0 ? [sideMargins(sides)] : []),
         // Note that a page's sections stand as close as the system lets them, since its small headers already part them.
         ...(look === LIST_LOOK.DETAIL ? [listSectionSpacing("compact")] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
@@ -348,9 +351,13 @@ export function RowList({
       <ListLookContext value={look}>
         <RowOpenContext value={onSelect}>
           <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+            {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
+            {lead === undefined || choosing !== undefined ? null : lead}
             {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
             {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
-            <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
+            <RowSearchedContext value={searchedWords}>
+              <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
+            </RowSearchedContext>
             {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
           </RowSelectedContext>
         </RowOpenContext>
@@ -402,6 +409,8 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
   readonly glyph?: Glyph | undefined;
+  /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
+  readonly emoji?: string | undefined;
   /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
   readonly repository?: string | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
@@ -455,6 +464,17 @@ type SectionAdd = {
   readonly acts: readonly SectionAct[];
 };
 
+/**
+ * One number for a section's done and total figures, which changes when
+ * either does, so `2/5` rolls on to `2/6` as a sub-task is added and not
+ * only to `3/5` as one is finished: Cantor's pairing, unique to each pair of
+ * whole numbers. Note that the figures stand in one `Text`, heard as one,
+ * so one animation keys on both.
+ */
+function progressKey({ done, total }: SectionProgress): number {
+  return ((done + total) * (done + total + 1)) / 2 + total;
+}
+
 /** A section's header: its fold chevron where it folds, its title in 13 pt medium, and its count, all muted. */
 function GroupHeader({
   title,
@@ -462,6 +482,7 @@ function GroupHeader({
   progress,
   mark,
   glyph,
+  emoji,
   repository,
   folded,
 }: {
@@ -470,12 +491,14 @@ function GroupHeader({
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
   readonly glyph: Glyph | undefined;
+  readonly emoji: string | undefined;
   readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -498,6 +521,10 @@ function GroupHeader({
       )}
       {repository !== undefined ? (
         <RepositoryPicture repository={repository} size={glyphSize} />
+      ) : emoji !== undefined ? (
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
+          {emoji}
+        </Text>
       ) : glyph === undefined ? null : (
         <Image
           {...glyphImage(glyph)}
@@ -524,6 +551,7 @@ function GroupHeader({
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
             accessibilityLabel(progress.heard),
+            ...rolling,
           ]}
         >
           {`${progress.done}/${progress.total}`}
@@ -534,6 +562,7 @@ function GroupHeader({
             font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
+            ...rolling,
           ]}
         >
           {String(count)}
@@ -660,6 +689,7 @@ export function ListSection({
   progress,
   mark,
   glyph,
+  emoji,
   repository,
   foldable = false,
   folded: held,
@@ -692,6 +722,7 @@ export function ListSection({
         progress={progress}
         mark={mark}
         glyph={glyph}
+        emoji={emoji}
         repository={repository}
         folded={foldable ? folded : undefined}
       />

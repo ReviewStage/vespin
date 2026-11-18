@@ -6,7 +6,9 @@
  * a sound of another account answers as one that is not there. An add
  * answers the hash its bytes are named by on the account's live read, and a
  * read answers it beside them, so a client that holds a sound knows which
- * it holds.
+ * it holds. A rename or a choice answers the transaction it committed in,
+ * so a client following the account's live read draws it until that read
+ * carries it; one that changed no row answers none.
  */
 
 import { createHash } from "node:crypto";
@@ -21,6 +23,7 @@ import { and, eq } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { CURRENT_TXID, TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { accountSound, accountSoundChoice } from "../schemas/account-sound.js";
 
 type SoundEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -28,6 +31,18 @@ type SoundEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 /** A sound's clip as a read answers it: its bytes under its type, and their hash. */
 export interface KeptSoundClip extends SoundClip {
   readonly sha256: string;
+}
+
+/** A sound renamed, and the transaction the rename committed in. */
+export interface RenamedSound {
+  readonly sound: Sound;
+  readonly txid: string;
+}
+
+/** The sound one of the account's two sounds plays after a choice, and the transaction the choice committed in; none where it changed no row. */
+export interface ChosenSound {
+  readonly id: string | null;
+  readonly txid?: string;
 }
 
 /** One sound of one account. */
@@ -73,12 +88,13 @@ const insertSound = SqlSchema.findOne({
     ),
 });
 
-const upsertChoice = SqlSchema.void({
+const upsertChoice = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
     slot: soundClipSlotSchema,
     soundId: Schema.String,
   }),
+  Result: TxidRowSchema,
   execute: ({ userId, slot, soundId }) =>
     Database.use((db) =>
       db
@@ -87,17 +103,20 @@ const upsertChoice = SqlSchema.void({
         .onConflictDoUpdate({
           target: [accountSoundChoice.userId, accountSoundChoice.slot],
           set: { soundId },
-        }),
+        })
+        .returning(TXID_RETURNING),
     ),
 });
 
-const deleteChoice = SqlSchema.void({
+const deleteChoice = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, slot: soundClipSlotSchema }),
+  Result: TxidRowSchema,
   execute: ({ userId, slot }) =>
     Database.use((db) =>
       db
         .delete(accountSoundChoice)
-        .where(and(eq(accountSoundChoice.userId, userId), eq(accountSoundChoice.slot, slot))),
+        .where(and(eq(accountSoundChoice.userId, userId), eq(accountSoundChoice.slot, slot)))
+        .returning(TXID_RETURNING),
     ),
 });
 
@@ -115,10 +134,14 @@ const findChoice = SqlSchema.findOneOption({
 
 const renameRow = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...SoundKeySchema.fields, name: Schema.String }),
-  Result: SoundRowSchema,
+  Result: Schema.Struct({ ...SoundRowSchema.fields, txid: Schema.String }),
   execute: ({ name, ...key }) =>
     Database.use((db) =>
-      db.update(accountSound).set({ name }).where(owned(key)).returning(SOUND_COLUMNS),
+      db
+        .update(accountSound)
+        .set({ name })
+        .where(owned(key))
+        .returning({ ...SOUND_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
 
@@ -181,7 +204,12 @@ export function addSound(
           now,
         }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
 
-        if (slot !== undefined) yield* upsertChoice({ userId, slot, soundId: sound.id });
+        // An upsert that answered no row is the database breaking its own contract, not an outcome.
+        if (slot !== undefined) {
+          yield* upsertChoice({ userId, slot, soundId: sound.id }).pipe(
+            Effect.catchTag("NoSuchElementError", Effect.die),
+          );
+        }
 
         return sound;
       }),
@@ -189,13 +217,16 @@ export function addSound(
   );
 }
 
-/** One of the account's sounds renamed; nothing where it keeps no such sound. */
+/** One of the account's sounds renamed, with the transaction it committed in; nothing where it keeps no such sound. */
 export function renameSound(
   userId: string,
   id: string,
   name: string,
-): SoundEffect<Option.Option<Sound>> {
-  return renameRow({ userId, id, name });
+): SoundEffect<Option.Option<RenamedSound>> {
+  return Effect.map(
+    renameRow({ userId, id, name }),
+    Option.map(({ txid, ...sound }) => ({ sound, txid })),
+  );
 }
 
 /** One of the account's sounds removed, and every choice of it with it; a sound it keeps not is left as it is, so a removal retried answers the same. */
@@ -213,21 +244,26 @@ export function readSoundClip(
 
 /**
  * Which of the account's sounds its `slot` sound plays: `id`, or none to let
- * it go. Answers the sound it now plays: where `id` names no sound the
- * account keeps, which chooses nothing, the one it played before, or none.
+ * it go. Answers the sound it now plays, with the transaction the choice
+ * committed in: where `id` names no sound the account keeps, which chooses
+ * nothing, the one it played before, or none, and no transaction, as where
+ * a slot let go of already played none.
  */
 export function chooseSound(
   userId: string,
   slot: SoundClipSlot,
   id: string | null,
-): SoundEffect<string | null> {
+): SoundEffect<ChosenSound> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         if (id === null) {
-          yield* deleteChoice({ userId, slot });
+          const deleted = yield* deleteChoice({ userId, slot });
 
-          return null;
+          return Option.match(deleted, {
+            onNone: () => ({ id: null }),
+            onSome: ({ txid }) => ({ id: null, txid }),
+          });
         }
 
         const sound = yield* findSound({ userId, id });
@@ -235,12 +271,17 @@ export function chooseSound(
         if (Option.isNone(sound)) {
           const standing = yield* findChoice({ userId, slot });
 
-          return Option.match(standing, { onNone: () => null, onSome: (choice) => choice.soundId });
+          return {
+            id: Option.match(standing, { onNone: () => null, onSome: (choice) => choice.soundId }),
+          };
         }
 
-        yield* upsertChoice({ userId, slot, soundId: id });
+        // An upsert that answered no row is the database breaking its own contract, not an outcome.
+        const { txid } = yield* upsertChoice({ userId, slot, soundId: id }).pipe(
+          Effect.catchTag("NoSuchElementError", Effect.die),
+        );
 
-        return id;
+        return { id, txid };
       }),
     ),
   );

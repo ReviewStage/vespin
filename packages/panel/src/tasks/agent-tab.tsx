@@ -53,7 +53,7 @@ import {
 } from "@repo/features/agent-wire";
 import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
-import type { KnownNames } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type KnownNames } from "@repo/features/entity-kind";
 import {
   CONTINUE_IN_CLOUD_LABEL,
   FAILURE_REASON,
@@ -127,10 +127,12 @@ import {
 } from "@repo/features/turn-rows";
 import {
   callMarksOf,
+  delegatedTurnsOf,
   isAgentTurn,
   isVoiceLine,
   spokenLineOf,
 } from "@repo/features/voice-call-lines";
+import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { replyFromWords } from "@repo/features/words";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { AGENT_ENTER, EXPERIMENT } from "@repo/settings";
@@ -183,7 +185,7 @@ import {
   type WireValue,
 } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { BotIcon, WebhookIcon, ZapIcon } from "lucide-react";
+import { WebhookIcon, ZapIcon } from "lucide-react";
 import {
   createContext,
   memo,
@@ -226,6 +228,7 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
@@ -235,6 +238,7 @@ import { useTaskListCollections, useTaskListRow } from "../task-list-collections
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import { useVoiceCall } from "../voice-call.js";
 import {
   type AgentApprovalsControl,
   ApprovalsProvider,
@@ -392,13 +396,7 @@ import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useKnownNames, useTaskStatus } from "./use-known-names.js";
-import {
-  CallEnds,
-  CallStarts,
-  NO_CALL_MARKS,
-  useVoiceShown,
-  VoiceLineRow,
-} from "./voice-call-rows.js";
+import { CallEnds, CallStarts, VoiceLineRow } from "./voice-call-rows.js";
 import { type CutBody, useWholePart, useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 import { WorkedFor, WorkingLine } from "./working-time.js";
 
@@ -483,6 +481,26 @@ export const AGENT_LEAD: TranscriptLead = {
   startingLine: "The agent is starting.",
 };
 
+/** What the empty transcript of an agent started blank says: its call connecting, the call listening for its first words, or the box waiting on them. */
+const BLANK_AGENT_LINE = {
+  CONNECTING: "Connecting the call.",
+  LISTENING: "Listening. Say what you want done.",
+  WAITING: "Waiting for your first message.",
+} as const;
+
+/**
+ * The line an agent started blank stands on before its first words, as
+ * Talk in a new agent's box starts one: no agent is starting, since none
+ * runs until it is told what to do, so it says what it waits on instead.
+ */
+function blankAgentLine(callStands: boolean, ownStage: VoiceCallStage | undefined): string {
+  if (ownStage === VOICE_CALL_STAGE.CONNECTING) return BLANK_AGENT_LINE.CONNECTING;
+
+  return callStands || ownStage === VOICE_CALL_STAGE.LIVE
+    ? BLANK_AGENT_LINE.LISTENING
+    : BLANK_AGENT_LINE.WAITING;
+}
+
 /** The description's own tab, which a task's name over its description's card opens. */
 const TASK_TARGET: ToolTarget = { kind: TOOL_TARGET.DESCRIPTION };
 
@@ -519,7 +537,7 @@ const OLDER_FAILED_LINE = "Earlier messages could not be read.";
 /** A worker's transcript: the subagent task it was handed, and the worker starting. */
 const WORKER_LEAD: TranscriptLead = {
   label: "Subagent task",
-  icon: <BotIcon />,
+  icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
   startingLine: "The worker is starting.",
 };
 
@@ -1837,13 +1855,15 @@ function TurnFoot({
 interface StretchPlace {
   readonly standings: ReadonlyMap<string, AgentSubagentStanding> | undefined;
   readonly arrived: readonly ArrivedLine[];
+  /** Whether a call's delegation opened the turn (`delegatedTurnsOf`), which folds its words with its work. */
+  readonly delegated: boolean;
 }
 
 /** A turn's rows as its message draws them, cut at every line that reached it (`turnStretches`). */
 function turnStretchesOf(
   message: AgentTranscriptMessage,
   moving: boolean,
-  { standings, arrived }: StretchPlace,
+  { standings, arrived, delegated }: StretchPlace,
 ): readonly TurnStretch[] {
   const workers = new Map(
     [...(standings?.values() ?? [])].map(
@@ -1855,6 +1875,7 @@ function turnStretchesOf(
     agentRows(message, moving, {
       workers,
       arrived: arrived.map((line) => line.message),
+      delegated,
     }),
   );
 }
@@ -1873,9 +1894,12 @@ export function AgentMessage({
   wakeupDelay,
   taskId,
   forkable = true,
+  delegated = false,
   piece,
 }: {
   message: AgentTranscriptMessage;
+  /** Whether a call's delegation opened this turn (`delegatedTurnsOf`), which folds its words with its work once it has finished. */
+  delegated?: boolean;
   /** The piece of a long turn this draws (`turn-pieces.ts`), its stretches read for it; the whole message where none. */
   piece?: TurnPiece | undefined;
   /** Whether its tab may offer to fork at it. */
@@ -2081,7 +2105,7 @@ export function AgentMessage({
 
   const stretches =
     piece?.stretches ??
-    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived });
+    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived, delegated });
 
   const first = piece?.first ?? true;
 
@@ -2108,6 +2132,9 @@ export function AgentMessage({
       }
     />
   );
+
+  // Note that a running turn with nothing to draw yet, as one the runner has just opened with only its step boundary, draws no message at all, because an empty one still stands a block's gap over the working line and moves it down as it lands.
+  if (moving && stretches.every((stretch) => stretch.rows?.length === 0)) return null;
 
   return stretches.map((stretch, index) => {
     if (stretch.line !== undefined) {
@@ -2536,7 +2563,8 @@ function sameRead(
     read.message === message &&
     read.moving === moving &&
     read.place.standings === place.standings &&
-    read.place.arrived === place.arrived
+    read.place.arrived === place.arrived &&
+    read.place.delegated === place.delegated
   );
 }
 
@@ -2556,7 +2584,7 @@ function useLogEntries(
   return useMemo(() => {
     const held = reads.current;
     const next = new Map<string, PiecesRead>();
-    const { placed, writing } = placing;
+    const { placed, writing, delegated } = placing;
 
     const entries = placed.flatMap((row, index): LogEntry[] => {
       const { message } = row;
@@ -2572,7 +2600,7 @@ function useLogEntries(
       }
 
       const moving = message.id === writing;
-      const place: StretchPlace = { standings, arrived };
+      const place: StretchPlace = { standings, arrived, delegated: delegated.has(message.id) };
       const was = held.get(message.id);
 
       const read =
@@ -2705,17 +2733,14 @@ function useReplySaid({
  * reached it, and the reply a running turn is still writing.
  */
 function transcriptPlacing(
-  held: readonly AgentTranscriptMessage[],
+  messages: readonly AgentTranscriptMessage[],
   working: boolean,
   undelivered: ReadonlySet<string>,
   unsent: ReadonlySet<string>,
   replayed: boolean,
-  voiceShown: boolean,
   standingCalls: readonly AgentStandingCall[],
   fromStart: boolean,
 ) {
-  // Note that the voice's lines on a call are drawn only where the Voice experiment is on, the caller's standing as any line of theirs where it is off.
-  const messages = voiceShown ? held : held.filter((message) => !isVoiceLine(message));
   const todos = todosPlace(messages, working);
 
   // Note that the opening is read only where the transcript's start is held, because a window of its newest messages, or a line still on its way before any page, would take a teammate's line for the brief and name its starter over it.
@@ -2737,9 +2762,11 @@ function transcriptPlacing(
   const newest = working ? placed.findLast((row) => isAgentTurn(row.message))?.message : undefined;
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
-  const calls = voiceShown ? callMarksOf(placed, standingCalls) : NO_CALL_MARKS;
+  const calls = callMarksOf(placed, standingCalls);
+  // A turn a call's delegation opened folds its written words with its work.
+  const delegated = delegatedTurnsOf(placed);
 
-  return { todos, first, opening, placed, writing, calls };
+  return { todos, first, opening, placed, writing, calls, delegated };
 }
 
 /** The transcript as the tab draws it: the messages, or what stands in their place. */
@@ -2866,10 +2893,10 @@ function AgentTranscriptView({
   signIn?: GitHubSignInDoors | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
+  const ownCall = useVoiceCall().call;
   const { members, former } = useMemberDirectory();
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
-  const voiceShown = useVoiceShown();
   // Note that the voice may talk on after the turn, so the current turn is the agent's newest, whatever row stands last.
   const lastTurn = messages.findLast(isAgentTurn);
 
@@ -2909,17 +2936,8 @@ function AgentTranscriptView({
   // Read through once for the messages held, so a draw that brings no page reads none of them again.
   const placing = useMemo(
     () =>
-      transcriptPlacing(
-        messages,
-        working,
-        undelivered,
-        unsent,
-        replayed,
-        voiceShown,
-        standingCalls,
-        fromStart,
-      ),
-    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls, fromStart],
+      transcriptPlacing(messages, working, undelivered, unsent, replayed, standingCalls, fromStart),
+    [messages, working, undelivered, unsent, replayed, standingCalls, fromStart],
   );
 
   // Each line that reached a turn, with who sent it, kept from draw to draw while neither moved.
@@ -3055,7 +3073,7 @@ function AgentTranscriptView({
   ]);
 
   if (!holding && messages.length > 0) {
-    const { todos, first, opening, placed, writing, calls } = placing;
+    const { todos, first, opening, placed, writing, calls, delegated } = placing;
 
     // Whose call each call was, by its caller: a teammate's, or none for the reader's own.
     const callerOf = (caller: AgentSender) => lineSender(caller, readerId, members, former);
@@ -3211,6 +3229,7 @@ function AgentTranscriptView({
                               : undefined
                           }
                           arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                          delegated={delegated.has(message.id)}
                           piece={piece}
                         />
                         {!tails ? null : message === first &&
@@ -3284,7 +3303,19 @@ function AgentTranscriptView({
   if (ended === undefined && boot === undefined) {
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {starting ?? <WorkingLine startedAt={undefined} words={lead.startingLine} />}
+        {starting ?? (
+          <WorkingLine
+            startedAt={undefined}
+            words={
+              brief === AGENT_BRIEF.BLANK && origin === undefined
+                ? blankAgentLine(
+                    standingCalls.length > 0,
+                    ownCall?.agentId === agentId ? ownCall?.stage : undefined,
+                  )
+                : lead.startingLine
+            }
+          />
+        )}
         {endTrail}
       </ConversationLead>
     );

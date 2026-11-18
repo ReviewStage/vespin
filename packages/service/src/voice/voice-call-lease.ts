@@ -59,7 +59,7 @@ import { PROVIDER_KEY_UNREADABLE } from "@repo/database/models/provider-key-seal
 import { spendVoiceMeter } from "@repo/database/models/quota";
 import {
   claimVoiceCallLease,
-  deleteVoiceCall,
+  endVoiceCall,
   readVoiceCall,
   type VoiceCallRow,
 } from "@repo/database/models/voice-calls";
@@ -162,12 +162,23 @@ interface VoiceCallLeasesService {
  * its seconds kept on the caller's day and the call counted once, by its
  * length and the agent's harness, in the agent's workspace. A meter the
  * store refused is logged and the call still counted, as dictation's is.
+ * The delete lets go of the caller's blank agent nobody spoke to, and of its
+ * task where that holds nothing else (`endVoiceCall`), so the agent is read
+ * for its harness and workspace before it.
  */
 const endCall = Effect.fnUntraced(function* (
   call: VoiceCallRow,
   seconds: Option.Option<number>,
 ): Effect.fn.Return<void, StoreFailure, DatabaseServices> {
-  const deleted = yield* deleteVoiceCall(call.callerId, call.id);
+  const routing = yield* readAgentRouting(call.callerId, call.agentId).pipe(
+    Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
+  );
+
+  const workspace = yield* readVisibleAgentWorkspace(call.callerId, call.agentId).pipe(
+    Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
+  );
+
+  const deleted = yield* endVoiceCall(call.callerId, call.id);
 
   if (!deleted || Option.isNone(seconds)) return;
   const now = yield* Clock.currentTimeMillis;
@@ -176,21 +187,15 @@ const endCall = Effect.fnUntraced(function* (
     Effect.catch(logStoreFailure),
   );
 
-  const routing = yield* readAgentRouting(call.callerId, call.agentId).pipe(
-    Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
-  );
-
   const harness = Option.flatMapNullishOr(routing, (agent) => harnessOf(agent.runtime));
 
   // Note that a call whose agent is gone, or ended for good, is metered but not counted, since it has no harness to count it by.
   if (Option.isNone(harness)) return;
 
-  yield* recordServerEventIn(
-    SERVER_EVENT.VOICE_CALL,
-    call.callerId,
-    readVisibleAgentWorkspace(call.callerId, call.agentId),
-    { duration: voiceCallDurationOf(seconds.value * MS_PER_SECOND), harness: harness.value },
-  );
+  yield* recordServerEventIn(SERVER_EVENT.VOICE_CALL, call.callerId, Effect.succeed(workspace), {
+    duration: voiceCallDurationOf(seconds.value * MS_PER_SECOND),
+    harness: harness.value,
+  });
 });
 
 /** The caller's own OpenAI key the session was opened on; none where they no longer have one this deployment can open. */

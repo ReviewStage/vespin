@@ -134,7 +134,7 @@ export function buildAdminUserDetail(
   support: AdminAccountSource,
   now: number,
   windowDays: AdminMetricsWindow,
-): AdminUserDetail {
+): Omit<AdminUserDetail, "sandboxUsage"> {
   const dayKeys = lastNDayKeys(now, windowDays);
   // The trends read the byDay map through their own trailing keys, like the
   // overview's, so a 7-day view still compares against the week before it.

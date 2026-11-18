@@ -439,6 +439,7 @@ const updatePlanStatus = SqlSchema.void({
               ? [
                   ne(accountProviderKey.status, PROVIDER_KEY_STATUS.VERIFIED),
                   ne(accountProviderKey.status, PROVIDER_KEY_STATUS.INVALID),
+                  lte(accountProviderKey.statusAt, write.savedBy),
                 ]
               : []),
           ),
@@ -904,7 +905,9 @@ export type PlanStatus = typeof PlanStatusSchema.Type;
  * reconnect saves one, ran none of it and is not judged by it.
  * Note that a row the service cannot read keeps saying so, since only a new
  * credential mends it; that a turn that ran is no word against a renewal
- * that found the sign-in ended, so verified never lifts invalid; and that a
+ * that found the sign-in ended, so verified never lifts invalid; that
+ * verified never lifts a status written since `savedBy`, which a turn or a
+ * usage refresh that began before it cannot speak to; and that a
  * plan already verified is not written again, so every turn's success
  * costs no write.
  */

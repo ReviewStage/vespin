@@ -16,6 +16,7 @@ import {
   COMPUTER_MOUSE_BUTTON,
   COMPUTER_RECORDING_BOUNDS,
   COMPUTER_SCROLL_DIRECTION,
+  type ComputerAction,
   type ComputerApp,
   type ComputerCursor,
   type ComputerOutcome,
@@ -40,9 +41,10 @@ import { COMMAND_DESCRIPTION } from "./command-description.js";
 import {
   askMachine,
   MACHINE_COMMAND_STATUS,
-  MACHINE_INPUT,
   type MachineCommandAnswer,
   machineCommandNotRun,
+  NO_MACHINE_INPUT,
+  namesMachine,
   routedCall,
 } from "./machine-command.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-keep.js";
@@ -52,8 +54,8 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  *
  * Every agent may call it, the brain, a coding agent, and either's workers,
  * wherever it runs, since the Mac it reaches is routed as `run_on_mac`'s is
- * (`machine-routing.ts`): the machine the call names, or else the agent's
- * default. One call is one action, queued as a computer command for that
+ * (`machine-routing.ts`): the agent's pick, or else its owner's default
+ * machine; a call names none. One call is one action, queued as a computer command for that
  * machine (`machine-command.ts`'s `askMachine`): the Mac asks the developer
  * about the app the first time it is used, for as long as its ask stands
  * (`machineAskSeconds`), and the action then runs within
@@ -106,32 +108,57 @@ const SETTLING_ACTIONS: ReadonlySet<string> = new Set([
   COMPUTER_ACTION.PERFORM_SECONDARY_ACTION,
 ]);
 
-const elementIndex = Schema.optionalKey(
-  describeWire(
-    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: COMPUTER_BOUNDS.MAX_ELEMENT_INDEX })),
-    "An element's number, as the app's last get_app_state numbered it.",
-  ),
+const elementIndexValue = Schema.Int.check(
+  Schema.isBetween({ minimum: 0, maximum: COMPUTER_BOUNDS.MAX_ELEMENT_INDEX }),
 );
 
-const coordinate = (words: string) =>
-  Schema.optionalKey(
-    describeWire(
-      Schema.Finite.check(
-        Schema.isBetween({
-          minimum: -COMPUTER_BOUNDS.MAX_COORDINATE,
-          maximum: COMPUTER_BOUNDS.MAX_COORDINATE,
-        }),
-      ),
-      words,
+const coordinateValue = (words: string) =>
+  describeWire(
+    Schema.Finite.check(
+      Schema.isBetween({
+        minimum: -COMPUTER_BOUNDS.MAX_COORDINATE,
+        maximum: COMPUTER_BOUNDS.MAX_COORDINATE,
+      }),
     ),
+    words,
   );
 
+const coordinate = (words: string) => Schema.optionalKey(coordinateValue(words));
+
+/** Where a click presses: an element by its number, or a point in the app's last screenshot. */
+const clickTarget = describeWire(
+  Schema.Union([
+    Schema.Struct({
+      element_index: describeWire(
+        elementIndexValue,
+        "An element's number, as the app's last get_app_state numbered it.",
+      ),
+    }),
+    Schema.Struct({
+      x: coordinateValue("A point's x in the pixels of the app's last screenshot."),
+      y: coordinateValue("A point's y in the pixels of the app's last screenshot."),
+    }),
+  ]),
+  "Where click presses: {element_index} for an element by the number the app's last " +
+    "get_app_state gave it, or {x, y} for a point in the pixels of its last screenshot.",
+);
+
+/**
+ * The tool's input. Note that it stays one flat object, because a tool's
+ * input must be an object at its top, and because the panel, released
+ * desktops' among them, reads `action` and `app` off a stored call, and
+ * `machine` off one from before the tool took none; which fields each action takes is held by `ACTION_FIELDS` instead.
+ */
 const COMPUTER_INPUT = Schema.Struct({
   action: describeWire(
     Schema.Literals(Object.values(COMPUTER_ACTION)),
-    "What to do: list_apps, get_app_state to read an app's window, or click, type_text, " +
-      "press_key, scroll, drag, set_value, or perform_secondary_action on it; record its window " +
-      "as a video, and stop_recording to stop and keep it.",
+    "What to do, with only the fields that action takes: list_apps (none); get_app_state, to " +
+      "read an app's window (app); click (app, target, and optionally click_count and " +
+      "mouse_button); type_text (app, text); press_key (app, key); scroll (app, and optionally " +
+      "element_index, direction, and pages); drag (app, from_x, from_y, to_x, to_y); set_value " +
+      "(app, element_index, value); perform_secondary_action (app, element_index, " +
+      "secondary_action); record, to record its window as a video (app); and stop_recording, " +
+      "to stop and keep it (optionally caption).",
   ),
   app: Schema.optionalKey(
     describeWire(
@@ -140,9 +167,14 @@ const COMPUTER_INPUT = Schema.Struct({
         "Every action but list_apps and stop_recording names one.",
     ),
   ),
-  element_index: elementIndex,
-  x: coordinate("A point's x in the pixels of the app's last screenshot, for click."),
-  y: coordinate("A point's y in the pixels of the app's last screenshot, for click."),
+  target: Schema.optionalKey(clickTarget),
+  element_index: Schema.optionalKey(
+    describeWire(
+      elementIndexValue,
+      "The element scroll, set_value, or perform_secondary_action acts on, by the number the " +
+        "app's last get_app_state gave it.",
+    ),
+  ),
   click_count: Schema.optionalKey(
     describeWire(
       Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: COMPUTER_BOUNDS.MAX_CLICKS })),
@@ -157,13 +189,16 @@ const COMPUTER_INPUT = Schema.Struct({
   ),
   text: Schema.optionalKey(
     describeWire(
-      Schema.String.check(Schema.isMaxLength(COMPUTER_BOUNDS.MAX_TEXT_CHARS)),
+      Schema.String.check(
+        Schema.isMinLength(1),
+        Schema.isMaxLength(COMPUTER_BOUNDS.MAX_TEXT_CHARS),
+      ),
       "What type_text types into the app's focused element.",
     ),
   ),
   key: Schema.optionalKey(
     describeWire(
-      Schema.String.check(Schema.isMaxLength(COMPUTER_BOUNDS.MAX_KEY_CHARS)),
+      Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(COMPUTER_BOUNDS.MAX_KEY_CHARS)),
       'What press_key presses, xdotool-style, such as "Return", "Tab", or "super+c".',
     ),
   ),
@@ -191,29 +226,124 @@ const COMPUTER_INPUT = Schema.Struct({
   ),
   secondary_action: Schema.optionalKey(
     describeWire(
-      Schema.String.check(Schema.isMaxLength(COMPUTER_BOUNDS.MAX_KEY_CHARS)),
+      Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(COMPUTER_BOUNDS.MAX_KEY_CHARS)),
       "Which of the element's secondary actions perform_secondary_action performs, as its " +
         'state names them, such as "AXShowMenu".',
     ),
   ),
   caption: Schema.optionalKey(recordingCaptionSchema),
   description: COMMAND_DESCRIPTION,
-  machine: Schema.optionalKey(MACHINE_INPUT),
 });
 
 type ComputerInput = typeof COMPUTER_INPUT.Type;
 
+/** A field only some actions take: every one but those each call names. */
+type ActionField = Exclude<keyof ComputerInput, "action" | "description">;
+
+/** What one action takes: the fields it needs and those it may name. */
+interface ActionFields {
+  readonly needs: readonly ActionField[];
+  readonly may: readonly ActionField[];
+}
+
+/** The fields each action takes; any other is refused. */
+const ACTION_FIELDS = {
+  [COMPUTER_ACTION.LIST_APPS]: { needs: [], may: [] },
+  [COMPUTER_ACTION.GET_APP_STATE]: { needs: ["app"], may: [] },
+  [COMPUTER_ACTION.CLICK]: { needs: ["app", "target"], may: ["click_count", "mouse_button"] },
+  [COMPUTER_ACTION.TYPE_TEXT]: { needs: ["app", "text"], may: [] },
+  [COMPUTER_ACTION.PRESS_KEY]: { needs: ["app", "key"], may: [] },
+  [COMPUTER_ACTION.SCROLL]: { needs: ["app"], may: ["element_index", "direction", "pages"] },
+  [COMPUTER_ACTION.DRAG]: { needs: ["app", "from_x", "from_y", "to_x", "to_y"], may: [] },
+  [COMPUTER_ACTION.SET_VALUE]: { needs: ["app", "element_index", "value"], may: [] },
+  [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: {
+    needs: ["app", "element_index", "secondary_action"],
+    may: [],
+  },
+  [COMPUTER_ACTION.RECORD]: { needs: ["app"], may: [] },
+  [COMPUTER_ACTION.STOP_RECORDING]: { needs: [], may: ["caption"] },
+} as const satisfies Record<ComputerAction, ActionFields>;
+
+const isActionField = (key: string): key is ActionField =>
+  key !== "action" && key !== "description" && key in COMPUTER_INPUT.fields;
+
+const isComputerAction = Schema.is(Schema.Literals(Object.values(COMPUTER_ACTION)));
+
 const readInput = readEither(COMPUTER_INPUT);
 const readAction = readEither(macComputerActionSchema);
 
+/** A field as a refusal names it, with the shape of the one whose shape is not plain. */
+function fieldWords(field: ActionField): string {
+  return field === "target" ? "`target` ({element_index} or {x, y})" : `\`${field}\``;
+}
+
+/** A list of fields in words: "`a`, `b`, and `c`". */
+function listed(fields: readonly ActionField[]): string {
+  const words = fields.map(fieldWords);
+  const last = words.pop();
+
+  if (last === undefined) return "";
+
+  if (words.length === 0) return last;
+
+  return `${words.join(", ")}${words.length > 1 ? "," : ""} and ${last}`;
+}
+
+/** Which fields an action takes, in words, so a refused call is fixed in one retry. */
+function takes(action: ComputerAction): string {
+  const { needs, may }: ActionFields = ACTION_FIELDS[action];
+
+  if (needs.length === 0 && may.length === 0) return `${action} takes no other field.`;
+
+  if (may.length === 0) return `${action} takes ${listed(needs)}.`;
+
+  if (needs.length === 0) return `${action} may take ${listed(may)}.`;
+
+  return `${action} takes ${listed(needs)}, and may take ${listed(may)}.`;
+}
+
+/** What a call that names no readable action is told: the actions there are. */
+const NAME_AN_ACTION =
+  `Not run: name the \`action\`, one of ${Object.values(COMPUTER_ACTION).join(", ")}, ` +
+  "with only the fields that action takes.";
+
+/** Why an input was refused before it was read, naming the field it failed at and what its action takes. */
+function unreadable(input: UnparsedWireValue, path: readonly (string | number)[]): string {
+  const [field] = path;
+  const action = isRecord(input) ? input.action : undefined;
+
+  if (field === undefined || field === "action" || !isComputerAction(action)) return NAME_AN_ACTION;
+  const named = String(field);
+
+  const why =
+    named in COMPUTER_INPUT.fields
+      ? `\`${path.join(".")}\` is not a value it takes`
+      : `computer has no field \`${named}\``;
+
+  return `Not run: ${why}. ${takes(action)}`;
+}
+
+/** Why an input names fields its action does not take or leaves out one it needs; none where it names exactly what it takes. */
+function misfit(input: ComputerInput): string | undefined {
+  const { needs, may }: ActionFields = ACTION_FIELDS[input.action];
+  const missing = needs.filter((field) => input[field] === undefined);
+
+  const extra = Object.keys(input)
+    .filter(isActionField)
+    .filter((field) => !needs.includes(field) && !may.includes(field));
+
+  if (missing.length === 0 && extra.length === 0) return undefined;
+
+  const why = [
+    missing.length === 0 ? undefined : `${input.action} needs ${listed(missing)}`,
+    extra.length === 0 ? undefined : `${input.action} takes no ${listed(extra)}`,
+  ].filter(Predicate.isNotUndefined);
+
+  return `Not run: ${why.join(", and ")}. ${takes(input.action)}`;
+}
+
 /** Why a call ran nothing before it reached the Mac, in words the model can act on. */
 const COMPUTER_TOOL_REFUSAL = {
-  UNREADABLE:
-    "Not run: name the `action`, and the `app` for every action but list_apps and " +
-    "stop_recording, with only the fields that action takes: click an element_index or an x and " +
-    "y, type_text a text, press_key a key, set_value an element_index and a value, " +
-    "perform_secondary_action an element_index and a secondary_action, drag from_x, from_y, " +
-    "to_x, and to_y, and stop_recording a caption where it has one.",
   UNAVAILABLE: "Not run: the developer's Mac could not be found. The call may be made again.",
 } as const;
 
@@ -228,7 +358,8 @@ export const COMPUTER_TOOL = {
     "working: its window as numbered elements and a screenshot, and clicks, typing, keys, " +
     "scrolls, and drags on it. Start with list_apps or get_app_state; act on an element by the " +
     "number the app's last get_app_state gave it, or on a point in its screenshot's pixels, " +
-    "and read the app again after you act, since its numbers change with it. A click answers " +
+    "and read the app again after you act, since its numbers change with it. Each action takes " +
+    "only its own fields, which `action` lists, and a call naming another is refused. A click answers " +
     "that it was sent, not that the app took it: an app in the background, a browser above " +
     "all, may drop a click at a point, so press an element by its number where one serves, " +
     "and read the app again to see what a click did. An app not " +
@@ -236,37 +367,42 @@ export const COMPUTER_TOOL = {
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
     `${PRODUCT_NAME}. Reach for it last: an integration's tools where one serves the app, ` +
-    "run_on_mac where a shell can do it, and browser for localhost and public pages. Use this " +
-    "for what only an app's window shows or takes, a browser on the developer's Mac among them, " +
+    "run_on_mac where a shell can do it, and browser, where you have it, for localhost and public " +
+    "pages. Use this for what only an app's window shows or takes, a browser on the developer's " +
+    "Mac among them, " +
     "such as a page that needs their own signed-in session. To show the developer a flow you " +
     "drove in an app, the iOS Simulator above all, record it: record starts a video of the " +
     "app's window, your cursor drawn over it while it records, " +
     `up to ${COMPUTER_RECORDING_BOUNDS.MAX_SECONDS} seconds and across calls, and ` +
-    "stop_recording, with a caption and the machine's id its record answered in machine, stops " +
-    "it on the machine it runs on and keeps it in your transcript, where it plays; " +
+    "stop_recording, with a caption, stops it and keeps it in your transcript, where it plays; " +
     "it stops by itself once its time runs out, and stop_recording still keeps it then. Its " +
-    "answer names the path the video stays at in your sandbox until your next recording, by " +
+    "answer names the path the video stays at on your machine until your next recording, by " +
     "which you can post it to a thread, or says why it has none.",
   inputSchema: COMPUTER_INPUT,
 } as const;
 
-/** The action the input names, as the Mac's helper reads it; nothing where its fields do not make one. */
-function actionOf(input: ComputerInput): MacComputerAction | undefined {
+/**
+ * The action the input names, as the Mac's helper reads it, or why the
+ * input makes none: a field its action does not take or leaves out.
+ */
+function actionOf(input: ComputerInput): Result.Result<MacComputerAction, string> {
+  const refused = misfit(input);
+
+  if (refused !== undefined) return Result.fail(refused);
+
   const {
     action,
     secondary_action,
-    caption,
+    target,
+    caption: _caption,
     description: _description,
-    machine: _machine,
     ...fields
   } = input;
-
-  // Note that a caption is the service's to keep, never the Mac's, so only a stop may name one.
-  if (caption !== undefined && action !== COMPUTER_ACTION.STOP_RECORDING) return undefined;
 
   const read = readAction({
     op: action,
     ...fields,
+    ...target,
     ...(secondary_action === undefined ? undefined : { action: secondary_action }),
     ...(action === COMPUTER_ACTION.GET_APP_STATE
       ? { shots: [COMPUTER_SHOTS.MODEL, COMPUTER_SHOTS.KEPT] }
@@ -280,7 +416,9 @@ function actionOf(input: ComputerInput): MacComputerAction | undefined {
       : undefined),
   });
 
-  return Result.isSuccess(read) ? read.success : undefined;
+  return Result.isSuccess(read)
+    ? Result.succeed(read.success)
+    : Result.fail(`Not run: ${takes(action)}`);
 }
 
 /** What the transcript keeps of one picture: the picture kept, or why not. */
@@ -429,17 +567,11 @@ const COMPUTER_RECORDING_REFUSAL = {
   [RECORDING_FAILURE.TOO_LARGE]: recordingTooLarge(COMPUTER_RECORDING_BOUNDS.MAX_BYTES),
 } as const satisfies Record<RecordingFailure | "UNKEPT", string>;
 
-/** How the agent stops a recording that started on the machine given: by its id, which no other machine shares and a rename leaves as it is. */
-function stopOn(machine: { readonly id: string; readonly name: string }): string {
-  return `Stop it with stop_recording and machine "${machine.id}" (${machine.name}), where it runs.`;
-}
-
-/** What a machine with no recording of the conversation answers, naming it, so a stop that went to the wrong machine is sent again to the right one. */
+/** What a machine with no recording of the conversation answers, naming it, since a stop goes where the agent's calls go now, which a member may have moved while it ran. */
 function noRecordingOn(machine: { readonly name: string }): string {
   return (
-    `no recording of this conversation runs on ${machine.name}: if you started one on another ` +
-    "machine, call stop_recording again with the id its record answered in machine; otherwise " +
-    "start one with record"
+    `no recording of this conversation runs on ${machine.name}: one started on another machine ` +
+    "stops there by itself once its time runs out; otherwise start one with record"
   );
 }
 
@@ -537,15 +669,21 @@ export function runComputerTool(
   input: UnparsedWireValue,
   sandbox?: InboxSandboxDoor,
 ): Effect.Effect<MachineCommandAnswer | ComputerRan, never, DatabaseServices> {
+  if (namesMachine(input)) return Effect.succeed(machineCommandNotRun(NO_MACHINE_INPUT));
   const read = readInput(input);
-  const action = Result.isSuccess(read) ? actionOf(read.success) : undefined;
 
-  if (action === undefined || Result.isFailure(read))
-    return Effect.succeed(machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNREADABLE));
-  const { caption, machine } = read.success;
+  if (Result.isFailure(read)) {
+    return Effect.succeed(machineCommandNotRun(unreadable(input, read.failure.path)));
+  }
+
+  const made = actionOf(read.success);
+
+  if (Result.isFailure(made)) return Effect.succeed(machineCommandNotRun(made.failure));
+  const action = made.success;
+  const { caption } = read.success;
 
   return Effect.gen(function* () {
-    const route = yield* Effect.result(routedCall(target, MACHINE_COMMAND_KIND.COMPUTER, machine));
+    const route = yield* Effect.result(routedCall(target, MACHINE_COMMAND_KIND.COMPUTER));
 
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
@@ -588,18 +726,7 @@ export function runComputerTool(
       return named(yield* keptMacRecording(target, outcome.recorded, recording, caption, sandbox));
     }
 
-    const ran = named(yield* answeredOutcome(target, outcome));
-
-    // Note that a recording names the machine it runs on for its stop, since the agent's default may move while it runs.
-    if (
-      "done" in outcome &&
-      outcome.done === COMPUTER_ACTION.RECORD &&
-      answer.machine !== undefined
-    ) {
-      return { ...ran, stop: stopOn(answer.machine) };
-    }
-
-    return ran;
+    return named(yield* answeredOutcome(target, outcome));
   });
 }
 

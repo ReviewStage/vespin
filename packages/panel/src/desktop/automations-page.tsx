@@ -18,6 +18,7 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -27,7 +28,6 @@ import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, type Experiment, experimentOn, INTRO } from "@repo/settings";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
   BUTTON_VARIANT,
@@ -42,8 +42,6 @@ import {
   EmptyState,
   ERROR_STATE_PLACEMENT,
   ErrorState,
-  FoldingButton,
-  type FoldingButtonHint,
   GAP,
   IconButton,
   Inline,
@@ -73,15 +71,15 @@ import { ACTOR_KIND, actorName } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { BotIcon, PlusIcon, ZapIcon } from "lucide-react";
+import { PlusIcon, ZapIcon } from "lucide-react";
 import { Fragment, useCallback, useState } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor-ref.js";
-import { useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "../live-reads.js";
 import { MemberDirectory, useCreator } from "../member-directory.js";
@@ -184,13 +182,6 @@ const WORKSPACES_UNREAD_LINE = "The workspaces could not be read.";
 
 /** Why the bar's two acts are unavailable while no workspace is chosen. */
 const NO_WORKSPACE_HINT = "Choose a workspace first";
-
-/** The hint a folding act of the bar hangs while no workspace is chosen: why it is off, after its words where they are folded. */
-const NoWorkspaceHint: FoldingButtonHint = ({ label, children }) => (
-  <Tooltip label={label === undefined ? NO_WORKSPACE_HINT : `${label}: ${NO_WORKSPACE_HINT}`}>
-    {children}
-  </Tooltip>
-);
 
 /** Who owns an automation, as its row's column says it: the workspace's photo and its name, or the maker's picture and Only you, its name whole on hover where the column cuts it short. */
 function OwnerCell({
@@ -579,7 +570,7 @@ function AutomationsHead({
             [
               {
                 label: CREATE_WITH_AGENT,
-                icon: <BotIcon />,
+                icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
                 disabled: workspace === undefined,
                 onSelect: tasks.newTask.onOpenForAutomation,
               },
@@ -591,15 +582,16 @@ function AutomationsHead({
     />
   ) : (
     <AutomationsToolbar>
-      <FoldingButton
-        label="Create with an agent"
-        icon={<BotIcon />}
-        variant={BUTTON_VARIANT.OUTLINE}
-        disabled={workspace === undefined}
-        focusableWhenDisabled
-        hint={workspace === undefined ? NoWorkspaceHint : undefined}
-        onClick={tasks.newTask.onOpenForAutomation}
-      />
+      <Tooltip label={workspace === undefined ? NO_WORKSPACE_HINT : undefined}>
+        <Button
+          variant={BUTTON_VARIANT.PRIMARY}
+          disabled={workspace === undefined}
+          focusableWhenDisabled
+          onClick={tasks.newTask.onOpenForAutomation}
+        >
+          {CREATE_WITH_AGENT}
+        </Button>
+      </Tooltip>
       <Tooltip label={workspace === undefined ? NO_WORKSPACE_HINT : undefined}>
         <Button
           variant={BUTTON_VARIANT.OUTLINE}
@@ -769,7 +761,6 @@ function ListPage({
   room: ShellRoom;
 }): React.JSX.Element {
   const door = useAutomationsDoor(tasks);
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, door.close);
   const now = useMinute();
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
@@ -914,7 +905,6 @@ function RunsPage({
   room: ShellRoom;
 }): React.JSX.Element {
   const door = useAutomationsDoor(tasks);
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, door.close);
   const now = useMinute();
   const workspace = tasks.workspace;
   const { read, reload } = useWorkspaceRuns(workspace?.id);
@@ -996,12 +986,7 @@ const AUTOMATIONS_PLACE_NAME = "automations";
 /** The bar of an automation's page that has no automation to show: its way back to the list, at the column's edge; on a phone, the back's glyph alone in its corner (`phone-head.tsx`). */
 function backBar(onBack: () => void, phone: boolean): ToolbarProps {
   const back = (
-    <BackButton
-      label={AUTOMATIONS_PLACE}
-      place={AUTOMATIONS_PLACE_NAME}
-      command={APP_COMMAND.EXIT_AUTOMATIONS}
-      onBack={onBack}
-    />
+    <BackButton label={AUTOMATIONS_PLACE} place={AUTOMATIONS_PLACE_NAME} onBack={onBack} />
   );
 
   if (phone) return phoneBar({ place: "automation", start: back, end: null });
@@ -1020,8 +1005,6 @@ function AutomationAbsentPage({
   phone: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
-
   return (
     <ReplayUnmask>
       <DetailPage
@@ -1063,8 +1046,6 @@ function UnreadPage({
 
 /** One automation's page that names an automation the list does not hold: it was deleted, or is of a workspace the reader is not in, as a link may name. */
 function GonePage({ onBack, phone }: { onBack: () => void; phone: boolean }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
-
   return (
     <ReplayUnmask>
       <NotFound replayUnmasked thing={NOT_FOUND_THING.AUTOMATION} bar={backBar(onBack, phone)} />
@@ -1082,8 +1063,6 @@ function ReadingPage({
   room: ShellRoom;
   offersOwner: boolean;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
-
   return <AutomationPageSkeleton room={room} offersOwner={offersOwner} onBack={onBack} />;
 }
 
@@ -1187,7 +1166,9 @@ function AutomationsPages({
   const offered = useOfferedPresets(workspace?.id);
   // The automation the new page made, whose page is that same editor still, so what was typed while it was made stands.
   const [made, setMade] = useState<string | undefined>(undefined);
-  const back = () => door.open({ kind: AUTOMATIONS_PAGE.LIST });
+  // Note that a phone's ‹ and a bar's ‹ are the window's Back (`door.back`), while a wide editor's crumb opens the list.
+  const back = door.back;
+  const crumbBack = room === SHELL_ROOM.NARROW ? door.back : () => door.open();
   const { place } = standing;
 
   if (place.kind === AUTOMATIONS_PAGE.LIST) {
@@ -1234,7 +1215,7 @@ function AutomationsPages({
 
   if (place.kind === AUTOMATIONS_PAGE.EDIT && opened === undefined) {
     return read === undefined ? (
-      <ReadingPage onBack={back} room={room} offersOwner={offersOwner} />
+      <ReadingPage onBack={crumbBack} room={room} offersOwner={offersOwner} />
     ) : (
       <GonePage onBack={back} phone={room === SHELL_ROOM.NARROW} />
     );
@@ -1259,7 +1240,7 @@ function AutomationsPages({
       offersOwner={offersOwner}
       repositories={tasks.newTask.repositoriesIn(workspace?.id)}
       writes={automations}
-      onBack={back}
+      onBack={crumbBack}
       onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
       linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
       placeLeave={tasks.placeLeave}

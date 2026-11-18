@@ -76,7 +76,7 @@ function keptId(answer: WireRecord): string {
 
 it.layer(getTestDB())("the coding agent's memory tools", (it) => {
   it.effect(
-    "a memory kept is recalled by the words it holds, a query with none answers the newest first, and one that finds nothing answers none",
+    "a memory kept is recalled by the words it holds, and a query that finds nothing answers none",
     () =>
       Effect.gen(function* () {
         const call = yield* openCall;
@@ -91,9 +91,6 @@ it.layer(getTestDB())("the coding agent's memory tools", (it) => {
         // A query word finds the memory words it begins.
         assert.deepEqual(recalledWords(yield* runRecall(call, { query: "deploy" })), [DEPLOYS]);
         assert.deepEqual(recalledWords(yield* runRecall(call, { query: "kubernetes" })), []);
-        const recent = yield* runRecall(call, {});
-        assert.deepEqual(recalledWords(recent), [DEPLOYS, TESTS_RUN]);
-        assert.equal(recent.total, 2);
       }),
   );
 
@@ -214,6 +211,8 @@ it.layer(getTestDB())("the coding agent's memory tools", (it) => {
         yield* runRemember(call, { text: "x".repeat(MEMORY_BOUNDS.MAX_CHARS + 1) }),
         yield* runRemember(call, { text: DEPLOYS, replaces: "not-an-id" }),
         yield* runRecall(call, { query: 7 }),
+        yield* runRecall(call, {}),
+        yield* runRecall(call, { query: "  " }),
       ];
 
       assert.deepEqual(
