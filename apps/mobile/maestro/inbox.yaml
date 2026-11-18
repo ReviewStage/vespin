@@ -26,7 +26,7 @@ env:
 # menu closes it.
 - tapOn: "More"
 - assertVisible: "Mark all as read"
-- assertVisible: "Needs me.*"
+- assertVisible: "Questions.*"
 - takeScreenshot: inbox-more
 - runFlow:
     file: subflows/dismiss.yaml
