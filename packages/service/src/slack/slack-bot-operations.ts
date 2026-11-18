@@ -29,7 +29,8 @@
  * - An update makes any of those three at once, all or nothing: it checks
  *   the role and reaches every repository first, then writes its rows in one
  *   transaction whose last step asks Slack to join or leave the channel, so
- *   a refusal anywhere leaves every setting as it stood.
+ *   a refusal leaves every setting as it stood. A failure past the point
+ *   where something may have landed is answered unconfirmed, never refused.
  *
  * The read answers an owner or admin the team's channels as Slack lists
  * them, each with its default repository; a member is answered none. A
@@ -89,6 +90,13 @@ export interface SlackBotUpdate {
 
 /** Slack refused the join or leave an update asked, which rolls its rows back. */
 class SlackChannelRefused extends Data.TaggedError("SlackChannelRefused") {}
+
+/**
+ * An update that may have landed in part or whole: its commit failed after
+ * Slack's join or leave went through, or it committed and the bot could not
+ * be read back, so the caller reads the bot before it tries again.
+ */
+export class SlackBotUpdateUnconfirmed extends Data.TaggedError("SlackBotUpdateUnconfirmed") {}
 
 /** What a write that names a repository reaches: the store, the bot, and GitHub through the App. */
 type SlackBotWriteServices =
@@ -315,13 +323,21 @@ export const changeSlackChannel = Effect.fn("web/changeSlackChannel")(function* 
  * set together or not at all. Note that every check (the role, the bot
  * connected, each repository GitHub reaches) runs before the transaction,
  * and Slack's join or leave runs last inside it, because Slack's is the one
- * write no rollback undoes: a refusal from it rolls back the rows.
+ * write no rollback undoes: a refusal from it rolls back the rows. A commit
+ * that fails after Slack moved the bot, or a read of the bot that fails
+ * after the commit, is unconfirmed rather than refused, because something
+ * may have changed; Slack's move is not undone, since the bot may have
+ * stood there already.
  */
 export const updateSlackBot = Effect.fn("web/updateSlackBot")(function* (
   userId: string,
   workspaceId: string,
   update: SlackBotUpdate,
-): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, SlackBotWriteServices> {
+): Effect.fn.Return<
+  WorkspaceSlackBot,
+  HostedRefusal | SlackBotUpdateUnconfirmed,
+  SlackBotWriteServices
+> {
   const { notifications, defaultRepository, channel } = update;
   const manages = defaultRepository !== undefined || channel !== undefined;
 
@@ -368,6 +384,8 @@ export const updateSlackBot = Effect.fn("web/updateSlackBot")(function* (
     return txid;
   });
 
+  let slackMoved = false;
+
   const membership = (txid: Option.Option<string>) =>
     Effect.gen(function* () {
       if (channel?.member === undefined || bot === undefined) return txid;
@@ -376,20 +394,29 @@ export const updateSlackBot = Effect.fn("web/updateSlackBot")(function* (
         ? yield* bot.join(channel.channelId)
         : yield* bot.leave(channel.channelId);
 
-      return done ? txid : yield* Effect.fail(new SlackChannelRefused());
+      if (!done) return yield* Effect.fail(new SlackChannelRefused());
+      slackMoved = true;
+
+      return txid;
     });
 
   const client = yield* SqlClient.SqlClient;
 
-  const txid = yield* client
-    .withTransaction(Effect.flatMap(written, membership))
-    .pipe(
-      Effect.catch((failure) =>
-        failure instanceof SlackChannelRefused
-          ? Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)
-          : hostedStoreOrUnavailable(Effect.fail(failure)),
-      ),
-    );
+  const txid = yield* client.withTransaction(Effect.flatMap(written, membership)).pipe(
+    Effect.catch((failure): Effect.Effect<never, HostedRefusal | SlackBotUpdateUnconfirmed> => {
+      if (failure instanceof SlackChannelRefused) return Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+      const refused = hostedStoreOrUnavailable(Effect.fail(failure));
 
-  return withTxid(yield* workspaceSlackBot(workspace, userId), txid);
+      // Note that the failure is still logged where Slack moved the bot, though it is answered unconfirmed.
+      return slackMoved
+        ? Effect.andThen(Effect.ignore(refused), Effect.fail(new SlackBotUpdateUnconfirmed()))
+        : refused;
+    }),
+  );
+
+  const answered = yield* workspaceSlackBot(workspace, userId).pipe(
+    Effect.mapError(() => new SlackBotUpdateUnconfirmed()),
+  );
+
+  return withTxid(answered, txid);
 });
