@@ -410,8 +410,7 @@ const recordRepository = (
  * read stamped on its row, and every pull request it opened read again beside it
  * (`recordRepository`), those from a branch a delivery from GitHub names
  * (`delivered`) among them. The routes read it through the cache below; an
- * agent tool's read of one agent (`agents/agent-tools.ts`) reads it afresh,
- * once per ask.
+ * agent tool's read of one agent reads `agentPublishedUnwritten` instead.
  */
 export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(function* (
   userId: string,
@@ -431,6 +430,26 @@ export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(fu
 
   return found.answer;
 });
+
+/**
+ * What the agent published as GitHub holds it now, as `agentPublished`
+ * answers it, with nothing written: no pull request linked, no read
+ * stamped, and so no merge counted and no automation run reconsidered.
+ * An agent tool's read of one agent (`agents/agent-tools.ts`,
+ * `agents/agent-changes-tool.ts`) reads it, since a read changes nothing;
+ * the first write to find a pull request ended stays with the webhook, the
+ * tab's read, a takeover, and an opening.
+ */
+export const agentPublishedUnwritten = /* @__PURE__ */ Effect.fn("web/agentPublishedUnwritten")(
+  function* (
+    userId: string,
+    agent: Agent,
+  ): Effect.fn.Return<AgentPullRequestAnswer, PublishedReadFailure, PublishedServices> {
+    const found = yield* publishedOnGitHub(userId, agent);
+
+    return found.answer;
+  },
+);
 
 /** What a write of pull requests leaves to do: each merge counted by the one write that first kept it, and the agent's automation run asked to archive where the read first saw one merged or closed. */
 const afterRecorded = (
