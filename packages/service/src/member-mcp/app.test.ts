@@ -711,8 +711,7 @@ it.effect(
             {
               threadId: rows.strangerItem,
               askId: openAskOf(strangerAsk),
-              reply: INBOX_REPLY.CHOSE,
-              choices: ["Approve"],
+              answer: { reply: INBOX_REPLY.CHOSE, choices: ["Approve"] },
             },
           ],
           [MEMBER_MCP_TOOL.REPLY_TO_THREAD, { threadId: rows.strangerItem, text: "Approve it." }],
@@ -1611,8 +1610,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         const answered = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
           threadId: posted.success.id,
           askId,
-          reply: INBOX_REPLY.CHOSE,
-          choices: ["30 days"],
+          answer: { reply: INBOX_REPLY.CHOSE, choices: ["30 days"] },
         });
 
         yield* Effect.promise(() => client.close());
