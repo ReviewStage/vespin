@@ -6,6 +6,8 @@
  * its own, on Node, where no Expo module loads.
  */
 
+import type { AccountRenewalWindow } from "@repo/credentials";
+import { identity } from "effect/Function";
 import { randomUUID } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { openURL } from "expo-linking";
@@ -38,6 +40,18 @@ function onAppActiveChanged(listener: (active: boolean) => void): () => void {
   return () => subscription.remove();
 }
 
+/**
+ * When the account may renew: while the app is not in the background, as
+ * React Native's `AppState` says it, since iOS may suspend a background wake
+ * mid-request and the rotated refresh token it was answered would then be
+ * presented again. The renewal runs as it is until a native hold keeps the
+ * app running through it.
+ */
+const renewalWindow: AccountRenewalWindow = {
+  open: () => AppState.currentState !== "background",
+  whileFinishing: identity,
+};
+
 /** The device as the host reads it. */
 export function deviceSeams(): DeviceSeams {
   return {
@@ -62,5 +76,6 @@ export function deviceSeams(): DeviceSeams {
     keepShareToken,
     localDatabaseDriver: expoSqliteDriver(openDatabaseSync),
     keepLine: keepHostLine,
+    renewalWindow,
   };
 }
