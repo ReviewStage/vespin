@@ -666,6 +666,8 @@ async function mount(
   workspace: Workspace,
   others: readonly Workspace[] = [],
   openPerson?: (userId: string, name?: string, workspaceId?: string) => void,
+  /** The page of its own a link lands on, in the Workspace page's place. */
+  landing?: SettingsSubPage,
 ) {
   const pressed = { left: 0 };
   const first = workspace.id === FIRST.id ? workspace : FIRST;
@@ -680,7 +682,7 @@ async function mount(
   roots.push(root);
 
   // Note that the page of its own a row opens stands in the page's place, as the window's address names it.
-  let sub: SettingsSubPage | undefined;
+  let sub = landing;
   let shownId = workspace.id;
 
   const draw = () => {
@@ -2736,6 +2738,20 @@ test("Integrations draws no Sentry row where the service holds no Sentry integra
 
   assert.equal([...githubGroup(page).querySelectorAll(ROWS)].map(nameOf).includes("Sentry"), false);
   assert.equal(sentryFailure(page), undefined);
+});
+
+test("a link to Sentry's page where the service holds no Sentry integration says so, and offers no Connect", async () => {
+  const { page } = await mount(
+    { ...ACME, role: WORKSPACE_ROLE.ADMIN },
+    [],
+    undefined,
+    INTEGRATION_PROVIDER.SENTRY,
+  );
+
+  await vi.waitFor(() =>
+    assert.deepEqual(rowsOf(page), [["Sentry", "Sentry isn't available here."]]),
+  );
+  assert.deepEqual(rowButtons(page), []);
 });
 
 test("a Sentry read that failed says so with Retry, for a member too, and Retry reads it again", async () => {

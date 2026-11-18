@@ -783,6 +783,19 @@ function SentryPage({
   );
 }
 
+/** What a page says of a service this deployment does not hold, as a link written for another deployment lands on it. */
+function UnavailableRow({ service }: { service: WorkspaceService }): React.JSX.Element {
+  return (
+    <SettingsSection>
+      <SettingsRow
+        leading={MARK[service]}
+        label={INTEGRATION_NAME[service]}
+        description={`${INTEGRATION_NAME[service]} isn't available here.`}
+      />
+    </SettingsSection>
+  );
+}
+
 /** What Slack's or Sentry's row or page draws once the workspace's integrations are read, or the read's failure in its place, or nothing while it is out. */
 function IntegrationsRead({
   workspace,
@@ -872,7 +885,14 @@ export function WorkspaceIntegrationPage({
           failedLine={WORKSPACE_READ_FAILED.SLACK_BOT}
           failedSurface={FAILURE_SURFACE.WORKSPACE_SLACK_BOT_READ}
         >
-          {({ slack }) => <SlackPage workspace={workspace} slack={slack} />}
+          {({ slack }) =>
+            !slack.configured ? (
+              <UnavailableRow service={INTEGRATION_PROVIDER.SLACK} />
+            ) : (
+              // Keyed to the team, so what one team's Add channel was refused with never stands under another's.
+              <SlackPage key={slack.team?.id} workspace={workspace} slack={slack} />
+            )
+          }
         </IntegrationsRead>
       );
     case INTEGRATION_PROVIDER.SENTRY:
@@ -882,7 +902,13 @@ export function WorkspaceIntegrationPage({
           failedLine={WORKSPACE_READ_FAILED.SENTRY}
           failedSurface={FAILURE_SURFACE.WORKSPACE_SENTRY_READ}
         >
-          {({ sentry }) => <SentryPage workspace={workspace} sentry={sentry} />}
+          {({ sentry }) =>
+            sentry.configured ? (
+              <SentryPage workspace={workspace} sentry={sentry} />
+            ) : (
+              <UnavailableRow service={INTEGRATION_PROVIDER.SENTRY} />
+            )
+          }
         </IntegrationsRead>
       );
     default:
