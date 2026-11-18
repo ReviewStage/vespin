@@ -517,6 +517,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
         const read = yield* call(AGENT_TOOL.READ_COMMENTS, {
           status: DESCRIPTION_COMMENT_STATUS.OPEN,
         });
+
         const replied = yield* call(AGENT_TOOL.REPLY_TO_COMMENT, { thread, words: "Link too." });
         const resolved = yield* call(AGENT_TOOL.UPDATE_COMMENT, { thread, resolved: true });
         const reopened = yield* call(AGENT_TOOL.UPDATE_COMMENT, { thread, resolved: false });

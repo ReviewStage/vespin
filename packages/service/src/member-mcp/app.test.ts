@@ -1911,6 +1911,7 @@ it.effect(
       );
 
       yield* call(MEMBER_MCP_TOOL.REPLY_TO_COMMENT, { taskId, thread, words: "Invoices too." });
+
       const open = decodeThreads(
         yield* call(MEMBER_MCP_TOOL.READ_COMMENTS, {
           taskId,
