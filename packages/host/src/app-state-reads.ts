@@ -249,6 +249,10 @@ export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwa
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
 export const selectVoiceCall = (state: AppStateSnapshot) => state.voiceCall;
 
+/** The apps the account let in over MCP, the command-line tool's sign-in among them, as the host follows them for it; none until read. */
+export const selectMcpClients = (accountId: string) => (state: AppStateSnapshot) =>
+  state[LIVE_READ.MCP_CLIENTS][accountId];
+
 /** What a window shows may be behind for: this machine offline, the service not answering, or live updates catching up, the machine's own network first, since nothing else can be read without it. */
 export const LIVE_MARK = {
   MAC_OFFLINE: "mac-offline",

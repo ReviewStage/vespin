@@ -28,6 +28,8 @@ export const SETTINGS_ROUTE = {
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
   MCP: "/settings/mcp",
+  /** One app the account let in over MCP, by the `client` it is pushed with, as a row of MCP & CLI opens it. */
+  MCP_APP: "/settings/mcp-app",
   /** A member of the workspace the app works in, by the `userId` it is pushed with, as a row of Workspace's Members opens it. */
   MEMBER: "/settings/member",
   /** A pending invitation of the workspace the app works in, by the `invitation` id it is pushed with, as a row of Workspace's Invitations opens it. */
