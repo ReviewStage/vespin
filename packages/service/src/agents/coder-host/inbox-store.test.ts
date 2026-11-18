@@ -98,6 +98,7 @@ import { accountInboxRead } from "../../live/reads/account-inbox.js";
 import { inboxItemsRead } from "../../live/reads/inbox-items.js";
 import { agentInboxRead, taskInboxRead } from "../../live/reads/scope-inbox.js";
 import { wokenOnHub } from "../../testing/sync-woken.js";
+import { TASKLESS_LIVE } from "../taskless-reads.js";
 import { accountInboxPast, agentInboxPast, taskInboxPast } from "./inbox-page.js";
 
 /**
@@ -306,14 +307,20 @@ const liveAnswerOf = (userId: string, readAt: number) =>
     );
   });
 
-/** The ids the account's items read carries as the desktop decodes its rows: those it stamps, and those it carries whole, read since the instants given. */
-const accountItemIdsOf = (userId: string, since: number, settledSince: number) =>
+/** The ids the account's items read carries as the desktop decodes its rows: those it stamps, and those it carries whole, read since the instants given, for a build that reads items on no task or one that does not. */
+const accountItemIdsOf = (
+  userId: string,
+  since: number,
+  settledSince: number,
+  taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] = TASKLESS_LIVE.LEFT_OUT,
+) =>
   Effect.gen(function* () {
     const parts = Option.getOrThrow(
       inboxItemsRead.statements({
         userId,
         since: String(since),
         settledSince: String(settledSince),
+        taskless,
       }),
     );
 
@@ -396,7 +403,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
   );
 
   it.effect(
-    "an agent on no task posts a thread on no task, which waits on its starter, its workspace reads, another workspace does not, and the account-wide live reads leave out",
+    "an agent on no task posts a thread on no task, which waits on its starter, its workspace reads, another workspace does not, and the account-wide live read carries only to a build that reads it",
     () =>
       Effect.gen(function* () {
         const userId = yield* openUser;
@@ -435,8 +442,12 @@ it.layer(getTestDB())("the inbox store", (it) => {
         assert.ok(Option.isNone(yield* readInboxItem(outsider, posted.id)));
         assert.ok(Option.isNone(yield* readInboxItemHome(outsider, posted.id)));
         assert.deepEqual(yield* memberAgentInboxItems(outsider, agent.agentId), []);
-        // A build before HOSTED_API_VERSION 6 fails its whole answer on a null task, and a live read is not told the build.
+        // A build before HOSTED_API_VERSION 6 fails its whole answer on a null task, so only a build that reads one is carried it.
         assert.deepEqual(yield* accountItemIdsOf(teammate, 0, 0), { stamps: [], items: [] });
+        assert.deepEqual(yield* accountItemIdsOf(teammate, 0, 0, TASKLESS_LIVE.CARRIED), {
+          stamps: [posted.id],
+          items: [posted.id],
+        });
       }),
   );
 
