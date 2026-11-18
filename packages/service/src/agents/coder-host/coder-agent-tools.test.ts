@@ -299,6 +299,9 @@ const CATALOG: readonly OfferedModel[] = [
 
 /** The branch of the repository a stacked agent starts on, and the commit GitHub says it stands at. */
 const STACKED_BRANCH = "luke/invitation-expiry";
+
+/** The repository's default branch, which GitHub always holds and a fresh start names. */
+const DEFAULT_BRANCH = "main";
 const BRANCH_COMMIT = "89abcdef0123456789abcdef0123456789abcdef";
 
 const database = await openHostedStoreTestDatabase();
@@ -482,7 +485,7 @@ async function fakeCoderSessions(
 
     if (
       pathname.startsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads%2F`) &&
-      branches.includes(branch)
+      (branch === DEFAULT_BRANCH || branches.includes(branch))
     ) {
       return Response.json({ object: { type: "commit", sha: BRANCH_COMMIT } });
     }
@@ -1299,7 +1302,7 @@ test("start_agent starts an agent on the caller's own task as the deployment act
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, prompt, model: OPUS, effort: "low" },
+    { taskId: caller.taskId, branch: DEFAULT_BRANCH, prompt, model: OPUS, effort: "low" },
     "call-start",
   );
 
@@ -1328,7 +1331,12 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   // An agent's own pick of a model is no member's new default.
   assert.equal((await database.run(readAccountPreferences(caller.userId)))?.agent, undefined);
 
-  const again = await call(AGENT_TOOL.START_AGENT, { taskId: caller.taskId, prompt }, "call-start");
+  const again = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: caller.taskId, branch: DEFAULT_BRANCH, prompt },
+    "call-start",
+  );
+
   assert.ok(isRecord(again.agent));
   assert.equal(again.agent.id, startedId);
   assert.equal(agentSessions.sent.length, 1, "the same call run again starts no second agent");
@@ -1366,6 +1374,7 @@ test("start_agent naming another member's device is refused in words that name t
   assert.deepEqual(
     await call(AGENT_TOOL.START_AGENT, {
       taskId: billing.id,
+      branch: DEFAULT_BRANCH,
       prompt: "Bill by seat.",
       runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
     }),
@@ -1381,6 +1390,7 @@ test("start_agent naming another member's device is refused in words that name t
     AGENT_TOOL.START_AGENT,
     {
       taskId: billing.id,
+      branch: DEFAULT_BRANCH,
       prompt: "Bill by seat.",
       runsOn: { machine: AGENT_MACHINE.VERCEL },
     },
@@ -1453,6 +1463,7 @@ test("start_agent naming a device by its name runs on the caller's member's own 
       AGENT_TOOL.START_AGENT,
       {
         taskId: billing.id,
+        branch: DEFAULT_BRANCH,
         prompt: "Bill by seat.",
         runsOn: { machine: AGENT_MACHINE.DEVICE, device: name },
       },
@@ -1544,7 +1555,7 @@ test("start_agent hands over a prompt and a note each as long as a start allows,
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt, note },
+    { taskId: agents.caller.taskId, branch: DEFAULT_BRANCH, prompt, note },
     "call-longest",
   );
 
@@ -1611,7 +1622,7 @@ test("start_agent on the description with a note hands the agent the pictures im
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
+    { taskId: caller.taskId, branch: DEFAULT_BRANCH, note: NOTE, images: [shownId, otherId] },
     "call-images",
   );
 
@@ -1639,7 +1650,7 @@ test("start_agent on the description with a note hands the agent the pictures im
 
   const again = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
+    { taskId: caller.taskId, branch: DEFAULT_BRANCH, note: NOTE, images: [shownId, otherId] },
     "call-images",
   );
 
@@ -1796,7 +1807,7 @@ test("start_agent refuses, in words that say why and starting nothing, a picture
     assert.deepEqual(
       await call(
         AGENT_TOOL.START_AGENT,
-        { taskId: caller.taskId, prompt: PROMPT, note: NOTE, images },
+        { taskId: caller.taskId, branch: DEFAULT_BRANCH, prompt: PROMPT, note: NOTE, images },
         `call-${randomUUID()}`,
       ),
       { status: ACTION_RESULT_STATUS.REJECTED, reason },
@@ -1815,7 +1826,12 @@ test("start_agent with a title names the agent by it from the start, and a title
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, prompt: "Add a title to start_agent.", title: `  ${title}  ` },
+    {
+      taskId: caller.taskId,
+      branch: DEFAULT_BRANCH,
+      prompt: "Add a title to start_agent.",
+      title: `  ${title}  `,
+    },
     "call-titled",
   );
 
@@ -1884,7 +1900,7 @@ test("an agent stored as a pilot, on a task stored in pilot mode, makes a child 
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: made.task.id, prompt: "Meter usage per workspace." },
+    { taskId: made.task.id, branch: DEFAULT_BRANCH, prompt: "Meter usage per workspace." },
     "call-start",
   );
 
@@ -1916,6 +1932,17 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_BRANCH },
   );
   assert.equal(agentSessions.sent.length, 0, "a branch GitHub does not hold starts nothing");
+
+  // A fresh start on a task with a repository names its branch, never left to the default.
+  const branchless = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: caller.taskId, prompt },
+    "call-branchless",
+  );
+
+  assert.equal(branchless.status, ACTION_RESULT_STATUS.REJECTED);
+  assert.match(String(branchless.reason), new RegExp(`${RELAY_FULL_NAME}.*branch`, "u"));
+  assert.equal(agentSessions.sent.length, 0, "a start naming no branch starts nothing");
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
@@ -2022,7 +2049,7 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
       const started = await call(
         AGENT_TOOL.START_AGENT,
-        { taskId: agents.caller.taskId, prompt: PROMPT, model, effort },
+        { taskId: agents.caller.taskId, branch: DEFAULT_BRANCH, prompt: PROMPT, model, effort },
         `call-${calls}`,
       );
 
@@ -2034,7 +2061,13 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
   const fast = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT, model: OPUS_FAST, effort: "high" },
+    {
+      taskId: agents.caller.taskId,
+      branch: DEFAULT_BRANCH,
+      prompt: PROMPT,
+      model: OPUS_FAST,
+      effort: "high",
+    },
     "call-fast",
   );
 
@@ -2049,7 +2082,7 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
   const unnamed = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT },
+    { taskId: agents.caller.taskId, branch: DEFAULT_BRANCH, prompt: PROMPT },
     "call-default",
   );
 
@@ -2112,7 +2145,7 @@ test("list_models says the default is no longer offered where the catalog droppe
 
   const unnamed = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT },
+    { taskId: agents.caller.taskId, branch: DEFAULT_BRANCH, prompt: PROMPT },
     "call-default",
   );
 
@@ -2136,7 +2169,13 @@ test("list_models says the default is no longer offered where the catalog droppe
 
   const refused = await once(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT, model: SOL, effort: "max" },
+    {
+      taskId: agents.caller.taskId,
+      branch: DEFAULT_BRANCH,
+      prompt: PROMPT,
+      model: SOL,
+      effort: "max",
+    },
     "call-max",
   );
 
@@ -2548,7 +2587,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: taskIds.billing, prompt: "Add the invoice export." },
+    { taskId: taskIds.billing, branch: DEFAULT_BRANCH, prompt: "Add the invoice export." },
     "call-billing",
   );
 
@@ -2562,7 +2601,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   // The same call run again answers the agent it made, and starts nothing.
   const again = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: taskIds.billing, prompt: "Add the invoice export." },
+    { taskId: taskIds.billing, branch: DEFAULT_BRANCH, prompt: "Add the invoice export." },
     "call-billing",
   );
 
@@ -2584,7 +2623,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: taskIds.billing, prompt: "Add the invoice export." },
+      { taskId: taskIds.billing, branch: DEFAULT_BRANCH, prompt: "Add the invoice export." },
       "call-billing",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_SUCH_TASK },
@@ -2594,7 +2633,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: taskIds.elsewhere, prompt: "Add the invoice export." },
+      { taskId: taskIds.elsewhere, branch: DEFAULT_BRANCH, prompt: "Add the invoice export." },
       "call-elsewhere",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_SUCH_TASK },
@@ -2620,7 +2659,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
     await placeOf(
       await fromRunTask(
         AGENT_TOOL.START_AGENT,
-        { taskId: runAgent.taskId, prompt: "Sweep." },
+        { taskId: runAgent.taskId, branch: DEFAULT_BRANCH, prompt: "Sweep." },
         "call-beside",
       ),
     ),
@@ -2634,7 +2673,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
     await placeOf(
       await fromRunTask(
         AGENT_TOOL.START_AGENT,
-        { taskId: runAgent.taskId, prompt: "Sweep." },
+        { taskId: runAgent.taskId, branch: DEFAULT_BRANCH, prompt: "Sweep." },
         "call-later",
       ),
     ),
@@ -2763,7 +2802,7 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A start on it by its id, as any other task of the workspace.
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId, prompt: "Write the migration." },
+    { taskId, branch: DEFAULT_BRANCH, prompt: "Write the migration." },
     "call-start",
   );
 
@@ -2814,7 +2853,11 @@ test("create_task makes a task in the caller's workspace for the member the agen
   assert.ok(isRecord(planless.task) && isWireString(planless.task.id), JSON.stringify(planless));
   assert.equal(Option.getOrThrow(await database.run(readTask(bob, planless.task.id))).text, "");
   assert.deepEqual(
-    await call(AGENT_TOOL.START_AGENT, { taskId: planless.task.id }, "call-planless-start"),
+    await call(
+      AGENT_TOOL.START_AGENT,
+      { taskId: planless.task.id, branch: DEFAULT_BRANCH },
+      "call-planless-start",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.PROMPT_NEEDED },
   );
   assert.equal(agentSessions.sent.length, 1, "a start with no prompt starts nothing");
@@ -3536,7 +3579,7 @@ test("add_suggestion keeps the start or the send a suggestion runs, answers the 
   const owner = agents.caller.userId;
   await turnExperiment(workspaceId, owner, EXPERIMENT.REPLY_BUTTONS, true);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
-  const start = { prompt: PROMPT, model: OPUS, effort: "high" };
+  const start = { prompt: PROMPT, branch: DEFAULT_BRANCH, model: OPUS, effort: "high" };
   const send = { agentId: agents.teammates.id, text: NOTE };
 
   for (const [label, asked] of [
@@ -3572,6 +3615,16 @@ test("add_suggestion keeps the start or the send a suggestion runs, answers the 
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: ADD_SUGGESTION_REFUSAL.SELF },
   );
+
+  // A start on a task with a repository names its branch, never left to the default.
+  const branchless = await call(
+    AGENT_TOOL.ADD_SUGGESTION,
+    { label: "Send it", start: { prompt: PROMPT } },
+    "branchless",
+  );
+
+  assert.equal(branchless.status, ACTION_RESULT_STATUS.REJECTED);
+  assert.match(String(branchless.reason), new RegExp(`${RELAY_FULL_NAME}.*branch`, "u"));
 });
 
 test("message_agent refuses an archived agent, naming unarchive_agent, and leaves it archived", async () => {

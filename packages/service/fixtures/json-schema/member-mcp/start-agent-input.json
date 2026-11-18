@@ -30,7 +30,7 @@
       "minLength": 1,
       "maxLength": 255,
       "pattern": "^[^\\s~^:?*[\\\\]+$",
-      "description": "The branch of the task's repository to clone the agent's checkout at and cut its own branch from, such as the head branch of a pull request it builds on; it must already be on GitHub. Leave it out for the repository's default branch."
+      "description": "The branch of the task's repository to clone the agent's checkout at and cut its own branch from, such as the repository's default branch or the head branch of a pull request it builds on; it must already be on GitHub. Required on a task with a repository, except with from; leave it out for a task with no repository or a start from another agent."
     },
     "model": {
       "type": "string",

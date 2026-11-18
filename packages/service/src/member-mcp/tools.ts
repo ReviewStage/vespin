@@ -1782,8 +1782,10 @@ function memberStartAgentWords(handed: string): string {
     `they can open by its taskId, ${handed}; make a task for it first with ` +
     `${MEMBER_MCP_TOOL.CREATE_TASK}. ` +
     "This one call carries everything the agent is told as it starts, and the " +
-    "agent sets to work on it at once. Its checkout is the repository's default branch, or " +
-    "the branch named, which must already be on GitHub. It runs on the model and effort " +
+    "agent sets to work on it at once. Its checkout is the branch named, which must already " +
+    "be on GitHub, and every start on a task with a repository but one from another agent " +
+    `names it; ${MEMBER_MCP_TOOL.LIST_REPOSITORIES} answers each one's defaultBranch. ` +
+    "It runs on the model and effort " +
     "named, as the member is offered them, or on the member's default with neither; " +
     `${MEMBER_MCP_TOOL.LIST_MODELS} lists them. With from, it starts from another agent ` +
     "instead: continue an agent that failed, ended, or ran out of context, which is handed " +

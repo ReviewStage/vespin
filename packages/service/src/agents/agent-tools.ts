@@ -30,6 +30,7 @@ import { listTaskSections, writeTaskSections } from "@repo/database/models/task-
 import {
   listTasks,
   readTask,
+  readTaskHeader,
   readTaskWorkspace,
   type StoredTask,
   setTaskParent,
@@ -70,6 +71,7 @@ import {
 import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { cleanMachineName } from "@repo/features/machine-name";
+import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { contextWindowsOf, windowOf } from "@repo/features/model-effort";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import {
@@ -380,7 +382,7 @@ export const START_AGENT_REFUSAL = {
     "Not started: give a prompt as text of at most " +
     `${AGENT_BOUNDS.MAX_START_WORDS_CHARS} characters, or none to start on the description, a note ` +
     `bounded the same or none, a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} ` +
-    "characters or none, a branch as one git branch name or none, a model with its effort, " +
+    "characters or none, a branch as one git branch name, a model with its effort, " +
     "both or neither, a taskId, runsOn as " +
     `${IN_THE_CLOUD_WORDS}, a device of the member's by its name or its id, or none, and images as ` +
     `at most ${AGENT_BOUNDS.MAX_ATTACHMENTS} attachment ids or none.`,
@@ -401,8 +403,8 @@ export const START_AGENT_REFUSAL = {
   NO_SUCH_TASK: `Not started: no task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
   NO_BRANCH:
     "Not started: the task's repository has no such branch on GitHub. Push it first, or name a " +
-    "branch that exists there, such as the head branch of the pull request to build on; leave " +
-    "branch out to start on the default branch.",
+    "branch that exists there, such as the repository's default branch or the head branch of " +
+    "the pull request to build on.",
   GITHUB_UNANSWERED:
     "Not started: GitHub did not answer whether the branch exists. The call may be made again.",
   NOT_REACHABLE:
@@ -757,8 +759,10 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
       describeWire(
         START_BRANCH,
         "The branch of the task's repository to clone the agent's checkout at and cut its own " +
-          "branch from, such as the head branch of a pull request it builds on; it must already be " +
-          "on GitHub. Leave it out for the repository's default branch.",
+          "branch from, such as the repository's default branch or the head branch of a pull " +
+          "request it builds on; it must already be on GitHub. Required on a task with a " +
+          "repository, except with from; leave it out for a task with no repository or a start " +
+          "from another agent.",
       ),
     ),
     model: Schema.optionalKey(
@@ -1502,6 +1506,41 @@ const taskOfCallerWorkspace = (caller: AgentCaller, taskId: string) =>
     const owning = yield* readTaskWorkspace(callerUserId(caller), taskId);
 
     return Option.isSome(owning) && owning.value === workspace.value;
+  });
+
+/**
+ * Why a start names no branch where it must, in words beginning with the
+ * refusal's own (`Not started`, `Not added`): a task that works in a
+ * repository has its agent's checkout cloned at the branch the caller
+ * names, never at one the service picks, so a start on it without one is
+ * refused with the repository and how to read its default branch. A task
+ * with no repository, or one the account does not reach, which the start
+ * refuses on its own, needs none.
+ */
+export const branchNeededRefusal = (
+  caller: AgentCaller,
+  taskId: string,
+  branch: string | undefined,
+  refused: string,
+) =>
+  Effect.gen(function* () {
+    if (branch !== undefined) return undefined;
+    const task = yield* readTaskHeader(callerUserId(caller), taskId);
+
+    if (Option.isNone(task) || task.value.repository === null) return undefined;
+    const repository = task.value.repository;
+
+    // Note that a member's client lists repositories with their default branch, while a coding agent reads it with gh in its checkout.
+    const answers =
+      callerAgent(caller) === undefined
+        ? `${MEMBER_MCP_TOOL.LIST_REPOSITORIES} answers as defaultBranch`
+        : `\`gh api repos/${repository} --jq .default_branch\` answers`;
+
+    return (
+      `${refused}: the task works in ${repository}, so name the branch to clone the agent's ` +
+      `checkout at as branch, such as the repository's default branch, which ${answers}, or ` +
+      "the head branch of a pull request it builds on."
+    );
   });
 
 /** A call's refusal as the model reads it, here and at a coding agent's edge for a session it does not admit. */
@@ -2272,6 +2311,14 @@ export function runStartAgent(
 
         if (!reached) return agentToolRejected(START_AGENT_REFUSAL.NO_SUCH_TASK);
       }
+
+      // A start from another agent is cloned where that agent's work stands, so only a fresh start names its branch.
+      const branchless =
+        from === undefined
+          ? yield* branchNeededRefusal(caller, taskId, asked.success.branch, "Not started")
+          : undefined;
+
+      if (branchless !== undefined) return agentToolRejected(branchless);
 
       // A start from another agent lands in that agent's own place, its task.
       const landing = from === undefined ? undefined : yield* sourceLanding(caller, from, taskId);

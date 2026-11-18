@@ -32,6 +32,7 @@ import {
   type AgentCall,
   type AgentToolServices,
   agentToolRejected,
+  branchNeededRefusal,
   callerAgent,
   callerUserId,
   callerWorkspace,
@@ -76,8 +77,9 @@ const ADD_SUGGESTION_INPUT = Schema.Struct({
         branch: Schema.optionalKey(
           describeWire(
             START_BRANCH,
-            "The branch of the task's repository to clone its checkout at, which must be on " +
-              "GitHub when the button is pressed; leave it out for the default branch.",
+            "The branch of the task's repository to clone its checkout at, such as the " +
+              "repository's default branch, which must be on GitHub when the button is pressed. " +
+              "Required where the task works in a repository; leave it out for a task with none.",
           ),
         ),
         model: Schema.optionalKey(
@@ -207,6 +209,12 @@ export function runAddSuggestion(
         if (Option.isNone(found)) return agentToolRejected(ADD_SUGGESTION_REFUSAL.NO_AGENT);
       }
 
+      const branchless =
+        action.kind === REPLY_BUTTON_ACTION.START
+          ? yield* branchNeededRefusal(call.caller, agent.taskId, action.branch, "Not added")
+          : undefined;
+
+      if (branchless !== undefined) return agentToolRejected(branchless);
       const refused = yield* startChoiceRefusal(userId, action);
 
       if (refused !== undefined) return agentToolRejected(refused);

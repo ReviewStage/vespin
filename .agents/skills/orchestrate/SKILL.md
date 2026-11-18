@@ -124,9 +124,9 @@ worker started earlier would have nothing to build on. Then start it with
 that PR's branch as its base.
 
 Start each worker on its PR's subtask, as the table's "Start a worker" row
-says, `title` at most 80 characters. Set `branch` to the base branch when it
-is not `main`; the worker starts on it and is told to pass it as `base` when
-it opens its PR. Give the rest of the brief (its items 2 to 5) as `note`,
+says, `title` at most 80 characters. Set `branch` to its base branch, `main`
+or the PR it builds on (a start on a task with a repository names one); the
+worker starts on it and is told to pass it as `base` when it opens its PR. Give the rest of the brief (its items 2 to 5) as `note`,
 which holds at most 64,000 characters, and the chosen `model` and `effort`,
 checked against `list_models`. The call carries everything the worker is
 told; do not follow it with a message.
@@ -253,7 +253,7 @@ Run one restack at a time per stack. Tell every worker in the stack, and in
 each branch-off stack based on it, that a restack is pending, and wait for
 each to reply "holding"; stop one that does not hold, as the table says. Then
 start a short-lived restack worker (the table's "Start a helper" row, named
-"Restack <stack title>"; without `branch`, on
+"Restack <stack title>"; with `branch` set to
 `main`, since a Vespin agent never pushes the branch it was started on, so its
 checkout is a single-branch clone of `main`, possibly shallow, and its brief
 has it first run `git remote set-branches origin '*'`, then `git fetch
