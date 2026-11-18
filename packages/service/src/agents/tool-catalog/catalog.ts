@@ -92,7 +92,8 @@ import {
   pictureNotLooked,
 } from "../../tasks/picture-look.js";
 import type { SentryApp } from "../../triggers/sentry/sentry-app-config.js";
-import { READ_AGENT_CHANGES_TOOL, runReadAgentChanges } from "../agent-changes-tool.js";
+import { READ_AGENT_CHANGES_TOOL } from "../agent-changes-spec.js";
+import { runReadAgentChanges } from "../agent-changes-tool.js";
 import {
   AGENT_CALLER,
   type AgentCall,
@@ -601,7 +602,8 @@ const CATALOG = [
   agentTool(STOP_AGENT_TOOL, runStopAgent),
   agentTool(LIST_AGENTS_TOOL, runListAgents, LOADED),
   agentTool(CODER_READ_AGENT_TOOL, runReadAgent),
-  agentTool(READ_AGENT_CHANGES_TOOL, runReadAgentChanges),
+  // Note that its run is reached when called, because its module imports this catalog through `agents-procedures.ts` and may load after it.
+  agentTool(READ_AGENT_CHANGES_TOOL, (call, input) => runReadAgentChanges(call, input)),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
   agentTool(ADD_SUGGESTION_TOOL, runAddSuggestion, {
     gate: TOOL_GATE.REPLY_BUTTONS,
