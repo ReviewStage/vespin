@@ -30,7 +30,7 @@
         "standard",
         "long"
       ],
-      "description": "The context window it runs on, standard or long; only with a model, and the model's whole window where left out."
+      "description": "The context window it runs on, standard or long, as list_models' contextWindows lists the model's; required with a model that lists two, and refused with one whose list is empty."
     },
     "pinned": {
       "type": "boolean",
