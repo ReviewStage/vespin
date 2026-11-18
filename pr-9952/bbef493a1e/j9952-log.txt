@@ -1,0 +1,18 @@
+== bundle P9952 base bbef493a1e
+  built bbef493a1e base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad26-light-portrait-detail: fails 0 shots 7 
+ipad26-light-search: fails 0 shots 1 
+ipad26-light-navigation: fails 0 shots 8 
+ipad26-dark-portrait-detail: fails 0 shots 7 
+ipad26-dark-search: fails 0 shots 1 
+ipad26-dark-navigation: fails 0 shots 8 
+ipad27-light-portrait-detail: fails 3 shots 8     Assert that "${ITEM}" is visible... FAILED
+ipad27-light-search: fails 0 shots 1 
+ipad27-light-navigation: fails 0 shots 8 
+ipad27-dark-portrait-detail: fails 3 shots 8     Assert that "${ITEM}" is visible... FAILED
+ipad27-dark-search: fails 0 shots 1 
+ipad27-dark-navigation: fails 0 shots 8 
