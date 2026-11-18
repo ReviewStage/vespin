@@ -4,8 +4,9 @@
  * An agent a Slack thread speaks for (`slack_agent_thread`) replies there
  * as a person does, in a few short messages, one call each, posted in its
  * current thread (`currentSlackThread`) as a `markdown` block, which Slack
- * draws as standard Markdown. The turn's final message is still posted
- * there as well (`slack-agent-starts.ts`'s `postTurnToSlack`). An agent no
+ * draws as standard Markdown. The thread hears nothing else of the turn
+ * but that it failed or was stopped (`slack-agent-starts.ts`'s
+ * `postTurnToSlack`). An agent no
  * thread speaks for is refused, so it answers where it was asked.
  */
 

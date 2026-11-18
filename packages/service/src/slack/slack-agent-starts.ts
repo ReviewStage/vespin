@@ -73,10 +73,12 @@
  * agent's current thread, and any other turn of an agent a thread speaks
  * for in its current thread, the one kept, moved, or written in latest
  * (`claimSlackThreadTurn`), never in every thread it was ever kept for. A
- * thread's post is its final message in a `markdown` block, which
- * Slack draws as standard Markdown, or that it failed
- * or was stopped, each with the agent's link, and after either the pictures,
- * recordings, and sound clips the agent showed with `show_media` in that turn, shared as
+ * thread hears only what the agent sends there itself
+ * (`send_slack_message`, `slack-message-tool.ts`): a turn that finished well
+ * posts none of its words, and only one that failed, was stopped, or hit its
+ * plan's usage limit is said so, with the agent's link, since the agent
+ * cannot say that itself. Either way the pictures, recordings, and sound
+ * clips the agent showed with `show_media` in that turn are then shared as
  * files under the thread (`SlackWorkspaceBot.upload`). A turn of an agent started
  * from Slack that finished well then
  * archives the agent under the rule an automation's "Mark finished runs Done"
@@ -186,7 +188,7 @@ import {
   type SlackUpload,
   type SlackWorkspaceBot,
 } from "./slack-bot.js";
-import { slackClipped, slackEscaped, slackMarkdownBlock } from "./slack-markdown.js";
+import { slackEscaped } from "./slack-markdown.js";
 import { threadDmAt } from "./thread-dms.js";
 
 /** The events read: a mention of the bot in a channel, and a message in a conversation with it. */
@@ -230,9 +232,6 @@ const THREAD_FRAME_CHARS = 512;
 
 /** What the thread's messages end with where they were cut to fit. */
 const CUT_MARK = "\n… (cut to fit; read the rest in Slack)";
-
-/** The most characters of a final message the notification's plain text says; the blocks hold more. */
-const NOTIFICATION_CHARS = 2500;
 
 /** The most pictures of one turn shared in its thread: its first ones shown. */
 const TURN_UPLOADS = 10;
@@ -629,7 +628,7 @@ function startPrompt(
   const lines = [
     words,
     "---",
-    `A member wrote this to ${PRODUCT_NAME}'s Slack bot ${where}. Your final message is posted back in that thread, so make it stand on its own.`,
+    `A member wrote this to ${PRODUCT_NAME}'s Slack bot ${where}. That thread sees only what you send there with \`send_slack_message\`; your final message is not posted.`,
   ];
 
   if (earlier.length === 0) return lines.join("\n\n");
@@ -676,8 +675,8 @@ function slackLine(
 
 /**
  * A later message in the agent's Slack thread as the agent reads it: the
- * member's words, then that it came from the thread and that the turn's
- * final message is posted back there, as the start's prompt says.
+ * member's words, then that it came from the thread and that the thread
+ * sees only what the agent sends there, as the start's prompt says.
  */
 function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<string>): string {
   const where = Option.match(permalink, {
@@ -688,7 +687,7 @@ function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<stri
   return [
     addressed.text === "" ? FILES_ALONE : addressed.text.slice(0, PROMPT_BOUND / 2),
     "---",
-    `A member wrote this in ${where} you were started from. Your final message is posted back in that thread, so make it stand on its own.`,
+    `A member wrote this in ${where} you were started from. That thread sees only what you send there with \`send_slack_message\`; your final message is not posted.`,
   ].join("\n\n");
 }
 
@@ -1138,22 +1137,28 @@ export function actOnSlackEvent(
   );
 }
 
-/** What the post says of the turn: its final message where it finished, that it failed and why, or that it was stopped. */
-function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMessageContent {
+/**
+ * What the thread is told of the turn by the bot: that it failed and why,
+ * that it was stopped, or that its plan's usage limit stopped it; nothing
+ * for a turn that finished well, whose words the agent sent itself.
+ */
+function turnNotice(turn: SettledAgentTurn): Option.Option<SlackMessageContent> {
   // A turn its plan's usage limit stopped is said so, not that the agent failed.
-  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return plainReply(LIMIT_REACHED_WORDS);
+  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return Option.some(plainReply(LIMIT_REACHED_WORDS));
 
   if (turn.status === TURN_STATUS.FAILED) {
-    return plainReply(
-      turn.failure === null ? "The agent failed." : `The agent failed: ${turn.failure}.`,
+    return Option.some(
+      plainReply(
+        turn.failure === null ? "The agent failed." : `The agent failed: ${turn.failure}.`,
+      ),
     );
   }
 
-  if (turn.status === TURN_STATUS.CANCELED) return plainReply("The agent was stopped.");
+  if (turn.status === TURN_STATUS.CANCELED) {
+    return Option.some(plainReply("The agent was stopped."));
+  }
 
-  if (words === undefined) return plainReply("The agent finished.");
-
-  return { text: slackClipped(words, NOTIFICATION_CHARS), blocks: [slackMarkdownBlock(words)] };
+  return Option.none();
 }
 
 /** The pictures, recordings, and sound clips the turn's `show_media` and `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
@@ -1237,10 +1242,11 @@ const turnPlace = Effect.fnUntraced(function* (agent: Agent, turnId: string) {
 });
 
 /**
- * Posts the settled turn once where it belongs (`turnPlace`), with the
- * agent's link and the pictures it showed shared after it. A run's result
+ * Posts the settled turn once where it belongs (`turnPlace`): a run's
+ * result, or in a thread only a turn that did not finish well, with the
+ * agent's link, and the pictures it showed shared after it. A run's result
  * DM is kept as the agent's current thread, with this turn posted in it, so
- * a reply there reaches the agent and the turn it starts is answered there.
+ * a reply there reaches the agent and what it sends lands there.
  * An agent started from Slack is then archived where the turn finished
  * well; any other, an automation's among them, is left to its own rule. A
  * failure is logged by its kind alone, never answered.
@@ -1298,17 +1304,21 @@ export function postTurnToSlack(
     }
 
     const { channelId, threadTs } = place.value.thread;
-    const outcome = turnOutcome(turn, words);
-    yield* bot.reply(channelId, threadTs, {
-      text: outcome.text,
-      blocks: [
-        ...outcome.blocks,
-        {
-          type: "context",
-          elements: [{ type: "mrkdwn", text: `<${link}|Open in ${PRODUCT_NAME}>` }],
-        },
-      ],
-    });
+    const notice = turnNotice(turn);
+
+    if (Option.isSome(notice)) {
+      yield* bot.reply(channelId, threadTs, {
+        text: notice.value.text,
+        blocks: [
+          ...notice.value.blocks,
+          {
+            type: "context",
+            elements: [{ type: "mrkdwn", text: `<${link}|Open in ${PRODUCT_NAME}>` }],
+          },
+        ],
+      });
+    }
+
     yield* bot.upload(channelId, threadTs, uploads);
 
     if (turn.status === TURN_STATUS.SETTLED && (yield* isSlackStartedAgent(agent.value.id))) {
