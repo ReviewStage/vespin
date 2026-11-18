@@ -765,13 +765,23 @@ function continuedReply(link: string): SlackMessageContent {
   };
 }
 
+/** The message's 👀 taken off where its thread still marks it as worked on; one marked since stands. */
+const clearedWorking = Effect.fnUntraced(function* (
+  bot: SlackWorkspaceBot,
+  message: SlackThreadMessageAt,
+) {
+  if (!(yield* clearSlackThreadWorking(message))) return;
+  yield* bot.unreact(message.channelId, message.ts, STATUS_EMOJI.WORKING);
+});
+
 /**
  * The ended agent continued in a new one as the member, as Continue and
  * `start_agent`'s `from` continue it: handed its work and its transcript, the
  * steps that do not fit summarized, with the member's message as its note
  * and the files it shared as the note's files.
- * The thread moves to it, the message is marked heard, and one line in the
- * thread links it; a refusal is said instead.
+ * The thread moves to it, the message already marked 👀 stays marked as
+ * worked on, and one line in the thread links it; a refusal is said
+ * instead, and the message's 👀 taken off.
  */
 const continueFromSlack = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
@@ -813,6 +823,12 @@ const continueFromSlack = Effect.fnUntraced(function* (
   );
 
   if (Result.isFailure(started)) {
+    yield* clearedWorking(bot, {
+      organizationId,
+      channelId: addressed.channel,
+      threadTs: thread,
+      ts: addressed.ts,
+    });
     yield* bot.reply(
       addressed.channel,
       thread,
@@ -832,18 +848,8 @@ const continueFromSlack = Effect.fnUntraced(function* (
     userId,
     workingTs: addressed.ts,
   });
-  yield* bot.react(addressed.channel, addressed.ts, HEARD_EMOJI);
   const link = yield* agentLink(userId, source.organizationId, agentId);
   yield* bot.reply(addressed.channel, thread, continuedReply(link));
-});
-
-/** The message's 👀 taken off where its thread still marks it as worked on; one marked since stands. */
-const clearedWorking = Effect.fnUntraced(function* (
-  bot: SlackWorkspaceBot,
-  message: SlackThreadMessageAt,
-) {
-  if (!(yield* clearSlackThreadWorking(message))) return;
-  yield* bot.unreact(message.channelId, message.ts, STATUS_EMOJI.WORKING);
 });
 
 /** 💤 taken off the message that started the agent, now that a message brought it back. */
@@ -899,8 +905,12 @@ const sendToAgent = Effect.fnUntraced(function* (
   const status = turns.get(agent.value.conversationId)?.status;
   const running = status !== undefined && RUNNING_TURN_STATUSES.has(status);
 
-  // Note that the mark is kept before the agent is handed the message, so a turn that ends at once still finds it to clear.
-  if (!running) yield* markSlackThreadWorking(message);
+  // Note that the mark is kept and shown before the agent is handed the message, so a turn that ends at once still finds both to clear.
+  if (!running) {
+    yield* markSlackThreadWorking(message);
+    yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.WORKING);
+  }
+
   const permalink = yield* bot.permalink(addressed.channel, addressed.ts);
   const attachments = yield* sharedFiles(bot, addressed.files);
 
@@ -922,10 +932,9 @@ const sendToAgent = Effect.fnUntraced(function* (
     ),
   );
 
-  // A message the agent did not take is no longer worked on; a continue marks it again where it starts.
-  if (Result.isFailure(sent) && !running) yield* clearSlackThreadWorking(message);
-
+  // Note that a message an ended agent did not take is worked on by the agent that continues it, so its mark stands.
   if (Result.isFailure(sent) && sent.failure.error === HOSTED_API_ERROR.AGENT_RETIRED) {
+    if (running) yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.WORKING);
     yield* continueFromSlack(
       bot,
       addressed,
@@ -940,6 +949,8 @@ const sendToAgent = Effect.fnUntraced(function* (
   }
 
   if (Result.isFailure(sent)) {
+    // A message the agent did not take is no longer worked on.
+    if (!running) yield* clearedWorking(bot, message);
     yield* bot.reply(
       addressed.channel,
       threadOf(addressed),
@@ -956,11 +967,7 @@ const sendToAgent = Effect.fnUntraced(function* (
     threadTs: threadOf(addressed),
   });
 
-  yield* bot.react(
-    addressed.channel,
-    addressed.ts,
-    running ? STATUS_EMOJI.ACKNOWLEDGED : STATUS_EMOJI.WORKING,
-  );
+  if (running) yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.ACKNOWLEDGED);
 });
 
 /**
@@ -1359,10 +1366,16 @@ export function postTurnToSlack(
 
     // Note that a workspace holding no token claims nothing, so its turn is neither marked posted nor its agent archived unseen.
     if (!bot.connected) return;
-    // Note that 👀 comes off whatever the turn posted, since a turn that finished well posts nothing of its own.
-    yield* Effect.forEach(yield* slackWorkingMessages(agent.value.id), (message) =>
-      clearedWorking(bot, message),
-    );
+    // Note that 👀 comes off whatever the turn posted, since a turn that finished well posts nothing of its own,
+    // but only while this turn is the agent's latest, because a mark made since belongs to the turn after it.
+    const latest = (yield* latestTurnsOfReached([turn.conversationId])).get(turn.conversationId);
+
+    if (latest?.id === turn.turnId) {
+      yield* Effect.forEach(yield* slackWorkingMessages(agent.value.id), (message) =>
+        clearedWorking(bot, message),
+      );
+    }
+
     const place = yield* turnPlace(agent.value, turn.turnId);
 
     if (Option.isNone(place)) return;

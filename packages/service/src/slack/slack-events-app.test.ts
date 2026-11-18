@@ -842,7 +842,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a message the agent takes into a turn already running is marked with 👍, and the turn's end takes 👀 off the message that started it",
+    "a message the agent takes into a turn already running is marked with 👍, the turn's end takes 👀 off the message that started it, and that end heard late leaves the next turn's 👀",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -881,10 +881,31 @@ it.layer(SUITE)("our Slack route", (it) => {
           ranMs: 1,
         }).pipe(Effect.provide(bot));
 
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: first, name: "eyes" }],
-        );
+        const removed = () =>
+          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : []));
+
+        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
+
+        // The first turn's end is heard again only after a third message started the next turn.
+        yield* (yield* Database)
+          .update(turns)
+          .set({ status: TURN_STATUS.SETTLED })
+          .where(eq(turns.id, turn.id));
+        // The next turn is queued later than the first, as it would be outside a test's still clock.
+        yield* TestClock.adjust("1 second");
+        const third = "1700000005.000600";
+        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, third));
+        yield* postTurnToSlack({
+          userId: owner,
+          conversationId: agent.conversationId,
+          turnId: turn.id,
+          status: TURN_STATUS.SETTLED,
+          failure: null,
+          ranMs: 1,
+        }).pipe(Effect.provide(bot));
+
+        assert.deepEqual(added("eyes"), [first, third]);
+        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
       });
     },
   );
