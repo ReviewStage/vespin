@@ -452,11 +452,8 @@ const LIST_HEADER_HEIGHT = 37;
 /** How tall a band between two hunks of a list's file stands, in pixels, which Pierre lays the list out by (`LIST_CSS`). */
 const LIST_GAP_HEIGHT = 24;
 
-/** The room between two files of a list, and above the first, in pixels: the panel's ground between their cards. */
+/** The room between two files of a list, above the first, and below the last, in pixels: the panel's ground around their cards. */
 const LIST_FILE_GAP = 12;
-
-/** The room below a list's last file, in pixels, so its last lines can be scrolled up off the foot of the pane. */
-const LIST_FOOT_ROOM = 48;
 
 /**
  * A file in a list: a card, its edge and its corners the panel's, holding
@@ -827,7 +824,7 @@ function listOptions(
     },
     layout: {
       paddingTop: LIST_FILE_GAP + (latest().topRoom ?? 0),
-      paddingBottom: LIST_FOOT_ROOM,
+      paddingBottom: LIST_FILE_GAP,
       gap: LIST_FILE_GAP,
     },
     renderCustomHeader: (
