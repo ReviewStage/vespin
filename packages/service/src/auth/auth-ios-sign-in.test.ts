@@ -18,7 +18,7 @@ import {
 import { oauthUserInfoFromAuthAnswer, requestUserId } from "./bearer.js";
 import type { UserInfoEndpoint } from "./bearer-callers.js";
 import { IOS_OAUTH_CLIENT, oauthClientRecord } from "./oauth-clients.js";
-import { offlineTokensOutliveSession } from "./offline-tokens.js";
+import { OFFLINE_TOKEN_ROTATION, offlineTokensOutliveSession } from "./offline-tokens.js";
 
 /**
  * The iPhone's OAuth sign-in, end to end on one Better Auth configured as
@@ -103,6 +103,7 @@ function iosAuth() {
         allowDynamicClientRegistration: false,
         clientPrivileges: denyOAuthClientPrivileges,
         cachedTrustedClients: new Set([IOS_OAUTH_CLIENT.id]),
+        ...OFFLINE_TOKEN_ROTATION,
       }),
       offlineTokensOutliveSession(),
     ],
@@ -364,6 +365,24 @@ test("a refresh mints an access token that names the same account, and a revoked
     HOSTED_HTTP_STATUS.OK,
   );
   assert.notEqual((await refresh(auth, second.refresh_token)).status, HOSTED_HTTP_STATUS.OK);
+});
+
+test("a refresh whose answer the phone never kept, sent again within a minute, answers the same tokens and signs nobody out", async () => {
+  const auth = iosAuth();
+  const { returned } = await signIn(auth);
+  const first = await exchange(auth, returned);
+
+  const rotated = await refresh(auth, first.refresh_token);
+  assert.equal(rotated.status, HOSTED_HTTP_STATUS.OK);
+  const kept = decodeTokens(await rotated.json());
+
+  // The phone was suspended before it kept that answer, so it presents the rotated token again.
+  vi.setSystemTime(new Date(NOW.getTime() + 30_000));
+  const replayed = await refresh(auth, first.refresh_token);
+  assert.equal(replayed.status, HOSTED_HTTP_STATUS.OK);
+  assert.equal(decodeTokens(await replayed.json()).refresh_token, kept.refresh_token);
+
+  assert.equal((await refresh(auth, kept.refresh_token)).status, HOSTED_HTTP_STATUS.OK);
 });
 
 test("a refresh after the consenting browser's session ran out still mints a token that names the account", async () => {
