@@ -964,11 +964,19 @@ it.effect(
           [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
           [
             MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
-            { workspace, repository: "acme/relay", actionId: rows.runActionId, remove: true },
+            {
+              workspace,
+              repository: "acme/relay",
+              edit: { operation: "remove", actionId: rows.runActionId },
+            },
           ],
           [
             MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
-            { workspace, repository: "acme/relay", label: "Planted", command: "pnpm planted" },
+            {
+              workspace,
+              repository: "acme/relay",
+              edit: { operation: "add", label: "Planted", command: "pnpm planted" },
+            },
           ],
           // Note that the member's own workspace holds no action of that id, so an edit of it there is refused.
           [
@@ -976,8 +984,7 @@ it.effect(
             {
               workspace: `workspace-${rows.own}`,
               repository: "acme/relay",
-              actionId: rows.runActionId,
-              label: "Planted",
+              edit: { operation: "change", actionId: rows.runActionId, label: "Planted" },
             },
           ],
           [MEMBER_MCP_TOOL.RUN_ACTION, { agentId, actionId: rows.runActionId }],
@@ -1062,6 +1069,56 @@ it.effect(
         [[rows.runActionId, "A stranger's action"]],
       );
     }),
+);
+
+it.effect("edit_run_action adds, changes, and removes a run action by its operation", () =>
+  Effect.gen(function* () {
+    const { auth, fetch, services } = yield* standing;
+    const member = yield* Effect.promise(() => signUp(auth));
+    const own = yield* openWorkspace(member.userId).pipe(Effect.provide(services));
+
+    const token = yield* Effect.promise(() =>
+      mintedToken(auth, member.cookie, {
+        clientId: MCP_CLIENT.id,
+        scope: [MEMBER_MCP_SCOPE.MCP],
+        resource: RESOURCE,
+      }),
+    );
+
+    const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
+    const edit = (args: ToolArguments) =>
+      Effect.promise(async () => {
+        const answer = decodeAnswer(
+          await client.callTool({
+            name: MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
+            arguments: { workspace: `workspace-${own}`, repository: "acme/relay", edit: args },
+          }),
+        );
+
+        assert.notEqual(answer.isError, true, answer.content[0].text);
+      });
+
+    const listed = readRunActions(own, "acme/relay").pipe(
+      Effect.map((actions) => actions.map(({ label, command }) => [label, command])),
+      Effect.provide(services),
+    );
+
+    yield* edit({ operation: "add", label: "Dev", command: "pnpm dev" });
+    yield* edit({ operation: "add", label: "Test", command: "pnpm test" });
+    const [dev] = yield* readRunActions(own, "acme/relay").pipe(Effect.provide(services));
+    assert.ok(dev !== undefined);
+    yield* edit({ operation: "change", actionId: dev.id, command: "pnpm dev --open" });
+    const changed = yield* listed;
+    yield* edit({ operation: "remove", actionId: dev.id });
+
+    assert.deepEqual(changed, [
+      ["Dev", "pnpm dev --open"],
+      ["Test", "pnpm test"],
+    ]);
+    assert.deepEqual(yield* listed, [["Test", "pnpm test"]]);
+    yield* Effect.promise(() => client.close());
+  }),
 );
 
 it.effect(

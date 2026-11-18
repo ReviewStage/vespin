@@ -732,13 +732,7 @@ Adds, changes, or removes a repository's run action. Owners and admins only.
 | --- | --- | --- |
 | `workspace` | string | The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
 | `repository` | string, required | The repository whose run actions to edit, as owner/name, under any casing of its name. (up to 140 characters) |
-| `actionId` | string | The action to change or remove, by the id read_sandbox_setup answered; leave it out to add one, which then needs a label and a command. (1–36 characters) |
-| `remove` | boolean | true to remove the action actionId names; nothing else given is then read. |
-| `label` | string | What the Run menu and the action's Terminal tab call it. (1–40 characters) |
-| `command` | string | The bash it runs from the repository's checkout, with the workspace's environment variables, such as pnpm dev. (up to 4096 characters) |
-| `icon` | object or null | The icon it wears in the Run menu, one emoji or one Lucide icon by its kebab-case name in a color or none, such as rocket; null for the menu's own. |
-| `isDefault` | boolean | true to make it the repository's default, which the Run button runs, so no other action is; false to make it no longer the default. |
-| `position` | integer | Its place in the list after the edit, from 0, a place past the end being the last; an added action goes last and a changed one stays where it stood where left out. (0–19) |
+| `edit` | object, required | The edit, by its operation, with only the fields it takes: add (label, command, and optionally icon, isDefault, and position); change (actionId, and any of label, command, icon, isDefault, and position, each left out unchanged); or remove (actionId). |
 
 ### list_environment_variables
 

@@ -164,6 +164,7 @@ import {
 } from "@repo/features/workspace-invitation-wire";
 import {
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
+  type WorkspaceRunActionEdit,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
   workspaceRunActionEditRequestSchema,
@@ -4944,9 +4945,8 @@ const RUN_ACTION_EDIT_REFUSAL = {
     "Not saved: the member is no longer in that workspace, or the repository has no run action " +
     `of that id; ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} lists each repository's actions.`,
   INVALID:
-    "Not saved: an add names a label and a command and no actionId, a repository keeps at most " +
-    `${WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS} run actions, and a remove names the ` +
-    "actionId it removes.",
+    `Not saved: a repository keeps at most ${WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS} ` +
+    "run actions, so remove one before adding another.",
 } as const;
 
 /** An edit's refusal in the agent's words: the edit's own, or a setup save's. */
@@ -4963,39 +4963,26 @@ function runActionEditRefusalWords(refusal: HostedRefusal): string {
 
 const RUN_ACTION_FIELDS = workspaceRunActionEditRequestSchema.fields;
 
-/** An edit names the workspace, the repository, the action where it changes one, and what changes. */
-const EditRunActionInputSchema = Schema.Struct({
-  workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
-  repository: describeWire(
-    RUN_ACTION_FIELDS.repository,
-    "The repository whose run actions to edit, as owner/name, under any casing of its name.",
-  ),
-  actionId: Schema.optionalKey(
-    describeWire(
-      RUN_ACTION_FIELDS.actionId.schema,
-      `The action to change or remove, by the id ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} ` +
-        "answered; leave it out to add one, which then needs a label and a command.",
-    ),
-  ),
-  remove: Schema.optionalKey(
-    describeWire(
-      RUN_ACTION_FIELDS.remove.schema,
-      "true to remove the action actionId names; nothing else given is then read.",
-    ),
-  ),
-  label: Schema.optionalKey(
-    describeWire(
-      RUN_ACTION_FIELDS.label.schema,
-      "What the Run menu and the action's Terminal tab call it.",
-    ),
-  ),
-  command: Schema.optionalKey(
-    describeWire(
-      RUN_ACTION_FIELDS.command.schema,
-      "The bash it runs from the repository's checkout, with the workspace's environment " +
-        "variables, such as pnpm dev.",
-    ),
-  ),
+/** What an edit of a run action does, which names the fields it takes. */
+const RUN_ACTION_OPERATION = {
+  ADD: "add",
+  CHANGE: "change",
+  REMOVE: "remove",
+} as const;
+
+const RUN_ACTION_ID_INPUT = describeWire(
+  RUN_ACTION_FIELDS.actionId.schema,
+  `The action, by the id ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} answered.`,
+);
+
+const RUN_ACTION_LABEL_WORDS = "What the Run menu and the action's Terminal tab call it.";
+
+const RUN_ACTION_COMMAND_WORDS =
+  "The bash it runs from the repository's checkout, with the workspace's environment " +
+  "variables, such as pnpm dev.";
+
+/** The fields an add sets and a change may change; each left out is the menu's own on an add and unchanged on a change. */
+const RUN_ACTION_SETTINGS = {
   icon: Schema.optionalKey(
     describeWire(
       RUN_ACTION_FIELDS.icon.schema,
@@ -5017,7 +5004,65 @@ const EditRunActionInputSchema = Schema.Struct({
         "added action goes last and a changed one stays where it stood where left out.",
     ),
   ),
+};
+
+/** One edit, by its operation, with only the fields that operation takes. */
+const RunActionEditSchema = Schema.Union([
+  Schema.Struct({
+    operation: Schema.Literal(RUN_ACTION_OPERATION.ADD),
+    label: describeWire(RUN_ACTION_FIELDS.label.schema, RUN_ACTION_LABEL_WORDS),
+    command: describeWire(RUN_ACTION_FIELDS.command.schema, RUN_ACTION_COMMAND_WORDS),
+    ...RUN_ACTION_SETTINGS,
+  }),
+  Schema.Struct({
+    operation: Schema.Literal(RUN_ACTION_OPERATION.CHANGE),
+    actionId: RUN_ACTION_ID_INPUT,
+    label: Schema.optionalKey(describeWire(RUN_ACTION_FIELDS.label.schema, RUN_ACTION_LABEL_WORDS)),
+    command: Schema.optionalKey(
+      describeWire(RUN_ACTION_FIELDS.command.schema, RUN_ACTION_COMMAND_WORDS),
+    ),
+    ...RUN_ACTION_SETTINGS,
+  }),
+  Schema.Struct({
+    operation: Schema.Literal(RUN_ACTION_OPERATION.REMOVE),
+    actionId: RUN_ACTION_ID_INPUT,
+  }),
+]);
+
+/**
+ * An edit names the workspace, the repository, and the edit. Note that the
+ * edit is nested under `edit`, because a tool's input must be an object at
+ * its top, and an object may not be a union there.
+ */
+const EditRunActionInputSchema = Schema.Struct({
+  workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
+  repository: describeWire(
+    RUN_ACTION_FIELDS.repository,
+    "The repository whose run actions to edit, as owner/name, under any casing of its name.",
+  ),
+  edit: describeWire(
+    RunActionEditSchema,
+    "The edit, by its operation, with only the fields it takes: add (label, command, and " +
+      "optionally icon, isDefault, and position); change (actionId, and any of label, command, " +
+      "icon, isDefault, and position, each left out unchanged); or remove (actionId).",
+  ),
 });
+
+/** An edit as the hosted operation reads it: a remove its flag, a change and an add their fields. */
+function runActionEdit(
+  edit: typeof RunActionEditSchema.Type,
+): Omit<WorkspaceRunActionEdit, "workspaceId" | "repository"> {
+  switch (edit.operation) {
+    case RUN_ACTION_OPERATION.REMOVE:
+      return { actionId: edit.actionId, remove: true };
+    case RUN_ACTION_OPERATION.CHANGE:
+    case RUN_ACTION_OPERATION.ADD: {
+      const { operation: _operation, ...fields } = edit;
+
+      return fields;
+    }
+  }
+}
 
 const EDIT_RUN_ACTION_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
@@ -5034,10 +5079,11 @@ const EDIT_RUN_ACTION_TOOL = memberMcpTool({
   input: EditRunActionInputSchema,
   // Note that an add made twice adds two actions, so the edit is not idempotent as a save is.
   annotations: { readOnlyHint: false, destructiveHint: true },
-  run: ({ workspace, ...edit }) =>
+  run: ({ workspace, repository, edit }) =>
     listAsMember(workspace, ({ caller }) =>
       editRunAction(callerUserId(caller), callerWorkspaceId(caller), {
-        ...edit,
+        ...runActionEdit(edit),
+        repository,
         workspaceId: callerWorkspaceId(caller),
       }).pipe(
         Effect.map((setup): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup })),
