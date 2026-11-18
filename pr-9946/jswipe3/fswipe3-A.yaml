@@ -1,0 +1,44 @@
+# fswipe3-A.yaml -- 0e8a24a7 10:44 UTC Nov 18: jswipe3, fswipe2's path to Ledger rounding with Fix ledger rounding scrolled into view, then a shot; the job dumps maestro hierarchy after it, and the lanes (fswipe3-A/B/C) repeat the path then swipe.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+  ORIENT: ${ORIENT || 'PORTRAIT'}
+---
+- launchApp: { clearState: true, arguments: { fixture: inbox } }
+- setOrientation: ${ORIENT}
+- waitForAnimationToEnd
+- runFlow: { file: subflows/tab.yaml, env: { TAB: Tasks } }
+- assertVisible: "Pinned"
+- runFlow:
+    when:
+      notVisible: "Search tasks"
+    commands:
+      - tapOn:
+          text: "Search"
+          above: "Tab Bar"
+- tapOn: "Search tasks"
+- inputText: "rounding"
+- assertVisible: "Ledger rounding"
+- tapOn: "Ledger rounding"
+- extendedWaitUntil:
+    visible: "Created by .*"
+    timeout: 20000
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Fix ledger rounding"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: ${P}-1-before-swipe
+- swipe:
+    start: "90%, 17%"
+    end: "10%, 17%"
+    duration: 900
+- takeScreenshot: ${P}-2-at-once
+- waitForAnimationToEnd
+- takeScreenshot: ${P}-3-settled
+- runFlow:
+    when:
+      visible: "Archive"
+    commands:
+      - takeScreenshot: ${P}-4-archive-shown

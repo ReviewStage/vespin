@@ -1,0 +1,11 @@
+== bundle SWIPE3 base 3f16f680c8
+  built 3f16f680c8 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+path: fails 0 shots 1 
+row center y 17%
+lane A: fails 0 shots 3  archive-shown=0
+lane B: fails 0 shots 3  archive-shown=0
+lane C: fails 0 shots 4  archive-shown=1

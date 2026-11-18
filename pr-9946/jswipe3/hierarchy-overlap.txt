@@ -1,0 +1,78 @@
+screen 402x2156 pt
+-- every element overlapping y 330-390 pt (depth, bounds, label/text/id):
+  1 [0,0][402,874] | 'Vespin' | '' | id='' | enabled=true selected=false
+  2 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  3 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  3 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  4 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  5 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  6 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  7 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  8 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  9 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 10 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 11 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 12 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 13 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 14 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 15 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 16 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 17 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 18 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 19 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 20 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 21 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 22 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 23 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 24 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 25 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 26 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 27 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 28 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 29 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 30 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 31 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 32 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 33 [0,116][402,791] | '' | '' | id='' | enabled=true selected=false
+ 33 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 34 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 34 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 34 [0,298][402,334] | '' | '' | id='' | enabled=true selected=false
+ 35 [0,298][402,334] | '' | '' | id='' | enabled=true selected=false
+ 35 [0,298][402,334] | '' | '' | id='' | enabled=true selected=false
+ 36 [0,298][402,334] | '' | '' | id='' | enabled=true selected=false
+ 37 [0,298][402,334] | '' | '' | id='' | enabled=true selected=false
+ 38 [342,294][386,338] | 'New agent' | '' | id='' | enabled=true selected=false
+ 34 [0,298][402,2156] | '' | '' | id='' | enabled=true selected=false
+ 34 [0,334][402,335] | '' | '' | id='' | enabled=true selected=false
+ 34 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 35 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 36 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 37 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 38 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 35 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 36 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 37 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 38 [0,334][402,388] | '' | '' | id='' | enabled=true selected=false
+ 38 [3,343][386,379] | 'Fix ledger rounding' | 'Cloud, 1 needs you' | id='' | enabled=true selected=false
+ 39 [3,348][12,357] | '' | '' | id='' | enabled=true selected=false
+ 39 [16,343][34,361] | 'ClawdMark' | '' | id='' | enabled=true selected=false
+ 39 [44,343][176,361] | 'Fix ledger rounding' | '' | id='' | enabled=true selected=false
+ 39 [336,348][348,357] | 'Cloud' | '' | id='' | enabled=true selected=false
+ 39 [352,345][386,359] | 'Cloud' | '' | id='' | enabled=true selected=false
+ 39 [44,363][116,379] | '1 needs you' | '' | id='' | enabled=true selected=false
+ 34 [44,387][402,388] | '' | '' | id='' | enabled=true selected=false
+ 34 [369,116][399,791] | 'Vertical scroll bar, 1 page' | '0%' | id='' | enabled=true selected=false
+ 34 [369,116][399,791] | 'Vertical scroll bar, 1 page' | '0%' | id='' | enabled=true selected=false
+ 25 [0,0][402,874] | 'Toolbar' | '' | id='Toolbar' | enabled=true selected=false
+ 26 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 18 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 20 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+ 11 [0,0][402,874] | 'Toolbar' | '' | id='Toolbar' | enabled=true selected=false
+ 12 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  2 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  3 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+  4 [0,0][402,874] | '' | '' | id='' | enabled=true selected=false
+-- every element naming "Fix ledger rounding":
+ 38 [3,343][386,379] | 'Fix ledger rounding' | 'Cloud, 1 needs you'
+ 39 [44,343][176,361] | 'Fix ledger rounding' | ''
