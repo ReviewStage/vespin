@@ -1,10 +1,6 @@
 // agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, the sheet of its options: its model, effort, Fast, permission mode, and MCP servers, and the sheet of its listening ports.
 
 import {
-  AGENT_PERMISSION_MODE,
-  type AgentPermissionMode,
-} from "@repo/features/agent-approval-wire";
-import {
   AGENT_PORTS_WORDS,
   PORT_ACT,
   type PortAct,
@@ -69,6 +65,7 @@ import {
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
+  PERMISSION_MODE_GLYPH,
   PickRows,
   QueuedLines,
   Screen,
@@ -194,13 +191,6 @@ const OPTIONS_WORDS = {
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
   MORE_SERVERS: "Connect another in Settings.",
 } as const;
-
-/** The glyph each permission mode wears, the panel's own: a hand, a shield round an ellipsis, a shield round a "!". */
-const MODE_SYMBOL = {
-  [AGENT_PERMISSION_MODE.ASK]: GLYPH.ASK_FIRST,
-  [AGENT_PERMISSION_MODE.AUTO]: GLYPH.AUTO_APPROVE,
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
-} as const satisfies Record<AgentPermissionMode, Glyph>;
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
@@ -406,10 +396,10 @@ function agentAddMenu(
         : [
             {
               label: PERMISSION_MODE_WORDS.GROUP,
-              symbol: MODE_SYMBOL[mode.mode],
+              symbol: PERMISSION_MODE_GLYPH[mode.mode],
               choices: mode.modes.map((option) => ({
                 label: option.label,
-                symbol: MODE_SYMBOL[option.id],
+                symbol: PERMISSION_MODE_GLYPH[option.id],
                 on: option.id === mode.mode,
                 onPress: () => mode.choose(option.id),
               })),

@@ -31,8 +31,10 @@ import {
   AGENT_ENTER,
   AGENT_ENTER_TOUCH_DETAIL,
   APP_SETTING_ID,
+  APP_SETTING_SCHEMA,
   type AppSettingField,
   isAgentEnter,
+  isPermissionMode,
   SETTING_SECTION,
   SETTINGS_PAGE,
   type SettingSection,
@@ -46,6 +48,7 @@ import {
   footerToneOf,
   ListSection,
   MenuPickRow,
+  PERMISSION_MODE_GLYPH,
   rejectionWords,
   SCREEN_GROUND,
   Screen,
@@ -91,6 +94,13 @@ const SCHEMA_GROUP = {
 
 /** One stored setting's row as the schema draws it on a page. */
 type SchemaRow = ReturnType<typeof settingRowsForPage>[number];
+
+/** The glyph a Default permissions option leads with, the panel's own (`modeGlyph`); none for any other choice. */
+function modeSymbol(field: AppSettingField, token: string) {
+  return field === APP_SETTING_SCHEMA.agentPermissionMode.field && isPermissionMode(token)
+    ? PERMISSION_MODE_GLYPH[token]
+    : undefined;
+}
 
 /** What the platform offers, which a platform feature's row stands on. */
 const selectCapabilities = (state: AppStateSnapshot) => state.run.capabilities;
@@ -228,7 +238,11 @@ export default function AgentsScreen() {
         <MenuPickRow
           key={settingRounds.get(field) ?? 0}
           label={entry.label}
-          options={control.options.map((option) => ({ id: option.value, label: option.label }))}
+          options={control.options.map((option) => ({
+            id: option.value,
+            label: option.label,
+            symbol: modeSymbol(field, option.value),
+          }))}
           picked={control.value}
           onPick={(token) => {
             if (token !== setting.newest(field, control.value)) store(field, token);
