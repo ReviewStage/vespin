@@ -1305,7 +1305,7 @@ function RunActionsSection({
   return (
     <SettingsSection
       {...settingsSectionHead(SECTION.ENVIRONMENT_RUN_ACTIONS)}
-      caption="Listed in each agent's Run menu, the default on its button. Each runs when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on."
+      caption="Commands in each agent's Run menu, run where the agent runs."
       action={
         manages ? (
           <AddRepositoryButton

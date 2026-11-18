@@ -35,13 +35,12 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /** The words the page says. */
 const WORDS = {
-  USAGE_CAPTION:
-    "Usage this month, in UTC. Each workspace's first usage each month is included, and what passes it is billed at the end of the month.",
+  USAGE_CAPTION: "This month so far, in UTC.",
   INCLUDED_LEFT: "Included usage left",
   OWED: "Owed past included usage",
   READING: "billing",
   READ_FAILED: "Billing could not be read.",
-  STATUS: "Billing",
+  STATUS: "Card",
   SET_UP: "Set up billing",
   SETTING_UP: "Opening",
   MANAGE: "Manage billing",
