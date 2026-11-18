@@ -1,0 +1,39 @@
+#9967 on main
+#9970 on main
+#9972 on main
+#9973 on main
+#9977 on main
+== bundle PSETM base 6f586c5b84
+  built 6f586c5b84 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+p9970-iphone-light: fails 0 shots 2 
+p9967-iphone-light a: fails 1 shots 1 Scrolling DOWN until "MCP" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, w
+  p9967-iphone-light: NO-MORE
+p9972-iphone-light: fails 0 shots 3 
+p9973-iphone-light: fails 0 shots 11 
+p9977-iphone-light: fails 0 shots 3 
+p9977-iphone-light-alerts: fails 0 shots 4 
+p9970-iphone-dark: fails 0 shots 2 
+p9967-iphone-dark a: fails 1 shots 1 Scrolling DOWN until "MCP" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, w
+  p9967-iphone-dark: NO-MORE
+p9972-iphone-dark: fails 0 shots 3 
+p9973-iphone-dark: fails 0 shots 11 
+p9977-iphone-dark: fails 0 shots 3 
+p9977-iphone-dark-alerts: fails 0 shots 4 
+p9970-ipad26-light: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9967-ipad26-light a: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+  p9967-ipad26-light: NO-MORE
+p9972-ipad26-light: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9973-ipad26-light: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9977-ipad26-light: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9977-ipad26-light-alerts: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9970-ipad26-dark: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9967-ipad26-dark a: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+  p9967-ipad26-dark: NO-MORE
+p9972-ipad26-dark: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9973-ipad26-dark: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9977-ipad26-dark: fails 0 shots 3 
+p9977-ipad26-dark-alerts: fails 0 shots 4 
