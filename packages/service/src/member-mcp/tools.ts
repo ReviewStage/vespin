@@ -250,6 +250,7 @@ import {
   READ_PAGE_CHARS,
   READ_PAGE_REFUSAL,
   READ_PAGE_TOOL,
+  READ_PAGE_VERSION,
   runArchiveAgent,
   runListAgents,
   runListMemberModels,
@@ -1031,7 +1032,8 @@ const MEMBER_READ_PAGE_TOOL = memberMcpTool({
   description:
     "Read a page an agent showed, by the page's id, on a task the member can open, in " +
     "whichever of the member's workspaces it stands: its " +
-    "title, the version read (the newest unless you name one) and the newest there is, its " +
+    `title, the version read (the one you name, by its number or "${READ_PAGE_VERSION.NEWEST}") ` +
+    "and the newest there is, its " +
     `task, and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
     "how many were left out.",
   input: ReadPageInputSchema,

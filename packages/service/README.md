@@ -1451,7 +1451,7 @@ agent menu keeps for the agent's starter, a turn still under way stopped
 first as the Stop button stops it, recording the archiving agent and its
 reason on the archived agent's row (`archived_by`), and `unarchive_agent`,
 which brings one back; `read_page`, a page shown on any task
-of the workspace by its id, its HTML cut on a line to a bound, which a
+of the workspace by its id and the version named, its number or `newest`, its HTML cut on a line to a bound, which a
 mention of a page points the agent at; `list_tasks`, the workspace's
 open tasks, and its archived ones too where asked, each with the sidebar
 section the agent's starter keeps it in, and those sections; `read_task`
