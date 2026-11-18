@@ -138,7 +138,7 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
     workspaceId: WORKSPACE_ID,
     name: "Release captain",
     repositories: ["acme/app"],
-    runsOn: { machine: "cloud" },
+    runsOn: { machine: "vercel" },
     model: "anthropic/claude-opus-5.5",
     effort: "high",
   },
