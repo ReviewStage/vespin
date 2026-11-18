@@ -1,12 +1,27 @@
-// launch-phases.ts -- how long a launch's host took to stand, noted as the host starts and stands, for `app:ready` to count beside its own time.
+// launch-phases.ts -- how long a launch took to reach each of its phases, the bundle evaluated, the account read, the local copy opened and the host stood, for `app:ready` to count beside its own time.
 
 /** React Native's own startup marks, which its `performance` holds beside the web's and its types leave out. */
 interface StartupPerformance {
   readonly rnStartupTiming?: { readonly startTime?: number | null };
 }
 
+/** A launch's phases before its host stands, in the order a launch reaches them. */
+export const LAUNCH_PHASE = {
+  /** The root layout's module evaluated, so the bundle's eager modules have run. */
+  EVALUATED: "evaluated",
+  /** The account's tokens first read from the Keychain. */
+  ACCOUNT: "account",
+  /** The host's local copy first opened. */
+  LOCAL: "local",
+} as const;
+
+export type LaunchPhase = (typeof LAUNCH_PHASE)[keyof typeof LAUNCH_PHASE];
+
 /** How long after the launch's start this launch's host stood; none before it stands. */
 let stood: { readonly ms: number | undefined } | undefined;
+
+/** How long after the launch's start each phase was first reached; a phase not yet reached is absent. */
+const reached = new Map<LaunchPhase, number | undefined>();
 
 /**
  * The time since React Native's own start of this launch, in milliseconds, or
@@ -26,9 +41,21 @@ export function sinceLaunch(): number | undefined {
   }
 }
 
-/** Notes that the host starts, clearing what an earlier start noted. */
+/** Notes that the host starts, clearing what an earlier start noted, the bundle's evaluation aside. */
 export function noteHostStarting(): void {
   stood = undefined;
+  reached.delete(LAUNCH_PHASE.ACCOUNT);
+  reached.delete(LAUNCH_PHASE.LOCAL);
+}
+
+/** Notes that the launch reached `phase`, the first time alone, so a later read or open of the same thing moves nothing. */
+export function noteLaunchPhase(phase: LaunchPhase): void {
+  if (!reached.has(phase)) reached.set(phase, sinceLaunch());
+}
+
+/** How long after the launch's start it first reached `phase`; none before it does, or where the runtime keeps no start. */
+export function launchPhaseMs(phase: LaunchPhase): number | undefined {
+  return reached.get(phase);
 }
 
 /** Notes, once the host stood, how long it took. */
