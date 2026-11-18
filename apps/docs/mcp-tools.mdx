@@ -457,7 +457,7 @@ Your threads: asks waiting on you first, then other open threads, then the lates
 
 ### answer_ask
 
-Answers an open ask as you: a choice, a to-do's done or not done, a form, or words.
+Answers an open ask as you: a choice, a to-do's done or not done, a form, or words. If this settles the last thing an automation run with Mark finished runs Done is waiting on, the run's agents are archived and its task moves to Done.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -471,7 +471,7 @@ Answers an open ask as you: a choice, a to-do's done or not done, a form, or wor
 
 ### acknowledge_thread
 
-Acknowledges a notice, as Got it does.
+Acknowledges a notice, as Got it does. If this settles the last thing an automation run with Mark finished runs Done is waiting on, the run's agents are archived and its task moves to Done.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -489,7 +489,7 @@ Writes on a thread without answering its ask.
 
 ### close_thread
 
-Closes a thread without answering it.
+Closes a thread without answering it. If this settles the last thing an automation run with Mark finished runs Done is waiting on, the run's agents are archived and its task moves to Done.
 
 | Input | Type | Description |
 | --- | --- | --- |

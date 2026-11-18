@@ -3364,6 +3364,11 @@ const WAITING_SETTLED_WORDS =
   `task or brings an agent back: move the task with ${MEMBER_MCP_TOOL.UPDATE_TASK}, or bring ` +
   `the agent back with ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT}, first.`;
 
+/** What settling a thread may set off: a finished automation run, with Mark finished runs Done on, put away (`automations/run-archive.ts`). */
+const RUN_SETTLED_WORDS =
+  "Where this settles the last thing an automation run with Mark finished runs Done waits on, " +
+  "its agents are archived and its task moves to Done.";
+
 const HANDED_WORDS =
   "It is written on the thread as the member's own and handed at once to the thread's agent, " +
   "which takes it up in its next turn, starting one where it was idle. " +
@@ -3497,7 +3502,7 @@ const ANSWER_ASK_TOOL = memberMcpTool({
     "done to clear it away. Answer only what the member decided or told you to, and ask them " +
     "where you do not know their answer. Answers `accepted` with the thread as it then stands, " +
     "or `rejected` and why nothing was written, such as an ask no longer open or an answer " +
-    "that does not fit it.",
+    `that does not fit it. ${RUN_SETTLED_WORDS}`,
   input: AnswerAskInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: ({ threadId, askId, answer, note }) =>
@@ -3529,7 +3534,7 @@ const ACKNOWLEDGE_THREAD_TOOL = memberMcpTool({
     `what it asked. ${WAITING_SETTLED_WORDS} A thread that holds an ask is refused: answer it with ` +
     `${MEMBER_MCP_TOOL.ANSWER_ASK}. Acknowledge only what the member has seen or told you ` +
     "to. Answers `accepted` with the thread as it then stands, or `rejected` and why it was " +
-    "not acknowledged.",
+    `not acknowledged. ${RUN_SETTLED_WORDS}`,
   input: AcknowledgeThreadInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: (asked) =>
@@ -3573,7 +3578,7 @@ const CLOSE_THREAD_TOOL = memberMcpTool({
     "it, which it takes as their not wanting what it asked; any other reads the close in its " +
     `own time. ${WAITING_SETTLED_WORDS} Close only what the member does not want. ` +
     "Answers `accepted` with the thread as " +
-    "it then stands, or `rejected` and why it was not closed.",
+    `it then stands, or \`rejected\` and why it was not closed. ${RUN_SETTLED_WORDS}`,
   input: CloseThreadInputSchema,
   annotations: DESTRUCTIVE,
   run: (asked) =>
