@@ -286,7 +286,7 @@ export {
   WorkspacePickRows,
   WorkspaceRow,
 } from "./settings-form.js";
-
+export { SkeletonRegion } from "./skeleton.js";
 export {
   type BarAction,
   type BarFootItem,
@@ -301,7 +301,6 @@ export {
   menuWithout,
   SplitView,
 } from "./split-view.js";
-
 export {
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
