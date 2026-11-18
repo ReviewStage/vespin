@@ -336,7 +336,8 @@ export const INBOX_REFUSAL = {
     "Not posted: the post does not read. key is a lowercase slug of letters, digits, dots, dashes, and underscores; " +
     `body is Markdown of at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters; title is one line of at most ${INBOX_BOUNDS.MAX_TITLE_CHARS}; ` +
     `ask is decide with two to ${INBOX_BOUNDS.MAX_OPTIONS} options, do with at most ${INBOX_BOUNDS.MAX_STEPS} steps, ` +
-    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none.`,
+    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none; ` +
+    "an option's media is {path, caption}, {page, version} with the version show_page answered, or {url, label}.",
   NO_TITLE:
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
   TOO_MANY_PICTURES: `Not posted: a message draws at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} pictures from your sandbox.`,
@@ -795,7 +796,7 @@ interface KeptOptionMedia {
  * One piece of an option's media as the store keeps it, or the refusal of
  * it: a file read from the sandbox as a body's picture is, under an id
  * minted for it; a page the agent showed on its task, at the version it
- * names, or its newest; or the address as posted.
+ * names; or the address as posted.
  */
 function keptOptionMedia(
   agent: InboxAgent,
@@ -835,11 +836,11 @@ function keptOptionMedia(
   );
 }
 
-/** A page an option names as the store keeps it: one shown on the agent's own task, at the version named, the one the agent was shown, or its newest; refused where the agent's account reaches no such page or version there. */
+/** A page an option names as the store keeps it: one shown on the agent's own task, at the version named; refused where the agent's account reaches no such page or version there. */
 function keptOptionPage(
   agent: InboxAgent,
   pageId: string,
-  version: number | undefined,
+  version: number,
 ): Effect.Effect<
   Result.Result<{ readonly media: InboxOptionMedia }, string>,
   never,

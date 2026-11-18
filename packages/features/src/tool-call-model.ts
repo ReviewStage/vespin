@@ -20,11 +20,12 @@ import {
   INBOX_BLOCK,
   INBOX_FIELD,
   INBOX_RESPONSE,
+  type InboxAskRead,
   type InboxPost,
   type InboxPostBlock,
-  type InboxThreadPostInput,
+  type InboxThreadPostRead,
   inboxPostInputSchema,
-  inboxThreadPostInputSchema,
+  inboxThreadPostReadSchema,
   recommendedLabels,
 } from "./inbox-wire.js";
 import {
@@ -757,10 +758,10 @@ function postLines(post: InboxPost): string {
   return [...blocks, ...askLines(post.response)].filter((line) => line.trim() !== "").join("\n");
 }
 
-const readThreadPost = Schema.decodeUnknownOption(inboxThreadPostInputSchema);
+const readThreadPost = Schema.decodeUnknownOption(inboxThreadPostReadSchema);
 
 /** The message a post carries from version 5, or nothing where its input does not read as one: a post from before it, or one still streaming. */
-function threadPostView(input: WireValue | undefined): InboxThreadPostInput | undefined {
+function threadPostView(input: WireValue | undefined): InboxThreadPostRead | undefined {
   return Option.getOrUndefined(readThreadPost(input));
 }
 
@@ -770,7 +771,7 @@ function threadPostView(input: WireValue | undefined): InboxThreadPostInput | un
  * steps, or an `answer`'s fields with their types; none where the reply's
  * own words answer it.
  */
-function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly string[] {
+function threadAskLines(ask: InboxAskRead): readonly string[] {
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
       return ask.options.map((option) => {
@@ -794,7 +795,7 @@ function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly
 }
 
 /** A version 5 post as the row's body lists it: its message's first line, then what its ask asks, by its kind, and what it offers. */
-function threadPostLines(post: InboxThreadPostInput): string {
+function threadPostLines(post: InboxThreadPostRead): string {
   const first = post.body.split("\n").find((line) => line.trim() !== "") ?? "";
 
   const ask =

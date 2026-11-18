@@ -1,4 +1,4 @@
-import { INBOX_ASK, type InboxAsk, type InboxAskInput } from "./inbox-wire.js";
+import { INBOX_ASK, type InboxAsk, type InboxAskRead } from "./inbox-wire.js";
 
 /**
  * inbox-ask-words.ts -- what an Inbox ask asks, in the words its box leads with: the one name the box, the list's row, and the agent's transcript say it by; and what an unfinished answer lacks, in the words its refused send says it by.
@@ -15,7 +15,7 @@ const PART = " · ";
  * that named none.
  */
 export function askHeadWords(
-  ask: InboxAsk | InboxAskInput,
+  ask: InboxAsk | InboxAskRead,
   ticked: readonly number[] | undefined,
 ): string {
   switch (ask.type) {

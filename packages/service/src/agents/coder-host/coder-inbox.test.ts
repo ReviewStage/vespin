@@ -505,7 +505,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version the agent was shown, and a page of another task is refused",
+    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version it names, and a page of another task or one naming no version is refused",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -592,7 +592,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           shown,
         ).pipe(Effect.map(Option.getOrThrow));
 
-        const away = [{ label: "A card", media: [{ page: elsewhere.id }] }, { label: "No card" }];
+        const away = [
+          { label: "A card", media: [{ page: elsewhere.id, version: 1 }] },
+          { label: "No card" },
+        ];
 
         const refused = yield* post(agent, {
           ...QUEUE,
@@ -600,6 +603,15 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         });
 
         assert.equal(refusalOf(refused), INBOX_REFUSAL.NO_PAGE);
+
+        const versionless = [{ label: "A card", media: [{ page: page.id }] }, { label: "No card" }];
+
+        const unversioned = yield* post(agent, {
+          ...QUEUE,
+          ask: { type: INBOX_ASK.DECIDE, options: versionless },
+        });
+
+        assert.equal(refusalOf(unversioned), INBOX_REFUSAL.UNREADABLE_POST);
       }),
   );
 
