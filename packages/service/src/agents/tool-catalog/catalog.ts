@@ -92,6 +92,7 @@ import {
   pictureNotLooked,
 } from "../../tasks/picture-look.js";
 import type { SentryApp } from "../../triggers/sentry/sentry-app-config.js";
+import { READ_AGENT_CHANGES_TOOL, runReadAgentChanges } from "../agent-changes-tool.js";
 import {
   AGENT_CALLER,
   type AgentCall,
@@ -606,6 +607,7 @@ const CATALOG = [
   agentTool(STOP_AGENT_TOOL, runStopAgent),
   agentTool(LIST_AGENTS_TOOL, runListAgents, LOADED),
   agentTool(CODER_READ_AGENT_TOOL, runReadAgent),
+  agentTool(READ_AGENT_CHANGES_TOOL, runReadAgentChanges),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
   agentTool(ADD_SUGGESTION_TOOL, runAddSuggestion, {
     gate: TOOL_GATE.REPLY_BUTTONS,

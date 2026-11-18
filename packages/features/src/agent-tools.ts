@@ -22,6 +22,8 @@ export const AGENT_TOOL = {
   // The tools about the workspace's coding agents, named for any agent offered them.
   LIST_AGENTS: "list_agents",
   READ_AGENT: "read_agent",
+  // What one agent of the workspace published: its pull request and the files it changes.
+  READ_AGENT_CHANGES: "read_agent_changes",
   // One agent's message to another of its workspace, shown in the two agents' transcripts alone.
   MESSAGE_AGENT: AGENT_MESSAGE_TOOL,
   START_AGENT: "start_agent",
