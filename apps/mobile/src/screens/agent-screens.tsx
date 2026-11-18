@@ -45,19 +45,14 @@ import {
   AttachedPictures,
   askForName,
   BAR_TITLE,
-  type BarAction,
-  type BarMenu,
   type BarSubtitle,
   BUTTON_LOOK,
   CallCardRow,
-  type ColumnBar,
   Composer,
   type ComposerCall,
-  ComposerFoot,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
-  DetailPage,
   drawnCallIds,
   FOOTER_TONE,
   FORM_SPACING,
@@ -67,7 +62,6 @@ import {
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
-  HostedFill,
   ListSection,
   MenuPickRow,
   MenuRow,
@@ -112,7 +106,7 @@ import {
   useTranscriptRetry,
   useWholeParts,
 } from "../agents/use-agent.js";
-import { type AgentActions, useAgentActions } from "../agents/use-agent-actions.js";
+import { useAgentActions } from "../agents/use-agent-actions.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
 import {
   type AgentComposer,
@@ -123,7 +117,7 @@ import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
-import { type OfferedRunAction, useAgentRun } from "../agents/use-agent-run.js";
+import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
 import {
   type OpenedSuggestion,
@@ -134,7 +128,6 @@ import {
 } from "../agents/use-suggestions.js";
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
-import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useDetailPush } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
@@ -302,7 +295,6 @@ function AgentComposerBar({
   onShowWaiting,
   addMenu,
   note,
-  inColumn = false,
   call,
   otherCall,
 }: {
@@ -313,8 +305,6 @@ function AgentComposerBar({
   readonly addMenu: ComposerMenu;
   /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
   readonly note: string | undefined;
-  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
-  readonly inColumn?: boolean | undefined;
   /** Talk, or the call's presses while a call into this agent stands; none while calls are not offered. */
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
@@ -381,7 +371,7 @@ function AgentComposerBar({
     saving: composer.saving,
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return <Composer {...props} />;
 }
 
 /**
@@ -483,142 +473,6 @@ function agentSubtitle(
   return words === "" ? undefined : { words, onPress: openOptions, label: ADD_WORDS.OPTIONS };
 }
 
-/** What the agent's bar in a split view's column offers, as its stack's bar and ⋯ offer it. */
-type AgentBarDoors = {
-  readonly title: string;
-  /** Where the agent stands and its model, under its name in the bar's middle; none before either is known. */
-  readonly subtitle: BarSubtitle | undefined;
-  readonly address: string | undefined;
-  readonly actions: AgentActions;
-  /** Whether the task list holds the agent, which every act on it reads. */
-  readonly listed: boolean;
-  readonly openOptions: (() => void) | undefined;
-  /** Opens the sheet of its listening ports; none where it listens on none. */
-  readonly openPorts: (() => void) | undefined;
-  readonly runActions: readonly OfferedRunAction[];
-  readonly copyTranscript: (way: TranscriptCopy) => void;
-  readonly shareTranscript: (way: TranscriptCopy) => void;
-  readonly onRename: () => void;
-  readonly onArchive: () => void;
-  readonly onDelete: () => void;
-};
-
-/**
- * The agent's bar as a page pushed over a split view's detail stands it: its
- * name in the ink, Archive and Pin as glyphs before its ⋯, as a regular
- * window's stack stands them, and the ⋯ holding the rest in the stack's
- * order, Copy transcript and Run › as menus of their own, and Permanently
- * delete red and last.
- */
-function columnBarOf(doors: AgentBarDoors): ColumnBar {
-  const { address, actions, listed, openOptions, openPorts, runActions } = doors;
-
-  const acts: BarAction[] = listed
-    ? [
-        { label: MENU_WORDS.ARCHIVE, symbol: GLYPH.ARCHIVE, onPress: doors.onArchive },
-        {
-          label: actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN,
-          symbol: actions.pinned ? GLYPH.UNPIN : GLYPH.PIN,
-          onPress: actions.pin,
-        },
-      ]
-    : [];
-
-  const linkActs =
-    address === undefined
-      ? []
-      : [
-          { label: MENU_WORDS.COPY_LINK, symbol: GLYPH.LINK, onPress: actions.copyLink },
-          {
-            label: VERB.OPEN_IN_BROWSER,
-            symbol: GLYPH.OPEN_EXTERNALLY,
-            onPress: () => openInSafari(address),
-          },
-        ];
-
-  const optionActs =
-    openOptions === undefined
-      ? []
-      : [
-          { label: ADD_WORDS.OPTIONS, symbol: GLYPH.OPTIONS, onPress: openOptions },
-          ...(openPorts === undefined
-            ? []
-            : [{ label: AGENT_PORTS_WORDS.PORTS, symbol: GLYPH.PLUG, onPress: openPorts }]),
-        ];
-
-  const copy: BarMenu = {
-    label: COPY_TRANSCRIPT_WORDS.COPY,
-    symbol: GLYPH.COPY,
-    choices: [],
-    actions: [
-      {
-        label: COPY_TRANSCRIPT_WORDS.CONCISE,
-        symbol: GLYPH.COPY,
-        onPress: () => doors.copyTranscript(TRANSCRIPT_COPY.CONCISE),
-      },
-      {
-        label: COPY_TRANSCRIPT_WORDS.FULL,
-        symbol: GLYPH.COPY,
-        onPress: () => doors.copyTranscript(TRANSCRIPT_COPY.FULL),
-      },
-      {
-        label: COPY_TRANSCRIPT_WORDS.SHARE,
-        symbol: GLYPH.SHARE,
-        onPress: () => doors.shareTranscript(TRANSCRIPT_COPY.FULL),
-      },
-    ],
-  };
-
-  const run: readonly BarMenu[] =
-    openOptions === undefined || runActions.length === 0
-      ? []
-      : [
-          {
-            label: RUN_ACTION_WORDS.SUBMENU,
-            symbol: GLYPH.RUN,
-            choices: [],
-            actions: runActions.map((offered) => ({
-              label: runActionMenuLabel(offered.action, offered.runs),
-              symbol: offered.runs ? GLYPH.STOP : GLYPH.RUN,
-              onPress: offered.onPress,
-            })),
-          },
-        ];
-
-  return {
-    name: doors.title,
-    subtitle: doors.subtitle,
-    acts,
-    menu: {
-      label: MENU_WORDS.MORE,
-      symbol: GLYPH.MORE,
-      choices: [],
-      actions: [
-        ...linkActs,
-        ...(listed
-          ? [{ label: MENU_WORDS.RENAME, symbol: GLYPH.RENAME, onPress: doors.onRename }]
-          : []),
-        ...optionActs,
-      ],
-      submenus: [copy, ...run],
-      groups: listed
-        ? [
-            {
-              actions: [
-                {
-                  label: MENU_WORDS.DELETE,
-                  symbol: GLYPH.DELETE,
-                  destructive: true,
-                  onPress: doors.onDelete,
-                },
-              ],
-            },
-          ]
-        : [],
-    },
-  };
-}
-
 /**
  * One agent's page: the system's header naming the agent in the ink, as
  * Messages names a conversation, since the transcript opens at its newest
@@ -652,9 +506,9 @@ function columnBarOf(doors: AgentBarDoors): ColumnBar {
  * waits behind it as the member's Follow-up behavior says, and Stop stands
  * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
  * Photos, Options, the permission mode, and Fast. A `/` typed offers the
- * task's skills over the field. Opened from a split view's detail, it
- * stands pushed over that detail instead (`AgentConversation`'s
- * `inColumn`), beside the list.
+ * task's skills over the field. Opened from a split view's detail, it is
+ * pushed on the tab's own stack over the whole window, as a compact window
+ * pushes it.
  */
 export function AgentScreen() {
   const {
@@ -675,34 +529,22 @@ export function AgentScreen() {
 
 /**
  * One agent's page as `AgentScreen` describes it, by the agent's id and the
- * suggestion a box opened it on: on a stack over the window, or, `inColumn`,
- * pushed over a split view's detail, where its bar stands its name, Archive
- * and Pin, and its ⋯, the transcript fills the column, and its composer
- * stands at the column's foot in the system's own glass (`ComposerFoot`),
- * since no React Native bar stands in a SwiftUI column. A page or a pull
- * request it opens is pushed over it in the same column.
+ * suggestion a box opened it on, on its tab's stack over the window. A page
+ * or a pull request it opens is pushed over it on the same stack.
  */
-export function AgentConversation({
+function AgentConversation({
   id,
   suggestedBy,
   button,
   brief,
-  inColumn = false,
-  onLeave,
 }: {
   readonly id: string;
   readonly suggestedBy?: string | undefined;
   readonly button?: string | undefined;
   /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
   readonly brief?: string | undefined;
-  /** Where the page goes once its agent is archived or deleted, where it stands as a detail's root, such as Search's pick; a pushed page leaves its stack, and a stack's screen goes back. */
-  readonly onLeave?: (() => void) | undefined;
-  /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
-  readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
-  const toDetail = useDetailPush();
-  const detailLeave = useDetailLeave();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const onTab = useOnTab();
@@ -882,13 +724,6 @@ export function AgentConversation({
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
   const transcriptCopy = useTranscriptCopy(id, title, shown?.brief);
-  const covered = useDetailCovered();
-  const cancelCopy = transcriptCopy.cancel;
-
-  // Note that a page pushed over this one in its own column leaves the tab focused, so a copy still reading is outdated here, as a push over the window outdates it.
-  useEffect(() => {
-    if (covered) cancelCopy();
-  }, [covered, cancelCopy]);
 
   // Note that a copy or share lets the menu's last note go, so an older Rename or Pin refusal never stands over what the copy says.
   const copyTranscript = (way: TranscriptCopy) => {
@@ -921,13 +756,6 @@ export function AgentConversation({
 
   // An agent archived or deleted gives way to where its own stack opened it from, or to the Tasks list it stands in where it was opened first, as from a launch or a notification; nothing moves once the reader has left its page.
   const leave = () => {
-    // Note that an agent standing in a split view's detail leaves that column alone, whatever stands in front.
-    if (onLeave !== undefined || detailLeave !== undefined) {
-      (onLeave ?? detailLeave?.leave)?.();
-
-      return;
-    }
-
     if (!navigation.isFocused()) return;
 
     if (router.canDismiss()) router.back();
@@ -940,14 +768,11 @@ export function AgentConversation({
   const copiable = held !== undefined;
   const taskId = shown?.taskId;
 
-  // Note that the agent's task opens as a page pushed over it, as a thread's path opens its task and the panel's crumbs do: beside the list in a split view's detail, else on the stack the reader stands in. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
+  // Note that the agent's task opens as a page pushed over it on the stack the reader stands in, as a thread's path opens its task and the panel's crumbs do. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
   const openTask =
     taskId === undefined
       ? undefined
-      : () => {
-          if (toDetail({ kind: PUSHED_PAGE.TASK, taskId })) return;
-          router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
-        };
+      : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || openOptions !== undefined;
@@ -966,15 +791,6 @@ export function AgentConversation({
   };
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) => {
-    const page = {
-      kind: PUSHED_PAGE.AGENT_PAGE,
-      agentId: id,
-      pageId: item.page,
-      version: item.version,
-      title: item.title,
-    } as const;
-
-    if (toDetail(page)) return;
     router.push({
       pathname: onOwnTab("/tasks/agent/[id]/page"),
       params: { id, page: item.page, version: String(item.version), title: item.title },
@@ -991,7 +807,6 @@ export function AgentConversation({
       return;
     }
 
-    if (toDetail({ kind: PUSHED_PAGE.PULL_REQUEST, ...key, agentId: id })) return;
     router.push(onOwnTab(iosRepositoryPullRequestRoute(key, id)));
   };
 
@@ -1004,7 +819,6 @@ export function AgentConversation({
       note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
       call={talk.call}
       otherCall={otherCall}
-      inColumn={inColumn}
     />
   );
 
@@ -1084,32 +898,6 @@ export function AgentConversation({
       />
     </>
   );
-
-  if (inColumn) {
-    return (
-      <DetailPage
-        bar={columnBarOf({
-          title,
-          subtitle,
-          address,
-          actions,
-          listed: agent !== undefined,
-          openOptions,
-          openPorts: hasPorts ? openPorts : undefined,
-          runActions,
-          copyTranscript,
-          shareTranscript,
-          onRename: askRename,
-          onArchive: askArchive,
-          onDelete: () => setDeleting(true),
-        })}
-        foot={composerBar}
-        asks={asks}
-      >
-        <HostedFill>{transcriptView}</HostedFill>
-      </DetailPage>
-    );
-  }
 
   const barOptions = { title, headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT } };
 
@@ -1276,19 +1064,17 @@ export function AgentPageScreen() {
   return <AgentPage agentId={id} pageId={page} version={Number(version)} title={title} />;
 }
 
-/** A page the agent showed, by the agent, the page, and its version; `inColumn` pushed over a split view's detail. */
-export function AgentPage({
+/** A page the agent showed, by the agent, the page, and its version. */
+function AgentPage({
   agentId,
   pageId,
   version,
   title,
-  inColumn,
 }: {
   readonly agentId: string;
   readonly pageId: string;
   readonly version: number;
   readonly title: string;
-  readonly inColumn?: boolean | undefined;
 }) {
   const agent = useFollowedAgent(agentId);
 
@@ -1299,7 +1085,6 @@ export function AgentPage({
       pageId={pageId}
       version={version}
       title={title}
-      inColumn={inColumn}
     />
   );
 }

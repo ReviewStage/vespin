@@ -5,10 +5,14 @@ import { REMIND_TIMES } from "@repo/features/inbox-remind-times";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
   MENU_COMMAND,
+  MENU_OWN_PAGE,
   MENU_SUBJECT,
   type MenuCommand,
   type MenuFocus,
+  type MenuOwnPage,
+  type MenuRouteParams,
   menuFocusOf,
+  menuOwnPageOf,
 } from "@repo/features/ios-menu-commands";
 import {
   GITHUB_PAGE,
@@ -47,14 +51,6 @@ import {
 } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentRowActs } from "../agents/use-agent.js";
-import {
-  DETAIL_FRONT,
-  PUSHED_PAGE,
-  type PushedPage,
-  popDetailFront,
-  useDetailFront,
-  useTopPage,
-} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -64,7 +60,6 @@ import {
 } from "../host/host-provider.js";
 import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
-import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
 import { SEARCH_FOCUS_PARAM } from "../search-field.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
@@ -135,54 +130,57 @@ interface Subject {
   readonly threadUnread: boolean;
 }
 
+/**
+ * The address a pushed pull request or page opens in the browser: the pull
+ * request on GitHub, or the page on vespin.dev in its task's workspace,
+ * which a task's page names itself and an agent's page takes from its task.
+ */
+function ownPageAddress(
+  page: MenuOwnPage,
+  task: TaskSummary | undefined,
+  agentTaskId: string | undefined,
+  stepOf: (workspaceId: string | undefined) => string | undefined,
+): string | undefined {
+  switch (page.kind) {
+    case MENU_OWN_PAGE.PULL_REQUEST:
+      return gitHubPageLink({
+        kind: GITHUB_PAGE.PULL_REQUEST,
+        repository: page.repository,
+        number: page.number,
+      });
+    case MENU_OWN_PAGE.TASK_PAGE: {
+      const step = stepOf(page.workspaceId ?? task?.workspaceId);
+
+      const place = {
+        kind: LINK_DESTINATION.PAGE,
+        taskId: page.taskId,
+        pageId: page.pageId,
+      } as const;
+
+      return step === undefined ? undefined : linkOf(place, step);
+    }
+
+    case MENU_OWN_PAGE.AGENT_PAGE: {
+      const step = stepOf(task?.workspaceId);
+
+      return step === undefined || agentTaskId === undefined
+        ? undefined
+        : linkOf({ kind: LINK_DESTINATION.PAGE, taskId: agentTaskId, pageId: page.pageId }, step);
+    }
+  }
+}
+
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
 function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
 }
 
-/** The place whose split view stands at a tab's root, by the route; none on a page pushed over the window. */
-function rootPlaceOf(pathname: string): SidebarPlace | undefined {
-  const segments = pathname.split("/").filter((segment) => segment !== "");
-
-  return segments.length === 1 ? placeOfRoute(segments[0]) : undefined;
-}
-
-/**
- * What a page pushed over a split view's detail puts in front of the menu:
- * an agent for its own page, a pull request opened from it, or a page it showed, so Stop
- * and Pin follow it; a task for its page, comments, history, or versions.
- */
-function pushedFocus(page: PushedPage): MenuFocus {
-  switch (page.kind) {
-    case PUSHED_PAGE.AGENT:
-    case PUSHED_PAGE.AGENT_PAGE:
-      return { kind: MENU_SUBJECT.AGENT, id: page.agentId };
-    case PUSHED_PAGE.PULL_REQUEST:
-      return page.agentId === undefined
-        ? { kind: MENU_SUBJECT.NONE }
-        : { kind: MENU_SUBJECT.AGENT, id: page.agentId };
-    case PUSHED_PAGE.TASK:
-    case PUSHED_PAGE.TASK_PAGE:
-    case PUSHED_PAGE.COMMENTS:
-    case PUSHED_PAGE.NEW_COMMENT:
-    case PUSHED_PAGE.HISTORY:
-    case PUSHED_PAGE.VERSION:
-      return { kind: MENU_SUBJECT.TASK, id: page.taskId };
-  }
-}
-
 /** Reads what the route stands in front into what each command may do to it. */
 function useSubject(signedIn: boolean): Subject {
   const pathname = usePathname();
-  const { selected } = useGlobalSearchParams<{ selected?: string }>();
-  // Note that a page pushed over a split view's detail is no route, so it is read off the detail's stack while its tab's root stands.
-  const pushed = useTopPage(signedIn ? rootPlaceOf(pathname) : undefined);
-
-  const focus: MenuFocus = !signedIn
-    ? { kind: MENU_SUBJECT.NONE }
-    : pushed === undefined
-      ? menuFocusOf(pathname, selected)
-      : pushedFocus(pushed);
+  const params = useGlobalSearchParams<MenuRouteParams>();
+  const focus: MenuFocus = signedIn ? menuFocusOf(pathname, params) : { kind: MENU_SUBJECT.NONE };
+  const ownPage = signedIn ? menuOwnPageOf(pathname, params) : undefined;
 
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const collections = useTaskListCollections();
@@ -253,26 +251,10 @@ function useSubject(signedIn: boolean): Subject {
   }
 
   // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
-  if (pushed?.kind === PUSHED_PAGE.PULL_REQUEST) {
-    address = gitHubPageLink({
-      kind: GITHUB_PAGE.PULL_REQUEST,
-      repository: pushed.repository,
-      number: pushed.number,
-    });
-  } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
-    address = linked({ kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId: pushed.pageId });
-  } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {
-    // Note that a task's page carries its own workspace, so it opens even where the task isn't in the list read.
-    const pageStep = linkWorkspaceStep(pushed.workspaceId ?? task?.workspaceId, workspaces);
-
-    const page = {
-      kind: LINK_DESTINATION.PAGE,
-      taskId: pushed.taskId,
-      pageId: pushed.pageId,
-    } as const;
-
-    address = pageStep === undefined ? undefined : linkOf(page, pageStep);
-  }
+  if (ownPage !== undefined)
+    address = ownPageAddress(ownPage, task, agent?.taskId, (id) =>
+      linkWorkspaceStep(id, workspaces),
+    );
 
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);
 
@@ -344,16 +326,12 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
 
-  // Note that Back pops a page pushed over the detail in front, else a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
-  const detailFront = useDetailFront();
+  // Note that Back pops a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
   const root: NavigatorState = useRootNavigationState();
   const navigation = useNavigationContainerRef();
   const tabs = tabsInFront(root);
 
-  const backs =
-    signedIn &&
-    tabs !== undefined &&
-    (detailFront === DETAIL_FRONT.NONE ? tabStackBacks(tabs) : detailFront === DETAIL_FRONT.PUSHED);
+  const backs = signedIn && tabs !== undefined && tabStackBacks(tabs);
 
   // Note that K and J step from the thread in front through what its screen draws, which stands its own steps (`useStandFrontSteps`), so the menu keeps no list or scope of its own.
   const steps = useFrontSteps();
@@ -467,8 +445,6 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.DETAIL_ONLY:
         return sidebar.toggle();
       case MENU_COMMAND.BACK: {
-        if (detailFront === DETAIL_FRONT.PUSHED) return popDetailFront();
-
         // Note that the tab's stack is read again at the press, because a held ⌘[ repeats before this render's enablement catches up, and a Back at the tab's root would go to the first tab.
         const liveRoot: NavigatorState | undefined = navigation.getRootState();
         const live = tabsInFront(liveRoot);

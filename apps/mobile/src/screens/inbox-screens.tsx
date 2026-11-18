@@ -91,13 +91,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
-import {
-  PUSHED_PAGE,
-  useDetailPush,
-  useStackRoot,
-  useStandFocusedDetailFront,
-  useTopPage,
-} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -116,24 +109,16 @@ import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { NotificationAsk } from "../notification-ask.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { useInFront } from "../place-columns.js";
 import { useReplyDrawnCount } from "../reply-drawn.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import {
-  PLUS_TAB,
-  SIDEBAR_PLACE,
-  useComposeAction,
-  useDetailColumnBar,
-  useListColumn,
-} from "./app-sidebar.js";
-import { useDetailStackColumn } from "./detail-stack-column.js";
+import { PLUS_TAB, useComposeAction, useDetailColumnBar, useListColumn } from "./app-sidebar.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -752,8 +737,6 @@ function ThreadDetail({
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
-  const onTab = useOnTab();
-  const toDetail = useDetailPush();
 
   // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
   const shown = useRef(false);
@@ -766,17 +749,10 @@ function ThreadDetail({
   }, []);
 
   const navigation = useNavigation();
-  const inFront = useInFront();
 
-  // Whether this thread stands in front now, read when a start answers rather than when it was sent, since the reader may have switched tabs meanwhile.
-  const front = useRef(inFront);
-  useEffect(() => {
-    front.current = inFront;
-  }, [inFront]);
-
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front, read when the start answers rather than when it was sent, since the reader may have switched tabs or pushed a page over it meanwhile: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
   const openStarted = (id: string) => {
-    if (!shown.current || !navigation.isFocused() || !front.current) return;
+    if (!shown.current || !navigation.isFocused()) return;
 
     if (place.inStack) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
     else place.onOpen(id);
@@ -816,23 +792,20 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them, inside the detail's own column beside the list where the window stands three, where the path heads the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
+  // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
-      onPress: () => {
-        if (toDetail({ kind: PUSHED_PAGE.TASK, taskId: holder.task.id })) return;
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })));
-      },
+      onPress: () =>
+        router.push(
+          onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })),
+        ),
     },
     {
       label: PATH_OPENS.AGENT,
       symbol: GLYPH.AGENT,
-      onPress: () => {
-        if (toDetail({ kind: PUSHED_PAGE.AGENT, agentId: item.agentId })) return;
-        router.push(onTab(iosAgentRoute(item.agentId)));
-      },
+      onPress: () => router.push(onOwnTab(iosAgentRoute(item.agentId))),
     },
   ] as const;
 
@@ -1336,15 +1309,14 @@ function InboxSplitScreen({
 
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
-  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; never while a page pushed over the thread covers it, since a pick would take that page away.
+  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; only while the Inbox's root is focused, never under a page pushed over it on the tab's stack.
   const focused = useIsFocused();
-  const covered = useTopPage(SIDEBAR_PLACE.INBOX) !== undefined;
   const shownIds = listing.listed.map(({ item }) => item.id);
   const at = selected === undefined ? -1 : shownIds.indexOf(selected);
   useStandFrontSteps(
     at < 0 ? {} : { previous: shownIds[at - 1], next: shownIds[at + 1] },
     select,
-    focused && at >= 0 && !covered,
+    focused && at >= 0,
   );
 
   const rows = (
@@ -1406,23 +1378,14 @@ function InboxSplitScreen({
   const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
 
   const first = useListColumn(list);
-  useStackRoot(SIDEBAR_PLACE.INBOX, selected);
-  // Note that the split view stands the detail's own stack, as Mail opens a message's related pages beside its list.
-  const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
-  // Note that the menu bar's Back pops the pages over this detail while it's shown.
-  useStandFocusedDetailFront(SIDEBAR_PLACE.INBOX);
   const firstDetailBar = useDetailColumnBar(detailBar);
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
+      <Stack.Screen options={{ headerShown: false, title: INBOX_TITLE }} />
       <Screen>
-        <SplitView
-          {...first}
-          detail={stack.wrap(detail)}
-          detailBar={firstDetailBar}
-          detailStack={stack.detailStack}
-        />
+        <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
       </Screen>
     </>
   );

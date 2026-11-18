@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- the places a regular window's tabs stand (the Inbox, Tasks, and Search), each tab's list column beside its detail under the workspace switcher, and New task, the compose button leading the detail's bar where the tab bar has no round +.
+// app-sidebar.tsx -- a regular window's tab roots: each tab's list column beside its detail under the workspace switcher, and New task, the compose button leading the detail's bar where the tab bar has no round +.
 
 import {
   AccountBarItem,
@@ -15,15 +15,6 @@ import { Platform } from "react-native";
 import { useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-
-/** The places a tab's root stands, each named by its route's first segment. */
-export const SIDEBAR_PLACE = {
-  INBOX: "inbox",
-  TASKS: "tasks",
-  SEARCH: "search",
-} as const;
-
-export type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
 
 /** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
@@ -42,11 +33,6 @@ type FirstColumn = SidebarVisibility & {
   readonly sidebar: ReactNode;
   readonly sidebarBar: ColumnBar;
 };
-
-/** The place a route stands in, by its first segment. */
-export function placeOfRoute(segment: string | undefined): SidebarPlace | undefined {
-  return Object.values(SIDEBAR_PLACE).find((place) => place === segment);
-}
 
 /**
  * Whether the tab bar stands its round + for New task: on an iPhone, the

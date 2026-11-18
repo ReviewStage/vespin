@@ -4,22 +4,17 @@ import {
   Divider,
   HStack,
   Menu,
-  NavigationDestination,
   NavigationSplitView,
-  NavigationStack,
-  RNHostView,
   Button as SwiftUIButton,
   Toggle,
   Toolbar,
   ToolbarItem,
   useNativeState,
-  VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
   background,
   buttonStyle,
-  containerBackground,
   disabled,
   frame,
   ignoreSafeArea,
@@ -33,19 +28,13 @@ import {
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { Fragment, memo, type ReactElement, type ReactNode, useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Fragment, memo, type ReactElement, type ReactNode, useEffect } from "react";
 import { BarContent } from "./bar-content.js";
-import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
-
-const layers = StyleSheet.create({
-  fill: { flex: 1 },
-});
 
 /**
  * A bar menu's trigger as its glyph alone, with no button of its own, so the
@@ -127,10 +116,6 @@ export type BarPath = {
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
-  /** A pushed page's name, small and inline in the ink, as a compact window's stack names an agent's page; never with a `title`. */
-  readonly name?: string | undefined;
-  /** A muted line under the page's `name`, such as an agent's state and model, standing with it in the bar's middle; never without a `name`. */
-  readonly subtitle?: BarSubtitle | undefined;
   readonly leading?: ReactNode | undefined;
   /** Glyph acts at the bar's leading edge, sharing one glass, as Mail's expand and compose stand over a message. */
   readonly lead?: readonly BarAction[] | undefined;
@@ -163,24 +148,6 @@ type SplitViewProps = {
   readonly sidebarShown: boolean;
   /** Called as a person shows or hides the list, with the system's button, a swipe, or a drag. */
   readonly onSidebarShownChange: (shown: boolean) => void;
-  /** The pages pushed over the detail inside its own column, with a Back of its own, as Mail opens a message's related pages; the detail stands alone where none is given. */
-  readonly detailStack?: DetailStack | undefined;
-};
-
-/** One page pushed over a split view's detail, by the key its stack's path names it by, drawn by its `DetailPage`. */
-export type DetailStackPage = { readonly key: string; readonly view: ReactNode };
-
-/** How long a detail's stack stands after its last page is popped, a little past UIKit's own pop, before the plain column takes its place. */
-const POP_SETTLE_MS = 500;
-
-/**
- * The pages pushed over a split view's detail, oldest first: the path of
- * their keys, each page by its key, and what is called as the stack moves
- * by itself, with Back or a swipe back, with the path left standing.
- */
-export type DetailStack = {
-  readonly pages: readonly DetailStackPage[];
-  readonly onPathChange: (path: readonly string[]) => void;
 };
 
 /** What a group is told apart by, since it has no name of its own: the words of its first act, or of its first menu. */
@@ -329,7 +296,6 @@ function barHolds(bar: ColumnBar): boolean {
     (bar.lead ?? []).length > 0 ||
     (bar.acts ?? []).length > 0 ||
     bar.path !== undefined ||
-    (bar.name !== undefined && bar.subtitle !== undefined) ||
     bar.menu !== undefined ||
     bar.action !== undefined ||
     (bar.foot ?? []).length > 0
@@ -351,14 +317,11 @@ function Column({
   view,
   bar = {},
   sidebar = false,
-  stacked: inStack = false,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   /** Whether it is the first column, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
-  /** Whether it stands inside the detail's own navigation stack, as its root or a page pushed over it, whose ground the stack paints too. */
-  readonly stacked?: boolean | undefined;
 }) {
   const colors = useColors();
   const text = useSearchWords(bar.search);
@@ -371,17 +334,13 @@ function Column({
         // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
         background(colors.GROUND),
-        // Note that a page in the detail's own stack paints the stack's ground too, because a navigation stack stands the system's own color behind each of its pages.
-        ...(inStack ? [containerBackground(colors.GROUND, "navigation")] : []),
-        // Note that the list keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        // Note that the list keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [
               navigationTitle(bar.title),
               toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
             ]
-          : bar.name !== undefined
-            ? [navigationTitle(bar.name), toolbarTitleDisplayMode("inline")]
-            : [toolbarTitleDisplayMode("inline")]),
+          : [toolbarTitleDisplayMode("inline")]),
       ]}
     >
       {ruled ? (
@@ -418,11 +377,6 @@ function Column({
         {bar.path === undefined ? null : (
           <ToolbarItem placement="principal">
             <PathTitle path={bar.path.path} status={bar.path.status} />
-          </ToolbarItem>
-        )}
-        {bar.name === undefined || bar.subtitle === undefined ? null : (
-          <ToolbarItem placement="principal">
-            <ColumnBarTitle title={bar.name} subtitle={bar.subtitle} />
           </ToolbarItem>
         )}
         {barActItems(bar.acts ?? [])}
@@ -469,123 +423,6 @@ function Column({
 }
 
 /**
- * The detail column as a navigation stack of its own, as Mail opens a
- * message's related pages inside its detail with a Back there: the detail
- * at its root under the detail's bar, and each page pushed over it under
- * the bar its `DetailPage` draws, so each page's items belong to its own
- * view and the root's stand again as Back returns to it. Note that the bars
- * stand inside the stack, never around it, because a bar around a stack
- * stands over the stack's own and draws twice. Note that every page on the
- * path stays drawn, each by its key, so a page pushed already carries its
- * bar as it slides in and one swiped half back stands as it was.
- */
-function DetailStackColumn({
-  stack,
-  root,
-  rootBar,
-}: {
-  readonly stack: DetailStack;
-  readonly root: ReactNode;
-  readonly rootBar: ColumnBar | undefined;
-}) {
-  const { pages, onPathChange } = stack;
-  const empty = pages.length === 0;
-  // The pages last pushed, kept mounted while the stack finishes popping them.
-  const [held, hold] = useState(pages);
-  // Whether the last pop has had time to finish, so the plain column may take the stack's place.
-  const [settled, settle] = useState(empty);
-
-  if (!empty && held !== pages) hold(pages);
-
-  if (!empty && settled) settle(false);
-
-  useEffect(() => {
-    if (!empty) return;
-    const timer = setTimeout(() => settle(true), POP_SETTLE_MS);
-
-    return () => clearTimeout(timer);
-  }, [empty]);
-
-  // Note that a detail with nothing pushed over it stands as a plain column, since a thread's React Native hosts drew no words as a stack's root; the stack stands on through a pop, its pages still mounted, because SwiftUI writes the emptied path as the pop starts, and taking the stack out then left the column on the popped page's bar with no root.
-  if (empty && settled) return <Column view={root} bar={rootBar} />;
-
-  return (
-    <NavigationStack path={pages.map((page) => page.key)} onPathChange={onPathChange}>
-      <Column view={root} bar={rootBar} stacked />
-      {(empty ? held : pages).map((page) => (
-        <NavigationDestination key={page.key} value={page.key}>
-          {page.view}
-        </NavigationDestination>
-      ))}
-    </NavigationStack>
-  );
-}
-
-/**
- * A page pushed over a split view's detail (`DetailStack`), such as an
- * agent's or a pull request's, under its own bar: its name or its path,
- * its main acts and its ⋯, with the stack's Back at its leading edge, where
- * the detail's root stands Mail's expand and compose. A screen draws the
- * same page here that a compact window's stack pushes over the list.
- */
-export function DetailPage({
-  bar,
-  children,
-  foot,
-  asks,
-}: {
-  readonly bar: ColumnBar;
-  readonly children: ReactNode;
-  /** What stands at the page's foot under its content, such as an agent's composer (`ComposerFoot`). */
-  readonly foot?: ReactNode | undefined;
-  /** The system's alerts the page asks in, such as `ConfirmAsk`, which are React Native hosts of their own. */
-  readonly asks?: ReactNode | undefined;
-}) {
-  const page =
-    foot === undefined ? (
-      children
-    ) : (
-      <VStack spacing={0}>
-        {children}
-        {foot}
-      </VStack>
-    );
-
-  return (
-    <Column
-      view={
-        asks === undefined ? (
-          page
-        ) : (
-          <>
-            {page}
-            {/* Note that the alerts stand in a React Native host as small as they are, because each is a host of its own, drawn in React Native's tree. */}
-            <RNHostView matchContents>
-              <View>{asks}</View>
-            </RNHostView>
-          </>
-        )
-      }
-      bar={bar}
-      stacked
-    />
-  );
-}
-
-/**
- * React Native views filling a SwiftUI column, such as an agent's
- * transcript or a page's web view, which size themselves to the space they
- * stand in rather than to what they hold.
- */
-export function HostedFill({ children }: { readonly children: ReactNode }) {
-  return (
-    <RNHostView>
-      <View style={layers.fill}>{children}</View>
-    </RNHostView>
-  );
-}
-
-/**
  * A tab's columns in a regular-width window, such as an iPad's or the
  * unfolded iPhone Duo's, beside the system's own tab sidebar, as Mail
  * stands its message list beside the message: the tab's list and the
@@ -602,7 +439,6 @@ export function SplitView({
   detailBar,
   sidebarShown,
   onSidebarShownChange,
-  detailStack,
 }: SplitViewProps) {
   return (
     <NavigationSplitView
@@ -619,11 +455,7 @@ export function SplitView({
         <Column view={sidebar} bar={sidebarBar} sidebar />
       </NavigationSplitView.Sidebar>
       <NavigationSplitView.Detail>
-        {detailStack === undefined ? (
-          <Column view={detail} bar={detailBar} />
-        ) : (
-          <DetailStackColumn stack={detailStack} root={detail} rootBar={detailBar} />
-        )}
+        <Column view={detail} bar={detailBar} />
       </NavigationSplitView.Detail>
     </NavigationSplitView>
   );

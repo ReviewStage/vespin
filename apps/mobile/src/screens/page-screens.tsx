@@ -4,16 +4,7 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { VERB } from "@repo/features/words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import {
-  BUTTON_LOOK,
-  DetailPage,
-  EmptyState,
-  GLYPH,
-  glyphSymbol,
-  HostedFill,
-  Screen,
-  SealedPage,
-} from "@repo/ui-native";
+import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { usePageHtml } from "../agents/use-agent.js";
@@ -59,21 +50,10 @@ type PageOpened = {
 /**
  * One version of a page, opened whole in the app's one web view, sealed
  * from the network and from navigation, under the system's header naming
- * it, with a ⋯ that opens it in the browser, or, `inColumn`, as a page
- * pushed over a split view's detail under the column's own bar. It reads
- * until its task is known.
+ * it, with a ⋯ that opens it in the browser. It reads until its task is
+ * known.
  */
-export function PageScreen({
-  workspaceId,
-  taskId,
-  pageId,
-  version,
-  title,
-  inColumn = false,
-}: PageOpened & {
-  /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
-  readonly inColumn?: boolean | undefined;
-}) {
+export function PageScreen({ workspaceId, taskId, pageId, version, title }: PageOpened) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
   const { read, again } = usePageHtml(taskId, pageId, version);
   const address = usePageAddress(workspaceId, taskId, pageId);
@@ -91,32 +71,6 @@ export function PageScreen({
       }
     />
   );
-
-  if (inColumn) {
-    // Note that a column's bar stands Open in browser as a glyph, as Mail stands a message's acts, since it is the page's one act.
-    const acts =
-      address === undefined
-        ? []
-        : [
-            {
-              label: VERB.OPEN_IN_BROWSER,
-              symbol: GLYPH.OPEN_EXTERNALLY,
-              onPress: () => openInSafari(address),
-            },
-          ];
-
-    return (
-      <DetailPage bar={{ name: named, acts }}>
-        {"html" in read ? (
-          <HostedFill>
-            <SealedPage html={read.html} title={named} />
-          </HostedFill>
-        ) : (
-          empty
-        )}
-      </DetailPage>
-    );
-  }
 
   return (
     <>
@@ -166,16 +120,12 @@ export function TaskPageScreen() {
   );
 }
 
-/** A page a task's Overview lists, in its task's own workspace, or the one chosen where it names none; `inColumn` pushed over a split view's detail. */
-export function TaskPage({
+/** A page a task's Overview lists, in its task's own workspace, or the one chosen where it names none. */
+function TaskPage({
   workspaceId,
-  inColumn,
   ...opened
-}: Omit<PageOpened, "taskId"> & {
-  readonly taskId: string;
-  readonly inColumn?: boolean | undefined;
-}) {
+}: Omit<PageOpened, "taskId"> & { readonly taskId: string }) {
   const chosen = useTasksWorkspace();
 
-  return <PageScreen {...opened} workspaceId={workspaceId ?? chosen?.id} inColumn={inColumn} />;
+  return <PageScreen {...opened} workspaceId={workspaceId ?? chosen?.id} />;
 }

@@ -45,9 +45,7 @@ import {
   buzz,
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
-  type ColumnBar,
   ConfirmAsk,
-  DetailPage,
   EmptyState,
   FACE_KIND,
   GLYPH,
@@ -354,8 +352,8 @@ function PullRequestToolbar({
  * head stands Merge under the title, and as a split button where the
  * repository merges more than one way.
  * The bar's ⋯ menu opens it on GitHub, where its diff and comments are
- * read. Opened from a split view's detail, it stands pushed over that
- * detail instead (`PullRequestPage`'s `inColumn`).
+ * read. Opened from a split view's detail, it is pushed on the tab's own
+ * stack over the whole window, as a compact window pushes it.
  */
 export function PullRequestScreen() {
   const {
@@ -409,22 +407,16 @@ export function AgentPullRequestScreen() {
 
 /**
  * One pull request as `PullRequestScreen` describes it, by its workspace,
- * its repository, and its number: on a stack over the window, or,
- * `inColumn`, pushed over a split view's detail under the column's own bar,
- * its path, and its ⋯ opening it on GitHub and reading it again, the merge
- * standing under the checks as a regular window's does. The agent it was
+ * its repository, and its number, on its tab's stack. The agent it was
  * opened from, where one was, names it for Handoff and draws its title from
  * the task list's line while the pull request is read.
  */
-export function PullRequestPage({
+function PullRequestPage({
   pullRequest: key,
   agentId = "",
-  inColumn = false,
 }: {
   readonly pullRequest: PullRequestKey;
   readonly agentId?: string | undefined;
-  /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
-  readonly inColumn?: boolean | undefined;
 }) {
   const id = agentId;
   useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(key.number));
@@ -482,51 +474,13 @@ export function PullRequestPage({
   );
   const path = [key.repository, `#${key.number}`];
 
-  // Note that a column's bar stands the page's two main acts as glyphs, as Mail stands a message's, and keeps Copy GitHub link in its ⋯, as the stack's ⋯ offers it; the merge stays under the heading.
-  const columnBar: ColumnBar = {
-    path: { path },
-    menu:
-      url === undefined
-        ? undefined
-        : {
-            label: MENU_WORDS.MORE,
-            symbol: GLYPH.MORE,
-            choices: [],
-            actions: [
-              {
-                label: MENU_WORDS.COPY_GITHUB_LINK,
-                symbol: GLYPH.LINK,
-                onPress: () => copyLink(url),
-              },
-            ],
-          },
-    acts: [
-      ...(url === undefined
-        ? []
-        : [
-            {
-              label: MENU_WORDS.OPEN_ON_GITHUB,
-              symbol: GLYPH.OPEN_EXTERNALLY,
-              onPress: () => openInSafari(url),
-            },
-          ]),
-      { label: MENU_WORDS.REFRESH, symbol: GLYPH.RETRY, onPress: () => void retry() },
-    ],
-  };
-
-  // Note that a page in a split view's column draws its bar in its column, and a stack's page in the stack's bar.
-  const page = (view: ReactNode, asks?: ReactNode) =>
-    inColumn ? (
-      <DetailPage bar={columnBar} asks={asks}>
-        {view}
-      </DetailPage>
-    ) : (
-      <>
-        {bar}
-        <Screen>{view}</Screen>
-        {asks}
-      </>
-    );
+  const page = (view: ReactNode, asks?: ReactNode) => (
+    <>
+      {bar}
+      <Screen>{view}</Screen>
+      {asks}
+    </>
+  );
 
   const bar = (
     <>
