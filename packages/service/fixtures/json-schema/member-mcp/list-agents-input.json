@@ -5,7 +5,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace to list, by the slug list_workspaces answered."
     },
     "taskId": {
       "type": "string",
@@ -25,6 +25,8 @@
       "description": "How many of the matching agents to pass over: the nextOffset an earlier list answered, to read the next page; leave it out for the first."
     }
   },
-  "required": [],
+  "required": [
+    "workspace"
+  ],
   "additionalProperties": false
 }

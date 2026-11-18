@@ -22,10 +22,11 @@
  * window, a workspace they are not in among it, is none. Each is told to
  * the agent in words of its own, for one acting for the member, on input
  * declared from the agents' own fields where their words hold for it. A
- * call is about one workspace: a list names it by its slug, or is about the
- * member's only one, and is refused, naming the member's workspaces, where
- * they have several and it names none; a read of one task, agent, or page
- * by its id is about the workspace that holds it, as the member reaches it.
+ * call is about one workspace: a list, a create, or a workspace's own
+ * setting names it by its slug, which is never guessed, the member's only
+ * workspace included, and is refused, naming the member's workspaces, where
+ * the slug names none of theirs; a read of one task, agent, or page by its
+ * id is about the workspace that holds it, as the member reaches it.
  *
  * A change to an agent's pull request, `agent_pull_request_action`, makes
  * what the agent's Pull request tab makes, through the operation the tab's
@@ -534,9 +535,12 @@ const READ_ONLY: ToolAnnotations = { readOnlyHint: true };
 const MEMBER_WORKSPACE_REFUSAL = {
   NONE: "Not run: the member belongs to no workspace yet.",
   UNKNOWN: (choices: string) =>
-    `Not run: the member belongs to no workspace of that slug; name one of theirs: ${choices}.`,
-  SEVERAL: (choices: string) =>
-    `Not run: the member belongs to several workspaces; name the one to read with workspace: ${choices}.`,
+    `Not run: the member belongs to no workspace of that slug; name one of theirs in workspace ` +
+    `by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered: ${choices}.`,
+  /** A call in a mode that needs its workspace named, which it left out, in the call's own words of that mode. */
+  MISSING: (mode: string) =>
+    `Not run: ${mode} names its workspace, so pass workspace by the slug ` +
+    `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered.`,
 } as const;
 
 /**
@@ -576,34 +580,25 @@ function memberCaller(member: AdmittedMemberValues, workspaceId: string): AgentR
 }
 
 /**
- * The workspace a list is about: the one of the member's its slug names,
- * read as a link's step is (`workspaceOfSlug`), or the member's only one
- * where it names none; or why there is none, naming the member's own.
+ * The workspace a call is about: the one of the member's its slug names,
+ * read as a link's step is (`workspaceOfSlug`); or why there is none,
+ * naming the member's own. Note that no slug is ever guessed, the member's
+ * only workspace included, so a call always says where it acts.
  */
-const listedWorkspace = (userId: string, slug: string | undefined) =>
+const listedWorkspace = (userId: string, slug: string) =>
   Effect.map(listWorkspaces(userId), (workspaces): Result.Result<string, string> => {
+    if (workspaces.length === 0) return Result.fail(MEMBER_WORKSPACE_REFUSAL.NONE);
+    const named = workspaceOfSlug(workspaces, slug);
     const choices = workspaces.map((one) => `${one.slug ?? one.id} (${one.name})`).join(", ");
 
-    if (slug !== undefined) {
-      const named = workspaceOfSlug(workspaces, slug);
-
-      return named === undefined
-        ? Result.fail(MEMBER_WORKSPACE_REFUSAL.UNKNOWN(choices))
-        : Result.succeed(named.id);
-    }
-
-    const [only, ...others] = workspaces;
-
-    if (only === undefined) return Result.fail(MEMBER_WORKSPACE_REFUSAL.NONE);
-
-    return others.length === 0
-      ? Result.succeed(only.id)
-      : Result.fail(MEMBER_WORKSPACE_REFUSAL.SEVERAL(choices));
+    return named === undefined
+      ? Result.fail(MEMBER_WORKSPACE_REFUSAL.UNKNOWN(choices))
+      : Result.succeed(named.id);
   });
 
-/** A list run as the member, about the workspace its slug names or their only one; refused, naming theirs, where that names none. */
+/** A list run as the member, about the workspace its slug names; refused, naming theirs, where that names none. */
 const listAsMember = <R>(
-  slug: string | undefined,
+  slug: string,
   read: (call: AgentReadCall) => Effect.Effect<WireRecord, never, R>,
 ) =>
   Effect.gen(function* () {
@@ -615,9 +610,9 @@ const listAsMember = <R>(
     return yield* read(memberCaller(member, workspace.success));
   });
 
-/** A call run as the member, in the workspace its slug names or their only one, as a list is; refused, naming theirs, where that names none. */
+/** A call run as the member, in the workspace its slug names, as a list is; refused, naming theirs, where that names none. */
 const asMemberInWorkspace = (
-  slug: string | undefined,
+  slug: string,
   run: (userId: string, workspaceId: string) => Effect.Effect<object, never, MemberMcpServices>,
 ) =>
   Effect.gen(function* () {
@@ -741,10 +736,16 @@ const onMemberTask = <E, R>(
     return yield* read(memberCaller(member, task.success.workspaceId), task.success.taskId);
   });
 
+/** A workspace, by its slug. */
+const WORKSPACE_SLUG = Schema.String.check(
+  Schema.isNonEmpty(),
+  Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS),
+);
+
 /** The workspace a member's call on one task names it in, which a key needs. */
 const TASK_WORKSPACE_INPUT = Schema.optionalKey(
   describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    WORKSPACE_SLUG,
     `The workspace the task stands in, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
       "answered: required with a key, and with an id the workspace that must hold the task; " +
       "leave it out with an id for whichever workspace it stands in.",
@@ -759,18 +760,19 @@ const memberTaskInput = (whose: string) =>
       "with the workspace it stands in.",
   );
 
-/** A list's input: the workspace it is about, by its slug, where the member has more than one. */
-const WORKSPACE_INPUT = Schema.optionalKey(
+/** A call's workspace, by the slug `list_workspaces` answered, its words naming what the call does there; every call names it, the member's only workspace included. */
+const workspaceInput = (what: string) =>
   describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
-    `The workspace to list, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it ` +
-      "out where the member belongs to one workspace alone.",
-  ),
-);
+    WORKSPACE_SLUG,
+    `The workspace ${what}, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered.`,
+  );
 
-/** How a list tells the agent to name its workspace. */
+/** A list's input: the workspace it is about. */
+const WORKSPACE_INPUT = workspaceInput("to list");
+
+/** How a call tells the agent to name its workspace. */
 const WORKSPACE_WORDS =
-  "Name the workspace by its slug where the member belongs to more than one; " +
+  "Name the workspace by its slug, even where the member belongs to one alone; " +
   `${MEMBER_MCP_TOOL.LIST_WORKSPACES} names them.`;
 
 /** `list_workspaces` takes nothing: the member's workspaces are the member's. */
@@ -829,7 +831,7 @@ const MEMBER_READ_TASK_REFUSAL = {
 const MemberReadTaskInputSchema = Schema.Struct({
   workspace: Schema.optionalKey(
     describeWire(
-      Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+      WORKSPACE_SLUG,
       `The workspace the task stands in, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
         "answered: required with a key, and with an id the workspace that must hold the task; " +
         "leave it out with an id to read the task in whichever workspace it stands.",
@@ -913,16 +915,7 @@ const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
     "last activity may have lost its session.",
   input: ListAgentsInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace, ...asked }) => {
-    const ref = asked.taskId === undefined ? undefined : cliTaskRefOf(asked.taskId);
-
-    // A key names a task's number in one workspace, so the member's only one is never guessed for it.
-    if (workspace === undefined && ref !== undefined && !("id" in ref)) {
-      return Effect.succeed(agentToolRejected(keyWithoutWorkspaceRefusal("Not run")));
-    }
-
-    return listAsMember(workspace, (call) => runListAgents(call, asked));
-  },
+  run: ({ workspace, ...asked }) => listAsMember(workspace, (call) => runListAgents(call, asked)),
 });
 
 const ReadAgentInputSchema = Schema.Struct({
@@ -1335,9 +1328,9 @@ const memberWriteCall = (read: AgentReadCall) =>
     return call;
   });
 
-/** A write run as the member, about the workspace its slug names or their only one; refused, naming theirs, where that names none. */
+/** A write run as the member, about the workspace its slug names; refused, naming theirs, where that names none. */
 const listWriteAsMember = <R>(
-  slug: string | undefined,
+  slug: string,
   write: (call: AgentCall) => Effect.Effect<WireRecord, never, R>,
 ) => listAsMember(slug, (read) => Effect.flatMap(memberWriteCall(read), write));
 
@@ -2382,9 +2375,9 @@ const PHOTO_REFUSAL_WORDS = {
     "Not changed: only the workspace's owner or an admin may set its photo.",
 } as const satisfies WorkspaceRefusalWords;
 
-/** An operation on the workspace a slug names, or the member's only one, as the member; refused in the agent's words. */
+/** An operation on the workspace a slug names, as the member; refused in the agent's words. */
 const workspaceAsMember = <A extends WireRecord, R>(
-  slug: string | undefined,
+  slug: string,
   refusalWords: WorkspaceRefusalWords,
   operation: (
     member: AdmittedMemberValues,
@@ -2424,16 +2417,6 @@ function invitationOrigin(member: AdmittedMemberValues): string {
   return new URL(member.baseURL).origin;
 }
 
-/** The workspace a write acts on, by the slug `list_workspaces` answered, its words naming what the write does there. */
-const workspaceToChange = (what: string) =>
-  Schema.optionalKey(
-    describeWire(
-      WORKSPACE_INPUT.schema,
-      `The workspace ${what}, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it ` +
-        "out where the member belongs to one workspace alone.",
-    ),
-  );
-
 const ListWorkspaceMembersInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
 
 const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
@@ -2458,7 +2441,7 @@ const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
 });
 
 const SetWorkspaceSlugInputSchema = Schema.Struct({
-  workspace: workspaceToChange("whose slug to change"),
+  workspace: workspaceInput("whose slug to change"),
   slug: describeWire(
     Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
     "The new slug: lowercase letters and digits, with single hyphens between them.",
@@ -2485,7 +2468,7 @@ const SET_WORKSPACE_SLUG_TOOL = memberMcpTool({
 });
 
 const RenameWorkspaceInputSchema = Schema.Struct({
-  workspace: workspaceToChange("to rename"),
+  workspace: workspaceInput("to rename"),
   name: describeWire(
     workspaceRenameRequestSchema.fields.name,
     `The new name, at most ${WORKSPACE_BOUNDS.MAX_NAME_CHARS} characters.`,
@@ -2521,7 +2504,7 @@ const MEMBER_USER_ID_INPUT = describeWire(
 );
 
 const RemoveWorkspaceMemberInputSchema = Schema.Struct({
-  workspace: workspaceToChange("to remove them from"),
+  workspace: workspaceInput("to remove them from"),
   userId: MEMBER_USER_ID_INPUT,
 });
 
@@ -2545,7 +2528,7 @@ const REMOVE_WORKSPACE_MEMBER_TOOL = memberMcpTool({
 });
 
 const ChangeWorkspaceMemberRoleInputSchema = Schema.Struct({
-  workspace: workspaceToChange("the member is in"),
+  workspace: workspaceInput("the member is in"),
   userId: MEMBER_USER_ID_INPUT,
   role: describeWire(
     workspaceMemberRoleSchema.fields.role,
@@ -2572,7 +2555,7 @@ const CHANGE_WORKSPACE_MEMBER_ROLE_TOOL = memberMcpTool({
 });
 
 const ListWorkspaceInvitationsInputSchema = Schema.Struct({
-  workspace: workspaceToChange("whose invitations to list"),
+  workspace: workspaceInput("whose invitations to list"),
 });
 
 const LIST_WORKSPACE_INVITATIONS_TOOL = memberMcpTool({
@@ -2592,7 +2575,7 @@ const LIST_WORKSPACE_INVITATIONS_TOOL = memberMcpTool({
 });
 
 const InviteToWorkspaceInputSchema = Schema.Struct({
-  workspace: workspaceToChange("to invite them to"),
+  workspace: workspaceInput("to invite them to"),
   email: describeWire(
     workspaceInviteRequestSchema.fields.email,
     "The address to invite, whose account alone may accept.",
@@ -2622,7 +2605,7 @@ const INVITE_TO_WORKSPACE_TOOL = memberMcpTool({
 });
 
 const CancelWorkspaceInvitationInputSchema = Schema.Struct({
-  workspace: workspaceToChange("the invitation is to"),
+  workspace: workspaceInput("the invitation is to"),
   invitationId: describeWire(
     workspaceInvitationCancelSchema.fields.invitationId,
     `The invitation's id, as ${MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS} answered it.`,
@@ -2646,13 +2629,7 @@ const CANCEL_WORKSPACE_INVITATION_TOOL = memberMcpTool({
 
 /** A photo set names the workspace and the photo, as a `data:` URL the window would send, or null to remove it. */
 const SetWorkspacePhotoInputSchema = Schema.Struct({
-  workspace: Schema.optionalKey(
-    describeWire(
-      WORKSPACE_INPUT.schema,
-      `The workspace whose photo to set, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
-        "answered; leave it out where the member belongs to one workspace alone.",
-    ),
-  ),
+  workspace: workspaceInput("whose photo to set"),
   photo: describeWire(
     workspacePhotoSetRequestSchema.fields.photo,
     `The photo as a base64 \`data:\` URL of a PNG, JPEG, or WebP image ` +
@@ -3090,9 +3067,9 @@ function readOrRefused<A extends object>(
   return Effect.fail(read.branch === undefined ? words : `${words} (read on ${read.branch})`);
 }
 
-/** A repository operation run as the member, in the workspace its slug names or their only one, accepted with what it found or rejected in its refusal's words. */
+/** A repository operation run as the member, in the workspace its slug names, accepted with what it found or rejected in its refusal's words. */
 const repositoryAsMember = <A extends object, R>(
-  slug: string | undefined,
+  slug: string,
   run: (userId: string, workspaceId: string) => Effect.Effect<A, HostedRefusal | string, R>,
 ) =>
   Effect.gen(function* () {
@@ -3809,14 +3786,20 @@ const PULL_REQUEST_NAME_ONE =
   "Not run: name the pull request's repository either by agentId or by repository " +
   "(owner/name), not both and not neither, beside its number.";
 
-/** With repository, the workspace whose installation reaches it, as a chapters call names it. */
+/** The words of a pull request call's workspace, which a pull request named by its repository needs and one named by its agent never takes. */
+const PULL_REQUEST_WORKSPACE_WORDS =
+  `The workspace whose GitHub installation reaches the repository, by the slug ` +
+  `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered: required with repository; leave it out with ` +
+  "agentId, whose agent settles it.";
+
+/** How a pull request tool tells the agent to name its workspace, which only a pull request named by its repository takes. */
+const PULL_REQUEST_BY_REPOSITORY_WORDS =
+  "With repository, name the workspace by its slug, even where the member belongs to one " +
+  `alone; ${MEMBER_MCP_TOOL.LIST_WORKSPACES} names them.`;
+
+/** With repository, the workspace whose installation reaches it. */
 const PULL_REQUEST_WORKSPACE = Schema.optionalKey(
-  describeWire(
-    WORKSPACE_INPUT.schema,
-    `With repository, the workspace whose GitHub installation reaches it, by the slug ` +
-      `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
-      "one workspace alone.",
-  ),
+  describeWire(WORKSPACE_SLUG, PULL_REQUEST_WORKSPACE_WORDS),
 );
 
 /** A read names the pull request, by its agent or its repository, and its part. */
@@ -3882,6 +3865,12 @@ const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestC
     return Effect.succeed(agentToolRejected(PULL_REQUEST_NAME_ONE));
   }
 
+  if (workspace === undefined) {
+    return Effect.succeed(
+      agentToolRejected(MEMBER_WORKSPACE_REFUSAL.MISSING("a pull request named by repository")),
+    );
+  }
+
   return listAsMember(workspace, (member) =>
     call.repository(callerUserId(member.caller), callerWorkspaceId(member.caller), {
       repository,
@@ -3907,7 +3896,8 @@ const READ_PULL_REQUEST_TOOL = memberMcpTool({
     "where more stand. changes answers the files it changes, a page at a time with nextOffset, " +
     "each with what became of it, the lines it adds and removes, and whether the member marked " +
     "it viewed; name a path to read that file's patch as well. " +
-    `${WORKSPACE_WORDS} Answers \`rejected\` and why where the member reaches no such agent, ` +
+    `${PULL_REQUEST_BY_REPOSITORY_WORDS} Answers \`rejected\` and why where the member ` +
+    "reaches no such agent, " +
     "the member is in no such workspace, or the repository holds no pull request of that " +
     "number. It only reads.",
   input: ReadPullRequestInputSchema,
@@ -3932,7 +3922,8 @@ const MARK_PULL_REQUEST_FILES_VIEWED_TOOL = memberMcpTool({
     "number, of a coding agent's repository by the agent's id or of any repository the " +
     "member's workspace reaches by its repository (owner/name), and the files by their paths as " +
     `${MEMBER_MCP_TOOL.READ_PULL_REQUEST}'s changes name them. ` +
-    `${WORKSPACE_WORDS} Answers \`accepted\` with the paths marked, or \`rejected\` and why ` +
+    `${PULL_REQUEST_BY_REPOSITORY_WORDS} Answers \`accepted\` with the paths marked, or ` +
+    "`rejected` and why " +
     "at the first GitHub did not take, naming those marked before it.",
   input: MarkPullRequestFilesViewedInputSchema,
   annotations: IDEMPOTENT_CHANGE,
@@ -4010,14 +4001,7 @@ const PullRequestChaptersInputSchema = Schema.Struct({
     "The pull request's number, in the repository that repository or agentId names. For an " +
       `agent's own pull request, pass the number ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers.`,
   ),
-  workspace: Schema.optionalKey(
-    describeWire(
-      WORKSPACE_INPUT.schema,
-      `With repository, the workspace whose GitHub installation reaches it, by the slug ` +
-        `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
-        "one workspace alone.",
-    ),
-  ),
+  workspace: PULL_REQUEST_WORKSPACE,
 });
 
 type PullRequestChaptersInput = typeof PullRequestChaptersInputSchema.Type;
@@ -4154,7 +4138,7 @@ const GENERATE_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
  * (`memberCommentAnswer`), so it hands its thread to the agents in it, and to
  * each one its words mention, as one typed in the window does. The
  * workspace's shared memory is searched, kept, and forgotten as the member,
- * in the workspace a slug names or their only one, only while that workspace
+ * in the workspace a slug names, only while that workspace
  * has Memory on (`experimentOnIn`), as Settings › Memory stands only then, and is
  * held to what the desktop holds the member to: the workspace's bound of
  * memories, and a forget of another member's words only for one who owns or
@@ -4490,18 +4474,12 @@ const MEMBER_UPDATE_COMMENT_TOOL = memberMcpTool({
     ),
 });
 
-/** A memory call's input: the workspace whose memory it acts on, by its slug, where the member has more than one. */
-const MEMORY_WORKSPACE_INPUT = Schema.optionalKey(
-  describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
-    `The workspace whose shared memory to act on, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
-      "answered; leave it out where the member belongs to one workspace alone.",
-  ),
-);
+/** A memory call's input: the workspace whose memory it acts on. */
+const MEMORY_WORKSPACE_INPUT = workspaceInput("whose shared memory to act on");
 
-/** A memory call run as the member, in the workspace its slug names or their only one, while that workspace has Memory on; refused otherwise. */
+/** A memory call run as the member, in the workspace its slug names, while that workspace has Memory on; refused otherwise. */
 const memoryAsMember = <R>(
-  slug: string | undefined,
+  slug: string,
   run: (memory: MemoryCall) => Effect.Effect<WireRecord, StoreFailure, R>,
 ) =>
   Effect.gen(function* () {
@@ -4686,7 +4664,14 @@ const MEMBER_AUTOMATION_FIELDS = {
 
 /** A list of automations names the workspace it lists, or one automation to read whole. */
 const ListAutomationsInputSchema = Schema.Struct({
-  workspace: WORKSPACE_INPUT,
+  workspace: Schema.optionalKey(
+    describeWire(
+      WORKSPACE_SLUG,
+      `The workspace to list, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered: ` +
+        "required without automationId; leave it out with automationId, whose automation " +
+        "settles it.",
+    ),
+  ),
   automationId: Schema.optionalKey(
     describeWire(
       wireUuidSchema,
@@ -4707,20 +4692,28 @@ const MEMBER_LIST_AUTOMATIONS_TOOL = memberMcpTool({
     "member's workspaces it stands, its prompt in full and its newest runs, each with why it " +
     "was skipped or failed and the agent it started. An automation fires on a schedule, a " +
     "GitHub event, a webhook, or a Sentry event, and starts an agent on its prompt, as its " +
-    `creator. ${WORKSPACE_WORDS} Answers \`accepted\` with them, or \`rejected\` and why.`,
+    "creator. Name the workspace to list by its slug, even where the member belongs to one " +
+    `alone; ${MEMBER_MCP_TOOL.LIST_WORKSPACES} names them. Answers \`accepted\` with them, or ` +
+    "`rejected` and why.",
   input: ListAutomationsInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, ...asked }) => {
     const { automationId } = asked;
     const list = (call: AgentReadCall) => runListAutomations(call, asked);
 
-    return automationId === undefined
-      ? listAsMember(workspace, list)
-      : readAsMember(
-          (userId) => automationWorkspace(userId, automationId),
-          AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION,
-          list,
-        );
+    if (automationId !== undefined) {
+      return readAsMember(
+        (userId) => automationWorkspace(userId, automationId),
+        AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION,
+        list,
+      );
+    }
+
+    return workspace === undefined
+      ? Effect.succeed(
+          agentToolRejected(MEMBER_WORKSPACE_REFUSAL.MISSING("a list with no automationId")),
+        )
+      : listAsMember(workspace, list);
   },
 });
 
@@ -5060,14 +5053,8 @@ const sandboxSetupAnswer = <R>(
     Effect.catch((refusal) => Effect.succeed(agentToolRejected(sandboxSetupRefusalWords(refusal)))),
   );
 
-/** The workspace whose setup a call reads or saves, by its slug, where the member has more than one. */
-const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
-  describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
-    `The workspace whose setup it is, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; ` +
-      "leave it out where the member belongs to one workspace alone.",
-  ),
-);
+/** The workspace whose setup a call reads or saves. */
+const SANDBOX_SETUP_WORKSPACE_INPUT = workspaceInput("whose setup it is");
 
 const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
 
@@ -5516,14 +5503,9 @@ const skillAnswer = <A extends object, R>(
 const skillAsMember = <R>(run: (userId: string) => Effect.Effect<WireRecord, never, R>) =>
   Effect.flatMap(AdmittedMember, (member) => run(member.userId));
 
-/** The workspace a skill call is about, by its slug. */
-const SKILL_WORKSPACE_INPUT = Schema.optionalKey(
-  describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
-    `The workspace, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered, whose skills to ` +
-      "list or whose GitHub installation reads a source; leave it out where the member belongs " +
-      "to one workspace alone.",
-  ),
+/** The workspace a skill call is about. */
+const SKILL_WORKSPACE_INPUT = workspaceInput(
+  "whose skills to list or whose GitHub installation reads a source",
 );
 
 /** A skill by its id. */
@@ -5767,14 +5749,8 @@ function slackBotRecord({ txid: _txid, ...slackBot }: WorkspaceSlackBot): WireRe
   return slackBot;
 }
 
-/** The workspace a Slack bot call is about, by its slug, where the member has more than one. */
-const SLACK_WORKSPACE_INPUT = Schema.optionalKey(
-  describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
-    `The workspace whose Slack bot it is, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
-      "answered; leave it out where the member belongs to one workspace alone.",
-  ),
-);
+/** The workspace a Slack bot call is about. */
+const SLACK_WORKSPACE_INPUT = workspaceInput("whose Slack bot it is");
 
 /** A repository named for Slack starts, as GitHub spells it, or null to clear it. */
 const slackRepositoryInput = (words: string) =>
@@ -5963,7 +5939,7 @@ const PIN_REPOSITORY_TOOL = memberMcpTool({
  * The workspace's environment variables, which its members' cloud agents are
  * handed. Each runs the one operation behind Settings › Cloud environment and its
  * procedures (`../workspace-environment/workspace-environment.ts`) as the
- * member, in the workspace a slug names or their only one, so it holds the
+ * member, in the workspace a slug names, so it holds the
  * member to what Settings does: any member reads the names, and only an
  * owner or admin sets or deletes one. A value goes in through
  * `set_environment_variable`, sealed under the deployment's ring the moment
@@ -5995,9 +5971,9 @@ function environmentRefusalWords(refusal: HostedRefusal, verb: string): string {
   }
 }
 
-/** An environment call run as the member in the workspace its slug names or their only one, answered as the names then stand, or refused in the member's words. */
+/** An environment call run as the member in the workspace its slug names, answered as the names then stand, or refused in the member's words. */
 const environmentAsMember = <R>(
-  slug: string | undefined,
+  slug: string,
   verb: string,
   run: (
     userId: string,
@@ -6021,15 +5997,8 @@ const environmentAsMember = <R>(
     );
   });
 
-/** The workspace an environment call is about, by its slug, where the member has more than one. */
-const ENVIRONMENT_WORKSPACE_INPUT = Schema.optionalKey(
-  describeWire(
-    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
-    `The workspace whose environment variables to act on, by the slug ` +
-      `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
-      "one workspace alone.",
-  ),
-);
+/** The workspace an environment call is about. */
+const ENVIRONMENT_WORKSPACE_INPUT = workspaceInput("whose environment variables to act on");
 
 /** A variable's name, as a shell spells one. */
 const ENVIRONMENT_NAME_INPUT = describeWire(

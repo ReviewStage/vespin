@@ -698,7 +698,7 @@ it.effect(
 
       const slugOf = (workspaceId: string) => `workspace-${workspaceId}`;
 
-      const unnamed = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, {});
+      const unnamed = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, { workspace: "nowhere" });
       const tasks = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, { workspace: slugOf(rows.own) });
       const agents = yield* call(MEMBER_MCP_TOOL.LIST_AGENTS, { workspace: slugOf(rows.own) });
       const inbox = yield* call(MEMBER_MCP_TOOL.READ_INBOX, { workspace: slugOf(rows.own) });
@@ -759,7 +759,7 @@ it.effect(
 
       yield* Effect.promise(() => client.close());
 
-      // A list that names no workspace is refused where the member has two, naming both and no other.
+      // A list that names none of the member's workspaces is refused, naming both of theirs and no other.
       assert.equal(unnamed.refused, true);
       assert.ok(
         unnamed.text.includes(slugOf(rows.own)) && unnamed.text.includes(slugOf(rows.second)),
@@ -1178,6 +1178,7 @@ it.effect(
 
       const made = decodeMade(
         yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
           name: "Seat billing",
           repository: null,
           status: TASK_STATUS.TODO,
@@ -1208,11 +1209,16 @@ it.effect(
         /`comment_on_description`/u,
       );
       assert.match(
-        yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Seat billing", plan: "## Problem" }),
+        yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
+          name: "Seat billing",
+          plan: "## Problem",
+        }),
         /named description, not plan/u,
       );
       assert.match(
         yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
           name: "Seat billing",
           relation: { kind: "blocks", taskId },
         }),
@@ -1246,6 +1252,7 @@ it.effect(
 
       const blockerId = decodeMade(
         yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
+          workspace: own,
           name: "Invoice lag",
           repository: null,
           status: TASK_STATUS.TODO,
@@ -1264,6 +1271,7 @@ it.effect(
 
       const automationId = decodeAutomation(
         yield* call(MEMBER_MCP_TOOL.CREATE_AUTOMATION, {
+          workspace: own,
           name: "Weekly sweep",
           prompt: "Sweep.",
           trigger: WEEKLY,
@@ -1539,7 +1547,7 @@ it.effect(
             .where(eq(agentTable.id, published)),
         );
 
-        return { published };
+        return { published, workspaceId };
       }).pipe(Effect.provide(services));
 
       const token = yield* Effect.promise(() =>
@@ -1551,7 +1559,12 @@ it.effect(
       );
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
-      const named = { repository: RELAY_FULL_NAME, number: PUBLISHED.number };
+
+      const named = {
+        workspace: agents.workspaceId,
+        repository: RELAY_FULL_NAME,
+        number: PUBLISHED.number,
+      };
 
       const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
@@ -1582,6 +1595,9 @@ it.effect(
         agentId: agents.published,
       });
 
+      const { workspace: _workspace, ...unplaced } = named;
+      const placeless = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, unplaced);
+
       yield* Effect.promise(() => client.close());
 
       // The agent's own pull request is the same pull request, read through the agent.
@@ -1597,6 +1613,10 @@ it.effect(
           ],
         );
       }
+
+      // A repository's pull request is never read in a workspace guessed for it: one naming none is refused, naming workspace.
+      assert.equal(placeless.isError, true);
+      assert.match(placeless.content[0].text, /pass workspace by the slug list_workspaces/u);
 
       // No pull request is read in the number's place: a call naming none is refused, naming it.
       assert.equal(unnumbered.isError, true);
@@ -1687,7 +1707,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
             decodeAnswer(await client.callTool({ name, arguments: args })),
           );
 
-        const read = yield* call(MEMBER_MCP_TOOL.READ_INBOX, {});
+        const read = yield* call(MEMBER_MCP_TOOL.READ_INBOX, { workspace: task.workspaceId });
 
         const unpicked = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
           threadId: posted.success.id,
@@ -2391,17 +2411,22 @@ it.effect(
           return answer;
         });
 
-      const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {});
+      const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {
+        workspace: workspaceId,
+      });
 
       const refused = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        workspace: workspaceId,
         slug: "seats",
       });
 
       const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        workspace: workspaceId,
         slug: "seats",
       });
 
       const photo = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO, {
+        workspace: "seats",
         photo: "data:image/png;base64,iVBORw0KGgo=",
       });
 
@@ -2434,9 +2459,12 @@ it.effect(
       const { auth, fetch, services } = yield* standing;
       const owner = yield* Effect.promise(() => signUp(auth));
       const admin = yield* Effect.promise(() => signUp(auth));
-      yield* Effect.gen(function* () {
+
+      const workspace = yield* Effect.gen(function* () {
         const workspaceId = yield* openWorkspace(owner.userId);
         yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+
+        return workspaceId;
       }).pipe(Effect.provide(services));
 
       const callAs = (cookie: string, name: string, args: ToolArguments) =>
@@ -2467,28 +2495,36 @@ it.effect(
         ]);
 
       const invited = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE, {
+        workspace,
         email: "Newcomer@Example.com",
         role: WORKSPACE_ROLE.MEMBER,
       });
 
       const invitation = JSON.parse(invited.content[0].text).invitation;
-      const listed = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS, {});
+
+      const listed = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS, {
+        workspace,
+      });
 
       const canceled = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION, {
+        workspace,
         invitationId: invitation.id,
       });
 
       const unranked = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        workspace,
         userId: owner.userId,
         role: WORKSPACE_ROLE.MEMBER,
       });
 
       const demoted = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        workspace,
         userId: admin.userId,
         role: WORKSPACE_ROLE.MEMBER,
       });
 
       const removed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER, {
+        workspace,
         userId: admin.userId,
       });
 
@@ -2587,6 +2623,7 @@ it.effect(
           client.callTool({
             name: MEMBER_MCP_TOOL.INSTALL_SKILL,
             arguments: {
+              workspace: "acme",
               source: "anthropics/skills",
               scope: INSTALLED_SKILL_SCOPE.PERSONAL,
               install: { kind: SKILL_PASTE_KIND.TEXT, name: "pdf", summary: "Read PDFs." },
