@@ -1,30 +1,11 @@
 {
   "type": "object",
   "properties": {
-    "workspace": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 48,
-      "description": "Where you name no taskId and no from, the workspace of the task made for the agent, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
-    },
     "taskId": {
       "type": "string",
       "minLength": 1,
       "maxLength": 36,
-      "description": "The task to start the agent on, by the id list_tasks answered; leave it out to start it on a new task made for it."
-    },
-    "repository": {
-      "anyOf": [
-        {
-          "type": "string",
-          "maxLength": 140,
-          "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "description": "Where you name no taskId and no from, the GitHub repository of the task made for the agent, as owner/name, which the workspace's GitHub installation must reach; null or left out for none. A task's agent works in the task's own."
+      "description": "The task to start the agent on, by the id list_tasks answered; with from, the task of the agent it starts from."
     },
     "prompt": {
       "type": "string",
@@ -148,6 +129,8 @@
       "description": "Another agent of your workspace to take over from, on its own task: the new agent is handed its brief, its transcript (with Vespin's summary of the steps that do not fit), and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on."
     }
   },
-  "required": [],
+  "required": [
+    "taskId"
+  ],
   "additionalProperties": false
 }

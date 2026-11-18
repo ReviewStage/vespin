@@ -27,14 +27,14 @@ below as that one. You and the workers talk by `message_agent`.
 | Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, and the PR's scope as `description` |
 | Draw a dependency | `update_task` on the subtask of the PR that builds on another, with `blockedBy: { add: [<the other PR's subtask id>] }` |
 | Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below) |
-| Start a helper | `start_agent` on your own task (no `taskId`, or the rollout task's id where you work on none), with the brief as `prompt` |
+| Start a helper | `start_agent` on your own task (`taskId` set to your own, from your instructions' own values), with the brief as `prompt` |
 | Worker's base branch | `start_agent`'s `branch` |
 | Open a PR | `open_pull_request` with `repository` and `base` |
 | Message a worker | `message_agent` with the worker's agent id |
 | Worker reports back | `message_agent` with the orchestrator's agent id |
 | Check on a silent worker | `read_agent` with its agent id |
 | Stop a worker | `stop_agent` with its agent id |
-| Continue a dead or stalled worker | `start_agent` with `from: { agentId }` and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
+| Continue a dead or stalled worker | `start_agent` with `from: { agentId }`, `taskId` set to that worker's subtask, and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
 | Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless its worker already marked it done, or `canceled` for a PR cut from the plan, once its worker is stopped and its PR closed; then archive its worker |
 | Archive a worker | `archive_agent` with a short `reason`, which stops a turn still under way first |
 | List the rollout's agents | `list_agents` with a subtask's `taskId` for its workers, and with `thisTask` (or the rollout task's `taskId`) for the helpers |

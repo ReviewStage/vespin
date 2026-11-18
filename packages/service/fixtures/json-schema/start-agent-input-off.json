@@ -5,7 +5,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 36,
-      "description": "The task to start the agent on, by the id list_tasks answered; leave it out for the task you work on."
+      "description": "The task to start the agent on, by its id: the taskId in your instructions' own values for your own, the id list_tasks answered for another, and with from the task of the agent it starts from."
     },
     "prompt": {
       "type": "string",
@@ -139,6 +139,8 @@
       "description": "Another agent of your workspace to take over from, on its own task: the new agent is handed its brief, its transcript (with Vespin's summary of the steps that do not fit), and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on."
     }
   },
-  "required": [],
+  "required": [
+    "taskId"
+  ],
   "additionalProperties": false
 }
