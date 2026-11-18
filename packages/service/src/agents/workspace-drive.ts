@@ -72,6 +72,7 @@ import {
   type ListedSandbox,
   SANDBOX_STATUS,
   Sandbox,
+  SandboxUnavailable,
   UP_STATUSES,
 } from "@repo/sandbox";
 import {
@@ -373,7 +374,11 @@ const lockedFill = <E, R, E2, R2>(
       userId: null,
       createdAt: yield* DateTime.nowAsDate,
     });
-    yield* bookSandboxUsageCheck(name);
+    yield* bookSandboxUsageCheck(name).pipe(
+      Effect.mapError(
+        () => new SandboxUnavailable({ retryable: true, detail: "its usage check was not booked" }),
+      ),
+    );
 
     const filled = yield* filledDrive(
       {
