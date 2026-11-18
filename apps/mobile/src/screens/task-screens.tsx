@@ -1074,20 +1074,21 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
 
 /**
  * What a Tasks list group's header leads with, as the panel's sidebar
- * heads each: a section with its own icon, a repository with the
- * repository's mark, which stands in until its owner's picture draws
- * (`headPicture`), the tasks with none with no-repository's; and nothing
- * for Pinned and Following, whose words say what they are.
+ * heads each: Pinned with the pin, Following with the eye, a section with
+ * its own icon, a repository with the repository's mark, which stands in
+ * until its owner's picture draws (`headPicture`), and the tasks with none
+ * with no-repository's.
  */
-function groupHeadGlyph(group: TaskTreeGroup): Glyph | undefined {
+function groupHeadGlyph(group: TaskTreeGroup): Glyph {
   switch (group.kind) {
+    case TASK_TREE_GROUP.PINNED:
+      return GLYPH.PIN;
+    case TASK_TREE_GROUP.FOLLOWING:
+      return GLYPH.FOLLOW;
     case TASK_TREE_GROUP.SECTION:
       return sectionGlyph(group.icon);
     case TASK_TREE_GROUP.REPOSITORY:
       return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
-    case TASK_TREE_GROUP.PINNED:
-    case TASK_TREE_GROUP.FOLLOWING:
-      return undefined;
   }
 }
 
