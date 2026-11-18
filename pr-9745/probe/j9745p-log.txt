@@ -1,0 +1,18 @@
+flows: /Users/deanstratakos/vespin-ipad-agent/flows/p9745-deny.yaml:1 /Users/deanstratakos/vespin-ipad-agent/flows/p9745-allow.yaml:1 
+== bundle P9745p base 9bdefce9f8
+  built 9bdefce9f8 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+probe1-iphone-deny: fails PARSE (an unquoted ${...} inside a {...} flow map, line 49) 
+  auth.txt: 1 lines, 0 naming authorization; 
+probe1-iphone-allow: fails PARSE (an unquoted ${...} inside a {...} flow map, line 49) 
+  auth.txt: 1 lines, 0 naming authorization; 
+  auth.txt: 1 lines, 0 naming authorization; 
+probe2-ipad-a-fresh-first: shot 1
+probe2-ipad-b-ask-lane: fails 0 shots 2 
+  auth.txt: 1 lines, 0 naming authorization; 
+probe2-ipad-c-fresh-after-lane: shot 1
+probe2-ipad-d-maestro-clearstate: fails 0 shots 1 
+  auth.txt: 1 lines, 0 naming authorization; 
