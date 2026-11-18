@@ -2997,17 +2997,14 @@ test("update_task, asked by a call from before tasks stopped being archived, set
     await database.run(readTask(agents.teammates.userId, tasks.billing)),
   );
 
-  // An unarchive moves the task into progress, which assigns the caller's member a task no one was on.
-  const assignee = `[@Test User](https://vespin.dev/workspace-${workspaceId}/person/${agents.caller.userId})`;
-
-  const answered = (status: string, already: boolean, assigned: string | null = null) => ({
+  const answered = (status: string, already: boolean) => ({
     status: ACTION_RESULT_STATUS.ACCEPTED,
     task: {
       id: tasks.billing,
       key: `TW-${billing.task.number}`,
       status,
       priority: TASK_PRIORITY.NONE,
-      assignee: assigned,
+      assignee: null,
       name: "Billing",
       repository: RELAY_FULL_NAME,
       pinned: false,
@@ -3051,10 +3048,7 @@ test("update_task, asked by a call from before tasks stopped being archived, set
   );
   assert.deepEqual(await archive(true, "call-2"), answered(TASK_STATUS.CANCELED, true));
 
-  assert.deepEqual(
-    await archive(false, "call-3"),
-    answered(TASK_STATUS.IN_PROGRESS, false, assignee),
-  );
+  assert.deepEqual(await archive(false, "call-3"), answered(TASK_STATUS.IN_PROGRESS, false));
   assert.deepEqual(await standing(), { status: TASK_STATUS.IN_PROGRESS, finished: false });
 
   await database.run(
@@ -3070,12 +3064,12 @@ test("update_task, asked by a call from before tasks stopped being archived, set
       mergedAt: NOW,
     }),
   );
-  assert.deepEqual(await archive(true, "call-4"), answered(TASK_STATUS.DONE, false, assignee));
+  assert.deepEqual(await archive(true, "call-4"), answered(TASK_STATUS.DONE, false));
   // A task already settled keeps its status under an archive asked again.
   await database.run(
     updateTask(agents.teammates.userId, tasks.billing, { status: TASK_STATUS.CANCELED }),
   );
-  assert.deepEqual(await archive(true, "call-5"), answered(TASK_STATUS.CANCELED, true, assignee));
+  assert.deepEqual(await archive(true, "call-5"), answered(TASK_STATUS.CANCELED, true));
 });
 
 test("update_task marks a task done as the member's menu does, withdrawing the asks still open on its threads", async () => {
@@ -4708,6 +4702,18 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
   );
 
   assert.equal(again.already, true, JSON.stringify(again));
+
+  // A move into progress leaves a task no one is on unassigned, since only `assignee` names who is.
+  const started = await call(
+    AGENT_TOOL.UPDATE_TASK,
+    { taskId: filed.id, status: TASK_STATUS.IN_PROGRESS },
+    "call-started",
+  );
+
+  assert.deepEqual(
+    [taskOf(started).status, taskOf(started).assignee],
+    [TASK_STATUS.IN_PROGRESS, null],
+  );
 
   const mine = await call(
     AGENT_TOOL.UPDATE_TASK,
