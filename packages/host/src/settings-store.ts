@@ -632,6 +632,13 @@ export class SettingsStore {
   /** Whether this run has cleared the vault of tokens no record names; see `#clearStrayTokens`. */
   #strayCleared = false;
   /**
+   * The account's renewed tokens where a renewal's write failed, kept for this
+   * run and written again on each read until one lands. Note that the pair it
+   * replaced is already rotated away on the service, which deletes every
+   * token of the account's client when one is presented again.
+   */
+  #unwritten: StoredAccount | undefined;
+  /**
    * The account whose preferences the service has answered, or failed to,
    * since it signed in to this host: until then the preferences this store
    * holds for it may be none of its own, as on a device it never used.
@@ -874,6 +881,14 @@ export class SettingsStore {
   /** Returns account credentials only to the main process. */
   readAccount(): Effect.Effect<StoredAccount | undefined, PlatformError> {
     return Effect.gen({ self: this }, function* () {
+      const unwritten = this.#unwritten;
+
+      if (unwritten !== undefined) {
+        yield* this.#keepRenewed(unwritten);
+
+        return unwritten;
+      }
+
       const { account } = yield* this.#load();
 
       if (!account) {
@@ -1009,20 +1024,59 @@ export class SettingsStore {
         return yield* new EncryptedStorageUnavailable();
       }
 
-      yield* this.#commitAccount(account, held);
+      const committed = yield* Effect.result(
+        this.#accounts.withPermits(1)(this.#writeAccount(account, held)),
+      );
+
+      if (Result.isFailure(committed)) {
+        // Note that only new tokens of the account already kept are held; a sign-in whose write fails still fails.
+        if ((yield* this.#load()).account?.email !== account.email) {
+          return yield* Effect.fail(committed.failure);
+        }
+
+        this.#unwritten = account;
+      } else {
+        this.#unwritten = undefined;
+      }
 
       return yield* this.accountSnapshot();
     });
   }
 
+  /** Writes renewed tokens a failed write left held, letting them go once the write lands. */
+  #keepRenewed(account: StoredAccount): Effect.Effect<void> {
+    const { accessToken, refreshToken, sessionToken } = account;
+
+    const held: AccountTokens = {
+      accessToken,
+      refreshToken,
+      ...(sessionToken ? { sessionToken } : undefined),
+    };
+
+    // Note that the tokens are checked still held inside the gate, so a sign-out that took it first is never written over.
+    return this.#accounts.withPermits(1)(
+      Effect.suspend(() =>
+        this.#unwritten === account
+          ? Effect.ignore(
+              Effect.tap(this.#writeAccount(account, held), () =>
+                Effect.sync(() => {
+                  this.#unwritten = undefined;
+                }),
+              ),
+            )
+          : Effect.void,
+      ),
+    );
+  }
+
   /**
-   * Keeps `account` with its tokens `held`, inside the account gate: the
+   * Keeps `account` with its tokens `held`, which its callers run inside the account gate: the
    * vault keeps the tokens before the record names it, so a record never
    * names tokens nobody keeps, and a record a failed write left naming the
    * account before reads none of them (`vaultTokensFor`). Another account's
    * preferences, sync baseline and experiments go with it.
    */
-  #commitAccount(
+  #writeAccount(
     account: StoredAccount,
     held: AccountTokens,
   ): Effect.Effect<void, PlatformError | EncryptedStorageUnavailable> {
@@ -1056,11 +1110,9 @@ export class SettingsStore {
       return next;
     });
 
-    return this.#accounts.withPermits(1)(
-      vault === undefined
-        ? kept
-        : Effect.andThen(vault.write(vaultText(held, account.email)), kept),
-    );
+    return vault === undefined
+      ? kept
+      : Effect.andThen(vault.write(vaultText(held, account.email)), kept);
   }
 
   /**
@@ -1074,7 +1126,12 @@ export class SettingsStore {
     return Effect.as(
       this.#accounts.withPermits(1)(
         Effect.andThen(
-          this.#vault?.clear ?? Effect.void,
+          Effect.andThen(
+            Effect.sync(() => {
+              this.#unwritten = undefined;
+            }),
+            this.#vault?.clear ?? Effect.void,
+          ),
           this.#mutate((persisted) => {
             // Note that the account's preferences go below, so a sign-in again reads them again before they stand.
             this.forgetAccountRead();

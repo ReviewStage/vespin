@@ -683,6 +683,43 @@ it.effect(
     }).pipe(Effect.provide(NodeFileSystem.layer)),
 );
 
+it.effect(
+  "a renewal whose tokens cannot be written keeps them for the run and writes them on a later read, so the rotated-away pair is never presented again",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("settings-");
+      const failing = { writes: false };
+      const kept = memoryVault();
+
+      // Note that the Keychain refuses while the disk does, which is the write a lost renewal can't do without.
+      const vault: TokenVault = {
+        ...kept,
+        write: (tokens) =>
+          failing.writes ? Effect.fail(new EncryptedStorageUnavailable()) : kept.write(tokens),
+      };
+
+      const store = storeWithFailingWrites(directory, failing, vault);
+      yield* store.setAccount(TEST_ACCOUNT);
+
+      const renewed = {
+        ...TEST_ACCOUNT,
+        accessToken: "renewed-access",
+        refreshToken: "renewed-refresh",
+      } as const satisfies StoredAccount;
+
+      failing.writes = true;
+      yield* store.setAccount(renewed);
+      assert.deepEqual(yield* store.readAccount(), renewed);
+      failing.writes = false;
+
+      assert.deepEqual(yield* store.readAccount(), renewed);
+      assert.deepEqual(
+        yield* storeWithFailingWrites(directory, failing, vault).readAccount(),
+        renewed,
+      );
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
 test("tokens a failed sign-out or an uninstall left in the vault are cleared by the next read that finds no one signed in", async (t) => {
   const directory = await temporaryDirectory(t, "settings-");
   const vault = memoryVault();
