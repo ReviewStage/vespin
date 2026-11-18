@@ -127,11 +127,12 @@ type WakeupAsk =
     }
   | { readonly kind: typeof WAKEUP_ASK.STOP };
 
-/** The call's input read, each refusal naming the one thing wrong. */
+/** The call's input read, each refusal naming the one thing wrong. Note that a cancel reads nothing else, so only a booking is refused for a key it meant under another name. */
 function readAsk(input: UnparsedWireValue): Result.Result<WakeupAsk, string> {
-  const renamed = isRecord(input)
-    ? CLAUDE_CODE_KEYS.find(({ key }) => input[key] !== undefined)
-    : undefined;
+  const renamed =
+    isRecord(input) && input.stop !== true
+      ? CLAUDE_CODE_KEYS.find(({ key }) => input[key] !== undefined)
+      : undefined;
 
   if (renamed !== undefined) {
     return Result.fail(WAKEUP_REFUSAL.RENAMED(renamed.key, renamed.described));
