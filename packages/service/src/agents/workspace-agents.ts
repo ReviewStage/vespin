@@ -49,7 +49,7 @@ export const AGENT_LIST_FILTER_REFUSAL = {
     "instructions name, as taskId.",
   MINE_KEY:
     "Not run: list_agents takes no mine; pass the developer you work for as startedBy, by the " +
-    `mention link ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers for them.`,
+    "mention link your instructions name for them.",
   NO_MEMBER:
     "Not run: startedBy names no person; name a member by their mention link, " +
     "`[@Name](…/person/<id>)`, or its address alone.",
