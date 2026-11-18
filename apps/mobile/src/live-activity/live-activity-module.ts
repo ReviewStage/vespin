@@ -44,7 +44,7 @@ declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
   reloadInboxWidget(): void;
   /** Asks iOS for background time by name, answering its identifier for `endBackgroundTask`; iOS gives it back itself once it runs out. */
   beginBackgroundTask(name: string): number;
-  /** Gives back background time `beginBackgroundTask` answered; one already given back is let be. */
+  /** Gives back background time `beginBackgroundTask` answered; iOS ends one whose time ran out itself, so ending it again only logs that it is gone. */
   endBackgroundTask(identifier: number): void;
 }
 
