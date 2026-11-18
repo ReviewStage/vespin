@@ -322,7 +322,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const workspaceNames = workspaces.map(({ name }) => name);
   const chosenWorkspace = workspaces.findIndex(({ id }) => id === switcher?.chosen.id);
   const sidebar = useSidebarShown();
-  // Note that Show or Hide Sidebar acts in any regular window, on the list beside its detail, and Expand Page stands the detail alone by hiding that list, as a two-column split view's own button does.
+  // Note that Show or Hide Sidebar acts in any regular window, on the list beside its detail, as a two-column split view's own button does.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
 
@@ -340,7 +340,6 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
-    ...(sidebarStands ? [MENU_COMMAND.DETAIL_ONLY] : []),
     ...(backs ? [MENU_COMMAND.BACK] : []),
     ...(signedIn && steps.previous !== undefined ? [MENU_COMMAND.PREVIOUS_ITEM] : []),
     ...(signedIn && steps.next !== undefined ? [MENU_COMMAND.NEXT_ITEM] : []),
@@ -348,7 +347,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
   const toggled = [
     ...subject.toggled,
-    ...(sidebarStands && !sidebar.shown ? [MENU_COMMAND.SIDEBAR, MENU_COMMAND.DETAIL_ONLY] : []),
+    ...(sidebarStands && !sidebar.shown ? [MENU_COMMAND.SIDEBAR] : []),
   ];
 
   const working = useWorkingAgents(subject.task?.id);
@@ -442,7 +441,6 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         // Note that Search is opened asking for its field's focus, since the system activates it only as its tab is tapped.
         return router.navigate({ pathname: "/search", params: { [SEARCH_FOCUS_PARAM]: "1" } });
       case MENU_COMMAND.SIDEBAR:
-      case MENU_COMMAND.DETAIL_ONLY:
         return sidebar.toggle();
       case MENU_COMMAND.BACK: {
         // Note that the tab's stack is read again at the press, because a held ⌘[ repeats before this render's enablement catches up, and a Back at the tab's root would go to the first tab.
