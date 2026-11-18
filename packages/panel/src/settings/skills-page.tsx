@@ -412,6 +412,9 @@ function ShownSkills({
   // Note that Bring in from your Mac reads this Mac's own folders, so it stands only where the window runs on one.
   const onAMac = useThisMac() !== undefined;
   const [bringing, setBringing] = useState(false);
+  // Note that Bring in's writes are the page's mutations, so an Undo pressed once the card has closed still sends.
+  const { mutateAsync: importFolder } = useMutation(actMutation(ACT_KIND.INSTALLED_SKILLS_IMPORT));
+  const { mutateAsync: removeBrought } = useMutation(actMutation(ACT_KIND.INSTALLED_SKILLS_REMOVE));
   const broughtIn = useDrawnThroughExit(bringing);
 
   const groups = skills === undefined ? undefined : skillGroups(skills, readerId, members);
@@ -511,6 +514,7 @@ function ShownSkills({
             (skill) => skill.scope === INSTALLED_SKILL_SCOPE.PERSONAL,
           )}
           onLanded={brought}
+          doors={{ importFolder, remove: removeBrought }}
           onClose={() => setBringing(false)}
           onExited={broughtIn.onExited}
         />

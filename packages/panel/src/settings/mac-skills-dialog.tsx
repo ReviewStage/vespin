@@ -42,7 +42,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { askAct } from "../act.js";
+import { type ActVariables, askAct } from "../act.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
@@ -95,8 +95,19 @@ interface Brought {
   readonly answered: Promise<readonly ImportAnswer[]>;
 }
 
-/** What Undo deletes: no doors of its own, since each write is its own act. */
-type Doors = Record<never, never>;
+/**
+ * The writes Bring in and its Undo send, each a mutation the Skills page
+ * holds, so a send outlives the card that pressed it and stands as pending
+ * where the page draws it.
+ */
+export interface MacSkillsDoors {
+  readonly importFolder: (
+    asked: ActVariables<typeof ACT_KIND.INSTALLED_SKILLS_IMPORT>,
+  ) => Promise<ImportAnswer>;
+  readonly remove: (
+    asked: ActVariables<typeof ACT_KIND.INSTALLED_SKILLS_REMOVE>,
+  ) => Promise<RemoveAnswer>;
+}
 
 /** The skills a send made. */
 function madeOf(answers: readonly ImportAnswer[]): readonly InstalledSkillSummary[] {
@@ -109,13 +120,11 @@ const BRING_IN_WRITE = {
   glyph: () => <SkillMark />,
   unmasked: () => true,
   act: (_doors, { answered }) => answered,
-  undo: (_doors, { answered }) =>
+  undo: ({ remove }, { answered }) =>
     answered.then((answers) =>
       Promise.all(
         madeOf(answers).map((skill) =>
-          askAct(ACT_KIND.INSTALLED_SKILLS_REMOVE, { skillId: skill.id }).catch(
-            (): RemoveAnswer => UNANSWERED,
-          ),
+          remove({ skillId: skill.id }).catch((): RemoveAnswer => UNANSWERED),
         ),
       ),
     ),
@@ -145,7 +154,12 @@ const BRING_IN_WRITE = {
           failure: { surface: FAILURE_SURFACE.SKILL_REMOVE, cause: first },
         };
   },
-} satisfies TakeBackWrite<Doors, Brought, readonly ImportAnswer[], readonly RemoveAnswer[]>;
+} satisfies TakeBackWrite<
+  MacSkillsDoors,
+  Brought,
+  readonly ImportAnswer[],
+  readonly RemoveAnswer[]
+>;
 
 /** The skills folders asked, read afresh each time the card opens, answered at once on a refusal. */
 function macSkillsQuery(apps: readonly MacSkillApp[]) {
@@ -325,6 +339,7 @@ export function MacSkillsDialog({
   workspace,
   personal,
   onLanded,
+  doors,
   onClose,
   onExited,
 }: {
@@ -334,6 +349,8 @@ export function MacSkillsDialog({
   personal: readonly InstalledSkillSummary[];
   /** Hears the skills each send made, as it answers. */
   onLanded: (made: readonly InstalledSkillSummary[]) => void;
+  /** The page's mutations Bring in and its Undo send on. */
+  doors: MacSkillsDoors;
   onClose: () => void;
   onExited: () => void;
 }): React.JSX.Element {
@@ -353,12 +370,13 @@ export function MacSkillsDialog({
   const bringIn = () => {
     const answered = Promise.all(
       picked.map((skill) =>
-        askAct(ACT_KIND.INSTALLED_SKILLS_IMPORT, {
-          workspaceId: workspace.id,
-          scope: INSTALLED_SKILL_SCOPE.PERSONAL,
-          mac: { app: skill.app, folder: skill.folder },
-          files: skill.files,
-        })
+        doors
+          .importFolder({
+            workspaceId: workspace.id,
+            scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+            mac: { app: skill.app, folder: skill.folder },
+            files: skill.files,
+          })
           .catch((): ImportAnswer => UNANSWERED)
           .then((answer) => {
             if ("skills" in answer) onLanded(answer.skills);
@@ -368,7 +386,7 @@ export function MacSkillsDialog({
       ),
     );
 
-    void pressTakeBack(BRING_IN_WRITE, {}, { count: picked.length, answered });
+    void pressTakeBack(BRING_IN_WRITE, doors, { count: picked.length, answered });
     onClose();
   };
 
