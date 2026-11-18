@@ -270,6 +270,23 @@ test("a saved token's row tells its facts masked and with no dot, and its ⋯ ho
   assert.equal(document.querySelector('[role="dialog"]'), null, "Add's dialog stays shut");
 });
 
+test("a Disconnect question closes when the token it was asked about is replaced elsewhere", async () => {
+  stored = KEPT;
+  await mountAndOpen(false);
+  openMore();
+  chooseMenuItem("Disconnect");
+  await settle();
+  assert.equal(document.querySelector('[role="alertdialog"]') !== null, true);
+
+  stored = { ...KEPT, hint: "ghp_…abcd", addedAt: KEPT.addedAt + 1000 };
+  act(() => layToken());
+  await settle();
+  await vi.waitFor(() =>
+    assert.equal(document.querySelector('[role="alertdialog"]') === null, true),
+  );
+  assert.equal(sent.filter((each) => each.kind === ACT_KIND.GITHUB_TOKEN_REMOVE).length, 0);
+});
+
 test("each refused save says why and what to do next, and keeps the field", async () => {
   await mountAndOpen();
   const said = new Map<string, string | undefined>();

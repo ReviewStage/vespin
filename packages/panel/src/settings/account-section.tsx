@@ -4,6 +4,7 @@ import {
   type ACCOUNT_STATUS,
   signedInAccountId,
 } from "@repo/credentials/snapshot";
+import type { GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS, VERB } from "@repo/features/words";
@@ -31,7 +32,7 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { sendAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
@@ -83,13 +84,30 @@ function GitHubTokenRow({ accountId }: { accountId: string | undefined }): React
   const read = useQuery(githubTokenQuery(accountId));
   const retry = useMutation(githubTokenRetryMutation());
   const token = read.data?.token;
+
+  // Note that the body is keyed by the token it draws, so a Disconnect question or the Add dialog never outlives its token: one saved or replaced elsewhere draws it afresh.
+  return (
+    <GitHubTokenRowBody
+      key={token ? `${token.addedAt}` : "none"}
+      token={token}
+      readFailed={read.isError}
+      onRetry={() => retry.mutate()}
+    />
+  );
+}
+
+/** The token row for one token, or none, which holds the questions and dialog asked of it. */
+function GitHubTokenRowBody({
+  token,
+  readFailed,
+  onRetry,
+}: {
+  token: GitHubTokenSummary | null | undefined;
+  readFailed: boolean;
+  onRetry: () => void;
+}): React.JSX.Element {
   const [adding, setAdding] = useState(false);
   const disconnect = useGitHubTokenDisconnect();
-  // Note that the dialog closes once the token it saved reaches the row, so a later Disconnect does not find it open again.
-  const kept = Boolean(token);
-  useEffect(() => {
-    if (kept) setAdding(false);
-  }, [kept]);
 
   return (
     <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.GITHUB_ACCESS)}>
@@ -111,10 +129,10 @@ function GitHubTokenRow({ accountId }: { accountId: string | undefined }): React
               </Button>
             ) : undefined,
           // Note that a row with nothing below draws no `below` at all, since its box keeps a margin.
-          below: read.isError ? (
+          below: readFailed ? (
             <FailureNote
               failure={unreadShown(FAILURE_SURFACE.ACCOUNT_TOKEN_READ)}
-              onRetry={() => retry.mutate()}
+              onRetry={onRetry}
             >
               {TOKEN_READ_FAILED}
             </FailureNote>
