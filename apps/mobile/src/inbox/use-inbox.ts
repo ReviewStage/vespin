@@ -36,6 +36,7 @@ import {
   NOT_RESOLVED,
   REMIND_REFUSED,
 } from "@repo/features/inbox-write-words";
+import type { InboxHeldFile } from "@repo/features/inbox-writes";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
@@ -792,20 +793,26 @@ function timedStep<T>(name: string, run: () => T): T {
   return value;
 }
 
+/** A picture's size in pixels, as its header states it, read from a file the service answered; none for any other kind of file. */
+function readPictureSize(each: InboxMessageMedia, base64: string): ImageDimensions | undefined {
+  const sizedAt = performance.now();
+  const size = each.kind === INBOX_MEDIA.PICTURE ? base64PictureSize(base64) : undefined;
+  globalThis.__perfStep?.("media:picture-size", {
+    chars: base64.length,
+    ms: performance.now() - sizedAt,
+  });
+
+  return size;
+}
+
 /** The files read with one more landed: what it is drawn from, its size in words, and a picture's size in pixels, as its header states it. */
 function withRead(
   held: ThreadMediaRead,
   each: InboxMessageMedia,
   source: string,
   base64: string,
+  pictureSize: ImageDimensions | undefined,
 ): ThreadMediaRead {
-  const sizedAt = performance.now();
-  const pictureSize = each.kind === INBOX_MEDIA.PICTURE ? base64PictureSize(base64) : undefined;
-  globalThis.__perfStep?.("media:picture-size", {
-    chars: base64.length,
-    ms: performance.now() - sizedAt,
-  });
-
   return {
     sources: new Map(held.sources).set(each.attachmentId, source),
     sizes: new Map(held.sizes).set(each.attachmentId, sizeLabel(base64)),
@@ -837,10 +844,7 @@ function withRead(
 export function useThreadMedia(
   itemId: string | undefined,
   media: readonly InboxMessageMedia[],
-  pending?: (
-    itemId: string,
-    attachmentId: string,
-  ) => { readonly contentType: string; readonly base64: string } | undefined,
+  pending?: (itemId: string, attachmentId: string) => InboxHeldFile | undefined,
 ): ThreadFiles {
   const acts = useHostActs();
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
@@ -885,7 +889,7 @@ export function useThreadMedia(
         void sourceOf(each, held)
           .then((source) => {
             if (asked.current.itemId !== itemId) return;
-            setRead((was) => withRead(was, each, source, held.base64));
+            setRead((was) => withRead(was, each, source, held.base64, held.pictureSize));
           })
           .catch(failed);
         continue;
@@ -907,7 +911,9 @@ export function useThreadMedia(
           const source = await sourceOf(each, answer);
 
           if (asked.current.itemId !== itemId) return;
-          setRead((held) => withRead(held, each, source, answer.base64));
+          setRead((held) =>
+            withRead(held, each, source, answer.base64, readPictureSize(each, answer.base64)),
+          );
         })
         .catch(failed);
     }
@@ -924,7 +930,7 @@ export function useThreadMedia(
     setRetries((count) => count + 1);
   }, []);
 
-  // Note that a picture of a reply still held is drawn from its bytes, at the size its header states, in the render that first draws it, rather than after the read above lands, so its bubble never stands as a spinner or at another shape first.
+  // Note that a picture of a reply still held is drawn from its bytes, at the size read from its header as it was sent, in the render that first draws it, rather than after the read above lands, so its bubble never stands as a spinner or at another shape first.
   const drawn = useMemo(
     () =>
       timedStep("media:drawn", () =>
@@ -938,7 +944,13 @@ export function useThreadMedia(
 
           return bytes === undefined
             ? was
-            : withRead(was, each, `data:${bytes.contentType};base64,${bytes.base64}`, bytes.base64);
+            : withRead(
+                was,
+                each,
+                `data:${bytes.contentType};base64,${bytes.base64}`,
+                bytes.base64,
+                bytes.pictureSize,
+              );
         }, read),
       ),
     [itemId, media, pending, read],
