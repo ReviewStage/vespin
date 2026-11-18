@@ -757,14 +757,17 @@ export const inboxPostInputSchema = EffectSchema.Struct({
 export type InboxPost = typeof inboxPostInputSchema.Type;
 
 /**
- * What a list's tool part carries as its input: nothing for the agent's own
- * threads, or one other agent of its workspace by `agentId`, or one task of
- * it by `taskId`, whose threads it reads and never writes; and where the
- * threads listed stand, every one where it names none.
+ * What a list's tool part carries as its input: whose threads, always
+ * named, as one agent of its workspace by `agentId`, the agent's own
+ * included, or one task of it by `taskId`, another's of which it reads and
+ * never writes; and where the threads listed stand, every one where it
+ * names none.
  */
 export const inboxListInputSchema = EffectSchema.Struct({
-  agentId: EffectSchema.optionalKey(wireUuidSchema),
-  taskId: EffectSchema.optionalKey(wireUuidSchema),
+  of: EffectSchema.Union([
+    EffectSchema.Struct({ agentId: wireUuidSchema }),
+    EffectSchema.Struct({ taskId: wireUuidSchema }),
+  ]),
   status: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(INBOX_STATUS))),
 });
 
