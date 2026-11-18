@@ -109,7 +109,9 @@ export const descriptionComment = pgTable(
   },
   (table) => [
     index("description_comment_thread_seq").on(table.threadId, table.seq),
+    // An account's delete clears its comment attribution.
     index("description_comment_user_id").on(table.userId),
+    // An agent's delete clears its author and asked-agent references.
     index("description_comment_agent_id").on(table.agentId),
     index("description_comment_asked_agent_id").on(table.askedAgentId),
     index("description_comment_task").on(table.taskId),
