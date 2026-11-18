@@ -31,6 +31,7 @@ import {
   CODER_HARNESS,
   type CoderHarness,
   coderInstructions,
+  managerInstructions,
 } from "../agents/coder-host/instructions.js";
 import { REPLAY_FIT } from "../agents/coder-host/replay-summary.js";
 import { TURN_DELIVERY } from "../agents/coder-host/turn-delivery-bounds.js";
@@ -45,6 +46,9 @@ import { MAINTENANCE_SWEEP } from "../maintenance/maintenance-bounds.js";
 
 /** The repository and task the instructions are built for, which stand in for any member's. */
 const PLACEHOLDER_REPOSITORY = "acme/app";
+
+/** The Manager the Manager lines are built for, which stands in for any workspace's. */
+const PLACEHOLDER_MANAGER = "Frontend";
 
 const PLACEHOLDER_TASK = {
   link: "https://vespin.dev/acme/task/1",
@@ -249,6 +253,11 @@ function prompts(): AdminCatalogPrompt[] {
 
   return [
     ...instructions,
+    prompt(
+      "Manager",
+      "managerInstructions",
+      managerInstructions({ name: PLACEHOLDER_MANAGER, deviceId: null }),
+    ),
     prompt("Pull request chapters", "CHAPTERS_INSTRUCTIONS", CHAPTERS_INSTRUCTIONS),
     prompt("Chapters repair", "REPAIR_INSTRUCTIONS", REPAIR_INSTRUCTIONS),
   ];
