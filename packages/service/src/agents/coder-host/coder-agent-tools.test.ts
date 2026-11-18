@@ -60,7 +60,6 @@ import {
   DEVICE_LAYOUT,
   joinWorkspace,
   leaveWorkspace,
-  openedPullRequest,
   openHostedStoreTestDatabase,
   openWorkspace,
   startTask,
@@ -78,9 +77,7 @@ import {
   AGENT_RUNTIME,
   AGENT_STATUS,
   agentMessageReplyLine,
-  CHECK_SUMMARY,
   CONTEXT_WINDOW,
-  PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
@@ -3069,91 +3066,6 @@ test("archive_agent stops the turn of an agent still working before it archives 
   }
 });
 
-test("update_task, asked by a call from before tasks stopped being archived, settles the task Canceled where no agent's pull request merged and Done where one did, stops its agents first as the app's archive does and archives none, answers a call run again as done, and an unarchive puts it In progress", async () => {
-  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
-  const agentSessions = await fakeCoderSessions(workspaceId);
-  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
-  await turnOn(agents.teammates, false);
-
-  const billing = Option.getOrThrow(
-    await database.run(readTask(agents.teammates.userId, tasks.billing)),
-  );
-
-  const answered = (status: string, already: boolean) => ({
-    status: ACTION_RESULT_STATUS.ACCEPTED,
-    task: {
-      id: tasks.billing,
-      key: `TW-${billing.task.number}`,
-      status,
-      priority: TASK_PRIORITY.NONE,
-      assignee: null,
-      name: "Billing",
-      repository: RELAY_FULL_NAME,
-      pinned: false,
-    },
-    already,
-  });
-
-  const standing = async () => {
-    const read = Option.getOrThrow(
-      await database.run(readTask(agents.teammates.userId, tasks.billing)),
-    ).task;
-
-    return { status: read.status, finished: read.completedAt !== undefined };
-  };
-
-  const archive = (archived: boolean, key: string) =>
-    call(AGENT_TOOL.UPDATE_TASK, { taskId: tasks.billing, archived }, key);
-
-  const agentArchive = async () =>
-    Option.getOrThrow(await database.run(readAgent(agents.teammates.userId, agents.teammates.id)))
-      .archivedAt;
-
-  const listedIds = (listed: WireRecord) =>
-    Array.isArray(listed.tasks)
-      ? listed.tasks.flatMap((each) => (isRecord(each) ? [each.id] : []))
-      : [];
-
-  assert.deepEqual(await archive(true, "call-1"), answered(TASK_STATUS.CANCELED, false));
-  assert.deepEqual(await standing(), { status: TASK_STATUS.CANCELED, finished: true });
-  assert.equal(
-    await agentArchive(),
-    null,
-    "its agent is stopped first, as the app's archive stops it, and not archived",
-  );
-  // Every member still lists it, where list_tasks narrows to the status it settled in.
-  assert.deepEqual(
-    listedIds(
-      await call(AGENT_TOOL.LIST_TASKS, { nameContains: "Bill", status: TASK_STATUS.CANCELED }),
-    ),
-    [tasks.billing],
-  );
-  assert.deepEqual(await archive(true, "call-2"), answered(TASK_STATUS.CANCELED, true));
-
-  assert.deepEqual(await archive(false, "call-3"), answered(TASK_STATUS.IN_PROGRESS, false));
-  assert.deepEqual(await standing(), { status: TASK_STATUS.IN_PROGRESS, finished: false });
-
-  await database.run(
-    openedPullRequest(agents.teammates.userId, agents.teammates.id, {
-      number: 7,
-      title: "Seat billing",
-      url: `https://github.com/${RELAY_FULL_NAME}/pull/7`,
-      state: PULL_REQUEST_STATE.MERGED,
-      checks: CHECK_SUMMARY.PASSING,
-      additions: 1,
-      deletions: 0,
-      changedFiles: 1,
-      mergedAt: NOW,
-    }),
-  );
-  assert.deepEqual(await archive(true, "call-4"), answered(TASK_STATUS.DONE, false));
-  // A task already settled keeps its status under an archive asked again.
-  await database.run(
-    updateTask(agents.teammates.userId, tasks.billing, { status: TASK_STATUS.CANCELED }),
-  );
-  assert.deepEqual(await archive(true, "call-5"), answered(TASK_STATUS.CANCELED, true));
-});
-
 test("update_task marks a task done as the member's menu does, withdrawing the asks still open on its threads", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -3263,7 +3175,7 @@ test("update_task renames a task, pins it for the caller's starter alone, sets i
   assert.equal(own.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(own));
 });
 
-test("update_task refuses a task of another workspace its starter is also in, a stranger's, an id that names no task, and a call that names no change, changing none of them", async () => {
+test("update_task refuses a task of another workspace its starter is also in, a stranger's, an id that names no task, a call that names no change, and one naming the retired archived, changing none of them", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -3274,19 +3186,26 @@ test("update_task refuses a task of another workspace its starter is also in, a 
 
   assert.ok(strangersTask !== null);
   const rejected = (reason: string) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason });
-  const archive = (taskId: string) => call(AGENT_TOOL.UPDATE_TASK, { taskId, archived: true });
 
-  assert.deepEqual(await archive(tasks.elsewhere), rejected(UPDATE_TASK_REFUSAL.NO_TASK));
-  assert.deepEqual(await archive(strangersTask), rejected(UPDATE_TASK_REFUSAL.NO_TASK));
-  assert.deepEqual(await archive(randomUUID()), rejected(UPDATE_TASK_REFUSAL.NO_TASK));
+  const settle = (taskId: string) =>
+    call(AGENT_TOOL.UPDATE_TASK, { taskId, status: TASK_STATUS.CANCELED });
+
+  assert.deepEqual(await settle(tasks.elsewhere), rejected(UPDATE_TASK_REFUSAL.NO_TASK));
+  assert.deepEqual(await settle(strangersTask), rejected(UPDATE_TASK_REFUSAL.NO_TASK));
+  assert.deepEqual(await settle(randomUUID()), rejected(UPDATE_TASK_REFUSAL.NO_TASK));
   assert.deepEqual(
     await call(AGENT_TOOL.UPDATE_TASK, { taskId: strangersTask, name: "Mine now" }),
     rejected(UPDATE_TASK_REFUSAL.NO_TASK),
   );
-  assert.deepEqual(await archive("Billing"), rejected(UPDATE_TASK_REFUSAL.UNREADABLE));
+  assert.deepEqual(await settle("Billing"), rejected(UPDATE_TASK_REFUSAL.UNREADABLE));
   assert.deepEqual(
     await call(AGENT_TOOL.UPDATE_TASK, { taskId: tasks.billing }),
     rejected(UPDATE_TASK_REFUSAL.UNREADABLE),
+  );
+  // A session offered the tool's earlier words may still send archived, which is refused rather than dropped.
+  assert.deepEqual(
+    await call(AGENT_TOOL.UPDATE_TASK, { taskId: tasks.invitations, archived: true }),
+    rejected(UPDATE_TASK_REFUSAL.ARCHIVED),
   );
 
   const owners = [
