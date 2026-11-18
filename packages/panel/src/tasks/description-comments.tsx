@@ -2812,13 +2812,23 @@ export function DescriptionCommentLayer({
   });
   // The editor's marks are the editor's own, so the open thread's words are drawn open there by a rule naming them, as are the words of the card the pointer is on, in either view, as Notion's are.
   const editorActive = editor !== undefined && active !== PENDING_THREAD ? active : undefined;
+
+  // Note that a card closed or gone under the pointer hears no leave, so its words are lit only while it is drawn: in the margin, or in the open thread's float where it folds.
+  const litPointed =
+    cardPointed !== undefined &&
+    (wide
+      ? marginCards.drawn.some((card) => card.id === cardPointed && !card.leaving)
+      : active !== undefined && active !== PENDING_THREAD)
+      ? cardPointed
+      : undefined;
+
   useEffect(() => {
     drawLitThreads(
-      [editorActive, cardPointed].filter((thread): thread is string => thread !== undefined),
+      [editorActive, litPointed].filter((thread): thread is string => thread !== undefined),
     );
 
     return () => drawLitThreads([]);
-  }, [editorActive, cardPointed]);
+  }, [editorActive, litPointed]);
   // A press anywhere but the thread, its words, or what it opened over the page closes it, its words kept as its draft; a thread being started goes too, but while its words are sent or it holds files or a dictation, which no draft keeps.
   usePressAway(NO_LAYER, () => undefined, {
     onPressAway:
