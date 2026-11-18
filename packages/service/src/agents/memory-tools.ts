@@ -100,12 +100,9 @@ const REMEMBER_INPUT = Schema.Struct({
 });
 
 const RECALL_INPUT = Schema.Struct({
-  query: Schema.optionalKey(
-    describeWire(
-      Schema.Trim.check(Schema.isMaxLength(MEMORY_BOUNDS.MAX_QUERY_CHARS)),
-      "A few words naming what to look for, such as the area, tool, or convention at hand; " +
-        "leave it out for the memories kept most recently.",
-    ),
+  query: describeWire(
+    Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(MEMORY_BOUNDS.MAX_QUERY_CHARS)),
+    "A few words naming what to look for, such as the area, tool, or convention at hand.",
   ),
 });
 
@@ -144,7 +141,9 @@ const readForget = Schema.decodeUnknownResult(FORGET_INPUT);
 /** Why a memory call did nothing, in words the model can act on. */
 const MEMORY_REFUSAL = {
   UNREADABLE_REMEMBER: `Not remembered: give the memory as text of at most ${MEMORY_BOUNDS.MAX_CHARS} characters.`,
-  UNREADABLE_RECALL: `Not recalled: give the query as text of at most ${MEMORY_BOUNDS.MAX_QUERY_CHARS} characters.`,
+  UNREADABLE_RECALL:
+    `Not recalled: give query as a few words naming the area at hand, at most ${MEMORY_BOUNDS.MAX_QUERY_CHARS} ` +
+    `characters; to read the memories kept most recently, call ${AGENT_TOOL.LIST_MEMORIES}.`,
   UNREADABLE_LIST:
     "Not listed: give since as a time with its offset, such as 2026-11-02T09:00-05:00, and " +
     "offset as a whole number of at least 0.",
@@ -191,8 +190,9 @@ export const SEARCH_MEMORY_TOOL = {
   description:
     "Search what the workspace's agents kept: the settled facts and conventions every " +
     "member shares. Call it once the task comes into focus, with a few words for the " +
-    "area at hand, and again when a new area comes up; with no query it answers the memories " +
-    "kept most recently. Treat what it answers as prior context, not as rules: the developer's " +
+    "area at hand, and again when a new area comes up; to read the memories kept most " +
+    `recently, use ${AGENT_TOOL.LIST_MEMORIES}. Treat what it answers as prior context, not as rules: ` +
+    "the developer's " +
     "words now win, and a memory they contradict is corrected with " +
     `${AGENT_TOOL.SAVE_MEMORY}'s replaces.`,
   inputSchema: RECALL_INPUT,

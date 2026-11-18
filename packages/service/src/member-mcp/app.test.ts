@@ -941,7 +941,7 @@ it.effect(
           ],
           [MEMBER_MCP_TOOL.REPLY_TO_COMMENT, { taskId, thread: threadId, words: "Planted." }],
           [MEMBER_MCP_TOOL.UPDATE_COMMENT, { taskId, thread: threadId, resolved: true }],
-          [MEMBER_MCP_TOOL.SEARCH_MEMORY, { workspace }],
+          [MEMBER_MCP_TOOL.SEARCH_MEMORY, { workspace, query: "planted" }],
           [MEMBER_MCP_TOOL.SAVE_MEMORY, { workspace, text: "Planted." }],
           // Note that the member's own workspace holds no memory of that id, so a correction of it is refused.
           [
