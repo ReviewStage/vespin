@@ -26,6 +26,7 @@ import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
   launchFixtureProfile,
+  launchInboxOff,
   launchMachineAsk,
   launchRefusesWrites,
   launchSetupOwed,
@@ -186,6 +187,7 @@ function launchOptions(): MobileHostStartOptions {
     fixtureUpdateNeeded: launchUpdateNeeded(),
     fixtureMachineAsk: launchMachineAsk(),
     fixtureSetupOwed: launchSetupOwed(),
+    fixtureInboxOff: launchInboxOff(),
     fixtureRefusesWrites: launchRefusesWrites(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),

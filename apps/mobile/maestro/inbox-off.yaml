@@ -1,0 +1,81 @@
+# inbox-off.yaml -- the app with the member's Inbox turned off: it opens on Tasks with no Inbox tab, a thread a link names opens on Tasks' stack, Search offers no Inbox scope, and Settings › Agents stands Use the Inbox off.
+#
+# Launched on the host's Inbox fixture with `-inboxOff true`, which stands
+# the account as one that turned its Inbox off on another device
+# (`fixture-host.ts`'s `withInboxOff`), so no server is reached. The
+# screenshots land under the run's --test-output-dir (`takeScreenshot/`).
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      inboxOff: "true"
+- extendedWaitUntil:
+    visible: "Teammate invitations"
+    timeout: 30000
+- assertNotVisible:
+    id: "inbox-tab"
+- assertNotVisible: "Recorded the invite flow"
+- takeScreenshot: inbox-off-tasks
+# A thread a link names still opens, on Tasks' stack, since no Inbox tab
+# stands to open it on. The system asks before a custom scheme opens the app.
+- openLink: "vespin://inbox/81e2a425-6d9f-4ab7-92df-000000000001"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*withdrawing one deletes it.*"
+    timeout: 15000
+- takeScreenshot: inbox-off-thread
+# Search offers Tasks and Agents, and finds no thread.
+- stopApp
+- launchApp:
+    arguments:
+      fixture: inbox
+      inboxOff: "true"
+- extendedWaitUntil:
+    visible: "Teammate invitations"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: "search-tab"
+    commands:
+      - tapOn:
+          id: "search-tab"
+- runFlow:
+    when:
+      notVisible: "Search Vespin"
+    commands:
+      - tapOn:
+          text: "Search"
+          rightOf: "Tasks"
+- tapOn: "Search Vespin"
+- inputText: "invite"
+- extendedWaitUntil:
+    visible: "Invite email copy"
+    timeout: 15000
+- assertNotVisible: "Inbox"
+- assertNotVisible: "Recorded the invite flow"
+- takeScreenshot: inbox-off-search
+# Settings › Agents stands the switch off, read from the account.
+- stopApp
+- launchApp:
+    arguments:
+      fixture: inbox
+      inboxOff: "true"
+- extendedWaitUntil:
+    visible: "Teammate invitations"
+    timeout: 30000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: "Settings(, .*)?"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Agents"
+- tapOn: "Agents"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Use the Inbox"
+- takeScreenshot: inbox-off-settings
