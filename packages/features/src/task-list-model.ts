@@ -11,9 +11,11 @@ import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from ".
  * order tasks by the same last activity (`taskTime`), which is the time
  * each row shows, so the order and the label never disagree.
  *
- * The list holds the reader's own tasks until they choose Anyone or a
- * teammate (`ASSIGNED_TO`): those assigned to them, and those no one is on
- * that they created, so a task of theirs nobody picked up never leaves it.
+ * The list holds the tasks assigned to the reader until they choose
+ * Anyone or a teammate (`ASSIGNED_TO`). Who created a task plays no part:
+ * a task no one is on stands under Following while the reader follows it,
+ * as its starter does from its start, and leaves the sidebar once they
+ * unfollow it.
  * It holds the tasks to do and in progress alone (`SHOWN_STATUSES`), so a
  * filed backlog and the settled tasks stay out of the way of the work under
  * way (`taskListed`); a task from a service before statuses has no status
@@ -255,10 +257,10 @@ function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
 
 /**
  * The tasks the view's Assigned to holds: every task for Anyone; one
- * teammate's; those the reader follows for Following; and for Me the
- * reader's, and the tasks no one is on that the reader created, so their
- * own unassigned work never leaves the list. A reader not yet known filters
- * nothing.
+ * teammate's; those the reader follows for Following; and for Me those
+ * assigned to the reader, by assignment alone, so a task no one is on is
+ * held by following it (`followingTasks`), never by having created it. A
+ * reader not yet known filters nothing.
  */
 export function tasksAssignedTo(
   tasks: readonly TaskSummary[],
@@ -277,11 +279,7 @@ export function tasksAssignedTo(
     case ASSIGNED_TO.ME:
       if (readerId === undefined) return tasks;
 
-      return tasks.filter((task) => {
-        const assignee = task.assignee?.userId;
-
-        return assignee === undefined ? creatorIdOf(task) === readerId : assignee === readerId;
-      });
+      return tasks.filter((task) => task.assignee?.userId === readerId);
   }
 }
 
@@ -292,8 +290,9 @@ export function tasksAssignedTo(
  * does not hold.
  * Note that the sidebar draws a task in one place, as a pinned task leaves
  * its section, so a task pinned or put in a section by hand stands there
- * and not here, and the reader's own tasks, which they follow too, stand
- * under My tasks: Following holds the rest they keep up with, a teammate's.
+ * and not here, and the tasks assigned to the reader, which they follow
+ * too, stand under My tasks: Following holds the rest they keep up with, a
+ * teammate's or one no one is on.
  */
 export function followingTasks(
   free: readonly TaskSummary[],

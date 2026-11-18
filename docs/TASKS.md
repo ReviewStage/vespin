@@ -70,9 +70,12 @@ other page, the document page among them, it does nothing.
 ### Task list
 
 - The tasks stand in the **Tasks** section, the work under way: the
-  reader's own tasks, those assigned to them and those no one is on that
-  they created, to do and in progress alone, newest updated first
-  (`@repo/ui/task-list-model`). Opening a task moves no row. The backlog and
+  tasks assigned to the reader, whoever created them, to do and in progress
+  alone, newest updated first
+  (`@repo/ui/task-list-model`). A task no one is on stands under
+  Following while the reader follows it, as its starter does from its
+  start, and leaves the sidebar once they unfollow it. Opening a task moves
+  no row. The backlog and
   the settled tasks are left to the Tasks page, which a quiet line under the
   list opens, saying how many it leaves out. The head's **View options**
   (the Inbox's sliders) chooses how the list is drawn, remembered for each

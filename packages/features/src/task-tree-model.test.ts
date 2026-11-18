@@ -14,7 +14,7 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 const READER = "user-ada";
 const WORKSPACE = "workspace-acme";
 
-/** A task of the reader's, last updated `updatedAt` minutes in. */
+/** A task the reader made and is on, last updated `updatedAt` minutes in. */
 function task(
   id: string,
   status: TaskStatus,
@@ -32,6 +32,7 @@ function task(
     status,
     ownerId: READER,
     createdBy: { userId: READER, name: "Ada Lovelace" },
+    assignee: { userId: READER, name: "Ada Lovelace" },
     ...more,
   };
 }
@@ -134,7 +135,12 @@ test("a teammate's open sub-task stands under the reader's parent, whatever its 
 
 test("Following holds the open tasks the reader follows that no other list holds", () => {
   const following = { followers: [{ userId: READER, assignee: false, machines: false }] };
-  const teammate = { ownerId: "user-grace", createdBy: { userId: "user-grace", name: "Grace" } };
+
+  const teammate = {
+    ownerId: "user-grace",
+    createdBy: { userId: "user-grace", name: "Grace" },
+    assignee: { userId: "user-grace", name: "Grace" },
+  };
 
   const tree = taskTree({
     view: {
