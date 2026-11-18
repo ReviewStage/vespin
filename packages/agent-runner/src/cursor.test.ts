@@ -7,9 +7,11 @@ import type { SDKMessage } from "@cursor/sdk";
 import { it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { type Cause, Effect, Fiber, Layer, Match, Queue, Stream } from "effect";
+import { TestClock } from "effect/testing";
 import { vi } from "vitest";
 import {
   CURSOR_SIGNED_OUT_DETAIL,
+  CURSOR_SILENCE,
   type CursorConfig,
   INPUT_LINE,
   type InputLine,
@@ -462,6 +464,73 @@ it.effect("cancels the run going on a Stop, and ends the launch stopped", () =>
       type: RUNNER_EVENT.END,
       reason: RUNNER_END.STOPPED,
     });
+  }),
+);
+
+it.effect(
+  "cancels a run that streams nothing for its silence limit, and ends the launch failed with words the member reads",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("I");
+
+      const { cursor, write, run } = yield* launch(
+        [{ messages: RECORDED_TURN, held: true }],
+        service,
+      );
+
+      yield* write(CONFIG);
+      yield* write(message("Read the README.", LINE.FIRST));
+      yield* service.seen;
+
+      yield* TestClock.adjust(CURSOR_SILENCE.LIMIT_MS - 1);
+      assert.equal(run.pollUnsafe(), undefined);
+      yield* TestClock.adjust(1);
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(cursor.cancels, 1);
+      assert.deepEqual(messagesOf(service.applied).at(-1), {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail:
+          "Cursor stopped answering for 3 minutes, so the turn was ended. Send a message to try again.",
+      });
+    }),
+);
+
+it.effect("never counts a run silent while one of its tool calls runs", () =>
+  Effect.gen(function* () {
+    const service = fakeService("npm test");
+
+    const { cursor, release, write, run } = yield* launch(
+      [
+        {
+          messages: [
+            { type: "status", ...IDS, status: "RUNNING" },
+            {
+              type: "tool_call",
+              ...IDS,
+              call_id: "call-2",
+              name: "shell",
+              status: "running",
+              args: { command: "npm test" },
+            },
+          ],
+          held: true,
+        },
+      ],
+      service,
+    );
+
+    yield* write(CONFIG);
+    yield* write(message("Run the tests.", LINE.FIRST));
+    yield* service.seen;
+
+    yield* TestClock.adjust(CURSOR_SILENCE.LIMIT_MS * 3);
+    assert.equal(run.pollUnsafe(), undefined);
+    assert.equal(cursor.cancels, 0);
+    release();
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
   }),
 );
 

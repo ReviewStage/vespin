@@ -1140,6 +1140,20 @@ export const RUNNER_UNANSWERED = {
   SILENCE_MS: 5 * 60 * 1_000,
 } as const;
 
+/**
+ * How long a Cursor run may stream nothing while none of its tool calls is
+ * running before the launch gives up on it (`cursor.ts`'s `watchSilence`):
+ * three minutes. Cursor's SDK retries a stalled or failed model call itself
+ * and says so to no one, so a run that never answers again would otherwise
+ * hold the turn until a Stop or its progress deadline.
+ */
+export const CURSOR_SILENCE = {
+  LIMIT_MS: 3 * 60 * 1_000,
+} as const;
+
+/** What a Cursor launch whose run went silent past `CURSOR_SILENCE.LIMIT_MS` ends `FAILED` with: words the member reads. */
+export const CURSOR_SILENT_DETAIL = `Cursor stopped answering for ${CURSOR_SILENCE.LIMIT_MS / 60_000} minutes, so the turn was ended. Send a message to try again.`;
+
 /** The END event; `detail` is the CLI's failure, with the launch's secrets taken out, where it failed; `files` the files the turn it ended changed, as IDLE carries them, where a turn ended with it. */
 export interface RunnerEndEvent {
   readonly type: typeof RUNNER_EVENT.END;
