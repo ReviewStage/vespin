@@ -1054,8 +1054,9 @@ export const START_LEAVES_TASK_WORDS =
 export const START_PAYER_WORDS =
   "No start names who pays: each turn of a cloud agent runs on the first of the member's " +
   "subscriptions and API keys for the model's provider, in the order Settings keeps them, that " +
-  "has room, and moves to the next when one hits its limit, which may switch it between a " +
-  "subscription and an API key; an agent on a device runs on that machine's own login.";
+  "has room (where none has, its first API key), and moves to the next when one hits its limit, " +
+  "which may switch it between a subscription and an API key; an agent on a device runs on that " +
+  "machine's own login whatever the member keeps.";
 
 /** `start_agent` in the words of the workspace's experiments: its name, its words, and its input schema. */
 export function startAgentToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
@@ -1099,7 +1100,7 @@ export const LIST_MODELS_TOOL = {
     "long one costs as a multiple of the standard price, or none where it runs on one window; " +
     "and its payers, the kinds of credential the member keeps that pay for it (subscription, " +
     "api_key, both, or none where nothing does), which a start never picks between, since each " +
-    "turn takes the first with room; " +
+    "turn of a cloud agent takes the first with room; " +
     "and the member's default, with the window it runs on, which the app's own Starts run on; " +
     `a ${AGENT_TOOL.START_AGENT} call names its own model and effort. ` +
     "Call it before you name a model, an effort, or a context window, such as one the developer " +
