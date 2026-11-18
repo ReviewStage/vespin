@@ -5,9 +5,11 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "The workspace, by the slug list_workspaces answered, whose skills to list or whose GitHub installation reads a source; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace whose skills to list or whose GitHub installation reads a source, by the slug list_workspaces answered."
     }
   },
-  "required": [],
+  "required": [
+    "workspace"
+  ],
   "additionalProperties": false
 }

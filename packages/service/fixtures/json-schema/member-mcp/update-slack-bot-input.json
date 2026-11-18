@@ -5,7 +5,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "The workspace whose Slack bot it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace whose Slack bot it is, by the slug list_workspaces answered."
     },
     "notifications": {
       "type": "boolean",
@@ -58,6 +58,8 @@
       "description": "One channel of the team to change."
     }
   },
-  "required": [],
+  "required": [
+    "workspace"
+  ],
   "additionalProperties": false
 }

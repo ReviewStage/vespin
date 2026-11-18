@@ -22,7 +22,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace whose GitHub installation reaches the repository, by the slug list_workspaces answered: required with repository; leave it out with agentId, whose agent settles it."
     }
   },
   "required": [
