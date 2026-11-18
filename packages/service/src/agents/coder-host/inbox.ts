@@ -46,7 +46,14 @@ import {
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result } from "effect";
-import { ACTION_RESULT_STATUS, EXCESS_KEYS, type UnparsedWireValue } from "../../core.js";
+import {
+  ACTION_RESULT_STATUS,
+  EXCESS_KEYS,
+  isWireString,
+  type UnparsedWireValue,
+  type WireRecord,
+  wireRecord,
+} from "../../core.js";
 import { afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import {
@@ -352,6 +359,8 @@ export const INBOX_REFUSAL = {
   FIELD_LABELS: "Not posted: an answer names each field by a label of its own.",
   SELECT_OPTIONS: "Not posted: a select field names each of its options once.",
   SELECT_RECOMMENDATION: "Not posted: a select field's recommended names one of its options.",
+  NOT_SELECT: (label: string, type: string) =>
+    `Not posted: field "${label}" is ${type}, yet names options or recommended, which only a select takes; make it a select, or leave both out.`,
   UNREADABLE_WITHDRAW: "Not withdrawn: name the thread's key and why you withdraw its ask.",
   UNREADABLE_LIST:
     'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
@@ -697,6 +706,27 @@ function fieldsRefusal(fields: PostedFields): string | undefined {
   return undefined;
 }
 
+/**
+ * The first field of a post's answer that names options or a recommendation
+ * though it is no select, read from the post as sent, since the post's read
+ * drops a key a field's type does not take and would post it without them.
+ */
+function strayChoiceField(input: UnparsedWireValue): WireRecord | undefined {
+  const ask = wireRecord(wireRecord(input)?.ask);
+  const fields = ask?.type === INBOX_ASK.ANSWER ? ask.fields : undefined;
+
+  if (!Array.isArray(fields)) return undefined;
+
+  return fields
+    .map(wireRecord)
+    .find(
+      (field) =>
+        field !== undefined &&
+        field.type !== INBOX_FIELD.SELECT &&
+        ("options" in field || "recommended" in field),
+    );
+}
+
 /** An ask's own refusal, before the store is asked: a decide's label used twice, a recommendation naming none, one twice, or several where one may be picked, or an answer's fields. */
 function askRefusal(ask: InboxAskInput | undefined): string | undefined {
   switch (ask?.type) {
@@ -983,6 +1013,15 @@ export function postToInbox(
   const post = read.success;
 
   if (post.body.trim() === "") return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_POST));
+  const stray = strayChoiceField(input);
+
+  if (stray !== undefined) {
+    const label = isWireString(stray.label) ? stray.label : "";
+    const type = isWireString(stray.type) ? stray.type : "untyped";
+
+    return Effect.succeed(inboxRejected(INBOX_REFUSAL.NOT_SELECT(label, type)));
+  }
+
   const refused = askRefusal(post.ask);
 
   if (refused !== undefined) return Effect.succeed(inboxRejected(refused));

@@ -433,6 +433,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             INBOX_REFUSAL.SELECT_RECOMMENDATION,
           ],
           [
+            answer([{ type: INBOX_FIELD.TEXT, label: "Channel", recommended: "Slack" }]),
+            'Not posted: field "Channel" is text, yet names options or recommended, which only a select takes; make it a select, or leave both out.',
+          ],
+          [
             answer([
               { type: INBOX_FIELD.TEXT, label: "Channel" },
               { type: INBOX_FIELD.BOOLEAN, label: "Channel" },
