@@ -1,1 +1,15 @@
-  STALE BUNDLE, not built
+== bundle P9780 base f6de407e99
+  built f6de407e99 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+JS at f6de407e99
+iphone-light-failure-notice: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone-light-refused-send: fails 1 shots 2 Assert that "Try again" is visible... FAILED
+iphone-dark-failure-notice: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone-dark-refused-send: fails 1 shots 2 Assert that "Try again" is visible... FAILED
+ipad26-light-failure-notice: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad26-light-refused-send: fails 1 shots 2 Assert that "Try again" is visible... FAILED
+ipad26-dark-failure-notice: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad26-dark-refused-send: fails 1 shots 2 Assert that "Try again" is visible... FAILED
