@@ -1,0 +1,51 @@
+Auto-merging pnpm-lock.yaml
+built main 2fd54bcdae + #natrot 8226f7ee64 as 5f39c06aff
+install 0
+precompiled modules forced off: EXPO_USE_PRECOMPILED_MODULES=0 (the natrot probe patches expo-modules-core, which otherwise links Expo's prebuilt XCFramework; 17:00 UTC Nov 18)
+curve 14:12:13 25185 MB
+curve 14:12:44 23016 MB
+curve 14:13:14 22969 MB
+curve 14:13:45 22397 MB
+curve 14:14:16 22801 MB
+curve 14:14:47 22359 MB
+curve 14:15:18 22011 MB
+curve 14:15:48 21880 MB
+curve 14:16:19 21800 MB
+curve 14:16:50 21709 MB
+curve 14:17:22 21572 MB
+curve 14:17:53 21398 MB
+curve 14:18:24 21301 MB
+curve 14:18:55 21173 MB
+curve 14:19:26 20612 MB
+curve 14:19:56 20413 MB
+curve 14:20:28 19994 MB
+curve 14:20:59 19738 MB
+curve 14:21:30 19574 MB
+curve 14:22:00 19353 MB
+curve 14:22:31 19315 MB
+curve 14:23:02 18804 MB
+BUILD EXIT 0 14:23:32
+actool: 2 warnings or errors
+Podfile precompiled lines: 2:ENV['RNS_GAMMA_ENABLED'] ||= '1' 11:  return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE'] 17:ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR'] 18:ENV['RCT_USE_RN_DEP'] ||= podfile_properties['ios.buildReactNativeFromSource'] == 'true' ? '0' : '1' 19:ENV['RCT_USE_PREBUILT_RNCORE'] ||= podfile_properties['ios.buildReactNativeFromSource'] == 'true' ?  | properties: {  "expo.jsEngine": "hermes",  "EX_DEV_CLIENT_NETWORK_INSPECTOR": "true",  "ios.deploymentTarget": "26.0",  "expo.inlineModules.watchedDirectories": "[]",  "expo.inlineModules.xcodeProjectTargets": "{\"mainTarget\":\"Vespin\",\"targets\":[]}"} | XCFramework switches: 
+pods:   - ExpoModulesCore (58.0.30):     - ExpoModulesJSI     - hermes-engine     - RCTRequired --   - "ExpoModulesCore (from `../../../node_modules/.pnpm/expo-modules-core@58.0.30_patch_hash=6c14dbc4acb730c877cb42a77b474eaeebd8d93706852f9916_9c0c5305c9e9ce7b335b8bdd5a96721c/node_modules/expo-modules-core`)"   - "ExpoModulesJSI (from `../../../node_modules/.pnpm/expo-modules-jsi@58.0.22_react-native@0.8
+pnpm copies: expo-modules-core@58.0.30_patch_hash=6c14dbc4acb730c877cb42a77b474eaeebd8d93706852f9916_9c0c5305c9e9ce7b335b8bdd5a96721c 
+Pods project names:    3 expo-modules-core@58.0.30_patch_hash=6c14dbc4acb730c877cb42a77b474eaeebd8d93706852f9916_9c0c5305c9e9ce7b335b8bdd5a96721c 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatrot2.app: replacing existing signature
+natrot: ExpoModulesCore holds vespin-probe 0 time(s)
+n-check-ipad27-a3: fails 0 shots 6 
+n-plain-ipad26-a3: fails 0 shots 6 
+  n-plain-ipad26-a3 probe lines: 14
+n-plain-ipad26-b: fails 0 shots 1 
+  n-plain-ipad26-b probe lines: 11
+n-plain-ipad27-a3: fails 0 shots 6 
+  n-plain-ipad27-a3 probe lines: 14
+n-plain-ipad27-b: fails 0 shots 1 
+  n-plain-ipad27-b probe lines: 11
+n-relayout-ipad26-a3: fails 0 shots 6 
+  n-relayout-ipad26-a3 probe lines: 20
+n-relayout-ipad26-b: fails 0 shots 1 
+  n-relayout-ipad26-b probe lines: 15
+n-relayout-ipad27-a3: fails 0 shots 6 
+  n-relayout-ipad27-a3 probe lines: 20
+n-relayout-ipad27-b: fails 0 shots 1 
+  n-relayout-ipad27-b probe lines: 15
