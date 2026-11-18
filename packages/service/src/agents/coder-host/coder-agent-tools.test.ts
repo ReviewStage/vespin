@@ -78,6 +78,7 @@ import {
   AGENT_STATUS,
   agentMessageReplyLine,
   CHECK_SUMMARY,
+  CONTEXT_WINDOW,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import {
@@ -1924,10 +1925,16 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
   assert.deepEqual(listed, {
     status: ACTION_RESULT_STATUS.ACCEPTED,
     models: [
-      { id: OPUS, name: "Opus 5.5", efforts: ["low", "medium", "high", "max"] },
-      { id: SOL, name: "GPT-6.1 Sol", efforts: ["low", "high"] },
+      { id: OPUS, name: "Opus 5.5", efforts: ["low", "medium", "high", "max"], contextWindows: [] },
+      { id: SOL, name: "GPT-6.1 Sol", efforts: ["low", "high"], contextWindows: [] },
     ],
-    default: { model: OPUS, modelName: "Opus 5.5", effort: "high", offered: true },
+    default: {
+      model: OPUS,
+      modelName: "Opus 5.5",
+      effort: "high",
+      contextWindow: null,
+      offered: true,
+    },
   });
 
   let calls = 0;
@@ -1993,6 +2000,7 @@ test("list_models says the default is no longer offered where the catalog droppe
     model: OPUS,
     modelName: "Opus 5.5",
     effort: "high",
+    contextWindow: null,
     offered: false,
   });
   const unnamed = await call(AGENT_TOOL.START_AGENT, { prompt: PROMPT }, "call-default");
@@ -4069,7 +4077,7 @@ async function retiredAgentOn(userId: string, taskId: string): Promise<StartedAg
   });
 }
 
-test("list_models for a Claude Code agent lists its Claude models alone, their fast versions among them, while a start's list and the list of an agent on the retired runtime name every model, as they did", async () => {
+test("list_models for a Claude Code agent lists its Claude models alone, their fast versions among them and no choice of context window, while a start's list and the list of an agent on the retired runtime name every model and the windows each offers, as they did", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const onClaudeCode = await claudeCodeAgentOn(agents.teammates.userId, tasks.billing);
@@ -4092,7 +4100,34 @@ test("list_models for a Claude Code agent lists its Claude models alone, their f
   assert.deepEqual(ids(forStart), [OPUS, OPUS_FAST, SONNET, SOL, SOL_FAST, SOL_ULTRAFAST]);
   assert.deepEqual(forEve, forStart);
   assert.deepEqual(ids(forClaudeCode), [OPUS, OPUS_FAST, SONNET]);
-  assert.deepEqual(forClaudeCode.default, forStart.default);
+
+  const windows = (listed: WireRecord) =>
+    Array.isArray(listed.models)
+      ? listed.models.map((model) => isRecord(model) && model.contextWindows)
+      : [];
+
+  const opusWindows = [
+    { window: CONTEXT_WINDOW.STANDARD, tokens: 200_000 },
+    { window: CONTEXT_WINDOW.LONG, tokens: 1_000_000 },
+  ];
+
+  assert.deepEqual(windows(forStart), [opusWindows, [], [], [], [], []]);
+  assert.deepEqual(windows(forClaudeCode), [[], [], []]);
+  // The default runs on Opus's whole window, which a Claude Code agent takes no choice of.
+  assert.deepEqual(forStart.default, {
+    model: OPUS,
+    modelName: "Opus 5.5",
+    effort: "high",
+    contextWindow: CONTEXT_WINDOW.LONG,
+    offered: true,
+  });
+  assert.deepEqual(forClaudeCode.default, {
+    model: OPUS,
+    modelName: "Opus 5.5",
+    effort: "high",
+    contextWindow: null,
+    offered: true,
+  });
 
   // A GPT default is offered to a start, and is not one a Claude Code agent may move to.
   await database.run(

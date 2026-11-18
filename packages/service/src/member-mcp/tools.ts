@@ -859,9 +859,12 @@ const MEMBER_LIST_MODELS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_MODELS,
   description:
     "List the models the member may start an agent on, as they are offered them: each with its " +
-    "catalog id, the model's name to say it by, and the efforts it lists; and the member's " +
-    "default model and effort, which a start naming neither runs on, and whether it is still " +
-    "offered. The models are the member's own, the same in every workspace.",
+    "catalog id, the model's name to say it by, the efforts it lists, and its contextWindows, " +
+    "the standard and the long with each one's size in tokens and what the long one costs as a " +
+    "multiple of the standard price, or none where it runs on one window; and the member's " +
+    "default model, effort, and the window it runs on, which a start naming neither runs on, " +
+    "and whether it is still offered. The models are the member's own, the same in every " +
+    "workspace.",
   input: NoInputSchema,
   annotations: READ_ONLY,
   run: () => Effect.flatMap(AdmittedMember, (member) => runListMemberModels(member.userId)),
