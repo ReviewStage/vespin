@@ -1,0 +1,74 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow wrap-undo
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Run undo.yaml...
+  Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+  Run subflows/open-row.yaml...
+    Run to-row.yaml...
+      Run flow when ${FLOATING_TABS != 'true'} is true...
+        Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+      Run flow when true is true... COMPLETED
+      Run flow when ${FLOATING_TABS == 'true'} is true...
+      Run flow when false is true... SKIPPED
+      Run clear-of-tabs.yaml...
+        Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Run flow when "acceptInvite can add a member twice", Above id: search-tab is not visible and true is true... SKIPPED
+        Wait for animation to end... COMPLETED
+      Run clear-of-tabs.yaml... COMPLETED
+    Run to-row.yaml... COMPLETED
+    Tap on "${ROW}"... COMPLETED
+  Run subflows/open-row.yaml... COMPLETED
+  Assert that "Got it" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot got-it... COMPLETED
+  Tap on "Got it"... COMPLETED
+  Assert that "Got it: “acceptInvite can add a member twice”" is visible... COMPLETED
+  Take screenshot got-it-undo... COMPLETED
+  Tap on id: failure-notice-undo... COMPLETED
+  Assert that id: failure-notice-undo is not visible... COMPLETED
+  Assert that "Got it" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot got-it-undone... COMPLETED
+  Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+  Run subflows/open-row.yaml...
+    Run to-row.yaml...
+      Run flow when ${FLOATING_TABS != 'true'} is true...
+        Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+      Run flow when true is true... COMPLETED
+      Run flow when ${FLOATING_TABS == 'true'} is true...
+      Run flow when false is true... SKIPPED
+      Run clear-of-tabs.yaml...
+        Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+          Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+        Run flow when "What the expired invite page says", Above id: search-tab is not visible and true is true... COMPLETED
+        Wait for animation to end... COMPLETED
+      Run clear-of-tabs.yaml... COMPLETED
+    Run to-row.yaml... COMPLETED
+    Tap on "${ROW}"... COMPLETED
+  Run subflows/open-row.yaml... COMPLETED
+  Wait for animation to end... COMPLETED
+  Run subflows/bar-act.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Tap on "More"... COMPLETED
+    Run flow when true is true... COMPLETED
+  Run subflows/bar-act.yaml... COMPLETED
+  Tap on "Resolve"... COMPLETED
+  Assert that "Resolved “What the expired invite page says”" is visible... COMPLETED
+  Take screenshot resolve-undo... COMPLETED
+  Tap on id: failure-notice-undo... COMPLETED
+  Assert that id: failure-notice-undo is not visible... COMPLETED
+  Run subflows/bar-act.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Tap on "More"... COMPLETED
+    Run flow when true is true... COMPLETED
+  Run subflows/bar-act.yaml... COMPLETED
+  Assert that "Resolve", enabled is visible... COMPLETED
+  Take screenshot resolve-undone... COMPLETED
+Run undo.yaml... COMPLETED
