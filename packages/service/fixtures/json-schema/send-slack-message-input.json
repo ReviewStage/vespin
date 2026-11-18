@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "One message, in Markdown, as a person would send it in Slack: a sentence or two."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}

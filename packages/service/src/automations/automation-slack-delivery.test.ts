@@ -26,10 +26,12 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
-import { TURN_STATUS } from "@repo/wire";
+import { ACTION_RESULT_STATUS, TURN_STATUS } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
+import { AGENT_CALLER } from "../agents/agent-tools.js";
 import { postTurnToSlack } from "../slack/slack-agent-starts.js";
 import { SlackBot, SlackBotFailure, type SlackWebApi, slackBotOver } from "../slack/slack-bot.js";
+import { runSendSlackMessage } from "../slack/slack-message-tool.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import { endedAt } from "../testing/agent-turns.js";
 
@@ -207,6 +209,47 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
       assert.ok(said.includes("Usage limit reached"), said);
       assert.ok(!said.includes("failed"), said);
     }),
+  );
+
+  it.effect(
+    "an agent's send_slack_message is refused while no thread speaks for it, then posted in the thread its run's result was kept as",
+    () =>
+      Effect.gen(function* () {
+        const slack = recordingSlack();
+        const bot = slackBotOver(slack.api);
+        const { agent } = yield* openDeliveringRun();
+        const caller = { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false } as const;
+
+        const send = (text: string) =>
+          runSendSlackMessage({ caller }, { text }).pipe(Effect.provideService(SlackBot, bot));
+
+        const early = yield* send("Too soon.");
+
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0, "Nothing needs you today.").pipe(
+          Effect.provide(
+            Layer.succeed(SettledTurnListener, {
+              heard: (turn) => postTurnToSlack(turn).pipe(Effect.provideService(SlackBot, bot)),
+            }),
+          ),
+        );
+
+        const sent = yield* send("Yes, it counts.");
+
+        // The fake Slack answers the run's result DM under this timestamp.
+        const digest = "1700000000.000001";
+        assert.equal(early.status, ACTION_RESULT_STATUS.REJECTED);
+        assert.deepEqual(sent, {
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          channelId: DM_CHANNEL,
+          threadTs: digest,
+        });
+        const [, reply, ...more] = slack.posted;
+        assert.equal(more.length, 0);
+        assert.deepEqual(
+          [reply?.channel, reply?.thread_ts, reply?.text],
+          [DM_CHANNEL, digest, "Yes, it counts."],
+        );
+      }),
   );
 
   it.effect(
