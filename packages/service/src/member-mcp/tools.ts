@@ -256,6 +256,7 @@ import {
   runUpdateTask,
   START_AGENT_REFUSAL,
   START_AGENT_TOOL,
+  START_LEAVES_TASK_WORDS,
   startAgentToolOf,
   TASKS_LIST_LIMIT,
   TRANSCRIPT_PAGE_WORDS,
@@ -1244,14 +1245,7 @@ const FOLLOW_WORDS =
 const CreateTaskInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   name: CREATE_TASK_TOOL.inputSchema.fields.name,
-  repository: Schema.optionalKey(
-    describeWire(
-      Schema.NullOr(githubRepositoryFullNameSchema),
-      "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub " +
-        "installation must reach; null or left out for none, or the parent's where you give a " +
-        "parent.",
-    ),
-  ),
+  repository: CREATE_TASK_TOOL.inputSchema.fields.repository,
   brief: CREATE_TASK_TOOL.inputSchema.fields.brief,
   description: CREATE_TASK_TOOL.inputSchema.fields.description,
   status: CREATE_TASK_TOOL.inputSchema.fields.status,
@@ -1778,9 +1772,9 @@ const MEMBER_START_AGENT_TOOL = memberMcpTool({
 /** The words of a member's start, how it is handed what it is told as their workspaces' Task descriptions words it. */
 function memberStartAgentWords(handed: string): string {
   return (
-    "Start a new coding agent as the member, exactly as their own Start would: on a task " +
+    "Start a new coding agent as the member: on a task " +
     `they can open by its taskId, ${handed}; make a task for it first with ` +
-    `${MEMBER_MCP_TOOL.CREATE_TASK}. ` +
+    `${MEMBER_MCP_TOOL.CREATE_TASK}. ${START_LEAVES_TASK_WORDS} ` +
     "This one call carries everything the agent is told as it starts, and the " +
     "agent sets to work on it at once. Its checkout is the branch named, which must already " +
     "be on GitHub, and every start on a task with a repository but one from another agent " +
@@ -1806,14 +1800,13 @@ const MessageAgentInputSchema = Schema.Struct({
     "What to tell the agent, as the member's own words: it reads them as a message the member " +
       "typed in its composer.",
   ),
-  queue: Schema.optionalKey(
-    describeWire(
-      Schema.Boolean,
-      "true to queue it behind the agent's turn, as the composer's ⌘↩ would, rather than steer " +
-        "it into the turn under way: it waits unsent, and goes as the member's next message once " +
-        "the turn and every message queued before it are over, at once where the agent stands " +
-        "idle. Any member who may message the agent queues to it.",
-    ),
+  queue: describeWire(
+    Schema.Boolean,
+    "false to steer it into the turn under way, as the composer's ↩ would, or start a turn on " +
+      "an idle agent; true to queue it behind the agent's turn, as the composer's ⌘↩ would: it " +
+      "waits unsent, and goes as the member's next message once the turn and every message " +
+      "queued before it are over, at once where the agent stands idle. Any member who may " +
+      "message the agent queues to it.",
   ),
 });
 
@@ -1894,7 +1887,7 @@ const memberMessage = (call: AgentCall, { agentId, text, queue }: MessageAgentIn
 
       if (Option.isSome(settled)) return agentToolRejected(settled.value);
 
-      if (queue === true) return yield* memberQueue(call, userId, agent, text);
+      if (queue) return yield* memberQueue(call, userId, agent, text);
 
       const sent = yield* Effect.result(
         steerMemberWords(call.writer, userId, agent, { text, clientKey: call.clientKey }),
@@ -1922,7 +1915,7 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     `the task with ${MEMBER_MCP_TOOL.UPDATE_TASK} first. Each ` +
     "call sends a message of its own, so call it once for each. Answers `accepted` once the " +
     "agent's session has taken it, without waiting for it to act or reply, or `rejected` and " +
-    "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
+    "why nothing was sent. With queue true, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
     `\`handed-on\` where the agent stood idle and it goes at once, unconfirmed, since a refusal puts it back and pauses the queue; and \`paused\` with why where ` +
     `the queue stands paused, which sends nothing until ${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it. ` +
@@ -2123,9 +2116,10 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     `and effort, and context window, from its next step, as ${MEMBER_MCP_TOOL.LIST_MODELS} ` +
     "lists them, pin or unpin it in the member's sidebar, or replace the list of MCP servers " +
     "switched off for it. Name at least one change, a model only with its effort and a " +
-    "contextWindow only with them; the changes land together or not at all. Archive it with " +
-    `${MEMBER_MCP_TOOL.ARCHIVE_AGENT}. Answers \`accepted\` with the agent as it then stands, or ` +
-    "`rejected` and why; a rejected model or effort lists the choices.",
+    "contextWindow only with them, required where the model's " +
+    `${MEMBER_MCP_TOOL.LIST_MODELS} contextWindows are not empty; the changes land together ` +
+    `or not at all. Archive it with ${MEMBER_MCP_TOOL.ARCHIVE_AGENT}. Answers \`accepted\` with ` +
+    "the agent as it then stands, or `rejected` and why; a rejected model or effort lists the choices.",
   input: UpdateAgentInputSchema,
   annotations: DESTRUCTIVE,
   run: (asked) =>
@@ -3298,16 +3292,56 @@ const READ_INBOX_TOOL = memberMcpTool({
     }),
 });
 
-/** The answers an ask takes: a pick or words for a decide, done or not for a do, and fields or words for an answer. */
-const ANSWER_REPLIES = [
-  INBOX_REPLY.CHOSE,
-  INBOX_REPLY.ANSWERED,
-  INBOX_REPLY.SUBMITTED,
-  INBOX_REPLY.DONE,
-  INBOX_REPLY.NOT_DONE,
-] as const;
+/** What a call meets that leaves out a reply's field: what each reply takes, so one retry fixes it. */
+const ANSWER_FIELD_MISSING =
+  `Not answered: answer.reply "${INBOX_REPLY.CHOSE}" takes choices (the option labels); ` +
+  `"${INBOX_REPLY.SUBMITTED}" takes values (each field by its label); "${INBOX_REPLY.DONE}" ` +
+  `and "${INBOX_REPLY.NOT_DONE}" take steps (the places of the steps done, from 0); ` +
+  `"${INBOX_REPLY.ANSWERED}" takes none, its words in note.`;
 
-/** An answer names its thread and the ask it answers, how the member answers, and what goes with it, as the window's answer carries them. */
+/** A reply's own field, refused in those words where it is left out. */
+const answerField = <S extends Schema.Top>(schema: S, description: string) =>
+  describeWire(schema, description).pipe(
+    Schema.annotateKey({ messageMissingKey: ANSWER_FIELD_MISSING }),
+  );
+
+/** The steps of a do the member did, by their places from 0, which done and not done alike carry. */
+const DONE_STEPS = (words: string) =>
+  answerField(
+    inboxAnswersSchema.fields.steps.schema,
+    `The steps of the ${INBOX_ASK.DO} the member did, by their places from 0: ${words}`,
+  );
+
+/** One answer per reply, each carrying exactly what that reply takes, as the window's answer does. */
+const AskAnswerSchema = Schema.Union([
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.CHOSE),
+    choices: answerField(
+      inboxAnswersSchema.fields.choices.schema,
+      "The labels of the options the member picks: one, or several where the ask lets several " +
+        "be picked.",
+    ),
+  }),
+  Schema.Struct({ reply: Schema.Literal(INBOX_REPLY.ANSWERED) }),
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.SUBMITTED),
+    values: answerField(
+      inboxAnswersSchema.fields.values.schema,
+      "The fields the member fills: each by its field's label, with words, a number, one of a " +
+        "select's options, or true or false, as its type asks; every required field filled.",
+    ),
+  }),
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.DONE),
+    steps: DONE_STEPS("every one."),
+  }),
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.NOT_DONE),
+    steps: DONE_STEPS("those they did, or none."),
+  }),
+]);
+
+/** An answer names its thread and the ask it answers, how the member answers with what that takes, and their words, as the window's answer carries them. */
 const AnswerAskInputSchema = Schema.Struct({
   threadId: THREAD_ID,
   askId: describeWire(
@@ -3315,41 +3349,19 @@ const AnswerAskInputSchema = Schema.Struct({
     `The id of the message whose ask you answer: the thread's askId, as ` +
       `${MEMBER_MCP_TOOL.READ_INBOX} answered it.`,
   ),
-  reply: describeWire(
-    Schema.Literals(ANSWER_REPLIES),
-    `How the member answers: ${INBOX_REPLY.CHOSE}, with choices, for a ${INBOX_ASK.DECIDE}; ` +
-      `${INBOX_REPLY.ANSWERED}, with their words in note, where no option of a ` +
-      `${INBOX_ASK.DECIDE} fits or an ${INBOX_ASK.ANSWER} asks no fields; ` +
+  answer: describeWire(
+    AskAnswerSchema,
+    `How the member answers, by its reply: ${INBOX_REPLY.CHOSE}, with choices, for a ` +
+      `${INBOX_ASK.DECIDE}; ${INBOX_REPLY.ANSWERED}, with their words in note, where no option ` +
+      `of a ${INBOX_ASK.DECIDE} fits or an ${INBOX_ASK.ANSWER} asks no fields; ` +
       `${INBOX_REPLY.SUBMITTED}, with values, for an ${INBOX_ASK.ANSWER}'s fields; and ` +
-      `${INBOX_REPLY.DONE} or ${INBOX_REPLY.NOT_DONE} for a ${INBOX_ASK.DO}.`,
-  ),
-  choices: Schema.optionalKey(
-    describeWire(
-      inboxAnswersSchema.fields.choices.schema,
-      `The labels of the options the member picks, for ${INBOX_REPLY.CHOSE}: one, or several ` +
-        "where the ask lets several be picked.",
-    ),
-  ),
-  values: Schema.optionalKey(
-    describeWire(
-      inboxAnswersSchema.fields.values.schema,
-      `The fields the member fills, for ${INBOX_REPLY.SUBMITTED}: each by its field's label, ` +
-        "with words, a number, one of a select's options, or true or false, as its type asks; " +
-        "every required field filled.",
-    ),
-  ),
-  steps: Schema.optionalKey(
-    describeWire(
-      inboxAnswersSchema.fields.steps.schema,
-      `The steps of a ${INBOX_ASK.DO} the member did, by their places from 0: every one for ` +
-        `${INBOX_REPLY.DONE}.`,
-    ),
+      `${INBOX_REPLY.DONE} or ${INBOX_REPLY.NOT_DONE}, with steps, for a ${INBOX_ASK.DO}.`,
   ),
   note: Schema.optionalKey(
     describeWire(
       Schema.Trim.check(Schema.isMaxLength(INBOX_BOUNDS.MAX_MESSAGE_CHARS)),
       `The member's words with the answer, in Markdown: the answer itself for ` +
-        `${INBOX_REPLY.ANSWERED}, and otherwise anything they add.`,
+        `${INBOX_REPLY.ANSWERED}, and otherwise anything they add; none where left out.`,
     ),
   ),
 });
@@ -3369,18 +3381,12 @@ const ANSWER_ASK_TOOL = memberMcpTool({
     "that does not fit it.",
   input: AnswerAskInputSchema,
   annotations: IDEMPOTENT_CHANGE,
-  run: ({ threadId, askId, reply, choices, values, steps, note }) =>
+  run: ({ threadId, askId, answer, note }) =>
     Effect.flatMap(AdmittedMember, (member) =>
       answerAskAsMember(member.userId, {
         threadId,
         note: note ?? "",
-        answers: {
-          ask: askId,
-          reply,
-          ...(choices === undefined ? undefined : { choices }),
-          ...(values === undefined ? undefined : { values }),
-          ...(steps === undefined ? undefined : { steps }),
-        },
+        answers: { ask: askId, ...answer },
       }),
     ),
 });
@@ -3565,26 +3571,24 @@ const AGENT_PULL_REQUEST_ACTION_REFUSAL = {
     `sign-in GitHub takes, which signing in with GitHub again in ${PRODUCT_NAME} mends.`,
   REFUSED: (words: string) => `Not made: GitHub refused this change, saying: ${words}`,
   NO_PULL_REQUEST:
-    "Not made: that agent has opened no pull request yet, or its repository holds none of " +
-    "that number.",
+    "Not made: that agent works in no repository, or its repository holds no pull request of " +
+    `that number; ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers the number of the agent's own.`,
   NOT_REACHABLE:
     "Not made: the GitHub installation connected to the workspace no longer reaches that " +
     "agent's repository.",
   UNANSWERED: "Not made: GitHub could not be reached just now. The call may be made again.",
 } as const;
 
-/** A change names the agent, at most another pull request of its repository, and the change as the agent's Pull request tab asks for it. */
+/** A change names the agent, the pull request of its repository by number, and the change as the agent's Pull request tab asks for it. */
 const AgentPullRequestActionInputSchema = Schema.Struct({
   agentId: describeWire(
     wireUuidSchema,
     `The agent's id, as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered it.`,
   ),
-  number: Schema.optionalKey(
-    describeWire(
-      githubPullRequestNumberSchema,
-      "Another pull request of the agent's repository, by its number, such as one stacked on " +
-        "its own; leave it out for the agent's own pull request.",
-    ),
+  number: describeWire(
+    githubPullRequestNumberSchema,
+    "The pull request of the agent's repository to change, by its number: the agent's own, " +
+      `which ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers, or another, such as one stacked on it.`,
   ),
   change: describeWire(
     pullRequestActionRequestSchema,
@@ -3626,8 +3630,8 @@ function unmadeWords(refusal: HostedRefusal): string {
 const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION,
   description:
-    "Make one change to the pull request of a coding agent the member can see, by the agent's " +
-    "id, in whichever of the member's workspaces it stands, as the agent's Pull request tab " +
+    "Make one change to a pull request of the repository of a coding agent the member can see, " +
+    "by the agent's id and the pull request's number, in whichever of the member's workspaces it stands, as the agent's Pull request tab " +
     "makes it: on GitHub as the member, on their own GitHub sign-in, so GitHub allows what " +
     "their own account may and nothing more. Name the change by its action " +
     `(${Object.values(PULL_REQUEST_ACTION).join(", ")}) with the fields that action takes. A ` +
@@ -3635,8 +3639,7 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
     `${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers, so GitHub refuses one against a head pushed ` +
     "since; an edit of the description names the words it began from, as expectedBody, and " +
     "writes nothing where GitHub's changed since; a review thread, a comment, and what a " +
-    "reaction is on are named by GitHub's own node ids. The change is made on the agent's own " +
-    "pull request unless number names another of its repository. Answers `accepted` once " +
+    "reaction is on are named by GitHub's own node ids. Answers `accepted` once " +
     "GitHub made it, or `rejected` and why not: GitHub's own words where it refused, or that " +
     "the member must sign in with GitHub again.",
   input: AgentPullRequestActionInputSchema,
@@ -3667,12 +3670,12 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
     ),
 });
 
-// A coding agent's pull request by the agent's id, or any pull request of a repository the member's workspace reaches by its repository and number (`pull-request-tools.ts`).
+// A pull request of a coding agent's repository by the agent's id and its number, or any pull request of a repository the member's workspace reaches by its repository and number (`pull-request-tools.ts`).
 
 /** Why a pull request call reached nothing before it began, in words the agent can act on. */
 const PULL_REQUEST_NAME_ONE =
-  "Not run: name the pull request either by agentId, or by repository and number, not both " +
-  "and not neither.";
+  "Not run: name the pull request's repository either by agentId or by repository " +
+  "(owner/name), not both and not neither, beside its number.";
 
 /** With repository, the workspace whose installation reaches it, as a chapters call names it. */
 const PULL_REQUEST_WORKSPACE = Schema.optionalKey(
@@ -3700,7 +3703,7 @@ const MarkPullRequestFilesViewedInputSchema = Schema.Struct({
 interface PullRequestNamedInput {
   readonly agentId: string | undefined;
   readonly repository: string | undefined;
-  readonly number: number | undefined;
+  readonly number: number;
   readonly workspace: string | undefined;
 }
 
@@ -3709,7 +3712,7 @@ interface PullRequestCall<R> {
   readonly agent: (
     userId: string,
     agent: Agent,
-    number: number | undefined,
+    number: number,
   ) => Effect.Effect<WireRecord, never, R>;
   readonly repository: (
     userId: string,
@@ -3743,7 +3746,7 @@ const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestC
     );
   }
 
-  if (repository === undefined || number === undefined) {
+  if (repository === undefined) {
     return Effect.succeed(agentToolRejected(PULL_REQUEST_NAME_ONE));
   }
 
@@ -3758,10 +3761,10 @@ const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestC
 const READ_PULL_REQUEST_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_PULL_REQUEST,
   description:
-    "Read a pull request one part a call, as its Pull request tab draws it: a coding agent's " +
-    "by the agent's id, what it published or another of its repository by number, or any " +
-    "pull request of a repository the member's workspace reaches on GitHub by its repository " +
-    "(owner/name) and number. " +
+    "Read a pull request one part a call, as its Pull request tab draws it, by its number: " +
+    "one of a coding agent's repository by the agent's id, or one of any repository the " +
+    "member's workspace reaches on GitHub by its repository (owner/name). " +
+    `${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers the number of an agent's own. ` +
     "overview (the default) answers the pull request as GitHub holds it now: its state, its " +
     "checks in one word, the head commit it stands on (headSha), the lines it adds and removes, " +
     "the branch it is from, and its overview: its body as written in Markdown, cut to a bound, its " +
@@ -3773,8 +3776,8 @@ const READ_PULL_REQUEST_TOOL = memberMcpTool({
     "each with what became of it, the lines it adds and removes, and whether the member marked " +
     "it viewed; name a path to read that file's patch as well. " +
     `${WORKSPACE_WORDS} Answers \`rejected\` and why where the member reaches no such agent, ` +
-    "the agent opened no pull request yet, the member is in no such workspace, or the " +
-    "repository holds no pull request of that number. It only reads.",
+    "the member is in no such workspace, or the repository holds no pull request of that " +
+    "number. It only reads.",
   input: ReadPullRequestInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, agentId, repository, number, ...asked }) =>
@@ -3793,9 +3796,9 @@ const MARK_PULL_REQUEST_FILES_VIEWED_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED,
   description:
     "Mark files of a pull request as viewed, or unmark them, as GitHub's own Viewed box does: " +
-    "on GitHub as the member, on their own GitHub sign-in. Name a coding agent's pull request " +
-    "by the agent's id, or any pull request of a repository the member's workspace reaches by " +
-    "its repository (owner/name) and number, and the files by their paths as " +
+    "on GitHub as the member, on their own GitHub sign-in. Name the pull request by its " +
+    "number, of a coding agent's repository by the agent's id or of any repository the " +
+    "member's workspace reaches by its repository (owner/name), and the files by their paths as " +
     `${MEMBER_MCP_TOOL.READ_PULL_REQUEST}'s changes name them. ` +
     `${WORKSPACE_WORDS} Answers \`accepted\` with the paths marked, or \`rejected\` and why ` +
     "at the first GitHub did not take, naming those marked before it.",
@@ -3858,8 +3861,9 @@ const PullRequestChaptersInputSchema = Schema.Struct({
   agentId: Schema.optionalKey(
     describeWire(
       wireUuidSchema,
-      `An agent whose pull request to read, by its id as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered ` +
-        "it; leave it out to name a repository's pull request instead.",
+      `An agent whose repository the pull request is of, by its id as ` +
+        `${MEMBER_MCP_TOOL.LIST_AGENTS} answered it, with number; leave it out to name the ` +
+        "repository instead.",
     ),
   ),
   repository: Schema.optionalKey(
@@ -3869,12 +3873,10 @@ const PullRequestChaptersInputSchema = Schema.Struct({
         "with agentId.",
     ),
   ),
-  number: Schema.optionalKey(
-    describeWire(
-      githubPullRequestNumberSchema,
-      "The pull request's number: with repository, the one to read; with agentId, another " +
-        "pull request of the agent's repository, left out for the agent's own.",
-    ),
+  number: describeWire(
+    githubPullRequestNumberSchema,
+    "The pull request's number, in the repository that repository or agentId names. For an " +
+      `agent's own pull request, pass the number ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers.`,
   ),
   workspace: Schema.optionalKey(
     describeWire(
@@ -3895,7 +3897,7 @@ interface ChaptersCall<R> {
   readonly agent: (
     userId: string,
     agent: Agent,
-    number: number | undefined,
+    number: number,
   ) => Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>;
   readonly repository: (
     userId: string,
@@ -3932,16 +3934,16 @@ const CHAPTERS_ANSWER_WORDS =
   `chapters stand (${Object.values(PULL_REQUEST_CHAPTERS_STATE).join(", ")}): the head and base ` +
   "they were told for, and, where ready, each chapter's title, summary, kind, risk and why, key " +
   "changes with the lines they are on, and the hunks it holds; chapters told for a head older " +
-  "than the pull request's now are stale. pullRequest is null where the agent opened none yet. " +
-  "Or `rejected` and why.";
+  "than the pull request's now are stale. pullRequest is null where the agent works in no " +
+  "repository, or its repository holds no pull request of that number. Or `rejected` and why.";
 
 const READ_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS,
   description:
     "Read a pull request's chapters as its Pull request tab shows them: the story of its diff " +
-    "told as chapters a reviewer reads in order. Name a coding agent's pull request by the " +
-    "agent's id, or any pull request of a repository the workspace's GitHub installation " +
-    "reaches by its repository and number. It only reads, and never generates: " +
+    "told as chapters a reviewer reads in order. Name the pull request by its number, of a " +
+    "coding agent's repository by the agent's id or of any repository the workspace's GitHub " +
+    "installation reaches by its repository. It only reads, and never generates: " +
     `${MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS} does, where none stand or they are stale. ` +
     CHAPTERS_ANSWER_WORDS,
   input: PullRequestChaptersInputSchema,
@@ -3973,13 +3975,7 @@ const GENERATE_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
     chaptersAsMember(asked, {
       generates: true,
       agent: (userId, agent, number) =>
-        agentChaptersGenerate(
-          {},
-          KEPT_PUBLISHED,
-          userId,
-          agent,
-          number === undefined ? undefined : String(number),
-        ),
+        agentChaptersGenerate({}, KEPT_PUBLISHED, userId, agent, String(number)),
       repository: (userId, query) => repositoryChaptersGenerate({}, userId, query),
     }),
 });
@@ -4905,14 +4901,31 @@ const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
 
 const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
 
+/** Which script a save replaces: the workspace's install script, or one repository's setup script. */
+const SANDBOX_SETUP_TARGET_KIND = {
+  WORKSPACE: "workspace",
+  REPOSITORY: "repository",
+} as const;
+
+const SandboxSetupTargetSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal(SANDBOX_SETUP_TARGET_KIND.WORKSPACE) }),
+  Schema.Struct({
+    kind: Schema.Literal(SANDBOX_SETUP_TARGET_KIND.REPOSITORY),
+    repository: describeWire(
+      githubRepositoryFullNameSchema,
+      "The repository whose setup script to save, as owner/name.",
+    ),
+  }),
+]);
+
 const EditSandboxSetupInputSchema = Schema.Struct({
   workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
-  repository: Schema.optionalKey(
-    describeWire(
-      githubRepositoryFullNameSchema,
-      "The repository whose setup script to save, as owner/name; leave it out to save the " +
-        "workspace's install script.",
-    ),
+  target: describeWire(
+    SandboxSetupTargetSchema,
+    `The script to save: kind ${SANDBOX_SETUP_TARGET_KIND.WORKSPACE} for the workspace's install ` +
+      `script, which runs once in each build of a repository's base snapshot; or kind ` +
+      `${SANDBOX_SETUP_TARGET_KIND.REPOSITORY} with repository, as owner/name, for that ` +
+      "repository's setup script, which runs once in each new agent sandbox of it.",
   ),
   script: describeWire(
     workspaceInstallScriptPutRequestSchema.fields.script,
@@ -4947,8 +4960,8 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
   description:
     "Save one script of the cloud sandbox setup of a workspace the member is an owner or an " +
-    "admin of, as its Settings › Cloud environment would: the install script, or, naming a " +
-    "repository, that repository's setup script, under any casing of its name. The " +
+    "admin of, as its Settings › Cloud environment would: the target names which, the " +
+    "workspace's install script or a repository's setup script, under any casing of its name. The " +
     "script given replaces the one that stood whole, so read it first with " +
     `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} to change part of it; an empty script removes it. ` +
     "Sandboxes already running keep the script they ran. " +
@@ -4956,15 +4969,15 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
     "`rejected` and why.",
   input: EditSandboxSetupInputSchema,
   annotations: DESTRUCTIVE,
-  run: ({ workspace, repository, script }) =>
+  run: ({ workspace, target, script }) =>
     listAsMember(workspace, ({ caller }) =>
       sandboxSetupAnswer(
-        repository === undefined
+        target.kind === SANDBOX_SETUP_TARGET_KIND.WORKSPACE
           ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
           : saveRepositorySetup(
               callerUserId(caller),
               callerWorkspaceId(caller),
-              repository,
+              target.repository,
               script,
             ),
         (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),

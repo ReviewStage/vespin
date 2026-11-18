@@ -214,8 +214,6 @@ export interface NewTask {
   readonly origin?: TaskOrigin;
   /** The task it is a child of, which the caller confirmed it reaches in the same workspace, and whose repository it took; none for a task at the top. */
   readonly parentTaskId?: string;
-  /** Whether `start_agent` made it for the agent it started, its caller on no task; not where none is named. */
-  readonly madeByStart?: boolean;
   /** The description's text as it starts; empty where none is named. */
   readonly text?: string;
 }
@@ -241,6 +239,8 @@ export interface TaskChanges {
   readonly priority?: TaskPriority;
   /** The member the task is assigned to, who must be a member of its workspace, or of the one it moves to; null for no one. */
   readonly assigneeId?: string | null;
+  /** False where a move into progress assigns no one the change does not name, as a tool's `update_task` asks; the app's own change leaves it out and assigns its mover. */
+  readonly assignsMover?: boolean;
 }
 
 /** How a task's repository was reached, as a write takes it. */
@@ -831,7 +831,6 @@ const TaskInsertSchema = Schema.Struct({
   parentTaskId: Schema.NullOr(Schema.String),
   description: Schema.String,
   brief: Schema.NullOr(Schema.String),
-  madeByStart: Schema.Boolean,
   now: Schema.Date,
 });
 
@@ -862,7 +861,6 @@ function taskValues(write: typeof TaskInsertSchema.Type) {
     assigneeId: write.assigneeId,
     creatorActor: write.creatorActor,
     creatorAgentId: write.creatorAgentId,
-    madeByStart: write.madeByStart,
     repository: write.repository,
     githubAccess: write.githubAccess,
     parentTaskId: write.parentTaskId,
@@ -1240,7 +1238,6 @@ const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =
       assigneeId: started.assigneeId ?? null,
       creatorActor: started.origin?.actor ?? DESCRIPTION_ACTOR.DEVELOPER,
       creatorAgentId: started.origin?.agentId ?? null,
-      madeByStart: started.madeByStart ?? false,
       number: yield* nextTaskNumber(started.organizationId),
       now,
     };
@@ -1991,7 +1988,7 @@ const taskStatusMoved = Effect.fnUntraced(function* <R, E2, R2>(
  * not a save: the document's `updatedAt` and the list's order stand. The pin
  * and the read mark are the account's own and no other member's. A task no one is assigned to
  * that the change moves into progress is assigned to the account, unless the
- * change names an assignee of its own. A change that moves the task to Done
+ * change names an assignee of its own or `assignsMover` is false. A change that moves the task to Done
  * or Canceled settles its open inbox items, and one that moves it off them
  * to work again leaves those items settled (`inbox-settle.ts`).
  *
@@ -2099,6 +2096,7 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
         // A task no one is on is its mover's once it moves into progress, as Linear's start assigns;
         // an assignee the change names wins, and one taken off a task already in progress stays off.
         const startedBy =
+          changes.assignsMover !== false &&
           changes.assigneeId === undefined &&
           changes.status === TASK_STATUS.IN_PROGRESS &&
           locked.value.status !== TASK_STATUS.IN_PROGRESS &&

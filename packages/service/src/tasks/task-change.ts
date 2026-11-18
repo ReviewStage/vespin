@@ -41,7 +41,10 @@ import { archiveAskedStatus } from "./archive-settle.js";
 const STOPPER = storeWriter({ tools: CODER_TOOL_SET });
 
 /** A change as a door asks for it: the app's own, bar the place a released desktop still names, which goes nowhere. */
-export type TaskChangeRequest = Omit<TaskUpdateRequest, "runsOn">;
+export type TaskChangeRequest = Omit<TaskUpdateRequest, "runsOn"> & {
+  /** False for a tool's change, which assigns no one it does not name on a move into progress (`TaskChanges`); the app's leaves it out. */
+  readonly assignsMover?: boolean;
+};
 
 /** A move the workspace's GitHub refused under the task's lock, carried out of the store's change as the refusal. */
 class MoveRefused extends Data.TaggedError("MoveRefused")<{ readonly refusal: HostedRefusal }> {}
@@ -189,6 +192,7 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
       ...(status === undefined ? undefined : { status }),
       ...(asked.priority === undefined ? undefined : { priority: asked.priority }),
       ...(assigneeId === undefined ? undefined : { assigneeId }),
+      ...(asked.assignsMover === undefined ? undefined : { assignsMover: asked.assignsMover }),
     },
     moveGuard:
       organizationId === undefined ? undefined : movedRepositoryReached(organizationId, userId),

@@ -278,6 +278,25 @@ const clickTarget = describeWire(
   "Where the click lands: {ref} for an element by the ref a snapshot printed, or {x, y} for a point on the visible page.",
 );
 
+/** Where typing lands: a field by its ref, or the element that has the focus, named as such. */
+const typeTarget = describeWire(
+  Schema.Union([
+    Schema.Struct({
+      ref: describeWire(
+        Schema.String.check(Schema.isPattern(REF_PATTERN)),
+        "The field to type into, by the ref a snapshot printed beside it.",
+      ),
+    }),
+    Schema.Struct({
+      focused: describeWire(
+        Schema.Literal(true),
+        "true, to type into the element that has the focus now.",
+      ),
+    }),
+  ]),
+  "Where the text goes: {ref} for a field by the ref a snapshot printed, or {focused: true} for the element that has the focus now.",
+);
+
 /** What a scroll turns: an element scrolled into view by its ref, or the page by a distance. */
 const scrollBy = describeWire(
   Schema.Union([
@@ -338,12 +357,7 @@ const typeAction = Schema.Struct({
     ),
     "The text to type, as it is; a key such as Enter is its own key action.",
   ),
-  ref: Schema.optionalKey(
-    describeWire(
-      Schema.String.check(Schema.isPattern(REF_PATTERN)),
-      "The field to type into, by its ref; left out for the element that has the focus.",
-    ),
-  ),
+  target: typeTarget,
 });
 
 const selectAction = Schema.Struct({

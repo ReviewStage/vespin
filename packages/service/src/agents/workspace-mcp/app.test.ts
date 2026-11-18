@@ -32,6 +32,7 @@ import { INBOX_TOOL } from "@repo/features/inbox-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import {
@@ -1055,10 +1056,19 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         const name = "Expire stale invitations";
 
-        const first = yield* create({ name, brief: "After a week.", repository: null });
-        const retried = yield* create({ repository: null, brief: "After a week.", name });
+        const asked = { name, brief: "After a week.", repository: null, status: TASK_STATUS.TODO };
+
+        const first = yield* create(asked);
+
+        const retried = yield* create({
+          status: asked.status,
+          repository: null,
+          brief: asked.brief,
+          name,
+        });
+
         yield* TestClock.adjust(NATIVE_CALL_KEY_WINDOW_MS);
-        const later = yield* create({ name, brief: "After a week.", repository: null });
+        const later = yield* create(asked);
         yield* Effect.promise(() => client.close());
 
         assert.equal(first.isError, false, JSON.stringify(first));

@@ -706,8 +706,7 @@ it.effect(
             {
               threadId: rows.strangerItem,
               askId: openAskOf(strangerAsk),
-              reply: INBOX_REPLY.CHOSE,
-              choices: ["Approve"],
+              answer: { reply: INBOX_REPLY.CHOSE, choices: ["Approve"] },
             },
           ],
           [MEMBER_MCP_TOOL.REPLY_TO_THREAD, { threadId: rows.strangerItem, text: "Approve it." }],
@@ -901,7 +900,10 @@ it.effect(
 
       const answers = yield* Effect.forEach(
         [
-          [MEMBER_MCP_TOOL.CREATE_TASK, { workspace, name: "Planted" }],
+          [
+            MEMBER_MCP_TOOL.CREATE_TASK,
+            { workspace, name: "Planted", repository: null, status: TASK_STATUS.TODO },
+          ],
           [MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.DELETE_TASK, { taskId }],
           [
@@ -915,7 +917,7 @@ it.effect(
           [MEMBER_MCP_TOOL.DELETE_SECTION, { sectionId: rows.sectionId }],
           [MEMBER_MCP_TOOL.START_AGENT, { taskId }],
           [MEMBER_MCP_TOOL.START_AGENT, { taskId, from: { agentId } }],
-          [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello." }],
+          [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: false }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: true }],
           [
             MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
@@ -957,7 +959,10 @@ it.effect(
           [MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
-          [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
+          [
+            MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
+            { workspace, target: { kind: "workspace" }, script: "Planted." },
+          ],
           [
             MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
             {
@@ -1152,6 +1157,8 @@ it.effect(
       const made = decodeMade(
         yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
           name: "Seat billing",
+          repository: null,
+          status: TASK_STATUS.TODO,
           description: "## Problem\n\nSeats drift.",
         }),
       );
@@ -1205,7 +1212,11 @@ it.effect(
       );
 
       const blockerId = decodeMade(
-        yield* call(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Invoice lag" }),
+        yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
+          name: "Invoice lag",
+          repository: null,
+          status: TASK_STATUS.TODO,
+        }),
       ).task.id;
 
       yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, blockedBy: { add: [blockerId] } });
@@ -1351,7 +1362,7 @@ it.effect(
           decodeAnswer(
             await client.callTool({
               name: MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION,
-              arguments: { agentId, change },
+              arguments: { agentId, number: PUBLISHED.number, change },
             }),
           ),
         );
@@ -1407,7 +1418,7 @@ it.effect(
 );
 
 it.effect(
-  "an outside agent reads a pull request by its repository and number or by the agent that opened it, its files with the member's viewed marks, and marks them on the member's own GitHub sign-in",
+  "an outside agent reads a pull request by its repository and number or by the agent that opened it and its number, refusing one that names no number, its files with the member's viewed marks, and marks them on the member's own GitHub sign-in",
   () =>
     Effect.gen(function* () {
       const calls: GraphqlCall[] = [];
@@ -1481,7 +1492,7 @@ it.effect(
         });
 
         const published = yield* openTaskAgent(member.userId, workspaceId, task.id);
-        // One agent pushed the branch its pull request stands open from; the other has opened none yet.
+        // The agent pushed the branch its pull request stands open from.
         yield* Database.use((db) =>
           db
             .update(agentTable)
@@ -1489,10 +1500,7 @@ it.effect(
             .where(eq(agentTable.id, published)),
         );
 
-        return {
-          published,
-          unpublished: yield* openTaskAgent(member.userId, workspaceId, task.id),
-        };
+        return { published };
       }).pipe(Effect.provide(services));
 
       const token = yield* Effect.promise(() =>
@@ -1520,17 +1528,19 @@ it.effect(
 
       const agentChanges = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
         agentId: agents.published,
+        number: PUBLISHED.number,
         part: "changes",
       });
 
       const agentMarked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
         agentId: agents.published,
+        number: PUBLISHED.number,
         paths: ["src/invite.ts"],
         viewed: false,
       });
 
-      const unopened = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
-        agentId: agents.unpublished,
+      const unnumbered = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
+        agentId: agents.published,
       });
 
       yield* Effect.promise(() => client.close());
@@ -1549,8 +1559,9 @@ it.effect(
         );
       }
 
-      assert.equal(unopened.isError, true);
-      assert.match(unopened.content[0].text, /opened no pull request yet/u);
+      // No pull request is read in the number's place: a call naming none is refused, naming it.
+      assert.equal(unnumbered.isError, true);
+      assert.match(unnumbered.content[0].text, /number/u);
       // A number the repository holds no pull request under is refused as the hosted read refuses it.
       assert.equal(missing.isError, true);
       assert.match(missing.content[0].text, /no pull request of that number/u);
@@ -1639,11 +1650,16 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
 
         const read = yield* call(MEMBER_MCP_TOOL.READ_INBOX, {});
 
+        const unpicked = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
+          threadId: posted.success.id,
+          askId,
+          answer: { reply: INBOX_REPLY.CHOSE },
+        });
+
         const answered = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
           threadId: posted.success.id,
           askId,
-          reply: INBOX_REPLY.CHOSE,
-          choices: ["30 days"],
+          answer: { reply: INBOX_REPLY.CHOSE, choices: ["30 days"] },
         });
 
         yield* Effect.promise(() => client.close());
@@ -1659,6 +1675,9 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           ],
           [posted.success.id, askId, true, ["7 days", "30 days"]],
         );
+        // A reply left without its field is refused naming what each reply takes, so one retry fixes it.
+        assert.equal(unpicked.isError, true);
+        assert.match(unpicked.content[0].text, /answer\.reply "chose" takes choices/u);
         assert.notEqual(answered.isError, true, answered.content[0].text);
         assert.equal(
           decodeWritten(JSON.parse(answered.content[0].text)).thread.status,

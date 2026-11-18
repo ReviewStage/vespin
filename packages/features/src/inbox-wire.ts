@@ -599,6 +599,25 @@ const inboxFieldSchema = EffectSchema.Struct({
 
 export type InboxField = typeof inboxFieldSchema.Type;
 
+/** A field's own keys whatever its type: its label and whether it must be filled. */
+const FIELD_INPUT_KEYS = {
+  label: inboxFieldSchema.fields.label,
+  required: inboxFieldSchema.fields.required,
+};
+
+/** A field as the agent posts it, one variant per type: a select names its options, one perhaps recommended, and no other type takes either. */
+const inboxFieldInputSchema = EffectSchema.Union([
+  EffectSchema.Struct({ type: EffectSchema.Literal(INBOX_FIELD.TEXT), ...FIELD_INPUT_KEYS }),
+  EffectSchema.Struct({ type: EffectSchema.Literal(INBOX_FIELD.NUMBER), ...FIELD_INPUT_KEYS }),
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(INBOX_FIELD.SELECT),
+    ...FIELD_INPUT_KEYS,
+    options: inboxFieldSchema.fields.options.schema,
+    recommended: inboxFieldSchema.fields.recommended,
+  }),
+  EffectSchema.Struct({ type: EffectSchema.Literal(INBOX_FIELD.BOOLEAN), ...FIELD_INPUT_KEYS }),
+]);
+
 /**
  * What an agent recommends of a choice's options as it posts the choice:
  * one label, or a list of them, several only where the choice lets several
@@ -825,15 +844,20 @@ const DO_FIELDS = {
 };
 
 /** An `answer` ask's own keys: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
-const ANSWER_FIELDS = {
-  type: EffectSchema.Literal(INBOX_ASK.ANSWER),
-  fields: EffectSchema.optionalKey(
-    EffectSchema.Array(inboxFieldSchema).check(
-      EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_FIELDS),
+const ANSWER_FIELDS = answerFields(inboxFieldSchema);
+
+/** An `answer` ask's own keys, its fields each read by `field`: as kept, or as the agent posts them. */
+function answerFields<F extends EffectSchema.Top>(field: F) {
+  return {
+    type: EffectSchema.Literal(INBOX_ASK.ANSWER),
+    fields: EffectSchema.optionalKey(
+      EffectSchema.Array(field).check(
+        EffectSchema.isMinLength(1),
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_FIELDS),
+      ),
     ),
-  ),
-};
+  };
+}
 
 /** What a message asks of its reader, one of three: decide among options, do steps, or answer. */
 const inboxAskSchema = EffectSchema.Union([
@@ -852,9 +876,14 @@ export type InboxAsk = typeof inboxAskSchema.Type;
  * words that say what it shows; a page it showed, by the id and the version
  * `show_page` answered, required where the model posts one and optional
  * where a panel reads a stored post; or an https address, with the words it
- * is named by.
+ * is named by. An `answer`'s fields are read by `field`: one variant per
+ * type where the model posts them, and as kept where a panel reads a stored
+ * post, which may name a select's options loosely.
  */
-function askInputSchema<V extends EffectSchema.Top>(pageVersion: V) {
+function askInputSchema<V extends EffectSchema.Top, F extends EffectSchema.Top>(
+  pageVersion: V,
+  field: F,
+) {
   const media = EffectSchema.Union([
     EffectSchema.Struct({
       path: filledText(INBOX_BOUNDS.MAX_PATH_CHARS),
@@ -892,12 +921,12 @@ function askInputSchema<V extends EffectSchema.Top>(pageVersion: V) {
       recommended: EffectSchema.optionalKey(recommendedInputSchema),
     }),
     EffectSchema.Struct(DO_FIELDS),
-    EffectSchema.Struct(ANSWER_FIELDS),
+    EffectSchema.Struct(answerFields(field)),
   ]);
 }
 
-/** An ask as the agent posts it, a page option naming its version. */
-const inboxAskInputSchema = askInputSchema(pageVersionNumberSchema);
+/** An ask as the agent posts it, a page option naming its version and each field one variant per type. */
+const inboxAskInputSchema = askInputSchema(pageVersionNumberSchema, inboxFieldInputSchema);
 
 export type InboxAskInput = typeof inboxAskInputSchema.Type;
 
@@ -961,12 +990,16 @@ export type InboxThreadPostInput = typeof inboxThreadPostInputSchema.Type;
 
 /**
  * A post's tool part as a panel reads one already stored: the input the
- * model is shown, but a page option's version optional, because a post from
- * before the version was required named none and its row still reads.
+ * model is shown, but a page option's version optional and an answer's
+ * fields read as kept, because a post from before the version was required
+ * named none, and one from before each field took one variant per type may
+ * name a select's options loosely, and its row still reads.
  */
 export const inboxThreadPostReadSchema = EffectSchema.Struct({
   ...inboxThreadPostInputSchema.fields,
-  ask: EffectSchema.optionalKey(askInputSchema(EffectSchema.optionalKey(pageVersionNumberSchema))),
+  ask: EffectSchema.optionalKey(
+    askInputSchema(EffectSchema.optionalKey(pageVersionNumberSchema), inboxFieldSchema),
+  ),
 });
 
 export type InboxThreadPostRead = typeof inboxThreadPostReadSchema.Type;

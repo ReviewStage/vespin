@@ -1349,6 +1349,31 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   );
 });
 
+test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+
+  const filed = await database.run(
+    createTask(agents.caller.userId, {
+      organizationId: workspaceId,
+      name: "Metered billing",
+      repository: RELAY_FULL_NAME,
+      status: TASK_STATUS.BACKLOG,
+    }),
+  );
+
+  const started = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: filed.id, prompt: "Bill by seat.", runsOn: { machine: AGENT_MACHINE.VERCEL } },
+    "call-start-filed",
+  );
+
+  assert.equal(started.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(started));
+  const stored = Option.getOrThrow(await database.run(readTask(agents.caller.userId, filed.id)));
+  assert.deepEqual([stored.task.status, stored.task.assignee], [TASK_STATUS.BACKLOG, undefined]);
+});
+
 test("start_agent naming another member's device is refused in words that name the device and its owner and offer the cloud, starting nothing, and runs in the cloud once runsOn names it", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -1892,7 +1917,12 @@ test("an agent stored as a pilot, on a task stored in pilot mode, makes a child 
 
   const made = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Meter usage", parentTaskId: plans.billing, mode: TASK_MODE.PILOT },
+    {
+      name: "Meter usage",
+      status: TASK_STATUS.TODO,
+      parentTaskId: plans.billing,
+      mode: TASK_MODE.PILOT,
+    },
     "call-make",
   );
 
@@ -2691,7 +2721,7 @@ async function tasksNamed(userId: string, workspaceId: string, name: string): Pr
     .map((each) => each.id);
 }
 
-test("create_task makes a task in the caller's workspace for the member the agent acts for, on the repository it works in unless another or none is named, with the brief and description given and no agent on it, once under the call's key; start_agent then starts on it by its id", async () => {
+test("create_task makes a task in the caller's workspace for the member the agent acts for, on the repository named or none, refusing one that names no repository or status, with the brief and description given and no agent on it, once under the call's key; start_agent then starts on it by its id", async () => {
   const { workspaceId, elsewhere, plans: tasks, agents } = await openWorkspaces();
   // Bob's agent on Alice's task: the task it makes is Bob's, not the owner's of the task it works on.
   const bob = agents.teammates.userId;
@@ -2707,7 +2737,13 @@ test("create_task makes a task in the caller's workspace for the member the agen
 
   const made = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: ` ${name} `, brief: "Invites should lapse after a week.", description },
+    {
+      name: ` ${name} `,
+      repository: RELAY_FULL_NAME,
+      status: TASK_STATUS.TODO,
+      brief: "Invites should lapse after a week.",
+      description,
+    },
     "call-new",
   );
 
@@ -2745,7 +2781,7 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A call naming the field as it was named before the rename makes nothing, and says what it is named now.
   const retired = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Seats", plan: "## Goal" },
+    { name: "Seats", status: TASK_STATUS.TODO, plan: "## Goal" },
     "call-plan",
   );
 
@@ -2755,7 +2791,12 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A title in a description written with CRLF line ends is dropped as well.
   const crlf = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Seats", description: "\r\n# Seats\r\n\r\n## Goal\r\n\r\nBill by seat." },
+    {
+      name: "Seats",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      description: "\r\n# Seats\r\n\r\n## Goal\r\n\r\nBill by seat.",
+    },
     "call-crlf",
   );
 
@@ -2768,7 +2809,12 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A line opening on # that is no Markdown title is the description's own, and stays.
   const kept = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Limits", description: "#define MAX 10\n\n## Goal\n\nUpdate limits." },
+    {
+      name: "Limits",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      description: "#define MAX 10\n\n## Goal\n\nUpdate limits.",
+    },
     "call-define",
   );
 
@@ -2779,16 +2825,20 @@ test("create_task makes a task in the caller's workspace for the member the agen
   );
 
   // The same call run again, even twice at once, answers the task it made, and makes no second.
+  const sameAsked = { name, repository: RELAY_FULL_NAME, status: TASK_STATUS.TODO };
+
   const again = await Promise.all([
-    call(AGENT_TOOL.CREATE_TASK, { name }, "call-new"),
-    call(AGENT_TOOL.CREATE_TASK, { name }, "call-new"),
+    call(AGENT_TOOL.CREATE_TASK, sameAsked, "call-new"),
+    call(AGENT_TOOL.CREATE_TASK, sameAsked, "call-new"),
   ]);
 
   assert.deepEqual(again, [made, made]);
 
+  const raced = { name: "Raced", repository: null, status: TASK_STATUS.TODO };
+
   const racing = await Promise.all([
-    call(AGENT_TOOL.CREATE_TASK, { name: "Raced" }, "call-race"),
-    call(AGENT_TOOL.CREATE_TASK, { name: "Raced" }, "call-race"),
+    call(AGENT_TOOL.CREATE_TASK, raced, "call-race"),
+    call(AGENT_TOOL.CREATE_TASK, raced, "call-race"),
   ]);
 
   assert.ok(
@@ -2813,16 +2863,46 @@ test("create_task makes a task in the caller's workspace for the member the agen
   );
 
   // None names no repository, and one the installation does not reach makes nothing.
-  const bare = await call(AGENT_TOOL.CREATE_TASK, { name: "Bare", repository: null }, "call-bare");
+  const bare = await call(
+    AGENT_TOOL.CREATE_TASK,
+    { name: "Bare", repository: null, status: TASK_STATUS.TODO },
+    "call-bare",
+  );
+
   assert.ok(isRecord(bare.task), JSON.stringify(bare));
   assert.equal(bare.task.repository, null);
   assert.deepEqual(
-    await call(AGENT_TOOL.CREATE_TASK, { name: "Away", repository: "Acme/Elsewhere" }, "call-away"),
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Away", repository: "Acme/Elsewhere", status: TASK_STATUS.TODO },
+      "call-away",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: UPDATE_TASK_REFUSAL.NOT_REACHABLE },
   );
   assert.deepEqual(await tasksNamed(bob, workspaceId, "Away"), []);
 
-  for (const input of [{ name: "   " }, { name: "a".repeat(TASK_BOUNDS.MAX_NAME_CHARS + 1) }, {}]) {
+  // A make that names no repository is refused, rather than given the one the agent works in, as is one that names no status.
+  assert.deepEqual(
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Unplaced", status: TASK_STATUS.TODO },
+      "call-unplaced",
+    ),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.NO_REPOSITORY },
+  );
+  assert.deepEqual(
+    await call(AGENT_TOOL.CREATE_TASK, { name: "Unplaced", repository: null }, "call-unstanding"),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.NO_STATUS },
+  );
+  assert.deepEqual(await tasksNamed(bob, workspaceId, "Unplaced"), []);
+
+  const valid = { repository: null, status: TASK_STATUS.TODO };
+
+  for (const input of [
+    { ...valid, name: "   " },
+    { ...valid, name: "a".repeat(TASK_BOUNDS.MAX_NAME_CHARS + 1) },
+    valid,
+  ]) {
     assert.deepEqual(await call(AGENT_TOOL.CREATE_TASK, input, "call-bad"), {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason: CREATE_TASK_REFUSAL.UNREADABLE,
@@ -2846,7 +2926,13 @@ test("create_task makes a task in the caller's workspace for the member the agen
 
   const planless = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Seat audit", brief: "Audit seat counts.", description: "## Goal\n\nCount seats." },
+    {
+      name: "Seat audit",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      brief: "Audit seat counts.",
+      description: "## Goal\n\nCount seats.",
+    },
     "call-planless",
   );
 
@@ -2869,7 +2955,12 @@ test("an agent whose starter has left the workspace makes no task in it", async 
   const call = await peerCaller(hostOf(), agents.teammates, agentSessions.services);
   await database.run(leaveWorkspace(workspaceId, agents.teammates.userId));
 
-  const refused = await call(AGENT_TOOL.CREATE_TASK, { name: "Left behind" });
+  const refused = await call(AGENT_TOOL.CREATE_TASK, {
+    name: "Left behind",
+    repository: null,
+    status: TASK_STATUS.TODO,
+  });
+
   assert.equal(refused.status, ACTION_RESULT_STATUS.REJECTED, JSON.stringify(refused));
   assert.deepEqual(await tasksNamed(agents.caller.userId, workspaceId, "Left behind"), []);
 });
@@ -2882,7 +2973,12 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
 
   const made = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Invite expiry", blocks: [tasks.invitations] },
+    {
+      name: "Invite expiry",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      blocks: [tasks.invitations],
+    },
     "call-blocks",
   );
 
@@ -2911,7 +3007,7 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
   // A task with a parent already takes no new one, and the task asked to be it is not left behind.
   const child = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Child", parentTaskId: tasks.invitations },
+    { name: "Child", status: TASK_STATUS.TODO, parentTaskId: tasks.invitations },
     "call-child",
   );
 
@@ -2919,7 +3015,7 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
   assert.deepEqual(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Usurper", subTaskIds: [child.task.id] },
+      { name: "Usurper", status: TASK_STATUS.TODO, subTaskIds: [child.task.id] },
       "call-usurper",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.PARENT_HELD },
@@ -2929,7 +3025,12 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
   // A child that waits on a sibling lands with both its parent and its block.
   const waiting = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Waits on a sibling", parentTaskId: tasks.invitations, blockedBy: [child.task.id] },
+    {
+      name: "Waits on a sibling",
+      status: TASK_STATUS.TODO,
+      parentTaskId: tasks.invitations,
+      blockedBy: [child.task.id],
+    },
     "call-parent-and-block",
   );
 
@@ -3122,17 +3223,14 @@ test("update_task, asked by a call from before tasks stopped being archived, set
     await database.run(readTask(agents.teammates.userId, tasks.billing)),
   );
 
-  // An unarchive moves the task into progress, which assigns the caller's member a task no one was on.
-  const assignee = `[@Test User](https://vespin.dev/workspace-${workspaceId}/person/${agents.caller.userId})`;
-
-  const answered = (status: string, already: boolean, assigned: string | null = null) => ({
+  const answered = (status: string, already: boolean) => ({
     status: ACTION_RESULT_STATUS.ACCEPTED,
     task: {
       id: tasks.billing,
       key: `TW-${billing.task.number}`,
       status,
       priority: TASK_PRIORITY.NONE,
-      assignee: assigned,
+      assignee: null,
       name: "Billing",
       repository: RELAY_FULL_NAME,
       pinned: false,
@@ -3176,10 +3274,7 @@ test("update_task, asked by a call from before tasks stopped being archived, set
   );
   assert.deepEqual(await archive(true, "call-2"), answered(TASK_STATUS.CANCELED, true));
 
-  assert.deepEqual(
-    await archive(false, "call-3"),
-    answered(TASK_STATUS.IN_PROGRESS, false, assignee),
-  );
+  assert.deepEqual(await archive(false, "call-3"), answered(TASK_STATUS.IN_PROGRESS, false));
   assert.deepEqual(await standing(), { status: TASK_STATUS.IN_PROGRESS, finished: false });
 
   await database.run(
@@ -3195,12 +3290,12 @@ test("update_task, asked by a call from before tasks stopped being archived, set
       mergedAt: NOW,
     }),
   );
-  assert.deepEqual(await archive(true, "call-4"), answered(TASK_STATUS.DONE, false, assignee));
+  assert.deepEqual(await archive(true, "call-4"), answered(TASK_STATUS.DONE, false));
   // A task already settled keeps its status under an archive asked again.
   await database.run(
     updateTask(agents.teammates.userId, tasks.billing, { status: TASK_STATUS.CANCELED }),
   );
-  assert.deepEqual(await archive(true, "call-5"), answered(TASK_STATUS.CANCELED, true, assignee));
+  assert.deepEqual(await archive(true, "call-5"), answered(TASK_STATUS.CANCELED, true));
 });
 
 test("update_task marks a task done as the member's menu does, withdrawing the asks still open on its threads", async () => {
@@ -4157,7 +4252,6 @@ test("update_agent renames a teammate's agent on the retired runtime, moves it t
     title: " Billing export ",
     model: SOL,
     effort: "low",
-    contextWindow: "standard",
     disabledServers: ["notion"],
   });
 
@@ -4167,7 +4261,7 @@ test("update_agent renames a teammate's agent on the retired runtime, moves it t
     [changed.agent.title, changed.agent.model, changed.agent.modelName, changed.agent.effort],
     ["Billing export", SOL, "GPT-6.1 Sol", "low"],
   );
-  // A model with one window keeps its whole one, as the catalog reads the choice.
+  // A model with one window runs on its whole one.
   const after = await stored();
   assert.deepEqual(
     [after.title, after.model, after.effort, after.contextWindow, after.disabledServers],
@@ -4383,7 +4477,7 @@ test("list_models for a Claude Code agent lists its Claude models alone, their f
   });
 });
 
-test("update_agent refuses a Claude Code agent a GPT model and a context window, each in words and with nothing written, takes a Claude model or its fast version, and leaves the choices of an agent on the retired runtime as they were", async () => {
+test("update_agent refuses a Claude Code agent a GPT model and a context window, each in words and with nothing written, takes a Claude model or its fast version, and requires an agent on the retired runtime to name a window exactly where the model lists two", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const onClaudeCode = await claudeCodeAgentOn(agents.teammates.userId, tasks.billing);
@@ -4454,10 +4548,35 @@ test("update_agent refuses a Claude Code agent a GPT model and a context window,
   const after = await stored(onClaudeCode);
   assert.deepEqual([after.model, after.effort], [SONNET, "low"]);
 
-  // An agent on the retired runtime still moves to a fast version, another provider's model, and the standard window.
+  // An agent on the retired runtime is refused a move to a model with two windows that names neither, and a window for a model with one.
+  const windowRefusals = [];
+
+  for (const change of [
+    { model: OPUS, effort: "high" },
+    { model: SOL, effort: "low", contextWindow: "long" },
+  ]) {
+    windowRefusals.push(
+      await call(AGENT_TOOL.UPDATE_AGENT, { agentId: onRetired.id, title: "Not this", ...change }),
+    );
+  }
+
+  assert.deepEqual(windowRefusals, [
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason: `Not changed: ${OPUS} offers two context windows, so name contextWindow: standard (200000 tokens) or long (1000000 tokens), as list_models lists them.`,
+    },
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason: `Not changed: ${SOL} runs on one context window, so its list_models contextWindows are empty; leave contextWindow out.`,
+    },
+  ]);
+  assert.equal((await stored(onRetired)).title, null);
+
+  // It still moves to a fast version, another provider's model, and either window.
   for (const change of [
     { model: OPUS_FAST, effort: "high" },
     { model: OPUS, effort: "high", contextWindow: "standard" },
+    { model: OPUS, effort: "high", contextWindow: "long" },
     { model: SOL, effort: "low" },
   ]) {
     const changed = await call(AGENT_TOOL.UPDATE_AGENT, {
@@ -4721,7 +4840,12 @@ test("create_task, update_task, list_tasks, and read_task carry a task's status,
   const filed = taskOf(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Refund export", status: TASK_STATUS.BACKLOG, priority: TASK_PRIORITY.HIGH },
+      {
+        name: "Refund export",
+        repository: null,
+        status: TASK_STATUS.BACKLOG,
+        priority: TASK_PRIORITY.HIGH,
+      },
       "call-filed",
     ),
   );
@@ -4780,7 +4904,11 @@ test("create_task, update_task, list_tasks, and read_task carry a task's status,
     reason: AGENT_TOOL_REFUSAL.UNREADABLE_TASKS,
   });
   assert.deepEqual(
-    await call(AGENT_TOOL.CREATE_TASK, { name: "Odd", priority: "p0" }, "call-odd"),
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Odd", repository: null, status: TASK_STATUS.TODO, priority: "p0" },
+      "call-odd",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.UNREADABLE },
   );
 });
@@ -4807,7 +4935,12 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
   const filed = taskOf(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Refund export", assignee: `[@Bob](${personLink(teammates.userId)})` },
+      {
+        name: "Refund export",
+        repository: null,
+        status: TASK_STATUS.TODO,
+        assignee: `[@Bob](${personLink(teammates.userId)})`,
+      },
       "call-assigned",
     ),
   );
@@ -4829,7 +4962,11 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
 
   // A child made with no assignee named is no one's, though its parent has one.
   const child = taskOf(
-    await call(AGENT_TOOL.CREATE_TASK, { name: "Child", parentTaskId: filed.id }, "call-child"),
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Child", status: TASK_STATUS.TODO, parentTaskId: filed.id },
+      "call-child",
+    ),
   );
 
   assert.ok(isWireString(child.id), JSON.stringify(child));
@@ -4854,6 +4991,18 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
 
   assert.equal(again.already, true, JSON.stringify(again));
 
+  // A move into progress leaves a task no one is on unassigned, since only `assignee` names who is.
+  const started = await call(
+    AGENT_TOOL.UPDATE_TASK,
+    { taskId: filed.id, status: TASK_STATUS.IN_PROGRESS },
+    "call-started",
+  );
+
+  assert.deepEqual(
+    [taskOf(started).status, taskOf(started).assignee],
+    [TASK_STATUS.IN_PROGRESS, null],
+  );
+
   const mine = await call(
     AGENT_TOOL.UPDATE_TASK,
     { taskId: taskIds.billing, assignee: personLink(caller.userId) },
@@ -4876,7 +5025,12 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
   assert.deepEqual(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Elsewhere's", assignee: personLink(otherWorkspaces.userId) },
+      {
+        name: "Elsewhere's",
+        repository: null,
+        status: TASK_STATUS.TODO,
+        assignee: personLink(otherWorkspaces.userId),
+      },
       "call-elsewhere",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.NOT_MEMBER },

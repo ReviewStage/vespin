@@ -135,9 +135,9 @@ Creates a task you own, with no agent on it.
 | --- | --- | --- |
 | `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
 | `name` | string, required | The task's name, as the developer would name it in the sidebar. (1–200 characters) |
-| `repository` | string or null | The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach; null or left out for none, or the parent's where you give a parent. |
+| `repository` | string or null | The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach, or null for none; required, but left out where you give a parentTaskId or subTaskIds, whose repository it takes. |
 | `brief` | string | The developer's own words about the task, which Vespin is handed when they open a call on it; their words where they gave them, left out otherwise. (up to 16000 characters) |
-| `status` | `backlog` \| `todo` \| `in-progress` \| `done` \| `canceled` | Where the task stands: backlog for work filed for later; todo where left out. |
+| `status` | `backlog` \| `todo` \| `in-progress` \| `done` \| `canceled`, required | Where the task stands: todo for work to start, backlog for work filed for later. |
 | `priority` | `none` \| `urgent` \| `high` \| `medium` \| `low` | How much the task matters; none for a task no one has weighed yet. |
 | `assignee` | string or null | The member the task is assigned to, who is on it now, by their mention link as list_tasks or another read names them, `[@Name](https://vespin.dev/&lt;workspace&gt;/person/&lt;id&gt;)`, or its address alone; a member of the task's workspace. null for no one. |
 | `parentTaskId` | string | The task to make it a child of, by the id list_tasks answered: a task of your workspace, whose repository it works in. Left out, it stands at the top. (1–36 characters) |

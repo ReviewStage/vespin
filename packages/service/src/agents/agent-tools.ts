@@ -967,6 +967,11 @@ const START_HANDED_WORDS = {
     "images.",
 } as const;
 
+/** What a tool's start does to its task, which the coding agent's and the member MCP's descriptions share: nothing, but for its first turn's move. */
+export const START_LEAVES_TASK_WORDS =
+  "The start leaves the task's assignee and status as they stand, and the agent's first turn " +
+  "moves the task to In progress from any other status, as every agent's turn does.";
+
 /** `start_agent` in the words of the workspace's experiments: its name, its words, and its input schema. */
 export function startAgentToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
@@ -981,7 +986,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
 
   return (
     "Start a new agent on the task its taskId names, your own or another of your workspace, " +
-    `exactly as the developer would: ${START_HANDED_WORDS[words]} ` +
+    `${START_HANDED_WORDS[words]} ${START_LEAVES_TASK_WORDS} ` +
     "Start it on the task you work on, by your own taskId, for any part of that task's work, even one " +
     "that runs apart from yours, so its branch, pull request, and transcript stand under that task; " +
     "name another task only for work unrelated to it, or where the developer asked for that, and for " +
@@ -1112,6 +1117,33 @@ export const ARCHIVE_AGENT_REFUSAL = {
 /** The lead a refused choice of a change is said under. */
 const UPDATE_CHOICE_LEAD = "Not changed";
 
+/**
+ * Why a move to a model refuses the context window asked, or nothing: one
+ * is required where the model lists two, as `list_models` answers its
+ * contextWindows, and refused where it lists none, so the window is always
+ * the caller's and never the model's whole one by default.
+ */
+function contextWindowRefusal(
+  asked: { readonly model: string; readonly contextWindow?: string },
+  listed: readonly OfferedModel[],
+): string | undefined {
+  const windows = contextWindowsOf(listed, asked.model);
+
+  if (windows === undefined) {
+    return asked.contextWindow === undefined
+      ? undefined
+      : `${asked.model} runs on one context window, so its ${AGENT_TOOL.LIST_MODELS} contextWindows are empty; leave contextWindow out.`;
+  }
+
+  if (asked.contextWindow !== undefined) return undefined;
+
+  return (
+    `${asked.model} offers two context windows, so name contextWindow: ` +
+    `${CONTEXT_WINDOW.STANDARD} (${windows.standardTokens} tokens) or ` +
+    `${CONTEXT_WINDOW.LONG} (${windows.longTokens} tokens), as ${AGENT_TOOL.LIST_MODELS} lists them.`
+  );
+}
+
 /** Whether a change names anything to change, and a model only with its effort and a window only with them. */
 function updateNamesAChange(update: {
   readonly title?: string;
@@ -1162,8 +1194,9 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
   contextWindow: Schema.optionalKey(
     describeWire(
       contextWindowSchema,
-      "The context window it runs on, standard or long; only with a model, and the model's " +
-        "whole window where left out.",
+      `The context window it runs on, standard or long, as ${AGENT_TOOL.LIST_MODELS}' ` +
+        "contextWindows lists the model's; required with a model that lists two, and refused " +
+        "with one whose list is empty.",
     ),
   ),
   pinned: Schema.optionalKey(
@@ -1188,10 +1221,11 @@ export const UPDATE_AGENT_TOOL = {
   description:
     "Change an agent of your workspace by its id, as the developer's own menu, model chip, and " +
     "composer would, for the developer you work for: rename it, move it to another model, effort, " +
-    "and context window from its next step, pin it, or replace the MCP servers switched off for " +
-    "it; the changes land together or not at all. Change a teammate's agent still in use only " +
-    "where the developer asked for it. A rejected model or effort lists the choices. Then say " +
-    "which agent you changed and how.",
+    "and context window from its next step, the window named wherever the model's " +
+    `${AGENT_TOOL.LIST_MODELS} contextWindows are not empty, pin it, or replace the MCP servers ` +
+    "switched off for it; the changes land together or not at all. Change a teammate's agent " +
+    "still in use only where the developer asked for it. A rejected model or effort lists the " +
+    "choices. Then say which agent you changed and how.",
   inputSchema: UPDATE_AGENT_INPUT,
 } as const;
 
@@ -2368,6 +2402,7 @@ export function runStartAgent(
         from,
         runsOn: runsOn.success,
         summaryModel: call.summaryModel,
+        byTool: true,
         ...(calling === undefined
           ? undefined
           : { noteHeading: START_NOTE_HEADING.AGENT, startedBy: calling }),
@@ -2636,10 +2671,18 @@ export function runUpdateTask(
       // The change itself is confirmed as the app's is (`taskChangeAsked`), an archive stopping the task's agents but the caller.
       const asked = archived === undefined ? changes : { ...changes, archived };
 
+      // Note that a move into progress assigns no one, because only `assignee` changes who is on the task.
       const confirmed =
         Object.keys(asked).length === 0
           ? undefined
-          : yield* Effect.result(taskChangeAsked(userId, taskId, asked, callerAgent(caller)?.id));
+          : yield* Effect.result(
+              taskChangeAsked(
+                userId,
+                taskId,
+                { ...asked, assignsMover: false },
+                callerAgent(caller)?.id,
+              ),
+            );
 
       if (confirmed !== undefined && Result.isFailure(confirmed)) {
         return agentToolRejected(changeRefusalWords(confirmed.failure));
@@ -3024,6 +3067,15 @@ export function runUpdateAgent(
 
       if (asked !== undefined && accepted !== undefined && Result.isFailure(accepted)) {
         return agentToolRejected(choiceRefusal(asked, offered, UPDATE_CHOICE_LEAD));
+      }
+
+      const windowRefused =
+        asked === undefined
+          ? undefined
+          : contextWindowRefusal(asked, runtimeModels(offered, runtime, route?.payer));
+
+      if (windowRefused !== undefined) {
+        return agentToolRejected(`${UPDATE_CHOICE_LEAD}: ${windowRefused}`);
       }
 
       // The catalog's own reading of the choice is written, a window the model does not offer apart dropped.
