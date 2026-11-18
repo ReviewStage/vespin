@@ -851,7 +851,7 @@ function typeText(page: Page, text: string, ref: string | undefined) {
     if (!(yield* takesText(page))) {
       return yield* failed(
         ref === undefined
-          ? "nothing that takes text has the focus, so the text would go nowhere; name the field's ref, or click the field first"
+          ? "nothing that takes text has the focus, so the text would go nowhere; target the field by {ref}, or click the field first"
           : `${ref} does not take text; name a text field's ref`,
       );
     }
@@ -1403,7 +1403,12 @@ function onPage<R>(
 
     case BROWSER_AGENT_ACTION.TYPE:
       return Effect.as(
-        typeWithCursor(page, cursor, action.text, action.ref),
+        typeWithCursor(
+          page,
+          cursor,
+          action.text,
+          "ref" in action.target ? action.target.ref : undefined,
+        ),
         actedOn(action.action, tab),
       );
     case BROWSER_AGENT_ACTION.SELECT:

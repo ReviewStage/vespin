@@ -167,7 +167,7 @@ it.effect("each action sends the browser's own commands, on the tab's flattened 
       { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" },
       { action: BROWSER_AGENT_ACTION.NAVIGATE, tab: "app", url: "https://example.com/" },
       { action: BROWSER_AGENT_ACTION.CLICK, tab: "app", target: { x: 40, y: 60 } },
-      { action: BROWSER_AGENT_ACTION.TYPE, tab: "app", text: "héllo" },
+      { action: BROWSER_AGENT_ACTION.TYPE, tab: "app", target: { focused: true }, text: "héllo" },
       { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "Enter" },
       { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "a", modifiers: ["control"] },
       { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "a", modifiers: ["shift"] },
@@ -441,11 +441,21 @@ it.effect("typing where nothing that takes text has the focus fails, and sends n
     );
 
     const nowhere = yield* run(peer, [
-      { action: BROWSER_AGENT_ACTION.TYPE, tab: "page-shop", text: "hello" },
+      {
+        action: BROWSER_AGENT_ACTION.TYPE,
+        tab: "page-shop",
+        target: { focused: true },
+        text: "hello",
+      },
     ]);
 
     const button = yield* run(peer, [
-      { action: BROWSER_AGENT_ACTION.TYPE, tab: "page-shop", ref: "e42", text: "hello" },
+      {
+        action: BROWSER_AGENT_ACTION.TYPE,
+        tab: "page-shop",
+        target: { ref: "e42" },
+        text: "hello",
+      },
     ]);
 
     assert.match(failureOf(nowhere.steps[0]) ?? "", /^nothing that takes text has the focus/u);
@@ -911,8 +921,13 @@ it.effect(
         peer,
         [
           { action: BROWSER_AGENT_ACTION.CLICK, tab, target: { ref: "e42" } },
-          { action: BROWSER_AGENT_ACTION.TYPE, tab, ref: "e7", text: "dean@example.com" },
-          { action: BROWSER_AGENT_ACTION.TYPE, tab, text: "hello" },
+          {
+            action: BROWSER_AGENT_ACTION.TYPE,
+            tab,
+            target: { ref: "e7" },
+            text: "dean@example.com",
+          },
+          { action: BROWSER_AGENT_ACTION.TYPE, tab, target: { focused: true }, text: "hello" },
           { action: BROWSER_AGENT_ACTION.CLICK, tab, target: { x: 5, y: 6 } },
           { action: BROWSER_AGENT_ACTION.SCROLL, tab, by: { deltaX: 0, deltaY: 300 } },
         ],
@@ -970,7 +985,14 @@ it.effect("typing nowhere the page can point to moves no cursor, and the text st
 
     const ran = yield* run(
       peer,
-      [{ action: BROWSER_AGENT_ACTION.TYPE, tab: "page-shop", text: "hello" }],
+      [
+        {
+          action: BROWSER_AGENT_ACTION.TYPE,
+          tab: "page-shop",
+          target: { focused: true },
+          text: "hello",
+        },
+      ],
       cursor,
     );
 
@@ -1134,7 +1156,7 @@ it.effect(
       const tab = "page-blank";
 
       const typed = yield* run(peer, [
-        { action: BROWSER_AGENT_ACTION.TYPE, tab, text: "dean" },
+        { action: BROWSER_AGENT_ACTION.TYPE, tab, target: { focused: true }, text: "dean" },
         { action: BROWSER_AGENT_ACTION.WAIT, tab },
       ]);
 

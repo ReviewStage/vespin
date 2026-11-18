@@ -463,7 +463,12 @@ it.layer(getTestDB())("the browser tool", (it) => {
           actions: [
             { action: BROWSER_AGENT_ACTION.CLICK, tab: "tab-free", target: { x: 10, y: 10 } },
             { action: BROWSER_AGENT_ACTION.CLICK, tab: "tab-driven", target: { x: 20, y: 20 } },
-            { action: BROWSER_AGENT_ACTION.TYPE, tab: "tab-free", text: "hello" },
+            {
+              action: BROWSER_AGENT_ACTION.TYPE,
+              tab: "tab-free",
+              target: { focused: true },
+              text: "hello",
+            },
           ],
         };
 
@@ -1095,22 +1100,30 @@ it.layer(getTestDB())("the browser tool", (it) => {
     }),
   );
 
-  it.effect("a click in the old flat shape runs nothing and is told the shape a click takes", () =>
-    Effect.gen(function* () {
-      const { conversationId } = yield* openConversation;
+  it.effect(
+    "a click or a type in the old flat shape runs nothing and is told the shape it takes",
+    () =>
+      Effect.gen(function* () {
+        const { conversationId } = yield* openConversation;
 
-      const result = yield* call(
-        conversationId,
-        { actions: [{ action: BROWSER_AGENT_ACTION.CLICK, tab: "tab-1", ref: "e4" }] },
-        noSandboxBrowserLayer,
-      );
+        const cases = [
+          {
+            action: { action: BROWSER_AGENT_ACTION.CLICK, tab: "tab-1", ref: "e4" },
+            takes: /`target`, either \{ref\} for an element or \{x, y\} for a point/u,
+          },
+          {
+            action: { action: BROWSER_AGENT_ACTION.TYPE, tab: "tab-1", text: "hello" },
+            takes: /`target`, either \{ref\} for a field or \{focused: true\} for the element/u,
+          },
+        ];
 
-      assert.ok(result.status === BROWSER_TOOL_STATUS.NOT_RUN);
-      assert.match(result.reason, /at actions\.0/u);
-      assert.match(
-        result.reason,
-        /`target`, either \{ref\} for an element or \{x, y\} for a point/u,
-      );
-    }),
+        for (const { action, takes } of cases) {
+          const result = yield* call(conversationId, { actions: [action] }, noSandboxBrowserLayer);
+
+          assert.ok(result.status === BROWSER_TOOL_STATUS.NOT_RUN);
+          assert.match(result.reason, /at actions\.0/u);
+          assert.match(result.reason, takes);
+        }
+      }),
   );
 });
