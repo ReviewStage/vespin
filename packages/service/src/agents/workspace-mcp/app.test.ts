@@ -586,7 +586,10 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const listed = yield* Effect.promise(() => client.listTools());
 
         const called = yield* Effect.promise(() =>
-          client.callTool({ name: INBOX_TOOL.LIST, arguments: {} }),
+          client.callTool({
+            name: INBOX_TOOL.LIST,
+            arguments: { of: { agentId: agent.agentId } },
+          }),
         );
 
         yield* Effect.promise(() => client.close());
@@ -633,7 +636,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         jsonrpc: "2.0",
         id: 2,
         method: "tools/call",
-        params: { name: INBOX_TOOL.LIST, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: { of: { agentId: agent.agentId } } },
       });
 
       yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
@@ -642,7 +645,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         jsonrpc: "2.0",
         id: 3,
         method: "tools/call",
-        params: { name: INBOX_TOOL.LIST, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: { of: { agentId: agent.agentId } } },
       });
 
       assert.equal(before.status, HOSTED_HTTP_STATUS.OK);

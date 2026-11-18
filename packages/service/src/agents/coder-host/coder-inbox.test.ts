@@ -1089,7 +1089,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         yield* closeInboxItemAsMember(agent.userId, settings.id, settings.revision, randomUUID());
         yield* withdrawAsk(agent, input({ key: "own", reason: "Did it myself." }));
 
-        const listed = acceptedList(yield* listThreads(agent, input({})));
+        const listed = acceptedList(
+          yield* listThreads(agent, input({ of: { agentId: agent.agentId } })),
+        );
+
         assert.deepEqual(
           listed.map((row) => [row.key, row.status, row.closedBy, row.closedReason]).sort(),
           [
@@ -1129,7 +1132,9 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             .where(eq(inboxItem.id, merged.id)),
         );
 
-        const listed = acceptedList(yield* listThreads(agent, input({})));
+        const listed = acceptedList(
+          yield* listThreads(agent, input({ of: { agentId: agent.agentId } })),
+        );
 
         assert.deepEqual(
           listed.map(({ updatedAt: _at, ...row }) => row),
@@ -1184,16 +1189,19 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         yield* post(elsewhere, SETTINGS);
 
         const byAgent = acceptedList(
-          yield* listThreads(agent, input({ agentId: teammate.agentId })),
+          yield* listThreads(agent, input({ of: { agentId: teammate.agentId } })),
         );
 
-        const byTask = acceptedList(yield* listThreads(agent, input({ taskId: teammate.taskId })));
+        const byTask = acceptedList(
+          yield* listThreads(agent, input({ of: { taskId: teammate.taskId } })),
+        );
 
         const outside = acceptedList(
-          yield* listThreads(agent, input({ agentId: elsewhere.agentId })),
+          yield* listThreads(agent, input({ of: { agentId: elsewhere.agentId } })),
         );
 
-        const misspelled = yield* listThreads(agent, input({ agentID: teammate.agentId }));
+        const misspelled = yield* listThreads(agent, input({ of: { agentID: teammate.agentId } }));
+        const unnamed = yield* listThreads(agent, input({}));
         const [elsewhereItem] = yield* taskInboxItems(agent.userId, elsewhere.taskId);
         assert.ok(elsewhereItem);
         const outsideRead = yield* readThread(agent, input({ threadId: elsewhereItem.id }));
@@ -1221,6 +1229,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.deepEqual(summary(byTask), teammateThread);
         assert.deepEqual(outside, []);
         assert.equal(refusalOf(misspelled), INBOX_REFUSAL.UNREADABLE_LIST);
+        assert.equal(refusalOf(unnamed), INBOX_REFUSAL.UNREADABLE_LIST);
         assert.equal(refusalOf(outsideRead), INBOX_REFUSAL.NO_THREAD);
       }),
   );
@@ -1246,7 +1255,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         }
 
         const answered = acceptedList(
-          yield* listThreads(agent, input({ status: INBOX_STATUS.ANSWERED })),
+          yield* listThreads(
+            agent,
+            input({ of: { agentId: agent.agentId }, status: INBOX_STATUS.ANSWERED }),
+          ),
         );
 
         assert.deepEqual(

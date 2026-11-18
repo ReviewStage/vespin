@@ -179,7 +179,7 @@ export const INBOX_TOOLS = {
     name: INBOX_TOOL.LIST,
     description:
       `List threads one line each: every one still open, then the latest ${INBOX_BOUNDS.MAX_SETTLED_TOLD} settled, each the latest changed first, with its id, which ${INBOX_TOOL.READ} takes, where it stands, and an open ask or an answer. ` +
-      `With nothing named it lists your own; name another agent of your workspace by agentId, or a task by taskId, to list its threads, and status to list only those standing there. ` +
+      `of names whose threads: an agent of your workspace as {agentId}, your own agentId for your own threads, or a task as {taskId}; status lists only those standing there. ` +
       `You only read another agent's threads: ${INBOX_TOOL.POST} and ${INBOX_TOOL.WITHDRAW} keep to your own, and a member's answer there reaches that agent, never you. ` +
       "List them to learn what the developer already decided or is still asked, rather than asking again.",
     inputSchema: inboxListInputSchema,
@@ -355,8 +355,7 @@ export const INBOX_REFUSAL = {
     "Not posted: a select field's recommended names one of its options, and no other field recommends one.",
   UNREADABLE_WITHDRAW: "Not withdrawn: name the thread's key and why you withdraw its ask.",
   UNREADABLE_LIST:
-    "Not listed: name nothing for your own threads, or one agent of your workspace by agentId, or one task of it by taskId, each by its id, and status as open, answered, or closed.",
-  BOTH_NAMED: "Not listed: name agentId or taskId, not both.",
+    'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
   UNREADABLE_READ:
     "Not read: name the thread by threadId as list_threads answered it, and before only as a page's older answered it.",
   NO_THREAD:
@@ -388,7 +387,7 @@ const SETTLED_MESSAGES_TOLD = 3;
 const readPost = readEither(inboxThreadPostInputSchema, { excess: EXCESS_KEYS.DROP });
 const readWithdraw = readEither(inboxWithdrawInputSchema, { excess: EXCESS_KEYS.DROP });
 
-// Note that a list refuses a key it did not name, because a misspelled agentId dropped would answer the agent's own threads as though they were the other's.
+// Note that a list refuses a key it did not name, so a misspelled status or an of naming both is refused rather than read as less than was asked.
 const readList = readEither(inboxListInputSchema);
 const readThreadAsked = readEither(inboxReadThreadInputSchema);
 
@@ -1087,10 +1086,11 @@ function orUnavailable<A>(
 }
 
 /**
- * Lists threads as the agent, one line each: its own, or one other agent's
- * or one task's of its own workspace, as the member it acts for may read
- * them, which it may read and never write; only those standing where
- * status names, where it names one.
+ * Lists threads as the agent, one line each, of the agent or task its input
+ * names: its own, by its own agentId, or one other agent's or one task's of
+ * its own workspace, as the member it acts for may read them, which it may
+ * read and never write; only those standing where status names, where it
+ * names one.
  */
 export function listThreads(
   agent: ThreadPoster,
@@ -1099,20 +1099,13 @@ export function listThreads(
   const asked = readList(input);
 
   if (Result.isFailure(asked)) return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_LIST));
-  const { agentId, taskId, status } = asked.success;
-
-  if (agentId !== undefined && taskId !== undefined) {
-    return Effect.succeed(inboxRejected(INBOX_REFUSAL.BOTH_NAMED));
-  }
-
+  const { of, status } = asked.success;
   const reader = { userId: agent.userId, workspaceId: agent.organizationId };
 
   const items =
-    taskId !== undefined
-      ? agentReachedInboxItems(reader, { taskId }, status)
-      : agentId === undefined || agentId === agent.agentId
-        ? agentInboxItems(agent, status)
-        : agentReachedInboxItems(reader, { agentId }, status);
+    "agentId" in of && of.agentId === agent.agentId
+      ? agentInboxItems(agent, status)
+      : agentReachedInboxItems(reader, of, status);
 
   return orUnavailable(
     Effect.map(items, (read) => ({
