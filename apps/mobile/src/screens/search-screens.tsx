@@ -243,12 +243,10 @@ const SEARCH_IDLE = null;
  * every listing on each delivery with nothing typed cost every tap in the
  * app.
  */
-function useSearchScreen({ query, scope: chosen, setScope }: SearchWords, leave?: () => void) {
+function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => void) {
   const router = useRouter();
   const found = useSearchFound(query);
   const inboxShown = useInboxShown();
-  // Note that the Inbox's scope, chosen before the member turned the Inbox off, stands as All, since no scope offers it then.
-  const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const doors = useTaskRowDoors(found.listing.workspace?.id);
   const { listing, status, deletion } = useListingAsks(found.listing, doors);
@@ -397,7 +395,10 @@ function SearchStackScreen(words: SearchWords) {
 /** The Search tab's root screen, under the Stack's bar, the query and its scope held here. */
 export function SearchScreen() {
   const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<SearchScope>(SEARCH_SCOPE.ALL);
+  const [chosen, setScope] = useState<SearchScope>(SEARCH_SCOPE.ALL);
+  const inboxShown = useInboxShown();
+  // Note that the Inbox's scope, chosen before the member turned the Inbox off, stands as All for the field and the results alike, since no scope offers it then.
+  const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
 
   return <SearchStackScreen query={query} setQuery={setQuery} scope={scope} setScope={setScope} />;
 }
