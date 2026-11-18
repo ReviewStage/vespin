@@ -59,6 +59,7 @@ import {
   type AgentStartFrom,
   type AgentStatus,
   agentRunsOnRequestSchema,
+  CONTEXT_WINDOW,
   contextWindowSchema,
   disabledServersSchema,
   LOCAL_AGENT_REFUSAL,
@@ -70,8 +71,13 @@ import {
 import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { cleanMachineName } from "@repo/features/machine-name";
+import { contextWindowsOf, windowOf } from "@repo/features/model-effort";
 import { agentName, modelLabel } from "@repo/features/model-label";
-import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
+import {
+  type ContextWindows,
+  type ModelChoice,
+  modelChoiceSchema,
+} from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
@@ -1004,12 +1010,14 @@ export const LIST_MODELS_TOOL = {
   name: AGENT_TOOL.LIST_MODELS,
   description:
     `List the models you may start an agent on with ${AGENT_TOOL.START_AGENT}, as the ` +
-    "member you act for is offered them: each with its catalog id, its name, and its efforts, " +
-    "and the member's default, which a start naming neither runs on. Call it before you name a " +
-    "model or an effort, such as one the developer named in their own words. Name an " +
-    `agentId to list instead what that agent may move to with ${AGENT_TOOL.UPDATE_AGENT}: an ` +
-    "agent on Claude Code runs Claude models alone, and one on Codex GPT models alone, with no " +
-    "fast version.",
+    "member you act for is offered them: each with its catalog id, its name, its efforts, and " +
+    "its contextWindows, the standard and the long with each one's size in tokens and what the " +
+    "long one costs as a multiple of the standard price, or none where it runs on one window; " +
+    "and the member's default, which a start naming neither runs on, with the window it runs on. " +
+    "Call it before you name a model, an effort, or a context window, such as one the developer " +
+    `named in their own words. Name an agentId to list instead what that agent may move to with ` +
+    `${AGENT_TOOL.UPDATE_AGENT}: an agent on Claude Code runs Claude models alone, and one on ` +
+    "Codex GPT models alone, with no fast version, and neither takes a choice of context window.",
   inputSchema: LIST_MODELS_INPUT,
 } as const;
 
@@ -3108,6 +3116,30 @@ export function runListTasks(
   );
 }
 
+/**
+ * The context windows a choice of a model takes, as `list_models` answers
+ * them: the standard and the long, each with its size in tokens and the
+ * long one with what it costs past the standard where the catalog prices
+ * it, for a model that offers two; none for one that runs on one window,
+ * or on a runtime that takes no choice of it.
+ */
+const contextWindowsListed = (windows: ContextWindows | undefined) =>
+  windows === undefined
+    ? []
+    : [
+        { window: CONTEXT_WINDOW.STANDARD, tokens: windows.standardTokens },
+        {
+          window: CONTEXT_WINDOW.LONG,
+          tokens: windows.longTokens,
+          ...(windows.longInputPriceFactor === undefined
+            ? undefined
+            : { inputPriceFactor: windows.longInputPriceFactor }),
+          ...(windows.longOutputPriceFactor === undefined
+            ? undefined
+            : { outputPriceFactor: windows.longOutputPriceFactor }),
+        },
+      ];
+
 /** The models the member is offered, narrowed to what the agent's route runs where one is named, with the member's default and whether it is among them. */
 const modelsListed = (userId: string, route: NativeRoute | undefined) =>
   Effect.gen(function* () {
@@ -3123,11 +3155,17 @@ const modelsListed = (userId: string, route: NativeRoute | undefined) =>
         id: model.id,
         name: modelLabel(model.id, offered),
         efforts: [...model.efforts],
+        contextWindows: contextWindowsListed(model.contextWindows),
       })),
       default: {
         model: defaultChoice.model,
         modelName: modelLabel(defaultChoice.model, offered),
         effort: defaultChoice.effort,
+        // The window the default runs on, where its model offers a choice of two among those listed.
+        contextWindow:
+          contextWindowsOf(listed, defaultChoice.model) === undefined
+            ? null
+            : windowOf(listed, defaultChoice),
         // Whether the default is among the models listed: for the agent named, one it may move to.
         offered: Result.isSuccess(validateModelChoice(listed, defaultChoice)),
       },
@@ -3136,8 +3174,9 @@ const modelsListed = (userId: string, route: NativeRoute | undefined) =>
 
 /**
  * One call of `list_models`: the models the caller's member may start an
- * agent on, each by its catalog id, the name to say it by, and its efforts,
- * and the member's default choice and whether it is still offered, read from
+ * agent on, each by its catalog id, the name to say it by, its efforts, and
+ * the context windows a choice of it takes, and the member's default choice,
+ * the window it runs on, and whether it is still offered, read from
  * the one source a start is checked against (`accountModelChoices`), so a
  * choice listed is one `start_agent` takes. It names nothing of the call's.
  */
