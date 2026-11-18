@@ -355,8 +355,10 @@ function SearchStackScreen(words: SearchWords) {
   return (
     <>
       <Stack.Screen options={{ title: SEARCH_TITLE }}>
+        {/* Note that a regular window stands the field on its own row under the bar, because iPadOS folds a field placed at the bar's trailing edge into a button wherever the floating tab bar takes the bar's middle (portrait, or landscape with the sidebar hidden), and Search then drew nothing at all. A compact window keeps the system's own place, the search tab's field. */}
         <Stack.SearchBar
           ref={field}
+          {...(regular && { placement: "stacked" })}
           placeholder={placeholder}
           onChangeText={(event) => setQuery(event.nativeEvent.text)}
           onSearchButtonPress={() => field.current?.blur()}
