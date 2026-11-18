@@ -92,7 +92,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useWindowDimensions } from "react-native";
 import { useAppReadyCount } from "../app-ready.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
@@ -275,8 +274,8 @@ const SKELETON_WORDS = {
   SUMMARY: "What the thread asks of the reader",
 } as const;
 
-/** About how tall a thread's row stands at the default text size (`ROW_INSET.THREAD_VERTICAL` above and below its three lines), which one screen's worth of skeleton rows is counted by. */
-const THREAD_ROW_POINTS = 76;
+/** The most skeleton rows the Inbox stands, about a phone's screen of threads, so a placeholder never reads as more than one screen. */
+const SKELETON_ROWS_MOST = 8;
 
 /**
  * The Inbox while its feed is on its first read with no thread to list, as
@@ -305,24 +304,17 @@ function InboxSkeleton({ count }: { readonly count: number }) {
 /**
  * How many skeleton rows the Inbox stands while its feed is on its first
  * read and lists nothing, under no search: as many as the scope holds where
- * that is known, up to one screen's worth, else one screen's worth; none
- * once it lists a thread or the feed answered or failed.
+ * that is known, up to `SKELETON_ROWS_MOST`, else that many; none once it
+ * lists a thread or the feed answered or failed.
  */
-function useSkeletonRows(
-  listing: InboxListing,
-  show: InboxShow,
-  search: string,
-): number | undefined {
-  const { height } = useWindowDimensions();
-
+function skeletonRows(listing: InboxListing, show: InboxShow, search: string): number | undefined {
   const reading =
     listing.listed.length === 0 && listing.feed === INBOX_FEED.READING && search.trim() === "";
 
   if (!reading) return undefined;
-  const screenful = Math.ceil(height / THREAD_ROW_POINTS);
   const known = listing.counts[show];
 
-  return known > 0 ? Math.min(known, screenful) : screenful;
+  return known > 0 ? Math.min(known, SKELETON_ROWS_MOST) : SKELETON_ROWS_MOST;
 }
 
 /**
@@ -1174,7 +1166,7 @@ type InboxHeld = {
 function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
-  const skeleton = useSkeletonRows(listing, show, search);
+  const skeleton = skeletonRows(listing, show, search);
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
