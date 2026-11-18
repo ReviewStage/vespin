@@ -17,7 +17,7 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -50,7 +50,6 @@ import {
   ConfirmAsk,
   DeniesWaiting,
   drawnCallIds,
-  FOOTER_TONE,
   FORM_SPACING,
   footerToneOf,
   GLYPH,
@@ -59,14 +58,13 @@ import {
   glyphSymbol,
   HeldCallBanner,
   ListSection,
-  MenuPickRow,
   MenuRow,
   type MenuRowAct,
+  ModelChoiceSheet,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
   PERMISSION_MODE_GLYPH,
-  PickRows,
   QueuedLines,
   Screen,
   SettingsForm,
@@ -694,10 +692,9 @@ function AgentConversation({
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 
-  const openOptions =
-    agent === undefined
-      ? undefined
-      : () => router.push({ pathname: "/agent-model", params: { agent: id } });
+  // Note that Options stands as the page's own sheet beside it, as its asks do, so the model chip, the + menu and ⋯ all open the one sheet.
+  const [optionsShown, setOptionsShown] = useState(false);
+  const openOptions = agent === undefined ? undefined : () => setOptionsShown(true);
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
@@ -851,6 +848,11 @@ function AgentConversation({
 
   const asks = (
     <>
+      <AgentOptionsSheet
+        agentId={id}
+        presented={optionsShown}
+        onDismiss={() => setOptionsShown(false)}
+      />
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
           pullRequestKey={merging}
@@ -1081,19 +1083,25 @@ function AgentPage({
 
 /**
  * The agent's options, as the panel's model chip and + menu change them, in
- * a sheet over its page, each change sent at once and drawn on the agent as
- * it is asked, one the service refused reading back and saying why under its
- * section: its model, effort, and Fast, which take effect from its next
- * step, the models New agent offers that its harness runs and the efforts
- * the model lists, Fast only where the model has a fast version; its
- * permission mode, each with what it does, where its harness takes one,
- * which takes effect from its next turn; and the connected MCP servers it is
- * handed, each with its switch, a server connected in Settings. Its checkmark closes
- * it.
+ * the model sheet over its page (`ModelChoiceSheet`), each change sent at
+ * once and drawn on the agent as it is asked, one the service refused reading
+ * back and saying why under its section: its model, among the models New
+ * agent offers that its harness runs, each under its harness's mark, its
+ * effort right under it, and Fast where the model has a fast version, which
+ * take effect from its next step; its permission mode, each with its glyph
+ * and what it does, where its harness takes one, which takes effect from its
+ * next turn; and the connected MCP servers it is handed, each with its
+ * switch, a server connected in Settings. Done closes it.
  */
-export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
-  const colors = useColors();
-  const router = useRouter();
+function AgentOptionsSheet({
+  agentId,
+  presented,
+  onDismiss,
+}: {
+  readonly agentId: string;
+  readonly presented: boolean;
+  readonly onDismiss: () => void;
+}) {
   const pick = useAgentModelPick(agentId);
   const mode = useAgentMode(agentId);
   const servers = useAgentServers(agentId);
@@ -1106,87 +1114,58 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
         ? OPTIONS_WORDS.NO_SERVERS
         : OPTIONS_WORDS.MORE_SERVERS);
 
-  return (
-    <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: OPTIONS_WORDS.TITLE,
-          headerTintColor: colors.TEXT,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
-        }}
-      />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          icon={glyphSymbol(GLYPH.CONFIRM)}
-          variant="done"
-          tintColor={colors.ACCENT}
-          accessibilityLabel={OPTIONS_WORDS.DONE}
-          onPress={() => router.back()}
-        />
-      </Stack.Toolbar>
-      <Screen>
-        <SettingsForm spacing={FORM_SPACING.COMPACT}>
-          <ListSection footer={pick.note} footerTone={FOOTER_TONE.FAILURE}>
-            <MenuPickRow
-              label={OPTIONS_WORDS.MODEL}
-              options={pick.models}
-              picked={pick.model}
-              onPick={pick.pickModel}
-            />
-            {pick.efforts.length <= 1 ? null : (
-              <MenuPickRow
-                label={OPTIONS_WORDS.EFFORT}
-                options={pick.efforts}
-                picked={pick.effort}
-                onPick={pick.pickEffort}
-              />
-            )}
-            {pick.fast === undefined ? null : (
-              <SwitchRow
-                label={OPTIONS_WORDS.FAST}
-                on={pick.fast.on}
-                onSwitch={pick.fast.toggle}
-                testId="options-fast"
-              />
-            )}
-          </ListSection>
-          {mode === undefined ? null : (
-            <ListSection
-              title={PERMISSION_MODE_WORDS.GROUP}
-              footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
-              footerTone={footerToneOf(mode.note)}
-            >
-              <PickRows
-                options={mode.modes}
-                picked={mode.mode}
-                onPick={(picked) => {
-                  const chosen = mode.modes.find((option) => option.id === picked);
+  const models = pick.models.flatMap((option) => {
+    const provider = providerOf(option.id);
 
-                  if (chosen !== undefined) mode.choose(chosen.id);
-                }}
-              />
-            </ListSection>
-          )}
-          <ListSection
-            title={MCP_SERVER_LABEL.many}
-            footer={serversFooter}
-            footerTone={footerToneOf(servers.note)}
-          >
-            {servers.servers.map((server) => (
-              <SwitchRow
-                key={server.connection}
-                label={server.name}
-                on={server.on}
-                onSwitch={(on) => servers.toggle(server.connection, on)}
-              />
-            ))}
-          </ListSection>
-        </SettingsForm>
-      </Screen>
-    </>
+    return provider === undefined ? [] : [{ ...option, provider }];
+  });
+
+  return (
+    <ModelChoiceSheet
+      presented={presented}
+      onDismiss={onDismiss}
+      models={models}
+      model={pick.model}
+      onModel={pick.pickModel}
+      efforts={pick.efforts}
+      effort={pick.effort}
+      onEffort={pick.pickEffort}
+      fast={pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle }}
+      note={pick.note}
+      mode={
+        mode === undefined
+          ? undefined
+          : {
+              title: PERMISSION_MODE_WORDS.QUESTION,
+              options: mode.modes.map((option) => ({
+                ...option,
+                symbol: PERMISSION_MODE_GLYPH[option.id],
+              })),
+              picked: mode.mode,
+              onPick: (picked) => {
+                const chosen = mode.modes.find((option) => option.id === picked);
+
+                if (chosen !== undefined) mode.choose(chosen.id);
+              },
+              footer: mode.note ?? PERMISSION_MODE_WORDS.APPLIES,
+            }
+      }
+    >
+      <ListSection
+        title={MCP_SERVER_LABEL.many}
+        footer={serversFooter}
+        footerTone={footerToneOf(servers.note)}
+      >
+        {servers.servers.map((server) => (
+          <SwitchRow
+            key={server.connection}
+            label={server.name}
+            on={server.on}
+            onSwitch={(on) => servers.toggle(server.connection, on)}
+          />
+        ))}
+      </ListSection>
+    </ModelChoiceSheet>
   );
 }
 
