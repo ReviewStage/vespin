@@ -24,6 +24,7 @@ import {
   automationActionSchema,
   automationCreateRequestSchema,
   automationScopeSchema,
+  GITHUB_TRIGGER_EVENT,
   githubTriggerSchema,
   scheduleTriggerSchema,
   sentryTriggerSchema,
@@ -107,7 +108,8 @@ export const AUTOMATION_TOOL_REFUSAL = {
     `of at most ${AUTOMATION_BOUNDS.MAX_PROMPT_CHARS}, and a trigger: a schedule as ` +
     '{"kind":"schedule","cron":"<five-field cron>","timezone":"<IANA zone>"} or once as ' +
     '{"kind":"schedule","at":"<YYYY-MM-DDTHH:mm>","timezone":"<IANA zone>"}, a GitHub event ' +
-    'as {"kind":"github","event":"<event>"}, or a Sentry event as ' +
+    'as {"kind":"github","event":"<event>","senders":["people"]} with the flags its event takes, ' +
+    "or a Sentry event as " +
     '{"kind":"integration","provider":"sentry","event":"alert-triggered"}; repositories as ' +
     `owner/name, [] for none; a model with one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them; ` +
     "scope as personal or workspace; and archiveSuccessful and slackDelivery as true or false.",
@@ -118,6 +120,12 @@ export const AUTOMATION_TOOL_REFUSAL = {
     "you work in among them where the run should work there, or [] for none; model is a catalog " +
     `id and effort one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them; scope is ` +
     "personal or workspace; archiveSuccessful and slackDelivery are true or false. Missing:",
+  GITHUB_FLAGS_MISSING:
+    "Not run: a GitHub trigger names whose events fire it and whether a draft, a fork's pull " +
+    "request, or a prerelease does, on the events each applies to; none has a default. senders " +
+    "is an array of people, app-agents, and other-bots; drafts, forks, and prereleases are true " +
+    "or false. Missing:",
+  GITHUB_FLAG_EXTRA: "Not run: a GitHub trigger takes",
   UNREADABLE_UPDATE:
     `Not run: name the automation by the id ${AGENT_TOOL.LIST_AUTOMATIONS} answered, and at ` +
     "least one change, a model with its effort, both or neither.",
@@ -184,13 +192,114 @@ const PROMPT = describeWire(
   "Each run's first message; make it stand alone, since no one watches a run.",
 );
 
+/** The flags a GitHub trigger names beside its event, each on the events it applies to. */
+const GITHUB_TRIGGER_FLAG = {
+  SENDERS: "senders",
+  DRAFTS: "drafts",
+  FORKS: "forks",
+  PRERELEASES: "prereleases",
+} as const;
+
+type GitHubTriggerFlag = (typeof GITHUB_TRIGGER_FLAG)[keyof typeof GITHUB_TRIGGER_FLAG];
+
+const {
+  kind: githubKind,
+  labels,
+  branches,
+  defaultBranch,
+  moments,
+  tags,
+} = githubTriggerSchema.fields;
+
+/** The filters every GitHub trigger may name, each keeping nothing out where it is left out. */
+const GITHUB_FILTERS = { kind: githubKind, labels, branches, defaultBranch, moments, tags };
+
+const SENDERS = { [GITHUB_TRIGGER_FLAG.SENDERS]: githubTriggerSchema.fields.senders.schema };
+const DRAFTS = { [GITHUB_TRIGGER_FLAG.DRAFTS]: Schema.Boolean };
+const FORKS = { [GITHUB_TRIGGER_FLAG.FORKS]: Schema.Boolean };
+const PRERELEASES = { [GITHUB_TRIGGER_FLAG.PRERELEASES]: Schema.Boolean };
+
+/**
+ * A GitHub trigger as the tools take it: one variant per set of events
+ * that take the same flags, each flag required where its event has it, so
+ * no call leaves whose events fire it, or whether a draft, a fork's pull
+ * request, or a prerelease does, to a default. Note that a check has no
+ * sender and a merged pull request is never a draft, so neither takes
+ * those. The stored trigger (`githubTriggerSchema`) and the automations
+ * page keep their own reading.
+ */
+const toolGithubTriggerSchema = Schema.Union([
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([
+      GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
+      GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
+      GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+    ]),
+    ...SENDERS,
+    ...DRAFTS,
+    ...FORKS,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED]),
+    ...SENDERS,
+    ...FORKS,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([
+      GITHUB_TRIGGER_EVENT.ISSUE_OPENED,
+      GITHUB_TRIGGER_EVENT.ISSUE_LABELED,
+      GITHUB_TRIGGER_EVENT.PUSH,
+    ]),
+    ...SENDERS,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED]),
+    ...SENDERS,
+    ...PRERELEASES,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([GITHUB_TRIGGER_EVENT.CHECK_FAILED]),
+  }),
+]);
+
+const GITHUB_FLAGS: readonly GitHubTriggerFlag[] = Object.values(GITHUB_TRIGGER_FLAG);
+
+/** The flags a GitHub trigger on each event must name, read off the variants above. */
+const GITHUB_EVENT_FLAGS: ReadonlyMap<string, readonly GitHubTriggerFlag[]> = new Map(
+  toolGithubTriggerSchema.members.flatMap((variant) =>
+    variant.fields.event.literals.map((event) => [
+      event,
+      GITHUB_FLAGS.filter((flag) => flag in variant.fields),
+    ]),
+  ),
+);
+
+/** The events that take a flag, in the catalog's order, as a refusal names them. */
+function eventsTaking(flag: GitHubTriggerFlag): string {
+  return Object.values(GITHUB_TRIGGER_EVENT)
+    .filter((event) => GITHUB_EVENT_FLAGS.get(event)?.includes(flag) === true)
+    .join(", ");
+}
+
 const TRIGGER = describeWire(
-  Schema.Union([...scheduleTriggerSchema.members, githubTriggerSchema, sentryTriggerSchema]),
+  Schema.Union([
+    ...scheduleTriggerSchema.members,
+    ...toolGithubTriggerSchema.members,
+    sentryTriggerSchema,
+  ]),
   "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and " +
-    "time on that zone's clock, to run once, after which it is paused. GitHub senders " +
-    "default to people (for pull-request-merged, whose pull request it is), moments " +
-    "(pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) " +
-    "to false; tags match a release's tag exactly. " +
+    "time on that zone's clock, to run once, after which it is paused. GitHub: senders names " +
+    "whose events fire it, of people, app-agents (our agents), and other-bots (for " +
+    "pull-request-merged, whose pull request it is), on every event but check-failed; drafts " +
+    "on pull-request-opened, -labeled, and -updated, forks on every pull-request event, and " +
+    "prereleases on release-published say whether a draft, a fork's pull request, or a " +
+    "prerelease fires it. moments (pull-request-updated only) left out is every moment; tags " +
+    "match a release's tag exactly. " +
     "Sentry: prefer alert-triggered, fired by an alert rule whose action is " +
     `"Send a notification via ${PRODUCT_NAME}"; issue-created fires on every new issue. A ` +
     "filter matches any of its values, and every filter given must. Webhooks are made only on " +
@@ -419,6 +528,34 @@ function missingCreateFields(input: UnparsedWireValue): readonly string[] {
   const named = isRecord(input) ? input : {};
 
   return CREATE_REQUIRED.filter((field) => named[field] === undefined);
+}
+
+/** A GitHub trigger's refusal in the model's words, where the call names one on a known event that leaves out a flag its event takes or names one it does not; nothing otherwise, the schema's read standing for the rest. */
+function githubFlagsRefused(input: UnparsedWireValue): WireRecord | undefined {
+  const trigger = isRecord(input) ? input.trigger : undefined;
+
+  if (!isRecord(trigger) || trigger.kind !== AUTOMATION_TRIGGER.GITHUB) return undefined;
+  const event = trigger.event;
+  const takes = Predicate.isString(event) ? GITHUB_EVENT_FLAGS.get(event) : undefined;
+
+  if (takes === undefined) return undefined;
+  const missing = takes.filter((flag) => trigger[flag] === undefined);
+
+  if (missing.length > 0) {
+    return agentToolRejected(
+      `${AUTOMATION_TOOL_REFUSAL.GITHUB_FLAGS_MISSING} ${missing.join(", ")} (${String(event)} takes ${takes.join(", ")}).`,
+    );
+  }
+
+  const extra = GITHUB_FLAGS.filter((flag) => !takes.includes(flag) && flag in trigger);
+
+  if (extra.length === 0) return undefined;
+
+  return agentToolRejected(
+    `${AUTOMATION_TOOL_REFUSAL.GITHUB_FLAG_EXTRA} ${extra
+      .map((flag) => `${flag} only on ${eventsTaking(flag)}`)
+      .join("; ")}; leave ${extra.join(", ")} out of one on ${String(event)}.`,
+  );
 }
 
 /** A refusal of the servers named that are no connection's, or nothing where every one is. */
@@ -689,6 +826,9 @@ export function runCreateAutomation(
     );
   }
 
+  const flags = githubFlagsRefused(input);
+
+  if (flags !== undefined) return Effect.succeed(flags);
   const asked = readCreateAsked(input);
 
   if (Result.isFailure(asked)) {
@@ -802,6 +942,9 @@ export function runUpdateAutomation(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
+  const flags = githubFlagsRefused(input);
+
+  if (flags !== undefined) return Effect.succeed(flags);
   const asked = readUpdateAsked(input);
   const choice = Result.isSuccess(asked) ? namedChoice(asked.success) : null;
 

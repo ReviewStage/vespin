@@ -86,18 +86,89 @@
                 "github"
               ]
             },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
+              "type": "boolean"
+            },
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
             "event": {
               "type": "string",
               "enum": [
                 "pull-request-opened",
                 "pull-request-labeled",
-                "pull-request-updated",
-                "issue-opened",
-                "issue-labeled",
-                "check-failed",
-                "push",
-                "pull-request-merged",
-                "release-published"
+                "pull-request-updated"
+              ]
+            },
+            "senders": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "people",
+                  "app-agents",
+                  "other-bots"
+                ]
+              }
+            },
+            "drafts": {
+              "type": "boolean"
+            },
+            "forks": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders",
+            "drafts",
+            "forks"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
               ]
             },
             "labels": {
@@ -121,6 +192,32 @@
             "defaultBranch": {
               "type": "boolean"
             },
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "event": {
+              "type": "string",
+              "enum": [
+                "pull-request-merged"
+              ]
+            },
             "senders": {
               "type": "array",
               "items": {
@@ -131,6 +228,48 @@
                   "other-bots"
                 ]
               }
+            },
+            "forks": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders",
+            "forks"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
+              ]
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
+              "type": "boolean"
             },
             "moments": {
               "type": "array",
@@ -143,11 +282,82 @@
                 ]
               }
             },
-            "drafts": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "event": {
+              "type": "string",
+              "enum": [
+                "issue-opened",
+                "issue-labeled",
+                "push"
+              ]
+            },
+            "senders": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "people",
+                  "app-agents",
+                  "other-bots"
+                ]
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
+              ]
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
               "type": "boolean"
             },
-            "forks": {
-              "type": "boolean"
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
             },
             "tags": {
               "type": "array",
@@ -158,8 +368,90 @@
               },
               "maxItems": 10
             },
+            "event": {
+              "type": "string",
+              "enum": [
+                "release-published"
+              ]
+            },
+            "senders": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "people",
+                  "app-agents",
+                  "other-bots"
+                ]
+              }
+            },
             "prereleases": {
               "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "event",
+            "senders",
+            "prereleases"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "github"
+              ]
+            },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "branches": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "defaultBranch": {
+              "type": "boolean"
+            },
+            "moments": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "opened",
+                  "ready",
+                  "pushed"
+                ]
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "event": {
+              "type": "string",
+              "enum": [
+                "check-failed"
+              ]
             }
           },
           "required": [
@@ -238,7 +530,7 @@
           "additionalProperties": false
         }
       ],
-      "description": "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is \"Send a notification via Vespin\"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page."
+      "description": "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub: senders names whose events fire it, of people, app-agents (our agents), and other-bots (for pull-request-merged, whose pull request it is), on every event but check-failed; drafts on pull-request-opened, -labeled, and -updated, forks on every pull-request event, and prereleases on release-published say whether a draft, a fork's pull request, or a prerelease fires it. moments (pull-request-updated only) left out is every moment; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is \"Send a notification via Vespin\"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page."
     },
     "repositories": {
       "type": "array",
