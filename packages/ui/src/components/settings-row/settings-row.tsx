@@ -471,17 +471,21 @@ export const SETTINGS_ROW_STATE = {
 
 export type SettingsRowState = (typeof SETTINGS_ROW_STATE)[keyof typeof SETTINGS_ROW_STATE];
 
-/** What each state draws: the finished session's dot before the words, the attention tint, or nothing. */
+/**
+ * What each state draws: the attention tint, or nothing. Note that a
+ * connected line draws as a plain one, because a row that is fine says
+ * nothing of its health beyond its words; the state stays only for the
+ * integration lists that still name it.
+ */
 const STATE_CLASS = {
-  [SETTINGS_ROW_STATE.CONNECTED]:
-    "before:size-settings-row-state-dot before:flex-none before:rounded-ui-full before:bg-complete",
+  [SETTINGS_ROW_STATE.CONNECTED]: "",
   [SETTINGS_ROW_STATE.ATTENTION]: "text-attention",
   [SETTINGS_ROW_STATE.PLAIN]: "",
 } as const satisfies Record<SettingsRowState, string>;
 
 /**
- * Where a row's subject stands, under its name: connected with the dot a
- * finished session wears, what needs a hand in the attention tint, or plain.
+ * Where a row's subject stands, under its name: what needs a hand in the
+ * attention tint, or plain, with no dot either way.
  * `block` stands it on a line of its own under the row's description, and
  * `wrap` lets its parts break between each other, never inside one.
  */
@@ -502,13 +506,10 @@ export function SettingsRowStateLine({
     <span
       className={cn(
         "ui-settings-row-state items-center gap-ui-6",
-        // Note that an inline line stands at the top of its own line box, because on the baseline a connected line takes its baseline from the dot, a flex item with none of its own, and sits a pixel low, growing the row as its words land.
         // Note that a block line stands no wider than its row's words, so a part that cannot wrap, an actor's chip, shrinks to its ellipsis rather than running under the row's controls.
-        block ? "flex w-fit max-w-full" : "inline-flex align-top",
-        // Note that the parts of a wrapping line are spaced by the spaces written between them, kept by `pre`: a flex gap beside the space a part ends in, trimmed at its end, would leave a wider gap after a separator than before it. The state's dot keeps its own.
+        block ? "flex w-fit max-w-full" : "inline-flex",
+        // Note that the parts of a wrapping line are spaced by the spaces written between them, kept by `pre`: a flex gap beside the space a part ends in, trimmed at its end, would leave a wider gap after a separator than before it.
         wrap && "flex-wrap gap-x-0 whitespace-pre",
-        // Note that only the connected line draws a dot, so only its dot keeps its step off the words; another line's empty marker would push its words in.
-        wrap && state === SETTINGS_ROW_STATE.CONNECTED && "before:me-ui-6",
         STATE_CLASS[state],
       )}
       data-state={state}

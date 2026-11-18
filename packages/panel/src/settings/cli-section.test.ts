@@ -128,7 +128,7 @@ test("the desktop's Install says why it failed, then the version installed, and 
   assert.ok(!pageText().includes("Installed"), "a failed install never says it landed");
 
   await press("Install");
-  assert.ok(pageText().includes("Installed · v0.3.0"), pageText());
+  assert.ok(pageText().includes("Installed, version 0.3.0"), pageText());
   assert.ok(!pageText().includes("Could not download"), pageText());
   assert.ok(drawn("Reinstall"), "an installed command offers Reinstall");
 });

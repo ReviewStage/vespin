@@ -131,7 +131,7 @@ function rowOf(
     line:
       installer === undefined
         ? sourceLine(skill.source)
-        : `${sourceLine(skill.source)} · by ${installer}`,
+        : `${sourceLine(skill.source)}, installed by ${installer}`,
   };
 }
 

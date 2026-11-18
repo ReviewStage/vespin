@@ -519,7 +519,7 @@ function AddHostSection({
       </SettingsBlock>
       {joined === undefined ? null : (
         <SettingsLine>
-          <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
+          <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>
             <ReplayMask>{joined}</ReplayMask> {WORDS.CONNECTED}
           </SettingsRowStateLine>
         </SettingsLine>

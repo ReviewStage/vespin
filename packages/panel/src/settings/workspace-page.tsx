@@ -7,7 +7,7 @@ import type {
 } from "@repo/features/sentry-install-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
+import { dayText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
 import type { WorkspaceSlack } from "@repo/features/workspace-integrations-live";
 import {
@@ -1033,8 +1033,8 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
             ),
             description: (
               <>
-                {INVITATION_WORDS.INVITED_AS(ROLE_WORDS[one.role])} · Expires{" "}
-                <ReplayMask>{dayAndTimeText(Date.parse(one.expiresAt))}</ReplayMask>
+                {INVITATION_WORDS.INVITED_AS(ROLE_WORDS[one.role])}, expires{" "}
+                <ReplayMask>{dayText(Date.parse(one.expiresAt))}</ReplayMask>
               </>
             ),
             // The service mails the accept link where the deployment names a sender; Copy link sends it by hand.

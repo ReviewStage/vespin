@@ -402,7 +402,6 @@ const PAGE_PATTERNS = {
     "settings-row-list",
     "settings-row-list-block",
     "settings-row-mark",
-    "settings-row-state-dot",
     "settings-row-words-inset",
     "state-row-inset",
   ],
