@@ -36,8 +36,9 @@ appId: dev.vespin.ios
       - waitForAnimationToEnd:
           timeout: 3000
       - tapOn:
-          point: "17%, 28%"
-      - tapOn: "Choose|Done|Add"
+          text: "Photo, November.*"
+          index: 0
+      - tapOn: "Done"
       - assertVisible: "Picture.*"
       - tapOn:
           text: "Send"
