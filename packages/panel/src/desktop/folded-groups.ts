@@ -230,6 +230,7 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
   const [sections, keepSections] = useKept(KEPT.FOLDED_SECTIONS, OPEN.sections);
   const [openedTasks, keepOpenedTasks] = useKept(KEPT.OPENED_TASKS, OPEN.openedTasks);
   const [stagedFolds, setStagedFolds] = useState<Folds>(OPEN);
+
   const folds = staged
     ? stagedFolds
     : { groups, pinned, following, managers, sections, openedTasks };
