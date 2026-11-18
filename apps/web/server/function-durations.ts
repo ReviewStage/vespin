@@ -8,6 +8,7 @@ import { SANDBOX_RELEASE } from "@repo/service/agents/sandbox-release-bounds";
 import { WORKSPACE_DRIVE_BUILD } from "@repo/service/agents/workspace-drive-build-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
 import { AUTOMATION_RUNS } from "@repo/service/automations/automation-run-bounds";
+import { SANDBOX_USAGE_CHECK, USAGE_SEND } from "@repo/service/billing/usage-queue-bounds";
 import {
   PULL_REQUEST_CHAPTERS_FUNCTION,
   PULL_REQUEST_CHAPTERS_ROUTE_PATHS,
@@ -139,9 +140,10 @@ const STANDALONE_ROUTES: readonly string[] = [
  * Fluid default a Start's function runs under, the sandbox-releases
  * consumer, under its own short bound, the github-delivery-reads
  * consumer, under the Fluid default, the workspace-drive-builds consumer,
- * under the platform's longest, since a fill runs up to ten minutes, and the
+ * under the platform's longest, since a fill runs up to ten minutes, the
  * voice-calls consumer, under the platform's longest duration, which one
- * lease on a call runs to.
+ * lease on a call runs to, and the sandbox-usage-checks and usage-sends
+ * consumers, each under its own short bound.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -192,6 +194,20 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(VOICE_CALL_LEASE.PATH)],
     dispatches: false,
     queueTopic: VOICE_CALL_LEASE.TOPIC,
+  },
+  {
+    file: routeKeyOf(SANDBOX_USAGE_CHECK.PATH),
+    maxDuration: SANDBOX_USAGE_CHECK.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(SANDBOX_USAGE_CHECK.PATH)],
+    dispatches: false,
+    queueTopic: SANDBOX_USAGE_CHECK.TOPIC,
+  },
+  {
+    file: routeKeyOf(USAGE_SEND.PATH),
+    maxDuration: USAGE_SEND.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(USAGE_SEND.PATH)],
+    dispatches: false,
+    queueTopic: USAGE_SEND.TOPIC,
   },
 ];
 

@@ -142,6 +142,7 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
+import { useInboxOn } from "../inbox-on.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useMergeQueueOn } from "../merge-queue-route.js";
 import {
@@ -2148,6 +2149,7 @@ function SidebarColumn({
     (onTasks && tasks.agentView.agentId !== undefined);
 
   const inboxCount = useInboxViewCount(tasks);
+  const inboxOn = useInboxOn();
 
   // A press in the list is always about tasks, so it brings the Tasks tab
   // forward from Settings as well as choosing; a task's row goes back to work
@@ -2558,13 +2560,15 @@ function SidebarColumn({
               onOpen={chosen(goHome)}
               onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
             />
-            <SidebarInboxRow
-              count={inboxCount}
-              current={inInbox}
-              disabled={!tasks.signedIn}
-              onOpen={chosen(openInbox)}
-              onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
-            />
+            {inboxOn ? (
+              <SidebarInboxRow
+                count={inboxCount}
+                current={inInbox}
+                disabled={!tasks.signedIn}
+                onOpen={chosen(openInbox)}
+                onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
+              />
+            ) : null}
           </>
         )}
         {phone ? null : (

@@ -36,7 +36,13 @@ env:
           duration: 400
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-card
-- tapOn: "Merge"
+# Note that the card's Merge is found below the words its row follows,
+# because while the transcript lays out its rows a fresh row can stand
+# at the top of the tree for a moment, and on a 26.5 iPad the tap went
+# there, past the card; the words' row ends that moment.
+- tapOn:
+    text: "Merge"
+    below: "The dialog takes an address and a role.*"
 - assertVisible: "Merge this pull request?"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-card-merge
@@ -70,18 +76,23 @@ env:
 - assertVisible: "grace"
 # Merging is the press under the heading, in every window, and it asks
 # first, as the card's Merge does, scrolled back up to after the reviewer.
-# Note that the list is let settle first, since a tap on a list still
-# gliding only stops it and presses nothing.
-- repeat:
-    while:
-      notVisible: "Squash and merge"
-    times: 10
-    commands:
-      - swipe:
-          start: "75%, 35%"
-          end: "75%, 75%"
-          duration: 400
+# Note that it is dragged back to the page's top every time, rather than
+# while the press reads as not visible, because the tree still names the
+# press in its place from before the reviewer's drag while the list glides,
+# and the tap went there, above the press. The list is then let settle,
+# since a tap on a list still gliding only stops it and presses nothing.
+- swipe:
+    start: "75%, 35%"
+    end: "75%, 75%"
+    duration: 400
+- swipe:
+    start: "75%, 35%"
+    end: "75%, 75%"
+    duration: 400
 - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Squash and merge"
+    timeout: 10000
 - tapOn: "Squash and merge"
 - assertVisible: "Merge this pull request?"
 - waitForAnimationToEnd
@@ -111,7 +122,27 @@ env:
       TAB: Tasks
 - tapOn: "Teammate invitations"
 - assertVisible: "Agents"
-- tapOn: "#128"
+# A tap on the agent's row, one element with its pull request's number in
+# its line, opens the agent, never the pull request.
+- tapOn: "Build teammate invitations"
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
+- assertNotVisible: "Ready to merge"
+- tapOn:
+    text: "Back"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Agents"
+# The pull request opens from the row's long-press menu, its item matched with
+# or without the subtitle iPadOS 27 adds to its label.
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Build teammate invitations
+      ITEM: "Open pull request(, .*)?"
+- tapOn: "Open pull request(, .*)?"
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000

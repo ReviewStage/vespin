@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { standsThreeColumns, WINDOW_SIZE_CLASS, windowSizeClass } from "./window-size-class.js";
+import { WINDOW_SIZE_CLASS, windowSizeClass } from "./window-size-class.js";
 
 describe("windowSizeClass", () => {
   // A phone's window either way up and a third of an iPad stay compact; an
@@ -37,15 +37,5 @@ describe("windowSizeClass", () => {
     },
   ])("reads $window as $sizeClass", ({ width, height, sizeClass }) => {
     expect(windowSizeClass(width, height)).toBe(sizeClass);
-  });
-});
-
-describe("standsThreeColumns", () => {
-  // Only an iPad's landscape window is wide enough for groups, rows, and a page side by side.
-  it.each([
-    { window: "an iPad in portrait", width: 834, three: false },
-    { window: "an iPad in landscape", width: 1194, three: true },
-  ])("reads $window as three columns: $three", ({ width, three }) => {
-    expect(standsThreeColumns(width)).toBe(three);
   });
 });

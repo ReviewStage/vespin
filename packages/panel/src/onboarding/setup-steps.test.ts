@@ -182,6 +182,20 @@ test("Just me after a team's workspace was made lists the account's own workspac
   assert.deepEqual(deleted, []);
 });
 
+test("a move stands on the step it asked for while the account's place has yet to come back", async () => {
+  const place = JSON.stringify({ audience: "me", at: 1 });
+  writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
+  fakeActPort({ [SETTINGS_ACT_KIND.SETTING_UPDATE]: () => new Promise(() => undefined) });
+  const container = setupDrawn();
+  assert.ok(container.textContent?.includes("Tell us about yourself"));
+
+  act(() => buttonStarting(container, "Back").click());
+
+  await vi.waitFor(() =>
+    assert.ok(container.textContent?.includes("Welcome to"), container.textContent ?? ""),
+  );
+});
+
 test("the team step coming back to the workspace it made shows the invitations it sent as sent", async () => {
   // Setup stands at the team step after a reload, Paperstar made and Grace invited to it before.
   const place = JSON.stringify({ audience: "team", at: 2, team: PAPERSTAR.id });

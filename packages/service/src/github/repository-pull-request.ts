@@ -40,9 +40,9 @@ import {
   viewedAnswerOf,
   viewedRead,
 } from "../agents/agent-pull-request-procedures.js";
-import { pullRequestChangesRead } from "../agents/agents-procedures.js";
 import { githubReadRefusal, type PullRequestSubject } from "../agents/asked-pull-request.js";
 import { pullRequestOfNumber } from "../agents/coder-host/published.js";
+import { pullRequestChangesRead } from "../agents/pull-request-changes.js";
 import {
   type MemberWrite,
   memberWriteOnReached,

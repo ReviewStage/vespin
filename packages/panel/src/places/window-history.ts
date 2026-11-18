@@ -161,6 +161,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { AutomationsRoute } from "../automations-route.js";
+import { useInboxOn } from "../inbox-on.js";
 import type { InboxRoute } from "../inbox-route.js";
 import { useRouteAccess } from "../route-gates.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -1248,10 +1249,11 @@ export function useWindowHistory(input: {
 
   const phoneWorkspace = tasks.workspace;
   const openInbox = inbox.onOpen;
+  const inboxOn = useInboxOn();
   useEffect(() => {
     if (instead === undefined || phoneWorkspace === undefined) return;
-    instead({ workspace: phoneWorkspace.slug ?? phoneWorkspace.id, openInbox });
-  }, [instead, phoneWorkspace, openInbox]);
+    instead({ workspace: phoneWorkspace.slug ?? phoneWorkspace.id, openInbox, inbox: inboxOn });
+  }, [instead, phoneWorkspace, openInbox, inboxOn]);
 
   // A step a way back names, as the history holds it: a task's at the address its own place stands at, since its step is told by its task.
   const placeOf = (to: BackStep): Place => {

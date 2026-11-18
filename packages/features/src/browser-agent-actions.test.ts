@@ -23,7 +23,7 @@ test("an address that is not http or https is refused", () => {
     "chrome://settings",
     "localhost:3000",
   ]) {
-    assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.OPEN, url }), false, url);
+    assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.OPEN, name: "app", url }), false, url);
     assert.equal(
       readsAction({ action: BROWSER_AGENT_ACTION.NAVIGATE, tab: "page-1", url }),
       false,
@@ -32,24 +32,45 @@ test("an address that is not http or https is refused", () => {
   }
 
   assert.equal(
-    readsAction({ action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" }),
+    readsAction({ action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" }),
     true,
   );
 });
 
-test("a click names a ref or a whole point, and a scroll a ref or a distance", () => {
+test("an action on a tab names it, and each open in a call names its own", () => {
+  const url = "http://localhost:3000/";
+  const open = (name: string) => ({ action: BROWSER_AGENT_ACTION.OPEN, name, url });
+  assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.SNAPSHOT }), false);
+  assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.OPEN, url }), false);
+  assert.equal(readsAction(open("Docs")), false);
+  assert.equal(readsActions([open("docs"), open("app")]), true);
+  assert.equal(readsActions([open("docs"), open("docs")]), false);
+});
+
+test("a click targets a ref or a whole point, and a scroll a ref or a whole distance", () => {
   const click = { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-1" };
   assert.equal(readsAction(click), false);
-  assert.equal(readsAction({ ...click, x: 10 }), false);
-  assert.equal(readsAction({ ...click, ref: "e4", x: 10, y: 20 }), false);
-  assert.equal(readsAction({ ...click, ref: "button" }), false);
-  assert.equal(readsAction({ ...click, ref: "e4" }), true);
-  assert.equal(readsAction({ ...click, x: 10, y: 20 }), true);
+  assert.equal(readsAction({ ...click, ref: "e4" }), false);
+  assert.equal(readsAction({ ...click, target: { x: 10 } }), false);
+  assert.equal(readsAction({ ...click, target: { ref: "button" } }), false);
+  assert.equal(readsAction({ ...click, target: { ref: "e4" } }), true);
+  assert.equal(readsAction({ ...click, target: { x: 10, y: 20 } }), true);
 
-  const scroll = { action: BROWSER_AGENT_ACTION.SCROLL };
+  const scroll = { action: BROWSER_AGENT_ACTION.SCROLL, tab: "page-1" };
   assert.equal(readsAction(scroll), false);
-  assert.equal(readsAction({ ...scroll, ref: "e4", deltaY: 300 }), false);
-  assert.equal(readsAction({ ...scroll, deltaY: -300 }), true);
+  assert.equal(readsAction({ ...scroll, deltaY: -300 }), false);
+  assert.equal(readsAction({ ...scroll, by: { deltaY: -300 } }), false);
+  assert.equal(readsAction({ ...scroll, by: { ref: "e4" } }), true);
+  assert.equal(readsAction({ ...scroll, by: { deltaX: 0, deltaY: -300 } }), true);
+});
+
+test("a type targets a field's ref or, by name, the focused element", () => {
+  const type = { action: BROWSER_AGENT_ACTION.TYPE, tab: "page-1", text: "hello" };
+  assert.equal(readsAction(type), false);
+  assert.equal(readsAction({ ...type, ref: "e4" }), false);
+  assert.equal(readsAction({ ...type, target: { focused: false } }), false);
+  assert.equal(readsAction({ ...type, target: { ref: "e4" } }), true);
+  assert.equal(readsAction({ ...type, target: { focused: true } }), true);
 });
 
 test("a select names a dropdown's ref and an option", () => {

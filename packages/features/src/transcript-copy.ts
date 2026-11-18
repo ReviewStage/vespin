@@ -513,7 +513,8 @@ function callParts(call: CopiedCall) {
   return {
     verb: named === undefined ? said : `${said} (${named})`,
     subject: oneLine(call.subject),
-    joiner: worker || call.description !== undefined ? ": " : " ",
+    // Note that a description that already ends in a colon, as a refused Slack message's does, takes no second one.
+    joiner: worker || (call.description !== undefined && !said.endsWith(":")) ? ": " : " ",
     code: !worker && CALL_WORDS[call.call].code,
   };
 }

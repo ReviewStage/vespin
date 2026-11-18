@@ -16,7 +16,7 @@
         "record",
         "stop_recording"
       ],
-      "description": "What to do: list_apps, get_app_state to read an app's window, or click, type_text, press_key, scroll, drag, set_value, or perform_secondary_action on it; record its window as a video, and stop_recording to stop and keep it."
+      "description": "What to do, with only the fields that action takes: list_apps (none); get_app_state, to read an app's window (app); click (app, target, and optionally click_count and mouse_button); type_text (app, text); press_key (app, key); scroll (app, and optionally element_index, direction, and pages); drag (app, from_x, from_y, to_x, to_y); set_value (app, element_index, value); perform_secondary_action (app, element_index, secondary_action); record, to record its window as a video (app); and stop_recording, to stop and keep it (optionally caption)."
     },
     "app": {
       "type": "string",
@@ -24,23 +24,53 @@
       "maxLength": 255,
       "description": "The app, by its name or bundle id, such as \"Simulator\" or \"com.apple.iphonesimulator\". Every action but list_apps and stop_recording names one."
     },
+    "target": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "element_index": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9999,
+              "description": "An element's number, as the app's last get_app_state numbered it."
+            }
+          },
+          "required": [
+            "element_index"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": -100000,
+              "maximum": 100000,
+              "description": "A point's x in the pixels of the app's last screenshot."
+            },
+            "y": {
+              "type": "number",
+              "minimum": -100000,
+              "maximum": 100000,
+              "description": "A point's y in the pixels of the app's last screenshot."
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Where click presses: {element_index} for an element by the number the app's last get_app_state gave it, or {x, y} for a point in the pixels of its last screenshot."
+    },
     "element_index": {
       "type": "integer",
       "minimum": 0,
       "maximum": 9999,
-      "description": "An element's number, as the app's last get_app_state numbered it."
-    },
-    "x": {
-      "type": "number",
-      "minimum": -100000,
-      "maximum": 100000,
-      "description": "A point's x in the pixels of the app's last screenshot, for click."
-    },
-    "y": {
-      "type": "number",
-      "minimum": -100000,
-      "maximum": 100000,
-      "description": "A point's y in the pixels of the app's last screenshot, for click."
+      "description": "The element scroll, set_value, or perform_secondary_action acts on, by the number the app's last get_app_state gave it."
     },
     "click_count": {
       "type": "integer",
@@ -59,11 +89,13 @@
     },
     "text": {
       "type": "string",
+      "minLength": 1,
       "maxLength": 10000,
       "description": "What type_text types into the app's focused element."
     },
     "key": {
       "type": "string",
+      "minLength": 1,
       "maxLength": 64,
       "description": "What press_key presses, xdotool-style, such as \"Return\", \"Tab\", or \"super+c\"."
     },
@@ -114,6 +146,7 @@
     },
     "secondary_action": {
       "type": "string",
+      "minLength": 1,
       "maxLength": 64,
       "description": "Which of the element's secondary actions perform_secondary_action performs, as its state names them, such as \"AXShowMenu\"."
     },

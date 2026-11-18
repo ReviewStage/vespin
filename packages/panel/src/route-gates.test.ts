@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { EXPERIMENT, NO_EXPERIMENTS } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { test } from "vitest";
-import { settingsPageRouteStands, workspaceRouteStands } from "./route-gates.js";
+import { inboxRouteStands, settingsPageRouteStands, workspaceRouteStands } from "./route-gates.js";
 
 /**
  * route-gates.test.ts -- a Settings page a workspace experiment holds waits on
@@ -19,6 +19,7 @@ test("a page a workspace experiment holds stands while the reader's workspaces a
     experimentsRead: true,
     workspaces: [],
     listed: "acme",
+    inbox: true,
   };
 
   const read = {
@@ -46,6 +47,7 @@ test("a workspace's place stands while the reader's workspaces are unread, under
     experimentsRead: true,
     workspaces: [],
     listed: undefined,
+    inbox: true,
   };
 
   const read = {
@@ -56,4 +58,18 @@ test("a workspace's place stands while the reader's workspaces are unread, under
   assert.equal(workspaceRouteStands("left", unread), true);
   assert.equal(workspaceRouteStands("acme-old", read), true);
   assert.equal(workspaceRouteStands("left", read), false);
+});
+
+test("the Inbox stands under the reader's workspace only while the account keeps one", () => {
+  const access = {
+    admin: false,
+    experiments: NO_EXPERIMENTS,
+    experimentsRead: true,
+    workspaces: [{ id: "workspace-acme", slug: "acme" }],
+    listed: "acme",
+    inbox: true,
+  };
+
+  assert.equal(inboxRouteStands("acme", access), true);
+  assert.equal(inboxRouteStands("acme", { ...access, inbox: false }), false);
 });

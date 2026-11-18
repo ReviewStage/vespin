@@ -15,7 +15,7 @@ const TASK_FALLBACK_PREFIX = "TASK";
 const MAX_PREFIX_CHARS = 4;
 
 /** The prefix a workspace's tasks are keyed by, or `TASK_FALLBACK_PREFIX` where its name holds no letter or digit. */
-function workspacePrefix(workspaceName: string): string {
+export function taskKeyPrefix(workspaceName: string): string {
   const words = workspaceName
     .replaceAll(/['’]/gu, "")
     .split(/[^\p{L}\p{N}]+/u)
@@ -33,7 +33,7 @@ function workspacePrefix(workspaceName: string): string {
 
 /** A task's key in its workspace, as `ACME-42`. */
 export function taskKey(workspaceName: string, number: number): string {
-  return `${workspacePrefix(workspaceName)}-${number}`;
+  return `${taskKeyPrefix(workspaceName)}-${number}`;
 }
 
 /**

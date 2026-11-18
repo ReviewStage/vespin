@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "One message, in Markdown, as a person would send it in Slack: a sentence or two. A workspace member's mention link becomes a real Slack mention."
+    },
+    "channel": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A channel the bot is in, by the id or name list_slack_channels answered; leave it and member out for your own Slack thread."
+    },
+    "member": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A member of your workspace to DM, by their mention link or user id."
+    },
+    "thread": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The `ts` of a message to reply under, in the channel, the DM, or your own thread's channel."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}

@@ -39,7 +39,9 @@ import {
 } from "@repo/database/testing";
 import {
   AGENT_BOUNDS,
+  AGENT_MACHINE,
   AGENT_PAYER,
+  type AgentRunsOnRequest,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
   type PullRequestState,
@@ -207,6 +209,7 @@ const openAutomation = (
     readonly disabledServers?: readonly IntegrationProvider[];
     readonly prompt?: string;
     readonly trigger?: AutomationTrigger;
+    readonly runsOn?: AgentRunsOnRequest;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -244,6 +247,7 @@ const openAutomation = (
       nextRunAt: new Date(now - 60_000),
       webhookSecretHash: null,
       archiveSuccessful: options.archiveSuccessful ?? false,
+      ...(options.runsOn === undefined ? undefined : { runsOn: options.runsOn }),
     });
 
     return { owner, automation: Option.getOrThrow(made), now, workspaceId: task.workspaceId };
@@ -1055,6 +1059,29 @@ it.layer(SUITE)("an automation's runs", (it) => {
         );
 
         assert.equal(row?.enabled, true);
+      }),
+  );
+
+  it.effect(
+    "a run of an automation that names a device gone since fails as the start refuses it and starts nothing in the cloud in its place",
+    () =>
+      Effect.gen(function* () {
+        const { automation } = yield* openAutomation({
+          runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: randomUUID() },
+        });
+
+        const agentSessions = fakeAgentSessions();
+
+        const outcome = yield* executeAutomationRun(
+          agentSessions.sessionsFor,
+          yield* runNow(automation),
+        ).pipe(Effect.provide(services));
+
+        assert.deepEqual(outcome, {
+          status: AUTOMATION_RUN_STATUS.FAILED,
+          reason: AUTOMATION_RUN_REASON.UNAVAILABLE,
+        });
+        assert.deepEqual(agentSessions.opened, []);
       }),
   );
 

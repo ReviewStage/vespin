@@ -117,7 +117,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
     HostKernelTag | AccountSource | AppIdentity | FileSystem.FileSystem | Path.Path | Scope.Scope
   > {
     const kernel = yield* HostKernelTag;
-    const { tokenCipher } = yield* AccountSource;
+    const { tokenCipher, tokenVault } = yield* AccountSource;
     const identity = yield* AppIdentity;
     const changedElsewhere = yield* Effect.serviceOption(SettingsChangedElsewhere);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
@@ -143,6 +143,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       packaged: identity.packaged,
       // The account source's own: a source that keeps no tokens here hands none.
       cipher: tokenCipher,
+      ...(tokenVault === undefined ? undefined : { tokenVault }),
       // Note that the link is peeked, because a read before the merge links the account must read no one rather than wait.
       sessionAccountEmail: () =>
         Effect.flatMap(late.peek, (links) =>

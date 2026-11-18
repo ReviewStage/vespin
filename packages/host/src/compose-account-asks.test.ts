@@ -304,6 +304,69 @@ it.effect(
     }),
 );
 
+/** One of the account's own sounds, as its live read delivers it. */
+const SOUND_ROW = { id: "sound-glass", name: "Glass", sha256: "0".repeat(64), createdAt: 1 };
+
+/** The names of the account's own sounds as the host last told them; none where it told none. */
+function soundNamesOf(told: WireValue | undefined): readonly string[] | undefined {
+  // SAFETY: the host tells its own slices whole, as built.
+  const held = told as AppAccountPreferences | undefined;
+
+  return held?.["user-dana"]?.rows?.sounds.list.map((sound) => sound.name);
+}
+
+it.effect(
+  "a sound's rename draws its new name before the service answers and keeps it until the read carries its transaction, and a refused rename puts back the name it drew over",
+  () =>
+    Effect.gen(function* () {
+      const harness = yield* subject();
+      const { acts, live, open, answerRenames } = harness;
+      const shown = () => soundNamesOf(harness.preferences().at(-1));
+      yield* open;
+      yield* settled;
+      // The read is woken by a write once, so it hands a wait for the next.
+      live.preferences.set({ sounds: [SOUND_ROW] }, ["9100"]);
+      yield* nextPoll;
+      assert.deepEqual(shown(), ["Glass"]);
+
+      const answering = yield* Deferred.make<void>();
+      const bell = { id: SOUND_ROW.id, name: "Bell", sha256: SOUND_ROW.sha256 };
+      answerRenames({ sound: bell, txid: "9200" }, Deferred.await(answering));
+
+      const renaming = yield* Effect.forkChild(
+        acts.SOUND_RENAME({ id: SOUND_ROW.id, name: "Bell" }),
+      );
+
+      yield* settled;
+      assert.equal(renaming.pollUnsafe(), undefined, "no answer while the service is asked");
+      assert.deepEqual(shown(), ["Bell"], "drawn before the service answers");
+
+      yield* Deferred.succeed(answering, undefined);
+      yield* Fiber.join(renaming);
+      // The read answers once more from before the rename, which still stands over it.
+      live.preferences.set({ sounds: [SOUND_ROW] });
+      yield* nextPoll;
+      assert.deepEqual(shown(), ["Bell"]);
+      live.preferences.set({ sounds: [{ ...SOUND_ROW, name: "Bell" }] }, ["9200"]);
+      yield* nextPoll;
+      assert.deepEqual(shown(), ["Bell"]);
+
+      const refusing = yield* Deferred.make<void>();
+      answerRenames({ failure: AGENT_CALL_FAILURE.UNANSWERED }, Deferred.await(refusing));
+
+      const refused = yield* Effect.forkChild(
+        acts.SOUND_RENAME({ id: SOUND_ROW.id, name: "Chime" }),
+      );
+
+      yield* settled;
+      assert.deepEqual(shown(), ["Chime"]);
+      yield* Deferred.succeed(refusing, undefined);
+      yield* Fiber.join(refused);
+      yield* settled;
+      assert.deepEqual(shown(), ["Bell"], "put back once the service refused it");
+    }),
+);
+
 /** The account's hosts the remove case lists: one kept, and one removed. */
 const KEPT_HOST = "4b1c2d3e-5f6a-4b7c-8d9e-0f1a2b3c4d5e";
 const GONE_HOST = "5c2d3e4f-6a7b-4c8d-9e0f-1a2b3c4d5e6f";

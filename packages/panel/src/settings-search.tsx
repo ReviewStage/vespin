@@ -402,8 +402,12 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Workspace URL", "Change URL slug link address workspace"],
         }
       : undefined,
-    // The window's own chords, fixed rather than chosen, listed below them; a gated feature's only while its experiment is on.
-    ...shownShortcutGroups(input.settings.experiments, input.capabilities).flatMap((group) => [
+    // The window's own chords, fixed rather than chosen, listed below them; a gated feature's only while its experiment is on, and the Inbox's only while the account keeps one.
+    ...shownShortcutGroups(
+      input.settings.experiments,
+      input.capabilities,
+      input.settings.inbox !== false,
+    ).flatMap((group) => [
       ...group.commands.map((command) => ({
         id: command,
         label: shortcutLabel(command, input.settings.experiments),

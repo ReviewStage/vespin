@@ -174,9 +174,13 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 /** The first bytes of a PDF, as a report's file starts. */
 const PDF = new TextEncoder().encode("%PDF-1.7\n%\u00e2\u00e3\n1 0 obj\n");
 
-/** A post run as the tool runs one, over the sandbox given. */
-const post = (agent: ThreadPoster, value: WireBoundaryInput, sandbox = noSandbox) =>
-  postToInbox(agent, input(value), sandbox);
+/** A member's mention link, as `to` takes it. */
+const person = (id: string) =>
+  `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: id }, { workspace: "acme", repository: null })})`;
+
+/** A post run as the tool runs one, over the sandbox given, addressed to the agent's starter where it names no `to`. */
+const post = (agent: ThreadPoster, value: Record<string, WireBoundaryInput>, sandbox = noSandbox) =>
+  postToInbox(agent, input({ to: person(agent.userId), ...value }), sandbox);
 
 /** The one thread of the agent's task, as the task's inbox reads it. */
 const onlyItem = (agent: Pick<InboxAgent, "userId"> & { readonly taskId: string }) =>
@@ -288,16 +292,27 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "a post is addressed to the member its link names; a link naming no member of the workspace is refused and posts nothing",
+    "a post is addressed to the member its link names; a first post naming none is refused, and a later one naming none keeps the thread's; a link naming no member of the workspace is refused and posts nothing",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
-
-        const person = (id: string) =>
-          `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: id }, { workspace: "acme", repository: null })})`;
+        assert.deepEqual(yield* postToInbox(agent, input(QUEUE), noSandbox), {
+          status: ACTION_RESULT_STATUS.REJECTED,
+          reason: INBOX_REFUSAL.NO_ADDRESSEE_NAMED,
+        });
 
         const posted = yield* post(agent, { ...QUEUE, to: person(agent.userId) });
         assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(posted));
+
+        // A new ask under the key that names no `to` keeps the thread's addressee.
+        const asked = yield* postToInbox(
+          agent,
+          input({ ...QUEUE, body: "Still open." }),
+          noSandbox,
+        );
+
+        assert.equal(asked.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(asked));
+        assert.equal((yield* onlyItem(agent)).addressed, true);
 
         const agentLink = `[@Agent](${encodeMention({ kind: MENTION_KIND.AGENT, agentId: agent.agentId }, { workspace: "acme", repository: null })})`;
 
@@ -405,7 +420,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             decide({ ...QUEUE.ask, multiple: true, recommended: ["Redis", "Redis"] }),
             INBOX_REFUSAL.SEVERAL_RECOMMENDED,
           ],
-          [answer([{ type: INBOX_FIELD.SELECT, label: "Channel" }]), INBOX_REFUSAL.SELECT_OPTIONS],
+          [answer([{ type: INBOX_FIELD.SELECT, label: "Channel" }]), INBOX_REFUSAL.UNREADABLE_POST],
           [
             answer([
               {
@@ -419,7 +434,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ],
           [
             answer([{ type: INBOX_FIELD.TEXT, label: "Channel", recommended: "Slack" }]),
-            INBOX_REFUSAL.SELECT_RECOMMENDATION,
+            'Not posted: field "Channel" is text, yet names options or recommended, which only a select takes; make it a select, or leave both out.',
           ],
           [
             answer([
@@ -505,7 +520,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version the agent was shown, and a page of another task is refused",
+    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version it names, and a page of another task or one naming no version is refused",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -592,7 +607,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           shown,
         ).pipe(Effect.map(Option.getOrThrow));
 
-        const away = [{ label: "A card", media: [{ page: elsewhere.id }] }, { label: "No card" }];
+        const away = [
+          { label: "A card", media: [{ page: elsewhere.id, version: 1 }] },
+          { label: "No card" },
+        ];
 
         const refused = yield* post(agent, {
           ...QUEUE,
@@ -600,6 +618,15 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         });
 
         assert.equal(refusalOf(refused), INBOX_REFUSAL.NO_PAGE);
+
+        const versionless = [{ label: "A card", media: [{ page: page.id }] }, { label: "No card" }];
+
+        const unversioned = yield* post(agent, {
+          ...QUEUE,
+          ask: { type: INBOX_ASK.DECIDE, options: versionless },
+        });
+
+        assert.equal(refusalOf(unversioned), INBOX_REFUSAL.UNREADABLE_POST);
       }),
   );
 
@@ -1089,7 +1116,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         yield* closeInboxItemAsMember(agent.userId, settings.id, settings.revision, randomUUID());
         yield* withdrawAsk(agent, input({ key: "own", reason: "Did it myself." }));
 
-        const listed = acceptedList(yield* listThreads(agent, input({})));
+        const listed = acceptedList(
+          yield* listThreads(agent, input({ of: { agentId: agent.agentId } })),
+        );
+
         assert.deepEqual(
           listed.map((row) => [row.key, row.status, row.closedBy, row.closedReason]).sort(),
           [
@@ -1129,7 +1159,9 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             .where(eq(inboxItem.id, merged.id)),
         );
 
-        const listed = acceptedList(yield* listThreads(agent, input({})));
+        const listed = acceptedList(
+          yield* listThreads(agent, input({ of: { agentId: agent.agentId } })),
+        );
 
         assert.deepEqual(
           listed.map(({ updatedAt: _at, ...row }) => row),
@@ -1184,16 +1216,19 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         yield* post(elsewhere, SETTINGS);
 
         const byAgent = acceptedList(
-          yield* listThreads(agent, input({ agentId: teammate.agentId })),
+          yield* listThreads(agent, input({ of: { agentId: teammate.agentId } })),
         );
 
-        const byTask = acceptedList(yield* listThreads(agent, input({ taskId: teammate.taskId })));
+        const byTask = acceptedList(
+          yield* listThreads(agent, input({ of: { taskId: teammate.taskId } })),
+        );
 
         const outside = acceptedList(
-          yield* listThreads(agent, input({ agentId: elsewhere.agentId })),
+          yield* listThreads(agent, input({ of: { agentId: elsewhere.agentId } })),
         );
 
-        const misspelled = yield* listThreads(agent, input({ agentID: teammate.agentId }));
+        const misspelled = yield* listThreads(agent, input({ of: { agentID: teammate.agentId } }));
+        const unnamed = yield* listThreads(agent, input({}));
         const [elsewhereItem] = yield* taskInboxItems(agent.userId, elsewhere.taskId);
         assert.ok(elsewhereItem);
         const outsideRead = yield* readThread(agent, input({ threadId: elsewhereItem.id }));
@@ -1221,6 +1256,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.deepEqual(summary(byTask), teammateThread);
         assert.deepEqual(outside, []);
         assert.equal(refusalOf(misspelled), INBOX_REFUSAL.UNREADABLE_LIST);
+        assert.equal(refusalOf(unnamed), INBOX_REFUSAL.UNREADABLE_LIST);
         assert.equal(refusalOf(outsideRead), INBOX_REFUSAL.NO_THREAD);
       }),
   );
@@ -1246,7 +1282,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         }
 
         const answered = acceptedList(
-          yield* listThreads(agent, input({ status: INBOX_STATUS.ANSWERED })),
+          yield* listThreads(
+            agent,
+            input({ of: { agentId: agent.agentId }, status: INBOX_STATUS.ANSWERED }),
+          ),
         );
 
         assert.deepEqual(

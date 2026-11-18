@@ -6,7 +6,7 @@ import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { getTestDB, openInboxItem, openTaskAgent, openWorkspace } from "../../testing/index.js";
-import { holdFailedTurnPush, holdThreadPush, takeAbsentHolds } from "../held-push-store.js";
+import { holdThreadPush, holdTurnPush, takeAbsentHolds } from "../held-push-store.js";
 import { stampPresence } from "../presence-store.js";
 import { createTask } from "../task-store.js";
 
@@ -61,8 +61,8 @@ it.layer(getTestDB())("the held push store", (it) => {
         yield* stampPresence(away);
         yield* holdThreadPush(away, itemId);
         yield* holdThreadPush(away, itemId);
-        yield* holdFailedTurnPush(away, agentId, "turn-1");
-        yield* holdFailedTurnPush(away, agentId, "turn-2");
+        yield* holdTurnPush(away, agentId, "turn-1");
+        yield* holdTurnPush(away, agentId, "turn-2");
         yield* holdThreadPush(present, otherItem);
 
         yield* TestClock.adjust("3 minutes");

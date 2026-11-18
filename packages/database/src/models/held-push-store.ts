@@ -1,7 +1,7 @@
 /**
  * held-push-store.ts -- alerts held back from a member's phones while they were at their desk: hold one, and take the holds of members who have since walked away.
  *
- * A hold names what it tells of, a thread or an agent's failed turn
+ * A hold names what it tells of, a thread or an agent's turn that ended
  * (`../schemas/held-push.ts`), under the member it was for, and holding the
  * same thing again only stamps it held again, with the newer turn for an
  * agent. The sweep takes, a batch at a time, the holds of every member whose
@@ -19,7 +19,7 @@ import { memberPresence } from "../schemas/presence.js";
 
 type HeldPushEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** A hold the sweep took: whose it was, and the thread, or the agent and its failed turn, it tells of. */
+/** A hold the sweep took: whose it was, and the thread, or the agent and its turn, it tells of. */
 const TakenHoldSchema = Schema.Struct({
   userId: Schema.String,
   inboxItemId: Schema.NullOr(Schema.String),
@@ -106,8 +106,8 @@ export function holdThreadPush(userId: string, itemId: string): HeldPushEffect<v
   return Effect.flatMap(DateTime.nowAsDate, (now) => upsertThreadHold({ userId, itemId, now }));
 }
 
-/** The member's push about the agent's failed turn held, the newer turn replacing an older one held for the same agent. */
-export function holdFailedTurnPush(
+/** The member's push about the agent's turn held, a failed one or one that finished, the newer turn replacing an older one held for the same agent. */
+export function holdTurnPush(
   userId: string,
   agentId: string,
   turnId: string,

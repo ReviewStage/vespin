@@ -44,6 +44,8 @@ interface Plan {
   readonly limited?: boolean;
   readonly meter?: { readonly value: number; readonly tone: ProgressTone };
   readonly usage?: readonly UsageMeterRow[];
+  /** When its usage was heard, where that is not fresh. */
+  readonly heard?: string;
   /** The press it offers under its meters, a plan at its limit's Use reset. */
   readonly offer?: string;
 }
@@ -75,13 +77,22 @@ const PLANS: readonly Plan[] = [
       { label: "5-hour", usedPercent: 42, resetsAt: NOW + 2 * HOUR },
       { label: "Weekly", usedPercent: 18, resetsAt: NOW + 3 * DAY },
     ],
+    heard: "Updated 4h ago",
   },
   { id: "side", name: "ana@sideproject.example", state: "Ready" },
   { id: "key", name: "API key · sk-proj-…a91F", state: "Ready" },
 ];
 
 /** One plan's row, as Settings › Agents draws it. */
-function PlanRow({ name, state, limited = false, meter, usage, offer }: Plan): React.JSX.Element {
+function PlanRow({
+  name,
+  state,
+  limited = false,
+  meter,
+  usage,
+  heard,
+  offer,
+}: Plan): React.JSX.Element {
   return (
     <SettingsRow
       leading={<SettingsRowMark>{CODEX}</SettingsRowMark>}
@@ -95,7 +106,7 @@ function PlanRow({ name, state, limited = false, meter, usage, offer }: Plan): R
               {state}
             </SettingsRowStateLine>
           )}
-          {usage === undefined ? null : <SettingsRowUsage rows={usage} />}
+          {usage === undefined ? null : <SettingsRowUsage rows={usage} heard={heard} />}
           {meter === undefined ? null : <SettingsRowMeter value={meter.value} tone={meter.tone} />}
           {offer === undefined ? null : (
             <SettingsRowAction>

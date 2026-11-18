@@ -1,12 +1,13 @@
 // sign-in.tsx -- the sign-in screen: the Keel mark on the brand's ground and a way in through Google and through GitHub at its foot, each in the system's authentication session.
 
-import { ACCOUNT_PROVIDER, type AccountProvider } from "@repo/credentials/snapshot";
+import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
 import { SIGN_IN_FAILURE, SIGN_IN_FAILURE_WORDS, type SignInFailure } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { AuthPage, PROVIDER_MARK_ASSET, ProviderButton, Screen } from "@repo/ui-native";
 import { useState } from "react";
+import { reportSignInEnd, SIGN_IN_END } from "../crash-reports.js";
 import { useHostActs } from "../host/host-provider.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -22,7 +23,9 @@ const WAYS_IN = [
  * provider's page in the system's sheet; the screen gives way to the Inbox
  * once the account lands (`_layout.tsx`'s guard). A sheet closed by hand is
  * an ordinary end and says nothing; any other end says why in the web's
- * words.
+ * words. Every end without an account is reported (`crash-reports.ts`), a
+ * closed sheet among them, since a sheet that never caught its return closes
+ * the same way.
  */
 export default function SignInScreen() {
   const acts = useHostActs();
@@ -35,9 +38,25 @@ export default function SignInScreen() {
     acts[ACT_KIND.ACCOUNT_BEGIN_SIGN_IN]({ provider })
       .then(
         (answer) => {
-          if ("failure" in answer) setFailure(answer.failure);
+          if ("failure" in answer) {
+            reportSignInEnd(provider, answer.failure);
+            setFailure(answer.failure);
+
+            return;
+          }
+
+          if (answer.account.status !== ACCOUNT_STATUS.SIGNED_IN) {
+            reportSignInEnd(provider, SIGN_IN_END.CLOSED);
+          }
         },
-        () => setFailure(SIGN_IN_FAILURE.UNFINISHED),
+        (refusal) => {
+          reportSignInEnd(
+            provider,
+            SIGN_IN_FAILURE.UNFINISHED,
+            refusal instanceof Error ? refusal : undefined,
+          );
+          setFailure(SIGN_IN_FAILURE.UNFINISHED);
+        },
       )
       .finally(() => setOpening(undefined));
   };

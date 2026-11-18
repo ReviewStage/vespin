@@ -1,7 +1,7 @@
 // glyph-label.tsx -- a glyph as SwiftUI draws it, alone or beside an act's words, whether one of Lucide's from the asset catalog or an SF Symbol.
 
 import { Image, Label, Text } from "@expo/ui/swift-ui";
-import { font } from "@expo/ui/swift-ui/modifiers";
+import { font, tag } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { MARK_SIZE } from "./tokens/space.js";
@@ -72,6 +72,36 @@ export function GlyphLabel({
       title={title}
       icon={<GlyphImage glyph={glyph} textStyle={textStyle} menuColor={color} />}
     />
+  );
+}
+
+/**
+ * A picker's option as a system menu draws it: its words beside its photo,
+ * or its glyph in the color the menu keeps, or its words alone, tagged with
+ * the value picking it chooses, as SwiftUI's `Picker` reads its options.
+ */
+export function PickOption({
+  label,
+  value,
+  glyph,
+  color,
+  photo,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly glyph?: Glyph | undefined;
+  readonly color?: string | undefined;
+  readonly photo?: string | undefined;
+}) {
+  const tagged = [tag(value)];
+
+  if (photo !== undefined)
+    return <Label title={label} icon={<MenuPhoto photo={photo} />} modifiers={tagged} />;
+
+  if (glyph === undefined) return <Text modifiers={tagged}>{label}</Text>;
+
+  return (
+    <Label title={label} icon={<GlyphImage glyph={glyph} menuColor={color} />} modifiers={tagged} />
   );
 }
 

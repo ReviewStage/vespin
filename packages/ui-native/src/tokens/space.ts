@@ -47,8 +47,6 @@ export const MARK_SIZE = {
    * wider than the ⋯ beside it.
    */
   COLUMN_BAR_FACE: 26,
-  /** The column a sidebar row's glyph stands centered in, as wide as Mail's mailbox glyphs, so every place's name starts at one edge. */
-  SIDEBAR_LEAD: 28,
 } as const;
 
 /** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
@@ -66,20 +64,6 @@ export const RADIUS = {
   TILE: 12,
   /** A message's bubble, as Messages rounds one. */
   BUBBLE: 18,
-} as const;
-
-/**
- * A sidebar row's measures, as Mail's mailboxes stand on iPadOS 26: about
- * 38 pt tall at the standard size, its selection's fill set in from the
- * sidebar's edges, and its glyph and words padded inside that fill.
- */
-export const SIDEBAR_ROW = {
-  /** Between the sidebar's edge and the row's selection fill. */
-  EDGE: 10,
-  /** Between the selection fill's side and the glyph or the count. */
-  SIDE: 10,
-  /** The row's top and bottom inside its fill. */
-  VERTICAL: 8,
 } as const;
 
 /**

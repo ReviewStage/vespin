@@ -7,8 +7,7 @@ import {
   Switch,
 } from "@repo/ui";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
-import { useEffect } from "react";
-import type { RowChange } from "./row-write.js";
+import { type RowChange, useSettledWrite } from "./row-write.js";
 
 /**
  * A settings switch: `@repo/ui`'s `SettingsRow` holding its `Switch`, the
@@ -59,11 +58,7 @@ export function SwitchRow({
   before?: React.ReactNode;
 }): React.JSX.Element {
   const ahead = write?.ahead;
-  const agreed = write !== undefined && !write.busy && ahead?.value === checked;
-  // Note that a landed write is let go of once the stored value agrees, so the switch then follows the store again, other windows' changes included.
-  useEffect(() => {
-    if (agreed) write.settle();
-  }, [agreed, write]);
+  useSettledWrite(write, checked);
   const run = write === undefined ? onChange : write.run;
 
   return (

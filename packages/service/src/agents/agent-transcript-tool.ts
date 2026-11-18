@@ -95,10 +95,11 @@ export const READ_AGENT_TRANSCRIPT_INPUT = Schema.Struct({
 
 const readTranscriptAsked = Schema.decodeUnknownResult(READ_AGENT_TRANSCRIPT_INPUT);
 
-/** An entry as a page of this read says it: its words, the journal it stands in where it is the agent's own, and the call it says where it is one. */
-function transcriptEntry({ messageId, text, callId }: PageEntry): WireRecord {
+/** An entry as a page of this read says it: its words, the journal it stands in where it is the agent's own, the line it is where one was sent to the agent, and the call it says where it is one. */
+function transcriptEntry({ messageId, lineId, text, callId }: PageEntry): WireRecord {
   return {
     ...(messageId === undefined ? undefined : { messageId }),
+    ...(lineId === undefined ? undefined : { lineId }),
     ...(callId === undefined ? undefined : { callId }),
     text,
   };

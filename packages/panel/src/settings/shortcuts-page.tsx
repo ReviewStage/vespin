@@ -66,13 +66,16 @@ const RUN_DASH = "–";
 export function WindowShortcutSections({
   experiments,
   capabilities,
+  inbox,
 }: {
   experiments: ExperimentChoices;
   capabilities: readonly HostCapability[];
+  /** Whether the account keeps an Inbox, whose chords are listed only then. */
+  inbox: boolean;
 }): React.JSX.Element {
   return (
     <>
-      {shownShortcutGroups(experiments, capabilities).map((group) => (
+      {shownShortcutGroups(experiments, capabilities, inbox).map((group) => (
         <SettingsSection
           key={group.title}
           {...settingsSectionHead(SECTION.SHORTCUTS_GROUP, { group: group.title })}

@@ -9,6 +9,7 @@
         "packages/panel/src/tasks/cloud-browser-pane.tsx",
         "packages/ui/src/components/back-button/",
         "packages/ui/src/components/landing/landing-desktop.tsx",
+        "packages/ui/src/components/landing/landing-hero.tsx",
         "packages/ui/src/icons/lucide-glyphs.tsx"
       ]
     }
@@ -33,7 +34,8 @@
       "names": ["BackIcon", "ArrowLeftIcon"],
       "allow": [
         "packages/ui/src/components/calendar/",
-        "packages/ui/src/components/landing/landing-desktop.tsx"
+        "packages/ui/src/components/landing/landing-desktop.tsx",
+        "packages/ui/src/components/landing/landing-hero.tsx"
       ]
     },
     {

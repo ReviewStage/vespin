@@ -1587,7 +1587,6 @@ const AgentsOfWorkspaceSchema = Schema.Struct({
   words: Schema.NullOr(Schema.String),
   includeArchived: Schema.Boolean,
   archivedOnly: Schema.Boolean,
-  ownOnly: Schema.Boolean,
   startedBy: Schema.NullOr(Schema.String),
   automation: Schema.NullOr(Schema.Boolean),
   automationId: Schema.NullOr(Schema.String),
@@ -1635,7 +1634,6 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
   return and(
     agentVisibleTo(userId),
     eq(agentTable.organizationId, organizationId),
-    request.ownOnly ? eq(agentTable.userId, userId) : undefined,
     request.startedBy === null ? undefined : eq(agentTable.userId, request.startedBy),
     request.includeArchived ? undefined : isNull(agentTable.archivedAt),
     request.archivedOnly ? isNotNull(agentTable.archivedAt) : undefined,
@@ -2488,8 +2486,6 @@ interface WorkspaceAgentsAsked {
   readonly includeArchived?: boolean;
   /** Only the archived agents; `includeArchived` must ask for them too. */
   readonly archivedOnly?: boolean;
-  /** Only the agents the account started, by hand or through any of its agents; every member's where unsaid. */
-  readonly ownOnly?: boolean;
   /** Only the agents this member started, by their account's id; every member's where unsaid. */
   readonly startedBy?: string;
   /** Only the agents an automation's run started where true, only those started otherwise where false; both where unsaid. */
@@ -2517,7 +2513,6 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
     words: options.words ?? null,
     includeArchived: options.includeArchived ?? false,
     archivedOnly: options.archivedOnly ?? false,
-    ownOnly: options.ownOnly ?? false,
     startedBy: options.startedBy ?? null,
     automation: options.automation ?? null,
     automationId: options.automationId ?? null,
@@ -2530,8 +2525,8 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
 }
 
 /**
- * The workspace's agents, on any task, by any member or only the
- * account's own where `ownOnly` asks, newest started first, the agents
+ * The workspace's agents, on any task, by any member or only the one
+ * `startedBy` names where it does, newest started first, the agents
  * around the one `around` names before the rest, an archived one
  * left out unless `includeArchived` asks, the one `except` names left out,
  * only those on the repository named where one is, on the plan named

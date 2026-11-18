@@ -28,7 +28,8 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { deliveryOf, handState, stateWith, withExperiments } from "../testing/app-state.js";
+import { deliveryOf, handState, stateWith, writeExperiments } from "../testing/app-state.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { standingTaskList } from "../testing/history-rows.js";
 import { tasksControl } from "../testing/tasks-control.js";
@@ -186,9 +187,20 @@ interface WaysBack {
 
 const roots: Root[] = [];
 
+/** What the document a window is mounted on lays over its slices, beside its experiments; nothing but in a case that turns a setting. */
+let documentPatch: Parameters<typeof stateWith>[1] = {};
+
+/** `element` on the test's Query client, its document holding Task descriptions on and `documentPatch` from the first frame. */
+function documented(element: React.ReactNode): React.ReactElement {
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), documentPatch);
+
+  return withQueryClient(element);
+}
+
 beforeEach(() => {
   fakeAppPlatform(QUIET_PANEL);
   handState({}, { access: { admin: true } });
+  documentPatch = {};
 });
 
 /** Takes down every window mounted so far, since a window's history is the one its root installed last. */
@@ -342,8 +354,7 @@ function mount(
   act(() =>
     root.render(
       held.provide(
-        withExperiments(
-          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+        documented(
           standingTaskList({ tasks: LISTED_TASKS, taskAgents: undefined }).provide(
             createElement(Probe),
           ),
@@ -441,6 +452,19 @@ test("on a narrow stage the window has no Home: standing there, it stands on the
 
   const wide = mount(SHELL_ROOM.WIDE, { ...ON_TASK, home: true });
   assert.equal(wide.at().inbox.open, false, "Home stands");
+});
+
+test("on a narrow stage an account that turned its Inbox off stands on Home, since the Inbox's route would only send it back", () => {
+  const settings = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS), {}).settings;
+  const held = settings ?? assert.fail("the document holds settings");
+  const off = { settings: { ...held, stored: { ...held.stored, inbox: false } } };
+
+  handState({}, { access: { admin: true }, ...off });
+  documentPatch = off;
+
+  const phone = mount(SHELL_ROOM.NARROW, { ...ON_TASK, home: true });
+  assert.equal(phone.at().inbox.open, false, "Home stands");
+  assert.deepEqual(phone.addresses(), ["/app"]);
 });
 
 test("on a narrow stage the side panel opened over the plan is a step: Back shuts it, Forward opens it on its tab, and each step's address is its link", () => {
