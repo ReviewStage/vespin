@@ -253,7 +253,7 @@ export function SkillFiles({
     [skills, ask],
   );
 
-  return <SkillFileContext.Provider value={doors}>{children}</SkillFileContext.Provider>;
+  return <SkillFileContext value={doors}>{children}</SkillFileContext>;
 }
 
 /** The named skill and what opens its `SKILL.md`; nothing where no skill of the task's is so named, or its skills are not read. */

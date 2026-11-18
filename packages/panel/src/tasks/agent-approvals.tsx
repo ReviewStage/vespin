@@ -556,7 +556,7 @@ export function ApprovalsProvider({
 }): React.JSX.Element {
   const value = useMemo(() => ({ asks }), [asks]);
 
-  return <ApprovalsContext.Provider value={value}>{children}</ApprovalsContext.Provider>;
+  return <ApprovalsContext value={value}>{children}</ApprovalsContext>;
 }
 
 /** The ask the agent holds on the call `callId`, as its row draws it; none where none is. */

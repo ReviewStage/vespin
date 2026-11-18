@@ -1411,7 +1411,7 @@ export function ListMotion({
   });
 
   return (
-    <LeavesContext.Provider value={leaves}>
+    <LeavesContext value={leaves}>
       {children}
       <ListMotionPlayer
         root={root}
@@ -1422,7 +1422,7 @@ export function ListMotion({
         way={way}
         reading={reading}
       />
-    </LeavesContext.Provider>
+    </LeavesContext>
   );
 }
 

@@ -51,7 +51,7 @@ export function RowPlaced({
   place: RowPlace | undefined;
   children: ReactNode;
 }): React.JSX.Element {
-  return <RowPlaceContext.Provider value={place}>{children}</RowPlaceContext.Provider>;
+  return <RowPlaceContext value={place}>{children}</RowPlaceContext>;
 }
 
 /** The place the list around this row handed it, if it stands in one that reorders. */

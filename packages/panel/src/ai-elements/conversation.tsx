@@ -215,7 +215,7 @@ export function Conversation({
   );
 
   return (
-    <ConversationContext.Provider value={scroll}>
+    <ConversationContext value={scroll}>
       <Fill
         className={cn("conversation relative", className)}
         style={{
@@ -226,7 +226,7 @@ export function Conversation({
       >
         {children}
       </Fill>
-    </ConversationContext.Provider>
+    </ConversationContext>
   );
 }
 

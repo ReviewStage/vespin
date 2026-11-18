@@ -57,9 +57,7 @@ export function MentionedServers({
   value: MentionedServersPlace;
   children: ReactNode;
 }): React.JSX.Element {
-  return (
-    <MentionedServersContext.Provider value={value}>{children}</MentionedServersContext.Provider>
-  );
+  return <MentionedServersContext value={value}>{children}</MentionedServersContext>;
 }
 
 /**

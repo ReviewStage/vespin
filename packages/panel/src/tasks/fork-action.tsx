@@ -79,11 +79,9 @@ export function ForkProvider({
   children?: ReactNode;
 }): React.JSX.Element {
   return (
-    <ForkContext.Provider value={value}>
-      <ForkOfferedContext.Provider value={value?.onFork !== undefined}>
-        {children}
-      </ForkOfferedContext.Provider>
-    </ForkContext.Provider>
+    <ForkContext value={value}>
+      <ForkOfferedContext value={value?.onFork !== undefined}>{children}</ForkOfferedContext>
+    </ForkContext>
   );
 }
 

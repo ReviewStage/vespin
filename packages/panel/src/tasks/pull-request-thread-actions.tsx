@@ -76,14 +76,14 @@ export function ThreadWritesProvider({
   const edits = useRef(heldBodies());
 
   return (
-    <ThreadWritesContext.Provider
+    <ThreadWritesContext
       value={{
         onWritten: value.onWritten,
         edits: edits.current,
       }}
     >
       {children}
-    </ThreadWritesContext.Provider>
+    </ThreadWritesContext>
   );
 }
 

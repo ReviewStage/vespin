@@ -852,17 +852,15 @@ export function Dialog({
           className={MIDDLE}
           inert={claimed !== undefined}
         >
-          <DialogFootContext.Provider value={foot}>
+          <DialogFootContext value={foot}>
             <ReplayWords unmasked={replayUnmasked}>{children}</ReplayWords>
-          </DialogFootContext.Provider>
+          </DialogFootContext>
         </div>
         {claimed !== undefined || (actions === undefined && actionsStart === undefined) ? null : (
           <div className={DIALOG_FOOT}>
             {actionsStart}
             <div className={DIALOG_ANSWERS}>
-              <DialogReplayUnmasked.Provider value={replayUnmasked}>
-                {actions}
-              </DialogReplayUnmasked.Provider>
+              <DialogReplayUnmasked value={replayUnmasked}>{actions}</DialogReplayUnmasked>
             </div>
           </div>
         )}

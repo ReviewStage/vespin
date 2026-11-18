@@ -93,7 +93,7 @@ export function SettingsFoldRow({
 
   return (
     <DisclosureScope state={state}>
-      <SettingsRowFoldPress.Provider value={state.toggle}>
+      <SettingsRowFoldPress value={state.toggle}>
         <SettingsRow
           label={label}
           adornment={adornment}
@@ -127,7 +127,7 @@ export function SettingsFoldRow({
         >
           {control}
         </SettingsRow>
-      </SettingsRowFoldPress.Provider>
+      </SettingsRowFoldPress>
     </DisclosureScope>
   );
 }
@@ -172,7 +172,7 @@ export function SettingsRowsFold({
 
   return (
     <DisclosureScope state={state}>
-      <SettingsRowFoldPress.Provider value={folds ? state.toggle : undefined}>
+      <SettingsRowFoldPress value={folds ? state.toggle : undefined}>
         {head(
           folds ? (
             <IconButton
@@ -185,7 +185,7 @@ export function SettingsRowsFold({
             <SettingsRowActSlot />
           ) : null,
         )}
-      </SettingsRowFoldPress.Provider>
+      </SettingsRowFoldPress>
       {/* Note that the rows stay drawn while closed, only hidden, so each keeps what it waits on; the body is the root's own child, which disclosure.css unrolls and rolls up. */}
       {folds ? (
         <div
