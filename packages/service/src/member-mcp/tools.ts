@@ -377,7 +377,12 @@ import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import type { SlackApp } from "../slack/slack-app.js";
 import type { SlackBot } from "../slack/slack-bot.js";
-import { disconnectSlackBot, readSlackBot, updateSlackBot } from "../slack/slack-bot-operations.js";
+import {
+  disconnectSlackBot,
+  readSlackBot,
+  SlackBotUpdateUnconfirmed,
+  updateSlackBot,
+} from "../slack/slack-bot-operations.js";
 import {
   COMMENT_TOOL_REFUSAL,
   commentAnswerRead,
@@ -5495,6 +5500,9 @@ const SETTINGS_REFUSAL = {
   UNAVAILABLE:
     "Not made: Slack, or this deployment's Slack bot, could not be reached just now. The call " +
     "may be made again.",
+  UNCONFIRMED:
+    "Not confirmed: the change may have been made, in part or whole, and the bot could not be " +
+    `read back; read it with ${MEMBER_MCP_TOOL.READ_SLACK_BOT} before trying again.`,
 } as const;
 
 /** A refusal of the Slack bot's or the pins' operations, in the agent's words. */
@@ -5606,7 +5614,8 @@ const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
     "or taking it out and naming or clearing its default repository (an owner or admin alone, " +
     "and only once the bot is connected). Connecting and disconnecting the bot is not done " +
     `here. ${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it then stands, as ` +
-    `${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why, with nothing changed.`,
+    `${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why, with nothing ` +
+    "changed unless it says the change is not confirmed.",
   input: UpdateSlackBotInputSchema,
   annotations: DESTRUCTIVE,
   run: ({ workspace, ...update }) =>
@@ -5616,7 +5625,15 @@ const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
           status: ACTION_RESULT_STATUS.ACCEPTED,
           slackBot: slackBotRecord(slackBot),
         })),
-        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+        Effect.catch((failure) =>
+          Effect.succeed(
+            agentToolRejected(
+              failure instanceof SlackBotUpdateUnconfirmed
+                ? SETTINGS_REFUSAL.UNCONFIRMED
+                : settingsRefusalWords(failure),
+            ),
+          ),
+        ),
       ),
     ),
 });

@@ -306,7 +306,7 @@ it.layer(getTestDB())("the Slack bot", (it) => {
         }),
       );
 
-      assert.equal(refused.error, HOSTED_API_ERROR.UNAVAILABLE);
+      assert.deepEqual(refused, { error: HOSTED_API_ERROR.UNAVAILABLE });
       assert.equal(yield* slackNotificationsOn(owner), true);
     }).pipe(
       Effect.provideService(
