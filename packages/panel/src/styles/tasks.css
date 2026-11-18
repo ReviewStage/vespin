@@ -2538,7 +2538,8 @@ svg.lucide {
 /* The button shows only while the pointer is over the description, its
    gutters on either side of the column included, as Notion's does. Beside
    the margin's cards, where no count stands, it stands centered in the gap
-   before them, which is as wide as the gutter. */
+   before them, which is as wide as the gutter, its top level with the
+   first line's, where the card it opens stands. */
 .comment-block-button {
   opacity: 0;
   transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
@@ -2547,6 +2548,7 @@ svg.lucide {
 .comment-block-button[data-beside-cards] {
   left: auto;
   right: calc(var(--ui-space-8) - var(--comment-gutter));
+  translate: none;
 }
 
 .comment-block-button:focus-within {

@@ -37,6 +37,7 @@ export default defineConfig({
       "../wire/src/testing/duplicate-keys.ts",
       "src/testing/resize-observer.ts",
       "src/testing/match-media.ts",
+      "src/testing/range-layout.ts",
     ],
     css: { include: [PANEL_STYLESHEETS] },
     server: { deps: { inline: ["streamdown", "@pierre/diffs"] } },
