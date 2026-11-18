@@ -68,7 +68,12 @@ import {
   runComputerTool,
   storedComputerOutput,
 } from "./computer-tool.js";
-import { askMac, MACHINE_COMMAND_STATUS, machineCommandsFor } from "./machine-command.js";
+import {
+  askMac,
+  MACHINE_COMMAND_STATUS,
+  machineCommandsFor,
+  runOnMacTool,
+} from "./machine-command.js";
 import { machineCommandsProcedures } from "./machine-commands-procedures.js";
 
 const ORIGIN = "https://app.test";
@@ -808,7 +813,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
   );
 
   it.effect(
-    "a recording answers the id of the machine it runs on for its stop, and a stop on a machine with none says to send it there",
+    "a stop goes where the agent's calls go now, and one that reaches a machine with no recording says the one it started stops there by itself",
     () =>
       Effect.scoped(
         Effect.gen(function* () {
@@ -839,8 +844,8 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             yield* markMachineListening(userId, id);
           }
 
-          // The Studio is the account's default, so a call naming no machine goes to it.
-          yield* changeMachine(userId, studio, { makeDefault: true });
+          // The Laptop is the account's default when the recording starts, and the Studio once it stops.
+          yield* changeMachine(userId, laptop, { makeDefault: true });
 
           const answeredOn = (
             deviceId: string,
@@ -858,11 +863,13 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
               }),
             );
 
-          const started = yield* answeredOn(
+          yield* answeredOn(
             laptop,
-            { action: COMPUTER_ACTION.RECORD, app: "Simulator", machine: laptop },
+            { action: COMPUTER_ACTION.RECORD, app: "Simulator" },
             { done: COMPUTER_ACTION.RECORD },
           );
+
+          yield* changeMachine(userId, studio, { makeDefault: true });
 
           const missed = yield* answeredOn(
             studio,
@@ -870,12 +877,10 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             { unrecorded: RECORDING_FAILURE.NONE },
           );
 
-          const read = Schema.decodeUnknownSync(Schema.Struct({ stop: Schema.String }));
-          assert.match(read(started.answered).stop, new RegExp(`machine "${laptop}"`, "u"));
           const reason = Schema.decodeUnknownSync(Schema.Struct({ reason: Schema.String }));
           assert.match(
             reason(missed.answered).reason,
-            /runs on Studio: if you started one on another machine/u,
+            /runs on Studio: one started on another machine stops there by itself/u,
           );
         }),
       ),
@@ -925,6 +930,29 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           );
         }),
       ),
+  );
+
+  it.effect(
+    "a call naming a machine, as a session from before the tools took none may, is refused saying the agent's pick sets the Mac",
+    () =>
+      Effect.gen(function* () {
+        const target = { userId: "user-names-machine", conversationId: randomUUID() };
+        const machine = randomUUID();
+        const shell = yield* runOnMacTool(target, { command: "ls", description: "List", machine });
+
+        const computer = yield* runComputerTool(target, {
+          action: COMPUTER_ACTION.LIST_APPS,
+          machine,
+        });
+
+        for (const answer of [shell, computer]) {
+          assert.equal(answer.status, MACHINE_COMMAND_STATUS.NOT_RUN);
+          assert.match(
+            "reason" in answer ? answer.reason : "",
+            /takes no `machine`\. It runs on this agent's machine, which a member picks in its composer/u,
+          );
+        }
+      }),
   );
 
   it.effect(

@@ -115,7 +115,7 @@ test("a press on a machine a refused call offers makes it the agent's default, t
     },
     {
       kind: AGENT_ACT_KIND.AGENTS_MESSAGE,
-      text: `Try again on Laptop, now your default machine (id "${LAPTOP}").`,
+      text: "Try again on Laptop, now your default machine.",
     },
   ]);
 });

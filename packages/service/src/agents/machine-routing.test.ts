@@ -1,9 +1,8 @@
 /**
  * machine-routing.test.ts -- which machine an agent's call goes to, over a real dialect.
  *
- * A call goes to the machine it names, else to the agent's pick, else, for a
- * local agent's action on an app, to the machine it runs on, else to its
- * owner's default machine from Settings, followed as it changes; a machine
+ * A call goes to the agent's pick, else to its owner's default machine from
+ * Settings, followed as it changes; a machine
  * so chosen that cannot take it refuses it, naming the machines that can,
  * in words for the model and as data for the transcript, with why. The
  * owner's machines always count, a follower's only while their switch is
@@ -100,18 +99,16 @@ const openMachine = (
     return id;
   });
 
-/** Where a call of the kind given, naming the machine's id given, goes, with the account's own listener answering as given. */
+/** Where a call of the kind given goes, with the account's own listener answering as given. */
 const route = (
   target: { readonly userId: string; readonly conversationId: string },
   ask: {
     readonly kind?: MachineCommandKind;
-    readonly machineId?: string;
     readonly account?: boolean;
   },
 ) =>
   routeOf(target, {
     kind: ask.kind ?? MACHINE_COMMAND_KIND.SHELL,
-    machineId: ask.machineId,
     accountListening: () => Effect.succeed(ask.account ?? false),
     noMachine: NO_MACHINE,
   });
@@ -122,7 +119,7 @@ const setAgent = (agentId: string, set: { deviceId?: string; targetDeviceId?: st
 
 it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   it.effect(
-    "a call goes to the machine whose id it names, else the agent's pick, else the owner's Settings default as it stands; one that cannot take it, its apps switched off for an action on an app among them, or a pick that is gone, is refused listing the ids of the ones that can",
+    "a call goes to the agent's pick, else the owner's Settings default as it stands; one that cannot take it, its apps switched off for an action on an app among them, or a pick that is gone, is refused naming the ones that can",
     () =>
       Effect.gen(function* () {
         const { owner, agentId, target } = yield* openPeople;
@@ -137,7 +134,8 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
 
         const studioOffline = {
           kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: Studio is offline, or Vespin isn't running on it. Carry on with what you can do without it, and try again later. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          reason:
+            "Not run: Studio is offline, or Vespin isn't running on it. Carry on with what you can do without it, and try again later. It could go to Laptop (Ana), once a member makes one this agent's machine from its composer or this call's card.",
           why: MACHINE_UNREACHED.OFFLINE,
           others: [toLaptop.machine],
           machine: { id: studio, name: "Studio", owner: ana },
@@ -152,27 +150,18 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           "the default picked in Settings, never moved to another without a word",
         );
 
-        assert.deepEqual(
-          yield* route(target, { machineId: laptop }),
-          toLaptop,
-          "a call naming a machine goes there whatever the default",
-        );
-
         yield* changeMachine(owner, laptop, { makeDefault: true });
         assert.deepEqual(yield* route(target, {}), toLaptop, "followed as it changes");
 
         yield* setAgent(agentId, { targetDeviceId: studio });
         assert.deepEqual(yield* route(target, {}), studioOffline, "the agent's pick first");
-        assert.deepEqual(yield* route(target, { machineId: laptop }), toLaptop, "by its id");
+        yield* setAgent(agentId, { targetDeviceId: laptop });
 
         yield* Database.use((db) =>
           db.update(device).set({ computerUse: false }).where(eq(device.id, laptop)),
         );
 
-        const appsOff = yield* route(target, {
-          kind: MACHINE_COMMAND_KIND.COMPUTER,
-          machineId: laptop,
-        });
+        const appsOff = yield* route(target, { kind: MACHINE_COMMAND_KIND.COMPUTER });
 
         assert.match(
           appsOff.kind === MACHINE_ROUTE.REFUSED ? appsOff.reason : "",
@@ -184,17 +173,9 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           MACHINE_UNREACHED.APPS_OFF,
           "and says why as data, for the card",
         );
-        assert.deepEqual(
-          yield* route(target, { machineId: laptop }),
-          toLaptop,
-          "a shell command still goes",
-        );
-        assert.deepEqual(yield* route(target, { machineId: "Laptop" }), {
-          kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: no machine this task's agents may use has the id "Laptop". Leave \`machine\` out to send it where your calls go by default. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
-          why: MACHINE_UNREACHED.UNKNOWN_MACHINE,
-          others: [toLaptop.machine],
-        });
+        assert.deepEqual(yield* route(target, {}), toLaptop, "a shell command still goes");
+
+        yield* setAgent(agentId, { targetDeviceId: studio });
 
         yield* Database.use((db) =>
           db
@@ -205,7 +186,8 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
 
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. Carry on with what you can do without it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          reason:
+            "Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. Carry on with what you can do without it. It could go to Laptop (Ana), once a member makes one this agent's machine from its composer or this call's card.",
           why: MACHINE_UNREACHED.DEFAULT_GONE,
           others: [toLaptop.machine],
         });
@@ -216,12 +198,13 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
     "a follower's machine is reached only while their switch is on, and never by a shell command where it is set to Never",
     () =>
       Effect.gen(function* () {
-        const { owner, teammate, taskId, target } = yield* openPeople;
+        const { owner, teammate, taskId, agentId, target } = yield* openPeople;
         const bens = yield* openMachine(teammate, "Studio", true, MACHINE_COMMAND_MODE.NEVER);
         yield* followTask(owner, { taskId, followerId: teammate, machines: true });
-        const computer = { kind: MACHINE_COMMAND_KIND.COMPUTER, machineId: bens };
+        yield* setAgent(agentId, { targetDeviceId: bens });
+        const computer = { kind: MACHINE_COMMAND_KIND.COMPUTER };
         const on = yield* route(target, computer);
-        const shell = yield* route(target, { machineId: bens });
+        const shell = yield* route(target, {});
         yield* setFollowerMachines(teammate, taskId, false);
         const switchedOff = yield* route(target, computer);
 
@@ -267,20 +250,17 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   );
 
   it.effect(
-    "a local agent's action on an app goes to the machine it runs on, which always counts for it, and its terminal command goes to the owner's default, its own machine included",
+    "a local agent's calls go to the owner's default like any agent's, and the machine it runs on always counts for its pick, even once the task is a teammate's",
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId, agentId, target } = yield* openPeople;
         const laptop = yield* openMachine(owner, "Laptop", true);
         const studio = yield* openMachine(owner, "Studio", true);
         const bens = yield* openMachine(teammate, "Mini", true);
+        yield* changeMachine(owner, studio, { makeDefault: true });
         yield* setAgent(agentId, { deviceId: laptop });
         const computer = { kind: MACHINE_COMMAND_KIND.COMPUTER };
-        const appsHere = yield* route(target, computer);
-        const shellOnDefault = yield* route(target, {});
-        const shellNamed = yield* route(target, { machineId: laptop });
-        yield* changeMachine(owner, studio, { makeDefault: true });
-        const shellElsewhere = yield* route(target, {});
+        const appsOnDefault = yield* route(target, computer);
 
         // Note that the starter's own switch is off and the task is a teammate's, yet the machine the agent runs on still counts for it.
         yield* followTask(owner, { taskId, followerId: owner, machines: false });
@@ -291,17 +271,15 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         );
 
         const appsAfterReassign = yield* route(target, computer);
-        const shellAfterReassign = yield* route(target, {});
+        yield* setAgent(agentId, { targetDeviceId: laptop });
+        const appsPickedHere = yield* route(target, computer);
 
         const own = (route: MachineRoute) =>
           route.kind === MACHINE_ROUTE.MACHINE && route.machine.id;
 
-        assert.equal(own(appsHere), laptop);
-        assert.equal(own(shellOnDefault), laptop, "its default is its own");
-        assert.equal(own(shellNamed), laptop, "named, too");
-        assert.equal(own(shellElsewhere), studio);
-        assert.equal(own(appsAfterReassign), laptop);
-        assert.equal(own(shellAfterReassign), bens, "the new owner's default");
+        assert.equal(own(appsOnDefault), studio, "not the machine it runs on");
+        assert.equal(own(appsAfterReassign), bens, "the new owner's default");
+        assert.equal(own(appsPickedHere), laptop);
       }),
   );
 

@@ -37,7 +37,7 @@ export function runOnMacStanding(agent: Agent, target: ConversationTarget) {
       return undefined;
     }
 
-    const route = yield* routedCall(target, MACHINE_COMMAND_KIND.SHELL, undefined);
+    const route = yield* routedCall(target, MACHINE_COMMAND_KIND.SHELL);
 
     const machine = route.kind === MACHINE_ROUTE.ACCOUNT ? undefined : route.machine;
 

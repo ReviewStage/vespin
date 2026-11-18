@@ -61,8 +61,9 @@ export const LIST_MACHINES_TOOL = {
     "may reach from this conversation (your task's assignee's, or your starter's where it has " +
     "none, and those of followers who let the task's agents use theirs), by id, name, and owner, " +
     "with whether it is online, its command mode (never, ask, or always), and whether it lets " +
-    "agents use its apps (on, off, or decided-on-the-mac). Pass a machine's id as `machine` to " +
-    "those tools.",
+    "agents use its apps (on, off, or decided-on-the-mac). Those tools take no machine: they go " +
+    "to this agent's machine, which a member picks in its composer, or else to the default of " +
+    "your task's assignee (your starter's where it has none).",
   inputSchema: LIST_MACHINES_INPUT,
 } as const;
 
