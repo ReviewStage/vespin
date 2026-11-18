@@ -389,7 +389,8 @@ here once, so a screen gets them by composing these pieces.
   element whose label is its title, so Voice Control and the Maestro flows
   find it by the words on screen, and whose value says its marks in words
   (unread, needs you, its status, its time by `sinceHeard`). A row holding a
-  button of its own, such as `AgentRow`'s pull request, stays apart instead.
+  button of its own stays apart instead; a row never nests a second press
+  over its own, so `AgentRow`'s pull request opens from its long-press menu.
   A group header, a page's heading, and a message's writer line are headings;
   a glyph its words already say is hidden. A message's `Video` that can play
   is one element, its name, which opens the system's player full screen, as

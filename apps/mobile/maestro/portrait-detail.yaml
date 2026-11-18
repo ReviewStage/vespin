@@ -56,10 +56,28 @@ onFlowComplete:
           timeout: 5000
       - assertVisible: "Agents"
       - takeScreenshot: portrait-agent-back
-      # The pull request opens in the same column from its agent's row,
-      # its bar standing Open on GitHub and Refresh as glyphs, its merge
-      # under the checks.
+      # A tap on the agent's row's second line, where its pull request's
+      # number stands, opens the agent too, never the pull request.
       - tapOn: "#128"
+      - extendedWaitUntil:
+          visible: "Add a way to resend an invite that expired."
+          timeout: 30000
+      - assertNotVisible: "Ready to merge"
+      - tapOn:
+          text: "Back"
+          optional: true
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - assertVisible: "Agents"
+      # The pull request opens in the same column from its agent's row's
+      # long-press menu, its bar standing Open on GitHub and Refresh as
+      # glyphs, its merge under the checks.
+      - runFlow:
+          file: subflows/row-menu.yaml
+          env:
+            ROW: Build teammate invitations
+            ITEM: Open pull request
+      - tapOn: "Open pull request"
       - extendedWaitUntil:
           visible: "Ready to merge"
           timeout: 30000

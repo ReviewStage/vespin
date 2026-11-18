@@ -13,7 +13,6 @@ import {
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
-  accessibilityHint,
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
@@ -58,6 +57,7 @@ import {
   FoldChevron,
   type FoldWords,
   foldActions,
+  ROW_ACTION_TONE,
   ROW_PLACE,
   type RowAction,
   type RowFold,
@@ -90,8 +90,8 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** What parts the pieces of an agent's line. */
 const LINE_PART = "· ";
 
-/** What a pull request's number in an agent's line is heard to do. */
-const OPENS_PULL_REQUEST = "Opens the pull request";
+/** What an agent row's long-press menu opens its pull request with. */
+const OPEN_PULL_REQUEST = "Open pull request";
 
 /** How a press-through row's words read: the attention ink for what waits on you, or the body's ink for a place or an act, as the panel's quiet New agent and New sub-task stand. */
 export const LINK_ROW_TONE = {
@@ -248,7 +248,7 @@ type AgentRowProps = {
   readonly waiting: number;
   /** The task it works on, named first in its line where the list holds agents of many tasks, as ⌘K's agent rows name it; none on the task's own page. */
   readonly task?: string | undefined;
-  /** The pull request it opened, its state's glyph and number in its line, pressed to open it. */
+  /** The pull request it opened: its state's glyph and number in its line, and Open pull request in its long-press menu. */
   readonly pullRequest?:
     | {
         readonly number: number;
@@ -284,62 +284,45 @@ function startedHeard(finished: number, total: number): string {
   return `${finished} of ${total} ${total === 1 ? "agent" : "agents"} it started finished`;
 }
 
-/** How far past its words an agent row's pull request link takes a press, in points: out to either side short of the line's gap to its neighbors, up only to the gap under the line above, and down to the row's foot, or only to the gap under it where a fact stands below it at an accessibility size; so the row stays its height and its other words keep the row's own press. */
-const LINK_REACH = {
-  ACROSS: SPACE.TIGHT,
-  UP: 2,
-  DOWN: ROW_INSET.VERTICAL,
-  DOWN_TO_FACT: 2,
-} as const;
-
-/** An agent's pull request in its line: its state's glyph and its number, pressed to open it. */
-function PullRequestLink({
+/** An agent's pull request in its line: its state's glyph and its number, which the row's long-press menu opens. */
+function PullRequestMark({
   pullRequest,
-  factBelow,
 }: {
   readonly pullRequest: NonNullable<AgentRowProps["pullRequest"]>;
-  /** Whether a fact stands on its own line under the link, as the needs-you count does at an accessibility size. */
-  readonly factBelow: boolean;
 }) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
-  const down = factBelow ? LINK_REACH.DOWN_TO_FACT : LINK_REACH.DOWN;
 
   return (
-    <SwiftUIButton
-      onPress={pullRequest.onPress}
-      modifiers={[
-        buttonStyle("borderless"),
-        accessibilityValue(pullRequestMarkLabel(pullRequest)),
-        accessibilityHint(OPENS_PULL_REQUEST),
-      ]}
-    >
-      {/* Note that the link takes a press past its words, down to the row's foot or the fact under it and out to either side, through a shape padded out and then taken back so the line lays out no taller; it stops short of the title above, which opens the agent. The shape stands on the label, since a borderless button takes a press only where its label is hit. */}
-      <HStack
-        spacing={SPACE.TIGHT}
+    <HStack spacing={SPACE.TIGHT}>
+      <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
+      <Text
         modifiers={[
-          padding({ horizontal: LINK_REACH.ACROSS, top: LINK_REACH.UP, bottom: down }),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-          padding({
-            horizontal: -LINK_REACH.ACROSS,
-            top: -LINK_REACH.UP,
-            bottom: -down,
-          }),
+          font({ textStyle: TYPE_ROLE.ROW_LINE }),
+          monospacedDigit(),
+          foregroundStyle(colors.TEXT_MUTED),
+          accessibilityValue(pullRequestMarkLabel(pullRequest)),
         ]}
       >
-        <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE }),
-            monospacedDigit(),
-            foregroundStyle(colors.TEXT_MUTED),
-          ]}
-        >
-          {`#${pullRequest.number}`}
-        </Text>
-      </HStack>
-    </SwiftUIButton>
+        {`#${pullRequest.number}`}
+      </Text>
+    </HStack>
   );
+}
+
+/** The row's menu act that opens its pull request, its number and state under its words; none without one. */
+function pullRequestActions(pullRequest: AgentRowProps["pullRequest"]): readonly RowAction[] {
+  if (pullRequest === undefined) return [];
+
+  return [
+    {
+      label: OPEN_PULL_REQUEST,
+      symbol: GLYPH.PULL_REQUEST,
+      detail: `#${pullRequest.number} · ${pullRequestMarkLabel(pullRequest)}`,
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: pullRequest.onPress,
+    },
+  ];
 }
 
 /** What an agent's line says of its state: the spinner and Working, or the alert and Failed. */
@@ -441,9 +424,7 @@ export function AgentRow(props: AgentRowProps) {
               heard={startedHeard(started.finished, started.total)}
             />
           )}
-          {pullRequest === undefined ? null : (
-            <PullRequestLink pullRequest={pullRequest} factBelow={stacked && waiting > 0} />
-          )}
+          {pullRequest === undefined ? null : <PullRequestMark pullRequest={pullRequest} />}
           {waiting === 0 ? null : (
             <Text
               modifiers={[
@@ -465,7 +446,11 @@ export function AgentRow(props: AgentRowProps) {
       row={row}
       indent={(depth + (fold === undefined ? 0 : 1)) * column}
       trailingActions={props.trailingActions}
-      menuActions={[...foldActions(fold, folding), ...(props.menuActions ?? [])]}
+      menuActions={[
+        ...foldActions(fold, folding),
+        ...pullRequestActions(pullRequest),
+        ...(props.menuActions ?? []),
+      ]}
       preview={props.preview}
       question={props.question}
     />
