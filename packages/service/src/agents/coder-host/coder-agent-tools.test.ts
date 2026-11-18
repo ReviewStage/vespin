@@ -32,6 +32,7 @@ import {
 } from "@repo/database/models/provider-key-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { readReplyButton } from "@repo/database/models/reply-buttons";
+import { readRunsOnPick } from "@repo/database/models/runs-on-pick";
 import { writePage } from "@repo/database/models/task-pages";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import {
@@ -1369,7 +1370,7 @@ test("start_agent leaves an unassigned backlog task's assignee and status as the
   assert.deepEqual([stored.task.status, stored.task.assignee], [TASK_STATUS.BACKLOG, undefined]);
 });
 
-test("start_agent naming no runsOn, or another member's device, is refused in words that name where to run it, starting nothing, and runs in the cloud once runsOn names it", async () => {
+test("start_agent naming no runsOn, or another member's device, is refused in words that name where to run it, starting nothing, and runs in the cloud once runsOn names it, kept as no pick of the member's", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -1430,6 +1431,8 @@ test("start_agent naming no runsOn, or another member's device, is refused in wo
 
   assert.deepEqual([stored.machine, stored.deviceId ?? null], [AGENT_MACHINE.VERCEL, null]);
   assert.equal(agentSessions.sent.length, 1);
+  // The place a tool's call names runs that agent alone: the member's next start by hand offers no pick of it.
+  assert.ok(Option.isNone(await database.run(readRunsOnPick(agents.caller.userId))));
 });
 
 test("start_agent naming a device by its name runs on the caller's member's own device of that name, any case, and refuses a name that matches more than one of theirs, or only a teammate's, listing only their own devices", async () => {
