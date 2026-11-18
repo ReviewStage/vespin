@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, it } from "@effect/vitest";
+import { afterEach, it, vi } from "@effect/vitest";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { HOSTED_API_ERROR } from "@repo/features";
 import { WORKSPACE_ROLE, WORKSPACE_SLUG_PROBLEM } from "@repo/features/workspace-wire";
@@ -257,15 +257,18 @@ function connectPort(
     readonly billing?: Effect.Effect<string, ActRefused>;
   },
   githubLanding?: string,
+  openExternal?: WorkspaceProceduresDependencies["openExternal"],
 ) {
   const opened: string[] = [];
   const landings: (string | undefined)[] = [];
 
   const dependencies: WorkspaceProceduresDependencies = {
-    openExternal: async (url, landing) => {
-      opened.push(url);
-      landings.push(landing);
-    },
+    openExternal:
+      openExternal ??
+      (async (url, landing) => {
+        opened.push(url);
+        landings.push(landing);
+      }),
   };
 
   if (githubLanding !== undefined) dependencies.githubLanding = githubLanding;
@@ -413,6 +416,40 @@ it.effect(
         { refused: WORKSPACE_ACTS.WORKSPACE_SLACK_BOT_INSTALL.refusal },
       ]);
       assert.deepEqual([...elsewhere.opened, ...refused.opened], []);
+    }),
+);
+
+it.effect(
+  "a workspace connection whose external opener rejects is refused without logging a defect",
+  () =>
+    Effect.gen(function* () {
+      const loggedErrors: unknown[][] = [];
+
+      const { port } = connectPort(
+        {
+          github: Effect.succeed(INSTALL_URL),
+          sentry: Effect.succeed(SENTRY_INSTALL_URL),
+          slack: Effect.succeed(SLACK_INSTALL_URL),
+        },
+        undefined,
+        () => Promise.reject(new Error("The browser could not open the address.")),
+      );
+
+      vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+        loggedErrors.push(args);
+      });
+
+      try {
+        const result = yield* port.perform(
+          { kind: WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT, payload: WORKSPACE },
+          PANEL,
+        );
+
+        assert.deepEqual(result, { refused: REFUSAL_ROWS.WORKSPACE_GITHUB_CONNECT.refusal });
+        assert.deepEqual(loggedErrors, []);
+      } finally {
+        vi.restoreAllMocks();
+      }
     }),
 );
 

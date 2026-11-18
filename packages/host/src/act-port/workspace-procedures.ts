@@ -83,7 +83,10 @@ export function workspaceProcedures(
       );
 
       if (!isGitHubAddress(url)) return yield* Effect.fail(errors.REFUSED());
-      yield* Effect.promise(() => openExternal(url, githubLanding));
+      yield* Effect.tryPromise({
+        try: () => openExternal(url, githubLanding),
+        catch: () => errors.REFUSED(),
+      });
     }),
     // Note that the address the service answered opens only where it is
     // Sentry's own, because it is the one address here the panel did not name.
@@ -97,7 +100,7 @@ export function workspaceProcedures(
       );
 
       if (!isSentryAddress(url)) return yield* Effect.fail(errors.REFUSED());
-      yield* Effect.promise(() => openExternal(url));
+      yield* Effect.tryPromise({ try: () => openExternal(url), catch: () => errors.REFUSED() });
     }),
     // Note that the address the service answered opens only where it is
     // Stripe's own, because it is the one address here the panel did not name.
@@ -111,7 +114,7 @@ export function workspaceProcedures(
       );
 
       if (!isStripeAddress(url)) return yield* Effect.fail(errors.REFUSED());
-      yield* Effect.promise(() => openExternal(url));
+      yield* Effect.tryPromise({ try: () => openExternal(url), catch: () => errors.REFUSED() });
     }),
     [WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL]: actPort[
       WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL
@@ -123,7 +126,7 @@ export function workspaceProcedures(
       );
 
       if (!isStripeAddress(url)) return yield* Effect.fail(errors.REFUSED());
-      yield* Effect.promise(() => openExternal(url));
+      yield* Effect.tryPromise({ try: () => openExternal(url), catch: () => errors.REFUSED() });
     }),
     // Note that the address the service answered opens only where it is
     // Slack's own, because it is the one address here the panel did not name.
@@ -137,7 +140,7 @@ export function workspaceProcedures(
       );
 
       if (!isSlackAddress(url)) return yield* Effect.fail(errors.REFUSED());
-      yield* Effect.promise(() => openExternal(url));
+      yield* Effect.tryPromise({ try: () => openExternal(url), catch: () => errors.REFUSED() });
     }),
   };
 }
