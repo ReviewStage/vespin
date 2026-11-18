@@ -3,7 +3,7 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { migrateRendererStorage } from "./renderer-storage";
 
 const LEGACY_PATH = path.resolve("fixture", "renderer", "index.html");
@@ -66,4 +66,32 @@ test("does not resurrect a migrated draft deleted before the next launch", async
   await migrateRendererStorage(storagePage(legacy, current), LEGACY_PATH);
 
   expect(current.has(DRAFTS)).toBe(false);
+});
+
+test("keeps both sets of drafts when the user writes a draft before migration retries", async () => {
+  const inbox = { kind: "inbox", taskId: null, agentId: "agent", itemId: "item" };
+  const oldDraft = { accountId: "one", place: { ...inbox, revision: 1 }, text: "Old inbox reply" };
+  const otherAccount = { accountId: "two", place: inbox, text: "Other account's reply" };
+  const currentDraft = { accountId: "one", place: inbox, text: "Current inbox reply", revision: 2 };
+
+  const newDraft = {
+    accountId: "one",
+    place: { kind: "newTask", workspaceId: null },
+    text: "New task",
+  };
+
+  const legacy = new Map([[DRAFTS, JSON.stringify([oldDraft, otherAccount])]]);
+  const current = new Map<string, string>();
+  const page = storagePage(legacy, current);
+
+  vi.spyOn(page, "loadURL").mockRejectedValueOnce(new Error("Could not load the renderer"));
+
+  await expect(migrateRendererStorage(page, LEGACY_PATH)).rejects.toThrow(
+    "Could not load the renderer",
+  );
+  current.set(DRAFTS, JSON.stringify([currentDraft, newDraft]));
+
+  await migrateRendererStorage(page, LEGACY_PATH);
+
+  expect(JSON.parse(current.get(DRAFTS) ?? "null")).toEqual([otherAccount, currentDraft, newDraft]);
 });

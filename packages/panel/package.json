@@ -39,6 +39,7 @@
     "./build-table": "./scripts/build-table.mjs",
     "./bundle-loader": "./src/bundle-loader.js",
     "./call/call-card-of": "./src/call/call-card-of.js",
+    "./composer-draft-storage": "./src/composer-draft-storage.js",
     "./composer-drafts": "./src/composer-drafts.js",
     "./entities/entity-glyph": "./src/entities/entity-glyph.js",
     "./failure-report": "./src/failure-report.js",
