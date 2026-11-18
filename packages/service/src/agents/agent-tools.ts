@@ -135,7 +135,7 @@ import {
   forwardedImages,
   type ImageForwarder,
 } from "./coder-host/forwarded-images.js";
-import { agentPublished } from "./coder-host/published.js";
+import { agentPublishedUnwritten } from "./coder-host/published.js";
 import { callEntry, cutText, lineWords, senderName } from "./coder-host/replay.js";
 import type { SummaryModelOf } from "./coder-host/replay-summary.js";
 import {
@@ -1545,7 +1545,7 @@ const publishedOf = (
   never,
   DatabaseServices | HttpClient.HttpClient | GitHubApp
 > =>
-  Effect.map(Effect.result(agentPublished(userId, agent)), (read) =>
+  Effect.map(Effect.result(agentPublishedUnwritten(userId, agent)), (read) =>
     Result.isSuccess(read) ? read.success : undefined,
   );
 

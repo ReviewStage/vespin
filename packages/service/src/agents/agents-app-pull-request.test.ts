@@ -19,9 +19,10 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { PULL_REQUEST_WRITE_BOUNDS, REACTION } from "@repo/features/pull-request-write-wire";
 import type { WireBoundaryInput } from "@repo/wire";
-import { Duration, Effect } from "effect";
+import { Duration, Effect, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { SERVER_EVENT } from "../events/server-events.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -55,7 +56,20 @@ import {
   type RepositoryScript,
   type SentToGitHub,
 } from "../testing/github-app-fake.js";
+import { connected, REVISION } from "../testing/member-mcp-auth.js";
 import { CODER } from "./coder-host/bounds.js";
+
+/** A member tool's answer: its one text part. */
+const decodeToolAnswer = Schema.decodeUnknownSync(
+  Schema.Struct({
+    content: Schema.Tuple([Schema.Struct({ type: Schema.Literal("text"), text: Schema.String })]),
+  }),
+);
+
+/** The state of the pull request a read_agent_changes answer names. */
+const decodeChangesState = Schema.decodeUnknownSync(
+  Schema.Struct({ pullRequest: Schema.Struct({ state: Schema.String }) }),
+);
 
 /** A change to the agent's pull request as the bearer given, with the fields beside its action given. */
 function actionAs(
@@ -2152,7 +2166,10 @@ it.layer(getTestDB())("an agent's kept pull request", (it) => {
   /** The owner's agent on the published branch, its pull request answered as `standing` holds it, and a read of it the time given after the last, by default once its row no longer answers for being fresh. */
   const publishedAs = (standing: Standing) =>
     Effect.gen(function* () {
-      const { owner, task, ask } = yield* openTask({ github: standingPullRequest(standing) });
+      const { owner, task, ask, mcpFetch } = yield* openTask({
+        github: standingPullRequest(standing),
+      });
+
       const { agent } = yield* startedAgent(owner, task.id, ask);
       yield* updateAgentBranch(owner, agent.id, PUBLISHED.branch);
 
@@ -2168,7 +2185,7 @@ it.layer(getTestDB())("an agent's kept pull request", (it) => {
       const read = readAfter(CODER.PUBLISHED_ROW_FRESH);
       const kept = readAgentPublished(owner, agent.id);
 
-      return { owner, agentId: agent.id, task, read, readAfter, kept };
+      return { owner, agentId: agent.id, task, read, readAfter, kept, mcpFetch };
     });
 
   it.effect(
@@ -2270,6 +2287,36 @@ it.layer(getTestDB())("an agent's kept pull request", (it) => {
         standing.limited = true;
 
         assert.deepEqual(yield* read, open);
+      }),
+  );
+
+  it.effect(
+    "read_agent_changes answers the pull request merged on GitHub and writes nothing of it, so the tab's next read is the one that first finds it merged",
+    () =>
+      Effect.gen(function* () {
+        const standing: Standing = { mergedAt: null };
+        const { owner, agentId, read, kept, mcpFetch } = yield* publishedAs(standing);
+
+        yield* read;
+        standing.mergedAt = MERGED_AT;
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
+        const answered = yield* Effect.promise(() =>
+          client.callTool({ name: MEMBER_MCP_TOOL.READ_AGENT_CHANGES, arguments: { agentId } }),
+        );
+
+        yield* Effect.promise(() => client.close());
+        const [content] = decodeToolAnswer(answered).content;
+        assert.equal(
+          decodeChangesState(JSON.parse(content.text)).pullRequest.state,
+          PULL_REQUEST_STATE.MERGED,
+        );
+        assert.equal((yield* kept)?.state, PULL_REQUEST_STATE.OPEN);
+        assert.equal(countedFor(owner, SERVER_EVENT.PULL_REQUEST_MERGE), 0);
+
+        yield* read;
+        assert.equal((yield* kept)?.state, PULL_REQUEST_STATE.MERGED);
+        assert.equal(countedFor(owner, SERVER_EVENT.PULL_REQUEST_MERGE), 1);
       }),
   );
 

@@ -4,8 +4,8 @@
  * The agent is found as `read_agent` finds it (`workspaceAgentOf`), on the
  * caller's member's standing now, so an agent of another workspace, even one
  * the member is also in, is none. What it published is the branch and pull
- * request its row holds as GitHub holds them now (`agentPublished`), its
- * state and checks among it, which the Pull request tab reads
+ * request its row holds as GitHub holds them now, written nowhere
+ * (`agentPublishedUnwritten`), its state and checks among it, which the Pull request tab reads
  * (`GET /api/agents/{id}/pull-request`); its files, reviewers, and reviews
  * that said something are read afresh on a token minted for its repository
  * (`pullRequestChangesRead`), as the Changes tab reads them
@@ -43,7 +43,7 @@ import {
   workspaceAgentOf,
 } from "./agent-tools.js";
 import { githubReadRefusal } from "./asked-pull-request.js";
-import { agentPublished, agentPullRequestReach } from "./coder-host/published.js";
+import { agentPublishedUnwritten, agentPullRequestReach } from "./coder-host/published.js";
 import { pullRequestChangesRead } from "./pull-request-changes.js";
 
 /** The most characters of one file's patch a read answers, about ten thousand tokens: the rest is counted, never sent. */
@@ -132,7 +132,10 @@ export function runReadAgentChanges(
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { agent } = found.value;
       const userId = callerUserId(call.caller);
-      const published = yield* Effect.result(githubReadRefusal(agentPublished(userId, agent)));
+
+      const published = yield* Effect.result(
+        githubReadRefusal(agentPublishedUnwritten(userId, agent)),
+      );
 
       if (Result.isFailure(published)) {
         return agentToolRejected(unreadWords(published.failure.error));
