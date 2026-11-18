@@ -111,7 +111,26 @@ env:
       TAB: Tasks
 - tapOn: "Teammate invitations"
 - assertVisible: "Agents"
+# A tap anywhere on the agent's row opens the agent, its pull request's
+# number in its line included, which once took the tap for itself.
 - tapOn: "#128"
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
+- assertNotVisible: "Ready to merge"
+- tapOn:
+    text: "Back"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Agents"
+# The pull request opens from the row's long-press menu.
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Build teammate invitations
+      ITEM: Open pull request
+- tapOn: "Open pull request"
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000
