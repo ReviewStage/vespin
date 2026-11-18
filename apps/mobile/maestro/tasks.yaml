@@ -475,9 +475,10 @@ env:
 # first, as the agent page's ⋯ does. The search above leaves "Ledger
 # rounding" found, whose agent finished, so its swipe offers Archive where a
 # working agent's offers Open and Stop. Note that the swipe starts on the
-# row, one element whose center is the row's, and takes 900 ms, as the
-# leading swipe above does, since a quick one reads as a tap and opens the
-# agent. A full swipe only opens the row, since Archive never runs on one,
+# row, one element whose center is the row's, and keeps Maestro's own
+# duration, because on the iPhone a 900 ms swipe held long enough to start
+# the row's long-press preview and never opened it (jswipe2 and jswipe3,
+# Nov 18). A full swipe only opens the row, since Archive never runs on one,
 # so the flow taps Archive and waits for its ask.
 - tapOn: "Ledger rounding"
 - extendedWaitUntil:
@@ -493,7 +494,6 @@ env:
     from:
       text: "Fix ledger rounding"
     direction: LEFT
-    duration: 900
 - waitForAnimationToEnd
 - takeScreenshot: task-agent-swipe-resting
 - tapOn: "Archive"
