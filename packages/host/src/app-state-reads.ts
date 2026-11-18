@@ -585,16 +585,38 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxR
   return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.TASK]));
 }
 
-/** What the Inbox groups its holders by of the document: the account's feed, each task's items by the task's id, and the tasks the host says hold items. */
+/** What the Inbox groups its holders by of the document: the account's feed, each task's items by the task's id, and the tasks holding items, the task whose item changed latest first. */
 export interface InboxHoldings {
   readonly read: InboxReads;
-  readonly tasks: AppStateSnapshot["inbox"]["tasks"];
+  readonly tasks: readonly { readonly taskId: string }[];
 }
 
-/** What the Inbox groups its holders by (`InboxHoldings`), as a `select`, made anew only as the feed or the host's read of what waits moves. */
+/** The tasks the feed's items are on, the task whose item changed latest first, as the account's read of what waits lists them. */
+function tasksOfFeed(read: InboxReads): readonly { readonly taskId: string }[] {
+  return [...read]
+    .flatMap(([taskId, items]) =>
+      items.length === 0
+        ? []
+        : [{ taskId, updatedAt: Math.max(...items.map((item) => item.updatedAt)) }],
+    )
+    .sort((one, other) => other.updatedAt - one.updatedAt);
+}
+
+/**
+ * What the Inbox groups its holders by (`InboxHoldings`), as a `select`,
+ * made anew only as the feed or the host's read of what waits moves. Note
+ * that while the feed's rows are still the ones the phone kept and that read
+ * has named no task yet, the tasks are the kept rows' own, since that read
+ * keeps nothing on the phone and answers only over the network, so a launch
+ * draws its kept rows at once rather than after a round trip.
+ */
 export const selectInboxHoldings = memoizedSelect(
   (state: AppStateSnapshot) => [state[LIVE_READ.INBOX_ITEMS], state.inbox.tasks],
-  (feed, tasks): InboxHoldings => ({ read: feedReads(feed), tasks }),
+  (feed, tasks): InboxHoldings => {
+    const read = feedReads(feed);
+
+    return { read, tasks: feed.kept === true && tasks.length === 0 ? tasksOfFeed(read) : tasks };
+  },
 );
 
 /**
