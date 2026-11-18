@@ -1050,6 +1050,15 @@ export const START_LEAVES_TASK_WORDS =
   "The start leaves the task's assignee and status as they stand, and the agent's first turn " +
   "moves the task to In progress from any other status, as every agent's turn does.";
 
+/** Who pays for a tool start's agent, which no start names, as the coding agent's and the member MCP's `start_agent` and `list_models` state it (`turnPayerOf`, `roomAfterLimit`). */
+export const START_PAYER_WORDS =
+  "No start names who pays: each turn of a cloud agent runs on the first of the member's " +
+  "subscriptions and API keys for the model's provider, in the order Settings keeps them, that " +
+  "has room (where none has, its first API key, or with no key the subscription whose limit " +
+  "resets soonest), and moves to the next when one hits its limit, " +
+  "which may switch it between a subscription and an API key; an agent on a device runs on that " +
+  "machine's own login whatever the member keeps.";
+
 /** `start_agent` in the words of the workspace's experiments: its name, its words, and its input schema. */
 export function startAgentToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
@@ -1064,7 +1073,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
 
   return (
     "Start a new agent on the task its taskId names, your own or another of your workspace, " +
-    `${START_HANDED_WORDS[words]} ${START_LEAVES_TASK_WORDS} ` +
+    `${START_HANDED_WORDS[words]} ${START_LEAVES_TASK_WORDS} ${START_PAYER_WORDS} ` +
     "Start it on the task you work on, by your own taskId, for any part of that task's work, even one " +
     "that runs apart from yours, so its branch, pull request, and transcript stand under that task; " +
     "name another task only for work unrelated to it, or where the developer asked for that, and for " +
@@ -1091,7 +1100,8 @@ export const LIST_MODELS_TOOL = {
     "its contextWindows, the standard and the long with each one's size in tokens and what the " +
     "long one costs as a multiple of the standard price, or none where it runs on one window; " +
     "and its payers, the kinds of credential the member keeps that pay for it (subscription, " +
-    "api_key, both, or none where nothing does); " +
+    "api_key, both, or none where nothing does), which a start never picks between, since each " +
+    "turn of a cloud agent takes the first with room; " +
     "and the member's default, with the window it runs on, which the app's own Starts run on; " +
     `a ${AGENT_TOOL.START_AGENT} call names its own model and effort. ` +
     "Call it before you name a model, an effort, or a context window, such as one the developer " +
@@ -1111,8 +1121,9 @@ export const UPDATE_TASK_TOOL = {
   description:
     "Change a task of your workspace by its id, as the developer's own task menu would, on behalf " +
     "of the developer you work for; name at least one change, and several go in one call. Mark a task " +
-    "Done, with status done, once all of the task's work is done, such as when its pull requests " +
-    "merged, or where the developer asked you to clean up: that withdraws every ask still open on its " +
+    "Done, with status done, when the developer asks, or once its work is done and you are confident " +
+    "they won't follow up; never just because you answered a question or ended a turn. Done " +
+    "withdraws every ask still open on its " +
     "threads, so mark it done only once you no longer need them, and archives every agent on the " +
     `task, as ${AGENT_TOOL.ARCHIVE_AGENT} would but stopping none: an idle one at once, and one at ` +
     "work, you included, as its turn ends; Canceled does the same. A change of its status off Done brings those agents back, their " +

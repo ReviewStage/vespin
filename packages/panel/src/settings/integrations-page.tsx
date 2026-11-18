@@ -1,13 +1,15 @@
 import {
   namedServers,
-  type ServerGroup,
+  type ProviderGroup,
+  providerGroups,
+  type ServerRow,
   searchServers,
-  serverGroups,
   serverRows,
 } from "@repo/features/agent-servers-model";
-import { connectionHealth } from "@repo/features/integration-health";
+import { type ConnectionHealth, connectionHealth } from "@repo/features/integration-health";
 import { INTEGRATIONS_PAGE_WORDS } from "@repo/features/integration-settings-words";
 import {
+  INTEGRATION_NAME,
   INTEGRATION_PROVIDER,
   INTEGRATION_PROVIDER_LIST,
   INTEGRATION_STATUS,
@@ -16,12 +18,14 @@ import {
 import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
+import type { SettingsSubPage } from "@repo/settings/settings-views";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
   commandKeyshortcuts,
   GAP,
   ListMotion,
+  motionKey,
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_SKELETON_CONTROL,
   SearchField,
@@ -37,71 +41,70 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
-import { IntegrationRow } from "../integration-row.js";
-import { useIntegrationStatuses } from "../integration-statuses.js";
+import { IntegrationLinkRow, IntegrationRow } from "../integration-row.js";
+import { type IntegrationStatuses, useIntegrationStatuses } from "../integration-statuses.js";
 import { useIntegrationToolReads } from "../integration-tools.js";
 import { focusSearchField } from "../search-field.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
+import { IntegrationProviderPage } from "./integration-provider-page.js";
 import { ReadFailed } from "./marks.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * integrations-page.tsx -- Settings › Integrations: the services the account connects so our agents can use them.
  *
- * One row per account at a provider (two Notion workspaces are two rows,
- * "Notion · Acme" and "Notion · Personal", each its own grant, and an
- * account alone is named the same way where it carries a name, such as a
- * Google account's email: "Gmail · dean@example.com"), and one for
- * a provider where the account holds none, under Connected or Not connected as the MCP popover
- * sections its servers (`@repo/features/agent-servers-model`), each section
- * in the order of the providers' names: its mark and name, and under it where its connection
- * stands once that needs saying — connected, a sign-in under way, or one
- * expired. A sign-in begun waits on the
- * browser with Reopen and Cancel, and one that failed or never finished
- * says so with Try again (`integration-sign-in.ts`). A row that connects or
- * disconnects glides from one section into the other (`ListMotion`), and
- * holds still under reduced motion. A connection is said to be
- * connected only once its server answered with its tools; one whose server
- * answered why it would not says why instead (`integration-health.ts`). A
- * row's button is for the problem state alone: Connect while none stands,
- * and Reconnect where a sign-in expired or a broken connection is mended by
- * one. A connected row that works stands quiet, and its ⋯ (or a right-click
- * on it) keeps Reconnect, which signs in with the provider again, beside
- * Disconnect, which asks first in the confirm dialog and ends that account
- * alone; an expired or broken row keeps Disconnect in its ⋯ beside its
- * Reconnect button. Where the provider offers more than one account, the ⋯ keeps Add
- * another account, which begins a sign-in for a new one that stands pending
- * as a row of its own until it settles; and where it holds more than one,
- * Rename, which names the account in place. GitHub is granted by the
+ * One row per provider, under Connected or Not connected as the MCP popover
+ * sections its servers (`@repo/features/agent-servers-model`'s
+ * `providerGroups`), each section in the order of the providers' names. A
+ * provider the account holds an account at is one row that opens its page
+ * (`IntegrationLinkRow`, `integration-provider-page.tsx`), however many
+ * accounts it holds: its mark, its name, beside it the accounts' names
+ * where they carry any ("Personal and Work"), and under it what it gives
+ * agents, or where an account needs the developer, that account's problem
+ * in the attention tint, with the one control that mends it before the ›:
+ * Reconnect for a sign-in expired or a connection a sign-in mends, Reopen
+ * and Cancel while its sign-in is waited on, Retry where its tools could
+ * not be read. Its page holds what each account's ⋯ once did, Rename,
+ * Reconnect, Add account, and Disconnect. A provider it holds nothing at is
+ * the row every surface connects it from (`IntegrationRow`): what it gives
+ * agents, and Connect; a sign-in begun waits on the browser with Reopen and
+ * Cancel, and one that failed or never finished says so with Try again
+ * (`integration-sign-in.ts`). A row that connects or disconnects glides
+ * from one section into the other (`ListMotion`), and holds still under
+ * reduced motion. A connection is said to work only once its server
+ * answered with its tools; one whose server answered why it would not says
+ * why instead (`integration-health.ts`). GitHub is granted by the
  * account's own GitHub (`integration-grant.ts`), which lets agents use
- * GitHub's tools as the developer and is linked nowhere else, as its ⋯ says
- * over its acts: its Connect links that GitHub in the browser, and its
- * Disconnect unlinks it under the Mac's session, a refusal saying why in a
- * toast. A workspace's repositories are not this; they come from the GitHub
- * connected in Settings › Workspace. The window never sees a sign-in
- * address; the host opens it. Where every
- * connection stands is read once for the page (`integration-statuses.ts`),
- * when it is drawn and whenever the window is focused, which is how the
- * developer comes back from the browser. A provider this deployment does not
- * offer the account has no row, as its agents are never handed it. Every
- * line is fixed by the build, but for the one-line reason a provider's
- * server gave, which the service passes on only where it carries no
- * credential. Agents are handed a connected integration's every tool, so the
- * page lists none: it says only whether the connection works.
+ * GitHub's tools as the developer and is linked nowhere else: its Connect
+ * links that GitHub in the browser, and its Disconnect unlinks it under the
+ * Mac's session, a refusal saying why in a toast. A workspace's
+ * repositories are not this; they come from the GitHub connected in
+ * Settings › Workspace. The window never sees a sign-in address; the host
+ * opens it. Where every connection stands is read once for the page
+ * (`integration-statuses.ts`), when it is drawn and whenever the window is
+ * focused, which is how the developer comes back from the browser. A
+ * provider this deployment does not offer the account has no row, as its
+ * agents are never handed it. Every line is fixed by the build, but for
+ * the one-line reason a provider's server gave, which the service passes
+ * on only where it carries no credential. Agents are handed a connected
+ * integration's every tool, so the page lists none: it says only whether
+ * the connection works.
  *
  * The page has a search of its own above its rows, for the integrations,
  * apart from Settings' search in the sidebar, which finds pages and rows: it
  * finds what the MCP popover's search finds, by the same words
  * (`@repo/features/agent-servers-model`'s `searchServers`). Command-F lands in it
  * while the page shows, and Escape clears it, then lets go of the caret.
- * While a query stands, the page keeps only the rows it found, in their
- * sections, the words marked; a query that finds nothing says so. Settings'
+ * While a query stands, the page keeps only the providers it found, an
+ * account's name finding its provider, in their sections, the words
+ * marked; a query that finds nothing says so. Settings'
  * own search hands its query down when one of its results opens a row here
  * (`../desktop/desktop-settings.tsx`).
  *
  * The search is `@repo/ui`'s `SearchField`, each section its
- * `SettingsSection`, and each row `MenuRow`'s `SettingsRow`, led by the
- * provider's mark, its line the row's description. A row's Connect,
+ * `SettingsSection`, a provider held its `SettingsLinkRow` and one not
+ * `MenuRow`'s `SettingsRow`, each led by the provider's mark, its line the
+ * row's description. A row's Connect,
  * Reconnect, Try again, and Cancel are the outline `Button`, and Reopen the
  * quiet one beside Cancel.
  */
@@ -129,7 +132,7 @@ const CONNECTED_SKELETON_ROWS = 2;
 
 /**
  * The sections that stand while the statuses are read, a row to each offered
- * provider: a few connected, each ending in its ⋯ under its line, and the
+ * provider: a few connected, each ending in the › that opens its page, and the
  * rest not, each in its Connect under the line saying what it gives agents,
  * every one led by its mark, so the rows land in the height they
  * stood in.
@@ -202,7 +205,7 @@ function NoMatchNote({ query }: { query: string }): React.JSX.Element {
   );
 }
 
-/** The rows each section stands, by its heading, as the connections the rows are followed by. */
+/** The rows each section stands, by its heading, as the providers or connections the rows are followed by. */
 type SectionPlaces = readonly (readonly [string | undefined, readonly string[]])[];
 
 /** Whether two placings stand the same rows in the same sections, in the same order. */
@@ -222,22 +225,22 @@ function samePlaces(one: SectionPlaces, other: SectionPlaces): boolean {
 }
 
 /**
- * The page's sections, which move (`ListMotion`): a row that connects or
+ * The page's sections, which move (`ListMotion`): a provider that connects or
  * disconnects glides from the section it stood in to the other, followed
- * by its connection, and the sections and rows it moved glide with it.
+ * by its key, and the sections and rows it moved glide with it.
  */
 function MovingSections({
   found,
   children,
 }: {
-  found: readonly ServerGroup[];
+  found: readonly ProviderGroup[];
   children: React.ReactNode;
 }): React.JSX.Element {
   const moving = useRef<HTMLElement | null>(null);
 
   const places: SectionPlaces = found.map((group) => [
     group.heading,
-    group.rows.map((row) => row.connection),
+    group.providers.flatMap((rows) => rows.map((row) => row.connection)),
   ]);
 
   const [placed, setPlaced] = useState(() => ({ places, change: {} }));
@@ -265,7 +268,13 @@ function MovingSections({
  * read again. A provider read as unavailable is not offered to the account
  * and has no row.
  */
-function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.Element {
+function IntegrationRows({
+  filter,
+  onOpen,
+}: {
+  filter: IntegrationsFilter;
+  onOpen: (provider: SettingsSubPage) => void;
+}): React.JSX.Element {
   const statuses = useIntegrationStatuses();
 
   const { reads, retry } = useIntegrationToolReads(
@@ -292,9 +301,10 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
   const healthOf = (server: string) =>
     connectionHealth(integrationConnectionOf(server)?.provider ?? GITHUB, reads[server]);
 
-  // Note that the rows stand in the order of their names within each
+  // Note that the providers stand in the order of their names within each
   // section, so no provider is pinned above the rest by the order its value
-  // set happens to list it in.
+  // set happens to list it in, and a provider's accounts keep their own order,
+  // which its page lists them in.
   const rows = serverRows({
     statusOf: statuses.statusOf,
     healthOf,
@@ -302,10 +312,14 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
     accountsOf: statuses.accountsOf,
     readFailed: statuses.readFailed,
     disabled: [],
-  }).toSorted((one, other) => one.name.localeCompare(other.name, "en"));
+  }).toSorted((one, other) =>
+    INTEGRATION_NAME[one.provider].localeCompare(INTEGRATION_NAME[other.provider], "en"),
+  );
 
   const tokens = searchTokens(query);
-  const found = serverGroups(searchServers(rows, query));
+  // Note that a query finding one of a provider's accounts finds the provider, whose one row names them all.
+  const foundProviders = new Set(searchServers(rows, query).map((row) => row.provider));
+  const found = providerGroups(rows.filter((row) => foundProviders.has(row.provider)));
 
   return (
     <MovingSections found={found}>
@@ -325,20 +339,85 @@ function IntegrationRows({ filter }: { filter: IntegrationsFilter }): React.JSX.
           key={group.heading ?? "unread"}
           {...settingsSectionHead(SECTION.INTEGRATIONS_GROUP, { group: group.heading })}
         >
-          {group.rows.map((row) => (
-            <IntegrationRow
-              key={row.connection}
-              row={row}
-              status={statuses.statusOf(row.connection)}
-              health={healthOf(row.connection)}
+          {group.providers.map((own) => (
+            <ProviderRows
+              key={own[0]?.provider}
+              rows={own}
               statuses={statuses}
+              healthOf={healthOf}
               tokens={tokens}
-              onRetryTools={() => retry(row.connection)}
+              onRetryTools={retry}
+              onOpen={onOpen}
             />
           ))}
         </SettingsSection>
       ))}
     </MovingSections>
+  );
+}
+
+/**
+ * One provider on the list: where the account holds an account there, the
+ * one row that opens its page; else its row to connect it, a sign-in under
+ * way or one that did not finish on it, as every surface draws it.
+ */
+function ProviderRows({
+  rows,
+  statuses,
+  healthOf,
+  tokens,
+  onRetryTools,
+  onOpen,
+}: {
+  rows: readonly ServerRow[];
+  statuses: IntegrationStatuses;
+  healthOf: (server: string) => ConnectionHealth;
+  tokens: readonly string[];
+  onRetryTools: (server: string) => void;
+  onOpen: (provider: SettingsSubPage) => void;
+}): React.JSX.Element | null {
+  const first = rows[0];
+
+  if (first === undefined) return null;
+  const { provider } = first;
+
+  const held = rows.some((row) => {
+    const status = statuses.statusOf(row.connection);
+
+    return status === INTEGRATION_STATUS.CONNECTED || status === INTEGRATION_STATUS.EXPIRED;
+  });
+
+  if (held) {
+    return (
+      // Note that a provider is followed by its own name, which the row it is drawn as before it connects carries too, so it glides from one section to the other.
+      <Stack gap={GAP.NONE} {...motionKey(provider)}>
+        <IntegrationLinkRow
+          provider={provider}
+          rows={rows}
+          statuses={statuses}
+          healthOf={healthOf}
+          tokens={tokens}
+          onRetryTools={onRetryTools}
+          onOpen={() => onOpen(provider)}
+        />
+      </Stack>
+    );
+  }
+
+  return (
+    <>
+      {rows.map((row) => (
+        <IntegrationRow
+          key={row.connection}
+          row={row}
+          status={statuses.statusOf(row.connection)}
+          health={healthOf(row.connection)}
+          statuses={statuses}
+          tokens={tokens}
+          onRetryTools={() => onRetryTools(row.connection)}
+        />
+      ))}
+    </>
   );
 }
 
@@ -352,25 +431,44 @@ function PageNote({ children }: { children: string }): React.JSX.Element {
 }
 
 /** The page's rows under its own search, the query held here where Settings does not hand the page one. */
-function SearchedRows({ filter }: { filter: IntegrationsFilter | undefined }): React.JSX.Element {
+function SearchedRows({
+  filter,
+  onOpen,
+}: {
+  filter: IntegrationsFilter | undefined;
+  onOpen: (provider: SettingsSubPage) => void;
+}): React.JSX.Element {
   const [query, setQuery] = useState("");
   const shown = filter ?? { query, onQueryChange: setQuery };
 
   return (
     <>
       <FilterField filter={shown} />
-      <IntegrationRows filter={shown} />
+      <IntegrationRows filter={shown} onOpen={onOpen} />
     </>
   );
 }
 
+/** Opens nothing, where the page is drawn with no Settings around it to open a provider's page in. */
+const OPENS_NOTHING = () => undefined;
+
 export function IntegrationsSection({
   signedIn,
   filter,
+  sub,
+  onSubChange = OPENS_NOTHING,
 }: {
   signedIn: boolean;
   /** The page's search, where Settings holds its query. */
   filter?: IntegrationsFilter | undefined;
+  /** The provider whose page stands in the list's place, where one does. */
+  sub?: SettingsSubPage | undefined;
+  /** Opens a provider's page. */
+  onSubChange?: ((sub: SettingsSubPage | undefined) => void) | undefined;
 }): React.JSX.Element {
-  return signedIn ? <SearchedRows filter={filter} /> : <PageNote>{PAGE_LINE.SIGNED_OUT}</PageNote>;
+  if (!signedIn) return <PageNote>{PAGE_LINE.SIGNED_OUT}</PageNote>;
+
+  if (sub !== undefined) return <IntegrationProviderPage provider={sub} />;
+
+  return <SearchedRows filter={filter} onOpen={onSubChange} />;
 }

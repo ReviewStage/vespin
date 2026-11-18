@@ -394,6 +394,9 @@ export const ChevronDownIcon = lucideGlyph(ChevronDown, "settings-chevron");
 /** Points at a fold's body, turned down by its stylesheet while the fold is open. */
 export const FoldChevronIcon = lucideGlyph(ChevronRight, "ui-disclosure-chevron");
 
+/** Points down at what a settings row folds open under it, turned up by its stylesheet while the fold is open. */
+export const FoldChevronDownIcon = lucideGlyph(ChevronDown, "ui-disclosure-chevron");
+
 /** Points into a submenu beside a menu row, in the chevron's own stroke. */
 export const ChevronRightIcon = lucideGlyph(ChevronRight, "settings-chevron");
 

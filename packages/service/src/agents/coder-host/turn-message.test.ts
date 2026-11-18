@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { writeAccountTimeZone } from "@repo/database/models/account-time-zone";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
 import type { DescriptionWriter } from "@repo/database/models/description-revisions";
 import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
@@ -43,7 +44,9 @@ import { coderTurnMessage } from "./turn-message.js";
  * agent's first turn, then only where someone other than the agent saved
  * the description after its previous turn started, never on its first turn or for
  * its own notes; and an agent's first turn alone, with Memory on, is handed
- * the memories of its own workspace its task's words find. Synthetic
+ * the memories of its own workspace its task's words find; and a turn whose
+ * request names no zone reads the developer's day in the zone their account
+ * keeps, and in UTC, said to be so, only where it keeps none. Synthetic
  * accounts, tasks, and words throughout.
  */
 
@@ -148,6 +151,37 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         assert.ok(!next.text?.includes("This turn is"), next.text ?? "");
         const compacted = yield* typedOn(handedAfterCompaction({ spoken: true }));
         assert.ok(compacted.text?.startsWith("This turn is typed"), compacted.text ?? "");
+      }),
+  );
+
+  it.effect(
+    "a turn whose request names no zone reads the zone the account keeps, one that names its own reads that, and one with neither reads UTC and says so",
+    () =>
+      Effect.gen(function* () {
+        const { userId, agent, admitted } = yield* openAgent;
+
+        const timeOf = (zone: string | undefined) =>
+          Effect.map(
+            coderTurnMessage(
+              { ...admitted, timeZone: zone },
+              agent,
+              { kind: SESSION_TURN.TYPED, turnId: undefined },
+              {},
+              TURN_STARTS_AT,
+            ),
+            (message) => message.text ?? "",
+          );
+
+        const unknown = yield* timeOf(undefined);
+        assert.ok(unknown.includes("Their time zone is unknown, so read it as UTC."), unknown);
+
+        yield* writeAccountTimeZone(userId, "America/New_York");
+        const kept = yield* timeOf(undefined);
+        assert.ok(kept.includes("7:10 PM America/New_York (UTC 00:10), offset -05:00"), kept);
+        assert.ok(!kept.includes("unknown"), kept);
+
+        const named = yield* timeOf("Asia/Tokyo");
+        assert.ok(named.includes("9:10 AM Asia/Tokyo (UTC 00:10), offset +09:00"), named);
       }),
   );
 

@@ -729,9 +729,9 @@ main() {
   # Note that nothing says how to upgrade, because the host updates itself to each release.
   printf '\n'
   if [ "${SETUP_PENDING:-false}" = true ]; then
-    ok "Installed and connected. It reads Online under a task's Runs on in Vespin once setup finishes."
+    ok "Installed and connected. It reads Online under a task's Machine menu in Vespin once setup finishes."
   else
-    ok "Ready. Pick it under a task's Runs on in Vespin."
+    ok "Ready. Pick it under a task's Machine menu in Vespin."
   fi
   printf 'To remove it: %s uninstall\n' "$TYPED_LINK"
   # Note that a systemd service does not keep a WSL distro up: WSL stops it about

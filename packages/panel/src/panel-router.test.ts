@@ -215,6 +215,13 @@ const LINKS: readonly (readonly [LinkDestination, Landing])[] = [
     },
   ],
   [
+    { kind: LINK_DESTINATION.SETTINGS, page: "workspace", sub: "github" },
+    {
+      routeId: "/$workspace/settings/$page/$sub",
+      params: { workspace: W, page: "workspace", sub: "github" },
+    },
+  ],
+  [
     { kind: LINK_DESTINATION.ADMIN },
     { routeId: "/places/$workspace/admin/", params: { workspace: W } },
   ],

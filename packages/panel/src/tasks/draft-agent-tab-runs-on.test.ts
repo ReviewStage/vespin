@@ -143,7 +143,7 @@ async function mount(draft: AgentDraft, agents: readonly AgentSummary[] = AGENTS
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(Tab))));
   await settle();
-  const chip = () => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]');
+  const chip = () => container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]');
 
   return {
     container,
@@ -152,14 +152,14 @@ async function mount(draft: AgentDraft, agents: readonly AgentSummary[] = AGENTS
     chip,
     pick: async (name: string) => {
       act(() =>
-        container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click(),
+        container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]')?.click(),
       );
       await settle();
 
       const option =
         [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
           each.textContent?.includes(name),
-        ) ?? assert.fail(`Runs on lists ${name}`);
+        ) ?? assert.fail(`Machine lists ${name}`);
 
       act(() => option.click());
       await settle();
@@ -173,7 +173,7 @@ async function mount(draft: AgentDraft, agents: readonly AgentSummary[] = AGENTS
 
 test("a draft's Runs on starts where the member's newest agent on the task runs, a teammate's newer one aside, and a send left on it names no place", async () => {
   const tab = await mount(DRAFT);
-  await vi.waitFor(() => assert.equal(tab.chip()?.getAttribute("aria-label"), "Runs on: Studio"));
+  await vi.waitFor(() => assert.equal(tab.chip()?.getAttribute("aria-label"), "Machine: Studio"));
 
   await tab.send();
   assert.deepEqual(tab.starts, [undefined]);
@@ -182,7 +182,7 @@ test("a draft's Runs on starts where the member's newest agent on the task runs,
 test("a place picked on a draft is sent with its start", async () => {
   const tab = await mount(DRAFT);
   await tab.pick("Cloud");
-  assert.equal(tab.chip()?.getAttribute("aria-label"), "Runs on: Cloud");
+  assert.equal(tab.chip()?.getAttribute("aria-label"), "Machine: Cloud");
 
   await tab.send();
   assert.deepEqual(tab.starts, [{ machine: AGENT_MACHINE.VERCEL }]);
@@ -192,7 +192,7 @@ test("a continue's draft starts on its source's place, and a place picked is sen
   const [inCloud] = AGENTS;
   assert.ok(inCloud !== undefined);
   const tab = await mount({ ...DRAFT, prompt: "", fork: continueFork(inCloud.id) });
-  assert.equal(tab.chip()?.getAttribute("aria-label"), "Runs on: Cloud");
+  assert.equal(tab.chip()?.getAttribute("aria-label"), "Machine: Cloud");
 
   await tab.pick("Studio");
   await tab.send();
@@ -211,5 +211,5 @@ test("a continue of a teammate's agent on their own device names that device, wh
     theirs,
   ]);
 
-  assert.equal(tab.chip()?.getAttribute("aria-label"), "Runs on: Dana's Mac mini");
+  assert.equal(tab.chip()?.getAttribute("aria-label"), "Machine: Dana's Mac mini");
 });

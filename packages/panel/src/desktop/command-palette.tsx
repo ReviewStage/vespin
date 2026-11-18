@@ -114,7 +114,12 @@ import {
   HOST_CAPABILITY,
   type HostCapability,
 } from "@repo/settings";
-import { SETTINGS_PAGE_LIST, type SettingsView } from "@repo/settings/settings-views";
+import {
+  SETTINGS_PAGE_LIST,
+  type SettingsSubPage,
+  type SettingsView,
+  settingsSubNamed,
+} from "@repo/settings/settings-views";
 import {
   APP_COMMAND,
   APP_SHORTCUT_GROUPS,
@@ -2023,7 +2028,7 @@ export function CommandPalette({
     rows: SettingsSearchInput | undefined;
     /** What the platform offers, which decides the Settings pages listed, whether or not the rows have been read. */
     capabilities: readonly HostCapability[];
-    onViewChange: (view: SettingsView) => void;
+    onViewChange: (view: SettingsView, sub?: SettingsSubPage) => void;
   };
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
@@ -2132,8 +2137,8 @@ export function CommandPalette({
 
   const land = (page: SettingsView, id: string) =>
     choose(() => {
-      // Choosing a page opens Settings on it, or turns the page of Settings standing.
-      settings.onViewChange(page);
+      // Choosing a page opens Settings on it, or turns the page of Settings standing; an integration opens its own page.
+      settings.onViewChange(page, settingsSubNamed(page, id));
       landing.current?.();
       landing.current = landOnSettingsRow(id);
     });

@@ -100,6 +100,13 @@ export const HOSTED_SERVICE_PATH = {
    */
   ACCOUNT_PRESENCE: "/api/account/presence",
   /**
+   * The IANA zone the member's device reads its clock in (PUT), named as a
+   * client launches and whenever it moves: the service keeps it on the
+   * account, for an agent's turn to read the developer's day in.
+   * `time-zone-wire.ts` declares it.
+   */
+  ACCOUNT_TIME_ZONE: "/api/account/time-zone",
+  /**
    * The outside MCP clients the account allowed: read them (GET), or revoke
    * one by its client id in the query (DELETE). `mcp-client-wire.ts`
    * declares both.

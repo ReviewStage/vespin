@@ -1,3 +1,4 @@
+import { CLOUD_ENVIRONMENT_HEAD } from "@repo/features/cloud-environment-words";
 import { MACHINES_WORDS } from "@repo/features/machines-settings-words";
 import { SKILLS_LINE, workspaceGroupTitle } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -129,6 +130,10 @@ function accountDrawn(input: SettingsSearchInput): boolean {
 export const SECTION = {
   MEMBERS: SETTINGS_SECTION.MEMBERS,
   WORKSPACE_CONNECTIONS: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+  /** Workspace › GitHub's accounts, the App's and its members' tokens', each with its repositories. */
+  GITHUB_ACCOUNTS: "workspace-github-accounts",
+  /** Workspace › Slack's channels, the bot's default repository and each channel's. */
+  SLACK_CHANNELS: "workspace-slack-channels",
   BILLING_USAGE: SETTINGS_SEARCH_ROW.BILLING_USAGE,
   BILLING_STATUS: SETTINGS_SEARCH_ROW.BILLING_STATUS,
   ENVIRONMENT_SANDBOX: SETTINGS_SEARCH_ROW.ENVIRONMENT_SANDBOX,
@@ -156,6 +161,8 @@ export const SECTION = {
   YOUR_SOUNDS: "your-sounds",
   APPEARANCE_GROUP: "appearance-group",
   INTEGRATIONS_GROUP: "integrations-group",
+  /** An integration's page's accounts, headed by its provider's name. */
+  INTEGRATION_ACCOUNTS: "integration-accounts",
   SHORTCUTS_GROUP: "shortcuts-group",
   SHORTCUTS_WRITING: "shortcuts-writing",
   SHORTCUTS_FILES_CHANGED: "shortcuts-files-changed",
@@ -204,6 +211,14 @@ const SETTINGS_SECTIONS = {
     words: "integrations GitHub repositories connect choose manage disconnect organization",
     drawn: workspaceShown,
   },
+  [SECTION.GITHUB_ACCOUNTS]: {
+    found: SECTION_FOUND.PAGE,
+    head: "Accounts and repositories",
+  },
+  [SECTION.SLACK_CHANNELS]: {
+    found: SECTION_FOUND.PAGE,
+    head: "Channels",
+  },
   [SECTION.BILLING_USAGE]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.BILLING,
@@ -221,28 +236,28 @@ const SETTINGS_SECTIONS = {
   [SECTION.ENVIRONMENT_SANDBOX]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Sandbox",
+    head: CLOUD_ENVIRONMENT_HEAD.SANDBOX,
     words: `sandbox size vcpus cpu cores memory ram gb machine larger bigger faster ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_VARIABLES]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Variables",
+    head: CLOUD_ENVIRONMENT_HEAD.VARIABLES,
     words: `environment variables env vars secrets ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_INSTALL]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Install software",
+    head: CLOUD_ENVIRONMENT_HEAD.INSTALL,
     words: `install script sudo apt packages tools ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_SETUP]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Setup scripts",
+    head: CLOUD_ENVIRONMENT_HEAD.SETUP,
     words: `setup script repository checkout ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
@@ -286,6 +301,10 @@ const SETTINGS_SECTIONS = {
     drawn: accountDrawn,
   },
   [SECTION.INTEGRATIONS_GROUP]: {
+    found: SECTION_FOUND.ROWS,
+    rows: SECTION_ROWS.INTEGRATIONS,
+  },
+  [SECTION.INTEGRATION_ACCOUNTS]: {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.INTEGRATIONS,
   },

@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { EXPERIMENT, NO_EXPERIMENTS } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { test } from "vitest";
-import { inboxRouteStands, settingsPageRouteStands, workspaceRouteStands } from "./route-gates.js";
+import {
+  inboxRouteStands,
+  settingsPageRouteStands,
+  settingsSubRouteStands,
+  workspaceRouteStands,
+} from "./route-gates.js";
 
 /**
  * route-gates.test.ts -- a Settings page a workspace experiment holds waits on
@@ -72,4 +77,11 @@ test("the Inbox stands under the reader's workspace only while the account keeps
 
   assert.equal(inboxRouteStands("acme", access), true);
   assert.equal(inboxRouteStands("acme", { ...access, inbox: false }), false);
+});
+
+test("a page of a Settings page's own stands only under the page that holds it", () => {
+  assert.equal(settingsSubRouteStands(SETTINGS_VIEW.WORKSPACE, "github"), true);
+  assert.equal(settingsSubRouteStands(SETTINGS_VIEW.WORKSPACE, "linear"), false);
+  assert.equal(settingsSubRouteStands(SETTINGS_VIEW.INTEGRATIONS, "linear"), true);
+  assert.equal(settingsSubRouteStands(SETTINGS_VIEW.AGENTS, "github"), false);
 });

@@ -22,7 +22,7 @@
  * entries hold a gap however they begin.
  */
 
-import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -255,9 +255,9 @@ const copyEntries = SqlSchema.void({
     sourceConversationId: Schema.String,
     conversationId: Schema.String,
     projectKey: Schema.NullOr(Schema.String),
-    keptProject: Schema.NullOr(Schema.String),
+    keptProjects: Schema.Array(Schema.String),
   }),
-  execute: ({ sourceUserId, sourceConversationId, conversationId, projectKey, keptProject }) =>
+  execute: ({ sourceUserId, sourceConversationId, conversationId, projectKey, keptProjects }) =>
     Database.use((db) =>
       db.insert(claudeSessionEntries).select((qb) =>
         qb
@@ -266,7 +266,7 @@ const copyEntries = SqlSchema.void({
             projectKey:
               projectKey === null
                 ? claudeSessionEntries.projectKey
-                : sql<string>`case when ${claudeSessionEntries.projectKey} = ${keptProject} then ${claudeSessionEntries.projectKey} else ${projectKey}::text end`.as(
+                : sql<string>`case when ${inArray(claudeSessionEntries.projectKey, [...keptProjects])} then ${claudeSessionEntries.projectKey} else ${projectKey}::text end`.as(
                     "project_key",
                   ),
             sessionId: claudeSessionEntries.sessionId,
@@ -495,10 +495,10 @@ export function holdsSession(
   return findOpening({ userId, conversationId, sessionId }).pipe(Effect.map(Option.isSome));
 }
 
-/** How a copy re-keys its rows: each to the project given, but those of the project kept, which names no checkout. */
+/** How a copy re-keys its rows: each to the project given, but those of the projects kept, which name no checkout. */
 interface SessionRekey {
   readonly projectKey: string;
-  readonly keptProject: string;
+  readonly keptProjects: readonly string[];
 }
 
 /** Every row of the source conversation, read as its own account, copied to the conversation given in their order, re-keyed where a re-key is given, its broken sessions marked broken there too. */
@@ -517,7 +517,7 @@ export function copySessionEntries(
     copyEntries({
       ...request,
       projectKey: rekey?.projectKey ?? null,
-      keptProject: rekey?.keptProject ?? null,
+      keptProjects: rekey?.keptProjects ?? [],
     }),
     copyBreaks(request),
   );

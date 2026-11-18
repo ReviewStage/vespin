@@ -13,43 +13,36 @@ import { dayText } from "@repo/features/time-format";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ANNOUNCE,
-  BUTTON_VARIANT,
-  Button,
   CONFIRM_LOSS,
+  ConfirmDialog,
   DIALOG_SIZE,
   Dialog,
   DialogActions,
-  FootQuestion,
-  Inline,
-  JUSTIFY,
   OutsideLink,
   PasteSteps,
   SETTINGS_ROW_STATE,
-  SettingsFacts,
   SettingsRowStateLine,
-  TEXT_ELEMENT,
-  TEXT_FONT,
-  TEXT_VARIANT,
-  Text,
   useConfirmDialog,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { sendAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
+import type { MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 
 /**
- * github-dialog.tsx -- Settings › Profile › GitHub personal access token: the member's own classic token, added, shown, and removed.
+ * github-dialog.tsx -- Settings › Profile › GitHub personal access token: the member's own classic token, added in a dialog, described on its row, and removed from its ⋯.
  *
- * The dialog holds the token alone: its paste, setup's own (`GitHubTokenPaste`), whose first step
- * opens GitHub's page for a new classic token in the browser, or once a token is saved its hint,
- * login, expiry, and Disconnect, which asks first at the dialog's own foot (`FootQuestion`). Every
+ * The dialog holds the paste alone, setup's own (`GitHubTokenPaste`), whose first step
+ * opens GitHub's page for a new classic token in the browser. A saved token is told in
+ * the row's description (`TokenFacts`), and Disconnect, which asks first
+ * (`useGitHubTokenDisconnect`), stands in the row's ⋯. Every
  * refusal and status says what to do next, in a line.
  *
  * The token stands in the open field alone, is sent once as it is pasted or on Enter, and is
@@ -106,44 +99,19 @@ function Problem({ children }: { children: string }): React.JSX.Element {
   );
 }
 
-/** The space a fact ends in, so the text of the line reads its facts apart where the gap only draws them so; at a line's end it collapses. */
-const FACT_BREAK = " ";
-
-/** The expiry's words, whole: "Expires Dec 23, 2026" never breaks inside, so a narrow row moves it as one. */
-function expiryWords(expiresAt: number): string {
-  return `Expires ${dayText(expiresAt)}`.replaceAll(" ", "\u00a0");
-}
-
 /**
- * What tells a saved token apart: its hint and login as one unit, then its
- * expiry, then its status where it is not in use. Note that the units are set
- * apart by their gap rather than by a dot, because a dot is strewn at a line's
- * end or start wherever the line breaks, and the hint and login are joined
- * so that the only dot never breaks.
+ * What tells a saved token apart, as one sentence with no dots: whose it is,
+ * the end of it, and when it expires, then its status where it is not in use.
  */
 export function TokenFacts({ token }: { token: GitHubTokenSummary }): React.JSX.Element {
   const status = statusLabel(token.status);
+  const expiry = token.expiresAt === null ? "" : `, expires ${dayText(token.expiresAt)}`;
 
   return (
-    <SettingsFacts>
-      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
-        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-          <ReplayMask>{token.hint}</ReplayMask>
-        </Text>
-        {"\u00a0·\u00a0"}
-        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.LABEL}>
-          <ReplayMask>{token.login}</ReplayMask>
-        </Text>
-        {FACT_BREAK}
-      </Text>
-      {token.expiresAt === null ? null : (
-        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
-          {expiryWords(token.expiresAt)}
-          {FACT_BREAK}
-        </Text>
-      )}
+    <>
+      <ReplayMask>{`${token.login}'s token ending ${token.hint}${expiry}`}</ReplayMask>
       {status === undefined ? null : <Problem>{status}</Problem>}
-    </SettingsFacts>
+    </>
   );
 }
 
@@ -162,8 +130,12 @@ const TOKEN_REMOVE_MUTATION = mutationOptions({
       }),
 });
 
-/** A saved token with Disconnect, which asks first, as every connection in Settings ends. */
-function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element {
+/**
+ * The saved token's Disconnect, which asks first, as every connection in
+ * Settings ends: the act for the row's ⋯ and the question it opens at the
+ * foot of the page.
+ */
+export function useGitHubTokenDisconnect() {
   const removing = useMutation(TOKEN_REMOVE_MUTATION);
 
   const removalAct = useConfirmAct(removing, {
@@ -177,18 +149,16 @@ function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element
     confirmFailure(FAILURE_SURFACE.GITHUB_TOKEN_REMOVE),
   );
 
-  return (
-    <Inline justify={JUSTIFY.BETWEEN}>
-      <TokenFacts token={token} />
-      <Button
-        variant={BUTTON_VARIANT.DANGER_OUTLINE}
-        busy={removal.busy}
-        busyLabel="Disconnecting"
-        onClick={removal.ask}
-      >
-        Disconnect
-      </Button>
-      <FootQuestion
+  return {
+    act: {
+      label: "Disconnect",
+      danger: true,
+      disabled: removal.busy,
+      onSelect: removal.ask,
+    } satisfies MenuAction,
+    question: (
+      <ConfirmDialog
+        open
         confirm={removal}
         question={{
           title: "Disconnect your GitHub token?",
@@ -199,8 +169,8 @@ function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element
           replayUnmasked: true,
         }}
       />
-    </Inline>
-  );
+    ),
+  };
 }
 
 /**
@@ -286,32 +256,19 @@ export function GitHubTokenPaste({
   );
 }
 
-/**
- * The dialog the Profile row's Add or Manage opens, over the token as the
- * host holds it, where a save's and a removal's own answer lands.
- */
+/** The dialog the Profile row's Add opens: setup's token paste, closed once the token is kept. */
 export function GitHubTokenDialog({
   open,
-  token,
   onClose,
   onExited,
 }: {
   /** Whether the card stands; falling, it fades out, then tells its owner it is gone. */
   open: boolean;
-  /** The saved token, or null where none is. */
-  token: GitHubTokenSummary | null;
   onClose: () => void;
   onExited: () => void;
 }): React.JSX.Element {
   const save = useGitHubTokenSave();
   const field = useRef<HTMLInputElement | null>(null);
-  // Note that a token leaving while the card stands puts focus in the form it brings back, since its read can land after Disconnect's question handed focus back.
-  const held = token !== null;
-  const wasHeld = useRef(held);
-  useEffect(() => {
-    if (open && wasHeld.current && !held) field.current?.focus();
-    wasHeld.current = held;
-  }, [open, held]);
 
   return (
     <Dialog
@@ -324,11 +281,7 @@ export function GitHubTokenDialog({
       onExited={onExited}
       actions={<DialogActions onDone={onClose} />}
     >
-      {token === null ? (
-        <GitHubTokenPaste field={field} onSave={save} />
-      ) : (
-        <SavedToken token={token} />
-      )}
+      <GitHubTokenPaste field={field} onSave={save} />
     </Dialog>
   );
 }

@@ -91,7 +91,7 @@ export function TabStrip({
   const placeOf = (tab: HTMLElement) => controls.current?.placeOf(tab);
 
   return (
-    <TabPlaceContext.Provider value={placeOf}>
+    <TabPlaceContext value={placeOf}>
       <Tabs
         label={label}
         ground={
@@ -104,7 +104,7 @@ export function TabStrip({
       >
         {children}
       </Tabs>
-    </TabPlaceContext.Provider>
+    </TabPlaceContext>
   );
 }
 

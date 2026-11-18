@@ -62,7 +62,7 @@ export function hostDeniedTitle(box: HostPairingAnswer): string {
 /** What the box is, as its row says under its name: its platform, its architecture, and the address its start came from. */
 export function hostBoxFacts(box: HostPairingAnswer): string {
   return [DEVICE_PLATFORM_NAME[box.platform], box.arch, ...(box.ip === null ? [] : [box.ip])].join(
-    " · ",
+    ", ",
   );
 }
 

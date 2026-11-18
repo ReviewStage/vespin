@@ -39,5 +39,5 @@ export function InlineRefFitScope({
   fit: InlineRefFit;
   children: ReactNode;
 }): React.JSX.Element {
-  return <InlineRefFitContext.Provider value={fit}>{children}</InlineRefFitContext.Provider>;
+  return <InlineRefFitContext value={fit}>{children}</InlineRefFitContext>;
 }

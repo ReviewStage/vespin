@@ -134,7 +134,7 @@ env:
       true: ${FLOATING_TABS != 'true'}
     commands:
       - scrollUntilVisible:
-          element: "Settings, .*"
+          element: "Settings(, .*)?"
           direction: DOWN
 - runFlow:
     when:
@@ -143,13 +143,13 @@ env:
       - repeat:
           times: 6
           while:
-            notVisible: "Settings, .*"
+            notVisible: "Settings(, .*)?"
           commands:
             - swipe:
                 start: "20%, 45%"
                 end: "20%, 18%"
                 duration: 1000
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-settings
@@ -163,7 +163,7 @@ env:
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn:
@@ -185,7 +185,7 @@ env:
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd:
     timeout: 5000
 - scrollUntilVisible:
@@ -205,7 +205,7 @@ env:
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Settings, .*"
+- tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd:
     timeout: 5000
 - scrollUntilVisible:

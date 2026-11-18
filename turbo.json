@@ -16,8 +16,10 @@
   // Files outside every workspace that every workspace reads. The changelog
   // and the privacy notice only the web app reads, so they are inputs of its
   // own tasks (apps/web/turbo.json). The brand artwork the web app and the
-  // desktop build read is @repo/brand's, which `transit` tracks.
-  "globalDependencies": [".nvmrc", "tsconfig.base.json"],
+  // desktop build read is @repo/brand's, which `transit` tracks. Every
+  // package's tsconfig extends `tsconfig.package.json`, which sits outside
+  // them all, so it is named here like the base it extends.
+  "globalDependencies": [".nvmrc", "tsconfig.base.json", "tsconfig.package.json"],
   "tasks": {
     // A task with no script anywhere, whose hash is its workspace's files and
     // the transit hashes of the workspaces it depends on. A task that depends
@@ -64,9 +66,14 @@
     // which turbo hashes with the task, so each shard caches on its own.
     "test:vitest": {
       "dependsOn": ["^transit"],
+      "env": ["CI"],
       // The sequencer that cuts a shard's files is read from outside the
       // workspace, and a shard's pass is only true of the files it was cut.
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/lib/test-shards.mjs"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/lib/test-shards.mjs",
+        "$TURBO_ROOT$/packages/wire/src/testing/file-time-cap.ts"
+      ],
       "outputs": []
     },
     // The whole-repository check reads every file in one program, so it is

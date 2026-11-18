@@ -412,7 +412,9 @@
 
   --ui-settings-row-block: var(--ui-space-12);
   --ui-settings-row-inline: var(--ui-space-16);
-  --ui-settings-row-min-height: auto;
+  /* A card row is never shorter than one control and its padding, so a switch
+     row stands as tall as a picker row. */
+  --ui-settings-row-min-height: calc(var(--ui-control-height) + 2 * var(--ui-settings-row-block));
   --ui-settings-row-compact-block: var(--ui-space-0);
   --ui-settings-row-compact-inline: var(--ui-space-0);
   --ui-settings-row-compact-min-height: auto;

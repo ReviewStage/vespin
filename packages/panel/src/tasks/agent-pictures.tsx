@@ -758,10 +758,10 @@ export function WordFilesOf({
   if (shown.named === undefined) return children;
 
   return (
-    <WordFilesContext.Provider value={shown.named}>
+    <WordFilesContext value={shown.named}>
       {children}
       {shown.viewer}
-    </WordFilesContext.Provider>
+    </WordFilesContext>
   );
 }
 

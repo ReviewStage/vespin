@@ -2275,7 +2275,7 @@ function KeptPageTabs({
 
         return (
           <Activity key={tabKey(pageTab)} mode={shown ? "visible" : "hidden"}>
-            <HandTabActionsContext.Provider value={(actions) => onTabActions(pageTab, actions)}>
+            <HandTabActionsContext value={(actions) => onTabActions(pageTab, actions)}>
               <TaskPagePane
                 place={place}
                 page={page}
@@ -2288,7 +2288,7 @@ function KeptPageTabs({
                   me: agents.me,
                 }}
               />
-            </HandTabActionsContext.Provider>
+            </HandTabActionsContext>
           </Activity>
         );
       })}
@@ -3335,7 +3335,7 @@ export function SidePanel({
             onTabActions={handTabActions}
           />
           {/* Note that whatever the tab's body hands its ⋯ is handed for this tab, at any depth of the body (`useTabActions`). */}
-          <HandTabActionsContext.Provider value={(actions) => handTabActions(tab, actions)}>
+          <HandTabActionsContext value={(actions) => handTabActions(tab, actions)}>
             <TabContent
               tab={tab}
               taskId={taskId}
@@ -3366,7 +3366,7 @@ export function SidePanel({
               transcript={transcript}
               onTabActions={handTabActions}
             />
-          </HandTabActionsContext.Provider>
+          </HandTabActionsContext>
         </FindScope>
       )}
     </PanelFrame>

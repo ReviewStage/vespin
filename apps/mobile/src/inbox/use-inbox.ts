@@ -68,6 +68,7 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn } from "./inbox-groups.js";
+import { useInboxShown } from "./inbox-shown.js";
 import {
   refusedWords,
   SETTLE,
@@ -263,12 +264,16 @@ export function useFrontSteps(): FrontSteps {
  * How many threads wait on the reader, which the Inbox's tab carries, as the
  * panel's Inbox counts them (`waitsOnReaderNow`): every open thread that is
  * theirs and not its agent's turn, a notice among them, but one whose
- * reminder is still ahead.
+ * reminder is still ahead; none while the member turned the Inbox off,
+ * since no Inbox stands to carry it.
  */
 export function useInboxBadge(): number {
   const groups = useInboxGroups();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  const shown = useInboxShown();
   const now = Date.now();
+
+  if (!shown) return 0;
 
   return groups.reduce(
     (count, { items }) =>

@@ -1,5 +1,9 @@
 // glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   TASK_SECTION_GLYPH,
@@ -10,6 +14,7 @@ import {
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
+import { PRODUCT_MARK_SYMBOL } from "./tokens/product-mark-symbol.js";
 import {
   TASK_PRIORITY_BARS_SYMBOL,
   TASK_PRIORITY_SYMBOL,
@@ -47,6 +52,10 @@ const priorityMark = (
     | typeof TASK_PRIORITY_BARS_SYMBOL,
 ): Glyph => name as Glyph;
 
+/** The product's mark, the Keel, cut from `@repo/brand`'s one description of it into the asset catalog, seated as a line glyph. */
+// SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
+const productMark = (name: typeof PRODUCT_MARK_SYMBOL): Glyph => name as Glyph;
+
 /** An SF Symbol, kept where iOS draws the thing its own way, or where the panel draws a mark of its own rather than a Lucide glyph. */
 // SAFETY: an SF Symbol's name is a glyph's name; this table is where glyphs are minted.
 const system = (name: SfSymbol): Glyph => name as Glyph;
@@ -58,10 +67,11 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
  * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
  * thing its own way (Share, and a sheet's close) or where the panel draws a mark of its own rather
- * than a Lucide glyph (a check box, a face, an MCP server, and the panel's
- * product mark), whose drawings are SF Symbols' nearest. A task's status
- * ring is the panel's own mark, written into the asset catalog from the
- * table `@repo/ui`'s `TaskStatusMark` draws (the developer, Nov 13, 2026).
+ * than a Lucide glyph (a check box, a face, an MCP server), whose drawings
+ * are SF Symbols' nearest. A task's status ring is the panel's own mark,
+ * written into the asset catalog from the table `@repo/ui`'s
+ * `TaskStatusMark` draws (the developer, Nov 13, 2026), and so is the
+ * product's Keel, where the panel leads its MCP & CLI page with it.
  */
 export const GLYPH = {
   // Places.
@@ -265,7 +275,7 @@ export const GLYPH = {
   APP: system("app"),
   MCP_SERVER: system("server.rack"),
   MCP_TOOL: system("wrench.and.screwdriver"),
-  MCP_CLIENTS: system("app.connected.to.app.below.fill"),
+  PRODUCT: productMark(PRODUCT_MARK_SYMBOL),
 } as const;
 
 /** Each glyph the panel's section icon picker suggests (`TASK_SECTION_GLYPH`), as its Lucide glyph, so a section wears on the phone the icon its member chose. */
@@ -283,6 +293,13 @@ const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
   [TASK_SECTION_GLYPH.HEART]: lucide(LUCIDE_SYMBOL.HEART),
   [TASK_SECTION_GLYPH.CIRCLE]: lucide(LUCIDE_SYMBOL.CIRCLE),
 };
+
+/** The glyph each permission mode wears, the panel's own (`MODE_GLYPH`): a hand, a shield round an ellipsis, a shield round a "!". */
+export const PERMISSION_MODE_GLYPH = {
+  [AGENT_PERMISSION_MODE.ASK]: GLYPH.ASK_FIRST,
+  [AGENT_PERMISSION_MODE.AUTO]: GLYPH.AUTO_APPROVE,
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
+} as const satisfies Record<AgentPermissionMode, Glyph>;
 
 /** Whether a glyph's name is one the section icon picker suggests. */
 function isSectionGlyph(name: string): name is TaskSectionGlyph {
@@ -328,6 +345,7 @@ const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
   ...Object.values(TASK_STATUS_SYMBOL),
   ...Object.values(TASK_PRIORITY_SYMBOL),
   TASK_PRIORITY_BARS_SYMBOL,
+  PRODUCT_MARK_SYMBOL,
 ]);
 
 /** The letters and digits iOS draws as a filled square of its own (`a.square.fill`), as a workspace's tile reads in a system menu. */

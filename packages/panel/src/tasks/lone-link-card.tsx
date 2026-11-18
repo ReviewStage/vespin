@@ -67,7 +67,7 @@ export function LoneLinkCards({
   doors: LoneLinkDoors;
   children: ReactNode;
 }): React.JSX.Element {
-  return <LoneLinkDoorsContext.Provider value={doors}>{children}</LoneLinkDoorsContext.Provider>;
+  return <LoneLinkDoorsContext value={doors}>{children}</LoneLinkDoorsContext>;
 }
 
 /** What a pull request's or a page's row is named for a reader moving between lists. */

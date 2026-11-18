@@ -100,6 +100,7 @@ export const WRITE_SUBJECT = {
   TASK_FOLLOWING: "task-following",
   TASK_COMMENT: "task-comment",
   TASK_WORKSPACE: "task-workspace",
+  SANDBOX_SIZE: "sandbox-size",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];

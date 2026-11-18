@@ -2144,6 +2144,12 @@ export function useMentionPicker({
   const [closed, setClosed] = useState<Closed | undefined>(undefined);
   const [narrowing, setNarrowing] = useState<Held | undefined>(undefined);
 
+  // A dismissal or narrowing stays with its word only while the caret is in it.
+  if (trigger === undefined && (closed !== undefined || narrowing !== undefined)) {
+    setClosed(undefined);
+    setNarrowing(undefined);
+  }
+
   const holder = source?.holder;
   const taskId = holder?.taskId;
   const agentPlace = useAgentRowPlace(taskId);
@@ -2152,14 +2158,6 @@ export function useMentionPicker({
   const place: MentionPlace = { workspace: source?.workspace ?? "", repository };
   const shut = trigger !== undefined && closed !== undefined && closed.start === trigger.start;
   const open = source !== undefined && trigger !== undefined && !shut;
-  // A word closed with Escape stays closed only while the caret is in it.
-  const inWord = trigger !== undefined;
-  // So does a narrowing a key made.
-  useEffect(() => {
-    if (inWord) return;
-    setClosed(undefined);
-    setNarrowing(undefined);
-  }, [inWord]);
 
   // The repository's paths are read the first time the list opens on the task, and again once its repository changes or Retry asks; a failed read is read again by the next word that opens the list.
   const paths = useQuery({

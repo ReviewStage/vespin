@@ -16,6 +16,7 @@ import {
   agentKeyLink,
   SETTINGS_VIEW,
   type SettingsLink,
+  type SettingsSubPage,
   type SettingsView,
 } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -69,7 +70,7 @@ import { forgetPictures } from "./picture-query.js";
 import { useHistoryRows } from "./places/history-rows.js";
 import { useLinkDestinationLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
-import { useNarrowBacks } from "./places/narrow-backs.js";
+import { useBackToOr, useNarrowBacks } from "./places/narrow-backs.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
 import { type ShellLeaveAsk, usePlaceLeave } from "./places/place-leave.js";
 import { useAdminDoor, useAutomationsDoor, usePersonDoor } from "./places/routed-doors.js";
@@ -259,13 +260,13 @@ export function App(): React.JSX.Element {
   return (
     <TimeTicks>
       <OpenAiKeyProvider account={accountKey}>
-        <WindowAccountContext.Provider value={accountKey}>
+        <WindowAccountContext value={accountKey}>
           {landed ? (
             <RoutedExitsProvider>
               <AppWindow />
             </RoutedExitsProvider>
           ) : null}
-        </WindowAccountContext.Provider>
+        </WindowAccountContext>
       </OpenAiKeyProvider>
     </TimeTicks>
   );
@@ -570,7 +571,29 @@ function AppWindow(): React.JSX.Element {
 
   // A page chosen from outside Settings, as ⌘K chooses one, is a move the router's blocker holds while a page holds unsaved
   // work, as entering Settings is; one turned within Settings leaves no page, so it asks nothing.
-  const chooseSettingsView = useSteadyDoor((view: SettingsView) => goSettings({ page: view }));
+  const chooseSettingsView = useSteadyDoor((view: SettingsView, sub?: SettingsSubPage) =>
+    goSettings(sub === undefined ? { page: view } : { page: view, sub }),
+  );
+
+  // Note that a page of the page's own stands only while its page is the one shown, never over the Profile a fallback shows.
+  const shownSub = shownView === settingsPlace.view ? settingsPlace.sub : undefined;
+
+  const backToOr = useBackToOr();
+
+  // A page of the shown page's own opened by its row, a step of its own; and its ‹, the window's Back where its page is the
+  // step behind, else its page standing in its step's place, as every ‹ goes (`places/narrow-backs.ts`).
+  const chooseSettingsSub = useSteadyDoor((sub: SettingsSubPage | undefined) => {
+    if (sub !== undefined) {
+      goSettings({ page: shownView, sub });
+
+      return;
+    }
+
+    const { pageAddress } = settingsPlace;
+
+    if (pageAddress === undefined) return;
+    backToOr({ address: pageAddress }, settingsPlace.up);
+  });
 
   // The links the window can copy now: ⌥⌘C copies the first, and ⌘K offers each (`links-at-hand.ts`).
   const copyLink = useCopyLink(
@@ -578,6 +601,7 @@ function AppWindow(): React.JSX.Element {
     settingsPlace.standing
       ? {
           view: shownView,
+          sub: shownSub,
           workspace: tasks.workspaces.find((each) => each.id === settingsPlace.workspaceId),
           listed: settingsPlace.listed,
         }
@@ -810,11 +834,21 @@ function AppWindow(): React.JSX.Element {
     () => ({
       view: shownView,
       onViewChange: chooseSettingsView,
+      sub: shownSub,
+      onSubChange: chooseSettingsSub,
       onSignOut: signOut,
       onRequestMicrophone: requestMicrophone,
       workspace,
     }),
-    [shownView, chooseSettingsView, signOut, requestMicrophone, workspace],
+    [
+      shownView,
+      chooseSettingsView,
+      shownSub,
+      chooseSettingsSub,
+      signOut,
+      requestMicrophone,
+      workspace,
+    ],
   );
 
   const openWorkspaceGitHub = useOpenWorkspaceGitHub(openSettings);
@@ -906,7 +940,7 @@ function AppWindow(): React.JSX.Element {
                         {/* A maintainer's sign-in as the member, said above the stage on the web. */}
                         <ViewingAs />
                         {/* A failure offers no Retry while the app does not reach the service, whose reads start again once it does. */}
-                        <RetryOffered.Provider value={connected}>
+                        <RetryOffered value={connected}>
                           <div
                             ref={stage.ref}
                             className="app-stage"
@@ -918,7 +952,7 @@ function AppWindow(): React.JSX.Element {
                             style={cssCustomProperties({ "--sidebar-width": `${sidebar.width}px` })}
                           >
                             {/* The window's content. */}
-                            <ShellRoomContext.Provider value={room}>
+                            <ShellRoomContext value={room}>
                               <div className="desktop-stage">
                                 <MessageRevealProvider value={messageReveal}>
                                   <ThreadRevealProvider value={threadReveal}>
@@ -939,7 +973,7 @@ function AppWindow(): React.JSX.Element {
                                   </ThreadRevealProvider>
                                 </MessageRevealProvider>
                               </div>
-                            </ShellRoomContext.Provider>
+                            </ShellRoomContext>
                             {/* A note to the people who make the app, written in a dialog over the
           window. */}
                             <FeedbackDialog
@@ -976,15 +1010,15 @@ function AppWindow(): React.JSX.Element {
                               doors={settingsDoors}
                             />
                             {/* The screens stood on last, Back's steps across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
-                            <ShellRoomContext.Provider value={room}>
+                            <ShellRoomContext value={room}>
                               <TabSwitcher
                                 available={!accountGated}
                                 steps={history}
                                 tasks={tasks}
                               />
-                            </ShellRoomContext.Provider>
+                            </ShellRoomContext>
                           </div>
-                        </RetryOffered.Provider>
+                        </RetryOffered>
                       </ListedAutomations>
                     </GitHubConnectProvider>
                   </RepositoryRemedyProvider>

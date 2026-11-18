@@ -685,15 +685,21 @@ test("deleting the last section hands focus to the first, rather than letting it
   assert.ok(sectionHeader(sidebar, "Someday").contains(document.activeElement));
 });
 
-test("a section holding tasks offers Rename, Change icon, its move, and Delete last, leaving what acts on all its tasks to the selection bar", async () => {
+test("a section holding tasks offers New task, Rename, Change icon, its move, and Delete last, leaving what acts on all its tasks to the selection bar", async () => {
   const sidebar = await mountSidebar([], ICONLESS);
 
   openSectionMenu(sidebar, "Launch");
 
-  assert.deepEqual(menuLabels(), ["Rename", "Change icon", "Move up", "Delete section"]);
+  assert.deepEqual(menuLabels(), [
+    "New task",
+    "Rename",
+    "Change icon",
+    "Move up",
+    "Delete section",
+  ]);
 });
 
-test("a section holding no task offers only Rename, Add icon where it wears none, its move, and Delete", async () => {
+test("a section holding no task offers only New task, Rename, Add icon where it wears none, its move, and Delete", async () => {
   const sidebar = await mountSidebar([], {
     sections: ICONLESS.sections,
     entries: ICONLESS.entries.filter((entry) => entry.sectionId !== SOMEDAY),
@@ -702,7 +708,7 @@ test("a section holding no task offers only Rename, Add icon where it wears none
 
   openSectionMenu(sidebar, "Someday");
 
-  assert.deepEqual(menuLabels(), ["Rename", "Add icon", "Move down", "Delete section"]);
+  assert.deepEqual(menuLabels(), ["New task", "Rename", "Add icon", "Move down", "Delete section"]);
 });
 
 test("⌘-clicking a section's task and one under Tasks chooses both, opening neither, and a right-click on either offers Status for both, which S on the focused one opens", async () => {

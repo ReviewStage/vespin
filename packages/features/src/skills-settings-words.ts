@@ -18,6 +18,8 @@ import {
   INSTALLED_SKILL_SCOPE,
   INSTALLED_SKILL_SOURCE,
   type InstalledSkillSource,
+  MAC_SKILL_APP,
+  type MacSkillApp,
 } from "./installed-skill-wire.js";
 import { fencedBlock } from "./markdown-fence.js";
 import { TASK_SKILL_SOURCE, type TaskSkillSource } from "./task-wire.js";
@@ -67,9 +69,19 @@ export function everyoneIn(workspace: Pick<Workspace, "name">): string {
   return `Everyone in ${workspace.name}`;
 }
 
-/** Where a skill's files came from: `owner/repo @ 3f9c2e1`, or Pasted. */
+/** Each coding agent whose skills folder a skill may be brought in from, as Settings names it. */
+export const MAC_SKILL_APP_NAME = {
+  [MAC_SKILL_APP.CLAUDE_CODE]: "Claude Code",
+  [MAC_SKILL_APP.CODEX]: "Codex",
+  [MAC_SKILL_APP.CURSOR]: "Cursor",
+  [MAC_SKILL_APP.AGENTS]: "Agents folder",
+} as const satisfies Record<MacSkillApp, string>;
+
+/** Where a skill's files came from: `owner/repo @ 3f9c2e1`, the folder on the Mac it was brought in from, or Pasted. */
 function sourceLine(source: InstalledSkillSource): string {
-  if (source.type === INSTALLED_SKILL_SOURCE.TEXT) return SKILLS_LINE.PASTED;
+  if (source.type === INSTALLED_SKILL_SOURCE.TEXT) {
+    return source.mac === undefined ? SKILLS_LINE.PASTED : `From ${source.mac.folder} on your Mac`;
+  }
 
   return `${source.owner}/${source.repo} @ ${source.sha.slice(0, SHORT_SHA)}`;
 }
@@ -119,7 +131,7 @@ function rowOf(
     line:
       installer === undefined
         ? sourceLine(skill.source)
-        : `${sourceLine(skill.source)} · by ${installer}`,
+        : `${sourceLine(skill.source)}, installed by ${installer}`,
   };
 }
 

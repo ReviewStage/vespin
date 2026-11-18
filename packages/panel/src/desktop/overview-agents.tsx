@@ -6,7 +6,7 @@ import {
   agentLastMovedAt,
   agentTree,
   inAgentListOrder,
-  type StartedAgentsCount,
+  type StartedAgentsStanding,
 } from "@repo/features/task-agents-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -84,8 +84,8 @@ import type { ChosenRows } from "./tasks-selection.js";
  * chosen (`agents-selection.tsx`).
  * An agent another agent started stands nested under it, an orchestrator's
  * workers under the orchestrator, as a task's sub-tasks nest, folded until
- * opened, the row it stands under counting how many of them finished
- * (`agentTree`); a worker an orchestrator started before it was continued
+ * opened, the row it stands under counting how many under it still work
+ * and marking one that failed (`agentTree`); a worker an orchestrator started before it was continued
  * stands under the agent that continued it.
  * The agents list oldest started first, as Sub-tasks do, each row at the
  * top standing where the first agent under it does; an
@@ -191,8 +191,8 @@ function PlanAgentRow({
   nest: ListRowNest | undefined;
   /** The agents it started, which it folds; none where it started none. */
   fold: ListRowFold | undefined;
-  /** How many of the agents it started have finished, of all of them. */
-  started: StartedAgentsCount | undefined;
+  /** Where the agents it started stand, at every depth. */
+  started: StartedAgentsStanding | undefined;
   onOpenPullRequest: () => void;
 }): React.JSX.Element | null {
   const { row, agent, card } = entry;

@@ -12,7 +12,7 @@ import {
   useState,
 } from "react";
 import { cn } from "../../cn.js";
-import { FoldChevronIcon } from "../../icons/lucide-glyphs.js";
+import { FoldChevronDownIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { type DisclosureMotion, disclosureMotion, useDisclosure } from "../../use-disclosure.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 import { LIST_MOTION_REPLAY, useListMotionReplay } from "../list-motion/list-motion.js";
@@ -280,11 +280,11 @@ export function DisclosureScope({
   const frame = useContext(FrameContext);
 
   return (
-    <StateContext.Provider value={state}>
-      <ScopeFrameContext.Provider value={frame}>
-        <FrameContext.Provider value={undefined}>{children}</FrameContext.Provider>
-      </ScopeFrameContext.Provider>
-    </StateContext.Provider>
+    <StateContext value={state}>
+      <ScopeFrameContext value={frame}>
+        <FrameContext value={undefined}>{children}</FrameContext>
+      </ScopeFrameContext>
+    </StateContext>
   );
 }
 
@@ -299,7 +299,7 @@ export function DisclosureFind({
   finding: boolean;
   children: ReactNode;
 }): React.JSX.Element {
-  return <FindContext.Provider value={finding}>{children}</FindContext.Provider>;
+  return <FindContext value={finding}>{children}</FindContext>;
 }
 
 /** Whether an app's find looks through what holds the caller. */
@@ -565,14 +565,27 @@ const OWN_PRESS =
  * React's tree, so only a press inside the cell's own box folds.
  */
 function groundPress(event: MouseEvent<HTMLElement>): void {
+  if (!pressOnBareGround(event)) return;
+  event.currentTarget.parentElement
+    ?.querySelector<HTMLElement>(":scope > details > summary")
+    ?.click();
+}
+
+/**
+ * Whether a press landed on the bare ground of the element hearing it, the
+ * room beside its controls, rather than on a control of its own, which
+ * answers the press itself. Note that a press inside a menu or a dialog a
+ * control drew elsewhere still bubbles to the element through React's tree,
+ * so only a press inside the element's own box is its ground's.
+ */
+export function pressOnBareGround(event: MouseEvent<HTMLElement>): boolean {
   const cell = event.currentTarget;
   const target = event.target;
 
-  if (!(target instanceof Element) || !cell.contains(target)) return;
+  if (!(target instanceof Element) || !cell.contains(target)) return false;
   const own = target.closest(OWN_PRESS);
 
-  if (own !== null && cell.contains(own)) return;
-  cell.parentElement?.querySelector<HTMLElement>(":scope > details > summary")?.click();
+  return own === null || !cell.contains(own);
 }
 
 function Frame({
@@ -607,7 +620,7 @@ function Frame({
           {lead}
         </div>
       )}
-      <FrameContext.Provider value={cells}>{children}</FrameContext.Provider>
+      <FrameContext value={cells}>{children}</FrameContext>
       {actions === undefined ? null : (
         // biome-ignore lint/a11y/noStaticElementInteractions: the cell's bare ground folds as the summary beside it does, for the pointer alone; the summary is the keyboard's.
         // biome-ignore lint/a11y/useKeyWithClickEvents: a key on a control inside reaches it as a click, which the cell leaves to the control.
@@ -653,21 +666,47 @@ export function DisclosureFrame({
 }
 
 /**
- * The chevron, turned down while its own fold is open. Note that it reads its
+ * How a chevron turns: pointing at its words' end while closed and turned
+ * down while open, as a transcript's line folds; or pointing down while
+ * closed and turned up while open, as a settings row folds what it owns
+ * open under it, so a row's `›` is left to a row that opens a page.
+ */
+export const DISCLOSURE_TURN = {
+  SIDE: "side",
+  DOWN: "down",
+} as const;
+
+export type DisclosureTurn = (typeof DISCLOSURE_TURN)[keyof typeof DISCLOSURE_TURN];
+
+/** Each turn's glyph, which `disclosure.css` turns as its fold opens. */
+const TURN_GLYPH = {
+  [DISCLOSURE_TURN.SIDE]: FoldChevronIcon,
+  [DISCLOSURE_TURN.DOWN]: FoldChevronDownIcon,
+} as const satisfies Record<DisclosureTurn, () => React.JSX.Element>;
+
+/**
+ * The chevron, turned as its own fold opens (`turn`). Note that it reads its
  * fold's state rather than the `details` element's through a selector,
  * because folds nest, and an ancestor's open would turn every chevron inside it.
  * A chevron standing outside its fold's scope, as a row's beside the rows it
  * folds, is handed whether that fold is open (`open`).
  */
-export function DisclosureChevron({ open: handed }: { open?: boolean }): React.JSX.Element {
+export function DisclosureChevron({
+  open: handed,
+  turn = DISCLOSURE_TURN.SIDE,
+}: {
+  open?: boolean;
+  turn?: DisclosureTurn;
+}): React.JSX.Element {
   const scoped = useContext(StateContext);
   const open = handed ?? scoped?.open;
 
   if (open === undefined) throw new Error("A disclosure's chevron must be drawn inside one");
+  const Glyph = TURN_GLYPH[turn];
 
   return (
-    <span className="ui-disclosure-turn" data-open={open}>
-      <FoldChevronIcon />
+    <span className="ui-disclosure-turn" data-open={open} data-turn={turn}>
+      <Glyph />
     </span>
   );
 }

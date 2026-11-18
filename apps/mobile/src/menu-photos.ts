@@ -3,7 +3,7 @@
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { MARK_SIZE } from "@repo/ui-native";
 import { File, Paths } from "expo-file-system";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppState, PixelRatio } from "react-native";
 import type { PictureOf } from "./member-pictures.js";
 
@@ -110,19 +110,24 @@ export function menuAddress(picture: string | undefined): string | undefined {
     : accountPictureAt(pinned, MARK_SIZE.MENU_PHOTO * PixelRatio.get());
 }
 
+/** A menu's pictures as files on this device: each address's file once written, and whether it is still on its way rather than failed. */
+export interface MenuPictures {
+  readonly fileOf: (address: string) => string | undefined;
+  /** Whether the address's file is still being downloaded or written, so its choice shows nothing rather than its fallback meanwhile. */
+  readonly coming: (address: string) => boolean;
+}
+
 /**
- * Each picture address's file on this device, for a menu that draws them;
- * none while one is still downloading or being written, whose choice keeps
- * its glyph meanwhile. Note that a system menu reads its images once, as it
- * opens, so a photo still on its way shows the next time the menu opens. A
- * photo held past its lifetime is read again as the app comes back to the
- * front, since a picture can change under the same address while a screen
- * stays mounted.
+ * Each picture address's file on this device, for a menu that draws them,
+ * and which of them are still on their way, as against failed. Note that a
+ * system menu reads its images once, as it opens, so a photo still on its
+ * way shows the next time the menu opens. A photo held past its lifetime is
+ * read again as the app comes back to the front, since a picture can change
+ * under the same address while a screen stays mounted.
  */
-export function useMenuPictureFiles(
-  addresses: readonly string[],
-): (address: string) => string | undefined {
+export function useMenuPictures(addresses: readonly string[]): MenuPictures {
   const [files, setFiles] = useState<ReadonlyMap<string, HeldPhoto>>(new Map());
+  const [missed, setMissed] = useState<ReadonlySet<string>>(new Set());
   const [resumes, setResumes] = useState(0);
 
   useEffect(() => {
@@ -135,15 +140,26 @@ export function useMenuPictureFiles(
 
   useEffect(() => {
     let live = true;
-
     // Note that a resume runs this again, so a photo past its lifetime is read again while the screen stays mounted.
     void resumes;
 
     for (const address of new Set(addresses)) {
       if (freshSince(files.get(address)?.at)) continue;
 
+      // Note that a photo tried again is on its way again, not failed, so its choice shows nothing rather than its fallback until this try settles.
+      setMissed((held) => {
+        if (!held.has(address)) return held;
+        const next = new Set(held);
+        next.delete(address);
+
+        return next;
+      });
+
       void downloaded(address).then((photo) => {
-        if (live && photo !== undefined) setFiles((held) => new Map(held).set(address, photo));
+        if (!live) return;
+
+        if (photo === undefined) setMissed((held) => new Set(held).add(address));
+        else setFiles((held) => new Map(held).set(address, photo));
       });
     }
 
@@ -152,8 +168,21 @@ export function useMenuPictureFiles(
     };
   }, [addresses, files, resumes]);
 
-  // Note that it's the same reader while no file landed, so a memo drawn from it stands still.
-  return useCallback((address: string) => files.get(address)?.uri, [files]);
+  // Note that the readers stand still while nothing landed, so a memo drawn from them does too.
+  return useMemo(
+    () => ({
+      fileOf: (address: string) => files.get(address)?.uri,
+      coming: (address: string) => !files.has(address) && !missed.has(address),
+    }),
+    [files, missed],
+  );
+}
+
+/** Each picture address's file on this device, for a menu that draws them; none while one is still on its way, or failed (`useMenuPictures`). */
+export function useMenuPictureFiles(
+  addresses: readonly string[],
+): (address: string) => string | undefined {
+  return useMenuPictures(addresses).fileOf;
 }
 
 /** Each of `userIds`' pictures as a file on this device, for a menu that draws them, as `useMenuPictureFiles` holds them; none for a member with no picture. */

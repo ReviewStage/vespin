@@ -58,6 +58,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
+import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { SEARCH_FOCUS_PARAM } from "../search-field.js";
@@ -82,7 +83,7 @@ const SHEET_ROUTE = {
   NEW_AGENT: "/start-agent",
 } as const;
 
-/** The commands that act on no one thing, enabled whenever an account is signed in. */
+/** The commands that act on no one thing, enabled whenever an account is signed in, but Inbox while the member turned it off, since no Inbox stands to go to. */
 const SIGNED_IN_COMMANDS: readonly MenuCommand[] = [
   MENU_COMMAND.SETTINGS,
   MENU_COMMAND.SIGN_OUT,
@@ -207,7 +208,15 @@ function useSubject(signedIn: boolean): Subject {
   const linked = (place: LinkDestination) =>
     workspaceStep === undefined ? undefined : linkOf(place, workspaceStep);
 
-  const enabled: MenuCommand[] = signedIn ? [...SIGNED_IN_COMMANDS, ...ALWAYS] : [...ALWAYS];
+  const inboxShown = useInboxShown();
+
+  const enabled: MenuCommand[] = signedIn
+    ? [
+        ...SIGNED_IN_COMMANDS.filter((command) => inboxShown || command !== MENU_COMMAND.INBOX),
+        ...ALWAYS,
+      ]
+    : [...ALWAYS];
+
   const toggled: MenuCommand[] = [];
   let address: string | undefined;
 

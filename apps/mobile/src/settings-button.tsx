@@ -17,6 +17,10 @@ export const SETTINGS_ROUTE = {
   MAIN: "/settings",
   ACCOUNT: "/settings/account",
   AGENTS: "/settings/agents",
+  /** The cloud environment of the workspace the app works in: its sandbox, variables, and scripts. */
+  CLOUD_ENVIRONMENT: "/settings/cloud-environment",
+  /** A secret variable's value, typed for the `name` and `workspaceId` it is pushed with, as a sheet over Cloud environment. */
+  VARIABLE_VALUE: "/variable-value",
   INTEGRATIONS: "/settings/integrations",
   /** One connection's own page, by the `connection` it is pushed with, as a connected row of Integrations opens it. */
   INTEGRATION: "/settings/integration",

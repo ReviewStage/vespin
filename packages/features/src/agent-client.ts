@@ -862,6 +862,14 @@ export class HostedAgentClient {
     return Effect.asVoid(hostedCall(this.#hosted.account.active, undefined));
   }
 
+  /** Tells the service the zone this device reads its clock in (`time-zone-wire.ts`): whether it was kept, so a zone not kept is named again. */
+  writeTimeZone(timeZone: string): Effect.Effect<boolean, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.account.writeTimeZone, { timeZone }),
+      (answer) => "done" in answer,
+    );
+  }
+
   /**
    * One dictated clip's words, under the held deadline, since the service
    * answers only once the model has heard the clip through; a clip the

@@ -41,9 +41,10 @@ import { COMMAND_DESCRIPTION } from "./command-description.js";
 import {
   askMachine,
   MACHINE_COMMAND_STATUS,
-  MACHINE_INPUT,
   type MachineCommandAnswer,
   machineCommandNotRun,
+  NO_MACHINE_INPUT,
+  namesMachine,
   routedCall,
 } from "./machine-command.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-keep.js";
@@ -53,8 +54,8 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  *
  * Every agent may call it, the brain, a coding agent, and either's workers,
  * wherever it runs, since the Mac it reaches is routed as `run_on_mac`'s is
- * (`machine-routing.ts`): the machine the call names, or else the agent's
- * default. One call is one action, queued as a computer command for that
+ * (`machine-routing.ts`): the agent's pick, or else its owner's default
+ * machine; a call names none. One call is one action, queued as a computer command for that
  * machine (`machine-command.ts`'s `askMachine`): the Mac asks the developer
  * about the app the first time it is used, for as long as its ask stands
  * (`machineAskSeconds`), and the action then runs within
@@ -145,8 +146,8 @@ const clickTarget = describeWire(
 /**
  * The tool's input. Note that it stays one flat object, because a tool's
  * input must be an object at its top, and because the panel, released
- * desktops' among them, reads `action`, `app`, and `machine` off a stored
- * call; which fields each action takes is held by `ACTION_FIELDS` instead.
+ * desktops' among them, reads `action` and `app` off a stored call, and
+ * `machine` off one from before the tool took none; which fields each action takes is held by `ACTION_FIELDS` instead.
  */
 const COMPUTER_INPUT = Schema.Struct({
   action: describeWire(
@@ -232,13 +233,12 @@ const COMPUTER_INPUT = Schema.Struct({
   ),
   caption: Schema.optionalKey(recordingCaptionSchema),
   description: COMMAND_DESCRIPTION,
-  machine: Schema.optionalKey(MACHINE_INPUT),
 });
 
 type ComputerInput = typeof COMPUTER_INPUT.Type;
 
 /** A field only some actions take: every one but those each call names. */
-type ActionField = Exclude<keyof ComputerInput, "action" | "description" | "machine">;
+type ActionField = Exclude<keyof ComputerInput, "action" | "description">;
 
 /** What one action takes: the fields it needs and those it may name. */
 interface ActionFields {
@@ -265,7 +265,7 @@ const ACTION_FIELDS = {
 } as const satisfies Record<ComputerAction, ActionFields>;
 
 const isActionField = (key: string): key is ActionField =>
-  key !== "action" && key !== "description" && key !== "machine" && key in COMPUTER_INPUT.fields;
+  key !== "action" && key !== "description" && key in COMPUTER_INPUT.fields;
 
 const isComputerAction = Schema.is(Schema.Literals(Object.values(COMPUTER_ACTION)));
 
@@ -374,8 +374,7 @@ export const COMPUTER_TOOL = {
     "drove in an app, the iOS Simulator above all, record it: record starts a video of the " +
     "app's window, your cursor drawn over it while it records, " +
     `up to ${COMPUTER_RECORDING_BOUNDS.MAX_SECONDS} seconds and across calls, and ` +
-    "stop_recording, with a caption and the machine's id its record answered in machine, stops " +
-    "it on the machine it runs on and keeps it in your transcript, where it plays; " +
+    "stop_recording, with a caption, stops it and keeps it in your transcript, where it plays; " +
     "it stops by itself once its time runs out, and stop_recording still keeps it then. Its " +
     "answer names the path the video stays at on your machine until your next recording, by " +
     "which you can post it to a thread, or says why it has none.",
@@ -397,7 +396,6 @@ function actionOf(input: ComputerInput): Result.Result<MacComputerAction, string
     target,
     caption: _caption,
     description: _description,
-    machine: _machine,
     ...fields
   } = input;
 
@@ -569,17 +567,11 @@ const COMPUTER_RECORDING_REFUSAL = {
   [RECORDING_FAILURE.TOO_LARGE]: recordingTooLarge(COMPUTER_RECORDING_BOUNDS.MAX_BYTES),
 } as const satisfies Record<RecordingFailure | "UNKEPT", string>;
 
-/** How the agent stops a recording that started on the machine given: by its id, which no other machine shares and a rename leaves as it is. */
-function stopOn(machine: { readonly id: string; readonly name: string }): string {
-  return `Stop it with stop_recording and machine "${machine.id}" (${machine.name}), where it runs.`;
-}
-
-/** What a machine with no recording of the conversation answers, naming it, so a stop that went to the wrong machine is sent again to the right one. */
+/** What a machine with no recording of the conversation answers, naming it, since a stop goes where the agent's calls go now, which a member may have moved while it ran. */
 function noRecordingOn(machine: { readonly name: string }): string {
   return (
-    `no recording of this conversation runs on ${machine.name}: if you started one on another ` +
-    "machine, call stop_recording again with the id its record answered in machine; otherwise " +
-    "start one with record"
+    `no recording of this conversation runs on ${machine.name}: one started on another machine ` +
+    "stops there by itself once its time runs out; otherwise start one with record"
   );
 }
 
@@ -677,6 +669,7 @@ export function runComputerTool(
   input: UnparsedWireValue,
   sandbox?: InboxSandboxDoor,
 ): Effect.Effect<MachineCommandAnswer | ComputerRan, never, DatabaseServices> {
+  if (namesMachine(input)) return Effect.succeed(machineCommandNotRun(NO_MACHINE_INPUT));
   const read = readInput(input);
 
   if (Result.isFailure(read)) {
@@ -687,10 +680,10 @@ export function runComputerTool(
 
   if (Result.isFailure(made)) return Effect.succeed(machineCommandNotRun(made.failure));
   const action = made.success;
-  const { caption, machine } = read.success;
+  const { caption } = read.success;
 
   return Effect.gen(function* () {
-    const route = yield* Effect.result(routedCall(target, MACHINE_COMMAND_KIND.COMPUTER, machine));
+    const route = yield* Effect.result(routedCall(target, MACHINE_COMMAND_KIND.COMPUTER));
 
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
@@ -733,18 +726,7 @@ export function runComputerTool(
       return named(yield* keptMacRecording(target, outcome.recorded, recording, caption, sandbox));
     }
 
-    const ran = named(yield* answeredOutcome(target, outcome));
-
-    // Note that a recording names the machine it runs on for its stop, since the agent's default may move while it runs.
-    if (
-      "done" in outcome &&
-      outcome.done === COMPUTER_ACTION.RECORD &&
-      answer.machine !== undefined
-    ) {
-      return { ...ran, stop: stopOn(answer.machine) };
-    }
-
-    return ran;
+    return named(yield* answeredOutcome(target, outcome));
   });
 }
 

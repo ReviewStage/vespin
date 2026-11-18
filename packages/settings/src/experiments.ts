@@ -107,9 +107,10 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.CURSOR,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: true,
+    // Note that Cursor is unlisted until a Cursor run that goes silent ends its turn, since a new member's first agent hung on one (Nov 18).
+    listed: false,
     name: "Cursor",
-    detail: "Run agents on Cursor's harness and models, on your own Cursor API key.",
+    detail: "Run agents on Cursor's models, with your own Cursor API key.",
     owner: "Dean",
     since: "2026-11-16",
   },
@@ -118,8 +119,7 @@ export const EXPERIMENTS = [
     scope: EXPERIMENT_SCOPE.ACCOUNT,
     listed: true,
     name: "Move agents",
-    detail:
-      "Move an agent between the cloud and your Macs and hosts, continuing it where you pick.",
+    detail: "Move an agent between the cloud and your machines, picking up where it left off.",
     owner: "Charles",
     since: "2026-11-13",
   },
@@ -148,8 +148,7 @@ export const EXPERIMENTS = [
     scope: EXPERIMENT_SCOPE.ACCOUNT,
     listed: true,
     name: "Turn changes",
-    detail:
-      "Under each of an agent's turns, the files it changed, which open the turn's changes in a tab of their own.",
+    detail: "Show the files each turn changed under it, and open them in a tab.",
     owner: "Dean",
     since: "2026-11-12",
   },
@@ -158,9 +157,7 @@ export const EXPERIMENTS = [
     scope: EXPERIMENT_SCOPE.WORKSPACE,
     listed: true,
     name: "Suggestions",
-    detail:
-      "Agents put suggestions in their replies, of a new agent or a message to a running one, " +
-      "which you open filled in, edit, and send.",
+    detail: "Agents suggest a new agent or a message to send, which you can edit before sending.",
     owner: "Dean",
     since: "2026-11-10",
   },

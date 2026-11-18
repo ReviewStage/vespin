@@ -208,7 +208,7 @@ test("Following holds the tasks the reader follows, whoever is on them", () => {
   ).toEqual(["Dean's on it, Charles follows"]);
 });
 
-test("Me holds the reader's tasks and the tasks no one is on that they created, but not a teammate's unassigned task or one they made for someone else", () => {
+test("Me holds the tasks assigned to the reader alone, not one they made that no one or a teammate is on", () => {
   const rows = [
     assigned("Charles made it, Dean's on it", 10, DEAN, CHARLES),
     task("Dean made it, no one's on it", "acme/relay", 1, 20, DEAN),
@@ -218,7 +218,6 @@ test("Me holds the reader's tasks and the tasks no one is on that they created, 
 
   expect(tasksAssignedTo(rows, { kind: ASSIGNED_TO.ME }, DEAN).map((each) => each.name)).toEqual([
     "Charles made it, Dean's on it",
-    "Dean made it, no one's on it",
   ]);
 });
 

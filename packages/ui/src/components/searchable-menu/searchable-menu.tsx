@@ -1327,7 +1327,7 @@ export function SearchableMenu(
 
   const footRows = (
     <>
-      <MenuReplayUnmasked.Provider value={unmasked}>{pinnedRows}</MenuReplayUnmasked.Provider>
+      <MenuReplayUnmasked value={unmasked}>{pinnedRows}</MenuReplayUnmasked>
       {props.lastLine === undefined ? null : <LastLine line={props.lastLine} />}
     </>
   );

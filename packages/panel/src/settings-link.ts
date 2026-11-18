@@ -2,7 +2,9 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import {
   SETTINGS_VIEW,
   type SettingsLink,
+  type SettingsSubPage,
   type SettingsView,
+  settingsSubNamed,
   settingsViewNamed,
 } from "@repo/settings/settings-views";
 import { useNavigate, useRouter } from "@tanstack/react-router";
@@ -14,11 +16,13 @@ import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
  * settings-link.ts -- Settings as the router stands it: the page, whether its list stands, the workspace its address names, and the navigation a Settings link makes.
  *
  * Settings is a routed place (`panel-router.tsx`): its address is
- * `/<workspace>/settings`, its list, and `/<workspace>/settings/<page>`, a
- * page, or the same under `/app` while the window lists no workspace. What
- * it shows is read from that address: the page, on its list the page last
- * shown, or Profile where Settings was entered on its list, and the workspace the
- * Workspace page shows, the one its address names, else the one the sidebar
+ * `/<workspace>/settings`, its list, `/<workspace>/settings/<page>`, a
+ * page, and `/<workspace>/settings/<page>/<sub>`, a page of that page's
+ * own, as Workspace's GitHub, or the same under `/app` while the window
+ * lists no workspace. What it shows is read from that address: the page,
+ * on its list the page last shown, or Profile where Settings was entered on
+ * its list, a page of its own only on its page's address, and the
+ * workspace the Workspace page shows, the one its address names, else the one the sidebar
  * lists. The sidebar is left as it was, because the task open behind
  * Settings must still be the listed workspace's when Back returns to it.
  *
@@ -38,16 +42,22 @@ export interface SettingsRoute {
   readonly standing: boolean;
   /** The page shown: the one its address names, else Profile, which it opens on. */
   readonly view: SettingsView;
+  /** The page of the page's own its address names, as Workspace's GitHub, else none. */
+  readonly sub: SettingsSubPage | undefined;
   /** Whether its page list stands rather than a page, which only a narrow room draws apart. */
   readonly listed: boolean;
   /** The workspace its address names, else the one the sidebar lists. */
   readonly workspaceId: string | undefined;
   /** The address of its page list, while it stands. */
   readonly listAddress: string | undefined;
+  /** The address of the page a page of its own stands over, while one does. */
+  readonly pageAddress: string | undefined;
   /** Goes to the page in Settings `link` names, under its workspace; its section is the door's to look for once the move lands. */
   readonly open: (link: SettingsLink) => void;
   /** Stands its page list in the page's place. */
   readonly list: () => void;
+  /** Stands the page in the place of the page of its own over it. */
+  readonly up: () => void;
 }
 
 /** The route of a pairing's link, `/connect/<code>`, which Settings' Hosts page opens from. */
@@ -77,6 +87,8 @@ export function useSettingsRoute(input: {
   else if (page !== undefined) lastPage.current = page;
   const shownPage = page ?? lastPage.current;
   const view = settingsViewNamed(shownPage) ?? SETTINGS_VIEW.ACCOUNT;
+  // Note that a page of the page's own stands only on its page's address, never on the list behind it.
+  const sub = page === undefined ? undefined : settingsSubNamed(view, params.sub);
 
   const listAddress = !standing
     ? undefined
@@ -84,20 +96,47 @@ export function useSettingsRoute(input: {
       ? router.buildLocation({ to: "/app/settings" }).href
       : router.buildLocation({ to: "/$workspace/settings", params: { workspace: slug } }).href;
 
+  const pageAddress =
+    sub === undefined || page === undefined
+      ? undefined
+      : slug === undefined
+        ? router.buildLocation({ to: "/app/settings/$page", params: { page } }).href
+        : router.buildLocation({
+            to: "/$workspace/settings/$page",
+            params: { workspace: slug, page },
+          }).href;
+
   // Settings goes under the workspace a link named, else the one it stands under, else the one the sidebar lists.
   const slugFor = (workspace: string | undefined): string | undefined =>
     workspaces.find((each) => each.id === workspace)?.slug ?? slug;
 
-  const go = (to: string | undefined, under: string | undefined, replace: boolean) => {
+  const go = (
+    to: string | undefined,
+    under: string | undefined,
+    replace: boolean,
+    within?: SettingsSubPage,
+  ) => {
     if (under === undefined) {
       if (to === undefined) void navigate({ to: "/app/settings", replace });
-      else void navigate({ to: "/app/settings/$page", params: { page: to }, replace });
+      else if (within !== undefined) {
+        void navigate({
+          to: "/app/settings/$page/$sub",
+          params: { page: to, sub: within },
+          replace,
+        });
+      } else void navigate({ to: "/app/settings/$page", params: { page: to }, replace });
 
       return;
     }
 
     if (to === undefined) {
       void navigate({ to: "/$workspace/settings", params: { workspace: under }, replace });
+    } else if (within !== undefined) {
+      void navigate({
+        to: "/$workspace/settings/$page/$sub",
+        params: { workspace: under, page: to, sub: within },
+        replace,
+      });
     } else {
       void navigate({
         to: "/$workspace/settings/$page",
@@ -121,12 +160,21 @@ export function useSettingsRoute(input: {
     const to = link.listed === true ? undefined : link.page;
     // Note that Settings opened from a pairing's link loaded at its own address takes that entry's step in place, since the
     // link names no place to come back to.
-    go(to, slugFor(link.workspaceId ?? workspaceId ?? listedId), here.leaf === PAIRING_ROUTE);
+    go(
+      to,
+      slugFor(link.workspaceId ?? workspaceId ?? listedId),
+      here.leaf === PAIRING_ROUTE,
+      to === undefined ? undefined : link.sub,
+    );
   };
 
   const list = () => {
     if (standing) go(undefined, slug, true);
   };
 
-  return { standing, view, listed, workspaceId, listAddress, open, list };
+  const up = () => {
+    if (sub !== undefined) go(page, slug, true);
+  };
+
+  return { standing, view, sub, listed, workspaceId, listAddress, pageAddress, open, list, up };
 }

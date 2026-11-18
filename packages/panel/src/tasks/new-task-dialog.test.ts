@@ -22,12 +22,7 @@ import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
-import {
-  agentKeyLink,
-  SETTINGS_SECTION,
-  SETTINGS_VIEW,
-  type SettingsLink,
-} from "@repo/settings/settings-views";
+import { agentKeyLink, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { experimentsOn } from "@repo/settings/testing";
 import { Effect, Predicate } from "effect";
 import { act, createElement, useState } from "react";
@@ -976,10 +971,10 @@ const NOWHERE_INSTALLED = () =>
     },
   });
 
-/** Where each of the GitHub row's presses lands: the workspace's GitHub repositories in Settings. */
+/** Where each of the GitHub row's presses lands: the workspace's GitHub page in Settings. */
 const WORKSPACE_GITHUB = {
   page: SETTINGS_VIEW.WORKSPACE,
-  section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+  sub: INTEGRATION_PROVIDER.GITHUB,
   workspaceId: "workspace-acme",
 };
 

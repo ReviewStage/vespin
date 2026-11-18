@@ -379,7 +379,7 @@ What the barrel holds (`src/index.ts`):
 | Entry | `FormField` (with `LengthCounter`), `TextField`, `TextArea`, `SearchField`, `Checkbox`, `ChoiceList`, `Switch` (and `LabeledSwitch`, with its name beside it), `ChoiceBar` (with `CountPart`, `linesCount`), `Combobox` (with `ComboboxList`, `ComboboxListBox`, `ComboboxOptionItem`), `Calendar` |
 | Status | `Badge`, `Avatar`, `Spinner`, `BusyLabel`, `SavedTick`, `Skeleton`, `EmptyState`, `ErrorState`, `FailureNote`, `NoteLine` |
 | Overlays | `Dialog`, `ConfirmDialog` (with `useConfirmDialog`), `AnchoredPopover`, `Menu` (with `useMenu`), `TooltipPill`, `TooltipCard`, `HoverCard` |
-| Patterns | `Toolbar` (a workspace's top bar, with `NotFound` under it), `PageHeader` (a document's own, which `SettingsPage`, `CollectionPage`, and `DetailPage` head themselves with), `SettingsRow`, `SettingsSection` (with `SettingsRowsSkeleton`, `SettingsSectionsSkeleton`), `SettingsPage`, `ListRow`, `CollectionPage`, `DetailPage`, `AuthPage`, `PublicPage` (with `PublicSection`, `PublicMedia`) |
+| Patterns | `Toolbar` (a workspace's top bar, with `NotFound` under it), `PageHeader` (a document's own, which `SettingsPage`, `CollectionPage`, and `DetailPage` head themselves with), `SettingsRow` (with `SettingsLinkRow`, a row that opens a page), `SettingsSection` (with `SettingsRowsSkeleton`, `SettingsSectionsSkeleton`), `SettingsPage`, `ListRow`, `CollectionPage`, `DetailPage`, `AuthPage`, `PublicPage` (with `PublicSection`, `PublicMedia`) |
 | Brand | `ProductMark`, the glyphs (`face/glyphs.tsx`), `ProviderMark` |
 
 Each component's design comment, at the top of its `.tsx`, says what it owns

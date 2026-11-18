@@ -18,6 +18,7 @@ import {
 } from "../../inbox/inbox-store.js";
 import { instantParam } from "../../sync/live-param.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
+import { answerSpanAnnotated } from "../answer-span.js";
 import { bindLiveRead } from "../live-read-binding.js";
 import { ITEM_GATES, SCOPE_INBOX_READS } from "./scope-inbox.js";
 
@@ -58,6 +59,8 @@ export const inboxItemsRead = bindLiveRead(INBOX_ITEMS_READ, {
       ? Effect.void
       : Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   },
+  // Note that the answer's size is said on its span, so the account's whole first read, the one a sign-in waits on, stands apart from a poll that waited.
+  answered: answerSpanAnnotated,
   delta: {
     whole: ITEM_GATES,
     anyTopic: [inboxMessageSync, attachmentSync],

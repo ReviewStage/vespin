@@ -1,8 +1,10 @@
 import { Schema as EffectSchema } from "effect";
 import {
+  INSTALLED_SKILL_BOUNDS,
   INSTALLED_SKILL_REFUSAL,
   installedSkillScopeSchema,
   installedSkillSourceSchema,
+  macSkillOriginSchema,
 } from "./installed-skill-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
@@ -13,7 +15,8 @@ import { SKILL_FILE_BOUNDS } from "./skill-file.js";
  *
  * A member installs a skill by pasting a GitHub repository, a link to one
  * of its folders, an `npx skills add` line naming one, or a skill's text
- * into one box. The preview reads a GitHub source at the commit its ref
+ * into one box, or brings one in from their Mac, its folder's files sent
+ * whole as the desktop read them. The preview reads a GitHub source at the commit its ref
  * stands at and lists every skill folder there; for text, it says the
  * name and description the text declares. An install sends the paste
  * again with the commit the preview pinned, and the service reads it
@@ -195,6 +198,40 @@ export const installedSkillInstallRequestSchema = EffectSchema.Struct({
   name: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
   description: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
 });
+
+/**
+ * A file's path from its skill's folder, as the store keeps one: relative,
+ * climbing out of no folder, with no `.` or `..` segment, no backslash, and no NUL.
+ */
+const importedPathSchema = EffectSchema.String.check(
+  EffectSchema.isMinLength(1),
+  EffectSchema.isMaxLength(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_PATH_CHARS),
+  // Note that the segment check spans any character, a newline among them, so no line break hides a `..` from it.
+  EffectSchema.isPattern(/^(?!\/)(?![\s\S]*(?:^|\/)\.\.?(?:\/|$))[^\\]+$/u),
+  // Note that a NUL is refused here, since the store's text column can hold none.
+  EffectSchema.makeFilter((path) => !path.includes(String.fromCharCode(0))),
+);
+
+/** One file of a skill brought in from a Mac: its path from the folder, and its bytes in base64. */
+const importedFileSchema = EffectSchema.Struct({
+  path: importedPathSchema,
+  base64: EffectSchema.String.check(EffectSchema.isPattern(/^[A-Za-z0-9+/]*={0,2}$/u)),
+});
+
+/**
+ * One skill's folder brought in from a Mac: whose it is, where on the Mac
+ * it was read, and every file it holds. Its files are checked as any
+ * install's are, and refused past `INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES`
+ * together; a name the member already holds is refused as taken.
+ */
+export const installedSkillImportRequestSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  scope: installedSkillScopeSchema,
+  mac: macSkillOriginSchema,
+  files: EffectSchema.Array(importedFileSchema).check(EffectSchema.isMinLength(1)),
+});
+
+export type InstalledSkillImportRequest = typeof installedSkillImportRequestSchema.Type;
 
 /**
  * The transaction a write committed in, which a reader following the skills

@@ -314,6 +314,14 @@ export function useSkillPicker({
   const leading = leads ? matchingCommands(trigger.query, commands.reach) : [];
   // Note that a box with no skills to offer opens the list only on a command the word finds.
   const mention = source === undefined && leading.length === 0 ? undefined : trigger;
+
+  // Forget the word when the caret leaves it, but keep the skills last read.
+  if (mention === undefined) {
+    if (closedAt !== undefined) setClosedAt(undefined);
+
+    if (read?.start !== undefined) setRead({ ...read, start: undefined });
+  }
+
   const open = mention !== undefined && closedAt !== mention.start;
   const offeredCommands = open ? leading : [];
 
@@ -355,16 +363,6 @@ export function useSkillPicker({
 
   // Note that a message already naming a skill reads them too, so its chips are drawn.
   const wantsSkills = source !== undefined && (asked > 0 || holdsSlashWord(draft));
-
-  // A word closed with Escape stays closed only while the caret is in it,
-  // and a word left is no longer the one the skills were read for, so a `/`
-  // typed again where it stood opens the list as another word does.
-  const inWord = mention !== undefined;
-  useEffect(() => {
-    if (inWord) return;
-    setClosedAt(undefined);
-    setRead((was) => (was?.start === undefined ? was : { ...was, start: undefined }));
-  }, [inWord]);
 
   // The skills are read as a `/` word opens the list, and again each time
   // another `/` word opens it, the skills last read drawn meanwhile, so a

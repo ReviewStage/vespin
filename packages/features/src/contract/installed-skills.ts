@@ -1,5 +1,5 @@
 /**
- * installed-skills.ts -- the skills members install into the app (`installed-skill-route-wire.ts`), as procedures: list them, read one, preview a paste, install from it, and remove one.
+ * installed-skills.ts -- the skills members install into the app (`installed-skill-route-wire.ts`), as procedures: list them, read one, preview a paste, install from it, bring one in from a Mac, and remove one.
  *
  * Every output is its wire schema flipped, so oRPC's output check encodes
  * the handler's value into the bytes the wire carries. A body refuses a key
@@ -14,6 +14,8 @@
  * not permitted; a paste's GitHub source out of reach, or GitHub silent,
  * is refused as such; a skill's files the store refuses, and a name already
  * taken, carry the skill by name (`installedSkillRefusedDataSchema`). A
+ * skill's folder brought in from a Mac answers 201 for the one skill it
+ * made, refused as an install's are but for GitHub, which it never reads. A
  * paste with nothing to install, or a workspace skill in a personal
  * workspace, is an invalid request, as any procedure may answer.
  */
@@ -25,6 +27,7 @@ import {
   INSTALLED_SKILL_LIST_QUERY,
   INSTALLED_SKILL_PASTE_MAX_CHARS,
   installedSkillContentSchema,
+  installedSkillImportRequestSchema,
   installedSkillInstallAnswerSchema,
   installedSkillInstallRequestSchema,
   installedSkillListAnswerSchema,
@@ -108,6 +111,25 @@ export const installedSkillsContract = {
       }),
     )
     .input(exactInput(installedSkillInstallRequestSchema))
+    .output(EffectSchema.flip(installedSkillInstallAnswerSchema)),
+  importFolder: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.SKILL_FILES_REFUSED,
+        HOSTED_API_ERROR.SKILL_NAME_TAKEN,
+      ),
+    )
+    // Note that a folder names no cap of its own, so it is held to the function's whole body, which its 3 MB in base64 and its paths fit under.
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: `${HOSTED_SERVICE_PATH.INSTALLED_SKILLS}/import` as const,
+        successStatus: CREATED_STATUS,
+      }),
+    )
+    .input(exactInput(installedSkillImportRequestSchema))
     .output(EffectSchema.flip(installedSkillInstallAnswerSchema)),
   remove: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))

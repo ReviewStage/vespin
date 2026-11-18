@@ -1790,7 +1790,7 @@ test("start_agent shows the model the recorded input, images among it, and one t
   );
 });
 
-test("run_on_mac and computer show the model the recorded input, the machine to run on among it", async () => {
+test("run_on_mac and computer show the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "run-on-mac-input", RUN_ON_MAC_TOOL.inputSchema);
   await settleJsonSchemaGolden(GOLDEN_ROOT, "computer-input", COMPUTER_TOOL.inputSchema);
 });

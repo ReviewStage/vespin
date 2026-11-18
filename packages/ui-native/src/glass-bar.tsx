@@ -361,7 +361,7 @@ function DockColumn({
 
   return (
     <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
-      <DockMeasure.Provider value={onRoom}>{bar}</DockMeasure.Provider>
+      <DockMeasure value={onRoom}>{bar}</DockMeasure>
     </View>
   );
 }
@@ -391,14 +391,14 @@ export function GlassDock({ children, bar }: DockProps) {
       style={styles.dock}
       onOverlap={(event) => setOverlap(event.nativeEvent.overlap)}
     >
-      <DockKeyboard.Provider value={overlap}>
-        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      </DockKeyboard.Provider>
+      <DockKeyboard value={overlap}>
+        <DockRoom value={room}>{children}</DockRoom>
+      </DockKeyboard>
       {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
       <View style={styles.docked} collapsable={false}>
-        <DockLifted.Provider value={true}>
+        <DockLifted value={true}>
           <DockColumn bar={bar} onRoom={setRoom} />
-        </DockLifted.Provider>
+        </DockLifted>
       </View>
     </KeyboardDockArea>
   );

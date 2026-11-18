@@ -16,9 +16,11 @@ import {
   SKILL_PASTE_KIND,
 } from "@repo/features/installed-skill-route-wire";
 import {
+  INSTALLED_SKILL_BOUNDS,
   INSTALLED_SKILL_REFUSAL,
   INSTALLED_SKILL_SCOPE,
   INSTALLED_SKILL_SOURCE,
+  MAC_SKILL_APP,
 } from "@repo/features/installed-skill-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -756,6 +758,84 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         assert.equal((yield* read(teammate, own)).status, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal((yield* read(stranger, team)).status, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal((yield* read(owner, "not-a-uuid")).status, HOSTED_HTTP_STATUS.NOT_FOUND);
+      }),
+  );
+
+  it.effect(
+    "a skill's folder from a Mac installs every file with where it was read, and a name already held, a folder past the bound, or one carrying a credential is refused",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const workspace = yield* openWorkspace(owner);
+        const ask = yield* routes(githubReaching([]));
+        const base64 = (text: string) => Buffer.from(text).toString("base64");
+        const notes = skillFile("release-notes", "Drafts release notes.");
+
+        const importFolder = (files: Readonly<Record<string, string>>) =>
+          ask(
+            `${SKILLS}/import`,
+            owner,
+            install({
+              workspaceId: workspace,
+              scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+              mac: { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills/release-notes" },
+              files: Object.entries(files).map(([path, text]) => ({ path, base64: base64(text) })),
+            }),
+          );
+
+        const folder = { "SKILL.md": notes, "scripts/tags.sh": "git tag --list" };
+
+        const [first] = readAnswer(
+          installedSkillInstallAnswerSchema,
+          201,
+          yield* importFolder(folder),
+        ).skills;
+
+        assert.ok(first);
+        assert.deepEqual(
+          { name: first.name, source: first.source },
+          {
+            name: "release-notes",
+            source: {
+              type: INSTALLED_SKILL_SOURCE.TEXT,
+              mac: { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills/release-notes" },
+            },
+          },
+        );
+        assert.equal(yield* storedText(owner, first.id, "SKILL.md"), notes);
+        assert.equal(yield* storedText(owner, first.id, "scripts/tags.sh"), "git tag --list");
+
+        // The same folder again finds its name taken, and is refused rather than renamed.
+        assert.deepEqual((yield* importFolder(folder)).body, {
+          error: HOSTED_API_ERROR.SKILL_NAME_TAKEN,
+          skillName: "release-notes",
+        });
+
+        const half = "x".repeat(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES / 2);
+        assert.deepEqual(
+          (yield* importFolder({ "SKILL.md": notes, "a.txt": half, "b.txt": half })).body,
+          {
+            error: HOSTED_API_ERROR.SKILL_FILES_REFUSED,
+            skillName: "release-notes",
+            skillRefusal: INSTALLED_SKILL_REFUSAL.TOO_LARGE,
+          },
+        );
+        assert.deepEqual(
+          (yield* importFolder({ "SKILL.md": notes, "env.sh": `TOKEN=${FAKE_GITHUB_TOKEN}` })).body,
+          {
+            error: HOSTED_API_ERROR.SKILL_FILES_REFUSED,
+            skillName: "release-notes",
+            skillRefusal: INSTALLED_SKILL_REFUSAL.CREDENTIAL,
+          },
+        );
+
+        for (const climbing of ["../escape.sh", "a\n/../escape.sh"]) {
+          assert.equal(
+            (yield* importFolder({ "SKILL.md": notes, [climbing]: "rm" })).status,
+            HOSTED_HTTP_STATUS.BAD_REQUEST,
+            JSON.stringify(climbing),
+          );
+        }
       }),
   );
 });

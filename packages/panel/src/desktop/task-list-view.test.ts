@@ -255,10 +255,14 @@ function taskRows(
   }));
 }
 
-/** `ASSIGNED`, and one more task Dean made that no one is on yet. */
-const MINE_UNASSIGNED = [
+/** `ASSIGNED`, one more task on Dean in another repository, and one Dean made that no one is on. */
+const MINE = [
   ...ASSIGNED,
-  task("t-5", "Audit logs", "acme/console", DEAN, { createdAt: 40, updatedAt: 300 }),
+  {
+    ...task("t-5", "Audit logs", "acme/console", CHARLES, { createdAt: 40, updatedAt: 300 }),
+    assignee: { userId: DEAN, name: "Dean Stratakos" },
+  },
+  task("t-6", "Rotate keys", "acme/relay", DEAN, { createdAt: 50, updatedAt: 450 }),
 ];
 
 /** The words a card hung now names its subject by. */
@@ -303,13 +307,13 @@ function headWords(sidebar: HTMLElement): string | undefined {
   return said;
 }
 
-test("a shared workspace opens on your own tasks, those you are on and those no one is on that you made, by repository, newest updated first", async () => {
-  const sidebar = await mountRead(ACME, MINE_UNASSIGNED);
+test("a shared workspace opens on the tasks you are on, not one you made that no one is on, by repository, newest updated first", async () => {
+  const sidebar = await mountRead(ACME, MINE);
 
   assert.deepEqual(groupNames(sidebar), ["relay", "console"]);
   assert.deepEqual(taskRows(sidebar), [
     { name: "Fix flaky deploy", repository: undefined, face: false },
-    { name: "Audit logs", repository: undefined, face: true },
+    { name: "Audit logs", repository: undefined, face: false },
   ]);
   const options = sidebar.querySelector('button[aria-label="View options"]');
   assert.equal(options?.getAttribute("aria-description"), null);
@@ -468,11 +472,11 @@ test("with every task pinned, a filter still says it leaves nothing under Tasks,
 
 test("a workspace whose list names no member count still filters by person once its members are read", async () => {
   const { memberCount: _, ...uncounted } = ACME;
-  const sidebar = await mountRead(uncounted);
+  const sidebar = await mountRead(uncounted, ASSIGNED);
   await vi.waitFor(() =>
     assert.deepEqual(
       taskRows(sidebar).map((row) => row.name),
-      ["Retry webhooks"],
+      ["Fix flaky deploy"],
     ),
   );
   await choose(sidebar, "Assigned to", "Anyone");
@@ -480,6 +484,7 @@ test("a workspace whose list names no member count still filters by person once 
 });
 
 test("in one run, a task with no repository says so on its row", async () => {
+  keepAnyone();
   const notes = task("t-6", "Hiring loop notes", null, DEAN, { createdAt: 1, updatedAt: 700 });
   const sidebar = await mountRead(ACME, [...TASKS, notes]);
   listUngrouped(sidebar);
@@ -599,9 +604,13 @@ test("a workspace nobody shares offers ⌘K no filtering by person", async () =>
   assert.equal(appCommandOffered(APP_COMMAND.LIST_TASKS_UNGROUPED), true);
 });
 
-/** A task of the workspace's standing in `status`. */
+/** A task of Dean's standing in `status`. */
 function standing(id: string, name: string, status: TaskStatus, updatedAt: number): TaskSummary {
-  return { ...task(id, name, "acme/relay", DEAN, { createdAt: 1, updatedAt }), status };
+  return {
+    ...task(id, name, "acme/relay", DEAN, { createdAt: 1, updatedAt }),
+    assignee: { userId: DEAN, name: "Dean Stratakos" },
+    status,
+  };
 }
 
 const BY_STATUS = [
@@ -628,7 +637,8 @@ test("the list holds the tasks to do and in progress, each led by its status's m
 });
 
 test("a task from a service before statuses stands among them", () => {
-  const sidebar = mountSidebar(ACME, [...BY_STATUS, task("t-0", "No status", null, DEAN)]);
+  const { status: _, ...unstated } = standing("t-0", "No status", TASK_STATUS.TODO, 2);
+  const sidebar = mountSidebar(ACME, [...BY_STATUS, unstated]);
   assert.ok(taskRows(sidebar).some((row) => row.name === "No status"));
 });
 

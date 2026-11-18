@@ -1130,7 +1130,7 @@ function SectionDates({
     };
   }, [open, dates, section]);
 
-  return <WordsDatesContext.Provider value={door}>{children}</WordsDatesContext.Provider>;
+  return <WordsDatesContext value={door}>{children}</WordsDatesContext>;
 }
 
 /** A description's body, in the description's type at its page's measure: the column its head and its blocks stand in. */

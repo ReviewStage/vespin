@@ -89,7 +89,7 @@ onFlowComplete:
     commands:
       - tapOn:
           id: "workspace-switcher"
-      - assertVisible: "Settings, .*"
+      - assertVisible: "Settings(, .*)?"
       - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: switcher-settings
       # Note that the switcher's list is a sheet at the window's foot, so it

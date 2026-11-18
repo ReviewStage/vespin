@@ -296,5 +296,5 @@ export function TranscriptMarkdownSource({
 }): ReactNode {
   const openTail = useMemo(() => openFenceTail(markdown), [markdown]);
 
-  return <OpenFenceTail.Provider value={openTail}>{children}</OpenFenceTail.Provider>;
+  return <OpenFenceTail value={openTail}>{children}</OpenFenceTail>;
 }

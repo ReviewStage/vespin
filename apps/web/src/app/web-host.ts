@@ -24,6 +24,7 @@
  */
 
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { readerZone } from "@repo/features/date-mention";
 import { feedbackDelivery } from "@repo/features/feedback";
 import type { LinkPlatform } from "@repo/features/link-open";
 import { TERMINAL_PORT_CHANNEL } from "@repo/features/terminal-acts";
@@ -268,7 +269,12 @@ function seamLayers(storage: Storage, fixture: RunProfile | undefined) {
   return Layer.mergeAll(
     Layer.succeed(StateRoot, STATE_ROOT),
     Layer.succeed(RunMode, runModeFor({ capture: false, fixture: fixture !== undefined })),
-    Layer.succeed(AppIdentity, { appVersion, packaged: true, platform: PRODUCT_PLATFORM.WEB }),
+    Layer.succeed(AppIdentity, {
+      appVersion,
+      packaged: true,
+      platform: PRODUCT_PLATFORM.WEB,
+      deviceZone: readerZone,
+    }),
     // A tab has no environment to read an override from.
     Layer.succeed(Environment, ConfigProvider.fromEnv({ env: {} })),
     Layer.succeed(IdSource, { create: () => crypto.randomUUID() }),

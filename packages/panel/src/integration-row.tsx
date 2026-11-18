@@ -25,7 +25,7 @@ import {
   integrationAccountLabel,
 } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { readFailedWords } from "@repo/features/words";
+import { andList, readFailedWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AccountWords,
@@ -41,6 +41,8 @@ import {
   RetryButton,
   SETTINGS_ROW_CONTROLS,
   SETTINGS_ROW_STATE,
+  SettingsLinkRow,
+  SettingsRow,
   SettingsRowMark,
   type SettingsRowState,
   SettingsRowStateLine,
@@ -54,7 +56,7 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { ActResult, ActVariables } from "./act.js";
 import { sendAct } from "./act.js";
 import { actMutation } from "./act-mutations.js";
@@ -68,7 +70,7 @@ import { Highlighted } from "./search-field.js";
 import { MenuRow } from "./settings/menu-row.js";
 
 /**
- * integration-row.tsx -- one account's row at a provider, as every surface that connects an integration draws it: Settings › Integrations and setup's tools step alike.
+ * integration-row.tsx -- an integration's rows: one account's at a provider, as every surface that connects one draws it (setup's tools step, and a provider Settings › Integrations holds nothing at), a held provider's on Settings › Integrations' list, and its page's accounts and Disconnects.
  *
  * The row leads with the provider's mark, names the provider and, beside
  * it, the account where one is told apart (`serverAccountName`: "Notion ·
@@ -270,6 +272,193 @@ function integrationRename(
   };
 }
 
+/** A row's own grant as it stands: at rest, or begun or being called off, and what refused the last one. */
+export interface RowGrantControl {
+  readonly stage: RowGrant;
+  /** Whether a grant or a Cancel is under way, which holds every other grant back. */
+  readonly busy: boolean;
+  /** Why the last grant begun here could not begin, said under the row. */
+  readonly rejection: string | undefined;
+  /** Begins the server's own sign-in: Connect, Reconnect, Try again, or Reopen. */
+  readonly connect: () => void;
+  /** Begins a sign-in to a new account at the provider. */
+  readonly add: () => void;
+  /** Ends the sign-in waited on, revoking nothing. */
+  readonly cancel: () => void;
+}
+
+/**
+ * One server's grant, as a row presses it: a sign-in begun for it, or for
+ * a new account at its provider, or the one waited on called off, each
+ * saying under the row where it could not go.
+ */
+export function useRowGrant(
+  statuses: IntegrationStatuses,
+  { provider, connection, name }: Pick<ServerRow, "provider" | "connection" | "name">,
+): RowGrantControl {
+  const { cancelSignIn } = statuses;
+  const grant = useIntegrationGrant(statuses);
+  // Note that the sign-in's own Cancel is the one busy while it is called off, as Connect is while one begins, and either holds every other grant back.
+  const [stage, setStage] = useState<RowGrant>(ROW_GRANT.IDLE);
+  const [rejection, setRejection] = useState<string | undefined>(undefined);
+
+  /** How a grant begun went, said under the row where it could not begin. */
+  const began = (outcome: (typeof GRANT_OUTCOME)[keyof typeof GRANT_OUTCOME]) => {
+    // A Cancel under way stands until it answers, whatever a grant begun before it answers.
+    setStage((now) => (now === ROW_GRANT.CANCELING ? now : ROW_GRANT.IDLE));
+
+    if (outcome === GRANT_OUTCOME.NOT_OPENED) setRejection(ROW_LINE.NOT_OPENED);
+
+    if (outcome === GRANT_OUTCOME.REFUSED) {
+      setRejection(INTEGRATION_REFUSED.CONNECT(name));
+    }
+  };
+
+  const connect = () => {
+    setStage(ROW_GRANT.CONNECTING);
+    setRejection(undefined);
+    void grant.begin(connection).then(began);
+  };
+
+  const add = () => {
+    setStage(ROW_GRANT.CONNECTING);
+    setRejection(undefined);
+    void grant.add(provider).then(began);
+  };
+
+  const cancel = () => {
+    setStage(ROW_GRANT.CANCELING);
+    setRejection(undefined);
+    void cancelSignIn(connection).then((canceled) => {
+      setStage(ROW_GRANT.IDLE);
+
+      if (!canceled) setRejection(INTEGRATION_REFUSED.CANCEL(name));
+    });
+  };
+
+  return { stage, busy: stage !== ROW_GRANT.IDLE, rejection, connect, add, cancel };
+}
+
+/** Where one server stands, as its row's control and line read it. */
+interface RowStanding {
+  readonly row: ServerRow;
+  /** Where the connection stands, or nothing while it has not been read. */
+  readonly status: IntegrationStatus | undefined;
+  /** How a connected account's server answered when asked for its tools. */
+  readonly health: ConnectionHealth;
+  /** The sign-in the window waits on, or last waited on, where one stands. */
+  readonly signIn: SignIn | undefined;
+}
+
+/**
+ * The control a row offers for what it needs next: Reopen and Cancel while
+ * the browser is waited on, Retry where its tools could not be read, and
+ * its grant (Connect, Reconnect, or Try again) where it is not connected or
+ * its connection broke in a way a sign-in mends; else none.
+ */
+function rowControl(
+  { row, status, health, signIn }: RowStanding,
+  grant: RowGrantControl,
+  onRetryTools: () => void,
+  describedBy?: string,
+): ReactNode {
+  const { name } = row;
+  const connected = status === INTEGRATION_STATUS.CONNECTED;
+  const broken = connected && health.kind === CONNECTION_HEALTH.BROKEN && health.reconnect;
+  const waiting = !connected && signIn?.kind === SIGN_IN.WAITING;
+
+  if (waiting) {
+    return (
+      <>
+        <Button
+          variant={BUTTON_VARIANT.QUIET}
+          busy={grant.stage === ROW_GRANT.CONNECTING}
+          busyLabel="Reopening the sign-in"
+          disabled={grant.stage === ROW_GRANT.CANCELING}
+          onClick={grant.connect}
+        >
+          {SIGN_IN_ACTION.REOPEN}
+        </Button>
+        <Button
+          variant={BUTTON_VARIANT.OUTLINE}
+          busy={grant.stage === ROW_GRANT.CANCELING}
+          busyLabel="Canceling the sign-in"
+          disabled={grant.stage === ROW_GRANT.CONNECTING}
+          onClick={grant.cancel}
+        >
+          {SIGN_IN_ACTION.CANCEL}
+        </Button>
+      </>
+    );
+  }
+
+  if (connected && health.kind === CONNECTION_HEALTH.FAILED) {
+    return <RetryButton onRetry={onRetryTools} />;
+  }
+
+  const granting = !(
+    status === undefined ||
+    status === INTEGRATION_STATUS.UNAVAILABLE ||
+    (connected && !broken)
+  );
+
+  if (!granting) return null;
+
+  return (
+    <Button
+      variant={BUTTON_VARIANT.OUTLINE}
+      // Note that the name starts with the words the button shows, so a voice command that says them finds it, and names the row, since several rows may offer the same words.
+      label={`${grantLabel(status, signIn)} ${name}`}
+      aria-describedby={describedBy}
+      busy={grant.busy}
+      busyLabel={`Connecting ${name}`}
+      onClick={grant.connect}
+    >
+      {grantLabel(status, signIn)}
+    </Button>
+  );
+}
+
+/** One account's Disconnect, asked first in the confirm dialog while the service holds the account (`held`). */
+function useDisconnect(row: ServerRow, held: boolean) {
+  const github = useGitHubConnection();
+
+  const disconnecting = useMutation({
+    mutationKey: [ACT_KIND.INTEGRATIONS_DISCONNECT],
+    mutationFn: () =>
+      disconnectAccount(
+        (variables) => sendAct(ACT_KIND.INTEGRATIONS_DISCONNECT, variables),
+        github,
+        row,
+      ),
+  });
+
+  const disconnectAct = useConfirmAct(disconnecting, {
+    send: () => disconnecting.mutateAsync(),
+    answered: sameAnswer,
+  });
+
+  return useConfirmDialog(
+    { subject: held, surfaceOpen: true },
+    disconnectAct,
+    confirmFailure(FAILURE_SURFACE.INTEGRATION_DISCONNECT),
+  );
+}
+
+/** Whether the service still holds an account, connected or expired, which is what a Disconnect ends. */
+function heldStatus(status: IntegrationStatus | undefined): boolean {
+  return status === INTEGRATION_STATUS.CONNECTED || status === INTEGRATION_STATUS.EXPIRED;
+}
+
+/** The provider's mark a row leads with. */
+function RowMark({ provider }: { provider: IntegrationProvider }): React.JSX.Element {
+  return (
+    <SettingsRowMark>
+      <ProviderMark provider={provider} />
+    </SettingsRowMark>
+  );
+}
+
 /** One account's row at a provider, or a provider's where the account holds none there. */
 export function IntegrationRow({
   row,
@@ -298,50 +487,11 @@ export function IntegrationRow({
     renameWrite(renaming, integrationRename(provider)),
   );
 
-  const { cancelSignIn } = statuses;
-  const grant = useIntegrationGrant(statuses);
+  const grant = useRowGrant(statuses, row);
   const bySignIn = grantedBySignIn(provider);
-  const github = useGitHubConnection();
   const signIn = statuses.signInOf(connection);
-  // Note that the sign-in's own Cancel is the one busy while it is called off, as Connect is while one begins, and either holds every other grant back.
-  const [stage, setStage] = useState<RowGrant>(ROW_GRANT.IDLE);
-  const [rejection, setRejection] = useState<string | undefined>(undefined);
   // Several accounts at a provider are each renamed, and each disconnected leaving the others.
   const several = row.accounts > 1 && account !== undefined;
-
-  /** How a grant begun went, said under the row where it could not begin. */
-  const began = (outcome: (typeof GRANT_OUTCOME)[keyof typeof GRANT_OUTCOME]) => {
-    // A Cancel under way stands until it answers, whatever a grant begun before it answers.
-    setStage((now) => (now === ROW_GRANT.CANCELING ? now : ROW_GRANT.IDLE));
-
-    if (outcome === GRANT_OUTCOME.NOT_OPENED) setRejection(ROW_LINE.NOT_OPENED);
-
-    if (outcome === GRANT_OUTCOME.REFUSED) {
-      setRejection(INTEGRATION_REFUSED.CONNECT(name));
-    }
-  };
-
-  const connect = useCallback(() => {
-    setStage(ROW_GRANT.CONNECTING);
-    setRejection(undefined);
-    void grant.begin(connection).then(began);
-  }, [grant, connection, name]);
-
-  const addAccount = () => {
-    setStage(ROW_GRANT.CONNECTING);
-    setRejection(undefined);
-    void grant.add(provider).then(began);
-  };
-
-  const cancel = useCallback(() => {
-    setStage(ROW_GRANT.CANCELING);
-    setRejection(undefined);
-    void cancelSignIn(connection).then((canceled) => {
-      setStage(ROW_GRANT.IDLE);
-
-      if (!canceled) setRejection(INTEGRATION_REFUSED.CANCEL(name));
-    });
-  }, [cancelSignIn, connection, name]);
 
   /** A rename ended: a new label asked of the service, which the host draws over its read on the press, so every surface draws it at once; a refusal puts the old one back, reopens the field over the label asked, and is said under the row. */
   const renamed = ({ value: label }: InlineEditEnd) => {
@@ -351,40 +501,13 @@ export function IntegrationRow({
   const connected = status === INTEGRATION_STATUS.CONNECTED;
   const expired = status === INTEGRATION_STATUS.EXPIRED;
   // An account the service still holds, connected or expired, is managed from its ⋯.
-  const held = connected || expired;
+  const held = heldStatus(status);
 
-  const disconnecting = useMutation({
-    mutationKey: [ACT_KIND.INTEGRATIONS_DISCONNECT],
-    mutationFn: () =>
-      disconnectAccount(
-        (variables) => sendAct(ACT_KIND.INTEGRATIONS_DISCONNECT, variables),
-        github,
-        row,
-      ),
-  });
+  const disconnect = useDisconnect(row, held);
 
-  const disconnectAct = useConfirmAct(disconnecting, {
-    send: () => disconnecting.mutateAsync(),
-    answered: sameAnswer,
-  });
-
-  const disconnect = useConfirmDialog(
-    { subject: held, surfaceOpen: true },
-    disconnectAct,
-    confirmFailure(FAILURE_SURFACE.INTEGRATION_DISCONNECT),
-  );
-
-  const busy = stage !== ROW_GRANT.IDLE;
+  const { busy } = grant;
   const line = rowLine(provider, status, health, signIn);
   const broken = connected && health.kind === CONNECTION_HEALTH.BROKEN && health.reconnect;
-  const waiting = !connected && signIn?.kind === SIGN_IN.WAITING;
-
-  // Whether the row offers its grant (Connect, Reconnect, or Try again) as
-  // the button at its end, where a row not connected keeps its Connect.
-  const granting =
-    !waiting &&
-    !(connected && health.kind === CONNECTION_HEALTH.FAILED) &&
-    !(status === undefined || status === INTEGRATION_STATUS.UNAVAILABLE || (connected && !broken));
 
   // A broken or expired connection's Reconnect is the row's button, so its ⋯
   // keeps it only while the connection stands quiet.
@@ -392,7 +515,7 @@ export function IntegrationRow({
     label: ROW_ACT.RECONNECT,
     icon: <RefreshCwIcon />,
     disabled: busy,
-    onSelect: connect,
+    onSelect: grant.connect,
   };
 
   const leave = {
@@ -412,7 +535,7 @@ export function IntegrationRow({
             label: ROW_ACT.ADD_ACCOUNT,
             icon: <PlusIcon />,
             disabled: busy,
-            onSelect: addAccount,
+            onSelect: grant.add,
           },
         ]
       : [];
@@ -434,11 +557,7 @@ export function IntegrationRow({
         row={{
           // Note that every row of a provider ends in a short button, a ⋯, or both, so each keeps its end beside its name and lets its words wrap, rather than one row dropping its end below them; on a phone's width they drop as every row's do, so the name reads whole.
           controls: SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW,
-          leading: (
-            <SettingsRowMark>
-              <ProviderMark provider={provider} />
-            </SettingsRowMark>
-          ),
+          leading: <RowMark provider={provider} />,
           label: <Highlighted text={INTEGRATION_NAME[provider]} tokens={tokens} />,
           // Note that the account's words are renamed by pressing them beside the provider's name, since the account is what a rename names.
           adornment:
@@ -472,46 +591,12 @@ export function IntegrationRow({
             ),
           // Note that a rename's refusal is the rename's own, so a connect begun meanwhile neither erases it nor is hidden by it.
           error: refusedShown(
-            [rename.refused ? INTEGRATION_REFUSED.RENAME(name) : undefined, rejection]
+            [rename.refused ? INTEGRATION_REFUSED.RENAME(name) : undefined, grant.rejection]
               .filter((words) => words !== undefined)
               .join(" "),
             FAILURE_SURFACE.INTEGRATION_RENAME,
           ),
-          control: waiting ? (
-            <>
-              <Button
-                variant={BUTTON_VARIANT.QUIET}
-                busy={stage === ROW_GRANT.CONNECTING}
-                busyLabel="Reopening the sign-in"
-                disabled={stage === ROW_GRANT.CANCELING}
-                onClick={connect}
-              >
-                {SIGN_IN_ACTION.REOPEN}
-              </Button>
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                busy={stage === ROW_GRANT.CANCELING}
-                busyLabel="Canceling the sign-in"
-                disabled={stage === ROW_GRANT.CONNECTING}
-                onClick={cancel}
-              >
-                {SIGN_IN_ACTION.CANCEL}
-              </Button>
-            </>
-          ) : connected && health.kind === CONNECTION_HEALTH.FAILED ? (
-            <RetryButton onRetry={onRetryTools} />
-          ) : !granting ? null : (
-            <Button
-              variant={BUTTON_VARIANT.OUTLINE}
-              // Note that the name starts with the words the button shows, so a voice command that says them finds it, and names the row, since several rows may offer the same words.
-              label={`${grantLabel(status, signIn)} ${name}`}
-              busy={busy}
-              busyLabel={`Connecting ${name}`}
-              onClick={connect}
-            >
-              {grantLabel(status, signIn)}
-            </Button>
-          ),
+          control: rowControl({ row, status, health, signIn }, grant, onRetryTools),
         }}
       />
       <ConfirmDialog
@@ -525,5 +610,319 @@ export function IntegrationRow({
         }}
       />
     </Stack>
+  );
+}
+
+/** A row's standing: where its connection stands, how its server answered, and its sign-in, read for it. */
+function standingOf(
+  row: ServerRow,
+  statuses: IntegrationStatuses,
+  healthOf: (server: string) => ConnectionHealth,
+): RowStanding {
+  return {
+    row,
+    status: statuses.statusOf(row.connection),
+    health: healthOf(row.connection),
+    signIn: statuses.signInOf(row.connection),
+  };
+}
+
+/**
+ * The line a held account says where it needs the developer: a problem in
+ * the attention tint, or a sign-in the browser is waited on; none while it
+ * works, is being checked, or was never connected.
+ */
+function neededLine({ row, status, health, signIn }: RowStanding): RowLine | undefined {
+  if (!heldStatus(status)) return undefined;
+  const line = rowLine(row.provider, status, health, signIn);
+
+  return line?.state === LINE_STATE.ATTENTION || line?.state === LINE_STATE.WAITING
+    ? line
+    : undefined;
+}
+
+/**
+ * A provider's row on Settings › Integrations' list, where the account
+ * holds an account there: pressed anywhere it opens the provider's page
+ * (`SettingsLinkRow`). It names the provider, and beside it the accounts
+ * where they carry names ("Personal and Work"), and says under it what the
+ * provider gives agents, or, where an account needs the developer, that
+ * account's problem in the attention tint (naming it where there are
+ * several), with the one control that mends it before the ›: Reconnect for
+ * an expired sign-in, Reopen and Cancel while its sign-in is waited on, or
+ * Retry where its tools could not be read.
+ */
+export function IntegrationLinkRow({
+  provider,
+  rows,
+  statuses,
+  healthOf,
+  tokens = NO_TOKENS,
+  onRetryTools,
+  onOpen,
+}: {
+  provider: IntegrationProvider;
+  /** The provider's rows, an account each. */
+  rows: readonly ServerRow[];
+  statuses: IntegrationStatuses;
+  /** How a connected account's server answered when asked for its tools. */
+  healthOf: (server: string) => ConnectionHealth;
+  /** The words a search asks for, marked where they landed in the row's name. */
+  tokens?: readonly string[];
+  /** Asks an account's server for its tools again, offered where the read failed. */
+  onRetryTools: (server: string) => void;
+  /** Opens the provider's page. */
+  onOpen: () => void;
+}): React.JSX.Element {
+  const standings = rows.map((row) => standingOf(row, statuses, healthOf));
+  const held = standings.filter((standing) => heldStatus(standing.status));
+  // Note that the row says the first account that needs the developer, so a provider with one expired account of two reads as needing a sign-in.
+  const needing = held.find((standing) => neededLine(standing) !== undefined);
+  const subject = needing ?? held[0] ?? standings[0];
+
+  const grant = useRowGrant(
+    statuses,
+    subject?.row ?? { provider, connection: provider, name: INTEGRATION_NAME[provider] },
+  );
+
+  const names = held.flatMap((standing) =>
+    standing.row.accountName === undefined ? [] : [standing.row.accountName],
+  );
+
+  const needed = needing === undefined ? undefined : neededLine(needing);
+  const owner = held.length > 1 ? needing?.row.accountName : undefined;
+
+  return (
+    <SettingsLinkRow
+      leading={<RowMark provider={provider} />}
+      label={<Highlighted text={INTEGRATION_NAME[provider]} tokens={tokens} />}
+      adornment={
+        names.length === 0 ? undefined : (
+          <AccountWords words={andList(names)}>
+            <ReplayMask>
+              <Highlighted text={andList(names)} tokens={tokens} />
+            </ReplayMask>
+          </AccountWords>
+        )
+      }
+      description={
+        needed === undefined ? (
+          INTEGRATION_PURPOSE[provider]
+        ) : (
+          <RowLineText
+            line={owner === undefined ? needed : { ...needed, text: `${owner}: ${needed.text}` }}
+          />
+        )
+      }
+      error={refusedShown(grant.rejection, FAILURE_SURFACE.INTEGRATION_RECONNECT)}
+      onOpen={onOpen}
+      control={
+        needing === undefined
+          ? undefined
+          : (ids) =>
+              rowControl(
+                needing,
+                grant,
+                () => onRetryTools(needing.row.connection),
+                ids["aria-describedby"],
+              )
+      }
+    />
+  );
+}
+
+/**
+ * One account's row on its provider's page, led by the provider's mark and
+ * named by the account (by the provider alone where the account carries no
+ * name), saying under it only what needs saying: a sign-in expired, a
+ * problem its server answered, a sign-in waited on, or one that did not
+ * finish. Its one control is what it needs next (`rowControl`), and its ⋯
+ * keeps what today's row kept short of Add another account, which heads
+ * the page's accounts: Rename where the provider holds several, Reconnect
+ * while the connection stands quiet, and, where the provider holds several
+ * (`leaves`), Disconnect last in red, asked first; a provider's one account
+ * keeps its Disconnect in a row of its own at the page's foot.
+ */
+export function IntegrationAccountRow({
+  row,
+  statuses,
+  health,
+  refusal,
+  anchor,
+  leaves = false,
+  onRetryTools,
+}: {
+  row: ServerRow;
+  statuses: IntegrationStatuses;
+  /** How the account's server answered when asked for its tools. */
+  health: ConnectionHealth;
+  /** Whether its ⋯ keeps its Disconnect, as each of several accounts' does, rather than a row of its own at the page's foot. */
+  leaves?: boolean;
+  /** Why a press elsewhere on the page that acted for this account could not go, as Add account's. */
+  refusal?: string | undefined;
+  /** The id a pressed search result lands on. */
+  anchor?: string | undefined;
+  /** Asks the account's server for its tools again, offered where the read failed. */
+  onRetryTools: () => void;
+}): React.JSX.Element {
+  const { provider, connection, name, account, accountName } = row;
+  const status = statuses.statusOf(connection);
+  const signIn = statuses.signInOf(connection);
+  const renaming = useMutation(actMutation(ACT_KIND.INTEGRATIONS_RENAME));
+
+  const rename = useInlineRename(
+    account === undefined ? undefined : connection,
+    renameWrite(renaming, integrationRename(provider)),
+  );
+
+  const grant = useRowGrant(statuses, row);
+  const several = row.accounts > 1 && account !== undefined;
+  const connected = status === INTEGRATION_STATUS.CONNECTED;
+  const broken = connected && health.kind === CONNECTION_HEALTH.BROKEN && health.reconnect;
+
+  // Note that an account that works says nothing under its name, since the page is the provider's and stands only for what it holds.
+  const line =
+    connected && health.kind === CONNECTION_HEALTH.WORKING
+      ? undefined
+      : rowLine(provider, status, health, signIn);
+
+  const naming = several
+    ? [{ label: ROW_ACT.RENAME, icon: <GLYPH.RENAME />, onSelect: rename.begin }]
+    : [];
+
+  const reconnect =
+    connected && !broken
+      ? [
+          {
+            label: ROW_ACT.RECONNECT,
+            icon: <RefreshCwIcon />,
+            disabled: grant.busy,
+            onSelect: grant.connect,
+          },
+        ]
+      : [];
+
+  const held = heldStatus(status);
+  const disconnect = useDisconnect(row, held && leaves);
+
+  const leave =
+    leaves && held
+      ? [{ label: INTEGRATION_ROW_WORDS.DISCONNECT, danger: true, onSelect: disconnect.ask }]
+      : [];
+
+  const actions = held ? [naming, reconnect, leave].filter((group) => group.length > 0) : [];
+
+  const words = accountName ?? INTEGRATION_NAME[provider];
+
+  return (
+    <Stack gap={GAP.NONE} {...motionKey(connection)}>
+      <MenuRow
+        thing={name}
+        actions={actions}
+        {...(anchor === undefined ? undefined : { anchor })}
+        {...(grantedBySignIn(provider) ? { heading: ROW_LINE.GITHUB_SIGN_IN } : undefined)}
+        row={{
+          controls: SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW,
+          leading: <RowMark provider={provider} />,
+          label: (
+            <RenamableName
+              value={
+                account === undefined || accountName === undefined
+                  ? words
+                  : (rename.asked ?? integrationAccountLabel(account))
+              }
+              label={`${name} account name`}
+              editing={rename.editing}
+              // Note that an account still waiting on its first sign-in is named by the service once it lands, so only one it holds is renamed.
+              onBegin={several && held ? rename.begin : undefined}
+              maxLength={INTEGRATION_LABEL_MAX}
+              onEnd={({ value: label }: InlineEditEnd) =>
+                rename.end(label === account?.label ? undefined : label)
+              }
+            >
+              <ReplayMask>{words}</ReplayMask>
+            </RenamableName>
+          ),
+          description: line === undefined ? undefined : <RowLineText line={line} />,
+          error: refusedShown(
+            [
+              rename.refused ? INTEGRATION_REFUSED.RENAME(name) : undefined,
+              grant.rejection,
+              refusal,
+            ]
+              .filter((each) => each !== undefined)
+              .join(" "),
+            FAILURE_SURFACE.INTEGRATION_RENAME,
+          ),
+          control: rowControl({ row, status, health, signIn }, grant, onRetryTools),
+        }}
+      />
+      {leaves ? (
+        <ConfirmDialog
+          open
+          confirm={disconnect}
+          question={{
+            ...disconnectQuestion(name, provider, {
+              bySignIn: grantedBySignIn(provider),
+              several,
+            }),
+            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+            replayUnmasked: true,
+            titleReplayMasked: true,
+          }}
+        />
+      ) : null}
+    </Stack>
+  );
+}
+
+/**
+ * The Disconnect of a provider's one account, last on its page in a danger
+ * outline, named for the provider, saying what goes, and asking first in
+ * the confirm dialog, as the account's ⋯ once did. Where the provider
+ * holds several, each account's ⋯ keeps its own instead.
+ */
+export function IntegrationDisconnectRow({ row }: { row: ServerRow }): React.JSX.Element {
+  const { provider, name, account } = row;
+  const disconnect = useDisconnect(row, true);
+  const several = row.accounts > 1 && account !== undefined;
+
+  const question = disconnectQuestion(name, provider, {
+    bySignIn: grantedBySignIn(provider),
+    several,
+  });
+
+  return (
+    <>
+      <SettingsRow
+        label={
+          <ReplayMask>{`${INTEGRATION_ROW_WORDS.DISCONNECT} ${several ? name : INTEGRATION_NAME[provider]}`}</ReplayMask>
+        }
+        description={question.body}
+      >
+        {(ids) => (
+          <Button
+            variant={BUTTON_VARIANT.DANGER_OUTLINE}
+            label={`${INTEGRATION_ROW_WORDS.DISCONNECT} ${name}`}
+            aria-describedby={ids["aria-describedby"]}
+            busy={disconnect.busy}
+            busyLabel={question.running}
+            onClick={disconnect.ask}
+          >
+            {INTEGRATION_ROW_WORDS.DISCONNECT}
+          </Button>
+        )}
+      </SettingsRow>
+      <ConfirmDialog
+        open
+        confirm={disconnect}
+        question={{
+          ...question,
+          loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+          replayUnmasked: true,
+          titleReplayMasked: true,
+        }}
+      />
+    </>
   );
 }

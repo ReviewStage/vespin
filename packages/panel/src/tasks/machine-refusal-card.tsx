@@ -73,9 +73,9 @@ const MACHINE_REFUSAL_WORDS = {
 /** The tools whose refusals the card answers. */
 const MACHINE_TOOLS: ReadonlySet<string> = new Set([AGENT_TOOL.RUN_ON_MAC, AGENT_TOOL.COMPUTER]);
 
-/** The line a press sends the agent once its default is the machine given, naming the machine's id so the agent may name it in its call. */
+/** The line a press sends the agent once its default is the machine given, where its next call goes. */
 function tryAgainLine(machine: CallMachine): string {
-  return `Try again on ${machine.name}, now your default machine (id "${machine.id}").`;
+  return `Try again on ${machine.name}, now your default machine.`;
 }
 
 /** Why the call reached no machine, in the reader's words: the machine as its chip, as the call's row ends in it, and whose it is where that is why. */

@@ -1018,11 +1018,11 @@ export function GitHubWords({
     () => ({
       ...TRANSCRIPT_COMPONENTS,
       a: ({ href, children, node }) => (
-        <InsideGitHubLink.Provider value={true}>
+        <InsideGitHubLink value={true}>
           <TranscriptLink href={href} words={node === undefined ? "" : wordsOf(node)}>
             {children}
           </TranscriptLink>
-        </InsideGitHubLink.Provider>
+        </InsideGitHubLink>
       ),
       img: ({ src, alt, width, height, node }) => (
         <GitHubImage
@@ -1464,9 +1464,9 @@ export function CallPlaceProvider({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <MacOwnerContext.Provider value={owner}>
-      <RoutedMachineContext.Provider value={route}>{children}</RoutedMachineContext.Provider>
-    </MacOwnerContext.Provider>
+    <MacOwnerContext value={owner}>
+      <RoutedMachineContext value={route}>{children}</RoutedMachineContext>
+    </MacOwnerContext>
   );
 }
 

@@ -19,6 +19,8 @@ export {
   readProcessTable,
 } from "./mac-resources.js";
 
+export { readMacSkills } from "./mac-skills.js";
+
 export { type RunMode, runModeFor, sentryReportingEnabled } from "./run-mode.js";
 
 export {

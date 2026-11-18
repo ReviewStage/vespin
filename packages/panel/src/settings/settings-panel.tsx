@@ -12,7 +12,11 @@ import type {
   NotificationsControl,
   UpdateControl,
 } from "@repo/settings/settings-controls";
-import { SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views";
+import {
+  SETTINGS_VIEW,
+  type SettingsSubPage,
+  type SettingsView,
+} from "@repo/settings/settings-views";
 import type { AppSettingsView } from "@repo/settings/wire";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -55,7 +59,12 @@ export interface SettingsPanelProps {
    * a shortcut or a button elsewhere in the window turns it.
    */
   view: SettingsView;
-  onViewChange: (view: SettingsView) => void;
+  /** Turns to a page, or to a page of its own where `sub` names one, as a search result for an integration opens its page. */
+  onViewChange: (view: SettingsView, sub?: SettingsSubPage) => void;
+  /** The page of the shown page's own that stands in its place, as Workspace's GitHub; none for the page itself. */
+  sub?: SettingsSubPage | undefined;
+  /** Opens a page of the shown page's own, or the page itself again for none. */
+  onSubChange?: ((sub: SettingsSubPage | undefined) => void) | undefined;
   microphone: MicrophoneControl;
   notifications: NotificationsControl;
   updates: UpdateControl;
@@ -75,6 +84,8 @@ export function SettingsPanel({
   account,
   onSignOut,
   view,
+  sub,
+  onSubChange,
   microphone,
   notifications,
   updates,
@@ -138,7 +149,12 @@ export function SettingsPanel({
           {SIGNED_OUT_WORDS}
         </Text>
       ) : workspace ? (
-        <WorkspacePage control={workspace} readerId={account.id} />
+        <WorkspacePage
+          control={workspace}
+          readerId={account.id}
+          sub={sub}
+          onSubChange={onSubChange}
+        />
       ) : null}
 
       {view === SETTINGS_VIEW.BILLING && billing && shown ? (
@@ -168,7 +184,12 @@ export function SettingsPanel({
       {view === SETTINGS_VIEW.HOSTS ? <HostsSection signedIn={signedIn} /> : null}
 
       {view === SETTINGS_VIEW.INTEGRATIONS ? (
-        <IntegrationsSection signedIn={signedIn} filter={integrationsFilter} />
+        <IntegrationsSection
+          signedIn={signedIn}
+          filter={integrationsFilter}
+          sub={sub}
+          onSubChange={onSubChange}
+        />
       ) : null}
 
       {view !== SETTINGS_VIEW.MCP ? null : signedIn ? (

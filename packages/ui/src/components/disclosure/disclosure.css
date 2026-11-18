@@ -180,6 +180,12 @@
     transition: transform var(--ui-duration-shape) var(--ui-spring);
   }
 
+  /* A chevron pointing down while closed (`DISCLOSURE_TURN.DOWN`) turns to
+     point up while open, on the same beats. */
+  .ui-disclosure-turn[data-turn="down"][data-open="true"] {
+    transform: rotate(180deg);
+  }
+
   /* A fold a press opens or closes (`use-disclosure.ts`), on the beats a
      setting's revealed rows ride (`reveal.tsx`), so every fold in the app,
      a sidebar group's or a pull request's section, moves alike whatever it

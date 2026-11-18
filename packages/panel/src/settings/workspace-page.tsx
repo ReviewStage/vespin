@@ -1,15 +1,7 @@
-import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_HOME } from "@repo/features/link-home";
-import { PRODUCT_NAME } from "@repo/features/product-name";
-import type {
-  WorkspaceSentry,
-  WorkspaceSentryInstallation,
-} from "@repo/features/sentry-install-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
+import { dayText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
-import type { WorkspaceSlack } from "@repo/features/workspace-integrations-live";
 import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
@@ -34,7 +26,7 @@ import {
 } from "@repo/features/workspace-wire";
 import { ACT_KIND, WORKSPACE_SLUG_REFUSAL } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW, searchAnchorProps } from "@repo/settings/settings-anchors";
-import { SETTINGS_SECTION } from "@repo/settings/settings-views";
+import { SETTINGS_SECTION, type SettingsSubPage } from "@repo/settings/settings-views";
 import {
   BUTTON_VARIANT,
   Button,
@@ -54,17 +46,13 @@ import {
   MENU_DETAIL,
   OneLine,
   PhotoPick,
-  ProviderMark,
+  PlusIcon,
   RenamableName,
   SETTINGS_ROW_MARK_WIDTH,
-  SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsRow,
   SettingsRowActSlot,
-  SettingsRowMark,
   type SettingsRowSkeletonLayout,
-  SettingsRowStateLine,
-  SettingsRowsFold,
   SettingsRowsSkeleton,
   SettingsRowValue,
   SettingsSection,
@@ -82,17 +70,9 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, memberActor, ROLE_WORDS, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { CONFIRM_STAGE, neverBusyAct } from "@repo/ui/confirm-state";
-import {
-  CrownIcon,
-  ExternalLinkIcon,
-  GLYPH,
-  ShieldIcon,
-  UserIcon,
-  UserRoundIcon,
-} from "@repo/ui/icons";
+import { CrownIcon, GLYPH, ShieldIcon, UserIcon, UserRoundIcon } from "@repo/ui/icons";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -108,9 +88,6 @@ import { TILE_SIZE, useWorkspaceTileUrl, WorkspaceTile } from "../desktop/worksp
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import {
   automationsQuery,
-  slackChannelsQuery,
-  workspaceIntegrationsQuery,
-  workspaceIntegrationsRetryMutation,
   workspaceInvitationsQuery,
   workspaceInvitationsRetryMutation,
   workspaceMembersQuery,
@@ -126,14 +103,11 @@ import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { shownWorkspace } from "./settings-rows.js";
 import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
-import { AddSlackChannel, SlackBotChannelRows } from "./slack-bot-channels.js";
-import { GitHubAccountRows, type ShownConnection } from "./workspace-github-accounts.js";
 import {
-  AddTokenRepository,
-  TOKEN_REPOSITORIES_READ,
-  TokenOwnerRows,
-  useTokenRepositories,
-} from "./workspace-token-repositories.js";
+  WORKSPACE_SERVICE_COUNT,
+  WorkspaceConnectionRows,
+  WorkspaceIntegrationPage,
+} from "./workspace-integrations.js";
 
 /**
  * workspace-page.tsx -- Settings' Workspace page: the workspace the sidebar lists, its members and invitations, its integrations, and the way out of it.
@@ -195,50 +169,6 @@ function transferAsk(workspace: Workspace, heir: string | undefined): TransferAs
 /** The outline face an invited address wears until it is a member, so its words stand in the members' column. */
 const INVITED_ACTOR = { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED } as const;
 
-/** What every integration's row says under its name, GitHub's, Slack's, and Sentry's alike. */
-const CONNECTION_LINE = {
-  CONNECTED: "Connected",
-  MANAGES: "Not connected.",
-  MEMBER: "Not connected. Ask an owner or admin.",
-} as const;
-
-/** What an integration's row presses to connect it, the same word on every row. */
-const CONNECT = "Connect";
-
-/** An integration's line under its name, by whether it is connected and whether the reader may connect it. */
-function connectionLine(connected: boolean, manages: boolean): React.ReactNode {
-  if (!connected) return manages ? CONNECTION_LINE.MANAGES : CONNECTION_LINE.MEMBER;
-
-  return (
-    <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-      {CONNECTION_LINE.CONNECTED}
-    </SettingsRowStateLine>
-  );
-}
-
-/** The chevrons folding an integration's own rows under its row, each closed until pressed. */
-const GITHUB_FOLD = "GitHub accounts";
-const SLACK_BOT_FOLD = "Slack settings";
-
-/** Each service's own mark, which leads its row as a provider's leads Settings › Integrations'. */
-const GITHUB_MARK = (
-  <SettingsRowMark>
-    <ProviderMark provider={INTEGRATION_PROVIDER.GITHUB} />
-  </SettingsRowMark>
-);
-
-const SENTRY_MARK = (
-  <SettingsRowMark>
-    <ProviderMark provider={INTEGRATION_PROVIDER.SENTRY} />
-  </SettingsRowMark>
-);
-
-const SLACK_MARK = (
-  <SettingsRowMark>
-    <ProviderMark provider={INTEGRATION_PROVIDER.SLACK} />
-  </SettingsRowMark>
-);
-
 /** The most rows that stand for the members while they are read, however many the workspace counts. */
 const MEMBERS_SKELETON_MOST = 5;
 
@@ -261,17 +191,10 @@ const INVITATION_ROW_SKELETON: SettingsRowSkeletonLayout = {
   end: [SETTINGS_SKELETON_CONTROL.MORE],
 };
 
-/** The services the Workspace connections group draws a row for, in order, each by its own row. */
-const WORKSPACE_INTEGRATIONS = [
-  { service: INTEGRATION_PROVIDER.GITHUB, Row: WorkspaceGitHub },
-  { service: INTEGRATION_PROVIDER.SLACK, Row: WorkspaceSlackBotRow },
-  { service: INTEGRATION_PROVIDER.SENTRY, Row: WorkspaceSentryRow },
-] as const;
-
 /**
  * The page's groups before the workspaces are read: the identity, unheaded,
  * its tile at a card's size; the members; and a row to each integration, its
- * mark leading and its press at its end.
+ * mark leading and its › at its end.
  */
 const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
@@ -287,10 +210,10 @@ const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   { headed: true, rows: [MEMBER_ROW_SKELETON] },
   {
     headed: true,
-    rows: WORKSPACE_INTEGRATIONS.map(() => ({
+    rows: Array.from({ length: WORKSPACE_SERVICE_COUNT }, () => ({
       described: true,
       mark: SETTINGS_ROW_MARK_WIDTH,
-      controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
+      controls: [],
       end: [SETTINGS_SKELETON_CONTROL.MORE],
     })),
   },
@@ -952,7 +875,7 @@ function InviteButton({ workspace }: { workspace: Workspace }): React.JSX.Elemen
 
   return (
     <div {...searchAnchorProps(SETTINGS_SECTION.INVITATIONS)}>
-      <Button variant={BUTTON_VARIANT.OUTLINE} onClick={invite.ask}>
+      <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={invite.ask}>
         Invite
       </Button>
       {invite.dialog}
@@ -1032,8 +955,8 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
             ),
             description: (
               <>
-                {INVITATION_WORDS.INVITED_AS(ROLE_WORDS[one.role])} · Expires{" "}
-                <ReplayMask>{dayAndTimeText(Date.parse(one.expiresAt))}</ReplayMask>
+                {INVITATION_WORDS.INVITED_AS(ROLE_WORDS[one.role])}, expires{" "}
+                <ReplayMask>{dayText(Date.parse(one.expiresAt))}</ReplayMask>
               </>
             ),
             // The service mails the accept link where the deployment names a sender; Copy link sends it by hand.
@@ -1063,526 +986,6 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
       />
     </>
   );
-}
-
-/**
- * The GitHub accounts connected to the workspace and active, the first
- * linked first: every one a service with several lists, else the one a
- * service from before them names. Note that one suspended or removed on
- * GitHub counts as none, because the store never forgets a removed one and
- * agents reach nothing through it.
- */
-function connectionsOf(workspace: Workspace): readonly ShownConnection[] {
-  const listed =
-    workspace.githubInstallations ?? (workspace.github === null ? [] : [workspace.github]);
-
-  return listed.filter((connection) => connection.active);
-}
-
-/**
- * The workspace's GitHub, for an owner or an admin: Connect while none is,
- * and once one is, a ⋯ whose menu holds Manage on GitHub, which opens the
- * same page, so the row ends as Integrations' rows do, in at most one
- * button (Add repository) and a ⋯. GitHub lists every account there, to
- * install the App on another or to configure one it is on, so one door does
- * both. The connect's return to the app adds the installation to this
- * workspace.
- */
-function ManagedGitHub({
-  workspace,
-  connections,
-  add,
-  addRefusal,
-  chevron,
-}: {
-  workspace: Workspace;
-  connections: readonly ShownConnection[];
-  /** Add repository, which stands before the row's own press and draws nothing without the reader's token. */
-  add: React.ReactNode;
-  /** What the last add was refused with, said under the row. */
-  addRefusal: string | undefined;
-  /** The chevron folding GitHub's accounts under the row, last among its controls, before its ⋯. */
-  chevron: React.ReactNode;
-}): React.JSX.Element {
-  const { mutateAsync: sendWorkspaceGithubConnect } = useMutation(
-    actMutation(ACT_KIND.WORKSPACE_GITHUB_CONNECT),
-  );
-
-  const workspaceId = workspace.id;
-  // Note that a second press while the browser is being sent is taken as none, because an install begun again replaces the first one's intent.
-  const opening = useAsyncAction(rejectionWords);
-
-  const open = () =>
-    void opening.run(() => sendWorkspaceGithubConnect({ workspaceId }).then(() => undefined));
-
-  const connected = connections.length > 0;
-
-  const actions = connected
-    ? [
-        [
-          {
-            label: "Manage on GitHub",
-            icon: <ExternalLinkIcon />,
-            disabled: opening.running,
-            onSelect: open,
-          },
-        ],
-      ]
-    : [];
-
-  return (
-    <Stack gap={GAP.NONE}>
-      <MenuRow
-        thing="GitHub"
-        actions={actions}
-        row={{
-          leading: GITHUB_MARK,
-          label: "GitHub",
-          description: connectionLine(connected, true),
-          error: replayMaskedError(
-            refusedShown(opening.refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
-          ),
-          control: (
-            <>
-              {add}
-              {connected ? null : (
-                <Button
-                  variant={BUTTON_VARIANT.OUTLINE}
-                  busy={opening.running}
-                  busyLabel="Connecting"
-                  onClick={open}
-                >
-                  {CONNECT}
-                </Button>
-              )}
-              {chevron}
-            </>
-          ),
-        }}
-      />
-    </Stack>
-  );
-}
-
-/**
- * The workspace's GitHub: an owner's or an admin's to connect, and for a
- * member, read only, or the ask to have it; then every account connected,
- * the same for both, and every owner of a repository a member added on
- * their own token (`workspace-token-repositories.tsx`), which a member
- * whose own token is saved adds from GitHub's row, and none else is
- * offered it.
- */
-function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Element {
-  const connections = connectionsOf(workspace);
-  const repositories = useTokenRepositories(workspace.id);
-  const [addRefusal, setAddRefusal] = useState<string>();
-
-  const add = (
-    <AddTokenRepository
-      workspaceId={workspace.id}
-      repositories={repositories}
-      onRefused={setAddRefusal}
-    />
-  );
-
-  // Note that the token rows say their read while it is out or failed, so GitHub folds those lines too.
-  const owns =
-    connections.length > 0 ||
-    repositories.read !== TOKEN_REPOSITORIES_READ.READY ||
-    repositories.listed.length > 0;
-
-  return (
-    <SettingsRowsFold
-      label={GITHUB_FOLD}
-      room={false}
-      head={(chevron) =>
-        managesWorkspace(workspace) ? (
-          <ManagedGitHub
-            workspace={workspace}
-            connections={connections}
-            add={add}
-            addRefusal={addRefusal}
-            chevron={chevron}
-          />
-        ) : (
-          <SettingsRow
-            leading={GITHUB_MARK}
-            label="GitHub"
-            description={connectionLine(connections.length > 0, false)}
-            error={replayMaskedError(refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB))}
-          >
-            {() => (
-              <>
-                {add}
-                {chevron}
-              </>
-            )}
-          </SettingsRow>
-        )
-      }
-      rows={
-        owns ? (
-          <>
-            <GitHubAccountRows workspaceId={workspace.id} connections={connections} />
-            <TokenOwnerRows repositories={repositories} />
-          </>
-        ) : undefined
-      }
-    />
-  );
-}
-
-/**
- * The workspace's Sentry, for an owner or an admin: Connect
- * while none stands, which opens Sentry's install page in the browser, an
- * install that could not be begun saying why under the row; and once one
- * stands, a ⋯ whose menu disconnects each installation, which asks first.
- * A disconnect stops its alerts firing this workspace's automations; the
- * integration stays installed on Sentry until the organization removes it
- * there, which the dialog says.
- */
-function ManagedSentry({
-  workspace,
-  sentry,
-}: {
-  workspace: Workspace;
-  sentry: WorkspaceSentry;
-}): React.JSX.Element {
-  const { mutateAsync: sendWorkspaceSentryInstall } = useMutation(
-    actMutation(ACT_KIND.WORKSPACE_SENTRY_INSTALL),
-  );
-
-  const { mutateAsync: sendWorkspaceSentryDisconnect, ...sentryLeaving } = useMutation(
-    actMutation(ACT_KIND.WORKSPACE_SENTRY_DISCONNECT),
-  );
-
-  const workspaceId = workspace.id;
-  const installing = useAsyncAction(rejectionWords);
-  const [leaving, setLeaving] = useState<WorkspaceSentryInstallation>();
-
-  const install = () =>
-    void installing.run(() => sendWorkspaceSentryInstall({ workspaceId }).then(() => undefined));
-
-  // Note that the question stands only while its installation is still listed, so a read that drops it dismisses it.
-  const stillListed =
-    leaving !== undefined &&
-    sentry.installations.some((one) => one.installationId === leaving.installationId);
-
-  const disconnectAct = useConfirmAct(sentryLeaving, {
-    send: () =>
-      leaving === undefined
-        ? Promise.resolve()
-        : sendWorkspaceSentryDisconnect({ workspaceId, installationId: leaving.installationId }),
-    answered: () => ANSWER_ACCEPTED,
-    failed: refusedWith,
-  });
-
-  const disconnect = useConfirmDialog(
-    { subject: stillListed, surfaceOpen: true },
-    disconnectAct,
-    confirmFailure(FAILURE_SURFACE.WORKSPACE_SENTRY_DISCONNECT),
-  );
-
-  const actions = [
-    sentry.installations.map((installation) => ({
-      // Note that a lone installation's act says only Disconnect, since the menu offers no other to tell it from.
-      label:
-        installation.account === undefined || sentry.installations.length === 1
-          ? "Disconnect"
-          : `Disconnect ${installation.account}`,
-      replayMasked: installation.account !== undefined && sentry.installations.length > 1,
-      danger: true,
-      onSelect: () => {
-        setLeaving(installation);
-        disconnect.ask();
-      },
-    })),
-  ].filter((group) => group.length > 0);
-
-  return (
-    <Stack gap={GAP.NONE}>
-      <MenuRow
-        thing="Sentry"
-        // Note that one installation's Disconnect stands in the ⋯ as several do, never as a glyph of its own beside the row's end, as Integrations' rows keep theirs.
-        actions={actions}
-        row={{
-          leading: SENTRY_MARK,
-          label: "Sentry",
-          description: connectionLine(sentry.installations.length > 0, true),
-          error: replayMaskedError(
-            refusedShown(installing.refusal, FAILURE_SURFACE.WORKSPACE_SENTRY),
-          ),
-          control:
-            sentry.installations.length > 0 ? null : (
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                busy={installing.running}
-                busyLabel="Opening Sentry"
-                onClick={install}
-              >
-                {CONNECT}
-              </Button>
-            ),
-        }}
-      />
-      <ConfirmDialog
-        open
-        confirm={disconnect}
-        question={{
-          title: `Disconnect Sentry from ${workspace.name}?`,
-          replayUnmasked: true,
-          titleReplayMasked: true,
-          body: `Its alerts and new issues stop triggering this workspace's automations. Uninstall ${PRODUCT_NAME} in Sentry's settings to remove it there too.`,
-          verb: "Disconnect Sentry",
-          running: "Disconnecting",
-          loss: CONFIRM_LOSS.AFFECTS_OTHERS,
-        }}
-      />
-    </Stack>
-  );
-}
-
-/**
- * The workspace's Sentry: drawn only where the deployment holds our
- * Sentry integration, an owner's or an admin's to install for everyone,
- * and for a member, read only, where it is installed or the ask to have it;
- * a read that did not land says so in the row's place, with Retry. It is
- * drawn as the host holds the workspace's integrations, followed live on
- * the service, so an install finished in the browser draws as it lands.
- */
-function WorkspaceSentryRow({ workspace }: { workspace: Workspace }): React.JSX.Element | null {
-  const read = useQuery(workspaceIntegrationsQuery(workspace.id));
-  const retry = useMutation(workspaceIntegrationsRetryMutation());
-
-  if (read.data === undefined) {
-    return read.isError ? (
-      <ReadFailed
-        line={WORKSPACE_READ_FAILED.SENTRY}
-        surface={FAILURE_SURFACE.WORKSPACE_SENTRY_READ}
-        onRetry={() => retry.mutate({ workspaceId: workspace.id })}
-      />
-    ) : null;
-  }
-
-  const { sentry } = read.data;
-
-  if (!sentry.configured) return null;
-
-  if (managesWorkspace(workspace)) {
-    return <ManagedSentry workspace={workspace} sentry={sentry} />;
-  }
-
-  return (
-    <SettingsRow
-      leading={SENTRY_MARK}
-      label="Sentry"
-      description={connectionLine(sentry.installations.length > 0, false)}
-    >
-      {() => null}
-    </SettingsRow>
-  );
-}
-
-/**
- * The workspace's Slack bot, for an owner or an admin: Connect
- * while it is not connected, which opens Slack's Add to Slack in the
- * browser, an install that could not be begun saying why under the row,
- * as Sentry's does: the browser's landing says how the install ended, and
- * the row says Connected once the held read carries the team; and
- * once it is, a ⋯ whose menu disconnects it, which asks first. A disconnect stops the bot writing to
- * the workspace's members; the bot stays installed in Slack, which the
- * dialog says. Add channel stands beside the ⋯ once Slack has listed the
- * team's channels (`channels`).
- */
-function ManagedSlackBot({
-  workspace,
-  slack,
-  channels,
-  chevron,
-}: {
-  workspace: Workspace;
-  slack: WorkspaceSlack;
-  channels: readonly SlackListedChannel[] | undefined;
-  /** The chevron folding the bot's rows under its row, last among its controls, before its ⋯. */
-  chevron: React.ReactNode;
-}): React.JSX.Element {
-  const { mutateAsync: sendWorkspaceSlackBotInstall } = useMutation(
-    actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL),
-  );
-
-  const { mutateAsync: sendWorkspaceSlackBotDisconnect, ...slackLeaving } = useMutation(
-    actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_DISCONNECT),
-  );
-
-  const workspaceId = workspace.id;
-  const [addRefusal, setAddRefusal] = useState<string>();
-  const installing = useAsyncAction(rejectionWords);
-
-  const install = () =>
-    void installing.run(() => sendWorkspaceSlackBotInstall({ workspaceId }).then(() => undefined));
-
-  const disconnectAct = useConfirmAct(slackLeaving, {
-    send: () => sendWorkspaceSlackBotDisconnect({ workspaceId }),
-    answered: () => ANSWER_ACCEPTED,
-    failed: refusedWith,
-  });
-
-  const disconnect = useConfirmDialog(
-    { subject: slack.team !== undefined, surfaceOpen: true },
-    disconnectAct,
-    confirmFailure(FAILURE_SURFACE.WORKSPACE_SLACK_BOT_DISCONNECT),
-  );
-
-  const actions =
-    slack.team === undefined
-      ? []
-      : [
-          [
-            {
-              label: "Disconnect",
-              danger: true,
-              onSelect: () => disconnect.ask(),
-            },
-          ],
-        ];
-
-  return (
-    <Stack gap={GAP.NONE}>
-      <MenuRow
-        thing="Slack"
-        actions={actions}
-        row={{
-          leading: SLACK_MARK,
-          label: "Slack",
-          description: connectionLine(slack.team !== undefined, true),
-          error: replayMaskedError(
-            refusedShown(installing.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
-              refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT_CHANNEL),
-          ),
-          control: (
-            <>
-              {slack.team !== undefined ? (
-                channels === undefined ? null : (
-                  <AddSlackChannel
-                    workspaceId={workspaceId}
-                    channels={channels}
-                    onRefused={setAddRefusal}
-                  />
-                )
-              ) : (
-                <Button
-                  variant={BUTTON_VARIANT.OUTLINE}
-                  busy={installing.running}
-                  busyLabel="Opening Slack"
-                  onClick={install}
-                >
-                  {CONNECT}
-                </Button>
-              )}
-              {chevron}
-            </>
-          ),
-        }}
-      />
-      <ConfirmDialog
-        open
-        confirm={disconnect}
-        question={{
-          title: `Disconnect the Slack bot from ${workspace.name}?`,
-          replayUnmasked: true,
-          titleReplayMasked: true,
-          body: `${PRODUCT_NAME} stops messaging this workspace's members in Slack. The bot stays installed in Slack until a Slack admin removes it.`,
-          verb: "Disconnect Slack bot",
-          running: "Disconnecting",
-          loss: CONFIRM_LOSS.AFFECTS_OTHERS,
-        }}
-      />
-    </Stack>
-  );
-}
-
-/**
- * An owner's or an admin's bot row, and folded under it, where the bot is
- * connected, its repositories and channels (`slack-bot-channels.tsx`): the
- * channels are Slack's own list, which the host holds while the row shows.
- */
-function ManagedSlackBotRows({
-  workspace,
-  slack,
-}: {
-  workspace: Workspace;
-  slack: WorkspaceSlack;
-}): React.JSX.Element {
-  const channels = useQuery(slackChannelsQuery(workspace.id));
-
-  return (
-    <SettingsRowsFold
-      label={SLACK_BOT_FOLD}
-      room={false}
-      head={(chevron) => (
-        <ManagedSlackBot
-          workspace={workspace}
-          slack={slack}
-          channels={channels.data}
-          chevron={chevron}
-        />
-      )}
-      rows={
-        slack.team === undefined ? undefined : (
-          <SlackBotChannelRows workspace={workspace} slack={slack} channels={channels.data} />
-        )
-      }
-    />
-  );
-}
-
-/** The bot's row, and folded under it, where the bot is connected and the reader manages the workspace, its repositories and channels. */
-function SlackBotRows({
-  workspace,
-  slack,
-}: {
-  workspace: Workspace;
-  slack: WorkspaceSlack;
-}): React.JSX.Element {
-  if (managesWorkspace(workspace))
-    return <ManagedSlackBotRows workspace={workspace} slack={slack} />;
-
-  return (
-    <SettingsRow
-      leading={SLACK_MARK}
-      label="Slack"
-      description={connectionLine(slack.team !== undefined, false)}
-    />
-  );
-}
-
-/**
- * The workspace's Slack bot: drawn only where the deployment holds
- * our bot, an owner's or an admin's to connect for everyone, and for a
- * member, read only, where it is connected or the ask to have it; the
- * reader's own Slack notifications stand on Preferences
- * (`slack-notifications-row.tsx`). A read that did not land says so in the row's place, with Retry. It is
- * drawn as the host holds the workspace's integrations, as Sentry's is.
- */
-function WorkspaceSlackBotRow({ workspace }: { workspace: Workspace }): React.JSX.Element | null {
-  const read = useQuery(workspaceIntegrationsQuery(workspace.id));
-  const retry = useMutation(workspaceIntegrationsRetryMutation());
-
-  if (read.data === undefined) {
-    return read.isError ? (
-      <ReadFailed
-        line={WORKSPACE_READ_FAILED.SLACK_BOT}
-        surface={FAILURE_SURFACE.WORKSPACE_SLACK_BOT_READ}
-        onRetry={() => retry.mutate({ workspaceId: workspace.id })}
-      />
-    ) : null;
-  }
-
-  const { slack } = read.data;
-
-  if (!slack.configured) return null;
-
-  return <SlackBotRows workspace={workspace} slack={slack} />;
 }
 
 /** What Settings' Workspace page is handed: the workspaces, the one the sidebar lists, and the fall back after a leave. */
@@ -1847,17 +1250,25 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
 }
 
 /**
- * The page for the listed workspace, the members and GitHub under the
- * anchors their links have always named; placeholder sections in the page's
- * shape before the workspaces are read, and Retry where that read failed.
+ * The page for the listed workspace, the members and Workspace connections
+ * under the anchors their links have always named, or in its place the page
+ * of its own one of Workspace connections' rows opened (`sub`); placeholder
+ * sections in the page's shape before the workspaces are read, and Retry
+ * where that read failed.
  */
 export function WorkspacePage({
   control,
   readerId,
+  sub,
+  onSubChange,
 }: {
   control: WorkspaceSettingsControl;
   /** The signed-in account's id, whose own member row wears You. */
   readerId: string | undefined;
+  /** The page of its own that stands in its place, GitHub's, Slack's, or Sentry's; none for the page itself. */
+  sub?: SettingsSubPage | undefined;
+  /** Opens a page of its own, as a row of Workspace connections does. */
+  onSubChange?: ((sub: SettingsSubPage | undefined) => void) | undefined;
 }): React.JSX.Element {
   const workspace = shownWorkspace(control);
 
@@ -1878,6 +1289,9 @@ export function WorkspacePage({
     );
   }
 
+  if (sub !== undefined)
+    return <WorkspaceIntegrationPage key={workspace.id} workspace={workspace} service={sub} />;
+
   // Keyed to the workspace, so another one listed reads its own members and asks nothing left over.
   return (
     <ShownWorkspace
@@ -1885,6 +1299,7 @@ export function WorkspacePage({
       control={control}
       workspace={workspace}
       readerId={readerId}
+      onOpen={(service) => onSubChange?.(service)}
     />
   );
 }
@@ -1894,10 +1309,13 @@ function ShownWorkspace({
   control,
   workspace,
   readerId,
+  onOpen,
 }: {
   control: WorkspaceSettingsControl;
   workspace: Workspace;
   readerId: string | undefined;
+  /** Opens the page of a row of Workspace connections. */
+  onOpen: (service: SettingsSubPage) => void;
 }): React.JSX.Element {
   const members = useMembersRead(workspace);
   const ownName = control.workspaces.find((each) => each.personal === true)?.name;
@@ -1920,9 +1338,7 @@ function ShownWorkspace({
         {managesWorkspace(workspace) ? <Invitations workspaceId={workspace.id} /> : null}
       </SettingsSection>
       <SettingsSection {...settingsSectionHead(SECTION_HEAD.WORKSPACE_CONNECTIONS)}>
-        {WORKSPACE_INTEGRATIONS.map(({ service, Row }) => (
-          <Row key={service} workspace={workspace} />
-        ))}
+        <WorkspaceConnectionRows workspace={workspace} onOpen={onOpen} />
       </SettingsSection>
       <LeaveGroup
         workspace={workspace}

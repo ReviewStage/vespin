@@ -20,7 +20,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
-import { dayAndTimeText } from "@repo/features/time-format";
+import { dayText } from "@repo/features/time-format";
 import type { WorkspaceSlack } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
 import {
@@ -49,7 +49,11 @@ import {
   WORKSPACE_ACT_KIND,
 } from "@repo/host/contract";
 import { SETTINGS_SEARCH_ANCHOR_ATTRIBUTE } from "@repo/settings/settings-anchors";
-import { SETTINGS_SECTION, type SettingsLink } from "@repo/settings/settings-views";
+import {
+  SETTINGS_SECTION,
+  type SettingsLink,
+  type SettingsSubPage,
+} from "@repo/settings/settings-views";
 import { ProviderMark, SettingsPage } from "@repo/ui";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -662,6 +666,8 @@ async function mount(
   workspace: Workspace,
   others: readonly Workspace[] = [],
   openPerson?: (userId: string, name?: string, workspaceId?: string) => void,
+  /** The page of its own a link lands on, in the Workspace page's place. */
+  landing?: SettingsSubPage,
 ) {
   const pressed = { left: 0 };
   const first = workspace.id === FIRST.id ? workspace : FIRST;
@@ -675,10 +681,14 @@ async function mount(
   const root = createRoot(container);
   roots.push(root);
 
-  const render = (workspaceId: string) => {
+  // Note that the page of its own a row opens stands in the page's place, as the window's address names it.
+  let sub = landing;
+  let shownId = workspace.id;
+
+  const draw = () => {
     const control: WorkspaceSettingsControl = {
       workspaces,
-      workspaceId,
+      workspaceId: shownId,
       listFailed: false,
       onRetryList: () => undefined,
       onLeft: () => {
@@ -686,28 +696,41 @@ async function mount(
       },
     };
 
-    act(() =>
-      root.render(
-        withQueryClient(
+    const props = {
+      control,
+      readerId: READER_ID,
+      sub,
+      onSubChange: (next: SettingsSubPage | undefined) => {
+        sub = next;
+        draw();
+      },
+    };
+
+    root.render(
+      withQueryClient(
+        createElement(
+          Fragment,
+          null,
           createElement(
-            Fragment,
-            null,
-            createElement(
-              OpenSettingsProvider,
-              { value: (_link: SettingsLink) => undefined },
-              openPerson === undefined
-                ? createElement(WorkspacePage, { control, readerId: READER_ID })
-                : createElement(
-                    OpenPersonProvider,
-                    { value: openPerson },
-                    createElement(WorkspacePage, { control, readerId: READER_ID }),
-                  ),
-            ),
-            createElement(ToastHost),
+            OpenSettingsProvider,
+            { value: (_link: SettingsLink) => undefined },
+            openPerson === undefined
+              ? createElement(WorkspacePage, props)
+              : createElement(
+                  OpenPersonProvider,
+                  { value: openPerson },
+                  createElement(WorkspacePage, props),
+                ),
           ),
+          createElement(ToastHost),
         ),
       ),
     );
+  };
+
+  const render = (workspaceId: string) => {
+    shownId = workspaceId;
+    act(draw);
   };
 
   render(workspace.id);
@@ -1746,11 +1769,11 @@ const SEVERAL: Workspace = {
   ],
 };
 
-/** The Workspace page's GitHub group, found by the anchor its links have always named. */
+/** The Workspace page's Workspace connections group, found by the anchor its links have always named. */
 const githubGroup = (page: HTMLElement) =>
   page.querySelector<HTMLElement>(
     `[${SETTINGS_SEARCH_ANCHOR_ATTRIBUTE}="${SETTINGS_SECTION.GITHUB_REPOSITORIES}"]`,
-  ) ?? assert.fail("no GitHub group");
+  ) ?? assert.fail("no Workspace connections group");
 
 /** What a row says: its name, and the line under it, its facts read apart by one space whatever joins or separates them. */
 const rowWords = (row: HTMLElement) => [
@@ -1763,29 +1786,32 @@ const rowWords = (row: HTMLElement) => [
     .trim(),
 ];
 
-/** What every row of the Integrations group says, in order. */
-const integrationRows = (page: HTMLElement) =>
-  [...githubGroup(page).querySelectorAll<HTMLElement>(ROWS)].flatMap((row) =>
+/** What every row within `within` says, in order. */
+const rowsOf = (within: HTMLElement) =>
+  [...within.querySelectorAll<HTMLElement>(ROWS)].flatMap((row) =>
     row.closest("[hidden]") === null ? [rowWords(row)] : [],
   );
 
-/** The chevrons folding an integration's own rows under its row. */
-const FOLD = { GITHUB: "GitHub accounts", SLACK_BOT: "Slack settings" } as const;
+/** What every row of Workspace connections says, in order. */
+const integrationRows = (page: HTMLElement) => rowsOf(githubGroup(page));
 
-/** The words of every button a row draws, bar the chevron folding its rows and its ⋯, which say none. */
+/** The words of every button a row draws, bar its whole-row press, a fold's chevron, and its ⋯, which say none. */
 const rowButtons = (row: HTMLElement) =>
   [...row.querySelectorAll("button")].flatMap(({ textContent: words }) =>
     words === "" ? [] : [words],
   );
 
-/** Opens the rows an integration's row folds under it, which start closed. */
-function unfold(page: HTMLElement, label: string): void {
-  const chevron =
-    page.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ??
-    assert.fail(`no ${label} fold`);
+/** Presses the Workspace connections row named `name`, which opens its own page in the Workspace page's place. */
+async function openService(page: HTMLElement, name: string): Promise<void> {
+  // Note that Slack's and Sentry's rows stand once the workspace's integrations reach their query.
+  const row = await vi.waitFor(() => rowNamed(githubGroup(page), name));
 
-  assert.equal(chevron.getAttribute("aria-expanded"), "false", `${label} starts folded`);
-  act(() => chevron.click());
+  const press =
+    row.querySelector<HTMLButtonElement>("button[data-card-press]") ??
+    assert.fail(`${name}'s row opens nothing`);
+
+  act(() => press.click());
+  await settle();
 }
 
 /** The row's ⋯, which opens its menu. */
@@ -1802,10 +1828,11 @@ const githubSent = () =>
       : [],
   );
 
-/** The words GitHub's row says once an account is connected, as every integration's does. */
-const MANAGED_ON_GITHUB = "Connected";
+/** What GitHub's row says while it holds nothing, to one who may connect it, and to a member. */
+const GITHUB_DOES = "The repositories agents work in";
+const GITHUB_ASK = `${GITHUB_DOES}. Ask an owner or admin to connect it.`;
 
-test("an owner or an admin of a connected workspace sees GitHub's row, led by its mark, with Add repository and a ⋯ holding Manage on GitHub, and every account connected under it", async () => {
+test("an owner or an admin of a connected workspace sees GitHub's row, led by its mark and saying its accounts, which opens GitHub's page: Manage on GitHub, then every account connected under Accounts and repositories", async () => {
   for (const role of [WORKSPACE_ROLE.OWNER, WORKSPACE_ROLE.ADMIN]) {
     const { page } = await mount({ ...SEVERAL, role });
     const group = githubGroup(page);
@@ -1816,29 +1843,31 @@ test("an owner or an admin of a connected workspace sees GitHub's row, led by it
       row.querySelector(".ui-settings-row-mark")?.innerHTML,
       renderToStaticMarkup(createElement(ProviderMark, { provider: INTEGRATION_PROVIDER.GITHUB })),
     );
-    assert.deepEqual(rowButtons(row), ["Add repository"], `a ${role}'s controls`);
-    assert.deepEqual(rowActions(row), ["Manage on GitHub"], `a ${role}'s ⋯`);
-    assert.deepEqual(integrationRows(page), [["GitHub", "Connected"]], "the accounts start folded");
-    unfold(page, FOLD.GITHUB);
-    assert.deepEqual(integrationRows(page), [
-      ["GitHub", "Connected"],
+    assert.deepEqual(rowButtons(row), [], `a ${role}'s row holds no control`);
+    assert.deepEqual(rowActions(row), [], `a ${role}'s row holds no ⋯`);
+    assert.deepEqual(integrationRows(page), [["GitHub", "acme-org, 0 repositories"]]);
+
+    await openService(page, "GitHub");
+    const head = rowNamed(page, "GitHub");
+
+    assert.deepEqual(rowButtons(head), ["Manage on GitHub"], `a ${role}'s controls`);
+    assert.deepEqual(
+      [...page.querySelectorAll("h2")].map((heading) => heading.textContent),
+      ["Accounts and repositories"],
+    );
+    assert.deepEqual(rowsOf(page), [
+      ["GitHub", "acme-org, 0 repositories"],
       ["acme-org", "0 repositories"],
     ]);
 
-    for (const name of ["acme-org"]) {
-      const account = rowNamed(group, name);
-      assert.equal(
-        account.querySelector(".ui-avatar[data-outline='tile']")?.textContent,
-        "A",
-        `${name}'s tile`,
-      );
-      assert.equal(
-        account.querySelector<HTMLImageElement>(".ui-avatar-picture")?.getAttribute("src"),
-        `https://github.com/${name}.png?size=32`,
-        `${name}'s picture is its own on GitHub`,
-      );
-      assert.deepEqual(rowButtons(account), [], `${name} offers nothing to press`);
-    }
+    const account = rowNamed(page, "acme-org");
+    assert.equal(account.querySelector(".ui-avatar[data-outline='tile']")?.textContent, "A");
+    assert.equal(
+      account.querySelector<HTMLImageElement>(".ui-avatar-picture")?.getAttribute("src"),
+      "https://github.com/acme-org.png?size=32",
+      "its picture is its own on GitHub",
+    );
+    assert.deepEqual(rowButtons(account), [], "an account offers nothing to press");
 
     for (const root of roots.splice(0)) act(() => root.unmount());
   }
@@ -1857,11 +1886,12 @@ test("an active account counts the App's repositories whose owner is its login i
   githubRepositories = ["acme-org/relay", "ACME-ORG/site", "acme-labs/old", "other/thing"];
   tokenReach = ["acme-org/forked"];
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
-  unfold(page, FOLD.GITHUB);
-  const group = githubGroup(page);
-  const org = rowNamed(group, "acme-org");
 
-  assert.deepEqual(integrationRows(page).slice(1), [["acme-org", "2 repositories"]]);
+  assert.deepEqual(integrationRows(page), [["GitHub", "acme-org, 2 repositories"]]);
+  await openService(page, "GitHub");
+  const org = rowNamed(page, "acme-org");
+
+  assert.deepEqual(rowsOf(page).slice(1), [["acme-org", "2 repositories"]]);
   assert.equal(foldOn(org).getAttribute("aria-label"), "acme-org's repositories");
   assert.deepEqual(foldLines(org), [], "a few repositories start folded too");
   act(() => foldOn(org).click());
@@ -1889,10 +1919,13 @@ test("an account given every repository says All N and folds every one open, and
     ],
   });
 
-  unfold(page, FOLD.GITHUB);
-  const org = rowNamed(githubGroup(page), "acme-org");
+  assert.deepEqual(integrationRows(page), [
+    ["GitHub", "acme-org, acme-labs-renamed, and acme-tools, 11 repositories"],
+  ]);
+  await openService(page, "GitHub");
+  const org = rowNamed(page, "acme-org");
 
-  assert.deepEqual(integrationRows(page).slice(1), [
+  assert.deepEqual(rowsOf(page).slice(1), [
     ["acme-org", "All 8 repositories"],
     ["acme-labs-renamed", "1 repository"],
     ["acme-tools", "2 repositories"],
@@ -1901,38 +1934,38 @@ test("an account given every repository says All N and folds every one open, and
   assert.deepEqual(foldLines(org), shown);
 });
 
-test("while the repositories are read each account's line says so, and a read that failed says so once with Retry rather than as none, which reads them again", async () => {
+test("while the repositories are read each account's line says so, and GitHub's names its accounts alone, and a read that failed says so once with Retry rather than as none, which reads them again", async () => {
   repositoriesReadHeld = true;
   const reading = await mount(SEVERAL);
-  unfold(reading.page, FOLD.GITHUB);
-  assert.deepEqual(integrationRows(reading.page).slice(1), [["acme-org", "Reading repositories"]]);
+  assert.deepEqual(integrationRows(reading.page), [["GitHub", "acme-org"]]);
+  await openService(reading.page, "GitHub");
+  assert.deepEqual(rowsOf(reading.page).slice(1), [["acme-org", "Reading repositories"]]);
 
   for (const root of roots.splice(0)) act(() => root.unmount());
 
   repositoriesReadHeld = false;
   repositoriesReadFails = true;
   const { page } = await mount(SEVERAL);
-  unfold(page, FOLD.GITHUB);
-  const group = githubGroup(page);
-  await vi.waitFor(() =>
-    assert.deepEqual(integrationRows(page).slice(1, 2), [["acme-org", undefined]]),
-  );
-  assert.equal(group.textContent?.includes("Repositories could not be read."), true);
+  await openService(page, "GitHub");
+  await vi.waitFor(() => assert.deepEqual(rowsOf(page).slice(1, 2), [["acme-org", undefined]]));
+  assert.equal(page.textContent?.includes("Repositories could not be read."), true);
 
   repositoriesReadFails = false;
   githubRepositories = ["acme-org/relay"];
-  act(() => button(group, "Retry").click());
+  act(() => button(page, "Retry").click());
   await settle();
   await vi.waitFor(() =>
-    assert.deepEqual(integrationRows(page).slice(1, 2), [["acme-org", "1 repository"]]),
+    assert.deepEqual(rowsOf(page).slice(1, 2), [["acme-org", "1 repository"]]),
   );
-  assert.equal(group.textContent?.includes("Repositories could not be read."), false);
+  assert.equal(page.textContent?.includes("Repositories could not be read."), false);
 });
 
-test("Manage on GitHub opens GitHub through the same connect as Connect, and nothing on the page disconnects GitHub", async () => {
+test("Manage on GitHub opens GitHub through the same connect as Connect, and nothing on GitHub's page disconnects GitHub", async () => {
   const { page } = await mount(SEVERAL);
+  await openService(page, "GitHub");
 
-  await chooseAction(rowNamed(page, "GitHub"), "Manage on GitHub");
+  act(() => button(rowNamed(page, "GitHub"), "Manage on GitHub").click());
+  await settle();
 
   assert.equal(page.textContent?.includes("Disconnect"), false);
   assert.deepEqual(githubSent(), [
@@ -1943,14 +1976,13 @@ test("Manage on GitHub opens GitHub through the same connect as Connect, and not
 test("a service from before several connections names one GitHub account alone, which is listed as the only one", async () => {
   const { githubInstallations: _dropped, ...legacy } = CONNECTED;
   const { page } = await mount(legacy);
-  unfold(page, FOLD.GITHUB);
+  await openService(page, "GitHub");
 
-  assert.deepEqual(integrationRows(page), [
-    ["GitHub", "Connected"],
+  assert.deepEqual(rowsOf(page), [
+    ["GitHub", "acme-org, 0 repositories"],
     ["acme-org", "0 repositories"],
   ]);
-  assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), ["Add repository"]);
-  assert.deepEqual(rowActions(rowNamed(page, "GitHub")), ["Manage on GitHub"]);
+  assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), ["Manage on GitHub"]);
 });
 
 test("Escape in a member's menu hands focus back to its ⋯", async () => {
@@ -1970,20 +2002,22 @@ test("Escape in a member's menu hands focus back to its ⋯", async () => {
   assert.equal(ellipsis.getAttribute("aria-expanded"), "false");
 });
 
-test("a GitHub page the browser could not open is said under the row, from Manage on GitHub and Connect alike", async () => {
+test("a GitHub page the browser could not open is said under the row, from Manage on GitHub on GitHub's page and Connect on its row alike", async () => {
   refuseGitHubOpen = true;
   const managed = await mount(CONNECTED);
-  await chooseAction(rowNamed(managed.page, "GitHub"), "Manage on GitHub");
+  await openService(managed.page, "GitHub");
+  act(() => button(rowNamed(managed.page, "GitHub"), "Manage on GitHub").click());
+  await settle();
   const unconnected = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   act(() => button(rowNamed(unconnected.page, "GitHub"), "Connect").click());
   await settle();
 
-  for (const { page } of [managed, unconnected]) {
-    assert.equal(refusalOf(githubGroup(page)), "Vespin could not open your browser.");
+  for (const row of [rowNamed(managed.page, "GitHub"), rowNamed(unconnected.page, "GitHub")]) {
+    assert.equal(refusalOf(row), "Vespin could not open your browser.");
   }
 });
 
-test("an owner or an admin of a workspace with no GitHub, or none still active, is offered Connect beside Add repository, which opens the same connect", async () => {
+test("an owner or an admin of a workspace with no GitHub, or none still active, is told what it does and offered Connect on its row and on its page, which open the same connect", async () => {
   // Note that the admin's workspace holds one installation GitHub suspended or removed, which counts as none.
   const inactive = [{ installationId: 12, login: "acme-labs", active: false }];
 
@@ -1992,38 +2026,39 @@ test("an owner or an admin of a workspace with no GitHub, or none still active, 
     const { page } = await mount({ ...ACME, role, githubInstallations: installations });
     const row = rowNamed(page, "GitHub");
 
-    assert.deepEqual(rowWords(row), ["GitHub", "Not connected."]);
-    assert.deepEqual(rowButtons(row), ["Add repository", "Connect"]);
+    assert.deepEqual(rowButtons(row), ["Connect"]);
     assert.equal(row.querySelector('[aria-haspopup="menu"]'), null);
-    assert.deepEqual(integrationRows(page), [["GitHub", "Not connected."]]);
+    assert.deepEqual(integrationRows(page), [["GitHub", GITHUB_DOES]]);
     act(() => button(row, "Connect").click());
+    await settle();
+    await openService(page, "GitHub");
+    assert.deepEqual(rowsOf(page), [
+      ["GitHub", GITHUB_DOES],
+      ["No repositories yet", undefined],
+    ]);
+    act(() => button(rowNamed(page, "GitHub"), "Connect").click());
     await settle();
   }
 
-  assert.deepEqual(githubSent(), [
-    [ACT_KIND.WORKSPACE_GITHUB_CONNECT, { workspaceId: ACME.id }],
-    [ACT_KIND.WORKSPACE_GITHUB_CONNECT, { workspaceId: ACME.id }],
-  ]);
+  assert.deepEqual(
+    githubSent(),
+    Array.from({ length: 4 }, () => [ACT_KIND.WORKSPACE_GITHUB_CONNECT, { workspaceId: ACME.id }]),
+  );
 });
 
-test("a member reads every account connected, or is told to ask an owner or admin, and is offered Add repository alone: no Manage on GitHub, Connect, or right-click menu", async () => {
+test("a member reads every account connected, or is told to ask an owner or admin, and is offered Add repository alone on GitHub's page: no Manage on GitHub, Connect, or right-click menu", async () => {
   const connected = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
   const unconnected = await mount(ACME);
-  unfold(connected.page, FOLD.GITHUB);
 
-  assert.deepEqual(integrationRows(connected.page), [
-    ["GitHub", MANAGED_ON_GITHUB],
-    ["acme-org", "0 repositories"],
-  ]);
-  assert.deepEqual(integrationRows(unconnected.page), [
-    ["GitHub", "Not connected. Ask an owner or admin."],
-  ]);
+  assert.deepEqual(integrationRows(connected.page), [["GitHub", "acme-org, 0 repositories"]]);
+  assert.deepEqual(integrationRows(unconnected.page), [["GitHub", GITHUB_ASK]]);
 
   for (const { page } of [connected, unconnected]) {
-    const group = githubGroup(page);
-    assert.deepEqual(rowButtons(group), ["Add repository"]);
+    assert.deepEqual(rowButtons(githubGroup(page)), []);
+    await openService(page, "GitHub");
+    assert.deepEqual(rowButtons(page), ["Add repository"]);
 
-    for (const row of group.querySelectorAll<HTMLElement>(ROWS)) {
+    for (const row of page.querySelectorAll<HTMLElement>(ROWS)) {
       act(() => {
         row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
       });
@@ -2039,11 +2074,14 @@ test("the repositories members added on their tokens stand by owner after the Ap
     { fullName: "ACME/notes", addedBy: READER_ID, addedAt: 1, removable: true },
   ];
   const { page } = await mount(SEVERAL);
-  unfold(page, FOLD.GITHUB);
-  const group = githubGroup(page);
 
   assert.deepEqual(integrationRows(page), [
-    ["GitHub", "Connected"],
+    ["GitHub", "acme-org, acme, and octo-member, 3 repositories"],
+  ]);
+  await openService(page, "GitHub");
+  const group = page;
+
+  assert.deepEqual(rowsOf(page).slice(1), [
     ["acme-org", "0 repositories"],
     ["acme", "2 repositories"],
     ["octo-member", "1 repository"],
@@ -2067,7 +2105,7 @@ test("the repositories members added on their tokens stand by owner after the Ap
     [{ workspaceId: SEVERAL.id, repository: "acme/relay", added: false }],
   );
   await vi.waitFor(() =>
-    assert.deepEqual(integrationRows(page).slice(2), [
+    assert.deepEqual(rowsOf(page).slice(2), [
       ["ACME", "1 repository"],
       ["octo-member", "1 repository"],
     ]),
@@ -2081,8 +2119,9 @@ test("Add repository offers the repositories the reader's own token may push to 
     { fullName: "octo-member/notes", addedBy: MEMBER.userId, addedAt: 1, removable: false },
   ];
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
+  await openService(page, "GitHub");
 
-  act(() => button(rowNamed(page, "GitHub"), "Add repository").click());
+  act(() => button(page, "Add repository").click());
   await settle();
   const offered = [...document.querySelectorAll('[role="option"]')].map(optionWords);
   const side = document.querySelector<HTMLElement>('[role="option"]') ?? assert.fail("no option");
@@ -2096,10 +2135,9 @@ test("Add repository offers the repositories the reader's own token may push to 
       .map((one) => one.payload),
     [{ workspaceId: SEVERAL.id, repository: "octo-member/side", added: true }],
   );
-  unfold(page, FOLD.GITHUB);
-  act(() => foldOn(rowNamed(githubGroup(page), "octo-member")).click());
+  act(() => foldOn(rowNamed(page, "octo-member")).click());
   await vi.waitFor(() =>
-    assert.deepEqual(foldLines(rowNamed(githubGroup(page), "octo-member")), [
+    assert.deepEqual(foldLines(rowNamed(page, "octo-member")), [
       "octo-member/sideToken",
       "octo-member/notesToken",
     ]),
@@ -2111,8 +2149,9 @@ test("Add repository offers the token's repositories from a service older than a
   githubRepositories = ["acme/relay"];
   tokenReach = ["octo-member/side"];
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
+  await openService(page, "GitHub");
 
-  act(() => button(rowNamed(page, "GitHub"), "Add repository").click());
+  act(() => button(page, "Add repository").click());
   await settle();
 
   assert.deepEqual([...document.querySelectorAll('[role="option"]')].map(optionWords), [
@@ -2120,20 +2159,24 @@ test("Add repository offers the token's repositories from a service older than a
   ]);
 });
 
-test("with no token saved, GitHub's row offers no Add repository, to an owner, an admin, or a member", async () => {
+test("with no token saved, GitHub's page offers no Add repository, to an owner, an admin, or a member", async () => {
   tokenSaved = false;
 
   for (const role of Object.values(WORKSPACE_ROLE)) {
     const { page } = await mount({ ...SEVERAL, role });
+    await openService(page, "GitHub");
 
-    assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), [], `a ${role}'s controls`);
+    assert.equal(buttons(page, "Add repository").length, 0, `a ${role}'s controls`);
+
+    for (const root of roots.splice(0)) act(() => root.unmount());
   }
 });
 
 test("with a token saved and nothing left to add, Add repository still says there are no repositories", async () => {
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
+  await openService(page, "GitHub");
 
-  act(() => button(rowNamed(page, "GitHub"), "Add repository").click());
+  act(() => button(page, "Add repository").click());
   await settle();
 
   assert.match(document.querySelector('[role="dialog"]')?.textContent ?? "", /No repositories/u);
@@ -2153,8 +2196,9 @@ test("Add repository draws each repository as the repository chip's menu does, b
     "side-org/zed",
   ];
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
+  await openService(page, "GitHub");
 
-  act(() => button(rowNamed(page, "GitHub"), "Add repository").click());
+  act(() => button(page, "Add repository").click());
   await settle();
 
   const zed = () =>
@@ -2185,7 +2229,7 @@ test("the token repositories say Reading while they are read, and a refused read
     release = resolve;
   });
   const { page } = await mount({ ...SEVERAL, role: WORKSPACE_ROLE.MEMBER });
-  unfold(page, FOLD.GITHUB);
+  await openService(page, "GitHub");
   const reading = page.textContent?.includes("Reading token repositories");
   release();
   await settle();
@@ -2204,7 +2248,7 @@ test("the token repositories say Reading while they are read, and a refused read
     assert.doesNotMatch(page.textContent ?? "", /Reading token|token repositories could not/u),
   );
   assert.deepEqual(
-    integrationRows(page).map(([name]) => name),
+    rowsOf(page).map(([name]) => name),
     ["GitHub", "acme-org"],
     "the retry read a workspace with none",
   );
@@ -2412,7 +2456,7 @@ test("the owner invites an address as a role, sees it pending with its link to c
   ]);
   assert.deepEqual(listed, [
     "alan@example.com",
-    `Invited as Admin · Expires ${dayAndTimeText(Date.parse("2026-10-16T12:00:00.000Z"))}`,
+    `Invited as Admin, expires ${dayText(Date.parse("2026-10-16T12:00:00.000Z"))}`,
   ]);
   assert.equal(
     face,
@@ -2666,13 +2710,17 @@ const sentryFailure = (page: HTMLElement) =>
     (each) => each.textContent === "The workspace's Sentry could not be read.Retry",
   );
 
+/** What Sentry's and Slack's rows say they do while none is connected, to one who may connect it. */
+const SENTRY_DOES = "Alerts and new issues start automations";
+const SLACK_DOES = "Start agents from Slack and hear back there";
+
 test("a Disconnect still being asked is dismissed once the read finds its installation gone", async () => {
   sentry = SENTRY_INSTALLED;
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
+  await openService(page, "Sentry");
 
-  // Note that the Sentry row stands once the workspace's integrations reach their query.
-  const row = await vi.waitFor(() => rowNamed(githubGroup(page), "Sentry"));
-  await chooseAction(row, "Disconnect");
+  act(() => button(rowNamed(page, "Disconnect Sentry"), "Disconnect").click());
+  await settle();
   const asked = document.querySelector('[role="alertdialog"]') !== null;
   sentry = { configured: true, installations: [] };
   act(() => layIntegrations(ACME.id));
@@ -2692,6 +2740,20 @@ test("Integrations draws no Sentry row where the service holds no Sentry integra
   assert.equal(sentryFailure(page), undefined);
 });
 
+test("a link to Sentry's page where the service holds no Sentry integration says so, and offers no Connect", async () => {
+  const { page } = await mount(
+    { ...ACME, role: WORKSPACE_ROLE.ADMIN },
+    [],
+    undefined,
+    INTEGRATION_PROVIDER.SENTRY,
+  );
+
+  await vi.waitFor(() =>
+    assert.deepEqual(rowsOf(page), [["Sentry", "Sentry isn't available here."]]),
+  );
+  assert.deepEqual(rowButtons(page), []);
+});
+
 test("a Sentry read that failed says so with Retry, for a member too, and Retry reads it again", async () => {
   sentry = undefined;
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.MEMBER });
@@ -2705,24 +2767,29 @@ test("a Sentry read that failed says so with Retry, for a member too, and Retry 
   assert.equal(failed, true);
   // Note that the failure is checked as a yes or no, because a failure's diff of an element would print the whole document.
   await vi.waitFor(() => assert.equal(sentryFailure(page) === undefined, true));
-  assert.deepEqual(rowWords(rowNamed(githubGroup(page), "Sentry")), ["Sentry", "Connected"]);
+  assert.deepEqual(rowWords(rowNamed(githubGroup(page), "Sentry")), [
+    "Sentry",
+    "acme's alerts and new issues start automations",
+  ]);
 });
 
-test("an admin installs Sentry for the workspace from its row, which opens Sentry at once", async () => {
+test("an admin installs Sentry for the workspace from its row, which opens Sentry at once and opens no page", async () => {
   sentry = { configured: true, installations: [] };
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
-  const row = rowNamed(githubGroup(page), "Sentry");
+  const row = await vi.waitFor(() => rowNamed(githubGroup(page), "Sentry"));
   const before = rowWords(row);
+  const press = row.querySelector("button[data-card-press]");
 
   act(() => button(row, "Connect").click());
   await settle();
 
-  assert.deepEqual(before, ["Sentry", "Not connected."]);
+  assert.deepEqual(before, ["Sentry", SENTRY_DOES]);
+  assert.equal(press, null);
   assert.equal(document.querySelector('[role="alertdialog"]'), null);
   assert.deepEqual(sentrySent(), [[ACT_KIND.WORKSPACE_SENTRY_INSTALL, { workspaceId: ACME.id }]]);
 });
 
-test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, which asks first, and a member sees it read only", async () => {
+test("an installed workspace's Sentry row says whose alerts start automations and opens its page, whose Disconnect asks first; a member reads the page with nothing to press", async () => {
   sentry = SENTRY_INSTALLED;
   const admin = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   // Note that each row stands, and moves, once the workspace's integrations reach their query.
@@ -2730,15 +2797,14 @@ test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, 
   const words = rowWords(row);
   const acts = rowActions(row);
 
-  await chooseAction(row, "Disconnect");
+  await openService(admin.page, "Sentry");
+  const shown = rowsOf(admin.page);
+  act(() => button(rowNamed(admin.page, "Disconnect Sentry"), "Disconnect").click());
+  await settle();
   await confirm("Disconnect Sentry");
   await vi.waitFor(() =>
-    assert.deepEqual(rowWords(rowNamed(githubGroup(admin.page), "Sentry")), [
-      "Sentry",
-      "Not connected.",
-    ]),
+    assert.deepEqual(rowWords(rowNamed(admin.page, "Sentry")), ["Sentry", SENTRY_DOES]),
   );
-  const after = rowWords(rowNamed(githubGroup(admin.page), "Sentry"));
 
   for (const root of roots.splice(0)) act(() => root.unmount());
   // Note that the member's page reads its own world, never the integrations the admin's page left cached.
@@ -2746,23 +2812,32 @@ test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, 
   sentry = SENTRY_INSTALLED;
   const member = await mount({ ...ACME, role: WORKSPACE_ROLE.MEMBER });
   const memberRow = await vi.waitFor(() => rowNamed(githubGroup(member.page), "Sentry"));
+  const memberWords = rowWords(memberRow);
+  await openService(member.page, "Sentry");
 
-  assert.deepEqual(words, ["Sentry", "Connected"]);
-  assert.deepEqual(acts, ["Disconnect"]);
+  assert.deepEqual(words, ["Sentry", "acme's alerts and new issues start automations"]);
+  assert.deepEqual(acts, []);
+  assert.deepEqual(shown, [
+    ["acme", "Its alerts and new issues start this workspace's automations"],
+    [
+      "Disconnect Sentry",
+      "Its alerts and new issues stop triggering this workspace's automations.",
+    ],
+  ]);
   assert.deepEqual(sentrySent(), [
     [
       ACT_KIND.WORKSPACE_SENTRY_DISCONNECT,
       { workspaceId: ACME.id, installationId: "installation-1" },
     ],
   ]);
-  assert.deepEqual(after, ["Sentry", "Not connected."]);
-  assert.deepEqual(rowWords(memberRow), ["Sentry", "Connected"]);
-  assert.deepEqual(rowButtons(memberRow), []);
+  assert.deepEqual(memberWords, words);
+  assert.deepEqual(rowsOf(member.page), shown.slice(0, 1));
+  assert.deepEqual(rowButtons(member.page), []);
 });
 
 const SLACK_TEAM = { id: "T0001", name: "Acme Slack" };
 
-test("an admin connects the Slack bot with Add to Slack, which then says Connected once the install lands, and disconnects it after asking; a member sees it read only", async () => {
+test("an admin connects the Slack bot with Add to Slack, whose row then names its Slack workspace and opens its page, whose Disconnect asks first; a member reads the page with nothing to press", async () => {
   slackBot = { configured: true };
   const admin = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   const slackRow = () => rowNamed(githubGroup(admin.page), "Slack");
@@ -2771,13 +2846,16 @@ test("an admin connects the Slack bot with Add to Slack, which then says Connect
 
   act(() => button(slackRow(), "Connect").click());
   await settle();
-  await vi.waitFor(() => assert.deepEqual(rowWords(slackRow()), ["Slack", "Connected"]));
-  const connected = rowWords(slackRow());
+  await vi.waitFor(() =>
+    assert.deepEqual(rowWords(slackRow()), ["Slack", "The Acme Slack workspace"]),
+  );
   const acts = rowActions(slackRow());
-  await chooseAction(slackRow(), "Disconnect");
+  await openService(admin.page, "Slack");
+  const headings = [...admin.page.querySelectorAll("h2")].map((heading) => heading.textContent);
+  act(() => button(rowNamed(admin.page, "Disconnect Slack"), "Disconnect").click());
+  await settle();
   await confirm("Disconnect Slack bot");
-  await vi.waitFor(() => assert.deepEqual(rowWords(slackRow()), before));
-  const after = rowWords(slackRow());
+  await vi.waitFor(() => assert.deepEqual(rowWords(rowNamed(admin.page, "Slack")), before));
 
   for (const root of roots.splice(0)) act(() => root.unmount());
   // Note that the member's page reads its own world, never the integrations the admin's page left cached.
@@ -2785,19 +2863,21 @@ test("an admin connects the Slack bot with Add to Slack, which then says Connect
   slackBot = { configured: true, team: SLACK_TEAM };
   const member = await mount({ ...ACME, role: WORKSPACE_ROLE.MEMBER });
   const memberRow = await vi.waitFor(() => rowNamed(githubGroup(member.page), "Slack"));
+  const memberWords = rowWords(memberRow);
+  await openService(member.page, "Slack");
 
-  assert.deepEqual(before, ["Slack", "Not connected."]);
+  assert.deepEqual(before, ["Slack", SLACK_DOES]);
   assert.deepEqual(
     sent.flatMap((request) =>
       request.kind === ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL ? [request.payload] : [],
     ),
     [{ workspaceId: ACME.id }],
   );
-  assert.deepEqual(connected, ["Slack", "Connected"]);
-  assert.deepEqual(acts, ["Disconnect"]);
-  assert.deepEqual(after, before);
-  assert.deepEqual(rowWords(memberRow), ["Slack", "Connected"]);
-  assert.deepEqual(rowButtons(memberRow), []);
+  assert.deepEqual(acts, []);
+  assert.deepEqual(headings, ["Channels"]);
+  assert.deepEqual(memberWords, ["Slack", "The Acme Slack workspace"]);
+  assert.deepEqual(rowsOf(member.page), [["Slack", "The Acme Slack workspace"]]);
+  assert.deepEqual(rowButtons(member.page), []);
 });
 
 test("in the window, each member's ⋯ opens their profile in the workspace the page shows, whose page holds their Copy link", async () => {

@@ -3,6 +3,7 @@ import { installedSkillsContract } from "./contract/installed-skills.js";
 import { failureFactsSchema } from "./failure-facts.js";
 import { answerView, failureSetOf } from "./hosted-failure.js";
 import {
+  installedSkillImportRequestSchema,
   installedSkillInstallAnswerSchema,
   installedSkillInstallRequestSchema,
   installedSkillPreviewRequestSchema,
@@ -65,6 +66,9 @@ export const installedSkillPreviewParamsSchema = installedSkillPreviewRequestSch
 export const installedSkillInstallParamsSchema = installedSkillInstallRequestSchema;
 
 export type InstalledSkillInstallParams = typeof installedSkillInstallParamsSchema.Type;
+
+/** One skill's folder read from a Mac, installed as the service takes it. */
+export const installedSkillImportParamsSchema = installedSkillImportRequestSchema;
 
 /** One skill, by id. */
 export const installedSkillIdParamsSchema = EffectSchema.Struct({ skillId: wireUuidSchema });

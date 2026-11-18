@@ -231,6 +231,8 @@ function publishLines(
  * repository, a pull request by its own address, never a bare `#42`, its
  * task, and a thing of ours by its kind and id under the workspace's
  * address (`../link-rule.ts` says the same to other authors at length).
+ * A person is tagged by their mention link, which a teammate's words
+ * arrive behind (`../attached-files.ts`'s `senderLabel`).
  */
 function namingLines(
   repository: string | null,
@@ -249,6 +251,7 @@ function namingLines(
   return [
     `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${file} a pull request \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\` (never a bare \`#42\`), or your task \`[@<its name>](${ownTask.link})\`.`,
     `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`,${item} or \`/task/<task-id>/page/<page-id>\`.`,
+    "Tag a person by their mention link, never a bare `@Name`.",
   ];
 }
 
@@ -265,7 +268,8 @@ interface QueueUntold {
  * developer's sidebar until they move it by hand. The agent keeps it
  * current in the order the task menu lists them: Backlog when set aside,
  * To do when it waits on another task, In progress while open or waiting,
- * Done once its work is finished, and Canceled when dropped. Done
+ * Done once its work is done and the developer will not follow up, or
+ * they asked, and Canceled when dropped. Done
  * withdraws the task's open asks and archives its agents, the one that
  * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
  * on both; a turn starting on the task moves it back into progress from
@@ -290,12 +294,11 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
       ? ""
       : ` Nothing tells you ${missed.join(" or ")}, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`;
 
-  const done = publishes
-    ? `Mark it Done before your last message, once your pull requests merged or closed, no ask is open on the task, and no other agent on it is at work; work with no pull request is finished once its result is ready.${watch}`
-    : "Mark it Done before your last message, once its result is ready, no ask is open on the task, and no other agent on it is at work.";
+  const merged = publishes ? " (your pull requests merged or closed)" : "";
+  const done = `Mark it Done when the developer asks, or once its work is done${merged}, you are confident they won't follow up, no ask is open on it, and no other agent on it is at work. Answering a question or ending a turn is not done; when unsure, leave it In progress.${publishes ? watch : ""}`;
 
   return [
-    `Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\`: Backlog when the developer sets it aside, To do when it waits on another task, In progress while you work or wait on a review, a merge, or the developer, Done once the work is finished, and Canceled when the developer drops it.`,
+    `Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\`: Backlog when the developer sets it aside, To do when it waits on another task, In progress while you work or wait on a review, a merge, or the developer, Done as below, and Canceled when the developer drops it.`,
     done,
   ];
 }

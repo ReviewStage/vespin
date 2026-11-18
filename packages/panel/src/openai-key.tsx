@@ -58,7 +58,7 @@ export function OpenAiKeyProvider({
   const { data: rows } = useQuery(providerKeysQuery(account));
   const key = useMemo(() => (rows === undefined ? OPENAI_KEY.UNKNOWN : keyOf(rows.keys)), [rows]);
 
-  return <OpenAiKeyContext.Provider value={key}>{children}</OpenAiKeyContext.Provider>;
+  return <OpenAiKeyContext value={key}>{children}</OpenAiKeyContext>;
 }
 
 /** Whether the account is known to have no OpenAI API key; false while nothing is known. */

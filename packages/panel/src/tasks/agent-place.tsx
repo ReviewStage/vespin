@@ -89,7 +89,7 @@ import {
  */
 
 /** What a reader hears before the name, which the glyph says to the eye. */
-const RUNS_ON = "Runs on: ";
+const RUNS_ON = "Machine: ";
 
 /** What a device the label names is said to be, where it is not simply there. */
 const STANDING_WORDS = {
@@ -360,7 +360,7 @@ function useMoveMenu(
  * opens its popover, headed "Where this agent works" as the Cloud chip's
  * is, with no facts, since the Agent runs in row's dot says whether the
  * device is online; otherwise the static chip and its card, the glyph, the
- * words a reader hears after "Runs on:", and the card's head and note.
+ * words a reader hears after "Machine:", and the card's head and note.
  * Note that an offline device keeps no attention tone on the popover's
  * chip, since a control takes none; its words still say it is offline.
  */

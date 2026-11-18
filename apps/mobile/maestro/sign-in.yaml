@@ -76,8 +76,8 @@ appId: dev.vespin.ios
 # Note that the account's row stands last in the list, below the fold at an
 # accessibility text size, so the list scrolls to it first.
 - scrollUntilVisible:
-    element: "Settings, .*"
-- tapOn: "Settings, .*"
+    element: "Settings(, .*)?"
+- tapOn: "Settings(, .*)?"
 - assertVisible: "Ada Lovelace"
 # The workspace the app works in stands under the account, the signed-in
 # account's own one first; the switcher in the bar chooses among the others.

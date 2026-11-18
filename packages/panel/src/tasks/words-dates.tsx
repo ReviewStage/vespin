@@ -70,12 +70,12 @@ export function WordsDatePickerRoom({ children }: { children: ReactNode }): Reac
   const picker = useDatePicker(room);
 
   return (
-    <WordsDatePickerContext.Provider value={picker.open}>
+    <WordsDatePickerContext value={picker.open}>
       {children}
       <div ref={room} className="pointer-events-none absolute inset-0 m-0 *:pointer-events-auto">
         {picker.popover}
       </div>
-    </WordsDatePickerContext.Provider>
+    </WordsDatePickerContext>
   );
 }
 

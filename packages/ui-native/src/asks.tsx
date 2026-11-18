@@ -239,8 +239,24 @@ export function ConfirmAsk(props: ConfirmAskProps) {
   return props.gate === undefined ? (
     <SystemConfirm {...props} compact={compact} />
   ) : (
-    <GatedConfirm {...props} />
+    <AskedGatedConfirm {...props} />
   );
+}
+
+/**
+ * A gated ask, drawn from the first time it is asked and kept after, so its
+ * alert's host is built as the person asks rather than as the page that
+ * offers it opens. Note that it isn't drawn before, because building the
+ * host and its field took Workspace settings' first open some 0.4 to 1.5 s
+ * on an iPhone simulator, for an ask most opens never make.
+ */
+function AskedGatedConfirm(props: ConfirmAskProps) {
+  const [asked, setAsked] = useState(props.presented);
+
+  // Note that the ask is marked asked as it renders, React's way of keeping what an earlier render saw, so its first presented render already draws it.
+  if (props.presented && !asked) setAsked(true);
+
+  return asked ? <GatedConfirm {...props} /> : null;
 }
 
 /** A question a row's own act asks first, such as a task's Permanently delete or an agent's Archive, which stands by that row. */

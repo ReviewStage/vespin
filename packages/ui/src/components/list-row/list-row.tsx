@@ -594,13 +594,11 @@ export function List({
   };
 
   const contexts = (rows: ReactNode) => (
-    <ListVariantContext.Provider value={variant}>
-      <ListDensityContext.Provider value={density}>
-        <ListSelectionContext.Provider value={chooser.selecting}>
-          {rows}
-        </ListSelectionContext.Provider>
-      </ListDensityContext.Provider>
-    </ListVariantContext.Provider>
+    <ListVariantContext value={variant}>
+      <ListDensityContext value={density}>
+        <ListSelectionContext value={chooser.selecting}>{rows}</ListSelectionContext>
+      </ListDensityContext>
+    </ListVariantContext>
   );
 
   if (run !== undefined) {

@@ -60,7 +60,7 @@ export function KeepingProvider({
   readonly keeping: Keeping;
   readonly children: ReactNode;
 }) {
-  return <KeepingDoor.Provider value={keeping}>{children}</KeepingDoor.Provider>;
+  return <KeepingDoor value={keeping}>{children}</KeepingDoor>;
 }
 
 /** The acts a kept thing's menu offers, in their order; none where nothing is kept yet, or no app answers them. */

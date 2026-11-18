@@ -1,7 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { integrationNamed } from "@repo/features/integration-search";
-import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
+import { INTEGRATION_NAME, INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -11,6 +11,7 @@ import {
   SETTINGS_VIEW,
   type SettingsPageGroup,
   type SettingsView,
+  settingsSubNamed,
 } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -175,6 +176,13 @@ type SettingsHistory = NavigationHistory & Pick<WindowHistory, "away">;
 /** The way back to the page list, which leads a page's bar in a narrow room. */
 function ListBack({ onList }: { onList: () => void }): React.JSX.Element {
   return <BackButton label={SETTINGS_LIST} place={SETTINGS_PLACE} onBack={onList} />;
+}
+
+/** The way back from a page of a page's own to that page, which leads its bar in every room, as ‹ Workspace leads GitHub's. */
+function PageBack({ view, onBack }: { view: SettingsView; onBack: () => void }): React.JSX.Element {
+  const { title } = settingsPageOf(view);
+
+  return <BackButton label={title} place={title} onBack={onBack} />;
 }
 
 /**
@@ -361,8 +369,13 @@ export function DesktopSettings({
       ? shownWorkspace(settings.workspace)
       : undefined;
 
-  const named = settings.view === SETTINGS_VIEW.WORKSPACE && listed !== undefined;
-  const title = named ? listed.name : shown.title;
+  // A page of the page's own is named for what it holds, and its way back for the page it stands over.
+  const { sub, onSubChange } = settings;
+
+  const named =
+    sub === undefined && settings.view === SETTINGS_VIEW.WORKSPACE && listed !== undefined;
+
+  const title = sub !== undefined ? INTEGRATION_NAME[sub] : named ? listed.name : shown.title;
   const writes = useSettingsWrites();
   // Whether Billing stands for the listed workspace: billing on, and the reader an owner or admin.
   const billing = useBillingShown(listed);
@@ -377,13 +390,16 @@ export function DesktopSettings({
   // A page standing alone is headed as a phone's, whose ⋯ holds its reset.
   const split = useScreenSplit(room);
 
-  const reset = pageResetControl(
-    settings.view,
-    settings.settings,
-    writes,
-    rows,
-    split.single ? title : undefined,
-  );
+  const reset =
+    sub !== undefined
+      ? undefined
+      : pageResetControl(
+          settings.view,
+          settings.settings,
+          writes,
+          rows,
+          split.single ? title : undefined,
+        );
 
   // Built only while a query stands: an empty field searches nothing.
   const search =
@@ -436,7 +452,8 @@ export function DesktopSettings({
       setIntegrationsQuery(integrationNamed(provider, query) ? query : "");
     }
 
-    settings.onViewChange(entry.page);
+    // Note that an integration's result opens the integration's own page, where its accounts stand.
+    settings.onViewChange(entry.page, settingsSubNamed(entry.page, entry.id));
     landing.current = landOnSettingsRow(entry.id, keyboard);
   };
 
@@ -560,7 +577,7 @@ export function DesktopSettings({
       >
         {/* Keyed to the page, so a page turned to opens at its top rather than where the last one was scrolled. */}
         <SettingsPage
-          key={settings.view}
+          key={sub ?? settings.view}
           // Note that a page's name shows in a screen recording and a workspace's stays masked: in its header on a desktop, and on a phone's bar, which draws the title as words.
           title={
             onList === undefined ? (
@@ -570,9 +587,15 @@ export function DesktopSettings({
             )
           }
           titleReplayUnmasked={!named}
-          description={pageDescription(settings.view)}
+          description={sub === undefined ? pageDescription(settings.view) : undefined}
           actions={reset}
-          lead={onList === undefined ? undefined : <ListBack onList={onList} />}
+          lead={
+            sub !== undefined && onSubChange !== undefined ? (
+              <PageBack view={settings.view} onBack={() => onSubChange(undefined)} />
+            ) : onList === undefined ? undefined : (
+              <ListBack onList={onList} />
+            )
+          }
           look={onList === undefined ? TOOLBAR_LOOK.WINDOW : TOOLBAR_LOOK.PHONE}
         >
           <SettingsPanel

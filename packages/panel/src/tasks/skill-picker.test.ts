@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import type { SkillsRead } from "@repo/features/skill-mention";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
-import { act, createElement, useRef } from "react";
+import { Activity, act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import type { ComposerTrigger } from "../description-editor/contract.js";
@@ -49,10 +49,20 @@ async function mounted(source: SkillSource = SOURCE) {
   const page = document.createElement("div");
   document.body.append(page);
   root = createRoot(page);
-  act(() => root?.render(createElement(Picker)));
+
+  const show = (mode: "visible" | "hidden") =>
+    act(() => root?.render(createElement(Activity, { mode, children: createElement(Picker) })));
+
+  show("visible");
 
   return {
     page,
+    show,
+    picker: (): SkillPicker => {
+      assert.ok(latest, "the picker is drawn");
+
+      return latest;
+    },
     close: () => act(() => latest?.onTrigger(undefined)),
     type: async (query: string, start = 0) => {
       const trigger: ComposerTrigger = { start, query, rect: { left: 0, top: 0, bottom: 0 } };
@@ -63,6 +73,20 @@ async function mounted(source: SkillSource = SOURCE) {
     },
   };
 }
+
+test("a / list closed with Escape opens again when the editor leaves and restores the word while its tab is hidden", async () => {
+  const { picker, type, show } = await mounted();
+  await type("");
+  act(() => picker().onKey(new KeyboardEvent("keydown", { key: "Escape", cancelable: true })));
+  assert.equal(picker().aria["aria-expanded"], "false");
+
+  show("hidden");
+  await act(async () => picker().onTrigger(undefined));
+  await type("");
+  show("visible");
+
+  assert.equal(picker().aria["aria-expanded"], "true");
+});
 
 test("a search no skill matches reads the one no-match line", async () => {
   const { page, type } = await mounted();

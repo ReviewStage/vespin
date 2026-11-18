@@ -2507,8 +2507,8 @@ export function Menu(props: MenuProps): React.JSX.Element {
   const sheet = useMemo(() => inNarrowRoom(), [placement]);
 
   return (
-    <MenuReplayUnmasked.Provider value={props.replayUnmasked === true}>
+    <MenuReplayUnmasked value={props.replayUnmasked === true}>
       {sheet ? <MenuSheet {...props} /> : <FloatingMenu {...props} />}
-    </MenuReplayUnmasked.Provider>
+    </MenuReplayUnmasked>
   );
 }

@@ -6,7 +6,11 @@ import {
   UNSUPPORTED_PREVIEW,
 } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
-import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
+import {
+  INSTALLED_SKILL_SCOPE,
+  INSTALLED_SKILL_SOURCE,
+  MAC_SKILL_APP,
+} from "@repo/features/installed-skill-wire";
 import { LIVE_READ, type LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { GatewayEventKind } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
@@ -146,6 +150,7 @@ function fakeService(options: { refuseInstall?: boolean } = {}) {
         return UNSUPPORTED_PREVIEW;
       }),
     install: (params) => writing(`install:${params.scope}`, () => replies.install),
+    importFolder: (params) => writing(`import:${params.mac.folder}`, () => ({ skills: [SKILL] })),
     remove: (skillId) => writing(`remove:${skillId}`, () => replies.remove),
   };
 
@@ -214,6 +219,13 @@ const INSTALL = {
   scope: INSTALLED_SKILL_SCOPE.WORKSPACE,
 };
 
+const IMPORT = {
+  workspaceId: WORKSPACE_ID,
+  scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+  mac: { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills/release-notes" },
+  files: [{ path: "SKILL.md", base64: "LS0tCg==" }],
+};
+
 it.effect("each ask reaches the service and answers the window its view", () =>
   Effect.gen(function* () {
     const { acts, asked } = yield* subject();
@@ -221,12 +233,14 @@ it.effect("each ask reaches the service and answers the window its view", () =>
     assert.deepEqual(yield* acts.INSTALLED_SKILLS_INSTALL(INSTALL), {
       skills: [SKILL],
     });
+    assert.deepEqual(yield* acts.INSTALLED_SKILLS_IMPORT(IMPORT), { skills: [SKILL] });
     assert.deepEqual(yield* acts.INSTALLED_SKILLS_READ({ skillId: SKILL_ID }), CONTENT);
     assert.deepEqual(yield* acts.INSTALLED_SKILLS_REMOVE({ skillId: SKILL_ID }), {
       id: SKILL_ID,
     });
     assert.deepEqual(asked, [
       `install:${INSTALLED_SKILL_SCOPE.WORKSPACE}`,
+      `import:${IMPORT.mac.folder}`,
       `read:${SKILL_ID}`,
       `remove:${SKILL_ID}`,
     ]);

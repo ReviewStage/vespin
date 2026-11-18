@@ -43,9 +43,7 @@ function ConnectionNamesReading({ children }: { children: ReactNode }): ReactNod
     [accountsOf],
   );
 
-  return (
-    <ConnectionNamesContext.Provider value={nameOf}>{children}</ConnectionNamesContext.Provider>
-  );
+  return <ConnectionNamesContext value={nameOf}>{children}</ConnectionNamesContext>;
 }
 
 /** Hands every call's row under it the names of the accounts it ran on, read only where `needed`: a transcript with no call of a server's tool reads none. */

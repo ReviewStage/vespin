@@ -83,8 +83,8 @@ test("the workspace's skills come before the account's own, by name, each with i
   assert.deepEqual(
     groups.workspace.map((row) => [row.skill.name, row.source, row.line]),
     [
-      ["release-notes", "workspace", "acme/agent-skills @ 3f9c2e1 · by you"],
-      ["triage", "workspace", "Pasted · by Dean"],
+      ["release-notes", "workspace", "acme/agent-skills @ 3f9c2e1, installed by you"],
+      ["triage", "workspace", "Pasted, installed by Dean"],
     ],
   );
   assert.deepEqual(

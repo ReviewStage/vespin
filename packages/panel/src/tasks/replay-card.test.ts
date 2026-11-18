@@ -32,9 +32,9 @@ import { AgentTab, type TranscriptCards } from "./agent-tab.js";
 import { OpenLinkProvider } from "./use-open-link.js";
 
 /**
- * replay-card.test.ts -- an agent started from another opens on the brief
- * as its source's did, then one folded card saying Continued or Forked from
- * the source's chip and how many of its steps, which opens onto the steps
+ * replay-card.test.ts -- an agent started from another opens on one folded
+ * card saying Continued or Forked from the source's chip and how many of its
+ * steps, a brief that is a line its first step, which opens onto the steps
  * one row each, every step onto its words exactly, and the way back to the
  * source's transcript, then the developer's note as their own line. No
  * marker its first message holds is drawn, and a message whose markers do
@@ -339,7 +339,7 @@ test("opened, the card draws each step as a transcript does, a line as a sent me
   assert.doesNotMatch(body?.textContent ?? "", /full transcript/u);
 });
 
-test("a fork trimmed of its earliest steps says Forked and its steps of how many, and says how many were left out", async () => {
+test("a fork trimmed of its earliest steps says Forked and its steps of how many, holds the source's prompt as its first step, and says how many were left out", async () => {
   const agent = summary({
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
     brief: AGENT_BRIEF.PROMPT,
@@ -355,13 +355,16 @@ test("a fork trimmed of its earliest steps says Forked and its steps of how many
   );
 
   assert.equal(headOf(container), "Forked from Wire the start from field · 3 of 212 steps");
-  // The prompt is the developer's bubble, as the source's was, holding the brief alone.
-  const prompt = container.querySelector(".is-user:not(.agent-origin)");
-  assert.equal(prompt?.textContent?.includes("Find why the toast fires twice."), true);
-  assert.equal(prompt?.textContent?.includes(PREAMBLE), false);
+  // The source's prompt is history inside the folded card, never a line drawn again over it.
+  assert.doesNotMatch(container.textContent ?? "", /Find why the toast fires twice\./u);
 
   press(container.querySelector("[data-replay-card] > summary"));
   await settle();
+  // Opened, the prompt is the card's first step, holding the brief alone, at when the source began.
+  const prompt = container.querySelector("[data-replay-card] [data-replay-step]");
+  assert.match(prompt?.textContent ?? "", /Find why the toast fires twice\./u);
+  assert.doesNotMatch(prompt?.textContent ?? "", new RegExp(PREAMBLE, "u"));
+  assert.notEqual(prompt?.querySelector(".ui-message-line-time"), null);
   assert.match(
     container.querySelector("[data-replay-card] .ui-disclosure-body")?.textContent ?? "",
     /209 earlier steps were left out to keep the replay within its size limit\./u,

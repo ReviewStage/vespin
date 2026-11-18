@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a script read whole, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
   Circle,
@@ -44,13 +44,14 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
-import { Avatar } from "./marks.js";
+import { Avatar, HarnessMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -588,6 +589,50 @@ export function CodeRow({ code, testId }: { readonly code: string; readonly test
   );
 }
 
+/**
+ * A script as it is saved, read and never edited here, such as a
+ * workspace's install script: its name, the script whole under it in the
+ * monospaced face, and a quiet line under that where one is given, such as
+ * how it last ran. VoiceOver hears it as one element, its name then the
+ * script and the line.
+ */
+export function ScriptRow({
+  name,
+  script,
+  line,
+}: {
+  readonly name: string;
+  readonly script: string;
+  readonly line?: string | undefined;
+}) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[listRowBackground(colors.RAISED), accessibilityElement("combine")]}
+    >
+      <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
+          foregroundStyle(colors.TEXT_BODY),
+        ]}
+      >
+        {script}
+      </Text>
+      {line === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {line}
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
 type ActionRowProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
@@ -676,6 +721,8 @@ export type PickOption = {
   readonly label: string;
   /** What picking it does, in the muted ink under its name, such as a permission mode's; none for none. */
   readonly hint?: string | undefined;
+  /** The panel's glyph the option leads with in a menu, such as a permission mode's; none for none. */
+  readonly symbol?: Glyph | undefined;
 };
 
 type PickRowsProps = {
@@ -1130,6 +1177,8 @@ type NoteAct = { readonly label: string; readonly onPress: () => void };
 type NoteRowProps = {
   /** The glyph before the words, in the muted ink, such as a machine's kind. */
   readonly symbol?: Glyph | undefined;
+  /** The harness a credential's row stands for, whose mark leads it in the glyph's place, as the panel leads a plan's and a key's rows with its provider's logo. */
+  readonly harness?: ModelProvider | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
   /** What it is, under its words in the body's ink, such as a skill's description. */
@@ -1157,7 +1206,16 @@ type NoteRowProps = {
  * VoiceOver hears the row as one element, its words then its line, and
  * offers its acts among its actions.
  */
-export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: NoteRowProps) {
+export function NoteRow({
+  symbol,
+  harness,
+  words,
+  detail,
+  line,
+  onPress,
+  edit,
+  remove,
+}: NoteRowProps) {
   const colors = useColors();
   const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
 
@@ -1187,7 +1245,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       spacing={SPACE.ROW}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
-      {symbol === undefined ? null : (
+      {harness !== undefined ? (
+        <HarnessMark provider={harness} size={leadSize} />
+      ) : symbol === undefined ? null : (
         <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
       )}
       {lines}
