@@ -147,7 +147,7 @@ Creates a task you own, with no agent on it.
 
 ### update_task
 
-Changes a task's name, repository, status, priority, assignee, pin, section, parent, or blocks. Marking it done withdraws its open asks.
+Changes a task's name, repository, status, priority, assignee, pin, section, parent, or blocks. Marking it done or canceled withdraws its open asks and archives its agents: idle ones at once, and working ones as their turns end. Moving it off done or canceled brings those agents back, but their asks stay withdrawn.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -176,7 +176,7 @@ Turns one relation between two tasks into another kind, in one step.
 
 ### delete_task
 
-Deletes a task for good. It stops no agent: while one of its agents is starting or running it is refused, and `stop_agent` stops each first.
+Deletes a task for good. Its sub-tasks stay, moved to the top level. It stops no agent: while one of its agents is starting or running it is refused, and `stop_agent` stops each first.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -303,7 +303,7 @@ Sends an agent a message as you, or queues it behind the agent's turn.
 
 ### change_agent_queue
 
-Resumes, holds, edits, deletes, reorders, or steers the messages queued for an agent.
+Resumes, holds, edits, deletes, reorders, or steers the messages queued for an agent. On an idle agent, every change except a delete sends the next message at once.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -312,7 +312,7 @@ Resumes, holds, edits, deletes, reorders, or steers the messages queued for an a
 
 ### stop_agent
 
-Stops the agent's turn. Its work so far stands.
+Stops the agent's turn. Its work so far stands. Every stop also cancels a wakeup the agent booked and pauses its queue until `change_agent_queue` resumes it, even when the agent was already idle.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -336,7 +336,7 @@ Changes an agent's title, model, effort, context window, pin, or MCP servers, or
 
 ### rewind_agent
 
-Takes an agent back to the moment before one of its lines. Its checkout stays as it is. It stops nothing: an agent starting or running is refused, and `stop_agent` stops it first.
+Takes an agent back to the moment before one of its lines, deleting the workers it started since. Its checkout stays as it is. It stops no turn: an agent starting or running is refused, and `stop_agent` stops it first. It does cancel a wakeup the agent booked.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -457,7 +457,7 @@ Your threads: asks waiting on you first, then other open threads, then the lates
 
 ### answer_ask
 
-Answers an open ask as you: a choice, a to-do's done or not done, a form, or words.
+Answers an open ask as you: a choice, a to-do's done or not done, a form, or words. If this settles the last thing an automation run with Mark finished runs Done is waiting on, the run's agents are archived and its task moves to Done.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -471,7 +471,7 @@ Answers an open ask as you: a choice, a to-do's done or not done, a form, or wor
 
 ### acknowledge_thread
 
-Acknowledges a notice, as Got it does.
+Acknowledges a notice, as Got it does. If this settles the last thing an automation run with Mark finished runs Done is waiting on, the run's agents are archived and its task moves to Done.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -489,7 +489,7 @@ Writes on a thread without answering its ask.
 
 ### close_thread
 
-Closes a thread without answering it.
+Closes a thread without answering it. If this settles the last thing an automation run with Mark finished runs Done is waiting on, the run's agents are archived and its task moves to Done.
 
 | Input | Type | Description |
 | --- | --- | --- |

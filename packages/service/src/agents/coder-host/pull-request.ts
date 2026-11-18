@@ -133,7 +133,8 @@ export const OPEN_PULL_REQUEST_TOOL = {
     "draft false opens it ready for review, true as a draft. " +
     `Use this rather than \`gh pr create\`: it opens as the developer who started you where you write as them, and as ${PRODUCT_NAME}'s GitHub ` +
     "App otherwise, and adds nothing to the description. Where GitHub refuses the developer's own access, it opens as the App " +
-    "and the answer says so; tell the developer, who can sign in with GitHub again.",
+    "and the answer says so, and your later pull requests open as the App too; tell the developer, who can sign in with GitHub again. " +
+    "Comments and reviews on the pull request then reach you as messages.",
   inputSchema: openPullRequestInputSchema,
 } as const;
 

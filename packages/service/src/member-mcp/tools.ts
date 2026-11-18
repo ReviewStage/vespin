@@ -1471,7 +1471,10 @@ const MEMBER_UPDATE_TASK_WORDS =
   "or back out of it (sectionId), put it under a parent task or take it out from under one, " +
   "or add and take away the tasks it is blocked by and the tasks it blocks; name at least " +
   "one change, and several go in one call. Mark a task whose work is done Done, with status " +
-  "done, as the menu's Mark done does; that withdraws every ask still open on its threads. " +
+  "done, as the menu's Mark done does; that withdraws every ask still open on its threads, and " +
+  `archives every agent on the task, as ${MEMBER_MCP_TOOL.ARCHIVE_AGENT} would but stopping ` +
+  "none: an idle one at once, and one at work as its turn ends; Canceled does the same. A change of its status off Done brings those " +
+  "agents back, their asks left withdrawn. " +
   "A block is Linear's: the blocker's work comes first and the task it blocks waits on it. " +
   "Both tasks must be in one workspace, a task never blocks itself, and a block that would " +
   "close a cycle is refused. A child task works in its parent's repository, so a parent " +
@@ -1558,7 +1561,7 @@ const MEMBER_DELETE_TASK_TOOL = memberMcpTool({
     "whichever of the member's workspaces it stands, or by its key in the workspace named, " +
     "as the app's Permanently delete would: " +
     "the task goes with everything on it, its agents and their transcripts among it, and none " +
-    "of it can be brought back. It stops no agent: while any agent on the task is starting or " +
+    "of it can be brought back, while its sub-tasks stay and stand at the top. It stops no agent: while any agent on the task is starting or " +
     `running it is refused, and ${MEMBER_MCP_TOOL.STOP_AGENT} stops each first. A delete ` +
     "refused leaves the task and its agents as they stood. " +
     "Delete one only when the member asks for it, and mark one done or canceled with " +
@@ -2187,8 +2190,9 @@ const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
     "failed turn, or a refused hand-off paused; hold a message, so the queue stops at it, or " +
     "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
     "under way now, which takes it out of the queue. Any member who may message the agent " +
-    "changes any message in its queue, whoever queued it. Where the agent stands idle, the change hands the next message on at once, as a " +
-    "turn's end would, so an agent whose task is done or canceled is refused: move the task " +
+    "changes any message in its queue, whoever queued it. Where the agent stands idle, every change " +
+    "but a delete hands the next message on at once, as a turn's end would, a steer starting a " +
+    "turn with its message, so an agent whose task is done or canceled is refused: move the task " +
     `with ${MEMBER_MCP_TOOL.UPDATE_TASK} first. ` +
     "Answers `accepted` with the queue as it then stands, or `rejected` and " +
     `why nothing changed. ${FOLLOW_WORDS}`,
@@ -2209,7 +2213,9 @@ const MEMBER_STOP_AGENT_TOOL = memberMcpTool({
     "under way is canceled and its status reads canceled, while the agent stays available, its " +
     "transcript and branch kept, and a later message starts a new turn. Answers `accepted` " +
     "with the agent's status now and whether it was stopped, " +
-    "`stopped` false for an agent already idle, which changes nothing, or `rejected` and why. " +
+    "`stopped` false for an agent already idle, or `rejected` and why. Every stop also cancels " +
+    "the agent's booked wakeup and pauses its queue until " +
+    `${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it, an idle agent's included. ` +
     `${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} reads where it stopped.`,
   input: AgentIdInputSchema,
   annotations: DESTRUCTIVE,
@@ -2272,10 +2278,12 @@ const MEMBER_ARCHIVE_AGENT_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.ARCHIVE_AGENT,
   description:
     "Archive a coding agent the member can see, by its id, as the member's own Archive agent " +
-    "would, the archive recorded as the member's own: a turn still under way is stopped first, " +
-    "as the Stop button would, and its open asks are withdrawn; then it leaves the sidebar, its " +
+    "would, the archive recorded as the member's own: it is stopped first, as " +
+    `${MEMBER_MCP_TOOL.STOP_AGENT} would, an idle one too, and its open asks are withdrawn; then ` +
+    "it leaves the sidebar, its " +
     "task's tabs, and every list but the archived ones, takes no message, and is not woken, its " +
-    "transcript, branch, and pull request kept. One still starting is refused until it can be " +
+    "transcript, branch, and pull request kept, but one on a member's device has its folder " +
+    "removed there, so what it never pushed is lost. One still starting is refused until it can be " +
     `stopped. ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT} brings it back. Answers \`accepted\` with the ` +
     "agent as it then stands, archived among it, or `rejected` and why.",
   input: ArchiveAgentInputSchema,
@@ -2293,7 +2301,8 @@ const MEMBER_UNARCHIVE_AGENT_TOOL = memberMcpTool({
   description:
     "Bring an archived coding agent the member can see back, by its id, as the member's own " +
     "Unarchive would: it stands in its task's lists again and takes messages, its archive's " +
-    "record cleared; it starts no turn, and the asks its archive withdrew stay withdrawn. " +
+    "record cleared; it starts no turn, the asks its archive withdrew stay withdrawn, and the " +
+    `queue its archive paused stays paused until ${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it. ` +
     "Answers `accepted` with the agent as it then stands, archived among it, or `rejected` and why.",
   input: AgentIdInputSchema,
   annotations: IDEMPOTENT_CHANGE,
@@ -2747,8 +2756,9 @@ const REWIND_AGENT_TOOL = memberMcpTool({
   description:
     "Rewind a coding agent the member can see, by its id, as the member's own Rewind would: " +
     "it is taken back to just before one of the lines sent to it, as though that line and " +
-    "everything after it were never said. It stops nothing: an agent starting or running is " +
-    `refused, and ${MEMBER_MCP_TOOL.STOP_AGENT} stops it first. Its checkout ` +
+    "everything after it were never said, the workers it started since deleted. It stops no " +
+    `turn: an agent starting or running is refused, and ${MEMBER_MCP_TOOL.STOP_AGENT} stops it ` +
+    "first; it cancels a wakeup the agent booked and ends its idle runner. Its checkout " +
     "and branch are left as they stand: only the conversation goes back. Name the line by the " +
     `lineId ${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} names on it; a line sent while a turn was working is ` +
     "refused. Only the member who started an agent rewinds one on their own GitHub token, " +
@@ -3356,6 +3366,11 @@ const WAITING_SETTLED_WORDS =
   `task or brings an agent back: move the task with ${MEMBER_MCP_TOOL.UPDATE_TASK}, or bring ` +
   `the agent back with ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT}, first.`;
 
+/** What settling a thread may set off: a finished automation run, with Mark finished runs Done on, put away (`automations/run-archive.ts`). */
+const RUN_SETTLED_WORDS =
+  "Where this settles the last thing an automation run with Mark finished runs Done waits on, " +
+  "its agents are archived and its task moves to Done.";
+
 const HANDED_WORDS =
   "It is written on the thread as the member's own and handed at once to the thread's agent, " +
   "which takes it up in its next turn, starting one where it was idle. " +
@@ -3489,7 +3504,7 @@ const ANSWER_ASK_TOOL = memberMcpTool({
     "done to clear it away. Answer only what the member decided or told you to, and ask them " +
     "where you do not know their answer. Answers `accepted` with the thread as it then stands, " +
     "or `rejected` and why nothing was written, such as an ask no longer open or an answer " +
-    "that does not fit it.",
+    `that does not fit it. ${RUN_SETTLED_WORDS}`,
   input: AnswerAskInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: ({ threadId, askId, answer, note }) =>
@@ -3521,7 +3536,7 @@ const ACKNOWLEDGE_THREAD_TOOL = memberMcpTool({
     `what it asked. ${WAITING_SETTLED_WORDS} A thread that holds an ask is refused: answer it with ` +
     `${MEMBER_MCP_TOOL.ANSWER_ASK}. Acknowledge only what the member has seen or told you ` +
     "to. Answers `accepted` with the thread as it then stands, or `rejected` and why it was " +
-    "not acknowledged.",
+    `not acknowledged. ${RUN_SETTLED_WORDS}`,
   input: AcknowledgeThreadInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: (asked) =>
@@ -3565,7 +3580,7 @@ const CLOSE_THREAD_TOOL = memberMcpTool({
     "it, which it takes as their not wanting what it asked; any other reads the close in its " +
     `own time. ${WAITING_SETTLED_WORDS} Close only what the member does not want. ` +
     "Answers `accepted` with the thread as " +
-    "it then stands, or `rejected` and why it was not closed.",
+    `it then stands, or \`rejected\` and why it was not closed. ${RUN_SETTLED_WORDS}`,
   input: CloseThreadInputSchema,
   annotations: DESTRUCTIVE,
   run: (asked) =>
@@ -4538,7 +4553,8 @@ const MEMBER_SAVE_MEMORY_TOOL = memberMcpTool({
     "be a credential, key, token, or password, which is refused. When what the member said " +
     `contradicts a memory ${MEMBER_MCP_TOOL.SEARCH_MEMORY} answered, pass that memory's id as ` +
     "replaces, in the workspace it answered it in, with the corrected statement, so the old " +
-    "one is rewritten rather than kept beside it. A workspace holds at most " +
+    "one is rewritten rather than kept beside it, now in the member's words, or folded into " +
+    "another memory that already holds the corrected words. A workspace holds at most " +
     `${MEMORY_BOUNDS.MAX_MEMORIES} memories. ${WORKSPACE_WORDS} Answers \`accepted\` with the ` +
     "outcome (kept, already_kept, corrected) and the memory, or `rejected` and why.",
   input: SaveMemoryInputSchema,
