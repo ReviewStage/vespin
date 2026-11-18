@@ -116,8 +116,9 @@ import { commitShaSchema } from "@repo/features/link-grammar";
 import { MCP_ACCESS_TOKEN_MINUTES, mcpClientIdSchema } from "@repo/features/mcp-client-wire";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
+import { contextWindowsOf } from "@repo/features/model-effort";
 import { agentName } from "@repo/features/model-label";
-import { modelChoiceSchema } from "@repo/features/models-wire";
+import { type ContextWindows, modelChoiceSchema } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   PULL_REQUEST_CHAPTERS_STATE,
@@ -289,6 +290,7 @@ import { instancePublishedCache } from "../agents/coder-host/published.js";
 import { changeAgentQueue } from "../agents/coder-host/queue-change.js";
 import { productionSummaryModel } from "../agents/coder-host/replay-summary.js";
 import { sessionsRouter } from "../agents/coder-host/runtime-sessions.js";
+import { accountModelChoices } from "../agents/coder-host/start.js";
 import { steerMemberWords } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
@@ -374,7 +376,7 @@ import { parseSkillPaste } from "../installed-skills/skill-paste.js";
 import type { IntegrationConnect } from "../integrations/integration-connect.js";
 import { hostedKeyRing } from "../orpc/base.js";
 import type { PageLinks } from "../pages/page-links.js";
-import type { ModelCatalog } from "../providers/model-catalog.js";
+import type { ModelCatalog, OfferedModel } from "../providers/model-catalog.js";
 import type { SlackApp } from "../slack/slack-app.js";
 import type { SlackBot } from "../slack/slack-bot.js";
 import { disconnectSlackBot, readSlackBot, updateSlackBot } from "../slack/slack-bot-operations.js";
@@ -1086,7 +1088,9 @@ const UpdatePreferencesInputSchema = Schema.Struct({
   contextWindow: Schema.optionalKey(
     describeWire(
       contextWindowSchema,
-      "The default context window, standard or long; leave it out for the model's standard one.",
+      "The default context window, standard or long: required where " +
+        `${MEMBER_MCP_TOOL.LIST_MODELS} lists the model's contextWindows, and refused where it ` +
+        "lists none, since that model runs on one window.",
     ),
   ),
 });
@@ -1098,7 +1102,38 @@ const UPDATE_PREFERENCES_REFUSAL = {
     `pays for that model; ${MEMBER_MCP_TOOL.LIST_MODELS} lists the choices.`,
   UNAVAILABLE:
     "Not changed: the model catalog or the member's preferences could not be read; try again.",
+  windowMissing: (model: string, windows: ContextWindows) =>
+    `Not changed: contextWindow is required for ${model}, which runs on two: standard ` +
+    `(${windows.standardTokens} tokens) or long (${windows.longTokens} tokens), as ` +
+    `${MEMBER_MCP_TOOL.LIST_MODELS} lists them.`,
+  windowOffered: (model: string) =>
+    `Not changed: ${model} runs on one context window, so it takes no contextWindow; leave ` +
+    `it out, as ${MEMBER_MCP_TOOL.LIST_MODELS} lists its contextWindows as none.`,
 } as const;
+
+/**
+ * Why a default's context window does not fit its model, or nothing where
+ * it does: a model that offers two must be given one, and a model with one
+ * takes none. A model the member is not offered is left to the write,
+ * which refuses it.
+ */
+function preferencesWindowRefusal(
+  offered: readonly OfferedModel[],
+  choice: typeof UpdatePreferencesInputSchema.Type,
+): string | undefined {
+  if (!offered.some((model) => model.id === choice.model)) return undefined;
+  const windows = contextWindowsOf(offered, choice.model);
+
+  if (windows !== undefined && choice.contextWindow === undefined) {
+    return UPDATE_PREFERENCES_REFUSAL.windowMissing(choice.model, windows);
+  }
+
+  if (windows === undefined && choice.contextWindow !== undefined) {
+    return UPDATE_PREFERENCES_REFUSAL.windowOffered(choice.model);
+  }
+
+  return undefined;
+}
 
 /**
  * `update_preferences`: the member's coding agents' default, written as
@@ -1111,15 +1146,27 @@ const UPDATE_PREFERENCES_TOOL = memberMcpTool({
   description:
     "Change the member's own preferences, as their Settings would: the default model and " +
     "effort their coding agents start on where a start names neither, and its context window, " +
-    `as ${MEMBER_MCP_TOOL.LIST_MODELS} lists them. The default is the member's own, the same ` +
-    "in every workspace, and agents already started keep the model they run on. Answers " +
+    `as ${MEMBER_MCP_TOOL.LIST_MODELS} lists them: a model it lists contextWindows for takes ` +
+    "one of them, and a model it lists none for takes none. The default is the member's own, " +
+    "the same in every workspace, and agents already started keep the model they run on. Answers " +
     "`accepted` with the default as it then stands, or `rejected` and why; " +
     `${MEMBER_MCP_TOOL.LIST_MODELS} reads it back.`,
   input: UpdatePreferencesInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: (agent) =>
-    Effect.flatMap(AdmittedMember, (member) =>
-      writeOwnPreferences(accountProcedureSeams(), member.userId, { agent }).pipe(
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      const choices = yield* Effect.result(accountModelChoices(member.userId));
+
+      if (Result.isFailure(choices)) {
+        return agentToolRejected(UPDATE_PREFERENCES_REFUSAL.UNAVAILABLE);
+      }
+
+      const windowRefusal = preferencesWindowRefusal(choices.success.offered, agent);
+
+      if (windowRefusal !== undefined) return agentToolRejected(windowRefusal);
+
+      return yield* writeOwnPreferences(accountProcedureSeams(), member.userId, { agent }).pipe(
         Effect.map((written) => ({
           status: ACTION_RESULT_STATUS.ACCEPTED,
           default: written.agent,
@@ -1133,8 +1180,8 @@ const UPDATE_PREFERENCES_TOOL = memberMcpTool({
             ),
           ),
         ),
-      ),
-    ),
+      );
+    }),
 });
 
 /** A write that may take something away, such as a turn under way, an archived agent's place, or a section, which the same call made again leaves as it stood. */
