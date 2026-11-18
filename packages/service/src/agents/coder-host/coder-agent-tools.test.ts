@@ -5196,6 +5196,23 @@ test("list_automations, create_automation, update_automation, and delete_automat
     await make({ trigger: { ...weekly, timezone: "Mars/Olympus" } }, "zone"),
     rejected(AUTOMATION_TOOL_REFUSAL.TIMEZONE),
   );
+  // A GitHub trigger names its event's flags, each left out named, and none its event does not take.
+  const merged = { kind: "github", event: "pull-request-merged" };
+  assert.deepEqual(
+    await make({ trigger: { ...merged, senders: ["people"] } }, "github-unflagged"),
+    rejected(
+      `${AUTOMATION_TOOL_REFUSAL.GITHUB_FLAGS_MISSING} forks (pull-request-merged takes senders, forks).`,
+    ),
+  );
+  assert.deepEqual(
+    await make(
+      { trigger: { ...merged, senders: ["people"], forks: false, drafts: true } },
+      "github-draft",
+    ),
+    rejected(
+      `${AUTOMATION_TOOL_REFUSAL.GITHUB_FLAG_EXTRA} drafts only on pull-request-opened, pull-request-labeled, pull-request-updated; leave drafts out of one on pull-request-merged.`,
+    ),
+  );
   // Nothing is taken from where the caller works or its starter's defaults: each one left out is named.
   assert.deepEqual(
     await call(
