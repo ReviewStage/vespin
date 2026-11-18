@@ -852,6 +852,28 @@ const continueFromSlack = Effect.fnUntraced(function* (
   yield* bot.reply(addressed.channel, thread, continuedReply(link));
 });
 
+/**
+ * The message marked as the one its thread's agent works on, and shown so
+ * with 👀. Note that a thread keeps one such mark, so the 👀 of a message it
+ * marked before is taken off first, since nothing would find it once replaced.
+ */
+const markedWorking = Effect.fnUntraced(function* (
+  bot: SlackWorkspaceBot,
+  agentId: string,
+  message: SlackThreadMessageAt,
+) {
+  const before = (yield* slackWorkingMessages(agentId)).filter(
+    (marked) =>
+      marked.channelId === message.channelId &&
+      marked.threadTs === message.threadTs &&
+      marked.ts !== message.ts,
+  );
+
+  yield* Effect.forEach(before, (marked) => clearedWorking(bot, marked));
+  yield* markSlackThreadWorking(message);
+  yield* bot.react(message.channelId, message.ts, STATUS_EMOJI.WORKING);
+});
+
 /** 💤 taken off the message that started the agent, now that a message brought it back. */
 const awake = Effect.fnUntraced(function* (bot: SlackWorkspaceBot, agentId: string) {
   const start = yield* slackStartMessage(agentId);
@@ -909,10 +931,7 @@ const sendToAgent = Effect.fnUntraced(function* (
   const running = status !== undefined && RUNNING_TURN_STATUSES.has(status);
 
   // Note that the mark is kept and shown before the agent is handed the message, so a turn that ends at once still finds both to clear.
-  if (!running) {
-    yield* markSlackThreadWorking(message);
-    yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.WORKING);
-  }
+  if (!running) yield* markedWorking(bot, agentId, message);
 
   const sent = yield* Effect.result(
     steerAgent(
@@ -935,10 +954,7 @@ const sendToAgent = Effect.fnUntraced(function* (
   // Note that a message an ended agent did not take is worked on by the agent that continues it, so its mark stands.
   if (Result.isFailure(sent) && sent.failure.error === HOSTED_API_ERROR.AGENT_RETIRED) {
     // One heard as joining a running turn was neither marked nor shown, so it is now, for a refused continue to take off.
-    if (running) {
-      yield* markSlackThreadWorking(message);
-      yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.WORKING);
-    }
+    if (running) yield* markedWorking(bot, agentId, message);
 
     yield* continueFromSlack(
       bot,
