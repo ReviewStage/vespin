@@ -113,9 +113,10 @@ export const BROWSER_TOOL = {
     `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, run in order. Take a snapshot for ` +
     "the refs before you click or type on an element. Choose in a native dropdown, a select " +
     "the snapshot shows as a combobox or listbox, with select on its ref and the option's " +
-    "label, since no click reaches its popup. An action that leaves out its tab acts on the tab " +
-    "the action before it acted on in the same call only, so open and go on in one call; a new " +
-    "call names its tab. To show the developer a flow, record it: record starts a video of what " +
+    "label, since no click reaches its popup. Every action on a tab names it, by the id list or " +
+    "open answered; an open names its new tab too, such as docs, so later actions in the same " +
+    "call pass that name to go on in it. To show the developer a flow, record it: record " +
+    "starts a video of what " +
     `the browser shows, your pointer drawn on it, up to ${BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS} seconds and across calls, ` +
     "and stop_recording, with a caption, keeps it in your transcript; stop it before your turn " +
     "ends, or it is lost. Its answer names the video's path in your sandbox until your next " +
@@ -216,29 +217,24 @@ function drivenWords(tab: string): string {
 
 /**
  * The first action that acts on a tab a member drives, and that tab, read
- * ahead of the run as the run itself names tabs: a tab left out is the one
- * the action before acted on, a tab just opened is driven by no one, and a
- * closed one leaves the next to name its own.
+ * ahead of the run: a tab named by an `open` earlier in the call was just
+ * opened, and no one drives it.
  */
 function firstDriven(
   actions: readonly BrowserAgentAction[],
   driven: ReadonlySet<string>,
 ): { readonly index: number; readonly tab: string } | undefined {
-  // Note that `null` is a tab this call opened, whose id is not known until it runs.
-  let tab: string | null | undefined;
+  const opened = new Set<string>();
 
   for (const [index, action] of actions.entries()) {
     if (action.action === BROWSER_AGENT_ACTION.LIST || isRecordingAction(action)) continue;
 
     if (action.action === BROWSER_AGENT_ACTION.OPEN) {
-      tab = null;
+      opened.add(action.name);
       continue;
     }
 
-    const named = action.tab ?? tab;
-
-    if (Predicate.isString(named) && driven.has(named)) return { index, tab: named };
-    tab = action.action === BROWSER_AGENT_ACTION.CLOSE ? undefined : named;
+    if (!opened.has(action.tab) && driven.has(action.tab)) return { index, tab: action.tab };
   }
 
   return undefined;

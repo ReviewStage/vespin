@@ -164,16 +164,16 @@ it.effect("each action sends the browser's own commands, on the tab's flattened 
     );
 
     const ran = yield* run(peer, [
-      { action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" },
-      { action: BROWSER_AGENT_ACTION.NAVIGATE, url: "https://example.com/" },
-      { action: BROWSER_AGENT_ACTION.CLICK, x: 40, y: 60 },
-      { action: BROWSER_AGENT_ACTION.TYPE, text: "héllo" },
-      { action: BROWSER_AGENT_ACTION.KEY, key: "Enter" },
-      { action: BROWSER_AGENT_ACTION.KEY, key: "a", modifiers: ["control"] },
-      { action: BROWSER_AGENT_ACTION.KEY, key: "a", modifiers: ["shift"] },
-      { action: BROWSER_AGENT_ACTION.SCROLL, deltaY: 300 },
-      { action: BROWSER_AGENT_ACTION.BACK },
-      { action: BROWSER_AGENT_ACTION.CLOSE },
+      { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" },
+      { action: BROWSER_AGENT_ACTION.NAVIGATE, tab: "app", url: "https://example.com/" },
+      { action: BROWSER_AGENT_ACTION.CLICK, tab: "app", x: 40, y: 60 },
+      { action: BROWSER_AGENT_ACTION.TYPE, tab: "app", text: "héllo" },
+      { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "Enter" },
+      { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "a", modifiers: ["control"] },
+      { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "a", modifiers: ["shift"] },
+      { action: BROWSER_AGENT_ACTION.SCROLL, tab: "app", deltaY: 300 },
+      { action: BROWSER_AGENT_ACTION.BACK, tab: "app" },
+      { action: BROWSER_AGENT_ACTION.CLOSE, tab: "app" },
       { action: BROWSER_AGENT_ACTION.LIST },
     ]);
 
@@ -349,7 +349,7 @@ it.effect(
 
       const clicked = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e42" },
-        { action: BROWSER_AGENT_ACTION.CLICK, ref: "e99" },
+        { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e99" },
       ]);
 
       assert.deepEqual(snapshotted.steps, [
@@ -471,13 +471,11 @@ it.effect("a sequence stops at its first failure, says why, and counts what neve
     });
 
     const navigated = yield* run(peer, [
-      { action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" },
-      { action: BROWSER_AGENT_ACTION.NAVIGATE, url: "https://nowhere.invalid/" },
-      { action: BROWSER_AGENT_ACTION.SNAPSHOT },
-      { action: BROWSER_AGENT_ACTION.CLOSE },
+      { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" },
+      { action: BROWSER_AGENT_ACTION.NAVIGATE, tab: "app", url: "https://nowhere.invalid/" },
+      { action: BROWSER_AGENT_ACTION.SNAPSHOT, tab: "app" },
+      { action: BROWSER_AGENT_ACTION.CLOSE, tab: "app" },
     ]);
-
-    const unnamed = yield* run(peer, [{ action: BROWSER_AGENT_ACTION.SCREENSHOT }]);
 
     const unclosed = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.CLOSE, tab: "page-vanished" },
@@ -499,7 +497,6 @@ it.effect("a sequence stops at its first failure, says why, and counts what neve
       },
     ]);
     assert.equal(navigated.skipped, 2);
-    assert.match(failureOf(unnamed.steps[0]) ?? "", /^name the tab/u);
     assert.deepEqual(unclosed.steps, [
       {
         action: "close",
@@ -914,10 +911,10 @@ it.effect(
         peer,
         [
           { action: BROWSER_AGENT_ACTION.CLICK, tab, ref: "e42" },
-          { action: BROWSER_AGENT_ACTION.TYPE, ref: "e7", text: "dean@example.com" },
-          { action: BROWSER_AGENT_ACTION.TYPE, text: "hello" },
-          { action: BROWSER_AGENT_ACTION.CLICK, x: 5, y: 6 },
-          { action: BROWSER_AGENT_ACTION.SCROLL, deltaY: 300 },
+          { action: BROWSER_AGENT_ACTION.TYPE, tab, ref: "e7", text: "dean@example.com" },
+          { action: BROWSER_AGENT_ACTION.TYPE, tab, text: "hello" },
+          { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 5, y: 6 },
+          { action: BROWSER_AGENT_ACTION.SCROLL, tab, deltaY: 300 },
         ],
         cursor,
       );
@@ -1062,8 +1059,8 @@ it.effect(
       const running = yield* Effect.forkChild(
         run(peer, [
           { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 40, y: 60 },
-          { action: BROWSER_AGENT_ACTION.WAIT },
-          { action: BROWSER_AGENT_ACTION.SNAPSHOT },
+          { action: BROWSER_AGENT_ACTION.WAIT, tab },
+          { action: BROWSER_AGENT_ACTION.SNAPSHOT, tab },
         ]),
       );
 
@@ -1103,7 +1100,7 @@ it.effect("a wait after a click is let go by a loading iframe the page removes m
     const running = yield* Effect.forkChild(
       run(peer, [
         { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 40, y: 60 },
-        { action: BROWSER_AGENT_ACTION.WAIT, timeoutMs: 2_000 },
+        { action: BROWSER_AGENT_ACTION.WAIT, tab, timeoutMs: 2_000 },
       ]),
     );
 
@@ -1134,13 +1131,13 @@ it.effect(
 
       const typed = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.TYPE, tab, text: "dean" },
-        { action: BROWSER_AGENT_ACTION.WAIT },
+        { action: BROWSER_AGENT_ACTION.WAIT, tab },
       ]);
 
       const clicked = yield* Effect.forkChild(
         run(peer, [
           { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 40, y: 60 },
-          { action: BROWSER_AGENT_ACTION.WAIT },
+          { action: BROWSER_AGENT_ACTION.WAIT, tab },
         ]),
       );
 
@@ -1421,8 +1418,8 @@ it.effect(
 
       const ran = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.SNAPSHOT, tab },
-        { action: BROWSER_AGENT_ACTION.SELECT, ref: "e7", option: "Option 2" },
-        { action: BROWSER_AGENT_ACTION.SELECT, ref: "e7", option: "1" },
+        { action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e7", option: "Option 2" },
+        { action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e7", option: "1" },
       ]);
 
       const [snapshotted, byLabel, byValue] = ran.steps;

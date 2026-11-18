@@ -1489,16 +1489,31 @@ export function isRecordingAction(action: BrowserAgentAction): action is Extract
   );
 }
 
+/** The tabs an `open` earlier in a call named, by that name, each to the id it answered. */
+type OpenedTabs = ReadonlyMap<string, string>;
+
+/** The tab an action acts on, by the id it passes or the one its name was opened as; none for an action on no tab. */
+function tabOf(action: BrowserAgentAction, opened: OpenedTabs): string | undefined {
+  if (
+    action.action === BROWSER_AGENT_ACTION.LIST ||
+    action.action === BROWSER_AGENT_ACTION.OPEN ||
+    isRecordingAction(action)
+  ) {
+    return undefined;
+  }
+
+  return opened.get(action.tab) ?? action.tab;
+}
+
 /**
- * The step an action answers, the tab it names or the one before it acted on
- * standing in for a tab it leaves out; where a `wait` follows it on that
- * tab, its navigations are heard from before it acts.
+ * The step an action answers, on the tab it names; where a `wait` follows
+ * it on that tab, its navigations are heard from before it acts.
  */
 function stepOf<R>(
   cdp: CdpSession,
   pages: Pages,
   action: BrowserAgentAction,
-  tab: string | undefined,
+  opened: OpenedTabs,
   watched: boolean,
   run: BrowserRunOptions<R>,
 ): Effect.Effect<BrowserAgentStep, ActionFailed | CdpFailure, R> {
@@ -1520,11 +1535,7 @@ function stepOf<R>(
     return Effect.map(cdp.openPage(action.url), (opened) => actedOn(action.action, opened));
   }
 
-  if (tab === undefined) {
-    return failed(
-      "name the tab: no action before this one acted on a tab; list the tabs to find its id",
-    );
-  }
+  const tab = opened.get(action.tab) ?? action.tab;
 
   if (action.action === BROWSER_AGENT_ACTION.CLOSE) {
     return closeTab(cdp, pages, tab);
@@ -1569,13 +1580,13 @@ function boundedStep<R>(
   cdp: CdpSession,
   pages: Pages,
   action: BrowserAgentAction,
-  tab: string | undefined,
+  opened: OpenedTabs,
   watched: boolean,
   run: BrowserRunOptions<R>,
 ) {
   const bound = boundOf(action);
 
-  return stepOf(cdp, pages, action, tab, watched, run).pipe(
+  return stepOf(cdp, pages, action, opened, watched, run).pipe(
     Effect.timeoutOrElse({
       duration: Duration.millis(bound.millis),
       orElse: () => failed(bound.reason),
@@ -1589,21 +1600,16 @@ function boundedStep<R>(
 /** Whether an action may navigate its tab and a `wait` on that same tab comes right after it, which then waits out that navigation. */
 function watchedFor(
   action: BrowserAgentAction,
-  tab: string | undefined,
   next: BrowserAgentAction | undefined,
+  opened: OpenedTabs,
 ): boolean {
   if (!NAVIGATING_ACTIONS.has(action.action)) return false;
 
   if (action.action === BROWSER_AGENT_ACTION.KEY && action.key !== "Enter") return false;
 
-  return next?.action === BROWSER_AGENT_ACTION.WAIT && (next.tab === undefined || next.tab === tab);
-}
-
-/** The tab a step leaves the next action on: the one it acted on, none once that is closed, and the one before for a list. */
-function tabAfter(step: BrowserAgentStep, before: string | undefined): string | undefined {
-  if (step.action === BROWSER_AGENT_ACTION.CLOSE) return undefined;
-
-  return "tab" in step ? step.tab : before;
+  return (
+    next?.action === BROWSER_AGENT_ACTION.WAIT && tabOf(next, opened) === tabOf(action, opened)
+  );
 }
 
 /**
@@ -1624,18 +1630,12 @@ export function runBrowserActions<R = never>(
     Effect.gen(function* () {
       const pages = yield* pagesOver(cdp);
       const steps: BrowserAgentStep[] = [];
-      let tab: string | undefined;
+      const opened = new Map<string, string>();
 
       for (const [at, action] of actions.entries()) {
-        const named =
-          action.action === BROWSER_AGENT_ACTION.LIST ||
-          action.action === BROWSER_AGENT_ACTION.OPEN ||
-          isRecordingAction(action)
-            ? undefined
-            : (action.tab ?? tab);
-
-        const watched = watchedFor(action, named, actions[at + 1]);
-        const ran = yield* Effect.result(boundedStep(cdp, pages, action, named, watched, options));
+        const named = tabOf(action, opened);
+        const watched = watchedFor(action, actions[at + 1], opened);
+        const ran = yield* Effect.result(boundedStep(cdp, pages, action, opened, watched, options));
 
         if (Result.isFailure(ran)) {
           const error = cutBrowserText(ran.failure, BROWSER_AGENT_LIMITS.ERROR_MAX_CHARS);
@@ -1650,7 +1650,10 @@ export function runBrowserActions<R = never>(
         }
 
         steps.push(ran.success);
-        tab = tabAfter(ran.success, tab);
+
+        if (action.action === BROWSER_AGENT_ACTION.OPEN && "tab" in ran.success) {
+          opened.set(action.name, ran.success.tab);
+        }
       }
 
       return { steps, skipped: actions.length - steps.length };
