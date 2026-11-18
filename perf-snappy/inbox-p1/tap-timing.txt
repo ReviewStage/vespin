@@ -1,0 +1,51 @@
+probe rows 3205, commands 182, frames 7541
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -20 | None | None | -5
+scope-all | 6 | topTouchEnd | 841 | 3 | 61 | 3077 | 1406 | 160 | 69 | 4 | 620 | None | None | 1391
+scope-questions | 5 | topTouchEnd | 783 | 3 | 107 | 1885 | 396 | 430 | 119 | 3 | 622 | 1025 | 1770 | 1591
+scope-open | 5 | topTouchEnd | 795 | 3 | 152 | 2690 | 1572 | 441 | 164 | 3 | 624 | 1044 | 1826 | 1408
+settings-open | 6 | topButtonPress | 652 | 10 | 41 | 7082 | 1685 | 354 | 85 | 8 | 11 | 650 | 1310 | 12
+settings-close | 5 | topTouchStart | 217 | 7 | 26 | 3302 | 680 | 1416 | 52 | 4 | 680 | 680 | 894 | 2135
+workspace-settings-open | 6 | topButtonPress | 634 | 10 | 42 | 7619 | 2179 | 317 | 70 | 8 | 56 | 642 | 1273 | 56
+switcher-open | 6 | topTouchEnd | 782 | 0 | 0 | 0 | 0 | 932 | 0 | 0 | 407 | 675 | 1457 | 1185
+switch-workspace | 5 | topIsOnChange | 628 | 4 | 10 | 529 | 41 | 93 | 0 | 1 | 473 | 640 | 1277 | 1436
+switch-back | 5 | topIsOnChange | 560 | 4 | 183 | 8189 | 5433 | 443 | 204 | 8 | 485 | 662 | 1215 | 1395
+
+most rendered components per path (summed over its taps):
+cold-launch: 
+scope-all: Button×1640, Text×1095, TextView×1095, Slot×945, SlotView×945, HStack×800, HStackView×800, Image×765, ImageView×750, GlyphLabel×520, Label×520, LabelView×520
+scope-questions: Button×980, Text×650, TextView×650, Slot×565, SlotView×565, HStack×470, HStackView×470, Image×470, ImageView×460, GlyphLabel×315, Label×315, LabelView×315
+scope-open: Button×1400, Text×965, TextView×965, Slot×805, SlotView×805, HStack×685, HStackView×685, Image×670, ImageView×660, GlyphLabel×450, Label×450, LabelView×450
+settings-open: obj×3402, Button×2582, Text×1692, TextView×1692, Image×1393, ImageView×1344, Slot×1331, SlotView×1331, HStack×1230, HStackView×1230, GlyphLabel×720, Label×720, SceneView×44, NavigationProvider×43
+settings-close: obj×1570, Button×1430, Text×940, TextView×940, Slot×835, SlotView×835, Image×685, ImageView×670, HStack×665, HStackView×665, GlyphLabel×460, Label×460
+workspace-settings-open: obj×3741, Button×3195, Text×2160, TextView×2160, Slot×1730, SlotView×1730, Image×1663, ImageView×1590, HStack×1530, HStackView×1530, GlyphImage×915, GlyphLabel×905
+switcher-open: Button×280, Text×177, TextView×177, Slot×160, SlotView×160, HStack×132, HStackView×132, Image×130, ImageView×129, GlyphLabel×90, Label×90, LabelView×90
+switch-workspace: obj×749, Text×83, TextView×83, Image×59, Slot×54, SlotView×54, Button×54, SceneView×48, NavigationProvider×48, View×40, ImageView×40, Screen×39, anon×7
+switch-back: Button×4260, Text×2925, TextView×2925, Slot×2465, SlotView×2465, Image×2065, HStack×2045, HStackView×2045, ImageView×2030, GlyphLabel×1370, Label×1370, LabelView×1370
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch: 
+scope-all: InboxRowView 36.2, TextView 0.9, Text 0.8, Button 0.8, InboxStackList 0.8, HStackView 0.7, RowFrame 0.6, SlotView 0.5, Image 0.4, VStackView 0.4
+scope-questions: InboxRowView 90.3, InboxStackList 1.5, Text 0.8, Button 0.7, RowFrame 0.5, SlotView 0.5, TextView 0.5, HStackView 0.4, Image 0.3, Avatar 0.3
+scope-open: InboxRowView 124.4, InboxStackList 1.9, Text 1.1, SlotView 1.1, RowFrame 1.1, Button 0.9, AgentTile 0.9, TextView 0.8, HStackView 0.6, ImageView 0.6
+settings-open: BaseNavigationContainer 4.5, StandardRouterNavigator 3.0, Animated(Anonymous) 2.4, SceneView 2.2, MenuCommands 1.4, GuardedScreens 1.2, Text 1.2, Button 1.1, UnreadDot 1.0, TextView 0.9
+settings-close: GuardedScreens 1.3, SceneView 1.3, Text 1.2, StandardRouterNavigator 1.1, SlotView 1.0, MenuCommands 0.8, Animated(Anonymous) 0.8, Button 0.7, InboxStackList 0.7, UnreadDot 0.6
+workspace-settings-open: GatedConfirm 71.4, BaseNavigationContainer 3.6, SceneView 2.2, Text 2.2, Animated(Anonymous) 1.9, StandardRouterNavigator 1.5, Button 1.3, RowFrame 1.2, TextView 1.2, ScreenStackItem 1.2
+switcher-open: Button 0.1, Text 0.1, TextView 0.1, SlotView 0.1, RowFrame 0.1, Image 0.1, ImageView 0.1, HStackView 0.1, LabelView 0.0, RowTime 0.0
+switch-workspace: MenuCommands 2.4, GuardedScreens 0.9, InboxStackList 0.5, StandardRouterNavigator 0.5, SceneView 0.5, KeptScreens 0.3, Animated(Anonymous) 0.3, obj 0.3, TabsLayout 0.2, TabsScreen 0.2
+switch-back: InboxRowView 132.3, RowFrame 4.2, Button 3.3, AgentTile 2.8, Text 2.2, SlotView 1.7, TextView 1.6, HStackView 1.2, Image 1.1, ImageView 1.1
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch: markdown 0.0, rest 0.0
+scope-all: markdown 0.0, rest 43.4
+scope-questions: markdown 0.0, rest 96.4
+scope-open: markdown 0.0, rest 135.5
+settings-open: markdown 0.0, rest 23.5
+settings-close: markdown 0.0, rest 11.4
+workspace-settings-open: markdown 0.0, rest 93.4
+switcher-open: markdown 0.0, rest 0.8
+switch-workspace: markdown 0.0, rest 6.5
+switch-back: markdown 0.0, rest 155.4
+
+whole run: 224s, 327 commits, 252789 components rendered, 10484 ms of stalls over 52 stalls
+events: topTransitionProgress×1628, topHeaderHeightChange×490, topLoad×91, topLoadEnd×91, topLoadStart×91, topFinishTransitioning×59, topTouchStart×45, topWillAppear×36, topTouchEnd×35, topAppear×32, topWillDisappear×24, topGlobalEvent×24, topWindowChange×24, topDisappear×24, topSelectionChange×15
