@@ -40,8 +40,11 @@ import { CALL_KIND, CALL_WORDS, type CallKind } from "./turn-rows.js";
  * handed one first message holding three things (`@repo/features/agent-replay`):
  * the brief its source was handed, the source's transcript replayed, and
  * the note the developer wrote with the start. The tab draws them apart:
- * the brief as the source's transcript drew it, the replay as one folded
- * card naming the source, and the note as the developer's own line. This
+ * one folded card naming the source, which holds the brief as the source's
+ * transcript drew it ahead of the replayed steps, and the note after it as
+ * the developer's own line, so nothing the agent inherited stands outside
+ * the card (a brief drawn as a card of its own, a description's or an
+ * automation's prompt, still opens the transcript). This
  * module reads the message into those three and says the card's words; a
  * message whose markers do not add up has no replay, and is drawn whole as
  * any first message is.
@@ -359,6 +362,27 @@ function briefSource(agent: AgentSummary, agents: readonly AgentSummary[]): Agen
   }
 
   return at;
+}
+
+/**
+ * The agent whose own first line a replay's brief is: the first along the
+ * source's `from` chain that was started afresh, the source itself where it
+ * was; none where the source, or a link of its chain, is not listed, since
+ * the agent it stops at would name the wrong sender and time.
+ */
+export function briefOrigin(
+  source: AgentSummary | undefined,
+  agents: readonly AgentSummary[],
+): AgentSummary | undefined {
+  let at = source;
+
+  for (let link = 0; link < MAX_CHAIN && at !== undefined; link += 1) {
+    if (at.from === undefined) return at;
+    const sourceId: string = at.from.agentId;
+    at = agents.find((each) => each.id === sourceId);
+  }
+
+  return undefined;
 }
 
 /**
