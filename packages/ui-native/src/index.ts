@@ -312,10 +312,8 @@ export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
 export {
   askForName,
-  askForSecret,
   askForWords,
   type NameAsk,
-  type SecretAsk,
   shareWords,
   WORDS_KIND,
   type WordsAct,

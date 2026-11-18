@@ -1,4 +1,4 @@
-// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for words, such as a name as Files and Notes rename or an address, the one that asks for a secret, and the share sheet a link or words are copied or sent from.
+// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for words, such as a name as Files and Notes rename or an address, and the share sheet a link or words are copied or sent from.
 
 import { Alert, Share } from "react-native";
 
@@ -95,41 +95,6 @@ export function askForName({ title, act, name, onName }: NameAsk): void {
       },
     ],
   });
-}
-
-/** What the secret alert asks: its question, what it explains, its act, and what it does with the value typed. */
-export interface SecretAsk {
-  readonly title: string;
-  readonly message?: string | undefined;
-  /** The act's own words, beside Cancel. */
-  readonly act: string;
-  /** Called with the value typed, kept as typed, once the act is pressed on a value that is not empty. */
-  readonly onSecret: (value: string) => void;
-}
-
-/**
- * Asks for a secret in the system's alert with a secure field, its
- * characters hidden as they are typed, as iOS asks for a network's
- * password, such as a workspace variable's value. The value is kept as
- * typed, its spaces included, since a secret's own characters are its
- * value; an act pressed on an empty field does nothing.
- */
-export function askForSecret({ title, message, act, onSecret }: SecretAsk): void {
-  Alert.prompt(
-    title,
-    message,
-    [
-      { text: CANCEL.LABEL, style: CANCEL.STYLE },
-      {
-        text: act,
-        isPreferred: true,
-        onPress: (typed?: string) => {
-          if (typed !== undefined && typed !== "") onSecret(typed);
-        },
-      },
-    ],
-    "secure-text",
-  );
 }
 
 /**

@@ -43,9 +43,8 @@ builds a control of its own.
   around them, each capsule led by the panel's glyph or a model's harness
   mark),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
-  typed in, its act preferred, for a task and an agent alike), `askForSecret`
-  (its secure field, for a variable's value), `ScriptRow` (a script read
-  whole in the monospaced face),
+  typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
+  face),
   `AccountButton`, `PermissionAsk` (a row heading a list, its `RowList`'s
   `lead`, that asks in place for what the app lacks, as Apple asks: why in
   one line, the act that raises the system's own prompt or, once refused,
