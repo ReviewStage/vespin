@@ -2121,9 +2121,10 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     `and effort, and context window, from its next step, as ${MEMBER_MCP_TOOL.LIST_MODELS} ` +
     "lists them, pin or unpin it in the member's sidebar, or replace the list of MCP servers " +
     "switched off for it. Name at least one change, a model only with its effort and a " +
-    "contextWindow only with them; the changes land together or not at all. Archive it with " +
-    `${MEMBER_MCP_TOOL.ARCHIVE_AGENT}. Answers \`accepted\` with the agent as it then stands, or ` +
-    "`rejected` and why; a rejected model or effort lists the choices.",
+    "contextWindow only with them, required where the model's " +
+    `${MEMBER_MCP_TOOL.LIST_MODELS} contextWindows are not empty; the changes land together ` +
+    `or not at all. Archive it with ${MEMBER_MCP_TOOL.ARCHIVE_AGENT}. Answers \`accepted\` with ` +
+    "the agent as it then stands, or `rejected` and why; a rejected model or effort lists the choices.",
   input: UpdateAgentInputSchema,
   annotations: DESTRUCTIVE,
   run: (asked) =>

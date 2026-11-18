@@ -4104,7 +4104,6 @@ test("update_agent renames a teammate's agent on the retired runtime, moves it t
     title: " Billing export ",
     model: SOL,
     effort: "low",
-    contextWindow: "standard",
     disabledServers: ["notion"],
   });
 
@@ -4114,7 +4113,7 @@ test("update_agent renames a teammate's agent on the retired runtime, moves it t
     [changed.agent.title, changed.agent.model, changed.agent.modelName, changed.agent.effort],
     ["Billing export", SOL, "GPT-6.1 Sol", "low"],
   );
-  // A model with one window keeps its whole one, as the catalog reads the choice.
+  // A model with one window runs on its whole one.
   const after = await stored();
   assert.deepEqual(
     [after.title, after.model, after.effort, after.contextWindow, after.disabledServers],
@@ -4330,7 +4329,7 @@ test("list_models for a Claude Code agent lists its Claude models alone, their f
   });
 });
 
-test("update_agent refuses a Claude Code agent a GPT model and a context window, each in words and with nothing written, takes a Claude model or its fast version, and leaves the choices of an agent on the retired runtime as they were", async () => {
+test("update_agent refuses a Claude Code agent a GPT model and a context window, each in words and with nothing written, takes a Claude model or its fast version, and requires an agent on the retired runtime to name a window exactly where the model lists two", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const onClaudeCode = await claudeCodeAgentOn(agents.teammates.userId, tasks.billing);
@@ -4401,10 +4400,35 @@ test("update_agent refuses a Claude Code agent a GPT model and a context window,
   const after = await stored(onClaudeCode);
   assert.deepEqual([after.model, after.effort], [SONNET, "low"]);
 
-  // An agent on the retired runtime still moves to a fast version, another provider's model, and the standard window.
+  // An agent on the retired runtime is refused a move to a model with two windows that names neither, and a window for a model with one.
+  const windowRefusals = [];
+
+  for (const change of [
+    { model: OPUS, effort: "high" },
+    { model: SOL, effort: "low", contextWindow: "long" },
+  ]) {
+    windowRefusals.push(
+      await call(AGENT_TOOL.UPDATE_AGENT, { agentId: onRetired.id, title: "Not this", ...change }),
+    );
+  }
+
+  assert.deepEqual(windowRefusals, [
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason: `Not changed: ${OPUS} offers two context windows, so name contextWindow: standard (200000 tokens) or long (1000000 tokens), as list_models lists them.`,
+    },
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason: `Not changed: ${SOL} runs on one context window, so its list_models contextWindows are empty; leave contextWindow out.`,
+    },
+  ]);
+  assert.equal((await stored(onRetired)).title, null);
+
+  // It still moves to a fast version, another provider's model, and either window.
   for (const change of [
     { model: OPUS_FAST, effort: "high" },
     { model: OPUS, effort: "high", contextWindow: "standard" },
+    { model: OPUS, effort: "high", contextWindow: "long" },
     { model: SOL, effort: "low" },
   ]) {
     const changed = await call(AGENT_TOOL.UPDATE_AGENT, {
