@@ -5005,6 +5005,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
   const stranger = await peerCaller(hostOf(), agents.strangers, agentSessions.services);
   const weekly = { kind: "schedule", cron: "0 9 * * 1", timezone: "Europe/London" };
   const prompt = `Audit our agents' tool sets. ${"Read every tool's description. ".repeat(20)}`;
+
   const made = {
     name: " Agent audit ",
     prompt,
