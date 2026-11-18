@@ -33,11 +33,9 @@ import {
 } from "./agent-store.js";
 import { agentReachableBy } from "./workspace-store.js";
 
-/** One repository an agent works in: `owner/name`, the branch its checkout is cloned at and its pull request opens against, its pull request's head, and that pull request as GitHub last answered. */
+/** One repository an agent works in: `owner/name`, its pull request's head, and that pull request as GitHub last answered. */
 export interface AgentRepositoryEntry {
   readonly repository: string;
-  /** None for the repository's default branch. */
-  readonly baseBranch: string | null;
   /** None until a pull request opens. */
   readonly headBranch: string | null;
   /** None where it opened none from its head branch. */
@@ -46,12 +44,10 @@ export interface AgentRepositoryEntry {
 
 const AgentRepositoryRowSchema = Schema.Struct({
   repository: Schema.NullOr(Schema.String),
-  baseBranch: Schema.NullOr(Schema.String),
   headBranch: Schema.NullOr(Schema.String),
   pullRequest: Schema.NullOr(PublishedColumnSchema),
   extraPosition: Schema.NullOr(Schema.Number),
   extraRepository: Schema.NullOr(Schema.String),
-  extraBaseBranch: Schema.NullOr(Schema.String),
   extraHeadBranch: Schema.NullOr(Schema.String),
   extraPullRequest: Schema.NullOr(PublishedColumnSchema),
 });
@@ -65,12 +61,10 @@ const findAgentRepositories = SqlSchema.findAll({
       db
         .select({
           repository: agentTable.repository,
-          baseBranch: agentTable.startBranch,
           headBranch: agentTable.branch,
           pullRequest: PULL_REQUEST_OF_AGENT_BRANCH,
           extraPosition: agentRepository.position,
           extraRepository: agentRepository.repository,
-          extraBaseBranch: agentRepository.baseBranch,
           extraHeadBranch: agentRepository.headBranch,
           extraPullRequest: pullRequestOfBranch(
             agentTable.id,
@@ -102,7 +96,6 @@ export function readAgentRepositories(
 
     const primary: AgentRepositoryEntry = {
       repository: first.repository,
-      baseBranch: first.baseBranch,
       headBranch: first.headBranch,
       pullRequest: first.pullRequest,
     };
@@ -113,7 +106,6 @@ export function readAgentRepositories(
         : [
             {
               repository: row.extraRepository,
-              baseBranch: row.extraBaseBranch,
               headBranch: row.extraHeadBranch,
               pullRequest: row.extraPullRequest,
             },
