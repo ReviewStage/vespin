@@ -475,10 +475,12 @@ env:
 # first, as the agent page's ⋯ does. The search above leaves "Ledger
 # rounding" found, whose agent finished, so its swipe offers Archive where a
 # working agent's offers Open and Stop. Note that the swipe starts on the
-# row, one element whose center is the row's, and takes 900 ms, as the
-# leading swipe above does, since a quick one reads as a tap and opens the
-# agent. A full swipe only asks, since Archive never runs on one, so the
-# ask is what the flow waits for.
+# row's trailing words, where it runs on ("Cloud"), because the row isn't
+# one element: a swipe from its name started a fifth of the way in and ran
+# too short to open it (jswipe, Nov 18). It takes 900 ms, as the leading
+# swipe above does, since a quick one reads as a tap and opens the agent.
+# A full swipe only opens the row, since Archive never runs on one, so the
+# flow taps Archive and waits for its ask.
 - tapOn: "Ledger rounding"
 - extendedWaitUntil:
     visible: "Created by .*"
@@ -491,7 +493,8 @@ env:
 - waitForAnimationToEnd
 - swipe:
     from:
-      text: "Fix ledger rounding"
+      text: "Cloud"
+      rightOf: "Fix ledger rounding"
     direction: LEFT
     duration: 900
 - waitForAnimationToEnd
