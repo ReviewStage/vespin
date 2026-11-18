@@ -472,6 +472,8 @@ export * from "./components/voice-call/voice-call.js";
 
 export * from "./components/waiting-line/waiting-line.js";
 
+export * from "./components/working-count/working-count.js";
+
 export * from "./components/working-mark/working-mark.js";
 
 export * from "./components/writing-glyph/writing-glyph.js";
