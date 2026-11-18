@@ -71,12 +71,7 @@
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readAccountPreferences } from "@repo/database/models/account-store";
-import {
-  type Agent,
-  agentTaskId,
-  readAgent,
-  readAgentOfConversation,
-} from "@repo/database/models/agent-store";
+import { type Agent, readAgent, readAgentOfConversation } from "@repo/database/models/agent-store";
 import {
   holdThreadPush,
   holdTurnPush,
@@ -382,7 +377,8 @@ function agentTurnNotification(agent: Agent, turnId: string, body: string) {
     payload: {
       aps: {
         alert: alertOf(agentName(agent), body),
-        "thread-id": agentTaskId(agent),
+        // Note that an agent on no task threads its alerts by itself, as its task would.
+        "thread-id": agent.taskId ?? agent.id,
         category: PUSH_CATEGORY.RUN_FAILED,
         "mutable-content": 1,
         sound: "default",
