@@ -271,6 +271,7 @@ const CALLER_TITLE = "Invite expiry";
 const OPUS = "anthropic/claude-opus-5.5";
 const OPUS_FAST = "anthropic/claude-opus-5.5-fast";
 const SOL = "openai/gpt-6.1-sol";
+const IN_THE_CLOUD = { machine: AGENT_MACHINE.VERCEL } as const;
 
 /** A model with a small window, which a long replay does not fit whole. */
 const SMALL_WINDOW = { model: "anthropic/claude-sonnet-4.9", tokens: 60_000 } as const;
@@ -1299,7 +1300,7 @@ test("start_agent starts an agent on the caller's own task as the deployment act
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, prompt, model: OPUS, effort: "low" },
+    { runsOn: IN_THE_CLOUD, taskId: caller.taskId, prompt, model: OPUS, effort: "low" },
     "call-start",
   );
 
@@ -1328,7 +1329,12 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   // An agent's own pick of a model is no member's new default.
   assert.equal((await database.run(readAccountPreferences(caller.userId)))?.agent, undefined);
 
-  const again = await call(AGENT_TOOL.START_AGENT, { taskId: caller.taskId, prompt }, "call-start");
+  const again = await call(
+    AGENT_TOOL.START_AGENT,
+    { runsOn: IN_THE_CLOUD, taskId: caller.taskId, prompt },
+    "call-start",
+  );
+
   assert.ok(isRecord(again.agent));
   assert.equal(again.agent.id, startedId);
   assert.equal(agentSessions.sent.length, 1, "the same call run again starts no second agent");
@@ -1366,7 +1372,7 @@ test("start_agent leaves an unassigned backlog task's assignee and status as the
   assert.deepEqual([stored.task.status, stored.task.assignee], [TASK_STATUS.BACKLOG, undefined]);
 });
 
-test("start_agent naming another member's device is refused in words that name the device and its owner and offer the cloud, starting nothing, and runs in the cloud once runsOn names it", async () => {
+test("start_agent naming no runsOn, or another member's device, is refused in words that name where to run it, starting nothing, and runs in the cloud once runsOn names it", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -1386,6 +1392,12 @@ test("start_agent naming another member's device is refused in words that name t
         repository: RELAY_FULL_NAME,
       });
     }),
+  );
+
+  // Note that the member's newest agent and last pick are no place to run it: the call names one.
+  assert.deepEqual(
+    await call(AGENT_TOOL.START_AGENT, { taskId: billing.id, prompt: "Bill by seat." }),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_RUNS_ON },
   );
 
   assert.deepEqual(
@@ -1569,7 +1581,7 @@ test("start_agent hands over a prompt and a note each as long as a start allows,
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt, note },
+    { runsOn: IN_THE_CLOUD, taskId: agents.caller.taskId, prompt, note },
     "call-longest",
   );
 
@@ -1636,7 +1648,7 @@ test("start_agent on the description with a note hands the agent the pictures im
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
+    { runsOn: IN_THE_CLOUD, taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
     "call-images",
   );
 
@@ -1664,7 +1676,7 @@ test("start_agent on the description with a note hands the agent the pictures im
 
   const again = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
+    { runsOn: IN_THE_CLOUD, taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
     "call-images",
   );
 
@@ -1821,7 +1833,7 @@ test("start_agent refuses, in words that say why and starting nothing, a picture
     assert.deepEqual(
       await call(
         AGENT_TOOL.START_AGENT,
-        { taskId: caller.taskId, prompt: PROMPT, note: NOTE, images },
+        { runsOn: IN_THE_CLOUD, taskId: caller.taskId, prompt: PROMPT, note: NOTE, images },
         `call-${randomUUID()}`,
       ),
       { status: ACTION_RESULT_STATUS.REJECTED, reason },
@@ -1840,7 +1852,12 @@ test("start_agent with a title names the agent by it from the start, and a title
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, prompt: "Add a title to start_agent.", title: `  ${title}  ` },
+    {
+      runsOn: IN_THE_CLOUD,
+      taskId: caller.taskId,
+      prompt: "Add a title to start_agent.",
+      title: `  ${title}  `,
+    },
     "call-titled",
   );
 
@@ -1865,7 +1882,11 @@ test("start_agent with a title names the agent by it from the start, and a title
     ["a".repeat(AGENT_BOUNDS.MAX_TITLE_CHARS + 1), "call-long"],
   ] as const) {
     assert.deepEqual(
-      await call(AGENT_TOOL.START_AGENT, { taskId: caller.taskId, title: refused }, key),
+      await call(
+        AGENT_TOOL.START_AGENT,
+        { runsOn: IN_THE_CLOUD, taskId: caller.taskId, title: refused },
+        key,
+      ),
       {
         status: ACTION_RESULT_STATUS.REJECTED,
         reason: START_AGENT_REFUSAL.UNREADABLE,
@@ -1914,7 +1935,7 @@ test("an agent stored as a pilot, on a task stored in pilot mode, makes a child 
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: made.task.id, prompt: "Meter usage per workspace." },
+    { runsOn: IN_THE_CLOUD, taskId: made.task.id, prompt: "Meter usage per workspace." },
     "call-start",
   );
 
@@ -1940,7 +1961,7 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: caller.taskId, prompt, branch: "luke/never-pushed" },
+      { runsOn: IN_THE_CLOUD, taskId: caller.taskId, prompt, branch: "luke/never-pushed" },
       "call-missing",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_BRANCH },
@@ -1949,7 +1970,7 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: caller.taskId, prompt, branch: "two words" },
+      { runsOn: IN_THE_CLOUD, taskId: caller.taskId, prompt, branch: "two words" },
       "call-unreadable",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.UNREADABLE },
@@ -1957,7 +1978,7 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, prompt, branch: STACKED_BRANCH },
+    { runsOn: IN_THE_CLOUD, taskId: caller.taskId, prompt, branch: STACKED_BRANCH },
     "call-stacked",
   );
 
@@ -1973,7 +1994,7 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
 
   const again = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: caller.taskId, prompt, branch: STACKED_BRANCH },
+    { runsOn: IN_THE_CLOUD, taskId: caller.taskId, prompt, branch: STACKED_BRANCH },
     "call-stacked",
   );
 
@@ -2052,7 +2073,7 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
       const started = await call(
         AGENT_TOOL.START_AGENT,
-        { taskId: agents.caller.taskId, prompt: PROMPT, model, effort },
+        { runsOn: IN_THE_CLOUD, taskId: agents.caller.taskId, prompt: PROMPT, model, effort },
         `call-${calls}`,
       );
 
@@ -2064,7 +2085,13 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
   const fast = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT, model: OPUS_FAST, effort: "high" },
+    {
+      runsOn: IN_THE_CLOUD,
+      taskId: agents.caller.taskId,
+      prompt: PROMPT,
+      model: OPUS_FAST,
+      effort: "high",
+    },
     "call-fast",
   );
 
@@ -2079,7 +2106,7 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
   const unnamed = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT },
+    { runsOn: IN_THE_CLOUD, taskId: agents.caller.taskId, prompt: PROMPT },
     "call-default",
   );
 
@@ -2142,7 +2169,7 @@ test("list_models says the default is no longer offered where the catalog droppe
 
   const unnamed = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT },
+    { runsOn: IN_THE_CLOUD, taskId: agents.caller.taskId, prompt: PROMPT },
     "call-default",
   );
 
@@ -2166,7 +2193,13 @@ test("list_models says the default is no longer offered where the catalog droppe
 
   const refused = await once(
     AGENT_TOOL.START_AGENT,
-    { taskId: agents.caller.taskId, prompt: PROMPT, model: SOL, effort: "max" },
+    {
+      runsOn: IN_THE_CLOUD,
+      taskId: agents.caller.taskId,
+      prompt: PROMPT,
+      model: SOL,
+      effort: "max",
+    },
     "call-max",
   );
 
@@ -2578,7 +2611,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: taskIds.billing, prompt: "Add the invoice export." },
+    { runsOn: IN_THE_CLOUD, taskId: taskIds.billing, prompt: "Add the invoice export." },
     "call-billing",
   );
 
@@ -2592,7 +2625,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   // The same call run again answers the agent it made, and starts nothing.
   const again = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: taskIds.billing, prompt: "Add the invoice export." },
+    { runsOn: IN_THE_CLOUD, taskId: taskIds.billing, prompt: "Add the invoice export." },
     "call-billing",
   );
 
@@ -2614,7 +2647,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: taskIds.billing, prompt: "Add the invoice export." },
+      { runsOn: IN_THE_CLOUD, taskId: taskIds.billing, prompt: "Add the invoice export." },
       "call-billing",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_SUCH_TASK },
@@ -2624,7 +2657,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: taskIds.elsewhere, prompt: "Add the invoice export." },
+      { runsOn: IN_THE_CLOUD, taskId: taskIds.elsewhere, prompt: "Add the invoice export." },
       "call-elsewhere",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_SUCH_TASK },
@@ -2650,7 +2683,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
     await placeOf(
       await fromRunTask(
         AGENT_TOOL.START_AGENT,
-        { taskId: runAgent.taskId, prompt: "Sweep." },
+        { runsOn: IN_THE_CLOUD, taskId: runAgent.taskId, prompt: "Sweep." },
         "call-beside",
       ),
     ),
@@ -2664,7 +2697,7 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
     await placeOf(
       await fromRunTask(
         AGENT_TOOL.START_AGENT,
-        { taskId: runAgent.taskId, prompt: "Sweep." },
+        { runsOn: IN_THE_CLOUD, taskId: runAgent.taskId, prompt: "Sweep." },
         "call-later",
       ),
     ),
@@ -2813,7 +2846,7 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A start on it by its id, as any other task of the workspace.
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId, prompt: "Write the migration." },
+    { runsOn: IN_THE_CLOUD, taskId, prompt: "Write the migration." },
     "call-start",
   );
 
@@ -2872,13 +2905,20 @@ test("create_task makes a task in the caller's workspace for the member the agen
 
   // A start naming a key the tool's earlier words taught is refused with the key it meant.
   assert.deepEqual(
-    await call(AGENT_TOOL.START_AGENT, { newTask: "Old way", prompt: "Sweep." }, "call-old"),
+    await call(
+      AGENT_TOOL.START_AGENT,
+      { runsOn: IN_THE_CLOUD, newTask: "Old way", prompt: "Sweep." },
+      "call-old",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NEW_TASK },
   );
-  assert.deepEqual(await call(AGENT_TOOL.START_AGENT, { task: "Sweep." }, "call-old-prompt"), {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: "Not started: start_agent takes no task; pass what the agent should do as prompt.",
-  });
+  assert.deepEqual(
+    await call(AGENT_TOOL.START_AGENT, { runsOn: IN_THE_CLOUD, task: "Sweep." }, "call-old-prompt"),
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason: "Not started: start_agent takes no task; pass what the agent should do as prompt.",
+    },
+  );
   assert.deepEqual(await tasksNamed(bob, workspaceId, "Old way"), []);
   assert.equal(agentSessions.sent.length, 1, "a refused start starts nothing");
 
@@ -2900,7 +2940,11 @@ test("create_task makes a task in the caller's workspace for the member the agen
   assert.ok(isRecord(planless.task) && isWireString(planless.task.id), JSON.stringify(planless));
   assert.equal(Option.getOrThrow(await database.run(readTask(bob, planless.task.id))).text, "");
   assert.deepEqual(
-    await call(AGENT_TOOL.START_AGENT, { taskId: planless.task.id }, "call-planless-start"),
+    await call(
+      AGENT_TOOL.START_AGENT,
+      { runsOn: IN_THE_CLOUD, taskId: planless.task.id },
+      "call-planless-start",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.PROMPT_NEEDED },
   );
   assert.equal(agentSessions.sent.length, 1, "a start with no prompt starts nothing");

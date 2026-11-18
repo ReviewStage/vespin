@@ -382,8 +382,12 @@ export const START_AGENT_REFUSAL = {
     `bounded the same or none, a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} ` +
     "characters or none, a branch as one git branch name or none, a model with its effort, " +
     "both or neither, a taskId, runsOn as " +
-    `${IN_THE_CLOUD_WORDS}, a device of the member's by its name or its id, or none, and images as ` +
+    `${IN_THE_CLOUD_WORDS} or a device of the member's by its name or its id, and images as ` +
     `at most ${AGENT_BOUNDS.MAX_ATTACHMENTS} attachment ids or none.`,
+  NO_RUNS_ON:
+    `Not started: name where the agent runs as runsOn: ${IN_THE_CLOUD_WORDS} for the cloud, or one ` +
+    `of the member's own devices as ${AGENT_TOOL.LIST_MACHINES} lists it, with the runsOn to pass. ` +
+    "Only a start with from may leave it out, to run where the agent it starts from runs.",
   NO_TASK:
     "Not started: name the task to start the agent on as taskId: your own is the taskId in your " +
     `instructions' own values, another the id ${AGENT_TOOL.LIST_TASKS} answered, and with from the ` +
@@ -782,9 +786,9 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
           "member's own devices (a Mac or a host) by its name, or " +
           `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id; it must be online, ` +
           "and a name matching none of their devices, or several, is refused with the devices listed. " +
-          "Left out: where the agent it starts from runs, with from; else where the member's newest agent " +
-          "on the task runs; else where the member last chose to run one; else the cloud. " +
-          "With from, another place than that agent's moves it there.",
+          `${AGENT_TOOL.LIST_MACHINES} lists each place with the runsOn to pass. Every start names it ` +
+          "but one with from, which runs where the agent it starts from runs unless it names another " +
+          "place, which moves it there.",
       ),
     ),
     from: Schema.optionalKey(
@@ -2249,7 +2253,10 @@ const runsOnOfStart = Effect.fnUntraced(function* (
  * why nothing was started. A call naming no taskId, as the tool's earlier
  * words let it, is refused with what to name rather than started on the
  * caller's own task, and one naming a key the tool's earlier words taught
- * is refused with the key it meant (`RETIRED_START_KEYS`). Note that a
+ * is refused with the key it meant (`RETIRED_START_KEYS`). A call naming no
+ * runsOn is refused with the places to name, rather than run where the
+ * member's newest agent or last pick runs, unless it starts from another
+ * agent, which runs where that agent runs. Note that a
  * start from another agent can take tens of seconds, a copy of its work and
  * a summary of its transcript among them, which the call is let run: our
  * MCP server's function runs a tool to the function's own bound, and the
@@ -2278,6 +2285,11 @@ export function runStartAgent(
   const { model, effort, from, taskId } = asked.success;
 
   if (taskId === undefined) return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_TASK));
+
+  if (from === undefined && asked.success.runsOn === undefined) {
+    return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_RUNS_ON));
+  }
+
   const { caller, agentSessions } = call;
   const refused = startInputRefusal(caller, asked.success);
 
