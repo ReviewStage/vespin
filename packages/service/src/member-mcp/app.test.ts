@@ -7,7 +7,7 @@ import { it } from "@effect/vitest";
 import type { Client } from "@modelcontextprotocol/client";
 import { Database } from "@repo/database/core/query";
 import { queueAgentMessage } from "@repo/database/models/agent-queue-store";
-import { createAgent, readAgent } from "@repo/database/models/agent-store";
+import { archiveAgent, createAgent, readAgent } from "@repo/database/models/agent-store";
 import {
   createAutomation,
   listAutomationRuns,
@@ -1785,6 +1785,47 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         assert.equal(agentSessions.sent.length, before);
         const after = Option.getOrThrow(yield* readTask(owner, task.id));
         assert.equal(after.task.status, TASK_STATUS.DONE);
+      }),
+  );
+
+  it.effect(
+    "an outside agent's reply to a thread of an archived agent is refused, naming unarchive_agent, and leaves the agent archived and untold",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, task, ask, mcpFetch } = yield* openTask({ agentSessions });
+        const { agent } = yield* startedAgent(owner, task.id, ask);
+
+        const notice = yield* postInboxThread(
+          { userId: owner, taskId: task.id, agentId: agent.id },
+          { key: "deploy-done", title: "Deployed to staging", body: "Staging runs the new build." },
+        );
+
+        assert.ok(Result.isSuccess(notice));
+        yield* archiveAgent(owner, agent.id, true);
+        const before = agentSessions.sent.length;
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
+        const replied = yield* Effect.promise(async () =>
+          decodeAnswer(
+            await client.callTool({
+              name: MEMBER_MCP_TOOL.REPLY_TO_THREAD,
+              arguments: { threadId: notice.success.id, text: "Ship it to production too." },
+            }),
+          ),
+        );
+
+        yield* Effect.promise(() => client.close());
+
+        assert.equal(replied.isError, true, replied.content[0].text);
+        assert.ok(
+          replied.content[0].text.includes(
+            `${MEMBER_MCP_TOOL.UNARCHIVE_AGENT} (agentId ${agent.id}`,
+          ),
+          replied.content[0].text,
+        );
+        assert.equal(agentSessions.sent.length, before);
+        assert.notEqual(Option.getOrThrow(yield* readAgent(owner, agent.id)).archivedAt, null);
       }),
   );
 

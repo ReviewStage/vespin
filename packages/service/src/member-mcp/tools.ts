@@ -1887,7 +1887,8 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "Send a coding agent the member can see a message, by its id, as the member's own words, " +
     "as their composer would: it lands in the agent's conversation under the member's name, " +
     "and a teammate's agent reads it under the member's label. A running agent reads it at " +
-    "its next step, and an idle one starts a turn on it; an archived agent takes nothing, and " +
+    "its next step, and an idle one starts a turn on it; an archived agent is refused, since a " +
+    `tool never brings one back: bring it back with ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT} first; and ` +
     "one whose task is done or canceled is refused, since a tool never reopens a task: move " +
     `the task with ${MEMBER_MCP_TOOL.UPDATE_TASK} first. Each ` +
     "call sends a message of its own, so call it once for each. Answers `accepted` once the " +
@@ -3203,16 +3204,23 @@ const READ_GITHUB_CONNECTION_TOOL = memberMcpTool({
 // The member's inbox (`inbox.ts`): the threads their agents ask them things on, read and worked as theirs.
 
 /** How an answer or a message tells the agent what the thread's agent hears. */
+/** What a call that would reach an archived agent meets, said in every such tool's description. */
+const ARCHIVED_AGENT_WORDS =
+  "Where that agent is archived, the call is refused before anything is written, since a " +
+  `tool never brings an agent back: bring it back with ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT} first.`;
+
 /** What a call that would wake an agent on a settled task meets, said in every such tool's description. */
 const SETTLED_AGENT_WORDS =
   "Where that agent's task is done or canceled, the call is refused before anything is " +
-  `written, since a tool never reopens a task: move the task with ${MEMBER_MCP_TOOL.UPDATE_TASK} first.`;
+  `written, since a tool never reopens a task: move the task with ${MEMBER_MCP_TOOL.UPDATE_TASK} first. ` +
+  ARCHIVED_AGENT_WORDS;
 
 /** The same for a call that tells the thread's agent only where it waits on the member's answer. */
 const WAITING_SETTLED_WORDS =
-  "Where it would tell an agent waiting on the answer whose task is done or canceled, it is " +
-  `refused before anything is written, since a tool never reopens a task: move the task with ` +
-  `${MEMBER_MCP_TOOL.UPDATE_TASK} first.`;
+  "Where it would tell an agent waiting on the answer whose task is done or canceled, or one " +
+  "that is archived, it is refused before anything is written, since a tool never reopens a " +
+  `task or brings an agent back: move the task with ${MEMBER_MCP_TOOL.UPDATE_TASK}, or bring ` +
+  `the agent back with ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT}, first.`;
 
 const HANDED_WORDS =
   "It is written on the thread as the member's own and handed at once to the thread's agent, " +
