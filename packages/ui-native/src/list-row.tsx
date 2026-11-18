@@ -512,6 +512,7 @@ export function RowFrame({
   const colors = useColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
+  const choosing = useContext(RowChoosingContext);
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
@@ -533,7 +534,8 @@ export function RowFrame({
   const groups = menuGroups.filter(menuGroupFilled);
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
-  if (!ownGroup && groups.length === 0 && preview === undefined) {
+  // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
+  if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
     return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 

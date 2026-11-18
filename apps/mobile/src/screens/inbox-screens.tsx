@@ -149,6 +149,9 @@ const MORE = { label: "More", symbol: GLYPH.MORE } as const;
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
 
+/** What a dimmed bar act does when pressed, which the system never lets happen. */
+const doNothing = (): void => undefined;
+
 /** What a video or a sound clip the words draw in place is heard as, where the words give it no alt. */
 const PLAYED_LABEL = {
   [INBOX_MEDIA.VIDEO]: "Video",
@@ -1164,11 +1167,13 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
           onChoose: selecting.choose,
         } satisfies RowChoosing,
         title:
-          pickedItems.length === 0 ? SELECTION_WORDS.SELECT : selectedWords(pickedItems.length),
+          pickedItems.length === 0
+            ? SELECTION_WORDS.SELECT_ITEMS
+            : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
-        // Note that Select all takes every thread listed, and Select none lets them go once all are chosen, as Mail's edit bar leads with them.
+        // Note that Select all takes every thread listed, and Deselect all lets them go once all are chosen, as Mail's edit bar leads with them.
         all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
-          ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
+          ? { label: SELECTION_WORDS.DESELECT_ALL, onPress: () => selecting.choose([]) }
           : {
               label: SELECTION_WORDS.SELECT_ALL,
               // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
@@ -1273,13 +1278,9 @@ function InboxStackList(held: InboxHeld) {
           {/* Note that the acts stand side by side between two flexible spaces, so iOS 26 draws them in one glass capsule centered over the foot, as Files and Mail group their edit bar's acts, never a glass circle each spread across it. */}
           <Stack.Toolbar.Spacer />
           {choosing.acts.map((act) =>
-            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
-            isBarMenu(act) ? (
-              <Stack.Toolbar.Menu
-                key={act.label}
-                accessibilityLabel={act.label}
-                disabled={act.disabled === true}
-              >
+            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
+            isBarMenu(act) && act.disabled !== true ? (
+              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1288,7 +1289,7 @@ function InboxStackList(held: InboxHeld) {
                 key={act.label}
                 accessibilityLabel={act.label}
                 disabled={act.disabled === true}
-                onPress={act.onPress}
+                onPress={isBarMenu(act) ? doNothing : act.onPress}
               >
                 {act.symbol === undefined ? null : (
                   <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
