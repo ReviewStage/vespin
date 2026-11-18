@@ -175,12 +175,13 @@ export const SAVE_MEMORY_TOOL = {
     "hold next time, and helps the team, never a guess, an idea still being weighed, this task's own " +
     "detail, or a remark about one member. It is refused when it runs past " +
     `${MEMORY_BOUNDS.MAX_CHARS} characters, when it looks like a credential, key, token, or ` +
-    "password, and on a turn an automation opened or one that read the web or drove the " +
-    "browser, so keep what was settled before you browse, or on a later turn a member's own " +
+    "password, and on a turn an automation opened or one that read the web, drove the " +
+    "browser, or used the computer tool, so keep what was settled before you browse, or on a later turn a member's own " +
     "words open. When what was said contradicts a " +
     `memory ${AGENT_TOOL.SEARCH_MEMORY} answered, pass ` +
     "that memory's id as replaces with the corrected statement, so the old one is rewritten " +
-    "rather than kept beside it. Do it quietly: never ask the developer whether to keep something and " +
+    "rather than kept beside it, now in your starter's name, or folded into another memory that " +
+    "already holds the corrected words. Do it quietly: never ask the developer whether to keep something and " +
     "never mention a memory you kept unless they ask.",
   inputSchema: REMEMBER_INPUT,
 } as const;
@@ -219,7 +220,8 @@ export const FORGET_MEMORY_TOOL = {
     "answer on a thread you posted, never to tidy up on your own. The member who started you " +
     "may forget a memory in their own words, and one in any member's where they own or " +
     "administer the workspace; any other is refused. It is refused too on a turn an " +
-    "automation opened or one that read the web or drove the browser, so forget on the turn " +
+    "automation opened or one that read the web, drove the browser, or used the computer tool, " +
+    "so forget on the turn " +
     "the member's own words open.",
   inputSchema: FORGET_INPUT,
 } as const;

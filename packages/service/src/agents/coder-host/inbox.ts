@@ -164,6 +164,7 @@ const POST_THREAD_WORDS =
   `since the reply box under every ask already takes their words, and picks among more than ${INBOX_BOUNDS.MAX_OPTIONS} are asked as an answer in their own words); ` +
   "never ask for a credential or a secret in a form, since the answer reaches your transcript: that is a do. " +
   "A post without ask asks nothing: a note, or your reply on the thread. " +
+  "A post on a settled thread opens it again, as a note waiting on them where it asks nothing. " +
   "A thread holds one open ask, and a newer ask replaces it; every answer reaches you as a message. " +
   "The call answers with the thread and one line for each other thread of yours still open.";
 

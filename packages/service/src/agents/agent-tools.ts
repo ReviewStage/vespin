@@ -1110,8 +1110,9 @@ export const UPDATE_TASK_TOOL = {
     "Done, with status done, once all of the task's work is done, such as when its pull requests " +
     "merged, or where the developer asked you to clean up: that withdraws every ask still open on its " +
     "threads, so mark it done only once you no longer need them, and archives every agent on the " +
-    "task, you included; Canceled does the same. A change of its status off Done brings " +
-    "them back, while a turn that reopens the task does not. Never change a teammate's task still " +
+    `task, as ${AGENT_TOOL.ARCHIVE_AGENT} would but stopping none: an idle one at once, and one at ` +
+    "work, you included, as its turn ends; Canceled does the same. A change of its status off Done brings those agents back, their " +
+    "asks left withdrawn, while a turn that reopens the task does not. Never change a teammate's task still " +
     "in use unless the developer asked for it. A task is never archived: a settled one stands Done " +
     "or Canceled. A block is Linear's: the blocker's work comes first and the task it blocks waits " +
     "on it, as advice, never a lock. Both tasks must be in your workspace, a task never blocks " +
@@ -1129,8 +1130,9 @@ export const STOP_AGENT_TOOL = {
     "its turn under way is canceled, while the agent, its transcript, and its branch stay, and a " +
     "later message starts a new turn. Stop an agent you or the developer started that is going the " +
     "wrong way, or one the developer asked you to stop; never a teammate's agent still in use " +
-    "unless the developer asked for it. No agent stops itself. `stopped` false is an agent " +
-    "already idle, which changes nothing. Then say which agent you stopped and why.",
+    "unless the developer asked for it. No agent stops itself. Every stop also cancels the agent's " +
+    "booked wakeup and pauses the messages queued for it until a member resumes them, even where " +
+    "`stopped` is false, an agent already idle. Then say which agent you stopped and why.",
   inputSchema: READ_AGENT_INPUT,
 } as const;
 
@@ -1323,10 +1325,11 @@ export const ARCHIVE_AGENT_TOOL = {
   name: AGENT_TOOL.ARCHIVE_AGENT,
   description:
     "Archive an agent of your workspace by its id, as the developer's Archive agent would, for " +
-    "the developer you work for: a turn it still has under way is stopped first, as " +
-    `${AGENT_TOOL.STOP_AGENT} would, and its open asks are withdrawn; then it leaves every list ` +
+    "the developer you work for: it is stopped first, as " +
+    `${AGENT_TOOL.STOP_AGENT} would, an idle one too, and its open asks are withdrawn; then it leaves every list ` +
     "but the archived ones, takes no message, and is not woken by GitHub or an automation. Its " +
-    "transcript, branch, and pull request are kept. Archive a helper agent whose work is done, " +
+    "transcript, branch, and pull request are kept, but one on a member's device has its folder " +
+    "removed there, so what it never pushed is lost. Archive a helper agent whose work is done, " +
     "such as one whose pull request merged, or one the developer asked you to clean up, with a " +
     "short reason; never a teammate's agent still in use unless the developer asked for it. No " +
     `agent archives itself. ${AGENT_TOOL.UNARCHIVE_AGENT} brings one back. Then say which agent ` +
