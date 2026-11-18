@@ -47,7 +47,12 @@ import {
   SESSION_COOKIE_CACHE,
   workspaceDeletion,
 } from "./auth-policy.js";
-import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "./oauth-clients.js";
+import {
+  ANDROID_OAUTH_CLIENT,
+  CLI_OAUTH_CLIENT,
+  DESKTOP_OAUTH_CLIENT,
+  IOS_OAUTH_CLIENT,
+} from "./oauth-clients.js";
 import { OFFLINE_TOKEN_ROTATION, offlineTokensOutliveSession } from "./offline-tokens.js";
 import { supportAccess } from "./support-access.js";
 
@@ -118,6 +123,7 @@ const OAUTH_PROVIDER_OPTIONS = {
     DESKTOP_OAUTH_CLIENT.id,
     CLI_OAUTH_CLIENT.id,
     IOS_OAUTH_CLIENT.id,
+    ANDROID_OAUTH_CLIENT.id,
   ]),
   accessTokenExpiresIn: 60 * 60,
   ...OFFLINE_TOKEN_ROTATION,
