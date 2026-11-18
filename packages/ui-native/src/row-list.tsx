@@ -633,7 +633,13 @@ export function footerToneOf(refusal: string | undefined): FooterTone {
 }
 
 /** A section's footer: a note in the system's footnote ink, or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
-function SectionFooter({ words, tone }: { readonly words: string; readonly tone: FooterTone }) {
+export function SectionFooter({
+  words,
+  tone,
+}: {
+  readonly words: string;
+  readonly tone: FooterTone;
+}) {
   const failure = tone === FOOTER_TONE.FAILURE;
   useAnnounced(failure ? words : undefined, true);
 

@@ -850,6 +850,8 @@ function AgentConversation({
     <>
       <AgentOptionsSheet
         agentId={id}
+        pick={pick}
+        mode={mode}
         presented={optionsShown}
         onDismiss={() => setOptionsShown(false)}
       />
@@ -1095,15 +1097,18 @@ function AgentPage({
  */
 function AgentOptionsSheet({
   agentId,
+  pick,
+  mode,
   presented,
   onDismiss,
 }: {
   readonly agentId: string;
+  /** The page's own model and mode, so a change from the sheet or the composer's + menu clears the one refusal and counts as the one latest change. */
+  readonly pick: AgentModelPick;
+  readonly mode: AgentMode | undefined;
   readonly presented: boolean;
   readonly onDismiss: () => void;
 }) {
-  const pick = useAgentModelPick(agentId);
-  const mode = useAgentMode(agentId);
   const servers = useAgentServers(agentId);
 
   const serversFooter =
@@ -1147,7 +1152,8 @@ function AgentOptionsSheet({
 
                 if (chosen !== undefined) mode.choose(chosen.id);
               },
-              footer: mode.note ?? PERMISSION_MODE_WORDS.APPLIES,
+              footer: PERMISSION_MODE_WORDS.APPLIES,
+              note: mode.note,
             }
       }
     >

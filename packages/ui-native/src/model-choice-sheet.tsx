@@ -33,6 +33,7 @@ import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { HarnessMark } from "./marks.js";
 import { SwitchRow } from "./option-rows.js";
+import { FOOTER_TONE, SectionFooter } from "./row-list.js";
 import { type PickOption, PickRows } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
@@ -53,8 +54,10 @@ export type ModeChoice = {
   readonly options: readonly PickOption[];
   readonly picked: string | undefined;
   readonly onPick: (mode: string) => void;
-  /** When a change reaches the agent, or why the last did not take; none for a new agent. */
+  /** When a change reaches the agent; none for a new agent. */
   readonly footer?: string | undefined;
+  /** Why the last change did not take, standing in the footer's place and told to VoiceOver; none while none failed. */
+  readonly note?: string | undefined;
 };
 
 type ModelChoiceSheetProps = {
@@ -82,6 +85,16 @@ function byHarness(models: readonly ModelOption[]) {
   return Object.values(MODEL_PROVIDER)
     .map((provider) => ({ provider, models: models.filter((each) => each.provider === provider) }))
     .filter((group) => group.models.length > 0);
+}
+
+/** The permission section's footer: why the last change did not take while it stands, told as a failure, else when a change reaches the agent. */
+function modeFooter(mode: ModeChoice) {
+  if (mode.note !== undefined)
+    return <SectionFooter words={mode.note} tone={FOOTER_TONE.FAILURE} />;
+
+  if (mode.footer === undefined) return undefined;
+
+  return <SectionFooter words={mode.footer} tone={FOOTER_TONE.NOTE} />;
 }
 
 /**
@@ -127,7 +140,13 @@ export function ModelChoiceSheet(props: ModelChoiceSheetProps) {
                   navigationBarTitleDisplayMode("inline"),
                 ]}
               >
-                <Section footer={props.note === undefined ? undefined : <Text>{props.note}</Text>}>
+                <Section
+                  footer={
+                    props.note === undefined ? undefined : (
+                      <SectionFooter words={props.note} tone={FOOTER_TONE.FAILURE} />
+                    )
+                  }
+                >
                   <Picker<string | null>
                     label={CHOICE_WORDS.MODEL}
                     selection={model ?? null}
@@ -175,12 +194,7 @@ export function ModelChoiceSheet(props: ModelChoiceSheetProps) {
                   )}
                 </Section>
                 {props.mode === undefined ? null : (
-                  <Section
-                    title={props.mode.title}
-                    footer={
-                      props.mode.footer === undefined ? undefined : <Text>{props.mode.footer}</Text>
-                    }
-                  >
+                  <Section title={props.mode.title} footer={modeFooter(props.mode)}>
                     <PickRows
                       options={props.mode.options}
                       picked={props.mode.picked}
