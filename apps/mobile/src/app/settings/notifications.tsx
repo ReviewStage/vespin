@@ -1,11 +1,10 @@
-// notifications.tsx -- Settings' Notifications page, as iOS's own Settings keeps an app's: how this phone's pushes fare, when it takes them ("Notify me"), and iOS's own notification settings; or, until the phone lets the app notify, the step toward letting it.
+// notifications.tsx -- Settings' Notifications page, as iOS apps keep theirs: whether notifications are on, when this phone takes them ("Notify me"), and iOS's own notification settings; or, while they are off, that they are and the step toward turning them on.
 
 import {
   PUSH_NOTIFICATIONS_STATE,
   PUSH_NOTIFY_CHOICES,
   PUSH_NOTIFY_FOOTER,
   PUSH_NOTIFY_TITLE,
-  pushStandingText,
 } from "@repo/features/push-device-model";
 import {
   ActionRow,
@@ -33,8 +32,11 @@ import {
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
-/** What the row that says how the phone's pushes fare is named, so its value reads as the pushes' state rather than a bare "Working". */
-const NOTIFICATIONS_STATUS = "Push notifications";
+/** What the row that says whether the app may notify is named, as an app's own settings name iOS's permission. */
+const NOTIFICATIONS_LABEL = "Notifications";
+
+/** What the page says while iOS lets the app notify none, over the step that turns them on. */
+const NOTIFICATIONS_OFF = "Notifications are off.";
 
 /** The step toward allowing them, where one is left: the system's prompt, or iOS's Settings after a refusal. */
 const NOTIFICATION_STEP = {
@@ -43,10 +45,12 @@ const NOTIFICATION_STEP = {
 } as const;
 
 /**
- * The page: once the phone lets the app notify, Status (how its pushes fare,
- * as the service reads them), Notify me's choices under their footer once
- * the phone is registered, and iOS's own notification settings; until then,
- * the one step toward letting it.
+ * The page: once the phone lets the app notify, that notifications are on,
+ * Notify me's choices under their footer once the phone is registered, and
+ * iOS's own notification settings; until then, that they are off and the one
+ * step toward turning them on. Note that it says the permission's state, as
+ * iOS apps do, never how the service's pushes fared, which is a delivery
+ * diagnostic for the service's own records and not the reader's to act on.
  */
 export default function NotificationsScreen() {
   const notifications = useNotificationPermission();
@@ -60,18 +64,11 @@ export default function NotificationsScreen() {
       <SettingsForm>
         {allowed ? (
           <ListSection>
-            <ValueRow
-              label={NOTIFICATIONS_STATUS}
-              value={
-                push.standing === undefined
-                  ? PUSH_NOTIFICATIONS_STATE.ON
-                  : pushStandingText(push.standing)
-              }
-            />
+            <ValueRow label={NOTIFICATIONS_LABEL} value={PUSH_NOTIFICATIONS_STATE.ON} />
           </ListSection>
         ) : notifications.standing === NOTIFICATION_STANDING.REFUSED ? (
           // Note that once iOS has refused, the one way on is its own Settings, so the row leaves the app as Open iOS notification settings does, with the arrow out.
-          <ListSection>
+          <ListSection footer={NOTIFICATIONS_OFF}>
             <PushRow
               label={NOTIFICATION_STEP[notifications.standing]}
               goes={PUSH_ROW_GOES.OUT}

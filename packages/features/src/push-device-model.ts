@@ -10,8 +10,7 @@
  */
 
 import { PRODUCT_NAME } from "./product-name.js";
-import { PUSH_NOTIFY, type PushDeviceStatusAnswer, type PushNotify } from "./push-device-wire.js";
-import { dayAndTimeText } from "./time-format.js";
+import { PUSH_NOTIFY, type PushNotify } from "./push-device-wire.js";
 
 /** Each "Notify me" choice in the order Settings lists them, with its label. */
 export const PUSH_NOTIFY_CHOICES: readonly { readonly id: PushNotify; readonly label: string }[] = [
@@ -39,24 +38,3 @@ export const PUSH_NOTIFY_FOOTER = `When I'm away holds a notification while you'
 
 /** What the phone says when the service did not take a "Notify me" choice, which is put back. */
 export const PUSH_NOTIFY_REFUSED = "Notify me could not be changed. Try again.";
-
-/** How a phone's pushes stand where none failed: working, or none sent yet. */
-const PUSH_STANDING_WORDS = {
-  WORKING: "Working",
-  NONE_YET: "None sent yet",
-} as const;
-
-/** How the phone's pushes are faring, as the Notifications row says it: failing since when and why, working, or none sent yet. */
-export function pushStandingText(
-  standing: Pick<PushDeviceStatusAnswer, "lastDeliveredAt" | "failingSince" | "failureReason">,
-): string {
-  if (standing.failingSince !== null) {
-    const since = `Failing since ${dayAndTimeText(standing.failingSince)}`;
-
-    return standing.failureReason === null ? since : `${since} (${standing.failureReason})`;
-  }
-
-  return standing.lastDeliveredAt === null
-    ? PUSH_STANDING_WORDS.NONE_YET
-    : PUSH_STANDING_WORDS.WORKING;
-}
