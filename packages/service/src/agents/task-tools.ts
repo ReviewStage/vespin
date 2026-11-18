@@ -1,12 +1,10 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { taskIdOfNumber } from "@repo/database/models/task-number-store";
 import {
   readTask,
   type TaskAssigneeNotMember,
   type TaskIdTaken,
 } from "@repo/database/models/task-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { cliTaskRefOf } from "@repo/features/cli-task-ref";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
@@ -58,6 +56,7 @@ import {
 import { calledId } from "./called-id.js";
 import { assigneeIdOf, TASK_ASSIGNEE_INPUT } from "./task-assignee.js";
 import { TASK_IDS, taskBlockReadings } from "./task-block-changes.js";
+import { TASK_REF_MISS, type TaskRefMiss, taskIdOfRef } from "./task-ref.js";
 import {
   EVERY_EXPERIMENT_ON,
   type ExperimentsOn,
@@ -71,8 +70,8 @@ import { workspaceNamingOf } from "./written-mentions.js";
  * Every coding agent is offered the same `read_task`,
  * one implementation, beside `list_tasks` (`agent-tools.ts`), which
  * names the tasks it reads by id; a key such as `ACME-42` names its number
- * in the caller's workspace (`cliTaskRefOf`, `taskIdOfNumber`), its prefix
- * never checked, since it follows the workspace's name. It reads any task of the caller's
+ * in the caller's workspace, and one whose prefix is not that workspace's is
+ * refused, naming the prefix it holds (`task-ref.ts`). It reads any task of the caller's
  * workspace, a teammate's included, as the member the
  * caller acts for could open it in the sidebar, read on that member's
  * standing now; a task of another workspace is none of the caller's, even
@@ -110,11 +109,19 @@ export const READ_TASK_REFUSAL = {
     `${AGENT_TOOL.LIST_TASKS} names them.`,
 } as const;
 
+/** Why a key of another workspace's prefix read nothing, naming the prefix the caller's workspace keys its tasks by. */
+export function readTaskOtherPrefixRefusal(miss: { prefix: string; key: string }): string {
+  return (
+    `Not read: that key names no task of your workspace, whose keys open with ${miss.prefix}-; ` +
+    `name the task in taskId by a key such as ${miss.key}, or by the id ${AGENT_TOOL.LIST_TASKS} answered.`
+  );
+}
+
 const READ_TASK_INPUT = Schema.Struct({
   taskId: describeWire(
     Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(MAX_TASK_REF_CHARS)),
     `The task to read, by the id ${AGENT_TOOL.LIST_TASKS} answered or by its key, such as ` +
-      "ACME-42; a key's prefix is not checked, since it follows the workspace's name.",
+      "ACME-42, whose prefix must be its workspace's.",
   ),
 });
 
@@ -152,15 +159,27 @@ function callerDescriptionsOn(caller: AgentCall["caller"]) {
     : experimentOnIn(caller.workspaceId, EXPERIMENT.DESCRIPTIONS);
 }
 
+/** The refusal a task ref that found nothing reads as. */
+function readTaskMissRefusal(miss: TaskRefMiss): WireRecord {
+  return agentToolRejected(
+    Match.value(miss).pipe(
+      Match.discriminatorsExhaustive("kind")({
+        [TASK_REF_MISS.UNREADABLE]: () => READ_TASK_REFUSAL.UNREADABLE,
+        [TASK_REF_MISS.NO_TASK]: () => READ_TASK_REFUSAL.NO_TASK,
+        [TASK_REF_MISS.OTHER_PREFIX]: readTaskOtherPrefixRefusal,
+      }),
+    ),
+  );
+}
+
 /** One call of `read_task`: a task of the caller's workspace, its description cut to the bound, or why there is none; no description where the caller has Task descriptions off. */
 export function runReadTask(
   call: AgentReadCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readTaskAsked(input);
-  const ref = Result.isSuccess(asked) ? cliTaskRefOf(asked.success.taskId) : undefined;
 
-  if (ref === undefined) {
+  if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(READ_TASK_REFUSAL.UNREADABLE));
   }
 
@@ -174,15 +193,12 @@ export function runReadTask(
 
       const userId = callerUserId(call.caller);
 
-      // A key names its number in the caller's workspace, as a link's step does.
-      const taskId =
-        "id" in ref
-          ? Option.some(ref.id)
-          : yield* taskIdOfNumber(userId, workspace.value, ref.number);
+      // A key names its number in the caller's workspace, and only under that workspace's prefix.
+      const taskId = yield* taskIdOfRef(userId, workspace.value, asked.success.taskId);
 
-      if (Option.isNone(taskId)) return agentToolRejected(READ_TASK_REFUSAL.NO_TASK);
+      if (Result.isFailure(taskId)) return readTaskMissRefusal(taskId.failure);
 
-      const stored = yield* readTask(userId, taskId.value);
+      const stored = yield* readTask(userId, taskId.success);
 
       // A task of another workspace, even one the member is also in, is none of the caller's.
       if (Option.isNone(stored) || stored.value.task.workspaceId !== workspace.value) {

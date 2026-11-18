@@ -204,7 +204,11 @@ import {
 } from "../sessions/agent-sessions.js";
 import { TASK_BLOCK_REFUSAL } from "../task-block-changes.js";
 import { NO_SECTION_DELETED, TASK_SECTION_TOOL_REFUSAL } from "../task-section-tools.js";
-import { CREATE_TASK_REFUSAL, READ_TASK_REFUSAL } from "../task-tools.js";
+import {
+  CREATE_TASK_REFUSAL,
+  READ_TASK_REFUSAL,
+  readTaskOtherPrefixRefusal,
+} from "../task-tools.js";
 import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import { callTool, type ServedTool } from "../tool-catalog/catalog.js";
 import { AGENT_LIST_FILTER_REFUSAL, WORKSPACE_AGENTS_LIST_LIMIT } from "../workspace-agents.js";
@@ -4510,6 +4514,15 @@ test("read_task reads a teammate's task of the caller's workspace by its id or i
   const byKey = await call(AGENT_TOOL.READ_TASK, { taskId: read.task.key });
   assert.equal(isRecord(byKey.task) && byKey.task.id, taskIds.billing, JSON.stringify(byKey));
 
+  // A key of another workspace's prefix is refused, naming the caller's, rather than read by its number here.
+  assert.ok(isWireString(read.task.key));
+  const [prefix, number] = read.task.key.split("-");
+  const otherPrefix = prefix === "ZZZZ" ? "YYYY" : "ZZZZ";
+  assert.deepEqual(await call(AGENT_TOOL.READ_TASK, { taskId: `${otherPrefix}-${number}` }), {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason: readTaskOtherPrefixRefusal({ prefix: String(prefix), key: read.task.key }),
+  });
+
   // A description past the bound is cut on a line, and what was left out is counted.
   const line = `${"x".repeat(999)}\n`;
   const long = line.repeat(41);
@@ -4544,7 +4557,7 @@ test("read_task reads a teammate's task of the caller's workspace by its id or i
   );
   assert.equal(isRecord(read.task) && read.task.brief, null);
 
-  for (const taskId of [taskIds.elsewhere, randomUUID(), "ACME-99999"]) {
+  for (const taskId of [taskIds.elsewhere, randomUUID(), `${prefix}-99999`]) {
     assert.deepEqual(await call(AGENT_TOOL.READ_TASK, { taskId }), {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason: READ_TASK_REFUSAL.NO_TASK,
