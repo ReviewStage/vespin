@@ -298,7 +298,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             ) : null}
           </ListSection>
           {/* Note that GitHub is the managers', as the panel's Settings › Workspace offers it to an owner or an admin alone. */}
-          {manages ? <GitHubSection workspaceId={workspaceId} /> : null}
+          {manages ? <GitHubSection workspaceId={workspaceId} opensPage /> : null}
           <ListSection
             title="Members"
             count={members?.length}

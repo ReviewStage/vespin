@@ -6,6 +6,7 @@ import { PUSH_NOTIFICATIONS_TITLE } from "@repo/features/push-device-model";
 import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { BAR_TITLE, useBarScheme, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
+import { GITHUB_WORDS } from "../../github/github-connection.js";
 import { IntegrationsProvider } from "../../integrations/use-integrations-page.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -45,6 +46,7 @@ export default function SettingsLayout() {
           name="workspace"
           options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE] }}
         />
+        <Stack.Screen name="github" options={{ title: GITHUB_WORDS.NAME }} />
         <Stack.Screen name="notifications" options={{ title: PUSH_NOTIFICATIONS_TITLE }} />
         <Stack.Screen
           name="agents"
