@@ -5564,6 +5564,15 @@ test("list_automations, create_automation, update_automation, and delete_automat
     await update({ name: "Mine now" }, teammate, "teammate-change"),
     rejected(AUTOMATION_TOOL_REFUSAL.NOT_PERMITTED),
   );
+  // Note that a machine it may not change is refused before the creator's devices are read, so none is listed.
+  assert.deepEqual(
+    await update(
+      { runsOn: { machine: AGENT_MACHINE.DEVICE, device: "Nowhere" } },
+      teammate,
+      "teammate-machine",
+    ),
+    rejected(AUTOMATION_TOOL_REFUSAL.NOT_PERMITTED),
+  );
   assert.equal(
     automationOf(await update({ enabled: true }, teammate, "teammate-toggle")).enabled,
     true,

@@ -1099,7 +1099,15 @@ export function runUpdateAutomation(
 
       if (model !== undefined) return agentToolRejected(model);
 
-      // Note that a machine is read against the creator's devices, since every run starts as its creator.
+      // Note that a machine is read against the creator's devices, since every run starts as its creator,
+      // and only once the caller may change it, because a refusal lists those devices.
+      const changeable =
+        runsOn === undefined
+          ? true
+          : Option.isSome(yield* readAutomation(userId, automationId, AUTOMATION_ACCESS.CHANGE));
+
+      if (!changeable) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NOT_PERMITTED);
+
       const machine =
         runsOn === undefined
           ? undefined
