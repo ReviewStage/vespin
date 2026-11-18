@@ -23,7 +23,7 @@ import { listMemories, rememberMemory } from "@repo/database/models/memory-store
 import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
-import { createTask, readTask } from "@repo/database/models/task-store";
+import { createTask, readTask, updateTask } from "@repo/database/models/task-store";
 import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import {
@@ -1737,6 +1737,46 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         assert.notEqual(deleted.isError, true, deleted.content[0].text);
         assert.ok(Option.isNone(yield* readAgent(owner, agent.id)), "the agent is deleted");
         assert.match(gone.content[0].text, /rejected/u);
+      }),
+  );
+
+  it.effect(
+    "an outside agent's reply to a thread of an agent whose task is done is refused, naming update_task, and nothing reaches the agent",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, task, ask, mcpFetch } = yield* openTask({ agentSessions });
+        const { agent } = yield* startedAgent(owner, task.id, ask);
+
+        const notice = yield* postInboxThread(
+          { userId: owner, taskId: task.id, agentId: agent.id },
+          { key: "deploy-done", title: "Deployed to staging", body: "Staging runs the new build." },
+        );
+
+        assert.ok(Result.isSuccess(notice));
+        yield* updateTask(owner, task.id, { status: TASK_STATUS.DONE });
+        const before = agentSessions.sent.length;
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
+        const replied = yield* Effect.promise(async () =>
+          decodeAnswer(
+            await client.callTool({
+              name: MEMBER_MCP_TOOL.REPLY_TO_THREAD,
+              arguments: { threadId: notice.success.id, text: "Ship it to production too." },
+            }),
+          ),
+        );
+
+        yield* Effect.promise(() => client.close());
+
+        assert.equal(replied.isError, true, replied.content[0].text);
+        assert.ok(
+          replied.content[0].text.includes(`${MEMBER_MCP_TOOL.UPDATE_TASK} (taskId ${task.id}`),
+          replied.content[0].text,
+        );
+        assert.equal(agentSessions.sent.length, before);
+        const after = Option.getOrThrow(yield* readTask(owner, task.id));
+        assert.equal(after.task.status, TASK_STATUS.DONE);
       }),
   );
 

@@ -223,7 +223,8 @@ interface QueueUntold {
  * withdraws the task's open asks and archives its agents, the one that
  * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
  * on both; a turn starting on the task moves it back into progress from
- * any status. A pull request merged or closed is told to the agent on the
+ * any status, though a tool that would start one on a done or canceled
+ * task is refused (`settledTaskRefusal`). A pull request merged or closed is told to the agent on the
  * App's access as a message from GitHub (`../../github/agent-wakes.ts`),
  * which it marks the task Done on where that finishes the work; one on its
  * starter's own token, or whose starter turned that wake off, hears of no

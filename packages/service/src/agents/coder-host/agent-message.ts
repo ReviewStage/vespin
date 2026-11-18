@@ -21,6 +21,7 @@ import {
   wireUuidSchema,
 } from "../../core.js";
 import type { HostedRefusal } from "../../http/http-effect.js";
+import { settledTaskRefusal } from "../../tasks/task-finish.js";
 import {
   type AgentCall,
   type AgentToolServices,
@@ -51,8 +52,9 @@ import { agentLineSender, agentTakingMessage, steerAgent } from "./steer.js";
  * stands in the two transcripts and nowhere else. It reaches any agent of the sender's
  * workspace, on any task, held to what a steer into it is held to, an
  * archived one brought back first as a member's words bring it back
- * (`agentTakingMessage`); one whose starter has left the workspace, or the
- * sender itself, takes none.
+ * (`agentTakingMessage`); one whose starter has left the workspace, one
+ * whose task stands done or canceled (`settledTaskRefusal`), or the sender
+ * itself, takes none.
  */
 
 /**
@@ -169,7 +171,8 @@ export const MESSAGE_AGENT_TOOL = {
     "Send another agent of your workspace a message, by its id, on any task. It lands in that agent's " +
     "conversation under your name, opening with your mention link and closing with how to answer you, and " +
     "only the two of you see it: a running agent reads it at its next step, and an idle one starts a turn on it; " +
-    "an archived agent is brought back and takes it. The call answers once its session took it, without waiting for a reply.",
+    "an archived agent is brought back and takes it. An agent whose task is done or canceled is refused, since a tool never " +
+    `reopens a task: move the task with ${AGENT_TOOL.UPDATE_TASK} first. The call answers once its session took it, without waiting for a reply.`,
   inputSchema: MESSAGE_AGENT_INPUT,
 } as const;
 
@@ -221,6 +224,11 @@ export function runMessageAgent(
       if (!(yield* isWorkspaceMember(found.value.userId, workspace.value))) {
         return agentToolRejected(MESSAGE_AGENT_REFUSAL.STARTER_LEFT);
       }
+
+      // A turn on a done or canceled task would reopen it unasked, so the caller moves the task itself first.
+      const settled = yield* settledTaskRefusal(userId, found.value.taskId);
+
+      if (Option.isSome(settled)) return agentToolRejected(settled.value);
 
       // An archived agent is brought back first, as a member's words bring it back; one archived again meanwhile the steer refuses.
       const taking = yield* agentTakingMessage(userId, agentId, (reader, id) =>

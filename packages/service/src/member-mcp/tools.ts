@@ -398,6 +398,7 @@ import {
 } from "../tasks/description-notes.js";
 import { deleteTaskStoppingAgents } from "../tasks/task-delete.js";
 import { readTaskFile } from "../tasks/task-file.js";
+import { settledTaskRefusal } from "../tasks/task-finish.js";
 import { readTaskTree } from "../tasks/task-tree.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import {
@@ -1845,6 +1846,10 @@ const memberMessage = (call: AgentCall, { agentId, text, queue }: MessageAgentIn
 
       if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
       const userId = callerUserId(call.caller);
+      // A queued message goes on to an idle agent at once, so it is refused as a sent one is.
+      const settled = yield* settledTaskRefusal(userId, agent.taskId);
+
+      if (Option.isSome(settled)) return agentToolRejected(settled.value);
 
       if (queue === true) return yield* memberQueue(call, userId, agent, text);
 
@@ -1868,7 +1873,9 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "Send a coding agent the member can see a message, by its id, as the member's own words, " +
     "as their composer would: it lands in the agent's conversation under the member's name, " +
     "and a teammate's agent reads it under the member's label. A running agent reads it at " +
-    "its next step, and an idle one starts a turn on it; an archived agent takes nothing. Each " +
+    "its next step, and an idle one starts a turn on it; an archived agent takes nothing, and " +
+    "one whose task is done or canceled is refused, since a tool never reopens a task: move " +
+    `the task with ${MEMBER_MCP_TOOL.UPDATE_TASK} first. Each ` +
     "call sends a message of its own, so call it once for each. Answers `accepted` once the " +
     "agent's session has taken it, without waiting for it to act or reply, or `rejected` and " +
     "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
@@ -1989,10 +1996,13 @@ const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueu
       const { agent } = found.value;
 
       if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
+      const userId = callerUserId(call.caller);
+      // Any change hands the next message on to an idle agent, so none is made while its task stands settled.
+      const settled = yield* settledTaskRefusal(userId, agent.taskId);
 
-      const changed = yield* Effect.result(
-        changeAgentQueue(callerUserId(call.caller), agent, change),
-      );
+      if (Option.isSome(settled)) return agentToolRejected(settled.value);
+
+      const changed = yield* Effect.result(changeAgentQueue(userId, agent, change));
 
       if (Result.isFailure(changed)) {
         return agentToolRejected(changeQueueRefusalWords(changed.failure));
@@ -2016,7 +2026,9 @@ const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
     "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
     "under way now, which takes it out of the queue. Any member who may message the agent " +
     "changes any message in its queue, whoever queued it. Where the agent stands idle, the change hands the next message on at once, as a " +
-    "turn's end would. Answers `accepted` with the queue as it then stands, or `rejected` and " +
+    "turn's end would, so an agent whose task is done or canceled is refused: move the task " +
+    `with ${MEMBER_MCP_TOOL.UPDATE_TASK} first. ` +
+    "Answers `accepted` with the queue as it then stands, or `rejected` and " +
     `why nothing changed. ${FOLLOW_WORDS}`,
   input: ChangeAgentQueueInputSchema,
   annotations: DESTRUCTIVE,
@@ -3150,9 +3162,21 @@ const READ_GITHUB_CONNECTION_TOOL = memberMcpTool({
 // The member's inbox (`inbox.ts`): the threads their agents ask them things on, read and worked as theirs.
 
 /** How an answer or a message tells the agent what the thread's agent hears. */
+/** What a call that would wake an agent on a settled task meets, said in every such tool's description. */
+const SETTLED_AGENT_WORDS =
+  "Where that agent's task is done or canceled, the call is refused before anything is " +
+  `written, since a tool never reopens a task: move the task with ${MEMBER_MCP_TOOL.UPDATE_TASK} first.`;
+
+/** The same for a call that tells the thread's agent only where it waits on the member's answer. */
+const WAITING_SETTLED_WORDS =
+  "Where it would tell an agent waiting on the answer whose task is done or canceled, it is " +
+  `refused before anything is written, since a tool never reopens a task: move the task with ` +
+  `${MEMBER_MCP_TOOL.UPDATE_TASK} first.`;
+
 const HANDED_WORDS =
   "It is written on the thread as the member's own and handed at once to the thread's agent, " +
-  "which takes it up in its next turn, starting one where it was idle.";
+  "which takes it up in its next turn, starting one where it was idle. " +
+  SETTLED_AGENT_WORDS;
 
 /** A thread by its id, as the inbox read names it. */
 const THREAD_ID = describeWire(
@@ -3299,7 +3323,7 @@ const ACKNOWLEDGE_THREAD_TOOL = memberMcpTool({
     `${MEMBER_MCP_TOOL.READ_INBOX} answered, so a thread its agent changed since is not ` +
     "settled unseen. It tells the thread's agent the member saw it, where the agent waits to " +
     `hear; unlike ${MEMBER_MCP_TOOL.CLOSE_THREAD}, which tells it the member does not want ` +
-    `what it asked. A thread that holds an ask is refused: answer it with ` +
+    `what it asked. ${WAITING_SETTLED_WORDS} A thread that holds an ask is refused: answer it with ` +
     `${MEMBER_MCP_TOOL.ANSWER_ASK}. Acknowledge only what the member has seen or told you ` +
     "to. Answers `accepted` with the thread as it then stands, or `rejected` and why it was " +
     "not acknowledged.",
@@ -3344,7 +3368,8 @@ const CLOSE_THREAD_TOOL = memberMcpTool({
     `revision ${MEMBER_MCP_TOOL.READ_INBOX} answered, so a thread its agent changed since is ` +
     "not closed unseen. An agent waiting on its answer is told at once that the member closed " +
     "it, which it takes as their not wanting what it asked; any other reads the close in its " +
-    "own time. Close only what the member does not want. Answers `accepted` with the thread as " +
+    `own time. ${WAITING_SETTLED_WORDS} Close only what the member does not want. ` +
+    "Answers `accepted` with the thread as " +
     "it then stands, or `rejected` and why it was not closed.",
   input: CloseThreadInputSchema,
   annotations: DESTRUCTIVE,

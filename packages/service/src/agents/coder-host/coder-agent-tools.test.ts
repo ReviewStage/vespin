@@ -3433,6 +3433,34 @@ test("message_agent brings an archived agent back and hands it the words", async
   assert.equal(Option.getOrThrow(read).archivedAt, null);
 });
 
+test("message_agent refuses an agent whose task is done, naming update_task, and leaves the task done", async () => {
+  const { workspaceId, plans: tasks, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  await database.run(
+    updateTask(agents.teammates.userId, tasks.billing, { status: TASK_STATUS.DONE }),
+  );
+
+  const sent = await directMessage(
+    hostOf(),
+    agents.caller,
+    agents.teammates,
+    agentSessions.services,
+  );
+
+  assert.equal(sent.status, ACTION_RESULT_STATUS.REJECTED, JSON.stringify(sent));
+  assert.match(
+    String(sent.reason),
+    new RegExp(`${AGENT_TOOL.UPDATE_TASK} \\(taskId ${tasks.billing}`, "u"),
+  );
+  assert.equal(agentSessions.sent.length, 0);
+
+  const task = Option.getOrThrow(
+    await database.run(readTaskHeader(agents.caller.userId, tasks.billing)),
+  );
+
+  assert.equal(task.status, TASK_STATUS.DONE);
+});
+
 test("a message to an agent whose session its harness no longer runs opens a fresh session over its conversation rather than being refused, and settles the turn the ended session was running as failed for its session's end, once", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId, [], undefined, "no_active_turn", true);
