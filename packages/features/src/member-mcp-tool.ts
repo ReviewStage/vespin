@@ -16,7 +16,7 @@ import { AGENT_TOOL } from "./agent-tools.js";
 export const MEMBER_MCP_TOOL = {
   LIST_WORKSPACES: "list_workspaces",
   CREATE_WORKSPACE: "create_workspace",
-  LIST_WORKSPACE_MEMBERS: "list_workspace_members",
+  LIST_WORKSPACE_MEMBERS: AGENT_TOOL.LIST_WORKSPACE_MEMBERS,
   SET_WORKSPACE_SLUG: "set_workspace_slug",
   RENAME_WORKSPACE: "rename_workspace",
   REMOVE_WORKSPACE_MEMBER: "remove_workspace_member",

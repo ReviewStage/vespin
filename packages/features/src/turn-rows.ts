@@ -126,6 +126,8 @@ export const CALL_KIND = {
   SLACK_MESSAGE: "slack-message",
   /** The Slack channels the bot is in, which a coding agent listed (`list_slack_channels`). */
   SLACK_CHANNELS: "slack-channels",
+  /** The members of the workspace a coding agent listed (`list_workspace_members`). */
+  WORKSPACE_MEMBERS: "workspace-members",
   /** A Slack channel's or thread's messages a coding agent read (`read_slack`). */
   SLACK_READ: "slack-read",
   /** A reaction a coding agent added to a Slack message or took off it (`react_slack`), its row naming the emoji. */
@@ -197,6 +199,7 @@ export const CALL_WORDS = {
   [CALL_KIND.MESSAGE_AGENT]: { verb: "Messaged the agent", code: false },
   [CALL_KIND.SLACK_MESSAGE]: { verb: "Sent on Slack:", code: false },
   [CALL_KIND.SLACK_CHANNELS]: { verb: "Listed the Slack channels", code: false },
+  [CALL_KIND.WORKSPACE_MEMBERS]: { verb: "Listed the members", code: false },
   [CALL_KIND.SLACK_READ]: { verb: "Read Slack", code: false },
   [CALL_KIND.SLACK_REACT]: { verb: "Reacted on Slack:", code: false },
   [CALL_KIND.START_AGENT]: { verb: "Started an agent", code: false },

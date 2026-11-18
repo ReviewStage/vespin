@@ -447,6 +447,7 @@ const AGENT_TOOLS = [
   "update_task",
   "create_section",
   "delete_section",
+  "list_workspace_members",
   "list_automations",
   "create_automation",
   "update_automation",

@@ -37,6 +37,8 @@ export const AGENT_TOOL = {
   DELETE_SECTION: "delete_section",
   // A task of the workspace renamed, given a repository, pinned, or archived, named for any agent offered `list_tasks`.
   UPDATE_TASK: "update_task",
+  // The members of the agent's workspace, by the mention link a call names a person by.
+  LIST_WORKSPACE_MEMBERS: "list_workspace_members",
   // The workspace's automations, listed, made, changed, and deleted for the member an agent acts for.
   LIST_AUTOMATIONS: "list_automations",
   CREATE_AUTOMATION: "create_automation",

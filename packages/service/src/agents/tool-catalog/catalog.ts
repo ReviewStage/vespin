@@ -206,6 +206,7 @@ import {
 } from "../task-tools.js";
 import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import type { ExperimentsOn } from "../workspace-experiment-on.js";
+import { LIST_WORKSPACE_MEMBERS_TOOL, runListWorkspaceMembers } from "../workspace-member-tool.js";
 import { type AgentStanding, GATES, standingOf, TOOL_GATE, type ToolGate } from "./gates.js";
 
 /** What a door answers: the tool's own result, the value the model is handed. */
@@ -614,6 +615,8 @@ const CATALOG = [
   agentTool(UPDATE_TASK_TOOL, runUpdateTask, { ...LOADED, variant: updateTaskToolOf }),
   agentTool(CREATE_SECTION_TOOL, runCreateSection),
   agentTool(DELETE_SECTION_TOOL, runDeleteSection),
+  // The workspace's members, by the mention link a call names a person by.
+  agentTool(LIST_WORKSPACE_MEMBERS_TOOL, runListWorkspaceMembers),
   // Automations.
   agentTool(LIST_AUTOMATIONS_TOOL, runListAutomations),
   agentTool(CREATE_AUTOMATION_TOOL, runCreateAutomation),

@@ -205,6 +205,7 @@ import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import { callTool, type ServedTool } from "../tool-catalog/catalog.js";
 import { AGENT_LIST_FILTER_REFUSAL, WORKSPACE_AGENTS_LIST_LIMIT } from "../workspace-agents.js";
 import { EXPERIMENT_OFF_REFUSAL, NO_EXPERIMENT_ON } from "../workspace-experiment-on.js";
+import { LIST_WORKSPACE_MEMBERS_TOOL } from "../workspace-member-tool.js";
 import type { AgentDoorSeams } from "./agent-doors.js";
 import {
   MAX_MESSAGE_WORDS_CHARS,
@@ -1641,6 +1642,14 @@ test("send_slack_message shows the model the recorded input", async () => {
 test("read_slack and react_slack show the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "read-slack-input", READ_SLACK_TOOL.inputSchema);
   await settleJsonSchemaGolden(GOLDEN_ROOT, "react-slack-input", REACT_SLACK_TOOL.inputSchema);
+});
+
+test("list_workspace_members shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "list-workspace-members-input",
+    LIST_WORKSPACE_MEMBERS_TOOL.inputSchema,
+  );
 });
 
 test("list_memories and forget_memory show the model the recorded input", async () => {
@@ -4621,6 +4630,40 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
   assert.ok(isWireString(assigned.id), JSON.stringify(assigned));
   await database.run(leaveWorkspace(workspaceId, teammates.userId));
   assert.equal(await childAssignee({ parentTaskId: assigned.id }, "child-of-leaver"), undefined);
+});
+
+test("list_workspace_members answers the members of the agent's own workspace alone, each by a mention link update_task takes as its assignee", async () => {
+  const { workspaceId, plans, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+
+  const listed = await call(AGENT_TOOL.LIST_WORKSPACE_MEMBERS, {});
+
+  assert.equal(listed.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(listed));
+  assert.ok(Array.isArray(listed.members));
+  // Note that Alice is in Carol's workspace too, so only the agent's own workspace keeps Carol out.
+  assert.deepEqual(
+    listed.members.map((each) => (isRecord(each) ? [each.userId, each.role] : each)),
+    [
+      [agents.caller.userId, "owner"],
+      [agents.teammates.userId, "member"],
+    ],
+  );
+
+  const bob = listed.members[1];
+  assert.ok(isRecord(bob) && isWireString(bob.mention));
+
+  const assigned = await call(AGENT_TOOL.UPDATE_TASK, {
+    taskId: plans.invitations,
+    assignee: bob.mention,
+  });
+
+  assert.equal(assigned.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(assigned));
+  assert.equal(
+    Option.getOrThrow(await database.run(readTask(agents.caller.userId, plans.invitations))).task
+      .assignee?.userId,
+    agents.teammates.userId,
+  );
 });
 
 test("list_automations, create_automation, update_automation, and delete_automation keep the automations of the caller's workspace as its starter may, under the automations page's own checks and access, once under the call's key, never as a webhook, and reach none of another workspace", async () => {
