@@ -468,6 +468,7 @@ export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
     starting: false,
     onOpen: ignore,
     onOpenIn: ignore,
+    onOpenInSection: ignore,
     onOpenRelated: ignore,
     onOpenForAutomation: ignore,
     open: false,

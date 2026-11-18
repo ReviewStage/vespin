@@ -2181,6 +2181,10 @@ function SidebarColumn({
   // composer is on it, so its row draws no Draft pencil for the words shown there.
   const atHome = onTasks && tasks.atHome;
   const newTaskIn = (repository: string) => newTaskOver(() => tasks.newTask.onOpenIn(repository));
+
+  const newTaskInSection = (sectionId: string) =>
+    newTaskOver(() => tasks.newTask.onOpenInSection(sectionId));
+
   const folds = useFoldedGroups(sidebar.staged);
   const taskView = useTaskListView(tasks.workspace?.id, sidebar.staged);
   // The Tasks head's New section button, which the focus goes back to where the naming ends by a key.
@@ -2801,6 +2805,7 @@ function SidebarColumn({
                         onDropRow: dropRow,
                         runs: runsPlace,
                         onCarried: setCarrying,
+                        onNewTaskIn: chosen(newTaskInSection),
                       }}
                     />
                     <nav
