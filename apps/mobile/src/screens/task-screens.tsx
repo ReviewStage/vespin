@@ -2374,6 +2374,7 @@ function TasksSplitScreen({
   const { detail, detailBar } = useTaskDetail(selected, listing);
 
   const list = {
+    chosen: selected !== undefined,
     view: (
       <TasksTree
         listing={listing}
