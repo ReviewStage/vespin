@@ -255,6 +255,10 @@ function namingLines(
   ];
 }
 
+/** Why an answered question or an ended turn never finishes a task: Done archives the agent while the developer may still be talking to it (#8276). */
+const NOT_DONE_YET =
+  "Answering a question, delivering a write-up, or ending a turn is not that: Done archives you while the developer may still be talking to you, and closing it is one click for them, so when unsure leave it In progress.";
+
 /** Which ends of a pull request reach the agent as no message: its merge, its close too where its starter turned both off, or the merge queue taking it out. */
 interface QueueUntold {
   readonly merged: boolean;
@@ -268,7 +272,8 @@ interface QueueUntold {
  * developer's sidebar until they move it by hand. The agent keeps it
  * current in the order the task menu lists them: Backlog when set aside,
  * To do when it waits on another task, In progress while open or waiting,
- * Done once its work is finished, and Canceled when dropped. Done
+ * Done only once its work is done and the developer will not come back
+ * to it, or they asked, and Canceled when dropped. Done
  * withdraws the task's open asks and archives its agents, the one that
  * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
  * on both; a turn starting on the task moves it back into progress from
@@ -294,11 +299,11 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
       : ` Nothing tells you ${missed.join(" or ")}, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`;
 
   const done = publishes
-    ? `Mark it Done before your last message, once your pull requests merged or closed, no ask is open on the task, and no other agent on it is at work; work with no pull request is finished once its result is ready.${watch}`
-    : "Mark it Done before your last message, once its result is ready, no ask is open on the task, and no other agent on it is at work.";
+    ? `Mark it Done where the developer asks you to, or else only once its work is actually done, your pull requests merged or closed, and you are confident the developer won't come back to you with a follow-up, with no ask open on the task and no other agent on it at work; then mark it before your last message. ${NOT_DONE_YET}${watch}`
+    : `Mark it Done where the developer asks you to, or else only once its work is actually done and you are confident the developer won't come back to you with a follow-up, with no ask open on the task and no other agent on it at work. ${NOT_DONE_YET}`;
 
   return [
-    `Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\`: Backlog when the developer sets it aside, To do when it waits on another task, In progress while you work or wait on a review, a merge, or the developer, Done once the work is finished, and Canceled when the developer drops it.`,
+    `Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\`: Backlog when the developer sets it aside, To do when it waits on another task, In progress while you work, wait on a review, a merge, or the developer, or may still hear from them, Done as below, and Canceled when the developer drops it.`,
     done,
   ];
 }
