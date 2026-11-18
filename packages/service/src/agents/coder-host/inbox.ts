@@ -131,7 +131,7 @@ const POST_THREAD_WORDS =
   "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. " +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
   "and a later one adds a message to that thread, a title it names renaming it. " +
-  "to is the member the ask waits on, by their [@Name](link) mention; without it, the task's assignee, or the developer who started you. " +
+  `to is the member the thread waits on, by their [@Name](link) mention as ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers it: the first post under a key must name it, and a later one without it keeps the thread's. ` +
   `body is Markdown, at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters. ` +
   `Write a file, a pull request, or an issue in it as a mention, such as [@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>), so ${PRODUCT_NAME} draws it as a chip, ` +
   "and put a link alone on its own line to show it as a card, its mention never followed by its bare address. " +
@@ -366,9 +366,11 @@ export const INBOX_REFUSAL = {
   NO_KEYED_THREAD: "Not withdrawn: you have no thread under that key; list_threads lists them.",
   NO_MEMBER:
     "Not posted: to names no member; write a member of your workspace by their mention link, [@Name](link), as a person's chip is written.",
+  NO_ADDRESSEE_NAMED:
+    "Not posted: you have no thread under that key, and the first post under a key names to, the member it waits on, " +
+    `by their mention link, [@Name](link), as ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers it.`,
   NO_ADDRESSEE: "Not posted: the member you addressed is not in your workspace.",
-  ADDRESSEE_CANNOT_SEE:
-    "Not posted: the member you addressed cannot see your task, so they would never see the thread; address someone who can, or leave to out.",
+  ADDRESSEE_CANNOT_SEE: `Not posted: the member you addressed cannot see your task, so they would never see the thread; address someone who can, by a mention ${AGENT_TOOL.LIST_WORKSPACE_MEMBERS} answers.`,
   NO_AGENT: "Not done: this conversation is no agent's.",
   UNAVAILABLE: "Not done: the service could not reach its store.",
 } as const;
@@ -911,7 +913,7 @@ function optionMedia(
   });
 }
 
-/** Whom a post waits on, as the store takes it: the member's account, absent where the post names none. */
+/** Whom a post waits on, as the store takes it: the member's account, absent on a reply to a thread addressed to nobody. */
 interface ThreadPlace {
   readonly addresseeId?: string;
 }
@@ -942,17 +944,34 @@ function addresseeOf(to: string): string | undefined {
 
 /**
  * Whom a post waits on, or why it is refused: the member its mention link
- * names, refused where it names no person. Note that whether that person is
- * of the workspace is the store's to say, under the lock it writes the post
- * under (`postInboxThread`).
+ * names, refused where it names no person; or, where it names none, the
+ * member the thread under its key was addressed to, kept as it stands, and
+ * refused where no thread stands under the key, since a first post names
+ * whom it waits on. Note that whether that person is of the workspace is the
+ * store's to say, under the lock it writes the post under (`postInboxThread`).
  */
-function placeOf(post: InboxThreadPostInput): Result.Result<ThreadPlace, string> {
-  if (post.to === undefined) return Result.succeed({});
-  const addresseeId = addresseeOf(post.to.trim());
+function placeOf(
+  agent: InboxAgent,
+  post: InboxThreadPostInput,
+): InboxStoreEffect<Result.Result<ThreadPlace, string>> {
+  if (post.to !== undefined) {
+    const addresseeId = addresseeOf(post.to.trim());
 
-  return addresseeId === undefined
-    ? Result.fail(INBOX_REFUSAL.NO_MEMBER)
-    : Result.succeed({ addresseeId });
+    return Effect.succeed(
+      addresseeId === undefined
+        ? Result.fail(INBOX_REFUSAL.NO_MEMBER)
+        : Result.succeed({ addresseeId }),
+    );
+  }
+
+  return Effect.map(agentInboxItemOfKey(agent, post.key), (standing) => {
+    if (Option.isNone(standing)) return Result.fail(INBOX_REFUSAL.NO_ADDRESSEE_NAMED);
+    const { addressed, waitsOn } = standing.value;
+
+    return Result.succeed(
+      addressed === true && waitsOn !== undefined ? { addresseeId: waitsOn.userId } : {},
+    );
+  });
 }
 
 /** Runs one post: whom it waits on, its pictures and PDFs read from the sandbox, the message written on the thread under its key, and the agent's threads answered, or why not. */
@@ -976,12 +995,11 @@ export function postToInbox(
     return Effect.succeed(inboxRejected(`Not posted: ${placeholderLinksWords(unread)}`));
   }
 
-  // A place refused is said before any picture is read, since mending it reads them again.
-  const place = placeOf(post);
-
-  if (Result.isFailure(place)) return Effect.succeed(inboxRejected(place.failure));
-
   return Effect.gen(function* () {
+    // A place refused is said before any picture is read, since mending it reads them again.
+    const place = yield* placeOf(agent, post);
+
+    if (Result.isFailure(place)) return inboxRejected(place.failure);
     const named = yield* bodyFiles(post.body, sandbox);
 
     if (Result.isFailure(named)) return inboxRejected(named.failure);
