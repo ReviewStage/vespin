@@ -1,14 +1,9 @@
-// workspace.tsx -- Settings' Workspace page for the workspace the app works in: its name, renamed by an owner or admin, and its photo, picked, changed, or removed by one; its members, whose roles the owner changes, to whom the owner hands it, and whom an owner or admin removes; its invitations, sent and canceled by an owner or admin; and Leave.
+// workspace.tsx -- Settings' Workspace page for the workspace the app works in: its name, renamed by an owner or admin, and its photo, picked, changed, or removed by one; its members, each opening their own page (`member.tsx`); its invitations, sent by an owner or admin, each opening its own page (`invitation.tsx`); and Leave.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { LIVE_READ } from "@repo/features/live-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
 import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
-import {
-  INVITATION_ROLE,
-  type WorkspaceInvitation,
-} from "@repo/features/workspace-invitation-wire";
-import { managesWorkspace, memberActs, WORKSPACE_ROLE_WORDS } from "@repo/features/workspace-role";
+import { INVITATION_ROLE } from "@repo/features/workspace-invitation-wire";
+import { managesWorkspace, WORKSPACE_ROLE_WORDS } from "@repo/features/workspace-role";
 import {
   INVITATION_ROLES,
   INVITATION_WORDS,
@@ -20,20 +15,16 @@ import {
   WORKSPACE_READ_FAILED,
 } from "@repo/features/workspace-settings-words";
 import {
-  ASSIGNABLE_ROLE,
   WORKSPACE_ROLE,
   type Workspace,
   type WorkspaceMember,
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
   askForName,
   askForWords,
-  BUZZ,
-  buzz,
   ConfirmAsk,
   FOOTER_TONE,
   footerToneOf,
@@ -41,8 +32,9 @@ import {
   ListSection,
   LoadingRow,
   MemberRow,
-  type MemberRowAct,
   MenuRow,
+  PUSH_ROW_GOES,
+  PushRow,
   SCREEN_GROUND,
   Screen,
   SettingsForm,
@@ -51,7 +43,6 @@ import {
   WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { setStringAsync } from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
@@ -59,14 +50,13 @@ import { GitHubSection } from "../../github/github-connection.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
+import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { refusalOf, useLatestWrites, useWrite } from "../../use-write.js";
+import { heldPeople } from "../../workspace-people.js";
 import { pickWorkspacePhoto } from "../../workspace-photo.js";
 import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
-
-/** What an invitation's menu calls copying its accept link, as the panel's row's button says it. */
-const INVITE_LINK_WORDS = { COPY: "Copy link" } as const;
 
 /** The rename's alert: its title and its act, the panel's words. */
 const RENAME_WORDS = {
@@ -76,8 +66,6 @@ const RENAME_WORDS = {
 
 /** The page's questions, named once. */
 const ASKING = {
-  REMOVE: "remove",
-  CANCEL: "cancel",
   LEAVE: "leave",
   TRANSFER: "transfer",
   PHOTO_REMOVE: "photo-remove",
@@ -85,26 +73,9 @@ const ASKING = {
 
 /** What the page asks first, by the act it asks about. */
 type Asking =
-  | { readonly kind: typeof ASKING.REMOVE; readonly member: WorkspaceMember }
-  | { readonly kind: typeof ASKING.CANCEL; readonly invitation: WorkspaceInvitation }
   | { readonly kind: typeof ASKING.LEAVE }
   | { readonly kind: typeof ASKING.TRANSFER; readonly member: WorkspaceMember }
   | { readonly kind: typeof ASKING.PHOTO_REMOVE };
-
-/** The members and invitations the host holds for one workspace, as a `select`; each none until read. */
-function heldPeople(workspaceId: string) {
-  return (state: AppStateSnapshot) => ({
-    members: state[LIVE_READ.WORKSPACE_MEMBERS][workspaceId],
-    invitations: state[LIVE_READ.WORKSPACE_INVITATIONS][workspaceId],
-  });
-}
-
-/** The line under an invited address: its role, and when its link stops working. */
-function invitationLine(invitation: WorkspaceInvitation): string {
-  const role = INVITATION_WORDS.INVITED_AS(WORKSPACE_ROLE_WORDS[invitation.role]);
-
-  return `${role} · Expires ${dayAndTimeText(Date.parse(invitation.expiresAt))}`;
-}
 
 /** The leave's question: what goes, and what stays, as the panel names them. */
 function leaveMessage(workspace: Workspace): string {
@@ -152,8 +123,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   // Note that each refusal says why in place, in the host's words through the one write door, never an error's own text.
   const write = useWrite();
   const rename = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  // Note that a member's role or removal, and an invitation sent or canceled, each go at once and say a refusal by their own row (a member's id, an invite's address or id), since the host draws them as they go and one row must not wait on, or hide, another's.
-  const people = useLatestWrites(() => ACT_UNREACHED_WORDS);
+  // Note that each invitation sent goes at once and says a refusal by its own address, since the host draws them as they go and one must not wait on, or hide, another's.
   const invite = useLatestWrites(() => ACT_UNREACHED_WORDS);
   const leave = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const transfer = useAsyncAction(() => ACT_UNREACHED_WORDS);
@@ -186,46 +156,8 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   // Note that an owner with no admin to hand the workspace to has nothing to press here, so why they can't leave is said under Members.
   const ownerAlone = owner && !personal && members !== undefined && heir === undefined;
 
-  const actsOn = (member: WorkspaceMember): readonly MemberRowAct[] => {
-    const may = memberActs(workspace, member, member.userId === readerId);
-
-    const role = (next: typeof ASSIGNABLE_ROLE.ADMIN | typeof ASSIGNABLE_ROLE.MEMBER) => () =>
-      void people.run(member.userId, undefined, () =>
-        refusalOf(write, () =>
-          acts[ACT_KIND.WORKSPACE_MEMBER_ROLE]({
-            workspaceId,
-            userId: member.userId,
-            role: next,
-          }),
-        ),
-      );
-
-    return [
-      ...(may.promote
-        ? [{ label: MEMBER_WORDS.MAKE_ADMIN, onPress: role(ASSIGNABLE_ROLE.ADMIN) }]
-        : []),
-      ...(may.demote
-        ? [{ label: MEMBER_WORDS.MAKE_MEMBER, onPress: role(ASSIGNABLE_ROLE.MEMBER) }]
-        : []),
-      ...(may.transfer
-        ? [
-            {
-              label: MEMBER_WORDS.MAKE_OWNER,
-              onPress: () => setAsking({ kind: ASKING.TRANSFER, member }),
-            },
-          ]
-        : []),
-      ...(may.remove
-        ? [
-            {
-              label: MEMBER_WORDS.REMOVE,
-              destructive: true,
-              onPress: () => setAsking({ kind: ASKING.REMOVE, member }),
-            },
-          ]
-        : []),
-    ];
-  };
+  const openMember = (member: WorkspaceMember) =>
+    router.push({ pathname: SETTINGS_ROUTE.MEMBER, params: { userId: member.userId } });
 
   const sendInvite = (role: (typeof INVITATION_ROLES)[number]) => (email: string) => {
     dismiss();
@@ -305,26 +237,24 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             footer={
               held?.members?.failed === true
                 ? WORKSPACE_READ_FAILED.MEMBERS
-                : people.said.join(" ") || (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined)
+                : ownerAlone
+                  ? LEAVE_WORDS.OWNER_NO_ADMIN
+                  : undefined
             }
-            footerTone={
-              held?.members?.failed === true || people.said.length > 0
-                ? FOOTER_TONE.FAILURE
-                : FOOTER_TONE.NOTE
-            }
+            footerTone={held?.members?.failed === true ? FOOTER_TONE.FAILURE : FOOTER_TONE.NOTE}
           >
             {members === undefined && held?.members?.failed !== true ? (
               <LoadingRow words={readingWords("the members")} />
             ) : null}
             {(members ?? []).map((member) => (
+              // Note that the reader's own row says You where another's says their address, as iOS Settings marks the reader's own card, rather than a badge joined to the name.
               <MemberRow
                 key={member.userId}
                 name={member.name}
-                email={member.email}
+                line={member.userId === readerId ? MEMBER_WORDS.YOU : member.email}
                 picture={member.pictureUrl}
                 role={WORKSPACE_ROLE_WORDS[member.role]}
-                badge={member.userId === readerId ? MEMBER_WORDS.YOU : undefined}
-                acts={actsOn(member)}
+                onOpen={() => openMember(member)}
               />
             ))}
           </ListSection>
@@ -365,29 +295,16 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 <LoadingRow words={readingWords("the invitations")} />
               ) : null}
               {(invitations ?? []).map((invitation) => (
-                <MemberRow
+                <PushRow
                   key={invitation.id}
-                  name={invitation.email}
-                  email={invitationLine(invitation)}
-                  invited
-                  acts={[
-                    // Note that the service mails the accept link where the deployment names a sender, so Copy link sends it by hand, as the panel's row offers it.
-                    {
-                      label: INVITE_LINK_WORDS.COPY,
-                      symbol: GLYPH.LINK,
-                      onPress: () =>
-                        void setStringAsync(invitation.acceptUrl)
-                          .then(() => buzz(BUZZ.SUCCESS))
-                          .catch((cause: unknown) =>
-                            console.error("The invite link was not copied.", cause),
-                          ),
-                    },
-                    {
-                      label: INVITATION_WORDS.CANCEL,
-                      destructive: true,
-                      onPress: () => setAsking({ kind: ASKING.CANCEL, invitation }),
-                    },
-                  ]}
+                  label={invitation.email}
+                  goes={PUSH_ROW_GOES.PAGE}
+                  onPress={() =>
+                    router.push({
+                      pathname: SETTINGS_ROUTE.INVITATION,
+                      params: { invitation: invitation.id },
+                    })
+                  }
                 />
               ))}
             </ListSection>
@@ -418,45 +335,6 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           )}
         </SettingsForm>
       </Screen>
-      {/* Note that a removal and a cancel ask in the accent rather than red, as the panel's do, since inviting again undoes either. */}
-      <ConfirmAsk
-        title={
-          asking?.kind === ASKING.REMOVE ? MEMBER_WORDS.REMOVE_QUESTION(asking.member.name) : ""
-        }
-        message={MEMBER_WORDS.REMOVE_BODY}
-        act={MEMBER_WORDS.REMOVE_VERB}
-        presented={asking?.kind === ASKING.REMOVE}
-        onDismiss={dismiss}
-        onAct={() => {
-          if (asking?.kind !== ASKING.REMOVE) return;
-          const { userId } = asking.member;
-          dismiss();
-          void people.run(userId, undefined, () =>
-            refusalOf(write, () => acts[ACT_KIND.WORKSPACE_MEMBER_REMOVE]({ workspaceId, userId })),
-          );
-        }}
-      />
-      <ConfirmAsk
-        title={INVITATION_WORDS.CANCEL_QUESTION}
-        message={
-          asking?.kind === ASKING.CANCEL
-            ? INVITATION_WORDS.CANCEL_BODY(asking.invitation.email)
-            : undefined
-        }
-        act={INVITATION_WORDS.CANCEL}
-        presented={asking?.kind === ASKING.CANCEL}
-        onDismiss={dismiss}
-        onAct={() => {
-          if (asking?.kind !== ASKING.CANCEL) return;
-          const invitationId = asking.invitation.id;
-          dismiss();
-          void invite.run(invitationId, undefined, () =>
-            refusalOf(write, () =>
-              acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }),
-            ),
-          );
-        }}
-      />
       {/* Note that a handover asks in the accent rather than red, as the panel's does, and waits on the workspace's name typed, since only the new owner can give it back. */}
       <ConfirmAsk
         title={transferQuestionTitle(
