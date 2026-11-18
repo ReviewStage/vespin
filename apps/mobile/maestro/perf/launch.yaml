@@ -1,0 +1,44 @@
+# launch.yaml -- MEASUREMENT ONLY: cold launches on the live host against the stubbed account service, four signed out, then four signed in after one sign-in, each labeled "T:<path>", for the splash's hold (`splash-hide` beside `host-started`).
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      authServer: stub
+- extendedWaitUntil:
+    visible: "Sign in to Vespin|Don.t Allow"
+    timeout: 30000
+- repeat:
+    times: 4
+    commands:
+      - stopApp
+      - launchApp:
+          stopApp: true
+          arguments:
+            authServer: stub
+          label: "T:cold-launch-signed-out"
+      - extendedWaitUntil:
+          visible: "Sign in to Vespin"
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 5000
+- tapOn: "Continue with GitHub"
+- extendedWaitUntil:
+    visible: "Know when an agent needs you|Open.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- repeat:
+    times: 4
+    commands:
+      - stopApp
+      - launchApp:
+          stopApp: true
+          arguments:
+            authServer: stub
+          label: "T:cold-launch-signed-in"
+      - extendedWaitUntil:
+          visible: "Know when an agent needs you|Open.*"
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 5000

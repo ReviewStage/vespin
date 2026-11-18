@@ -35,6 +35,8 @@ export function holdSplash(): void {
 export function releaseSplash(): void {
   if (released) return;
   released = true;
+  // @ts-expect-error -- probe only.
+  globalThis.__perfMark?.("splash-hide");
   clearTimeout(deadline);
   hide();
 }
