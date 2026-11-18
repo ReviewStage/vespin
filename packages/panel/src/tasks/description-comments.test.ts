@@ -821,11 +821,11 @@ test("a line's count stands every thread on the line under it, the first open", 
 
 test("a line's count stands centered on the first line its words stand on, though they wrap onto the next", () => {
   // Note that jsdom lays nothing out, so the marked words are given two line boxes 22px apart, the body at the page's top.
-  const lines = Object.getOwnPropertyDescriptor(Element.prototype, "getClientRects");
-  Element.prototype.getClientRects = function (this: Element) {
-    const marked = this.classList.contains("description-comment-mark");
+  const lines = Object.getOwnPropertyDescriptor(Range.prototype, "getClientRects");
+  Range.prototype.getClientRects = function (this: Range) {
+    const marked = this.startContainer.parentElement?.closest(".description-comment-mark") != null;
 
-    // SAFETY: the marks read their rects by index and length alone, as a DOMRectList is read.
+    // SAFETY: the measure reads the rects by spreading them, as a DOMRectList is read.
     return (marked ? [new DOMRect(40, 100, 300, 20), new DOMRect(0, 122, 200, 20)] : []) as never;
   };
 
@@ -834,7 +834,7 @@ test("a line's count stands centered on the first line its words stand on, thoug
     const count = container.querySelector<HTMLElement>(".comment-count");
     assert.equal(count?.style.top, "110px", "the middle of the first line's box");
   } finally {
-    if (lines !== undefined) Object.defineProperty(Element.prototype, "getClientRects", lines);
+    if (lines !== undefined) Object.defineProperty(Range.prototype, "getClientRects", lines);
   }
 });
 
@@ -1080,7 +1080,7 @@ test("a thread at rest draws its comment's mentions as their chips, as it does o
   );
 });
 
-test("a block a thread covers whole offers no button to start another, and one a thread covers in part keeps it", () => {
+test("a block a thread stands on offers no button to start another, whether it covers the block whole or a word of it", () => {
   const onHeading = threadOn(ID.OPEN, "Approach", "Is this the right order?", {
     scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
     section: "Approach",
@@ -1113,8 +1113,8 @@ test("a block a thread covers whole offers no button to start another, and one a
   const { button, approach, goal, paragraph } = blocks(container);
   assert.ok(button(approach) === null, "the heading a thread covers offers none");
   assert.ok(button(goal), "a heading without one does");
-  assert.ok(button(paragraph), "a paragraph with a thread on one word does");
-  assert.ok(button(approach) === null, "and going back takes it away");
+  assert.ok(button(paragraph) === null, "a paragraph with a thread on one word offers none");
+  assert.ok(button(goal), "and going back to one without brings it again");
 
   for (const root of roots.splice(0)) act(() => root.unmount());
   container.remove();
@@ -1328,8 +1328,8 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started gives its card's place to the thread as its words are sent, under the id its first comment's key names, and words refused stand as not sent where its words are commented on again", async () => {
-  const { container, started } = wide(() => drawn("page", []));
+test("a thread being started turns into the thread where it stands once the thread is drawn, under the id its first comment's key names, and words refused stand as not sent where its words are commented on again", async () => {
+  const { container, started, rethread } = wide(() => drawn("page", []));
 
   const paragraph = [...container.querySelectorAll("p")].find((p) =>
     p.textContent?.startsWith("Admins can withdraw"),
@@ -1346,16 +1346,31 @@ test("a thread being started gives its card's place to the thread as its words a
   comment();
   const field = pending()?.querySelector<HTMLElement>(".composer-editor");
   assert.ok(field);
+  const place = pending()?.closest(".comment-slot");
   typeInto(field, "Ask Vespin about retries");
 
   act(() => {
     field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
-  assert.equal(pending(), null, "the card gives way as its words are sent");
+  assert.ok(pending() !== null, "the card stands until its thread is drawn");
   const [start] = started;
   assert.ok(start);
   assert.equal(start.id, start.clientKey);
 
+  // The host draws the thread at once, and takes it away again as the service refuses it.
+  rethread([
+    threadOn(start.clientKey, "Admins can withdraw", "Ask Vespin about retries", {
+      scope: start.scope,
+      quote: start.quote,
+      anchor: start.anchor,
+      section: "Approach",
+    }),
+  ]);
+  const thread = container.querySelector(`.comment-card[data-thread="${start.clientKey}"]`);
+  assert.equal(pending(), null, "the card gives way to its thread");
+  assert.ok(thread?.closest(".comment-slot") === place, "in the place the card stood in");
+
+  rethread([]);
   await act(async () => undefined);
   comment();
   assert.equal(

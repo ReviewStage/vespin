@@ -257,6 +257,8 @@ const FLOW_SLOT_CLASS = "comment-slot";
 /** A card in the margin as it was last drawn: its thread or the thread being started, where it stood, and whether it stood open. */
 interface MarginCard {
   readonly id: string;
+  /** The place it is drawn in, which a thread started from the pending card takes over from it. */
+  readonly slot: string;
   readonly thread: DescriptionCommentThread | undefined;
   readonly pending: PendingThread | undefined;
   readonly top: number;
@@ -277,6 +279,7 @@ function sameCards(a: readonly MarginCard[], b: readonly MarginCard[]): boolean 
       return (
         other !== undefined &&
         card.id === other.id &&
+        card.slot === other.slot &&
         card.thread === other.thread &&
         card.pending === other.pending &&
         card.top === other.top &&
@@ -308,14 +311,17 @@ function useMarginCards(cards: readonly MarginCard[], drawing: boolean): UseMarg
 
   // Note that a margin not drawn, folded, holds nothing, since a card it held would fade out once it is drawn again.
   if (!sameCards(held.last, cards) || (!drawing && leaving.length > 0)) {
-    const standing = new Set(cards.map((card) => card.id));
-    const left = held.last.filter((card) => !standing.has(card.id));
-    leaving = drawing ? [...leaving.filter((card) => !standing.has(card.id)), ...left] : [];
+    const standing = new Set(cards.map((card) => card.slot));
+    const left = held.last.filter((card) => !standing.has(card.slot));
+    leaving = drawing ? [...leaving.filter((card) => !standing.has(card.slot)), ...left] : [];
     setHeld({ last: cards, leaving });
   }
 
-  const gone = useCallback((id: string) => {
-    setHeld((now) => ({ last: now.last, leaving: now.leaving.filter((card) => card.id !== id) }));
+  const gone = useCallback((slot: string) => {
+    setHeld((now) => ({
+      last: now.last,
+      leaving: now.leaving.filter((card) => card.slot !== slot),
+    }));
   }, []);
 
   return {
@@ -338,20 +344,23 @@ function MarginSlot({
   slotRef,
   onGone,
   flows = false,
+  onPointed,
   children,
 }: {
   card: DrawnCard;
   moves: boolean;
   slotRef: (element: HTMLDivElement | null) => void;
-  onGone: (id: string) => void;
+  onGone: (slot: string) => void;
   flows?: boolean;
+  /** Says which card the pointer is on, and that it left; none where nothing answers it. */
+  onPointed?: ((id: string | undefined) => void) | undefined;
   children: ReactNode;
 }): React.JSX.Element | null {
   const shown = useDisclosure(!card.leaving);
-  const { id } = card;
+  const { id, slot } = card;
   useEffect(() => {
-    if (!shown.mounted) onGone(id);
-  }, [shown.mounted, onGone, id]);
+    if (!shown.mounted) onGone(slot);
+  }, [shown.mounted, onGone, slot]);
 
   if (!shown.mounted) return null;
 
@@ -367,6 +376,10 @@ function MarginSlot({
       data-leaving={card.leaving ? "true" : undefined}
       inert={card.leaving}
       style={flows ? undefined : { transform: `translateY(${card.top}px)` }}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== "touch" && !card.leaving) onPointed?.(id);
+      }}
+      onPointerLeave={() => onPointed?.(undefined)}
     >
       {children}
     </div>
@@ -1958,24 +1971,17 @@ function ownRange(block: HTMLElement): Range {
 }
 
 /**
- * Whether threads' marks cover every one of the block's own words, as a
- * thread on the block does, so it is commented on through them; a thread on
- * a few of its words, or on a bullet nested under it, leaves it its button.
+ * Whether a thread stands on any of the block's own words, as Notion's
+ * blocks do once commented on: its card stands beside it in the button's
+ * place, and more words of it are commented on by selecting them. A thread
+ * on a bullet nested under it leaves it its button.
  */
-function threadedWhole(block: HTMLElement): boolean {
+function threaded(block: HTMLElement): boolean {
   const own = ownRange(block);
 
-  const marked = [...block.querySelectorAll(`.${COMMENT_MARK_CLASS}[data-threads]`)]
-    .flatMap((mark) =>
-      own.intersectsNode(mark) && mark.parentElement?.closest(`.${COMMENT_MARK_CLASS}`) === null
-        ? [mark.textContent]
-        : [],
-    )
-    .join("");
-
-  const words = own.toString().replace(/\s+/gu, "");
-
-  return words !== "" && marked.replace(/\s+/gu, "") === words;
+  return [...block.querySelectorAll(`.${COMMENT_MARK_CLASS}[data-threads]`)].some((mark) =>
+    own.intersectsNode(mark),
+  );
 }
 
 /** A thread started on the editor's words, its quote held to the bound the service keeps. */
@@ -2021,27 +2027,36 @@ function topIn(body: HTMLElement, element: Element): number {
   return element.getBoundingClientRect().top - body.getBoundingClientRect().top;
 }
 
+/** Where a line stands in the description body's own box: its top and its middle. */
+interface LineAt {
+  readonly top: number;
+  readonly middle: number;
+}
+
 /**
- * Where the middle of the first line `element`'s words stand on, in the description
- * body's own box: a count or a block's button stands centered on it, so it
- * reads as that line's whether the words go on past it or not. Note that the
- * element holding the first words is measured: an inline one by the first
- * of its line boxes, and a block by its top and half its line, because a
+ * Where the first line `element`'s words stand on starts and where its
+ * middle is, in the description body's own box: a margin card stands level
+ * with its top, as does a block's button beside the cards, so the button
+ * stands where the card it opens will; a count or a folded button stands
+ * centered on its middle, so it reads as that line's whether the words go on
+ * past it or not. Note that the first words are measured themselves, the
+ * first of their line boxes, as a thread's mark around them is, because a
  * box wrapping onto more lines spans them all.
  */
-function lineMiddleIn(body: HTMLElement, element: Element): number {
+function firstLineIn(body: HTMLElement, element: Element): LineAt {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, (node) =>
     (node.textContent ?? "").trim() === "" ? NodeFilter.FILTER_SKIP : NodeFilter.FILTER_ACCEPT,
   );
 
-  const holder = walker.nextNode()?.parentElement ?? element;
-  const style = getComputedStyle(holder);
-  const line = style.display === "inline" ? holder.getClientRects()[0] : undefined;
+  const words = walker.nextNode();
+  const range = document.createRange();
+  range.selectNodeContents(words ?? element);
+  const line = [...range.getClientRects()].find((rect) => rect.height > 0);
+  const top = body.getBoundingClientRect().top;
 
-  if (line !== undefined) return (line.top + line.bottom) / 2 - body.getBoundingClientRect().top;
-  const height = Number.parseFloat(style.lineHeight);
+  if (line === undefined) return { top: topIn(body, element), middle: topIn(body, element) };
 
-  return topIn(body, holder) + (Number.isFinite(height) ? height / 2 : 0);
+  return { top: line.top - top, middle: (line.top + line.bottom) / 2 - top };
 }
 
 /** The part of the scroller in view, inside its edges, in the description body's own box; none before either is drawn. */
@@ -2097,29 +2112,33 @@ function blockAt(
  * from the scroller around it, whose width says whether a margin fits.
  */
 /**
- * The sheet naming the open thread's words in the editor, built once; a
- * constructed sheet, since the window's policy takes no inline style. It
- * names the thread's id, so it is written withheld from the screen
- * recording (`@repo/ui/session-replay-marks`), from before it is adopted.
+ * The sheet naming the threads whose words are drawn lit by a rule rather
+ * than their marks' own `data-active`, built once; a constructed sheet,
+ * since the window's policy takes no inline style. It names the threads'
+ * ids, so it is written withheld from the screen recording
+ * (`@repo/ui/session-replay-marks`), from before it is adopted.
  */
-let openThreadSheet: CSSStyleSheet | undefined;
+let litThreadsSheet: CSSStyleSheet | undefined;
 
-/** The open thread's words drawn open in the editor, as the read view draws its marks with `data-active`; none where no thread is open. */
-function editorOpenThread(thread: string | undefined): void {
+/** The threads' words drawn as an open thread's are, as the read view draws its marks with `data-active`; none where the list is empty. */
+function drawLitThreads(threads: readonly string[]): void {
   if (!("CSSStyleSheet" in globalThis) || !("adoptedStyleSheets" in document)) return;
 
-  if (openThreadSheet === undefined) {
-    openThreadSheet = new CSSStyleSheet();
-    writeWithheldSheet(openThreadSheet, "");
-    document.adoptedStyleSheets = [...document.adoptedStyleSheets, openThreadSheet];
+  if (litThreadsSheet === undefined) {
+    litThreadsSheet = new CSSStyleSheet();
+    writeWithheldSheet(litThreadsSheet, "");
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, litThreadsSheet];
   }
 
   // Note that a thread's id is the service's UUID, which a selector takes as it is; the rule draws the edge whole, so words inside another thread's mark, which draws none of its own, show it too.
   writeWithheldSheet(
-    openThreadSheet,
-    thread === undefined
-      ? ""
-      : `.description-document-text .${COMMENT_MARK_CLASS}[data-threads~="${thread}"] { padding-bottom: 1px; border-bottom: 1.5px solid var(--comment-mark-active-edge); background: var(--comment-mark-active); }`,
+    litThreadsSheet,
+    threads
+      .map(
+        (thread) =>
+          `.description-document-body .${COMMENT_MARK_CLASS}[data-threads~="${thread}"] { padding-bottom: 1px; border-bottom: 1.5px solid var(--comment-mark-active-edge); background: var(--comment-mark-active); }`,
+      )
+      .join("\n"),
   );
 }
 
@@ -2189,6 +2208,8 @@ export function DescriptionCommentLayer({
   const [onBlocks, setOnBlocks] = useState(false);
   // The thread whose words the pointer is on, whose card answers it before a press.
   const [pointed, setPointed] = useState<string | undefined>(undefined);
+  // The thread whose card the pointer is on, whose words answer it before a press.
+  const [cardPointed, setCardPointed] = useState<string | undefined>(undefined);
   // Whether the open thread was opened by the editor's caret standing in its words, which closes it as the caret leaves them.
   const caretOpened = useRef(false);
   // Whether a pointer is down, whose press moves the focus before its own rule says what becomes of the thread.
@@ -2203,33 +2224,62 @@ export function DescriptionCommentLayer({
   const cards = useRef(new Map<string, HTMLDivElement>());
   // The cards already stood in the margin, which move to their next place rather than land there, so a card arriving lands where it belongs.
   const settled = useRef(new Set<string>());
+  // The place the pending card is drawn in, which the thread it starts takes over, and the places threads took over so, by thread.
+  const pendingSlot = useRef(crypto.randomUUID());
+  const takenOver = useRef(new Map<string, string>());
+
+  // The thread the pending card started, from which pending thread, and in which place, which the card stands for until the thread is drawn.
+  const [handing, setHanding] = useState<
+    { thread: string; from: PendingThread; slot: string } | undefined
+  >(undefined);
 
   // Note that the open threads stand in the order of their words rather than of their starting, so the keyboard meets their counts and cards top to bottom.
   const open = doors.control.threads
     .filter(openThread)
     .sort((one, other) => (anchors.get(one.id) ?? 0) - (anchors.get(other.id) ?? 0));
 
+  // Note that the pending card stands until the thread it started is drawn, which then takes its place, so the card turns into the thread where it stands rather than leaving and the thread arriving after it, the cards below moving away and back between.
+  const handed =
+    handing !== undefined &&
+    pending === handing.from &&
+    open.some((thread) => thread.id === handing.thread);
+
+  const handedThread = handed ? handing.thread : undefined;
+
+  // Note that the thread taking the pending card's place stands where the card stood until it is measured itself.
+  const measuredAs = (id: string): string =>
+    id === handedThread && !tops.has(id) ? PENDING_THREAD : id;
+
+  // Note that the pending card is drawn in its words' order among the threads, as the thread it starts is, so the cards around it are never moved in the page, which would play their arrival again.
   const marginCards = useMarginCards(
     [
       ...open.map((thread) => ({
         id: thread.id,
+        slot: takenOver.current.get(thread.id) ?? thread.id,
         thread,
         pending: undefined,
-        top: tops.get(thread.id) ?? 0,
-        open: active === thread.id,
+        top: tops.get(measuredAs(thread.id)) ?? 0,
+        open: active === thread.id || thread.id === handedThread,
       })),
-      ...(pending === undefined
+      ...(pending === undefined || handed
         ? []
         : [
             {
               id: PENDING_THREAD,
+              slot:
+                handing !== undefined && pending === handing.from
+                  ? handing.slot
+                  : pendingSlot.current,
               thread: undefined,
               pending,
               top: tops.get(PENDING_THREAD) ?? 0,
               open: true,
             },
           ]),
-    ],
+    ].sort(
+      (one, other) =>
+        (anchors.get(measuredAs(one.id)) ?? 0) - (anchors.get(measuredAs(other.id)) ?? 0),
+    ),
     wide,
   );
 
@@ -2288,7 +2338,7 @@ export function DescriptionCommentLayer({
 
       return {
         top: anchor === element ? 0 : topIn(element, anchor),
-        middle: lineMiddleIn(element, anchor),
+        middle: firstLineIn(element, anchor).middle,
       };
     },
     [body, anchorOf],
@@ -2337,7 +2387,7 @@ export function DescriptionCommentLayer({
 
     const placed = [
       ...threads.filter(openThread).map((thread) => ({ id: thread.id, section: thread.section })),
-      ...(pending === undefined ? [] : [{ id: PENDING_THREAD, section: "" }]),
+      ...(pending === undefined || handed ? [] : [{ id: PENDING_THREAD, section: "" }]),
     ].flatMap(({ id, section }) => {
       const at = anchorAt(id, section);
 
@@ -2350,7 +2400,7 @@ export function DescriptionCommentLayer({
 
     const next = marginTops(
       placed,
-      active ?? (pending === undefined ? undefined : PENDING_THREAD),
+      handedThread ?? active ?? (pending === undefined ? undefined : PENDING_THREAD),
       CARD_GAP,
       view,
     );
@@ -2371,7 +2421,7 @@ export function DescriptionCommentLayer({
     setAnchors((held) => (sameTops(held, nextAnchors) ? held : nextAnchors));
     const nextLines = new Map(placed.map((card) => [card.id, card.middle]));
     setLines((held) => (sameTops(held, nextLines) ? held : nextLines));
-  }, [threads, pending, active, anchorAt, text, wide, resized]);
+  }, [threads, pending, handed, handedThread, active, anchorAt, text, wide, resized]);
 
   // An ask to show a thread scrolls the document's own scroller to its words, once per ask.
   const scrolled = useRef<number | undefined>(undefined);
@@ -2443,8 +2493,8 @@ export function DescriptionCommentLayer({
 
       if (found === undefined) return;
 
-      // Note that a block whose words a thread already covers is commented on through that thread, so it offers no button.
-      if (threadedWhole(found.block)) {
+      // Note that a block a thread already stands on is commented on through that thread, so it offers no button.
+      if (threaded(found.block)) {
         setHovered(undefined);
 
         return;
@@ -2452,8 +2502,7 @@ export function DescriptionCommentLayer({
 
       if (editor !== undefined) {
         setHovered({
-          top: topIn(element, found.block),
-          middle: lineMiddleIn(element, found.block),
+          ...firstLineIn(element, found.block),
           start: () => {
             const span = editor.current?.blockSpan(found.block);
 
@@ -2471,8 +2520,7 @@ export function DescriptionCommentLayer({
       if (section === undefined) return;
       const { quote, from, to } = ownWords(found.unit, found.block);
       setHovered({
-        top: topIn(element, found.block),
-        middle: lineMiddleIn(element, found.block),
+        ...firstLineIn(element, found.block),
         start: () => {
           const begun = pendingOf(
             found.unit,
@@ -2762,13 +2810,15 @@ export function DescriptionCommentLayer({
   useEffect(() => {
     settled.current = new Set(tops.keys());
   });
-  // The editor's marks are the editor's own, so the open thread's words are drawn open there by a rule naming them.
+  // The editor's marks are the editor's own, so the open thread's words are drawn open there by a rule naming them, as are the words of the card the pointer is on, in either view, as Notion's are.
   const editorActive = editor !== undefined && active !== PENDING_THREAD ? active : undefined;
   useEffect(() => {
-    editorOpenThread(editorActive);
+    drawLitThreads(
+      [editorActive, cardPointed].filter((thread): thread is string => thread !== undefined),
+    );
 
-    return () => editorOpenThread(undefined);
-  }, [editorActive]);
+    return () => drawLitThreads([]);
+  }, [editorActive, cardPointed]);
   // A press anywhere but the thread, its words, or what it opened over the page closes it, its words kept as its draft; a thread being started goes too, but while its words are sent or it holds files or a dictation, which no draft keeps.
   usePressAway(NO_LAYER, () => undefined, {
     onPressAway:
@@ -2793,13 +2843,25 @@ export function DescriptionCommentLayer({
     setPending(undefined);
   };
 
+  // Note that a pending thread begun while the thread is on its way takes a place of its own, so the two never share one.
   const startedFromPending = (threadId: string) => {
-    setPending(undefined);
-    onActive(threadId);
+    if (pending === undefined) return;
+    const slot = pendingSlot.current;
+    pendingSlot.current = crypto.randomUUID();
+    takenOver.current.set(threadId, slot);
+    setHanding({ thread: threadId, from: pending, slot });
   };
 
+  // Once the thread started is drawn, it is the open thread in the pending card's place, before the frame shows it.
+  useLayoutEffect(() => {
+    if (handedThread === undefined) return;
+    setHanding(undefined);
+    setPending(undefined);
+    onActive(handedThread);
+  }, [handedThread, setPending, onActive]);
+
   const pendingCard =
-    pending === undefined ? null : (
+    pending === undefined || handed ? null : (
       <PendingCard
         on={pending}
         doors={doors}
@@ -2816,7 +2878,7 @@ export function DescriptionCommentLayer({
       <div
         className={BLOCK_BUTTON_CLASS}
         data-beside-cards={wide ? "" : undefined}
-        style={{ top: hovered.middle }}
+        style={{ top: wide ? hovered.top : hovered.middle }}
       >
         <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
           {/* Note that the press takes no focus, so an open editor stays to measure the block through. */}
@@ -2892,11 +2954,12 @@ export function DescriptionCommentLayer({
         <div className="comment-margin absolute top-0 left-comment-margin w-comment-card">
           {marginCards.drawn.map((card) => (
             <MarginSlot
-              key={card.id}
+              key={card.slot}
               card={card}
               moves={settled.current.has(card.id)}
               slotRef={cardRef(card.id)}
               onGone={marginCards.gone}
+              onPointed={setCardPointed}
             >
               {card.thread !== undefined ? (
                 <ThreadCard
@@ -3242,7 +3305,14 @@ function ThreadList({
   handle: RefObject<VirtualRowsHandle | null>;
 }): React.JSX.Element {
   const held = useMarginCards(
-    listed.map((thread) => ({ id: thread.id, thread, pending: undefined, top: 0, open: true })),
+    listed.map((thread) => ({
+      id: thread.id,
+      slot: thread.id,
+      thread,
+      pending: undefined,
+      top: 0,
+      open: true,
+    })),
     true,
   );
 
@@ -3253,7 +3323,7 @@ function ThreadList({
   // Note that a thread leaving where its row is not drawn has no fade to wait out, so it is let go at once.
   useLayoutEffect(() => {
     for (const card of rows) {
-      if (card.leaving && handle.current?.rowElement(card.id) === undefined) gone(card.id);
+      if (card.leaving && handle.current?.rowElement(card.id) === undefined) gone(card.slot);
     }
   });
 
