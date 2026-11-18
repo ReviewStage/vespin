@@ -1,5 +1,5 @@
 /**
- * pull-request-tools.ts -- `read_pull_request` and `mark_pull_request_files_viewed`: a coding agent's pull request by the agent's id, or any pull request of a repository the member's workspace reaches by its repository and number, read a part at a time and its files marked viewed, as the hosted pull request reads and change make them.
+ * pull-request-tools.ts -- `read_pull_request` and `mark_pull_request_files_viewed`: a pull request of a coding agent's repository by the agent's id and its number, or any pull request of a repository the member's workspace reaches by its repository and number, read a part at a time and its files marked viewed, as the hosted pull request reads and change make them.
  *
  * A pull request named by its repository and number is reached through the
  * operation the hosted procedures run (`../github/repository-pull-request.ts`),
@@ -7,9 +7,10 @@
  * workspace the member is not in and a number the repository holds none
  * under alike, as no pull request. One named by an agent is the one its
  * Pull request tab reads, through the operations `agentPullRequests.*` run
- * (`../agents/agent-pull-request-procedures.ts`): what the agent published,
- * or another of its repository by its number; an agent that opened none yet
- * is refused as such.
+ * (`../agents/agent-pull-request-procedures.ts`): the pull request of the
+ * agent's repository its number names, the agent's own or another, since a
+ * call always names the number; one its repository holds none of is
+ * refused as such.
  *
  * A read answers one part a call, so a long conversation or a large diff
  * never lands whole in a model's context: the overview (the pull request
@@ -104,8 +105,8 @@ const PULL_REQUEST_TOOL_REFUSAL = {
     `${not}: the member belongs to no such workspace, or the repository holds no pull request ` +
     "of that number.",
   NO_PULL_REQUEST: (not: string) =>
-    `${not}: that agent has opened no pull request yet, or its repository holds none of that ` +
-    "number.",
+    `${not}: that agent works in no repository, or its repository holds no pull request of ` +
+    `that number; ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers the number of the agent's own.`,
   NOT_REACHABLE: (not: string) =>
     `${not}: the GitHub installation connected to the workspace does not reach that repository.`,
   UNANSWERED: (not: string) =>
@@ -119,13 +120,14 @@ const PULL_REQUEST_TOOL_REFUSAL = {
   REFUSED: (words: string) => `Not marked: GitHub refused, saying: ${words}`,
 } as const;
 
-/** The pull request a call names: an agent's by the agent's id, or a repository's by its number, beside the workspace the caller names. */
+/** The pull request a call names, always by its number: of an agent's repository by the agent's id, or of a repository named, beside the workspace the caller names. */
 const PULL_REQUEST_FIELDS = {
   agentId: Schema.optionalKey(
     describeWire(
       wireUuidSchema,
-      `A coding agent whose pull request it is, by its id as ${MEMBER_MCP_TOOL.LIST_AGENTS} ` +
-        "answered it; leave it out to name a repository's pull request instead.",
+      `A coding agent whose repository the pull request is of, by its id as ` +
+        `${MEMBER_MCP_TOOL.LIST_AGENTS} answered it, with number; leave it out to name the ` +
+        "repository instead.",
     ),
   ),
   repository: Schema.optionalKey(
@@ -135,12 +137,10 @@ const PULL_REQUEST_FIELDS = {
         "reaches, with number; leave it out with agentId.",
     ),
   ),
-  number: Schema.optionalKey(
-    describeWire(
-      githubPullRequestNumberSchema,
-      "The pull request's number: with repository, the one meant; with agentId, another pull " +
-        "request of the agent's repository, left out for the agent's own.",
-    ),
+  number: describeWire(
+    githubPullRequestNumberSchema,
+    "The pull request's number, in the repository that repository or agentId names. For an " +
+      `agent's own pull request, pass the number ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers.`,
   ),
 };
 
@@ -451,12 +451,12 @@ const reachedByRepository = (userId: string, query: PullRequestQuery) =>
     (reached): Reached => ({ by: REACHED_BY.REPOSITORY, reached, query }),
   );
 
-/** The pull request asked about of an agent the member reached; not found where it names none yet. */
+/** The pull request of the number given of an agent the member reached; not found where its repository holds none. */
 const reachedByAgent = (
   published: Effect.Effect<PublishedCache>,
   userId: string,
   agent: Agent,
-  number: number | undefined,
+  number: number,
 ) =>
   Effect.flatMap(askedOfAgent(published, userId, agent, number), (answer) => {
     const { pullRequest } = answer;
@@ -501,12 +501,12 @@ export const runReadPullRequest = (
     asked,
   );
 
-/** One call of `read_pull_request` naming an agent's pull request, as the member: the part asked of what it published, or of the one `number` names, or why there is none. */
+/** One call of `read_pull_request` naming a pull request of an agent's repository by its number, as the member: the part asked, or why there is none. */
 export const runReadAgentPullRequest = (
   published: Effect.Effect<PublishedCache>,
   userId: string,
   agent: Agent,
-  number: number | undefined,
+  number: number,
   asked: ReadPullRequestInput,
 ) => readReached(REACHED_BY.AGENT, reachedByAgent(published, userId, agent, number), userId, asked);
 
@@ -564,15 +564,16 @@ export const runMarkFilesViewed = (
 };
 
 /**
- * One call of `mark_pull_request_files_viewed` naming an agent's pull
- * request, as the member: the pull request asked once, then each path
- * changed on it as its Pull request tab's Viewed box changes it.
+ * One call of `mark_pull_request_files_viewed` naming a pull request of an
+ * agent's repository by its number, as the member: the pull request asked
+ * once, then each path changed on it as its Pull request tab's Viewed box
+ * changes it.
  */
 export const runMarkAgentFilesViewed = (
   published: Effect.Effect<PublishedCache>,
   userId: string,
   agent: Agent,
-  number: number | undefined,
+  number: number,
   asked: MarkFilesViewedInput,
 ) =>
   Effect.flatMap(askedOfAgent(published, userId, agent, number), ({ pullRequest }) =>

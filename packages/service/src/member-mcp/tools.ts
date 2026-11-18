@@ -3546,26 +3546,24 @@ const AGENT_PULL_REQUEST_ACTION_REFUSAL = {
     `sign-in GitHub takes, which signing in with GitHub again in ${PRODUCT_NAME} mends.`,
   REFUSED: (words: string) => `Not made: GitHub refused this change, saying: ${words}`,
   NO_PULL_REQUEST:
-    "Not made: that agent has opened no pull request yet, or its repository holds none of " +
-    "that number.",
+    "Not made: that agent works in no repository, or its repository holds no pull request of " +
+    `that number; ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers the number of the agent's own.`,
   NOT_REACHABLE:
     "Not made: the GitHub installation connected to the workspace no longer reaches that " +
     "agent's repository.",
   UNANSWERED: "Not made: GitHub could not be reached just now. The call may be made again.",
 } as const;
 
-/** A change names the agent, at most another pull request of its repository, and the change as the agent's Pull request tab asks for it. */
+/** A change names the agent, the pull request of its repository by number, and the change as the agent's Pull request tab asks for it. */
 const AgentPullRequestActionInputSchema = Schema.Struct({
   agentId: describeWire(
     wireUuidSchema,
     `The agent's id, as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered it.`,
   ),
-  number: Schema.optionalKey(
-    describeWire(
-      githubPullRequestNumberSchema,
-      "Another pull request of the agent's repository, by its number, such as one stacked on " +
-        "its own; leave it out for the agent's own pull request.",
-    ),
+  number: describeWire(
+    githubPullRequestNumberSchema,
+    "The pull request of the agent's repository to change, by its number: the agent's own, " +
+      `which ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers, or another, such as one stacked on it.`,
   ),
   change: describeWire(
     pullRequestActionRequestSchema,
@@ -3607,8 +3605,8 @@ function unmadeWords(refusal: HostedRefusal): string {
 const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION,
   description:
-    "Make one change to the pull request of a coding agent the member can see, by the agent's " +
-    "id, in whichever of the member's workspaces it stands, as the agent's Pull request tab " +
+    "Make one change to a pull request of the repository of a coding agent the member can see, " +
+    "by the agent's id and the pull request's number, in whichever of the member's workspaces it stands, as the agent's Pull request tab " +
     "makes it: on GitHub as the member, on their own GitHub sign-in, so GitHub allows what " +
     "their own account may and nothing more. Name the change by its action " +
     `(${Object.values(PULL_REQUEST_ACTION).join(", ")}) with the fields that action takes. A ` +
@@ -3616,8 +3614,7 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
     `${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers, so GitHub refuses one against a head pushed ` +
     "since; an edit of the description names the words it began from, as expectedBody, and " +
     "writes nothing where GitHub's changed since; a review thread, a comment, and what a " +
-    "reaction is on are named by GitHub's own node ids. The change is made on the agent's own " +
-    "pull request unless number names another of its repository. Answers `accepted` once " +
+    "reaction is on are named by GitHub's own node ids. Answers `accepted` once " +
     "GitHub made it, or `rejected` and why not: GitHub's own words where it refused, or that " +
     "the member must sign in with GitHub again.",
   input: AgentPullRequestActionInputSchema,
@@ -3648,12 +3645,12 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
     ),
 });
 
-// A coding agent's pull request by the agent's id, or any pull request of a repository the member's workspace reaches by its repository and number (`pull-request-tools.ts`).
+// A pull request of a coding agent's repository by the agent's id and its number, or any pull request of a repository the member's workspace reaches by its repository and number (`pull-request-tools.ts`).
 
 /** Why a pull request call reached nothing before it began, in words the agent can act on. */
 const PULL_REQUEST_NAME_ONE =
-  "Not run: name the pull request either by agentId, or by repository and number, not both " +
-  "and not neither.";
+  "Not run: name the pull request's repository either by agentId or by repository " +
+  "(owner/name), not both and not neither, beside its number.";
 
 /** With repository, the workspace whose installation reaches it, as a chapters call names it. */
 const PULL_REQUEST_WORKSPACE = Schema.optionalKey(
@@ -3681,7 +3678,7 @@ const MarkPullRequestFilesViewedInputSchema = Schema.Struct({
 interface PullRequestNamedInput {
   readonly agentId: string | undefined;
   readonly repository: string | undefined;
-  readonly number: number | undefined;
+  readonly number: number;
   readonly workspace: string | undefined;
 }
 
@@ -3690,7 +3687,7 @@ interface PullRequestCall<R> {
   readonly agent: (
     userId: string,
     agent: Agent,
-    number: number | undefined,
+    number: number,
   ) => Effect.Effect<WireRecord, never, R>;
   readonly repository: (
     userId: string,
@@ -3724,7 +3721,7 @@ const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestC
     );
   }
 
-  if (repository === undefined || number === undefined) {
+  if (repository === undefined) {
     return Effect.succeed(agentToolRejected(PULL_REQUEST_NAME_ONE));
   }
 
@@ -3739,10 +3736,10 @@ const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestC
 const READ_PULL_REQUEST_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_PULL_REQUEST,
   description:
-    "Read a pull request one part a call, as its Pull request tab draws it: a coding agent's " +
-    "by the agent's id, what it published or another of its repository by number, or any " +
-    "pull request of a repository the member's workspace reaches on GitHub by its repository " +
-    "(owner/name) and number. " +
+    "Read a pull request one part a call, as its Pull request tab draws it, by its number: " +
+    "one of a coding agent's repository by the agent's id, or one of any repository the " +
+    "member's workspace reaches on GitHub by its repository (owner/name). " +
+    `${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers the number of an agent's own. ` +
     "overview (the default) answers the pull request as GitHub holds it now: its state, its " +
     "checks in one word, the head commit it stands on (headSha), the lines it adds and removes, " +
     "the branch it is from, and its overview: its body as written in Markdown, cut to a bound, its " +
@@ -3754,8 +3751,8 @@ const READ_PULL_REQUEST_TOOL = memberMcpTool({
     "each with what became of it, the lines it adds and removes, and whether the member marked " +
     "it viewed; name a path to read that file's patch as well. " +
     `${WORKSPACE_WORDS} Answers \`rejected\` and why where the member reaches no such agent, ` +
-    "the agent opened no pull request yet, the member is in no such workspace, or the " +
-    "repository holds no pull request of that number. It only reads.",
+    "the member is in no such workspace, or the repository holds no pull request of that " +
+    "number. It only reads.",
   input: ReadPullRequestInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, agentId, repository, number, ...asked }) =>
@@ -3774,9 +3771,9 @@ const MARK_PULL_REQUEST_FILES_VIEWED_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED,
   description:
     "Mark files of a pull request as viewed, or unmark them, as GitHub's own Viewed box does: " +
-    "on GitHub as the member, on their own GitHub sign-in. Name a coding agent's pull request " +
-    "by the agent's id, or any pull request of a repository the member's workspace reaches by " +
-    "its repository (owner/name) and number, and the files by their paths as " +
+    "on GitHub as the member, on their own GitHub sign-in. Name the pull request by its " +
+    "number, of a coding agent's repository by the agent's id or of any repository the " +
+    "member's workspace reaches by its repository (owner/name), and the files by their paths as " +
     `${MEMBER_MCP_TOOL.READ_PULL_REQUEST}'s changes name them. ` +
     `${WORKSPACE_WORDS} Answers \`accepted\` with the paths marked, or \`rejected\` and why ` +
     "at the first GitHub did not take, naming those marked before it.",
@@ -3839,8 +3836,9 @@ const PullRequestChaptersInputSchema = Schema.Struct({
   agentId: Schema.optionalKey(
     describeWire(
       wireUuidSchema,
-      `An agent whose pull request to read, by its id as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered ` +
-        "it; leave it out to name a repository's pull request instead.",
+      `An agent whose repository the pull request is of, by its id as ` +
+        `${MEMBER_MCP_TOOL.LIST_AGENTS} answered it, with number; leave it out to name the ` +
+        "repository instead.",
     ),
   ),
   repository: Schema.optionalKey(
@@ -3850,12 +3848,10 @@ const PullRequestChaptersInputSchema = Schema.Struct({
         "with agentId.",
     ),
   ),
-  number: Schema.optionalKey(
-    describeWire(
-      githubPullRequestNumberSchema,
-      "The pull request's number: with repository, the one to read; with agentId, another " +
-        "pull request of the agent's repository, left out for the agent's own.",
-    ),
+  number: describeWire(
+    githubPullRequestNumberSchema,
+    "The pull request's number, in the repository that repository or agentId names. For an " +
+      `agent's own pull request, pass the number ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} answers.`,
   ),
   workspace: Schema.optionalKey(
     describeWire(
@@ -3876,7 +3872,7 @@ interface ChaptersCall<R> {
   readonly agent: (
     userId: string,
     agent: Agent,
-    number: number | undefined,
+    number: number,
   ) => Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>;
   readonly repository: (
     userId: string,
@@ -3913,16 +3909,16 @@ const CHAPTERS_ANSWER_WORDS =
   `chapters stand (${Object.values(PULL_REQUEST_CHAPTERS_STATE).join(", ")}): the head and base ` +
   "they were told for, and, where ready, each chapter's title, summary, kind, risk and why, key " +
   "changes with the lines they are on, and the hunks it holds; chapters told for a head older " +
-  "than the pull request's now are stale. pullRequest is null where the agent opened none yet. " +
-  "Or `rejected` and why.";
+  "than the pull request's now are stale. pullRequest is null where the agent works in no " +
+  "repository, or its repository holds no pull request of that number. Or `rejected` and why.";
 
 const READ_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS,
   description:
     "Read a pull request's chapters as its Pull request tab shows them: the story of its diff " +
-    "told as chapters a reviewer reads in order. Name a coding agent's pull request by the " +
-    "agent's id, or any pull request of a repository the workspace's GitHub installation " +
-    "reaches by its repository and number. It only reads, and never generates: " +
+    "told as chapters a reviewer reads in order. Name the pull request by its number, of a " +
+    "coding agent's repository by the agent's id or of any repository the workspace's GitHub " +
+    "installation reaches by its repository. It only reads, and never generates: " +
     `${MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS} does, where none stand or they are stale. ` +
     CHAPTERS_ANSWER_WORDS,
   input: PullRequestChaptersInputSchema,
@@ -3954,13 +3950,7 @@ const GENERATE_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
     chaptersAsMember(asked, {
       generates: true,
       agent: (userId, agent, number) =>
-        agentChaptersGenerate(
-          {},
-          KEPT_PUBLISHED,
-          userId,
-          agent,
-          number === undefined ? undefined : String(number),
-        ),
+        agentChaptersGenerate({}, KEPT_PUBLISHED, userId, agent, String(number)),
       repository: (userId, query) => repositoryChaptersGenerate({}, userId, query),
     }),
 });

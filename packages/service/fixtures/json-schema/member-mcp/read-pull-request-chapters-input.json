@@ -5,7 +5,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 36,
-      "description": "An agent whose pull request to read, by its id as list_agents answered it; leave it out to name a repository's pull request instead."
+      "description": "An agent whose repository the pull request is of, by its id as list_agents answered it, with number; leave it out to name the repository instead."
     },
     "repository": {
       "type": "string",
@@ -16,7 +16,7 @@
     "number": {
       "type": "integer",
       "minimum": 1,
-      "description": "The pull request's number: with repository, the one to read; with agentId, another pull request of the agent's repository, left out for the agent's own."
+      "description": "The pull request's number, in the repository that repository or agentId names. For an agent's own pull request, pass the number read_agent_changes answers."
     },
     "workspace": {
       "type": "string",
@@ -25,6 +25,8 @@
       "description": "With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
     }
   },
-  "required": [],
+  "required": [
+    "number"
+  ],
   "additionalProperties": false
 }
