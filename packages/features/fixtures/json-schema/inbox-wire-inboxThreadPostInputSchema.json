@@ -84,7 +84,8 @@
                             }
                           },
                           "required": [
-                            "page"
+                            "page",
+                            "version"
                           ],
                           "additionalProperties": false
                         },

@@ -1186,7 +1186,15 @@ test("a post from version 5 is a row naming its thread's title, or its key where
       body: "\nThe plan leaves this open.\n\nI set 7 days, its assumption.",
       ask: {
         type: "decide",
-        options: [{ label: "7 days", detail: "Matches password resets." }, { label: "14 days" }],
+        options: [
+          {
+            label: "7 days",
+            detail: "Matches password resets.",
+            // A page option from before its version was required still reads.
+            media: [{ page: "5f0c6f43-8a54-4c8e-9a43-6b7f3e2d1c0a" }],
+          },
+          { label: "14 days" },
+        ],
         recommended: "7 days",
       },
       waits: true,

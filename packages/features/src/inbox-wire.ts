@@ -582,45 +582,6 @@ const inboxOptionSchema = EffectSchema.Struct({
 
 export type InboxOption = typeof inboxOptionSchema.Type;
 
-/**
- * One piece of an option's media as the agent posts it: a file by its path
- * in the agent's sandbox, which the service reads and keeps as a file of the
- * message, with the words that say what it shows; a page it showed, by the
- * id and the version `show_page` answered, its newest where it names none;
- * or an https address, with the words it is named by.
- */
-const inboxPostOptionMediaSchema = EffectSchema.Union([
-  EffectSchema.Struct({
-    path: filledText(INBOX_BOUNDS.MAX_PATH_CHARS),
-    caption: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_ALT_CHARS)),
-  }),
-  EffectSchema.Struct({
-    page: wireUuidSchema,
-    version: EffectSchema.optionalKey(pageVersionNumberSchema),
-  }),
-  EffectSchema.Struct({
-    url: EffectSchema.String.check(
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_URL_CHARS),
-      EffectSchema.isPattern(SECURE_WEB_ADDRESS),
-    ),
-    label: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_LABEL_CHARS)),
-  }),
-]);
-
-export type InboxPostOptionMedia = typeof inboxPostOptionMediaSchema.Type;
-
-/** One option of a choice as the agent posts it: those it is kept by, its media named as the agent names them. */
-const inboxPostOptionSchema = EffectSchema.Struct({
-  label: inboxOptionSchema.fields.label,
-  detail: inboxOptionSchema.fields.detail,
-  media: EffectSchema.optionalKey(
-    EffectSchema.Array(inboxPostOptionMediaSchema).check(
-      EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_POSTED_OPTION_MEDIA),
-    ),
-  ),
-});
-
 /** One field of a form: its type, its label, which names its value in the answer, whether it must be filled, and a select's options, one perhaps recommended. */
 const inboxFieldSchema = EffectSchema.Struct({
   type: EffectSchema.Literals(Object.values(INBOX_FIELD)),
@@ -848,17 +809,6 @@ const DECIDE_FIELDS = {
   ...RECOMMENDED_FIELDS,
 };
 
-/** A `decide` ask's own keys as the agent posts it: those it is kept by, but its options' media named as the agent names them and its recommendation one label or a list of them. */
-const DECIDE_INPUT_FIELDS = {
-  type: DECIDE_FIELDS.type,
-  options: EffectSchema.Array(inboxPostOptionSchema).check(
-    EffectSchema.isMinLength(2),
-    EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_OPTIONS),
-  ),
-  multiple: DECIDE_FIELDS.multiple,
-  recommended: EffectSchema.optionalKey(recommendedInputSchema),
-};
-
 /**
  * A `do` ask's own keys: its steps in Markdown, in order. Note that none is
  * a `do` ask too, because a version 4 to-do named no step and its item's
@@ -891,14 +841,67 @@ const inboxAskSchema = EffectSchema.Union([
 
 export type InboxAsk = typeof inboxAskSchema.Type;
 
-/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them. */
-const inboxAskInputSchema = EffectSchema.Union([
-  EffectSchema.Struct(DECIDE_INPUT_FIELDS),
-  EffectSchema.Struct(DO_FIELDS),
-  EffectSchema.Struct(ANSWER_FIELDS),
-]);
+/**
+ * An ask as the agent posts it: one it is kept as, but a `decide`'s
+ * recommendation one label or a list of them, and each option's media
+ * named as the agent names it: a file by its path in the agent's sandbox,
+ * which the service reads and keeps as a file of the message, with the
+ * words that say what it shows; a page it showed, by the id and the version
+ * `show_page` answered, required where the model posts one and optional
+ * where a panel reads a stored post; or an https address, with the words it
+ * is named by.
+ */
+function askInputSchema<V extends EffectSchema.Top>(pageVersion: V) {
+  const media = EffectSchema.Union([
+    EffectSchema.Struct({
+      path: filledText(INBOX_BOUNDS.MAX_PATH_CHARS),
+      caption: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_ALT_CHARS)),
+    }),
+    EffectSchema.Struct({ page: wireUuidSchema, version: pageVersion }),
+    EffectSchema.Struct({
+      url: EffectSchema.String.check(
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_URL_CHARS),
+        EffectSchema.isPattern(SECURE_WEB_ADDRESS),
+      ),
+      label: EffectSchema.optionalKey(filledText(INBOX_BOUNDS.MAX_LABEL_CHARS)),
+    }),
+  ]);
+
+  const option = EffectSchema.Struct({
+    label: inboxOptionSchema.fields.label,
+    detail: inboxOptionSchema.fields.detail,
+    media: EffectSchema.optionalKey(
+      EffectSchema.Array(media).check(
+        EffectSchema.isMinLength(1),
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_POSTED_OPTION_MEDIA),
+      ),
+    ),
+  });
+
+  return EffectSchema.Union([
+    EffectSchema.Struct({
+      type: DECIDE_FIELDS.type,
+      options: EffectSchema.Array(option).check(
+        EffectSchema.isMinLength(2),
+        EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_OPTIONS),
+      ),
+      multiple: DECIDE_FIELDS.multiple,
+      recommended: EffectSchema.optionalKey(recommendedInputSchema),
+    }),
+    EffectSchema.Struct(DO_FIELDS),
+    EffectSchema.Struct(ANSWER_FIELDS),
+  ]);
+}
+
+/** An ask as the agent posts it, a page option naming its version. */
+const inboxAskInputSchema = askInputSchema(pageVersionNumberSchema);
 
 export type InboxAskInput = typeof inboxAskInputSchema.Type;
+
+/** One piece of an option's media as the agent posts it. */
+export type InboxPostOptionMedia = NonNullable<
+  Extract<InboxAskInput, { type: typeof INBOX_ASK.DECIDE }>["options"][number]["media"]
+>[number];
 
 /**
  * A posted ask as a message keeps it: a `decide`'s recommendation its first
@@ -952,6 +955,21 @@ export const inboxThreadPostInputSchema = EffectSchema.Struct({
 });
 
 export type InboxThreadPostInput = typeof inboxThreadPostInputSchema.Type;
+
+/**
+ * A post's tool part as a panel reads one already stored: the input the
+ * model is shown, but a page option's version optional, because a post from
+ * before the version was required named none and its row still reads.
+ */
+export const inboxThreadPostReadSchema = EffectSchema.Struct({
+  ...inboxThreadPostInputSchema.fields,
+  ask: EffectSchema.optionalKey(askInputSchema(EffectSchema.optionalKey(pageVersionNumberSchema))),
+});
+
+export type InboxThreadPostRead = typeof inboxThreadPostReadSchema.Type;
+
+/** An ask as a panel reads a stored post's, which every ask an agent posts reads as. */
+export type InboxAskRead = NonNullable<InboxThreadPostRead["ask"]>;
 
 /** What a withdrawal's tool part carries as its input: the thread's key, and why the agent takes its open ask back. */
 export const inboxWithdrawInputSchema = EffectSchema.Struct({
