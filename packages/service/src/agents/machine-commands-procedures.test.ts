@@ -661,7 +661,11 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           const cursor = { xFraction: 0.25, yFraction: 0.5 };
 
           const call = yield* wokenOnHub(
-            runComputerTool(target, { action: "click", app: "Simulator", element_index: 3 }),
+            runComputerTool(target, {
+              action: "click",
+              app: "Simulator",
+              target: { element_index: 3 },
+            }),
             Effect.gen(function* () {
               const [claimed] = yield* claimMachineCommands("user-settled", new Date(0), [
                 MACHINE_COMMAND_KIND.COMPUTER,
@@ -907,7 +911,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           yield* wokenOnHub(
             runComputerTool(
               { userId, conversationId: row.conversationId },
-              { action: COMPUTER_ACTION.CLICK, app: "Simulator", element_index: 3 },
+              { action: COMPUTER_ACTION.CLICK, app: "Simulator", target: { element_index: 3 } },
             ),
             Effect.gen(function* () {
               const [claimed] = yield* claimMachineCommands(userId, new Date(0), [
@@ -921,5 +925,24 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           );
         }),
       ),
+  );
+
+  it.effect(
+    "a computer call that leaves out a field its action needs and names one it does not take is refused, naming both and what the action takes",
+    () =>
+      Effect.gen(function* () {
+        const answer = yield* runComputerTool(
+          { userId: "user-computer-misfit", conversationId: randomUUID() },
+          { action: COMPUTER_ACTION.CLICK, app: "Simulator", text: "hello" },
+        );
+
+        assert.deepEqual(answer, {
+          status: "not-run",
+          reason:
+            "Not run: click needs `target` ({element_index} or {x, y}), and click takes no " +
+            "`text`. click takes `app` and `target` ({element_index} or {x, y}), and may take " +
+            "`click_count` and `mouse_button`.",
+        });
+      }),
   );
 });
