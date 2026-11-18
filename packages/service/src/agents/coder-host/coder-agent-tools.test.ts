@@ -4957,6 +4957,9 @@ test("list_automations, create_automation, update_automation, and delete_automat
     repositories: [RELAY_FULL_NAME],
     model: OPUS,
     effort: "high",
+    scope: "personal",
+    archiveSuccessful: false,
+    slackDelivery: false,
   };
 
   const automationOf = (answer: WireRecord) =>
@@ -5047,7 +5050,9 @@ test("list_automations, create_automation, update_automation, and delete_automat
       { name: made.name, prompt, trigger: weekly, model: OPUS },
       "unnamed",
     ),
-    rejected(`${AUTOMATION_TOOL_REFUSAL.MISSING_CREATE} repositories, effort.`),
+    rejected(
+      `${AUTOMATION_TOOL_REFUSAL.MISSING_CREATE} repositories, effort, scope, archiveSuccessful, slackDelivery.`,
+    ),
   );
   const unoffered = await make({ model: SOL, effort: "high" }, "unoffered");
   assert.equal(unoffered.status, ACTION_RESULT_STATUS.REJECTED);
@@ -5221,6 +5226,9 @@ test("create_automation and update_automation take a Sentry trigger once the wor
     repositories: [],
     model: OPUS,
     effort: "high",
+    scope: "personal",
+    archiveSuccessful: false,
+    slackDelivery: false,
   };
 
   const automationOf = (answer: WireRecord) =>
@@ -5247,6 +5255,9 @@ test("create_automation and update_automation take a Sentry trigger once the wor
         repositories: [],
         model: OPUS,
         effort: "high",
+        scope: "personal",
+        archiveSuccessful: false,
+        slackDelivery: false,
       },
       "weekly",
     ),

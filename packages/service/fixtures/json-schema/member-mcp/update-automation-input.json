@@ -289,7 +289,7 @@
         "personal",
         "workspace"
       ],
-      "description": "personal, the default, is its creator's; workspace is every member's."
+      "description": "personal is its creator's alone; workspace is every member's."
     },
     "archiveSuccessful": {
       "type": "boolean",

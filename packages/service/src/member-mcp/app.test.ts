@@ -973,6 +973,9 @@ it.effect(
               repositories: [],
               model: "anthropic/claude-opus-5.5",
               effort: "high",
+              scope: "personal",
+              archiveSuccessful: false,
+              slackDelivery: false,
             },
           ],
           [MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Renamed" }],
@@ -1257,6 +1260,9 @@ it.effect(
           repositories: [],
           model: "anthropic/claude-opus-5.5",
           effort: "high",
+          scope: "personal",
+          archiveSuccessful: false,
+          slackDelivery: false,
         }),
       ).automation.id;
 
