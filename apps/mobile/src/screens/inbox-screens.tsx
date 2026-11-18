@@ -37,6 +37,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import type { TaskSummary } from "@repo/features/task-wire";
 import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
@@ -257,6 +258,22 @@ function InboxRows({
   );
 }
 
+/**
+ * The thread a row draws: its item, and of the task holding it only what the
+ * row says (its id and workspace for the link, its name and status for the
+ * line above the title). Note that the row takes them one by one rather than
+ * the task, because a task read or moved anew, such as by the read an opened
+ * task sends, is a new object, which drew every row of the task again for
+ * words that stood as they were.
+ */
+type InboxRowThread = {
+  readonly item: InboxItem;
+  readonly taskId: string;
+  readonly workspaceId: TaskSummary["workspaceId"];
+  readonly taskName: string;
+  readonly taskStatus: TaskSummary["status"];
+};
+
 type InboxRowActs = {
   readonly readerId: string | undefined;
   /** Each member's picture by their id, read once by the list the row stands in. */
@@ -280,7 +297,16 @@ export function InboxItemRows({
 }: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
   return (
     <RowForEach data={listed} keyOf={(each) => each.item.id}>
-      {(each) => <InboxRow listed={each} {...acts} />}
+      {({ holder: { task }, item }) => (
+        <InboxRow
+          item={item}
+          taskId={task.id}
+          workspaceId={task.workspaceId}
+          taskName={task.name}
+          taskStatus={task.status}
+          {...acts}
+        />
+      )}
     </RowForEach>
   );
 }
@@ -295,26 +321,29 @@ export function InboxItemRows({
  * On an iPad it drags out as its vespin.dev link.
  */
 function InboxRowView({
-  listed,
+  item,
+  taskId,
+  workspaceId,
+  taskName,
+  taskStatus,
   readerId,
   pictureOf,
   onMark,
   remindMenu,
   onResolve,
-}: InboxRowActs & { readonly listed: InboxListed }) {
+}: InboxRowActs & InboxRowThread) {
   // Note that the row is drawn again as the day turns, so Remind me's Tomorrow and Next week say their days rightly; its time moves on with the minute inside `ListRow`, so the minute draws no Inbox row again.
   useToday();
-  const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+  const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
   const keeping = useKeeping();
 
   const link = linkOf(
-    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId, itemId: item.id },
     workspaceStep,
   );
 
@@ -350,8 +379,8 @@ function InboxRowView({
       id={item.id}
       title={title}
       task={{
-        name: holder.task.name,
-        status: holder.task.status,
+        name: taskName,
+        status: taskStatus,
       }}
       line={inboxLineKind(item)}
       summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
@@ -386,7 +415,7 @@ function InboxRowView({
       preview={
         <ThreadPreview
           title={title}
-          task={{ name: holder.task.name, status: holder.task.status }}
+          task={{ name: taskName, status: taskStatus }}
           messages={messages}
         />
       }
@@ -398,9 +427,9 @@ function InboxRowView({
  * An Inbox item's row, drawn again only where its props moved. Note that
  * every delivery to the Inbox drew every row again, a list off screen's
  * among them, which held the JS thread under a working agent's posts; its
- * props keep their identity while its own thread stands (`inboxListed`, the
- * acts' and the menus' hooks), so a row is now drawn again only where its
- * thread moved.
+ * props keep their identity while its own thread stands (the item, the
+ * task's words it says, and the acts' and the menus' hooks), so a row is now
+ * drawn again only where its thread or those words moved.
  */
 const InboxRow = memo(InboxRowView);
 
