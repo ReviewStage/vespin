@@ -934,7 +934,12 @@ const sendToAgent = Effect.fnUntraced(function* (
 
   // Note that a message an ended agent did not take is worked on by the agent that continues it, so its mark stands.
   if (Result.isFailure(sent) && sent.failure.error === HOSTED_API_ERROR.AGENT_RETIRED) {
-    if (running) yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.WORKING);
+    // One heard as joining a running turn was neither marked nor shown, so it is now, for a refused continue to take off.
+    if (running) {
+      yield* markSlackThreadWorking(message);
+      yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.WORKING);
+    }
+
     yield* continueFromSlack(
       bot,
       addressed,
