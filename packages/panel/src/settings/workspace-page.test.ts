@@ -20,6 +20,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
+import { dayText } from "@repo/features/time-format";
 import type { WorkspaceSlack } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
 import {
@@ -2409,7 +2410,10 @@ test("the owner invites an address as a role, sees it pending with its link to c
   assert.deepEqual(invitationLink, [
     "https://vespin.dev/accept-invitation.html?id=inv-alan@example.com",
   ]);
-  assert.deepEqual(listed, ["alan@example.com", "Invited as Admin, expires Oct 16, 2026"]);
+  assert.deepEqual(listed, [
+    "alan@example.com",
+    `Invited as Admin, expires ${dayText(Date.parse("2026-10-16T12:00:00.000Z"))}`,
+  ]);
   assert.equal(
     face,
     "someone",
