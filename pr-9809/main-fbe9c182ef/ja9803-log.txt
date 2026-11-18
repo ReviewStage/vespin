@@ -1,0 +1,10 @@
+== bundle A9803t base fbe9c182ef
+  built fbe9c182ef base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-relation: fails 2 shots 7   Tap on "More"... FAILED
+iphone-dark-relation: fails 2 shots 7   Tap on "More"... FAILED
+ipad26-light-relation: fails 2 shots 8   Tap on "More"... FAILED
+ipad26-dark-relation: fails 2 shots 8   Tap on "More"... FAILED
