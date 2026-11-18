@@ -6,6 +6,9 @@ import { Equal, Option, Schema, SchemaTransformation } from "effect";
 
 export const COMPOSER_DRAFTS_KEY = "app.composerDrafts";
 
+/** How many drafts are kept at most, the oldest written let go first. */
+export const MAX_KEPT = 200;
+
 /** What a draft is written to: a started agent, a plan's agent not yet started, an inbox item, a task not yet started, an automation's helper not yet started, a description's comment, a line comment on a pull request's changed file, a reply on its review thread, or an agent's line written again. */
 export const DRAFT_PLACE = {
   AGENT: "agent",
@@ -273,5 +276,5 @@ export function mergeStoredComposerDrafts(legacy: string, current: string): stri
 
   return missing.length === 0
     ? current
-    : Schema.encodeSync(storedDrafts)([...missing, ...now.value]);
+    : Schema.encodeSync(storedDrafts)([...missing, ...now.value].slice(-MAX_KEPT));
 }

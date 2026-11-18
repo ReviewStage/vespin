@@ -14,6 +14,7 @@ import {
   DRAFT_PLACE,
   type DraftPageElement,
   type DraftPlace,
+  MAX_KEPT,
   placeOf,
   COMPOSER_DRAFTS_KEY as STORAGE_KEY,
   type StoredDraft,
@@ -68,9 +69,6 @@ export { DRAFT_PLACE, type DraftPageElement, type DraftPlace } from "./composer-
  * or closed, or another account signs in to it, so a burst of keys reads and
  * writes the whole store once rather than on every key.
  */
-
-/** How many drafts are kept at most, the oldest written let go first. */
-const MAX_KEPT = 200;
 
 /** How long the typing rests before what the window changed is written to storage. */
 const STORE_PAUSE = Duration.millis(300);

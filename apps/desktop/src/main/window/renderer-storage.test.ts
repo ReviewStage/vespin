@@ -95,3 +95,21 @@ test("keeps both sets of drafts when the user writes a draft before migration re
 
   expect(JSON.parse(current.get(DRAFTS) ?? "null")).toEqual([otherAccount, currentDraft, newDraft]);
 });
+
+test("keeps the newest 200 drafts and gives current-origin drafts priority", async () => {
+  const drafts = (origin: string, count: number) =>
+    Array.from({ length: count }, (_, index) => ({
+      accountId: "one",
+      place: { kind: "newTask", workspaceId: `${origin}-${index}` },
+      text: `Draft ${index}`,
+    }));
+
+  const oldDrafts = drafts("legacy", 110);
+  const newDrafts = drafts("current", 100);
+  const legacy = new Map([[DRAFTS, JSON.stringify(oldDrafts)]]);
+  const current = new Map([[DRAFTS, JSON.stringify(newDrafts)]]);
+
+  await migrateRendererStorage(storagePage(legacy, current), LEGACY_PATH);
+
+  expect(JSON.parse(current.get(DRAFTS) ?? "null")).toEqual([...oldDrafts.slice(10), ...newDrafts]);
+});
