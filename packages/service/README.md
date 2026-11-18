@@ -2859,9 +2859,11 @@ are made the first time a workspace has usage to send and kept in
 charge's id, so Metronome counts one sent twice once, and a charge is stamped
 `sent_at` once Metronome took it. A 429, a 5xx, or no answer in time fails
 the delivery and the queue delivers it again; Metronome's other refusals are
-logged and their charges left unsent. The queues are Vercel's on production
-alone; a Preview publishes nothing, and anywhere else each message is
-delivered in the process. Without `METRONOME_API_TOKEN`,
+logged and their charges left unsent. Each check also publishes every charge
+of its sandbox still unsent (read by the sandbox's name, which a charge's
+figures carry), so a send a delete failed to publish is published again by
+the sandbox's next check. The queues are Vercel's on production and on a
+Preview, and anywhere else each message is delivered in the process. Without `METRONOME_API_TOKEN`,
 `METRONOME_RATE_CARD_ID`, and `METRONOME_CREDIT_PRODUCT_ID`
 (`src/billing/billing-environment.ts`) nothing is sent, and the ledger is
 written all the same. Metronome's webhook

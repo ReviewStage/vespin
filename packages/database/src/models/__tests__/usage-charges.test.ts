@@ -15,6 +15,7 @@ import {
   recordUsageCharges,
   type UsageCharge,
   unsentChargeIdsOf,
+  unsentSandboxChargeIds,
   unsentUsageChargesOf,
   workspaceMonthMemberTotals,
   workspaceMonthTotals,
@@ -162,5 +163,38 @@ it.layer(getTestDB())("the usage ledger", (it) => {
           ids.slice(1),
         );
       }),
+  );
+
+  it.effect("reads a sandbox's session charges not yet sent by its name alone", () =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount;
+      const acme = yield* openWorkspace(owner);
+      const sandboxName = `agent-sandbox-${randomUUID()}`;
+
+      const ofSandbox = (amountMicroUsd: number) => {
+        const made = sessionCharge(acme, owner, amountMicroUsd, "2026-11-10T00:00:00Z");
+
+        return { ...made, figures: { ...made.figures, sandboxName } };
+      };
+
+      const charges = [
+        ofSandbox(100),
+        ofSandbox(200),
+        sessionCharge(acme, owner, 300, "2026-11-10T00:00:00Z"),
+      ];
+
+      yield* recordUsageCharges(charges);
+
+      const ids = yield* unsentChargeIdsOf(
+        USAGE_KIND.SANDBOX_SESSION,
+        charges.slice(0, 2).map((charge) => charge.sourceId),
+      );
+
+      assert.deepEqual(yield* unsentSandboxChargeIds(sandboxName), ids);
+
+      yield* markUsageChargesSent(ids.slice(0, 1), NOVEMBER);
+
+      assert.deepEqual(yield* unsentSandboxChargeIds(sandboxName), ids.slice(1));
+    }),
   );
 });

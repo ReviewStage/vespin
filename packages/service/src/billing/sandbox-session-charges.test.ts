@@ -218,7 +218,7 @@ it.layer(getTestDB())("sandbox sessions in the usage ledger", (it) => {
   );
 
   it.effect(
-    "charges a deleted sandbox's ended sessions as it is deleted, and publishes them to be sent",
+    "charges a deleted sandbox's ended sessions as it is deleted, and its check publishes a send the delete failed to publish",
     () =>
       Effect.gen(function* () {
         const member = yield* openAccount;
@@ -240,22 +240,32 @@ it.layer(getTestDB())("sandbox sessions in the usage ledger", (it) => {
           session(sandboxName, SESSION_END.STOPPED, { durationMs: 60_000 }),
         );
 
-        const queues = recordingQueues();
+        // The delete's publish to the send queue fails, and is logged.
+        const refusing = {
+          ...recordingQueues().service,
+          send: () => Effect.die(new Error("the queue did not take it")),
+        };
 
         yield* memory.service
           .delete(sandboxName)
           .pipe(
             Effect.provide(endedSessionsChargedOnDelete),
-            Effect.provideService(UsageQueues, queues.service),
+            Effect.provideService(UsageQueues, refusing),
           );
 
         assert.deepEqual(yield* workspaceMonthTotals(acme, NOW), [
           { kind: USAGE_KIND.SANDBOX_SESSION, amountMicroUsd: 2_827 },
         ]);
-        assert.deepEqual(
-          queues.sends.map((ids) => ids.length),
-          [1],
+
+        // The check its open booked finds the sandbox gone, publishes its unsent charge, and books nothing more.
+        const queues = recordingQueues();
+
+        yield* consumeSandboxUsageCheck(sandboxName).pipe(
+          Effect.provideService(Sandbox, memory.service),
+          Effect.provideService(UsageQueues, queues.service),
         );
+
+        assert.deepEqual([queues.sends.map((ids) => ids.length), queues.checks], [[1], []]);
       }),
   );
 });

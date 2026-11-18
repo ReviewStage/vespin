@@ -7,8 +7,8 @@
  * the UTC calendar month, from its first instant to the next month's, and a
  * charge falls in the month its usage happened in. Every month read names
  * its workspace, so none answers another workspace's charges; the charges
- * not yet sent on to be invoiced are read by their row ids or their items'
- * ids, across workspaces, by the usage queues that send them
+ * not yet sent on to be invoiced are read by their row ids, their items'
+ * ids, or their sandbox's name, across workspaces, by the usage queues that send them
  * (`@repo/service`'s `billing/usage-queues.ts`), and stamped as sent once
  * they are.
  */
@@ -18,7 +18,12 @@ import { Array as Arr, Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { usageChargeTable } from "../schemas/usage-charge.js";
-import { UsageFiguresSchema, type UsageKind, usageKindSchema } from "../usage-vocabulary.js";
+import {
+  USAGE_KIND,
+  UsageFiguresSchema,
+  type UsageKind,
+  usageKindSchema,
+} from "../usage-vocabulary.js";
 import type { AgentStoreEffect } from "./agent-store.js";
 
 /**
@@ -117,6 +122,26 @@ const findUnsentOfSources = SqlSchema.findAll({
             eq(usageChargeTable.kind, kind),
             inArray(usageChargeTable.sourceId, [...sourceIds]),
             isNull(usageChargeTable.sentAt),
+          ),
+        )
+        .orderBy(asc(usageChargeTable.id)),
+    ),
+});
+
+const findUnsentOfSandbox = SqlSchema.findAll({
+  Request: Schema.Struct({ sandboxName: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ sandboxName }) =>
+    Database.use((db) =>
+      db
+        .select({ id: usageChargeTable.id })
+        .from(usageChargeTable)
+        .where(
+          and(
+            eq(usageChargeTable.kind, USAGE_KIND.SANDBOX_SESSION),
+            // Note that the expression is spelled as the partial index spells it, so the read uses it.
+            sql`(${usageChargeTable.figures} ->> 'sandboxName') = ${sandboxName}`,
+            sql`${usageChargeTable.sentAt} is null`,
           ),
         )
         .orderBy(asc(usageChargeTable.id)),
@@ -254,6 +279,11 @@ export function unsentChargeIdsOf(
     ),
     (rows) => rows.flat().map((row) => row.id),
   );
+}
+
+/** The row ids of the named sandbox's session charges not yet sent on, however long ago they were recorded. */
+export function unsentSandboxChargeIds(sandboxName: string): AgentStoreEffect<readonly string[]> {
+  return Effect.map(findUnsentOfSandbox({ sandboxName }), (rows) => rows.map((row) => row.id));
 }
 
 /** When each of the workspaces' earliest charge not yet sent on happened, at or after `since`; a workspace with none is left out. */

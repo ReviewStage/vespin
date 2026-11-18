@@ -7,10 +7,13 @@
  * an open whose check the queue did not take is refused, so no sandbox runs
  * that nothing will charge. The check's consumer reads that sandbox's
  * sessions by name and charges those that ended with their figures in
- * (`sandbox-session-charges.ts`). Where one is still up, or stopped with its
- * figures not yet answered, it books itself again `CHECK_AGAIN` on; a
- * sandbox gone took its sessions with it, which were charged as it was
- * deleted, and its check books nothing more. A check is published under its
+ * (`sandbox-session-charges.ts`), then publishes every charge of that
+ * sandbox still unsent to be sent, whatever it found, so a send a delete
+ * failed to publish is published again by the sandbox's next check. Where a
+ * session is still up, or stopped with its figures not yet answered, it
+ * books itself again `CHECK_AGAIN` on; a sandbox gone took its sessions with
+ * it, which were charged as it was deleted, and its check books nothing
+ * more. A check is published under its
  * sandbox's name and the span of `CHECK_AGAIN` it falls due in, so the
  * checks every open and every check again book for one sandbox fall into one
  * message a span.
@@ -23,10 +26,9 @@
  * `USAGE_SEND.FAILED_AGAIN`. A send is idempotent, reading only what is still
  * unsent, so a message twice is harmless and none is keyed.
  *
- * The queues are Vercel Queues on production alone, as the daily job this
- * replaced ran there alone. A Preview's database is a branch of
- * production's, so it books and sends nothing; its deletes still charge its
- * own ledger. Anywhere else, as the local server, each message is handed in
+ * The queues are Vercel Queues on production and on a Preview, whose own
+ * database records its sandboxes' owners and whose Metronome is the
+ * sandbox account it is tested against. Anywhere else, as the local server, each message is handed in
  * this process to the same consumer, on a fiber of its own over the services
  * the queues were built on, and delivered again after a failure as the
  * queue would. A test runs with neither, publishing nothing, unless it
@@ -34,6 +36,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { unsentSandboxChargeIds } from "@repo/database/models/usage-charges";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import { EndedSessionsOnDelete, SANDBOX_IDLE, Sandbox, type SandboxSession } from "@repo/sandbox";
 import { send } from "@vercel/queue";
@@ -92,7 +95,7 @@ const SendMessageSchema = Schema.Struct({ chargeIds: Schema.Array(Schema.String)
 /** How long after an open its sandbox's first check comes: once it must have stopped, left idle, and had its figures answered. */
 const FIRST_CHECK = Duration.sum(SANDBOX_IDLE, SANDBOX_USAGE_CHECK.STOP_MARGIN);
 
-/** The queues that publish nothing, as a test or a Preview has them. */
+/** The queues that publish nothing, as a test has them. */
 const NOTHING_PUBLISHED: UsageQueuesService = {
   check: () => Effect.void,
   send: () => Effect.void,
@@ -176,8 +179,8 @@ function stillOpen(session: SandboxSession, now: number): boolean {
 
 /**
  * One delivery of the named sandbox's check: its sessions that ended with
- * their figures in charged and their unsent charges published to be sent,
- * and the check booked again where one is still to be charged. A session
+ * their figures in charged, every charge of the sandbox still unsent
+ * published to be sent, and the check booked again where one is still to be charged. A session
  * whose figures were waited on past `FIGURES_AWAITED_LONGEST` is logged and
  * let go. A failure is the caller's, which leaves the message to come again.
  */
@@ -190,7 +193,8 @@ export const consumeSandboxUsageCheck = (sandboxName: string) =>
       sessions.filter((session) => session.ended !== undefined && !figuresAwaited(session)),
     );
 
-    yield* sendPublished(run.unsentIds);
+    // Note that every unsent charge of the sandbox is published, not only this delivery's, because a delete's publish that failed has no other way back.
+    yield* sendPublished(yield* unsentSandboxChargeIds(sandboxName));
     const open = sessions.filter((session) => stillOpen(session, now));
     const givenUp = sessions.filter(figuresAwaited).length - open.filter(figuresAwaited).length;
 
@@ -280,16 +284,16 @@ function inProcessQueues(services: Context.Context<UsageQueueServices>): UsageQu
   return queues;
 }
 
-/** The queues as the deployment's environment names them: Vercel's on production, none on a Preview, this process's anywhere else. */
+/** The queues as the deployment's environment names them: Vercel's on production and on a Preview, this process's anywhere else. */
 export const usageQueuesFromEnvironment = Layer.effect(
   UsageQueues,
   Effect.gen(function* () {
     const deployment = yield* Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT));
     const named = Option.getOrUndefined(deployment);
 
-    if (named === DEPLOYMENT_ENVIRONMENT.PRODUCTION) return vercelQueues;
-
-    if (named === DEPLOYMENT_ENVIRONMENT.PREVIEW) return NOTHING_PUBLISHED;
+    if (named === DEPLOYMENT_ENVIRONMENT.PRODUCTION || named === DEPLOYMENT_ENVIRONMENT.PREVIEW) {
+      return vercelQueues;
+    }
 
     return inProcessQueues(yield* Effect.context<UsageQueueServices>());
   }).pipe(
@@ -305,7 +309,9 @@ export const usageQueuesFromEnvironment = Layer.effect(
  * over the database the deployment reads and their unsent charges published
  * to be sent, a failure of either logged and let be, so a delete never waits
  * on more than the ledger's write and a publish nor fails for them. A
- * session it missed goes uncharged, since its sandbox's checks find it gone.
+ * charge whose publish failed is published again by the sandbox's next
+ * check, booked at its open; a session it missed goes uncharged, since that
+ * check finds the sandbox gone.
  */
 export const endedSessionsChargedOnDelete = Layer.effect(
   EndedSessionsOnDelete,
