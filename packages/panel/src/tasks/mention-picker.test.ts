@@ -81,7 +81,7 @@ function mounted(chosen: MentionNode[] = []) {
       root?.render(
         withExperiments(
           experimentsOn(EXPERIMENT.DESCRIPTIONS),
-          createElement(Activity, { mode }, createElement(Picker)),
+          createElement(Activity, { mode, children: createElement(Picker) }),
         ),
       ),
     );

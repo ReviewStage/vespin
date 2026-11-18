@@ -51,7 +51,7 @@ async function mounted(source: SkillSource = SOURCE) {
   root = createRoot(page);
 
   const show = (mode: "visible" | "hidden") =>
-    act(() => root?.render(createElement(Activity, { mode }, createElement(Picker))));
+    act(() => root?.render(createElement(Activity, { mode, children: createElement(Picker) })));
 
   show("visible");
 
