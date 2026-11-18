@@ -4069,7 +4069,7 @@ const MEMBER_READ_COMMENTS_TOOL = memberMcpTool({
     "section, whether those words were since deleted, every comment with who wrote it, when, " +
     "and the names of the files it carries, and the agents it was sent to. A page's thread " +
     "names the version it was left on and the element it is on, by its words and its path, or " +
-    "none for the whole page. Open threads unless you ask for resolved ones. It only reads: " +
+    "none for the whole page. The open threads or the resolved ones, as status names. It only reads: " +
     "nobody is told.",
   input: ReadCommentsInputSchema,
   descriptionsOff: {
@@ -4078,8 +4078,8 @@ const MEMBER_READ_COMMENTS_TOOL = memberMcpTool({
       "and the page's id, a teammate's included, in whichever of the member's workspaces it " +
       "stands: each thread's id, the version it was left on and the element it is on, by its " +
       "words and its path, or none for the whole page, every comment with who wrote it, when, " +
-      "and the names of the files it carries, and the agents it was sent to. Open threads " +
-      "unless you ask for resolved ones. It only reads: nobody is told.",
+      "and the names of the files it carries, and the agents it was sent to. The open threads " +
+      "or the resolved ones, as status names. It only reads: nobody is told.",
     input: ReadCommentsInputSchemaOff,
   },
   annotations: READ_ONLY,

@@ -19,12 +19,13 @@
         "open",
         "resolved"
       ],
-      "description": "Which threads to read: open, the default, or resolved."
+      "description": "Which threads to read: open or resolved."
     }
   },
   "required": [
     "taskId",
-    "page"
+    "page",
+    "status"
   ],
   "additionalProperties": false
 }

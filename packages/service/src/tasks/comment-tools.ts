@@ -59,6 +59,7 @@ export interface CommentToolBinding {
 /** Why a call took nothing, in the words its result says. */
 export const COMMENT_TOOL_REFUSAL = {
   UNREADABLE: "The input is not one this tool takes.",
+  NO_STATUS: `Name which threads to read as status: ${Object.values(DESCRIPTION_COMMENT_STATUS).join(" or ")}.`,
   NO_TASK_NAMED: `Name the task whose comments to act on as taskId, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
   NO_THREAD: "No thread of this task has that id; read_comments lists them.",
   NO_TASK: `No task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
@@ -87,12 +88,15 @@ const READ_INPUT = Schema.Struct({
       `One of the task's pages, by the id ${AGENT_TOOL.SHOW_PAGE} answered or a mention of it names, to read its threads instead of the description's.`,
     ),
   ),
-  status: Schema.optionalKey(
-    describeWire(
-      Schema.Literals(Object.values(DESCRIPTION_COMMENT_STATUS)),
-      "Which threads to read: open, the default, or resolved.",
-    ),
+  status: describeWire(
+    Schema.Literals(Object.values(DESCRIPTION_COMMENT_STATUS)),
+    "Which threads to read: open or resolved.",
   ),
+});
+
+// The call's status stands beside its other fields, and is read on its own so a call missing it is told what to pass.
+const readStatus = readEither(Schema.Struct({ status: READ_INPUT.fields.status }), {
+  excess: EXCESS_KEYS.DROP,
 });
 
 const REPLY_INPUT = Schema.Struct({
@@ -143,8 +147,8 @@ const PAGES_COMMENT_TOOLS = {
     name: AGENT_TOOL.READ_COMMENTS,
     description:
       "Read the comment threads on one of the pages of the task taskId names, your own task or any other of your workspace, by the page's id: each thread's id, the version it was left on and the element it is on, by its words and its path, or none for the whole page, " +
-      "and every comment with who wrote it, when, and the names of the files it carries. Open threads unless you ask " +
-      "for resolved ones. Reading asks nothing of you: reply only to a thread someone sent you.",
+      "and every comment with who wrote it, when, and the names of the files it carries. The open threads or " +
+      "the resolved ones, as status names. Reading asks nothing of you: reply only to a thread someone sent you.",
     inputSchema: PAGES_READ_INPUT,
   },
   [AGENT_TOOL.REPLY_TO_COMMENT]: {
@@ -183,8 +187,8 @@ export const READ_COMMENTS_TOOL = {
   name: AGENT_TOOL.READ_COMMENTS,
   description:
     "Read the comment threads on the description of the task taskId names, your own task or any other of your workspace, or on one of its pages where you name the page: each thread's id, the words of the description it is on and their section, " +
-    "whether those words were since deleted, and every comment with who wrote it, when, and the names of the files it carries. A page's thread names the version it was left on and the element it is on, by its words and its path, or none for the whole page. Open threads unless you ask " +
-    "for resolved ones. Reading asks nothing of you: reply only to a thread someone sent you.",
+    "whether those words were since deleted, and every comment with who wrote it, when, and the names of the files it carries. A page's thread names the version it was left on and the element it is on, by its words and its path, or none for the whole page. The open threads or " +
+    "the resolved ones, as status names. Reading asks nothing of you: reply only to a thread someone sent you.",
   inputSchema: READ_INPUT,
 } as const;
 
@@ -340,16 +344,17 @@ export function runCommentTool(
   const run = Effect.gen(function* () {
     switch (name) {
       case AGENT_TOOL.READ_COMMENTS: {
+        if (Result.isFailure(readStatus(input)))
+          return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_STATUS);
         const read = readEither(READ_INPUT)(input);
 
         if (Result.isFailure(read)) return commentToolRejected(COMMENT_TOOL_REFUSAL.UNREADABLE);
-        const { page } = read.success;
+        const { page, status } = read.success;
 
         if (page === undefined && !descriptionsOn) {
           return commentToolRejected(EXPERIMENT_OFF_REFUSAL);
         }
 
-        const status = read.success.status ?? DESCRIPTION_COMMENT_STATUS.OPEN;
         const threads = yield* readDescriptionCommentThreads(writer.userId, taskId, page);
 
         if (Option.isNone(threads)) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK);

@@ -935,7 +935,7 @@ it.effect(
           [MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB, { agentId, address: "https://example.com/" }],
           [MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
           [MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
-          [MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }],
+          [MEMBER_MCP_TOOL.READ_COMMENTS, { taskId, status: DESCRIPTION_COMMENT_STATUS.OPEN }],
           [
             MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION,
             { taskId, quote: DESCRIPTION_NOTE.text, words: "Planted." },
@@ -1911,7 +1911,12 @@ it.effect(
       );
 
       yield* call(MEMBER_MCP_TOOL.REPLY_TO_COMMENT, { taskId, thread, words: "Invoices too." });
-      const open = decodeThreads(yield* call(MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }));
+      const open = decodeThreads(
+        yield* call(MEMBER_MCP_TOOL.READ_COMMENTS, {
+          taskId,
+          status: DESCRIPTION_COMMENT_STATUS.OPEN,
+        }),
+      );
 
       const resolved = decodeThread(
         yield* call(MEMBER_MCP_TOOL.UPDATE_COMMENT, { taskId, thread, resolved: true }),
