@@ -784,6 +784,7 @@ it.effect("a read begun before a renewal never answers the tokens the renewal re
 
     // Note that the vault holds its first read open, with the text it held before the renewal, until the renewal has written.
     let first = true;
+
     const vault: TokenVault = {
       ...kept,
       read: Effect.suspend(() => {
