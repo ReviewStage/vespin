@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 import { inboxItem } from "./inbox.js";
@@ -53,6 +53,7 @@ export const inboxItemRead = pgTable(
     remindThrough: timestamptz("remind_through"),
   },
   (table) => [
+    index("inbox_item_read_user_id").on(table.userId),
     // One marker per member per item, which every read of an item's unread state looks up.
     uniqueIndex("inbox_item_read_item_user").on(table.itemId, table.userId),
   ],

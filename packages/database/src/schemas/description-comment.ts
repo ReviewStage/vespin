@@ -109,6 +109,9 @@ export const descriptionComment = pgTable(
   },
   (table) => [
     index("description_comment_thread_seq").on(table.threadId, table.seq),
+    index("description_comment_user_id").on(table.userId),
+    index("description_comment_agent_id").on(table.agentId),
+    index("description_comment_asked_agent_id").on(table.askedAgentId),
     index("description_comment_task").on(table.taskId),
     uniqueIndex("description_comment_client_key")
       .on(table.taskId, table.clientKey)

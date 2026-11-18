@@ -164,6 +164,8 @@ export const task = pgTable(
   (table) => [
     // The task list reads one account's tasks, newest started first.
     index("task_user_created").on(table.userId, table.createdAt),
+    index("task_creator_agent_id").on(table.creatorAgentId),
+    index("task_assignee_id").on(table.assigneeId),
     // A workspace's tasks, newest started first.
     index("task_organization_created").on(table.organizationId, table.createdAt),
     // The key names one task of its workspace, and a new task takes the next number.
