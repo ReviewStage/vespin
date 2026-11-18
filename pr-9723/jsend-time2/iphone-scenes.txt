@@ -1,0 +1,2474 @@
+frame:0    pts:0       pts_time:0
+lavfi.scene_score=0.000000
+frame:1    pts:3870    pts_time:6.45
+lavfi.scene_score=0.004092
+frame:2    pts:5397    pts_time:8.995
+lavfi.scene_score=0.000214
+frame:3    pts:5399    pts_time:8.998333
+lavfi.scene_score=0.000453
+frame:4    pts:5408    pts_time:9.013333
+lavfi.scene_score=0.000860
+frame:5    pts:5417    pts_time:9.028333
+lavfi.scene_score=0.000878
+frame:6    pts:5431    pts_time:9.051667
+lavfi.scene_score=0.001072
+frame:7    pts:5432    pts_time:9.053333
+lavfi.scene_score=0.000392
+frame:8    pts:5437    pts_time:9.061667
+lavfi.scene_score=0.000386
+frame:9    pts:5447    pts_time:9.078333
+lavfi.scene_score=0.000582
+frame:10   pts:5457    pts_time:9.095
+lavfi.scene_score=0.000384
+frame:11   pts:5467    pts_time:9.111667
+lavfi.scene_score=0.000458
+frame:12   pts:5477    pts_time:9.128333
+lavfi.scene_score=0.000370
+frame:13   pts:5487    pts_time:9.145
+lavfi.scene_score=0.000852
+frame:14   pts:5497    pts_time:9.161667
+lavfi.scene_score=0.000264
+frame:15   pts:5507    pts_time:9.178333
+lavfi.scene_score=0.000043
+frame:16   pts:5517    pts_time:9.195
+lavfi.scene_score=0.000539
+frame:17   pts:5519    pts_time:9.198333
+lavfi.scene_score=0.006735
+frame:18   pts:5528    pts_time:9.213333
+lavfi.scene_score=0.000325
+frame:19   pts:5537    pts_time:9.228333
+lavfi.scene_score=0.000102
+frame:20   pts:5547    pts_time:9.245
+lavfi.scene_score=0.000399
+frame:21   pts:5558    pts_time:9.263333
+lavfi.scene_score=0.000054
+frame:22   pts:5567    pts_time:9.278333
+lavfi.scene_score=0.000180
+frame:23   pts:5577    pts_time:9.295
+lavfi.scene_score=0.000035
+frame:24   pts:5587    pts_time:9.311667
+lavfi.scene_score=0.000018
+frame:25   pts:5597    pts_time:9.328333
+lavfi.scene_score=0.000043
+frame:26   pts:5607    pts_time:9.345
+lavfi.scene_score=0.000092
+frame:27   pts:5617    pts_time:9.361667
+lavfi.scene_score=0.000020
+frame:28   pts:5627    pts_time:9.378333
+lavfi.scene_score=0.000048
+frame:29   pts:5637    pts_time:9.395
+lavfi.scene_score=0.001202
+frame:30   pts:5647    pts_time:9.411667
+lavfi.scene_score=0.000180
+frame:31   pts:5657    pts_time:9.428333
+lavfi.scene_score=0.000047
+frame:32   pts:5667    pts_time:9.445
+lavfi.scene_score=0.000010
+frame:33   pts:5678    pts_time:9.463333
+lavfi.scene_score=0.000052
+frame:34   pts:5689    pts_time:9.481667
+lavfi.scene_score=0.000030
+frame:35   pts:5698    pts_time:9.496667
+lavfi.scene_score=0.000012
+frame:36   pts:5707    pts_time:9.511667
+lavfi.scene_score=0.000008
+frame:37   pts:5718    pts_time:9.53
+lavfi.scene_score=0.000008
+frame:38   pts:5728    pts_time:9.546667
+lavfi.scene_score=0.000007
+frame:39   pts:5737    pts_time:9.561667
+lavfi.scene_score=0.000015
+frame:40   pts:5747    pts_time:9.578333
+lavfi.scene_score=0.000004
+frame:41   pts:5757    pts_time:9.595
+lavfi.scene_score=0.000004
+frame:42   pts:5767    pts_time:9.611667
+lavfi.scene_score=0.000002
+frame:43   pts:5778    pts_time:9.63
+lavfi.scene_score=0.000002
+frame:44   pts:5788    pts_time:9.646667
+lavfi.scene_score=0.000000
+frame:45   pts:5797    pts_time:9.661667
+lavfi.scene_score=0.000001
+frame:46   pts:5987    pts_time:9.978333
+lavfi.scene_score=0.000001
+frame:47   pts:8492    pts_time:14.153333
+lavfi.scene_score=0.000002
+frame:48   pts:25362   pts_time:42.27
+lavfi.scene_score=0.000632
+frame:49   pts:25392   pts_time:42.32
+lavfi.scene_score=0.019568
+frame:50   pts:26284   pts_time:43.806667
+lavfi.scene_score=0.000030
+frame:51   pts:26289   pts_time:43.815
+lavfi.scene_score=0.000010
+frame:52   pts:26425   pts_time:44.041667
+lavfi.scene_score=0.000397
+frame:53   pts:26427   pts_time:44.045
+lavfi.scene_score=0.000417
+frame:54   pts:26437   pts_time:44.061667
+lavfi.scene_score=0.000215
+frame:55   pts:26447   pts_time:44.078333
+lavfi.scene_score=0.000017
+frame:56   pts:26457   pts_time:44.095
+lavfi.scene_score=0.000123
+frame:57   pts:26467   pts_time:44.111667
+lavfi.scene_score=0.000125
+frame:58   pts:26477   pts_time:44.128333
+lavfi.scene_score=0.000958
+frame:59   pts:26487   pts_time:44.145
+lavfi.scene_score=0.000807
+frame:60   pts:26497   pts_time:44.161667
+lavfi.scene_score=0.000186
+frame:61   pts:26499   pts_time:44.165
+lavfi.scene_score=0.000215
+frame:62   pts:26507   pts_time:44.178333
+lavfi.scene_score=0.000310
+frame:63   pts:26517   pts_time:44.195
+lavfi.scene_score=0.000054
+frame:64   pts:26527   pts_time:44.211667
+lavfi.scene_score=0.000646
+frame:65   pts:26537   pts_time:44.228333
+lavfi.scene_score=0.000344
+frame:66   pts:26550   pts_time:44.25
+lavfi.scene_score=0.000315
+frame:67   pts:26557   pts_time:44.261667
+lavfi.scene_score=0.000241
+frame:68   pts:26567   pts_time:44.278333
+lavfi.scene_score=0.000144
+frame:69   pts:26572   pts_time:44.286667
+lavfi.scene_score=0.005250
+frame:70   pts:26582   pts_time:44.303333
+lavfi.scene_score=0.000254
+frame:71   pts:26592   pts_time:44.32
+lavfi.scene_score=0.000013
+frame:72   pts:26602   pts_time:44.336667
+lavfi.scene_score=0.000068
+frame:73   pts:26612   pts_time:44.353333
+lavfi.scene_score=0.000031
+frame:74   pts:26621   pts_time:44.368333
+lavfi.scene_score=0.000068
+frame:75   pts:26631   pts_time:44.385
+lavfi.scene_score=0.000019
+frame:76   pts:26641   pts_time:44.401667
+lavfi.scene_score=0.000085
+frame:77   pts:26651   pts_time:44.418333
+lavfi.scene_score=0.000005
+frame:78   pts:26661   pts_time:44.435
+lavfi.scene_score=0.000075
+frame:79   pts:26671   pts_time:44.451667
+lavfi.scene_score=0.000001
+frame:80   pts:26684   pts_time:44.473333
+lavfi.scene_score=0.000071
+frame:81   pts:26691   pts_time:44.485
+lavfi.scene_score=0.000004
+frame:82   pts:26701   pts_time:44.501667
+lavfi.scene_score=0.000074
+frame:83   pts:26711   pts_time:44.518333
+lavfi.scene_score=0.000004
+frame:84   pts:26721   pts_time:44.535
+lavfi.scene_score=0.000064
+frame:85   pts:26731   pts_time:44.551667
+lavfi.scene_score=0.000006
+frame:86   pts:26741   pts_time:44.568333
+lavfi.scene_score=0.000068
+frame:87   pts:26751   pts_time:44.585
+lavfi.scene_score=0.000069
+frame:88   pts:26761   pts_time:44.601667
+lavfi.scene_score=0.000047
+frame:89   pts:26771   pts_time:44.618333
+lavfi.scene_score=0.000114
+frame:90   pts:26785   pts_time:44.641667
+lavfi.scene_score=0.000001
+frame:91   pts:26791   pts_time:44.651667
+lavfi.scene_score=0.000117
+frame:92   pts:26801   pts_time:44.668333
+lavfi.scene_score=0.000041
+frame:93   pts:26811   pts_time:44.685
+lavfi.scene_score=0.000083
+frame:94   pts:26821   pts_time:44.701667
+lavfi.scene_score=0.000005
+frame:95   pts:26831   pts_time:44.718333
+lavfi.scene_score=0.000083
+frame:96   pts:26847   pts_time:44.745
+lavfi.scene_score=0.000030
+frame:97   pts:29656   pts_time:49.426667
+lavfi.scene_score=0.000126
+frame:98   pts:29671   pts_time:49.451667
+lavfi.scene_score=0.096619
+frame:99   pts:29674   pts_time:49.456667
+lavfi.scene_score=0.000222
+frame:100  pts:29676   pts_time:49.46
+lavfi.scene_score=0.000003
+frame:101  pts:29680   pts_time:49.466667
+lavfi.scene_score=0.128400
+frame:102  pts:29688   pts_time:49.48
+lavfi.scene_score=0.051226
+frame:103  pts:29692   pts_time:49.486667
+lavfi.scene_score=0.026089
+frame:104  pts:29697   pts_time:49.495
+lavfi.scene_score=0.000319
+frame:105  pts:29709   pts_time:49.515
+lavfi.scene_score=0.223685
+frame:106  pts:29718   pts_time:49.53
+lavfi.scene_score=0.002928
+frame:107  pts:29728   pts_time:49.546667
+lavfi.scene_score=0.025351
+frame:108  pts:29743   pts_time:49.571667
+lavfi.scene_score=0.038252
+frame:109  pts:29746   pts_time:49.576667
+lavfi.scene_score=0.029117
+frame:110  pts:29749   pts_time:49.581667
+lavfi.scene_score=0.000112
+frame:111  pts:29752   pts_time:49.586667
+lavfi.scene_score=0.000008
+frame:112  pts:29759   pts_time:49.598333
+lavfi.scene_score=0.103819
+frame:113  pts:29769   pts_time:49.615
+lavfi.scene_score=0.024460
+frame:114  pts:29779   pts_time:49.631667
+lavfi.scene_score=0.018135
+frame:115  pts:29789   pts_time:49.648333
+lavfi.scene_score=0.014347
+frame:116  pts:29799   pts_time:49.665
+lavfi.scene_score=0.010016
+frame:117  pts:29809   pts_time:49.681667
+lavfi.scene_score=0.010392
+frame:118  pts:29819   pts_time:49.698333
+lavfi.scene_score=0.006710
+frame:119  pts:29829   pts_time:49.715
+lavfi.scene_score=0.005405
+frame:120  pts:29840   pts_time:49.733333
+lavfi.scene_score=0.004705
+frame:121  pts:29849   pts_time:49.748333
+lavfi.scene_score=0.001707
+frame:122  pts:29856   pts_time:49.76
+lavfi.scene_score=0.002967
+frame:123  pts:29859   pts_time:49.765
+lavfi.scene_score=0.000027
+frame:124  pts:29866   pts_time:49.776667
+lavfi.scene_score=0.003782
+frame:125  pts:29876   pts_time:49.793333
+lavfi.scene_score=0.001325
+frame:126  pts:29879   pts_time:49.798333
+lavfi.scene_score=0.000026
+frame:127  pts:29890   pts_time:49.816667
+lavfi.scene_score=0.003916
+frame:128  pts:29900   pts_time:49.833333
+lavfi.scene_score=0.000228
+frame:129  pts:29910   pts_time:49.85
+lavfi.scene_score=0.017485
+frame:130  pts:29912   pts_time:49.853333
+lavfi.scene_score=0.000063
+frame:131  pts:29914   pts_time:49.856667
+lavfi.scene_score=0.000002
+frame:132  pts:29916   pts_time:49.86
+lavfi.scene_score=0.000036
+frame:133  pts:29926   pts_time:49.876667
+lavfi.scene_score=0.000051
+frame:134  pts:29936   pts_time:49.893333
+lavfi.scene_score=0.000015
+frame:135  pts:29946   pts_time:49.91
+lavfi.scene_score=0.000016
+frame:136  pts:30056   pts_time:50.093333
+lavfi.scene_score=0.000001
+frame:137  pts:30550   pts_time:50.916667
+lavfi.scene_score=0.000001
+frame:138  pts:30560   pts_time:50.933333
+lavfi.scene_score=0.000196
+frame:139  pts:30570   pts_time:50.95
+lavfi.scene_score=0.000033
+frame:140  pts:30580   pts_time:50.966667
+lavfi.scene_score=0.000030
+frame:141  pts:30590   pts_time:50.983333
+lavfi.scene_score=0.000030
+frame:142  pts:30600   pts_time:51
+lavfi.scene_score=0.000023
+frame:143  pts:30610   pts_time:51.016667
+lavfi.scene_score=0.000012
+frame:144  pts:30620   pts_time:51.033333
+lavfi.scene_score=0.000008
+frame:145  pts:30631   pts_time:51.051667
+lavfi.scene_score=0.000006
+frame:146  pts:30640   pts_time:51.066667
+lavfi.scene_score=0.000031
+frame:147  pts:30650   pts_time:51.083333
+lavfi.scene_score=0.000021
+frame:148  pts:30660   pts_time:51.1
+lavfi.scene_score=0.000001
+frame:149  pts:30670   pts_time:51.116667
+lavfi.scene_score=0.000000
+frame:150  pts:30680   pts_time:51.133333
+lavfi.scene_score=0.000019
+frame:151  pts:30690   pts_time:51.15
+lavfi.scene_score=0.000018
+frame:152  pts:30699   pts_time:51.165
+lavfi.scene_score=0.000014
+frame:153  pts:30709   pts_time:51.181667
+lavfi.scene_score=0.000000
+frame:154  pts:31274   pts_time:52.123333
+lavfi.scene_score=0.000000
+frame:155  pts:31282   pts_time:52.136667
+lavfi.scene_score=0.000001
+frame:156  pts:31291   pts_time:52.151667
+lavfi.scene_score=0.000001
+frame:157  pts:31301   pts_time:52.168333
+lavfi.scene_score=0.000003
+frame:158  pts:31311   pts_time:52.185
+lavfi.scene_score=0.000001
+frame:159  pts:31321   pts_time:52.201667
+lavfi.scene_score=0.000319
+frame:160  pts:31331   pts_time:52.218333
+lavfi.scene_score=0.000001
+frame:161  pts:31341   pts_time:52.235
+lavfi.scene_score=0.000002
+frame:162  pts:31351   pts_time:52.251667
+lavfi.scene_score=0.000001
+frame:163  pts:31361   pts_time:52.268333
+lavfi.scene_score=0.000004
+frame:164  pts:31371   pts_time:52.285
+lavfi.scene_score=0.000003
+frame:165  pts:31381   pts_time:52.301667
+lavfi.scene_score=0.000001
+frame:166  pts:31391   pts_time:52.318333
+lavfi.scene_score=0.000001
+frame:167  pts:31401   pts_time:52.335
+lavfi.scene_score=0.000316
+frame:168  pts:31411   pts_time:52.351667
+lavfi.scene_score=0.000003
+frame:169  pts:31421   pts_time:52.368333
+lavfi.scene_score=0.000001
+frame:170  pts:31431   pts_time:52.385
+lavfi.scene_score=0.000001
+frame:171  pts:31441   pts_time:52.401667
+lavfi.scene_score=0.000000
+frame:172  pts:31451   pts_time:52.418333
+lavfi.scene_score=0.000001
+frame:173  pts:31462   pts_time:52.436667
+lavfi.scene_score=0.000001
+frame:174  pts:31472   pts_time:52.453333
+lavfi.scene_score=0.000001
+frame:175  pts:31485   pts_time:52.475
+lavfi.scene_score=0.000017
+frame:176  pts:31487   pts_time:52.478333
+lavfi.scene_score=0.000004
+frame:177  pts:31556   pts_time:52.593333
+lavfi.scene_score=0.000000
+frame:178  pts:31749   pts_time:52.915
+lavfi.scene_score=0.000000
+frame:179  pts:31817   pts_time:53.028333
+lavfi.scene_score=0.000000
+frame:180  pts:31855   pts_time:53.091667
+lavfi.scene_score=0.000000
+frame:181  pts:31953   pts_time:53.255
+lavfi.scene_score=0.000000
+frame:182  pts:32110   pts_time:53.516667
+lavfi.scene_score=0.000000
+frame:183  pts:32126   pts_time:53.543333
+lavfi.scene_score=0.000000
+frame:184  pts:32128   pts_time:53.546667
+lavfi.scene_score=0.000000
+frame:185  pts:32628   pts_time:54.38
+lavfi.scene_score=0.000000
+frame:186  pts:33250   pts_time:55.416667
+lavfi.scene_score=0.000001
+frame:187  pts:33267   pts_time:55.445
+lavfi.scene_score=0.000774
+frame:188  pts:33270   pts_time:55.45
+lavfi.scene_score=0.004009
+frame:189  pts:33277   pts_time:55.461667
+lavfi.scene_score=0.012528
+frame:190  pts:33287   pts_time:55.478333
+lavfi.scene_score=0.015250
+frame:191  pts:33298   pts_time:55.496667
+lavfi.scene_score=0.013893
+frame:192  pts:33307   pts_time:55.511667
+lavfi.scene_score=0.018378
+frame:193  pts:33317   pts_time:55.528333
+lavfi.scene_score=0.015852
+frame:194  pts:33328   pts_time:55.546667
+lavfi.scene_score=0.011820
+frame:195  pts:33337   pts_time:55.561667
+lavfi.scene_score=0.011026
+frame:196  pts:33348   pts_time:55.58
+lavfi.scene_score=0.006204
+frame:197  pts:33358   pts_time:55.596667
+lavfi.scene_score=0.003368
+frame:198  pts:33368   pts_time:55.613333
+lavfi.scene_score=0.011522
+frame:199  pts:33378   pts_time:55.63
+lavfi.scene_score=0.011023
+frame:200  pts:33392   pts_time:55.653333
+lavfi.scene_score=0.015123
+frame:201  pts:33397   pts_time:55.661667
+lavfi.scene_score=0.003854
+frame:202  pts:33407   pts_time:55.678333
+lavfi.scene_score=0.009237
+frame:203  pts:33417   pts_time:55.695
+lavfi.scene_score=0.005556
+frame:204  pts:33427   pts_time:55.711667
+lavfi.scene_score=0.016548
+frame:205  pts:33432   pts_time:55.72
+lavfi.scene_score=0.000182
+frame:206  pts:33440   pts_time:55.733333
+lavfi.scene_score=0.070710
+frame:207  pts:33450   pts_time:55.75
+lavfi.scene_score=0.015194
+frame:208  pts:33460   pts_time:55.766667
+lavfi.scene_score=0.014342
+frame:209  pts:33470   pts_time:55.783333
+lavfi.scene_score=0.009702
+frame:210  pts:33479   pts_time:55.798333
+lavfi.scene_score=0.000041
+frame:211  pts:33490   pts_time:55.816667
+lavfi.scene_score=0.039109
+frame:212  pts:33500   pts_time:55.833333
+lavfi.scene_score=0.000052
+frame:213  pts:33510   pts_time:55.85
+lavfi.scene_score=0.000003
+frame:214  pts:33520   pts_time:55.866667
+lavfi.scene_score=0.028020
+frame:215  pts:33529   pts_time:55.881667
+lavfi.scene_score=0.000047
+frame:216  pts:33539   pts_time:55.898333
+lavfi.scene_score=0.000169
+frame:217  pts:33585   pts_time:55.975
+lavfi.scene_score=0.020872
+frame:218  pts:34866   pts_time:58.11
+lavfi.scene_score=0.000022
+frame:219  pts:34986   pts_time:58.31
+lavfi.scene_score=0.011973
+frame:220  pts:34996   pts_time:58.326667
+lavfi.scene_score=0.000460
+frame:221  pts:35006   pts_time:58.343333
+lavfi.scene_score=0.000923
+frame:222  pts:35014   pts_time:58.356667
+lavfi.scene_score=0.000070
+frame:223  pts:35025   pts_time:58.375
+lavfi.scene_score=0.000138
+frame:224  pts:35035   pts_time:58.391667
+lavfi.scene_score=0.000016
+frame:225  pts:35045   pts_time:58.408333
+lavfi.scene_score=0.000224
+frame:226  pts:35055   pts_time:58.425
+lavfi.scene_score=0.000422
+frame:227  pts:35063   pts_time:58.438333
+lavfi.scene_score=0.000032
+frame:228  pts:35072   pts_time:58.453333
+lavfi.scene_score=0.000536
+frame:229  pts:35085   pts_time:58.475
+lavfi.scene_score=0.000036
+frame:230  pts:35091   pts_time:58.485
+lavfi.scene_score=0.000131
+frame:231  pts:35101   pts_time:58.501667
+lavfi.scene_score=0.000059
+frame:232  pts:35111   pts_time:58.518333
+lavfi.scene_score=0.000015
+frame:233  pts:35124   pts_time:58.54
+lavfi.scene_score=0.000420
+frame:234  pts:35134   pts_time:58.556667
+lavfi.scene_score=0.000134
+frame:235  pts:35144   pts_time:58.573333
+lavfi.scene_score=0.000030
+frame:236  pts:35154   pts_time:58.59
+lavfi.scene_score=0.000011
+frame:237  pts:35163   pts_time:58.605
+lavfi.scene_score=0.000029
+frame:238  pts:35173   pts_time:58.621667
+lavfi.scene_score=0.000007
+frame:239  pts:35183   pts_time:58.638333
+lavfi.scene_score=0.000014
+frame:240  pts:35193   pts_time:58.655
+lavfi.scene_score=0.000005
+frame:241  pts:35203   pts_time:58.671667
+lavfi.scene_score=0.000011
+frame:242  pts:35215   pts_time:58.691667
+lavfi.scene_score=0.000008
+frame:243  pts:35225   pts_time:58.708333
+lavfi.scene_score=0.000004
+frame:244  pts:35279   pts_time:58.798333
+lavfi.scene_score=0.001513
+frame:245  pts:35280   pts_time:58.8
+lavfi.scene_score=0.000050
+frame:246  pts:35291   pts_time:58.818333
+lavfi.scene_score=0.129190
+frame:247  pts:35299   pts_time:58.831667
+lavfi.scene_score=0.016353
+frame:248  pts:35306   pts_time:58.843333
+lavfi.scene_score=0.000405
+frame:249  pts:35314   pts_time:58.856667
+lavfi.scene_score=0.142831
+frame:250  pts:35318   pts_time:58.863333
+lavfi.scene_score=0.000208
+frame:251  pts:35320   pts_time:58.866667
+lavfi.scene_score=0.000116
+frame:252  pts:35328   pts_time:58.88
+lavfi.scene_score=0.130635
+frame:253  pts:35331   pts_time:58.885
+lavfi.scene_score=0.000929
+frame:254  pts:35338   pts_time:58.896667
+lavfi.scene_score=0.128956
+frame:255  pts:35341   pts_time:58.901667
+lavfi.scene_score=0.002196
+frame:256  pts:35348   pts_time:58.913333
+lavfi.scene_score=0.112036
+frame:257  pts:35351   pts_time:58.918333
+lavfi.scene_score=0.002438
+frame:258  pts:35357   pts_time:58.928333
+lavfi.scene_score=0.109284
+frame:259  pts:35369   pts_time:58.948333
+lavfi.scene_score=0.010112
+frame:260  pts:35372   pts_time:58.953333
+lavfi.scene_score=0.001583
+frame:261  pts:35375   pts_time:58.958333
+lavfi.scene_score=0.091452
+frame:262  pts:35378   pts_time:58.963333
+lavfi.scene_score=0.000461
+frame:263  pts:35380   pts_time:58.966667
+lavfi.scene_score=0.000909
+frame:264  pts:35388   pts_time:58.98
+lavfi.scene_score=0.088752
+frame:265  pts:35391   pts_time:58.985
+lavfi.scene_score=0.001361
+frame:266  pts:35398   pts_time:58.996667
+lavfi.scene_score=0.083216
+frame:267  pts:35401   pts_time:59.001667
+lavfi.scene_score=0.001114
+frame:268  pts:35408   pts_time:59.013333
+lavfi.scene_score=0.079134
+frame:269  pts:35424   pts_time:59.04
+lavfi.scene_score=0.003096
+frame:270  pts:35426   pts_time:59.043333
+lavfi.scene_score=0.000048
+frame:271  pts:35428   pts_time:59.046667
+lavfi.scene_score=0.080618
+frame:272  pts:35430   pts_time:59.05
+lavfi.scene_score=0.001289
+frame:273  pts:35437   pts_time:59.061667
+lavfi.scene_score=0.078429
+frame:274  pts:35440   pts_time:59.066667
+lavfi.scene_score=0.001421
+frame:275  pts:35447   pts_time:59.078333
+lavfi.scene_score=0.069017
+frame:276  pts:35450   pts_time:59.083333
+lavfi.scene_score=0.001082
+frame:277  pts:35458   pts_time:59.096667
+lavfi.scene_score=0.057092
+frame:278  pts:35466   pts_time:59.11
+lavfi.scene_score=0.012272
+frame:279  pts:35471   pts_time:59.118333
+lavfi.scene_score=0.000730
+frame:280  pts:35479   pts_time:59.131667
+lavfi.scene_score=0.034263
+frame:281  pts:35490   pts_time:59.15
+lavfi.scene_score=0.007716
+frame:282  pts:35500   pts_time:59.166667
+lavfi.scene_score=0.007514
+frame:283  pts:35513   pts_time:59.188333
+lavfi.scene_score=0.004818
+frame:284  pts:35516   pts_time:59.193333
+lavfi.scene_score=0.000046
+frame:285  pts:35520   pts_time:59.2
+lavfi.scene_score=0.000262
+frame:286  pts:35530   pts_time:59.216667
+lavfi.scene_score=0.018017
+frame:287  pts:35546   pts_time:59.243333
+lavfi.scene_score=0.000351
+frame:288  pts:35548   pts_time:59.246667
+lavfi.scene_score=0.000053
+frame:289  pts:35550   pts_time:59.25
+lavfi.scene_score=0.000024
+frame:290  pts:35552   pts_time:59.253333
+lavfi.scene_score=0.000160
+frame:291  pts:35559   pts_time:59.265
+lavfi.scene_score=0.000152
+frame:292  pts:35563   pts_time:59.271667
+lavfi.scene_score=0.020668
+frame:293  pts:35569   pts_time:59.281667
+lavfi.scene_score=0.000034
+frame:294  pts:35579   pts_time:59.298333
+lavfi.scene_score=0.000023
+frame:295  pts:35588   pts_time:59.313333
+lavfi.scene_score=0.000151
+frame:296  pts:35593   pts_time:59.321667
+lavfi.scene_score=0.002809
+frame:297  pts:35598   pts_time:59.33
+lavfi.scene_score=0.000119
+frame:298  pts:35610   pts_time:59.35
+lavfi.scene_score=0.000007
+frame:299  pts:35620   pts_time:59.366667
+lavfi.scene_score=0.000010
+frame:300  pts:35628   pts_time:59.38
+lavfi.scene_score=0.000036
+frame:301  pts:35638   pts_time:59.396667
+lavfi.scene_score=0.000066
+frame:302  pts:35648   pts_time:59.413333
+lavfi.scene_score=0.000022
+frame:303  pts:35671   pts_time:59.451667
+lavfi.scene_score=0.000041
+frame:304  pts:35673   pts_time:59.455
+lavfi.scene_score=0.000018
+frame:305  pts:35678   pts_time:59.463333
+lavfi.scene_score=0.000001
+frame:306  pts:35688   pts_time:59.48
+lavfi.scene_score=0.000005
+frame:307  pts:35698   pts_time:59.496667
+lavfi.scene_score=0.000007
+frame:308  pts:35718   pts_time:59.53
+lavfi.scene_score=0.000003
+frame:309  pts:35737   pts_time:59.561667
+lavfi.scene_score=0.000021
+frame:310  pts:35739   pts_time:59.565
+lavfi.scene_score=0.000001
+frame:311  pts:35749   pts_time:59.581667
+lavfi.scene_score=0.000012
+frame:312  pts:35757   pts_time:59.595
+lavfi.scene_score=0.000000
+frame:313  pts:35778   pts_time:59.63
+lavfi.scene_score=0.000001
+frame:314  pts:35918   pts_time:59.863333
+lavfi.scene_score=0.000001
+frame:315  pts:35956   pts_time:59.926667
+lavfi.scene_score=0.000037
+frame:316  pts:35966   pts_time:59.943333
+lavfi.scene_score=0.000003
+frame:317  pts:36004   pts_time:60.006667
+lavfi.scene_score=0.000143
+frame:318  pts:36043   pts_time:60.071667
+lavfi.scene_score=0.000076
+frame:319  pts:36081   pts_time:60.135
+lavfi.scene_score=0.000036
+frame:320  pts:36120   pts_time:60.2
+lavfi.scene_score=0.000374
+frame:321  pts:36158   pts_time:60.263333
+lavfi.scene_score=0.000326
+frame:322  pts:36197   pts_time:60.328333
+lavfi.scene_score=0.000096
+frame:323  pts:36217   pts_time:60.361667
+lavfi.scene_score=0.000026
+frame:324  pts:37819   pts_time:63.031667
+lavfi.scene_score=0.000009
+frame:325  pts:38390   pts_time:63.983333
+lavfi.scene_score=0.000187
+frame:326  pts:38472   pts_time:64.12
+lavfi.scene_score=0.000027
+frame:327  pts:38482   pts_time:64.136667
+lavfi.scene_score=0.000001
+frame:328  pts:38492   pts_time:64.153333
+lavfi.scene_score=0.000022
+frame:329  pts:38501   pts_time:64.168333
+lavfi.scene_score=0.000047
+frame:330  pts:38504   pts_time:64.173333
+lavfi.scene_score=0.000022
+frame:331  pts:38512   pts_time:64.186667
+lavfi.scene_score=0.000006
+frame:332  pts:38521   pts_time:64.201667
+lavfi.scene_score=0.000026
+frame:333  pts:38600   pts_time:64.333333
+lavfi.scene_score=0.000457
+frame:334  pts:38611   pts_time:64.351667
+lavfi.scene_score=0.009030
+frame:335  pts:38621   pts_time:64.368333
+lavfi.scene_score=0.010768
+frame:336  pts:38630   pts_time:64.383333
+lavfi.scene_score=0.011852
+frame:337  pts:38633   pts_time:64.388333
+lavfi.scene_score=0.000137
+frame:338  pts:38642   pts_time:64.403333
+lavfi.scene_score=0.007583
+frame:339  pts:38650   pts_time:64.416667
+lavfi.scene_score=0.014325
+frame:340  pts:38665   pts_time:64.441667
+lavfi.scene_score=0.000102
+frame:341  pts:38667   pts_time:64.445
+lavfi.scene_score=0.000073
+frame:342  pts:38674   pts_time:64.456667
+lavfi.scene_score=0.057284
+frame:343  pts:38676   pts_time:64.46
+lavfi.scene_score=0.016887
+frame:344  pts:38678   pts_time:64.463333
+lavfi.scene_score=0.015438
+frame:345  pts:38690   pts_time:64.483333
+lavfi.scene_score=0.003891
+frame:346  pts:38699   pts_time:64.498333
+lavfi.scene_score=0.005122
+frame:347  pts:38709   pts_time:64.515
+lavfi.scene_score=0.007392
+frame:348  pts:38719   pts_time:64.531667
+lavfi.scene_score=0.007651
+frame:349  pts:38729   pts_time:64.548333
+lavfi.scene_score=0.005286
+frame:350  pts:38739   pts_time:64.565
+lavfi.scene_score=0.004783
+frame:351  pts:38749   pts_time:64.581667
+lavfi.scene_score=0.005283
+frame:352  pts:38759   pts_time:64.598333
+lavfi.scene_score=0.003607
+frame:353  pts:38764   pts_time:64.606667
+lavfi.scene_score=0.000729
+frame:354  pts:38769   pts_time:64.615
+lavfi.scene_score=0.009796
+frame:355  pts:38772   pts_time:64.62
+lavfi.scene_score=0.003713
+frame:356  pts:38779   pts_time:64.631667
+lavfi.scene_score=0.004314
+frame:357  pts:38781   pts_time:64.635
+lavfi.scene_score=0.002483
+frame:358  pts:38791   pts_time:64.651667
+lavfi.scene_score=0.005201
+frame:359  pts:38793   pts_time:64.655
+lavfi.scene_score=0.000020
+frame:360  pts:38800   pts_time:64.666667
+lavfi.scene_score=0.004281
+frame:361  pts:38802   pts_time:64.67
+lavfi.scene_score=0.001558
+frame:362  pts:38809   pts_time:64.681667
+lavfi.scene_score=0.001390
+frame:363  pts:38812   pts_time:64.686667
+lavfi.scene_score=0.001042
+frame:364  pts:38819   pts_time:64.698333
+lavfi.scene_score=0.000979
+frame:365  pts:38822   pts_time:64.703333
+lavfi.scene_score=0.000767
+frame:366  pts:38829   pts_time:64.715
+lavfi.scene_score=0.005519
+frame:367  pts:38831   pts_time:64.718333
+lavfi.scene_score=0.000006
+frame:368  pts:38841   pts_time:64.735
+lavfi.scene_score=0.000004
+frame:369  pts:38843   pts_time:64.738333
+lavfi.scene_score=0.000002
+frame:370  pts:38849   pts_time:64.748333
+lavfi.scene_score=0.000000
+frame:371  pts:38857   pts_time:64.761667
+lavfi.scene_score=0.000002
+frame:372  pts:38867   pts_time:64.778333
+lavfi.scene_score=0.000002
+frame:373  pts:38877   pts_time:64.795
+lavfi.scene_score=0.000000
+frame:374  pts:38887   pts_time:64.811667
+lavfi.scene_score=0.000000
+frame:375  pts:38897   pts_time:64.828333
+lavfi.scene_score=0.000000
+frame:376  pts:38907   pts_time:64.845
+lavfi.scene_score=0.000456
+frame:377  pts:38917   pts_time:64.861667
+lavfi.scene_score=0.000149
+frame:378  pts:38949   pts_time:64.915
+lavfi.scene_score=0.000019
+frame:379  pts:38971   pts_time:64.951667
+lavfi.scene_score=0.000040
+frame:380  pts:38994   pts_time:64.99
+lavfi.scene_score=0.000027
+frame:381  pts:39017   pts_time:65.028333
+lavfi.scene_score=0.000057
+frame:382  pts:39033   pts_time:65.055
+lavfi.scene_score=0.000162
+frame:383  pts:39049   pts_time:65.081667
+lavfi.scene_score=0.000199
+frame:384  pts:39070   pts_time:65.116667
+lavfi.scene_score=0.000047
+frame:385  pts:39100   pts_time:65.166667
+lavfi.scene_score=0.000103
+frame:386  pts:39113   pts_time:65.188333
+lavfi.scene_score=0.000305
+frame:387  pts:39129   pts_time:65.215
+lavfi.scene_score=0.000081
+frame:388  pts:39137   pts_time:65.228333
+lavfi.scene_score=0.000133
+frame:389  pts:39160   pts_time:65.266667
+lavfi.scene_score=0.000480
+frame:390  pts:39170   pts_time:65.283333
+lavfi.scene_score=0.000066
+frame:391  pts:39200   pts_time:65.333333
+lavfi.scene_score=0.000136
+frame:392  pts:39219   pts_time:65.365
+lavfi.scene_score=0.000114
+frame:393  pts:39245   pts_time:65.408333
+lavfi.scene_score=0.000149
+frame:394  pts:39481   pts_time:65.801667
+lavfi.scene_score=0.000020
+frame:395  pts:39545   pts_time:65.908333
+lavfi.scene_score=0.000001
+frame:396  pts:39567   pts_time:65.945
+lavfi.scene_score=0.000057
+frame:397  pts:39596   pts_time:65.993333
+lavfi.scene_score=0.000024
+frame:398  pts:39612   pts_time:66.02
+lavfi.scene_score=0.000007
+frame:399  pts:39635   pts_time:66.058333
+lavfi.scene_score=0.000002
+frame:400  pts:39755   pts_time:66.258333
+lavfi.scene_score=0.000006
+frame:401  pts:39777   pts_time:66.295
+lavfi.scene_score=0.000038
+frame:402  pts:39808   pts_time:66.346667
+lavfi.scene_score=0.000002
+frame:403  pts:39822   pts_time:66.37
+lavfi.scene_score=0.000001
+frame:404  pts:39828   pts_time:66.38
+lavfi.scene_score=0.000933
+frame:405  pts:39830   pts_time:66.383333
+lavfi.scene_score=0.000382
+frame:406  pts:39845   pts_time:66.408333
+lavfi.scene_score=0.000170
+frame:407  pts:39912   pts_time:66.52
+lavfi.scene_score=0.001106
+frame:408  pts:39997   pts_time:66.661667
+lavfi.scene_score=0.000093
+frame:409  pts:40007   pts_time:66.678333
+lavfi.scene_score=0.000022
+frame:410  pts:40017   pts_time:66.695
+lavfi.scene_score=0.000044
+frame:411  pts:40146   pts_time:66.91
+lavfi.scene_score=0.000030
+frame:412  pts:40152   pts_time:66.92
+lavfi.scene_score=0.000003
+frame:413  pts:40157   pts_time:66.928333
+lavfi.scene_score=0.010571
+frame:414  pts:40162   pts_time:66.936667
+lavfi.scene_score=0.000039
+frame:415  pts:40165   pts_time:66.941667
+lavfi.scene_score=0.000009
+frame:416  pts:40174   pts_time:66.956667
+lavfi.scene_score=0.000020
+frame:417  pts:40189   pts_time:66.981667
+lavfi.scene_score=0.000041
+frame:418  pts:40198   pts_time:66.996667
+lavfi.scene_score=0.000010
+frame:419  pts:40211   pts_time:67.018333
+lavfi.scene_score=0.000030
+frame:420  pts:40230   pts_time:67.05
+lavfi.scene_score=0.000093
+frame:421  pts:40249   pts_time:67.081667
+lavfi.scene_score=0.000033
+frame:422  pts:40268   pts_time:67.113333
+lavfi.scene_score=0.000050
+frame:423  pts:40286   pts_time:67.143333
+lavfi.scene_score=0.000059
+frame:424  pts:40305   pts_time:67.175
+lavfi.scene_score=0.000049
+frame:425  pts:40315   pts_time:67.191667
+lavfi.scene_score=0.000026
+frame:426  pts:40325   pts_time:67.208333
+lavfi.scene_score=0.000003
+frame:427  pts:40344   pts_time:67.24
+lavfi.scene_score=0.000007
+frame:428  pts:40349   pts_time:67.248333
+lavfi.scene_score=0.000007
+frame:429  pts:40361   pts_time:67.268333
+lavfi.scene_score=0.000000
+frame:430  pts:40388   pts_time:67.313333
+lavfi.scene_score=0.000003
+frame:431  pts:40415   pts_time:67.358333
+lavfi.scene_score=0.000002
+frame:432  pts:40442   pts_time:67.403333
+lavfi.scene_score=0.000001
+frame:433  pts:40466   pts_time:67.443333
+lavfi.scene_score=0.000003
+frame:434  pts:40484   pts_time:67.473333
+lavfi.scene_score=0.000519
+frame:435  pts:40511   pts_time:67.518333
+lavfi.scene_score=0.000196
+frame:436  pts:40535   pts_time:67.558333
+lavfi.scene_score=0.000066
+frame:437  pts:40558   pts_time:67.596667
+lavfi.scene_score=0.000003
+frame:438  pts:40583   pts_time:67.638333
+lavfi.scene_score=0.000013
+frame:439  pts:40594   pts_time:67.656667
+lavfi.scene_score=0.000064
+frame:440  pts:40602   pts_time:67.67
+lavfi.scene_score=0.000039
+frame:441  pts:40615   pts_time:67.691667
+lavfi.scene_score=0.000008
+frame:442  pts:40626   pts_time:67.71
+lavfi.scene_score=0.000034
+frame:443  pts:40647   pts_time:67.745
+lavfi.scene_score=0.000090
+frame:444  pts:40677   pts_time:67.795
+lavfi.scene_score=0.000032
+frame:445  pts:40698   pts_time:67.83
+lavfi.scene_score=0.000048
+frame:446  pts:40719   pts_time:67.865
+lavfi.scene_score=0.000090
+frame:447  pts:40741   pts_time:67.901667
+lavfi.scene_score=0.000004
+frame:448  pts:40763   pts_time:67.938333
+lavfi.scene_score=0.000064
+frame:449  pts:41066   pts_time:68.443333
+lavfi.scene_score=0.000028
+frame:450  pts:41083   pts_time:68.471667
+lavfi.scene_score=0.000069
+frame:451  pts:41106   pts_time:68.51
+lavfi.scene_score=0.000004
+frame:452  pts:41128   pts_time:68.546667
+lavfi.scene_score=0.000036
+frame:453  pts:41150   pts_time:68.583333
+lavfi.scene_score=0.000003
+frame:454  pts:41158   pts_time:68.596667
+lavfi.scene_score=0.000021
+frame:455  pts:41230   pts_time:68.716667
+lavfi.scene_score=0.000133
+frame:456  pts:41237   pts_time:68.728333
+lavfi.scene_score=0.000003
+frame:457  pts:41480   pts_time:69.133333
+lavfi.scene_score=0.000000
+frame:458  pts:41484   pts_time:69.14
+lavfi.scene_score=0.000004
+frame:459  pts:41487   pts_time:69.145
+lavfi.scene_score=0.000548
+frame:460  pts:41489   pts_time:69.148333
+lavfi.scene_score=0.000002
+frame:461  pts:41491   pts_time:69.151667
+lavfi.scene_score=0.000000
+frame:462  pts:41494   pts_time:69.156667
+lavfi.scene_score=0.000003
+frame:463  pts:41524   pts_time:69.206667
+lavfi.scene_score=0.099582
+frame:464  pts:41530   pts_time:69.216667
+lavfi.scene_score=0.000143
+frame:465  pts:41541   pts_time:69.235
+lavfi.scene_score=0.000020
+frame:466  pts:41774   pts_time:69.623333
+lavfi.scene_score=0.000011
+frame:467  pts:41791   pts_time:69.651667
+lavfi.scene_score=0.000044
+frame:468  pts:41814   pts_time:69.69
+lavfi.scene_score=0.000048
+frame:469  pts:41832   pts_time:69.72
+lavfi.scene_score=0.000047
+frame:470  pts:41856   pts_time:69.76
+lavfi.scene_score=0.000002
+frame:471  pts:41878   pts_time:69.796667
+lavfi.scene_score=0.000019
+frame:472  pts:41932   pts_time:69.886667
+lavfi.scene_score=0.000224
+frame:473  pts:41951   pts_time:69.918333
+lavfi.scene_score=0.000203
+frame:474  pts:41970   pts_time:69.95
+lavfi.scene_score=0.000016
+frame:475  pts:41990   pts_time:69.983333
+lavfi.scene_score=0.000015
+frame:476  pts:42020   pts_time:70.033333
+lavfi.scene_score=0.000158
+frame:477  pts:42030   pts_time:70.05
+lavfi.scene_score=0.000040
+frame:478  pts:42059   pts_time:70.098333
+lavfi.scene_score=0.000078
+frame:479  pts:42078   pts_time:70.13
+lavfi.scene_score=0.000073
+frame:480  pts:42099   pts_time:70.165
+lavfi.scene_score=0.000165
+frame:481  pts:42118   pts_time:70.196667
+lavfi.scene_score=0.000072
+frame:482  pts:42139   pts_time:70.231667
+lavfi.scene_score=0.000144
+frame:483  pts:42439   pts_time:70.731667
+lavfi.scene_score=0.000039
+frame:484  pts:42461   pts_time:70.768333
+lavfi.scene_score=0.000027
+frame:485  pts:42484   pts_time:70.806667
+lavfi.scene_score=0.000005
+frame:486  pts:42509   pts_time:70.848333
+lavfi.scene_score=0.000017
+frame:487  pts:42529   pts_time:70.881667
+lavfi.scene_score=0.000001
+frame:488  pts:42649   pts_time:71.081667
+lavfi.scene_score=0.000005
+frame:489  pts:42671   pts_time:71.118333
+lavfi.scene_score=0.000038
+frame:490  pts:42694   pts_time:71.156667
+lavfi.scene_score=0.000001
+frame:491  pts:42716   pts_time:71.193333
+lavfi.scene_score=0.000000
+frame:492  pts:42739   pts_time:71.231667
+lavfi.scene_score=0.000286
+frame:493  pts:42809   pts_time:71.348333
+lavfi.scene_score=0.001169
+frame:494  pts:42907   pts_time:71.511667
+lavfi.scene_score=0.000183
+frame:495  pts:42917   pts_time:71.528333
+lavfi.scene_score=0.000039
+frame:496  pts:42943   pts_time:71.571667
+lavfi.scene_score=0.101584
+frame:497  pts:42949   pts_time:71.581667
+lavfi.scene_score=0.000284
+frame:498  pts:42960   pts_time:71.6
+lavfi.scene_score=0.000051
+frame:499  pts:42962   pts_time:71.603333
+lavfi.scene_score=0.000017
+frame:500  pts:43261   pts_time:72.101667
+lavfi.scene_score=0.000040
+frame:501  pts:43279   pts_time:72.131667
+lavfi.scene_score=0.000038
+frame:502  pts:43302   pts_time:72.17
+lavfi.scene_score=0.000050
+frame:503  pts:43324   pts_time:72.206667
+lavfi.scene_score=0.000002
+frame:504  pts:43354   pts_time:72.256667
+lavfi.scene_score=0.000018
+frame:505  pts:43467   pts_time:72.445
+lavfi.scene_score=0.000052
+frame:506  pts:43491   pts_time:72.485
+lavfi.scene_score=0.000026
+frame:507  pts:43512   pts_time:72.52
+lavfi.scene_score=0.000002
+frame:508  pts:43534   pts_time:72.556667
+lavfi.scene_score=0.000009
+frame:509  pts:43557   pts_time:72.595
+lavfi.scene_score=0.000007
+frame:510  pts:43857   pts_time:73.095
+lavfi.scene_score=0.000040
+frame:511  pts:43879   pts_time:73.131667
+lavfi.scene_score=0.000040
+frame:512  pts:43902   pts_time:73.17
+lavfi.scene_score=0.000005
+frame:513  pts:43924   pts_time:73.206667
+lavfi.scene_score=0.000001
+frame:514  pts:43950   pts_time:73.25
+lavfi.scene_score=0.000005
+frame:515  pts:44070   pts_time:73.45
+lavfi.scene_score=0.000039
+frame:516  pts:44089   pts_time:73.481667
+lavfi.scene_score=0.000043
+frame:517  pts:44112   pts_time:73.52
+lavfi.scene_score=0.000009
+frame:518  pts:44134   pts_time:73.556667
+lavfi.scene_score=0.000009
+frame:519  pts:44169   pts_time:73.615
+lavfi.scene_score=0.000000
+frame:520  pts:44457   pts_time:74.095
+lavfi.scene_score=0.000041
+frame:521  pts:44479   pts_time:74.131667
+lavfi.scene_score=0.000409
+frame:522  pts:44502   pts_time:74.17
+lavfi.scene_score=0.000215
+frame:523  pts:44524   pts_time:74.206667
+lavfi.scene_score=0.000103
+frame:524  pts:44547   pts_time:74.245
+lavfi.scene_score=0.000008
+frame:525  pts:44667   pts_time:74.445
+lavfi.scene_score=0.000001
+frame:526  pts:44689   pts_time:74.481667
+lavfi.scene_score=0.000030
+frame:527  pts:44712   pts_time:74.52
+lavfi.scene_score=0.000046
+frame:528  pts:44735   pts_time:74.558333
+lavfi.scene_score=0.000004
+frame:529  pts:44757   pts_time:74.595
+lavfi.scene_score=0.000019
+frame:530  pts:45049   pts_time:75.081667
+lavfi.scene_score=0.000052
+frame:531  pts:45059   pts_time:75.098333
+lavfi.scene_score=0.000012
+frame:532  pts:45079   pts_time:75.131667
+lavfi.scene_score=0.000038
+frame:533  pts:45102   pts_time:75.17
+lavfi.scene_score=0.000009
+frame:534  pts:45124   pts_time:75.206667
+lavfi.scene_score=0.000011
+frame:535  pts:45129   pts_time:75.215
+lavfi.scene_score=0.000076
+frame:536  pts:45137   pts_time:75.228333
+lavfi.scene_score=0.000016
+frame:537  pts:45276   pts_time:75.46
+lavfi.scene_score=0.000002
+frame:538  pts:45282   pts_time:75.47
+lavfi.scene_score=0.000002
+frame:539  pts:45290   pts_time:75.483333
+lavfi.scene_score=0.000013
+frame:540  pts:45292   pts_time:75.486667
+lavfi.scene_score=0.000076
+frame:541  pts:45294   pts_time:75.49
+lavfi.scene_score=0.000046
+frame:542  pts:45296   pts_time:75.493333
+lavfi.scene_score=0.000031
+frame:543  pts:45303   pts_time:75.505
+lavfi.scene_score=0.000291
+frame:544  pts:45313   pts_time:75.521667
+lavfi.scene_score=0.000465
+frame:545  pts:45323   pts_time:75.538333
+lavfi.scene_score=0.000596
+frame:546  pts:45333   pts_time:75.555
+lavfi.scene_score=0.000653
+frame:547  pts:45344   pts_time:75.573333
+lavfi.scene_score=0.000246
+frame:548  pts:45353   pts_time:75.588333
+lavfi.scene_score=0.000226
+frame:549  pts:45373   pts_time:75.621667
+lavfi.scene_score=0.000703
+frame:550  pts:45387   pts_time:75.645
+lavfi.scene_score=0.001085
+frame:551  pts:45392   pts_time:75.653333
+lavfi.scene_score=0.000946
+frame:552  pts:45402   pts_time:75.67
+lavfi.scene_score=0.000546
+frame:553  pts:45412   pts_time:75.686667
+lavfi.scene_score=0.000312
+frame:554  pts:45423   pts_time:75.705
+lavfi.scene_score=0.000142
+frame:555  pts:45434   pts_time:75.723333
+lavfi.scene_score=0.000067
+frame:556  pts:45444   pts_time:75.74
+lavfi.scene_score=0.000042
+frame:557  pts:45454   pts_time:75.756667
+lavfi.scene_score=0.000004
+frame:558  pts:45464   pts_time:75.773333
+lavfi.scene_score=0.000048
+frame:559  pts:45474   pts_time:75.79
+lavfi.scene_score=0.000062
+frame:560  pts:45484   pts_time:75.806667
+lavfi.scene_score=0.000028
+frame:561  pts:45495   pts_time:75.825
+lavfi.scene_score=0.000049
+frame:562  pts:45506   pts_time:75.843333
+lavfi.scene_score=0.000093
+frame:563  pts:45508   pts_time:75.846667
+lavfi.scene_score=0.000013
+frame:564  pts:45527   pts_time:75.878333
+lavfi.scene_score=0.000032
+frame:565  pts:45647   pts_time:76.078333
+lavfi.scene_score=0.000005
+frame:566  pts:45672   pts_time:76.12
+lavfi.scene_score=0.000044
+frame:567  pts:45692   pts_time:76.153333
+lavfi.scene_score=0.000002
+frame:568  pts:45715   pts_time:76.191667
+lavfi.scene_score=0.000001
+frame:569  pts:45738   pts_time:76.23
+lavfi.scene_score=0.000002
+frame:570  pts:45751   pts_time:76.251667
+lavfi.scene_score=0.001192
+frame:571  pts:45753   pts_time:76.255
+lavfi.scene_score=0.000008
+frame:572  pts:45756   pts_time:76.26
+lavfi.scene_score=0.002830
+frame:573  pts:45757   pts_time:76.261667
+lavfi.scene_score=0.001287
+frame:574  pts:45768   pts_time:76.28
+lavfi.scene_score=0.002238
+frame:575  pts:45778   pts_time:76.296667
+lavfi.scene_score=0.001149
+frame:576  pts:45788   pts_time:76.313333
+lavfi.scene_score=0.001139
+frame:577  pts:45795   pts_time:76.325
+lavfi.scene_score=0.099771
+frame:578  pts:45800   pts_time:76.333333
+lavfi.scene_score=0.000634
+frame:579  pts:45811   pts_time:76.351667
+lavfi.scene_score=0.000115
+frame:580  pts:45820   pts_time:76.366667
+lavfi.scene_score=0.000262
+frame:581  pts:45828   pts_time:76.38
+lavfi.scene_score=0.000091
+frame:582  pts:45838   pts_time:76.396667
+lavfi.scene_score=0.000031
+frame:583  pts:45848   pts_time:76.413333
+lavfi.scene_score=0.000011
+frame:584  pts:45860   pts_time:76.433333
+lavfi.scene_score=0.000026
+frame:585  pts:45870   pts_time:76.45
+lavfi.scene_score=0.000020
+frame:586  pts:45878   pts_time:76.463333
+lavfi.scene_score=0.000002
+frame:587  pts:45888   pts_time:76.48
+lavfi.scene_score=0.000009
+frame:588  pts:45897   pts_time:76.495
+lavfi.scene_score=0.000013
+frame:589  pts:45907   pts_time:76.511667
+lavfi.scene_score=0.000006
+frame:590  pts:45917   pts_time:76.528333
+lavfi.scene_score=0.000000
+frame:591  pts:46033   pts_time:76.721667
+lavfi.scene_score=0.000002
+frame:592  pts:46061   pts_time:76.768333
+lavfi.scene_score=0.000001
+frame:593  pts:46083   pts_time:76.805
+lavfi.scene_score=0.000040
+frame:594  pts:46107   pts_time:76.845
+lavfi.scene_score=0.000001
+frame:595  pts:46124   pts_time:76.873333
+lavfi.scene_score=0.000000
+frame:596  pts:46147   pts_time:76.911667
+lavfi.scene_score=0.000000
+frame:597  pts:46178   pts_time:76.963333
+lavfi.scene_score=0.000202
+frame:598  pts:46198   pts_time:76.996667
+lavfi.scene_score=0.000223
+frame:599  pts:46226   pts_time:77.043333
+lavfi.scene_score=0.000018
+frame:600  pts:46238   pts_time:77.063333
+lavfi.scene_score=0.000000
+frame:601  pts:46258   pts_time:77.096667
+lavfi.scene_score=0.000165
+frame:602  pts:46278   pts_time:77.13
+lavfi.scene_score=0.000075
+frame:603  pts:46298   pts_time:77.163333
+lavfi.scene_score=0.000082
+frame:604  pts:46318   pts_time:77.196667
+lavfi.scene_score=0.000054
+frame:605  pts:46338   pts_time:77.23
+lavfi.scene_score=0.000151
+frame:606  pts:46358   pts_time:77.263333
+lavfi.scene_score=0.000083
+frame:607  pts:46378   pts_time:77.296667
+lavfi.scene_score=0.000140
+frame:608  pts:46678   pts_time:77.796667
+lavfi.scene_score=0.000143
+frame:609  pts:46701   pts_time:77.835
+lavfi.scene_score=0.000197
+frame:610  pts:46723   pts_time:77.871667
+lavfi.scene_score=0.000132
+frame:611  pts:46746   pts_time:77.91
+lavfi.scene_score=0.000004
+frame:612  pts:46777   pts_time:77.961667
+lavfi.scene_score=0.000028
+frame:613  pts:46891   pts_time:78.151667
+lavfi.scene_score=0.000012
+frame:614  pts:46911   pts_time:78.185
+lavfi.scene_score=0.000022
+frame:615  pts:46933   pts_time:78.221667
+lavfi.scene_score=0.000006
+frame:616  pts:46958   pts_time:78.263333
+lavfi.scene_score=0.000026
+frame:617  pts:46978   pts_time:78.296667
+lavfi.scene_score=0.000022
+frame:618  pts:47228   pts_time:78.713333
+lavfi.scene_score=0.001209
+frame:619  pts:47278   pts_time:78.796667
+lavfi.scene_score=0.000061
+frame:620  pts:47301   pts_time:78.835
+lavfi.scene_score=0.000051
+frame:621  pts:47323   pts_time:78.871667
+lavfi.scene_score=0.000007
+frame:622  pts:47337   pts_time:78.895
+lavfi.scene_score=0.000028
+frame:623  pts:47347   pts_time:78.911667
+lavfi.scene_score=0.000041
+frame:624  pts:47368   pts_time:78.946667
+lavfi.scene_score=0.000072
+frame:625  pts:47371   pts_time:78.951667
+lavfi.scene_score=0.000038
+frame:626  pts:47377   pts_time:78.961667
+lavfi.scene_score=0.096181
+frame:627  pts:47380   pts_time:78.966667
+lavfi.scene_score=0.000112
+frame:628  pts:47383   pts_time:78.971667
+lavfi.scene_score=0.000202
+frame:629  pts:47388   pts_time:78.98
+lavfi.scene_score=0.000004
+frame:630  pts:47398   pts_time:78.996667
+lavfi.scene_score=0.000072
+frame:631  pts:47408   pts_time:79.013333
+lavfi.scene_score=0.000023
+frame:632  pts:47421   pts_time:79.035
+lavfi.scene_score=0.000046
+frame:633  pts:47439   pts_time:79.065
+lavfi.scene_score=0.000003
+frame:634  pts:47454   pts_time:79.09
+lavfi.scene_score=0.000063
+frame:635  pts:47464   pts_time:79.106667
+lavfi.scene_score=0.000016
+frame:636  pts:47467   pts_time:79.111667
+lavfi.scene_score=0.000015
+frame:637  pts:47477   pts_time:79.128333
+lavfi.scene_score=0.000337
+frame:638  pts:47494   pts_time:79.156667
+lavfi.scene_score=0.000099
+frame:639  pts:47496   pts_time:79.16
+lavfi.scene_score=0.000020
+frame:640  pts:47504   pts_time:79.173333
+lavfi.scene_score=0.000002
+frame:641  pts:47507   pts_time:79.178333
+lavfi.scene_score=0.000022
+frame:642  pts:47517   pts_time:79.195
+lavfi.scene_score=0.000019
+frame:643  pts:47671   pts_time:79.451667
+lavfi.scene_score=0.000005
+frame:644  pts:47693   pts_time:79.488333
+lavfi.scene_score=0.000039
+frame:645  pts:47719   pts_time:79.531667
+lavfi.scene_score=0.000005
+frame:646  pts:47738   pts_time:79.563333
+lavfi.scene_score=0.000003
+frame:647  pts:47761   pts_time:79.601667
+lavfi.scene_score=0.000003
+frame:648  pts:47881   pts_time:79.801667
+lavfi.scene_score=0.000002
+frame:649  pts:47903   pts_time:79.838333
+lavfi.scene_score=0.000040
+frame:650  pts:47926   pts_time:79.876667
+lavfi.scene_score=0.000000
+frame:651  pts:47948   pts_time:79.913333
+lavfi.scene_score=0.000000
+frame:652  pts:47971   pts_time:79.951667
+lavfi.scene_score=0.000001
+frame:653  pts:48273   pts_time:80.455
+lavfi.scene_score=0.000002
+frame:654  pts:48293   pts_time:80.488333
+lavfi.scene_score=0.000040
+frame:655  pts:48316   pts_time:80.526667
+lavfi.scene_score=0.000000
+frame:656  pts:48338   pts_time:80.563333
+lavfi.scene_score=0.000000
+frame:657  pts:48361   pts_time:80.601667
+lavfi.scene_score=0.000001
+frame:658  pts:48481   pts_time:80.801667
+lavfi.scene_score=0.000002
+frame:659  pts:48503   pts_time:80.838333
+lavfi.scene_score=0.000040
+frame:660  pts:48526   pts_time:80.876667
+lavfi.scene_score=0.000000
+frame:661  pts:48548   pts_time:80.913333
+lavfi.scene_score=0.000001
+frame:662  pts:48571   pts_time:80.951667
+lavfi.scene_score=0.000001
+frame:663  pts:48873   pts_time:81.455
+lavfi.scene_score=0.000002
+frame:664  pts:48893   pts_time:81.488333
+lavfi.scene_score=0.000040
+frame:665  pts:48916   pts_time:81.526667
+lavfi.scene_score=0.000000
+frame:666  pts:48938   pts_time:81.563333
+lavfi.scene_score=0.000411
+frame:667  pts:48961   pts_time:81.601667
+lavfi.scene_score=0.000167
+frame:668  pts:49081   pts_time:81.801667
+lavfi.scene_score=0.000016
+frame:669  pts:49106   pts_time:81.843333
+lavfi.scene_score=0.000048
+frame:670  pts:49126   pts_time:81.876667
+lavfi.scene_score=0.000033
+frame:671  pts:49148   pts_time:81.913333
+lavfi.scene_score=0.000014
+frame:672  pts:49171   pts_time:81.951667
+lavfi.scene_score=0.000045
+frame:673  pts:49473   pts_time:82.455
+lavfi.scene_score=0.000025
+frame:674  pts:49489   pts_time:82.481667
+lavfi.scene_score=0.000016
+frame:675  pts:49499   pts_time:82.498333
+lavfi.scene_score=0.000064
+frame:676  pts:49516   pts_time:82.526667
+lavfi.scene_score=0.000020
+frame:677  pts:49538   pts_time:82.563333
+lavfi.scene_score=0.000006
+frame:678  pts:49559   pts_time:82.598333
+lavfi.scene_score=0.000102
+frame:679  pts:49567   pts_time:82.611667
+lavfi.scene_score=0.000063
+frame:680  pts:49703   pts_time:82.838333
+lavfi.scene_score=0.000031
+frame:681  pts:49717   pts_time:82.861667
+lavfi.scene_score=0.000002
+frame:682  pts:49721   pts_time:82.868333
+lavfi.scene_score=0.000100
+frame:683  pts:49723   pts_time:82.871667
+lavfi.scene_score=0.000034
+frame:684  pts:49725   pts_time:82.875
+lavfi.scene_score=0.000038
+frame:685  pts:49728   pts_time:82.88
+lavfi.scene_score=0.000104
+frame:686  pts:49739   pts_time:82.898333
+lavfi.scene_score=0.000550
+frame:687  pts:49749   pts_time:82.915
+lavfi.scene_score=0.000580
+frame:688  pts:49761   pts_time:82.935
+lavfi.scene_score=0.000959
+frame:689  pts:49772   pts_time:82.953333
+lavfi.scene_score=0.000093
+frame:690  pts:49782   pts_time:82.97
+lavfi.scene_score=0.000082
+frame:691  pts:49792   pts_time:82.986667
+lavfi.scene_score=0.000028
+frame:692  pts:49802   pts_time:83.003333
+lavfi.scene_score=0.000222
+frame:693  pts:49812   pts_time:83.02
+lavfi.scene_score=0.000524
+frame:694  pts:49834   pts_time:83.056667
+lavfi.scene_score=0.000104
+frame:695  pts:49844   pts_time:83.073333
+lavfi.scene_score=0.000556
+frame:696  pts:49854   pts_time:83.09
+lavfi.scene_score=0.000125
+frame:697  pts:49864   pts_time:83.106667
+lavfi.scene_score=0.000043
+frame:698  pts:49874   pts_time:83.123333
+lavfi.scene_score=0.000038
+frame:699  pts:49884   pts_time:83.14
+lavfi.scene_score=0.000023
+frame:700  pts:49904   pts_time:83.173333
+lavfi.scene_score=0.000103
+frame:701  pts:49914   pts_time:83.19
+lavfi.scene_score=0.000121
+frame:702  pts:49924   pts_time:83.206667
+lavfi.scene_score=0.000063
+frame:703  pts:49935   pts_time:83.225
+lavfi.scene_score=0.000063
+frame:704  pts:49938   pts_time:83.23
+lavfi.scene_score=0.000015
+frame:705  pts:49965   pts_time:83.275
+lavfi.scene_score=0.000031
+frame:706  pts:50082   pts_time:83.47
+lavfi.scene_score=0.000004
+frame:707  pts:50100   pts_time:83.5
+lavfi.scene_score=0.000044
+frame:708  pts:50122   pts_time:83.536667
+lavfi.scene_score=0.000001
+frame:709  pts:50145   pts_time:83.575
+lavfi.scene_score=0.000002
+frame:710  pts:50167   pts_time:83.611667
+lavfi.scene_score=0.000001
+frame:711  pts:50331   pts_time:83.885
+lavfi.scene_score=0.000618
+frame:712  pts:50333   pts_time:83.888333
+lavfi.scene_score=0.000192
+frame:713  pts:50338   pts_time:83.896667
+lavfi.scene_score=0.001395
+frame:714  pts:50347   pts_time:83.911667
+lavfi.scene_score=0.001899
+frame:715  pts:50357   pts_time:83.928333
+lavfi.scene_score=0.000444
+frame:716  pts:50373   pts_time:83.955
+lavfi.scene_score=0.091414
+frame:717  pts:50379   pts_time:83.965
+lavfi.scene_score=0.000726
+frame:718  pts:50389   pts_time:83.981667
+lavfi.scene_score=0.000256
+frame:719  pts:50398   pts_time:83.996667
+lavfi.scene_score=0.000039
+frame:720  pts:50408   pts_time:84.013333
+lavfi.scene_score=0.000077
+frame:721  pts:50423   pts_time:84.038333
+lavfi.scene_score=0.000093
+frame:722  pts:50428   pts_time:84.046667
+lavfi.scene_score=0.000010
+frame:723  pts:50438   pts_time:84.063333
+lavfi.scene_score=0.000018
+frame:724  pts:50448   pts_time:84.08
+lavfi.scene_score=0.000284
+frame:725  pts:50458   pts_time:84.096667
+lavfi.scene_score=0.000103
+frame:726  pts:50468   pts_time:84.113333
+lavfi.scene_score=0.000018
+frame:727  pts:50478   pts_time:84.13
+lavfi.scene_score=0.000002
+frame:728  pts:50487   pts_time:84.145
+lavfi.scene_score=0.000026
+frame:729  pts:50497   pts_time:84.161667
+lavfi.scene_score=0.000020
+frame:730  pts:50507   pts_time:84.178333
+lavfi.scene_score=0.000010
+frame:731  pts:50622   pts_time:84.37
+lavfi.scene_score=0.000004
+frame:732  pts:50640   pts_time:84.4
+lavfi.scene_score=0.000006
+frame:733  pts:50665   pts_time:84.441667
+lavfi.scene_score=0.000037
+frame:734  pts:50686   pts_time:84.476667
+lavfi.scene_score=0.000007
+frame:735  pts:50705   pts_time:84.508333
+lavfi.scene_score=0.000001
+frame:736  pts:50727   pts_time:84.545
+lavfi.scene_score=0.000002
+frame:737  pts:50759   pts_time:84.598333
+lavfi.scene_score=0.000200
+frame:738  pts:50779   pts_time:84.631667
+lavfi.scene_score=0.000222
+frame:739  pts:50808   pts_time:84.68
+lavfi.scene_score=0.000016
+frame:740  pts:50828   pts_time:84.713333
+lavfi.scene_score=0.000000
+frame:741  pts:50849   pts_time:84.748333
+lavfi.scene_score=0.000162
+frame:742  pts:50858   pts_time:84.763333
+lavfi.scene_score=0.000074
+frame:743  pts:50888   pts_time:84.813333
+lavfi.scene_score=0.000082
+frame:744  pts:50898   pts_time:84.83
+lavfi.scene_score=0.000054
+frame:745  pts:50920   pts_time:84.866667
+lavfi.scene_score=0.000148
+frame:746  pts:50949   pts_time:84.915
+lavfi.scene_score=0.000082
+frame:747  pts:50968   pts_time:84.946667
+lavfi.scene_score=0.000142
+frame:748  pts:51270   pts_time:85.45
+lavfi.scene_score=0.000004
+frame:749  pts:51291   pts_time:85.485
+lavfi.scene_score=0.000039
+frame:750  pts:51313   pts_time:85.521667
+lavfi.scene_score=0.000001
+frame:751  pts:51336   pts_time:85.56
+lavfi.scene_score=0.000000
+frame:752  pts:51358   pts_time:85.596667
+lavfi.scene_score=0.000000
+frame:753  pts:51479   pts_time:85.798333
+lavfi.scene_score=0.000384
+frame:754  pts:51500   pts_time:85.833333
+lavfi.scene_score=0.000162
+frame:755  pts:51523   pts_time:85.871667
+lavfi.scene_score=0.000055
+frame:756  pts:51545   pts_time:85.908333
+lavfi.scene_score=0.000009
+frame:757  pts:51570   pts_time:85.95
+lavfi.scene_score=0.000027
+frame:758  pts:51868   pts_time:86.446667
+lavfi.scene_score=0.000018
+frame:759  pts:51889   pts_time:86.481667
+lavfi.scene_score=0.001220
+frame:760  pts:51898   pts_time:86.496667
+lavfi.scene_score=0.000065
+frame:761  pts:51913   pts_time:86.521667
+lavfi.scene_score=0.000020
+frame:762  pts:51935   pts_time:86.558333
+lavfi.scene_score=0.000024
+frame:763  pts:51958   pts_time:86.596667
+lavfi.scene_score=0.000024
+frame:764  pts:51998   pts_time:86.663333
+lavfi.scene_score=0.000033
+frame:765  pts:52007   pts_time:86.678333
+lavfi.scene_score=0.000022
+frame:766  pts:52017   pts_time:86.695
+lavfi.scene_score=0.000041
+frame:767  pts:52040   pts_time:86.733333
+lavfi.scene_score=0.092718
+frame:768  pts:52049   pts_time:86.748333
+lavfi.scene_score=0.000075
+frame:769  pts:52352   pts_time:87.253333
+lavfi.scene_score=0.000098
+frame:770  pts:52370   pts_time:87.283333
+lavfi.scene_score=0.000036
+frame:771  pts:52392   pts_time:87.32
+lavfi.scene_score=0.000090
+frame:772  pts:52414   pts_time:87.356667
+lavfi.scene_score=0.000009
+frame:773  pts:52438   pts_time:87.396667
+lavfi.scene_score=0.000014
+frame:774  pts:52557   pts_time:87.595
+lavfi.scene_score=0.000047
+frame:775  pts:52579   pts_time:87.631667
+lavfi.scene_score=0.000031
+frame:776  pts:52602   pts_time:87.67
+lavfi.scene_score=0.000000
+frame:777  pts:52624   pts_time:87.706667
+lavfi.scene_score=0.000006
+frame:778  pts:52647   pts_time:87.745
+lavfi.scene_score=0.000004
+frame:779  pts:52954   pts_time:88.256667
+lavfi.scene_score=0.000039
+frame:780  pts:52969   pts_time:88.281667
+lavfi.scene_score=0.000041
+frame:781  pts:52992   pts_time:88.32
+lavfi.scene_score=0.000003
+frame:782  pts:53014   pts_time:88.356667
+lavfi.scene_score=0.000367
+frame:783  pts:53037   pts_time:88.395
+lavfi.scene_score=0.000140
+frame:784  pts:53157   pts_time:88.595
+lavfi.scene_score=0.000027
+frame:785  pts:53179   pts_time:88.631667
+lavfi.scene_score=0.000044
+frame:786  pts:53206   pts_time:88.676667
+lavfi.scene_score=0.000022
+frame:787  pts:53224   pts_time:88.706667
+lavfi.scene_score=0.000034
+frame:788  pts:53247   pts_time:88.745
+lavfi.scene_score=0.000015
+frame:789  pts:53528   pts_time:89.213333
+lavfi.scene_score=0.000005
+frame:790  pts:53551   pts_time:89.251667
+lavfi.scene_score=0.000006
+frame:791  pts:53569   pts_time:89.281667
+lavfi.scene_score=0.000035
+frame:792  pts:53592   pts_time:89.32
+lavfi.scene_score=0.000002
+frame:793  pts:53599   pts_time:89.331667
+lavfi.scene_score=0.000040
+frame:794  pts:53607   pts_time:89.345
+lavfi.scene_score=0.000003
+frame:795  pts:53743   pts_time:89.571667
+lavfi.scene_score=0.000000
+frame:796  pts:53751   pts_time:89.585
+lavfi.scene_score=0.000006
+frame:797  pts:53760   pts_time:89.6
+lavfi.scene_score=0.000039
+frame:798  pts:53768   pts_time:89.613333
+lavfi.scene_score=0.000141
+frame:799  pts:53778   pts_time:89.63
+lavfi.scene_score=0.000308
+frame:800  pts:53797   pts_time:89.661667
+lavfi.scene_score=0.001767
+frame:801  pts:53808   pts_time:89.68
+lavfi.scene_score=0.000077
+frame:802  pts:53818   pts_time:89.696667
+lavfi.scene_score=0.000258
+frame:803  pts:53828   pts_time:89.713333
+lavfi.scene_score=0.000136
+frame:804  pts:53838   pts_time:89.73
+lavfi.scene_score=0.000032
+frame:805  pts:53848   pts_time:89.746667
+lavfi.scene_score=0.000427
+frame:806  pts:53860   pts_time:89.766667
+lavfi.scene_score=0.000268
+frame:807  pts:53870   pts_time:89.783333
+lavfi.scene_score=0.000692
+frame:808  pts:53880   pts_time:89.8
+lavfi.scene_score=0.000332
+frame:809  pts:53890   pts_time:89.816667
+lavfi.scene_score=0.000127
+frame:810  pts:53900   pts_time:89.833333
+lavfi.scene_score=0.000026
+frame:811  pts:53921   pts_time:89.868333
+lavfi.scene_score=0.000575
+frame:812  pts:53931   pts_time:89.885
+lavfi.scene_score=0.000287
+frame:813  pts:53941   pts_time:89.901667
+lavfi.scene_score=0.000150
+frame:814  pts:53951   pts_time:89.918333
+lavfi.scene_score=0.000014
+frame:815  pts:53961   pts_time:89.935
+lavfi.scene_score=0.000059
+frame:816  pts:53971   pts_time:89.951667
+lavfi.scene_score=0.000063
+frame:817  pts:53983   pts_time:89.971667
+lavfi.scene_score=0.000095
+frame:818  pts:53985   pts_time:89.975
+lavfi.scene_score=0.000043
+frame:819  pts:53997   pts_time:89.995
+lavfi.scene_score=0.000068
+frame:820  pts:54117   pts_time:90.195
+lavfi.scene_score=0.000058
+frame:821  pts:54140   pts_time:90.233333
+lavfi.scene_score=0.000019
+frame:822  pts:54164   pts_time:90.273333
+lavfi.scene_score=0.000002
+frame:823  pts:54185   pts_time:90.308333
+lavfi.scene_score=0.000011
+frame:824  pts:54207   pts_time:90.345
+lavfi.scene_score=0.000007
+frame:825  pts:54362   pts_time:90.603333
+lavfi.scene_score=0.000606
+frame:826  pts:54364   pts_time:90.606667
+lavfi.scene_score=0.000150
+frame:827  pts:54368   pts_time:90.613333
+lavfi.scene_score=0.001012
+frame:828  pts:54378   pts_time:90.63
+lavfi.scene_score=0.002223
+frame:829  pts:54388   pts_time:90.646667
+lavfi.scene_score=0.000337
+frame:830  pts:54398   pts_time:90.663333
+lavfi.scene_score=0.001215
+frame:831  pts:54408   pts_time:90.68
+lavfi.scene_score=0.000989
+frame:832  pts:54415   pts_time:90.691667
+lavfi.scene_score=0.088568
+frame:833  pts:54420   pts_time:90.7
+lavfi.scene_score=0.000387
+frame:834  pts:54430   pts_time:90.716667
+lavfi.scene_score=0.000113
+frame:835  pts:54438   pts_time:90.73
+lavfi.scene_score=0.000020
+frame:836  pts:54448   pts_time:90.746667
+lavfi.scene_score=0.000043
+frame:837  pts:54458   pts_time:90.763333
+lavfi.scene_score=0.000085
+frame:838  pts:54468   pts_time:90.78
+lavfi.scene_score=0.000014
+frame:839  pts:54478   pts_time:90.796667
+lavfi.scene_score=0.000016
+frame:840  pts:54488   pts_time:90.813333
+lavfi.scene_score=0.000306
+frame:841  pts:54498   pts_time:90.83
+lavfi.scene_score=0.000100
+frame:842  pts:54511   pts_time:90.851667
+lavfi.scene_score=0.000023
+frame:843  pts:54517   pts_time:90.861667
+lavfi.scene_score=0.000001
+frame:844  pts:54528   pts_time:90.88
+lavfi.scene_score=0.000025
+frame:845  pts:54538   pts_time:90.896667
+lavfi.scene_score=0.000017
+frame:846  pts:54653   pts_time:91.088333
+lavfi.scene_score=0.000011
+frame:847  pts:54671   pts_time:91.118333
+lavfi.scene_score=0.000002
+frame:848  pts:54693   pts_time:91.155
+lavfi.scene_score=0.000049
+frame:849  pts:54712   pts_time:91.186667
+lavfi.scene_score=0.000007
+frame:850  pts:54735   pts_time:91.225
+lavfi.scene_score=0.000009
+frame:851  pts:54757   pts_time:91.261667
+lavfi.scene_score=0.000001
+frame:852  pts:54800   pts_time:91.333333
+lavfi.scene_score=0.000204
+frame:853  pts:54807   pts_time:91.345
+lavfi.scene_score=0.000004
+frame:854  pts:54818   pts_time:91.363333
+lavfi.scene_score=0.000463
+frame:855  pts:54838   pts_time:91.396667
+lavfi.scene_score=0.000016
+frame:856  pts:54864   pts_time:91.44
+lavfi.scene_score=0.000000
+frame:857  pts:54878   pts_time:91.463333
+lavfi.scene_score=0.000162
+frame:858  pts:54898   pts_time:91.496667
+lavfi.scene_score=0.000074
+frame:859  pts:54918   pts_time:91.53
+lavfi.scene_score=0.000082
+frame:860  pts:54938   pts_time:91.563333
+lavfi.scene_score=0.000055
+frame:861  pts:54958   pts_time:91.596667
+lavfi.scene_score=0.000148
+frame:862  pts:54978   pts_time:91.63
+lavfi.scene_score=0.000080
+frame:863  pts:54998   pts_time:91.663333
+lavfi.scene_score=0.000142
+frame:864  pts:55298   pts_time:92.163333
+lavfi.scene_score=0.000003
+frame:865  pts:55321   pts_time:92.201667
+lavfi.scene_score=0.000040
+frame:866  pts:55343   pts_time:92.238333
+lavfi.scene_score=0.000001
+frame:867  pts:55366   pts_time:92.276667
+lavfi.scene_score=0.000000
+frame:868  pts:55388   pts_time:92.313333
+lavfi.scene_score=0.000000
+frame:869  pts:55508   pts_time:92.513333
+lavfi.scene_score=0.000377
+frame:870  pts:55530   pts_time:92.55
+lavfi.scene_score=0.000170
+frame:871  pts:55553   pts_time:92.588333
+lavfi.scene_score=0.000056
+frame:872  pts:55576   pts_time:92.626667
+lavfi.scene_score=0.000008
+frame:873  pts:55598   pts_time:92.663333
+lavfi.scene_score=0.000035
+frame:874  pts:55830   pts_time:93.05
+lavfi.scene_score=0.001240
+frame:875  pts:55898   pts_time:93.163333
+lavfi.scene_score=0.000029
+frame:876  pts:55921   pts_time:93.201667
+lavfi.scene_score=0.000038
+frame:877  pts:55927   pts_time:93.211667
+lavfi.scene_score=0.000052
+frame:878  pts:55945   pts_time:93.241667
+lavfi.scene_score=0.000029
+frame:879  pts:55947   pts_time:93.245
+lavfi.scene_score=0.000060
+frame:880  pts:55965   pts_time:93.275
+lavfi.scene_score=0.000022
+frame:881  pts:55971   pts_time:93.285
+lavfi.scene_score=0.084810
+frame:882  pts:55975   pts_time:93.291667
+lavfi.scene_score=0.000307
+frame:883  pts:55978   pts_time:93.296667
+lavfi.scene_score=0.000052
+frame:884  pts:55983   pts_time:93.305
+lavfi.scene_score=0.000020
+frame:885  pts:56001   pts_time:93.335
+lavfi.scene_score=0.000061
+frame:886  pts:56011   pts_time:93.351667
+lavfi.scene_score=0.000018
+frame:887  pts:56027   pts_time:93.378333
+lavfi.scene_score=0.000035
+frame:888  pts:56046   pts_time:93.41
+lavfi.scene_score=0.000008
+frame:889  pts:56060   pts_time:93.433333
+lavfi.scene_score=0.000002
+frame:890  pts:56062   pts_time:93.436667
+lavfi.scene_score=0.000021
+frame:891  pts:56071   pts_time:93.451667
+lavfi.scene_score=0.000009
+frame:892  pts:56086   pts_time:93.476667
+lavfi.scene_score=0.000002
+frame:893  pts:56088   pts_time:93.48
+lavfi.scene_score=0.000005
+frame:894  pts:56097   pts_time:93.495
+lavfi.scene_score=0.000006
+frame:895  pts:56107   pts_time:93.511667
+lavfi.scene_score=0.000004
+frame:896  pts:56117   pts_time:93.528333
+lavfi.scene_score=0.000000
+frame:897  pts:56267   pts_time:93.778333
+lavfi.scene_score=0.000003
+frame:898  pts:56289   pts_time:93.815
+lavfi.scene_score=0.000377
+frame:899  pts:56312   pts_time:93.853333
+lavfi.scene_score=0.000197
+frame:900  pts:56334   pts_time:93.89
+lavfi.scene_score=0.000095
+frame:901  pts:56357   pts_time:93.928333
+lavfi.scene_score=0.000009
+frame:902  pts:56482   pts_time:94.136667
+lavfi.scene_score=0.000000
+frame:903  pts:56499   pts_time:94.165
+lavfi.scene_score=0.000031
+frame:904  pts:56522   pts_time:94.203333
+lavfi.scene_score=0.000047
+frame:905  pts:56550   pts_time:94.25
+lavfi.scene_score=0.000004
+frame:906  pts:56567   pts_time:94.278333
+lavfi.scene_score=0.000019
+frame:907  pts:56867   pts_time:94.778333
+lavfi.scene_score=0.000047
+frame:908  pts:56889   pts_time:94.815
+lavfi.scene_score=0.000026
+frame:909  pts:56912   pts_time:94.853333
+lavfi.scene_score=0.000002
+frame:910  pts:56943   pts_time:94.905
+lavfi.scene_score=0.000009
+frame:911  pts:56957   pts_time:94.928333
+lavfi.scene_score=0.000022
+frame:912  pts:57077   pts_time:95.128333
+lavfi.scene_score=0.000014
+frame:913  pts:57099   pts_time:95.165
+lavfi.scene_score=0.000039
+frame:914  pts:57127   pts_time:95.211667
+lavfi.scene_score=0.000003
+frame:915  pts:57144   pts_time:95.24
+lavfi.scene_score=0.000002
+frame:916  pts:57167   pts_time:95.278333
+lavfi.scene_score=0.000000
+frame:917  pts:57247   pts_time:95.411667
+lavfi.scene_score=0.000016
+frame:918  pts:57257   pts_time:95.428333
+lavfi.scene_score=0.000001
+frame:919  pts:57267   pts_time:95.445
+lavfi.scene_score=0.000004
+frame:920  pts:57277   pts_time:95.461667
+lavfi.scene_score=0.000000
+frame:921  pts:57438   pts_time:95.73
+lavfi.scene_score=0.000009
+frame:922  pts:57448   pts_time:95.746667
+lavfi.scene_score=0.000001
+frame:923  pts:57475   pts_time:95.791667
+lavfi.scene_score=0.094184
+frame:924  pts:57497   pts_time:95.828333
+lavfi.scene_score=0.007329
+frame:925  pts:57508   pts_time:95.846667
+lavfi.scene_score=0.000057
+frame:926  pts:57515   pts_time:95.858333
+lavfi.scene_score=0.000121
+frame:927  pts:57525   pts_time:95.875
+lavfi.scene_score=0.001526
+frame:928  pts:57536   pts_time:95.893333
+lavfi.scene_score=0.005038
+frame:929  pts:57543   pts_time:95.905
+lavfi.scene_score=0.003119
+frame:930  pts:57547   pts_time:95.911667
+lavfi.scene_score=0.000057
+frame:931  pts:57560   pts_time:95.933333
+lavfi.scene_score=0.006404
+frame:932  pts:57569   pts_time:95.948333
+lavfi.scene_score=0.002941
+frame:933  pts:57573   pts_time:95.955
+lavfi.scene_score=0.000031
+frame:934  pts:57579   pts_time:95.965
+lavfi.scene_score=0.010773
+frame:935  pts:57582   pts_time:95.97
+lavfi.scene_score=0.000029
+frame:936  pts:57589   pts_time:95.981667
+lavfi.scene_score=0.016691
+frame:937  pts:57593   pts_time:95.988333
+lavfi.scene_score=0.000028
+frame:938  pts:57598   pts_time:95.996667
+lavfi.scene_score=0.019600
+frame:939  pts:57609   pts_time:96.015
+lavfi.scene_score=0.004011
+frame:940  pts:57620   pts_time:96.033333
+lavfi.scene_score=0.000768
+frame:941  pts:57622   pts_time:96.036667
+lavfi.scene_score=0.000027
+frame:942  pts:57634   pts_time:96.056667
+lavfi.scene_score=0.021648
+frame:943  pts:57641   pts_time:96.068333
+lavfi.scene_score=0.003081
+frame:944  pts:57650   pts_time:96.083333
+lavfi.scene_score=0.002438
+frame:945  pts:57660   pts_time:96.1
+lavfi.scene_score=0.002100
+frame:946  pts:57670   pts_time:96.116667
+lavfi.scene_score=0.002960
+frame:947  pts:57681   pts_time:96.135
+lavfi.scene_score=0.003409
+frame:948  pts:57691   pts_time:96.151667
+lavfi.scene_score=0.002606
+frame:949  pts:57700   pts_time:96.166667
+lavfi.scene_score=0.002131
+frame:950  pts:57710   pts_time:96.183333
+lavfi.scene_score=0.000953
+frame:951  pts:57720   pts_time:96.2
+lavfi.scene_score=0.000089
+frame:952  pts:57730   pts_time:96.216667
+lavfi.scene_score=0.000220
+frame:953  pts:57747   pts_time:96.245
+lavfi.scene_score=0.000026
+frame:954  pts:57751   pts_time:96.251667
+lavfi.scene_score=0.000037
+frame:955  pts:57753   pts_time:96.255
+lavfi.scene_score=0.000117
+frame:956  pts:57756   pts_time:96.26
+lavfi.scene_score=0.000030
+frame:957  pts:57759   pts_time:96.265
+lavfi.scene_score=0.000005
+frame:958  pts:57770   pts_time:96.283333
+lavfi.scene_score=0.001636
+frame:959  pts:57779   pts_time:96.298333
+lavfi.scene_score=0.000029
+frame:960  pts:57789   pts_time:96.315
+lavfi.scene_score=0.000546
+frame:961  pts:57793   pts_time:96.321667
+lavfi.scene_score=0.000015
+frame:962  pts:57799   pts_time:96.331667
+lavfi.scene_score=0.000804
+frame:963  pts:57801   pts_time:96.335
+lavfi.scene_score=0.000042
+frame:964  pts:57810   pts_time:96.35
+lavfi.scene_score=0.000541
+frame:965  pts:57819   pts_time:96.365
+lavfi.scene_score=0.000157
+frame:966  pts:57829   pts_time:96.381667
+lavfi.scene_score=0.000142
+frame:967  pts:57839   pts_time:96.398333
+lavfi.scene_score=0.000089
+frame:968  pts:57849   pts_time:96.415
+lavfi.scene_score=0.000061
+frame:969  pts:57863   pts_time:96.438333
+lavfi.scene_score=0.000029
+frame:970  pts:57873   pts_time:96.455
+lavfi.scene_score=0.000047
+frame:971  pts:57885   pts_time:96.475
+lavfi.scene_score=0.000048
+frame:972  pts:57893   pts_time:96.488333
+lavfi.scene_score=0.000018
+frame:973  pts:57903   pts_time:96.505
+lavfi.scene_score=0.000018
+frame:974  pts:57913   pts_time:96.521667
+lavfi.scene_score=0.000006
+frame:975  pts:57919   pts_time:96.531667
+lavfi.scene_score=0.000008
+frame:976  pts:57934   pts_time:96.556667
+lavfi.scene_score=0.000034
+frame:977  pts:57936   pts_time:96.56
+lavfi.scene_score=0.000017
+frame:978  pts:57938   pts_time:96.563333
+lavfi.scene_score=0.000017
+frame:979  pts:57949   pts_time:96.581667
+lavfi.scene_score=0.000022
+frame:980  pts:57959   pts_time:96.598333
+lavfi.scene_score=0.000028
+frame:981  pts:57969   pts_time:96.615
+lavfi.scene_score=0.000013
+frame:982  pts:57979   pts_time:96.631667
+lavfi.scene_score=0.000008
+frame:983  pts:57994   pts_time:96.656667
+lavfi.scene_score=0.000515
+frame:984  pts:57999   pts_time:96.665
+lavfi.scene_score=0.000245
+frame:985  pts:58009   pts_time:96.681667
+lavfi.scene_score=0.000078
+frame:986  pts:58019   pts_time:96.698333
+lavfi.scene_score=0.000010
+frame:987  pts:58029   pts_time:96.715
+lavfi.scene_score=0.000046
+frame:988  pts:58043   pts_time:96.738333
+lavfi.scene_score=0.000002
+frame:989  pts:58193   pts_time:96.988333
+lavfi.scene_score=0.000067
+frame:990  pts:58488   pts_time:97.48
+lavfi.scene_score=0.000013
+frame:991  pts:58494   pts_time:97.49
+lavfi.scene_score=0.000254
+frame:992  pts:58504   pts_time:97.506667
+lavfi.scene_score=0.000379
+frame:993  pts:58513   pts_time:97.521667
+lavfi.scene_score=0.000116
+frame:994  pts:58523   pts_time:97.538333
+lavfi.scene_score=0.000241
+frame:995  pts:58533   pts_time:97.555
+lavfi.scene_score=0.000085
+frame:996  pts:58543   pts_time:97.571667
+lavfi.scene_score=0.000002
+frame:997  pts:58553   pts_time:97.588333
+lavfi.scene_score=0.000058
+frame:998  pts:58563   pts_time:97.605
+lavfi.scene_score=0.000014
+frame:999  pts:58614   pts_time:97.69
+lavfi.scene_score=0.097987
+frame:1000 pts:58622   pts_time:97.703333
+lavfi.scene_score=0.014724
+frame:1001 pts:58632   pts_time:97.72
+lavfi.scene_score=0.006415
+frame:1002 pts:58639   pts_time:97.731667
+lavfi.scene_score=0.006746
+frame:1003 pts:58645   pts_time:97.741667
+lavfi.scene_score=0.005983
+frame:1004 pts:58650   pts_time:97.75
+lavfi.scene_score=0.000097
+frame:1005 pts:58655   pts_time:97.758333
+lavfi.scene_score=0.000032
+frame:1006 pts:58660   pts_time:97.766667
+lavfi.scene_score=0.005150
+frame:1007 pts:58665   pts_time:97.775
+lavfi.scene_score=0.000975
+frame:1008 pts:58670   pts_time:97.783333
+lavfi.scene_score=0.000079
+frame:1009 pts:58675   pts_time:97.791667
+lavfi.scene_score=0.003145
+frame:1010 pts:58689   pts_time:97.815
+lavfi.scene_score=0.000361
+frame:1011 pts:58693   pts_time:97.821667
+lavfi.scene_score=0.000152
+frame:1012 pts:58698   pts_time:97.83
+lavfi.scene_score=0.004219
+frame:1013 pts:58706   pts_time:97.843333
+lavfi.scene_score=0.000141
+frame:1014 pts:58711   pts_time:97.851667
+lavfi.scene_score=0.003663
+frame:1015 pts:58716   pts_time:97.86
+lavfi.scene_score=0.000153
+frame:1016 pts:58721   pts_time:97.868333
+lavfi.scene_score=0.000085
+frame:1017 pts:58726   pts_time:97.876667
+lavfi.scene_score=0.003258
+frame:1018 pts:58730   pts_time:97.883333
+lavfi.scene_score=0.000068
+frame:1019 pts:58734   pts_time:97.89
+lavfi.scene_score=0.002077
+frame:1020 pts:58738   pts_time:97.896667
+lavfi.scene_score=0.000064
+frame:1021 pts:58742   pts_time:97.903333
+lavfi.scene_score=0.000008
+frame:1022 pts:58746   pts_time:97.91
+lavfi.scene_score=0.001028
+frame:1023 pts:58750   pts_time:97.916667
+lavfi.scene_score=0.000051
+frame:1024 pts:58753   pts_time:97.921667
+lavfi.scene_score=0.001018
+frame:1025 pts:58756   pts_time:97.926667
+lavfi.scene_score=0.000024
+frame:1026 pts:58765   pts_time:97.941667
+lavfi.scene_score=0.001146
+frame:1027 pts:58768   pts_time:97.946667
+lavfi.scene_score=0.000051
+frame:1028 pts:58770   pts_time:97.95
+lavfi.scene_score=0.000024
+frame:1029 pts:58773   pts_time:97.955
+lavfi.scene_score=0.001128
+frame:1030 pts:58776   pts_time:97.96
+lavfi.scene_score=0.000012
+frame:1031 pts:58778   pts_time:97.963333
+lavfi.scene_score=0.000000
+frame:1032 pts:58780   pts_time:97.966667
+lavfi.scene_score=0.000007
+frame:1033 pts:58783   pts_time:97.971667
+lavfi.scene_score=0.001010
+frame:1034 pts:58788   pts_time:97.98
+lavfi.scene_score=0.000015
+frame:1035 pts:58790   pts_time:97.983333
+lavfi.scene_score=0.000000
+frame:1036 pts:58798   pts_time:97.996667
+lavfi.scene_score=0.000993
+frame:1037 pts:58801   pts_time:98.001667
+lavfi.scene_score=0.000028
+frame:1038 pts:58808   pts_time:98.013333
+lavfi.scene_score=0.000977
+frame:1039 pts:58810   pts_time:98.016667
+lavfi.scene_score=0.000012
+frame:1040 pts:58818   pts_time:98.03
+lavfi.scene_score=0.000915
+frame:1041 pts:58821   pts_time:98.035
+lavfi.scene_score=0.000416
+frame:1042 pts:58835   pts_time:98.058333
+lavfi.scene_score=0.000884
+frame:1043 pts:58837   pts_time:98.061667
+lavfi.scene_score=0.000052
+frame:1044 pts:58839   pts_time:98.065
+lavfi.scene_score=0.000002
+frame:1045 pts:58848   pts_time:98.08
+lavfi.scene_score=0.000528
+frame:1046 pts:58850   pts_time:98.083333
+lavfi.scene_score=0.000112
+frame:1047 pts:58858   pts_time:98.096667
+lavfi.scene_score=0.000274
+frame:1048 pts:58860   pts_time:98.1
+lavfi.scene_score=0.000045
+frame:1049 pts:58868   pts_time:98.113333
+lavfi.scene_score=0.000362
+frame:1050 pts:58870   pts_time:98.116667
+lavfi.scene_score=0.000050
+frame:1051 pts:58878   pts_time:98.13
+lavfi.scene_score=0.000241
+frame:1052 pts:58880   pts_time:98.133333
+lavfi.scene_score=0.000034
+frame:1053 pts:58888   pts_time:98.146667
+lavfi.scene_score=0.000264
+frame:1054 pts:58890   pts_time:98.15
+lavfi.scene_score=0.000034
+frame:1055 pts:58903   pts_time:98.171667
+lavfi.scene_score=0.000324
+frame:1056 pts:58905   pts_time:98.175
+lavfi.scene_score=0.000028
+frame:1057 pts:58909   pts_time:98.181667
+lavfi.scene_score=0.000005
+frame:1058 pts:58919   pts_time:98.198333
+lavfi.scene_score=0.000234
+frame:1059 pts:58930   pts_time:98.216667
+lavfi.scene_score=0.000100
+frame:1060 pts:58939   pts_time:98.231667
+lavfi.scene_score=0.000000
+frame:1061 pts:58951   pts_time:98.251667
+lavfi.scene_score=0.000021
+frame:1062 pts:58959   pts_time:98.265
+lavfi.scene_score=0.000060
+frame:1063 pts:58970   pts_time:98.283333
+lavfi.scene_score=0.000036
+frame:1064 pts:58972   pts_time:98.286667
+lavfi.scene_score=0.000013
+frame:1065 pts:58978   pts_time:98.296667
+lavfi.scene_score=0.000074
+frame:1066 pts:58989   pts_time:98.315
+lavfi.scene_score=0.000031
+frame:1067 pts:58999   pts_time:98.331667
+lavfi.scene_score=0.000042
+frame:1068 pts:59009   pts_time:98.348333
+lavfi.scene_score=0.000021
+frame:1069 pts:59019   pts_time:98.365
+lavfi.scene_score=0.000036
+frame:1070 pts:59038   pts_time:98.396667
+lavfi.scene_score=0.000201
+frame:1071 pts:59040   pts_time:98.4
+lavfi.scene_score=0.000096
+frame:1072 pts:59042   pts_time:98.403333
+lavfi.scene_score=0.000082
+frame:1073 pts:59047   pts_time:98.411667
+lavfi.scene_score=0.000036
+frame:1074 pts:59049   pts_time:98.415
+lavfi.scene_score=0.000027
+frame:1075 pts:59065   pts_time:98.441667
+lavfi.scene_score=0.000037
+frame:1076 pts:59067   pts_time:98.445
+lavfi.scene_score=0.000048
+frame:1077 pts:59073   pts_time:98.455
+lavfi.scene_score=0.000006
+frame:1078 pts:59075   pts_time:98.458333
+lavfi.scene_score=0.000010
+frame:1079 pts:59077   pts_time:98.461667
+lavfi.scene_score=0.000002
+frame:1080 pts:59088   pts_time:98.48
+lavfi.scene_score=0.000027
+frame:1081 pts:59091   pts_time:98.485
+lavfi.scene_score=0.000010
+frame:1082 pts:59101   pts_time:98.501667
+lavfi.scene_score=0.000014
+frame:1083 pts:59112   pts_time:98.52
+lavfi.scene_score=0.000010
+frame:1084 pts:59122   pts_time:98.536667
+lavfi.scene_score=0.000001
+frame:1085 pts:59132   pts_time:98.553333
+lavfi.scene_score=0.000014
+frame:1086 pts:59142   pts_time:98.57
+lavfi.scene_score=0.000003
+frame:1087 pts:59152   pts_time:98.586667
+lavfi.scene_score=0.000007
+frame:1088 pts:59163   pts_time:98.605
+lavfi.scene_score=0.000001
+frame:1089 pts:59165   pts_time:98.608333
+lavfi.scene_score=0.000005
+frame:1090 pts:59173   pts_time:98.621667
+lavfi.scene_score=0.000042
+frame:1091 pts:59184   pts_time:98.64
+lavfi.scene_score=0.000018
+frame:1092 pts:59194   pts_time:98.656667
+lavfi.scene_score=0.000004
+frame:1093 pts:59204   pts_time:98.673333
+lavfi.scene_score=0.000039
+frame:1094 pts:59214   pts_time:98.69
+lavfi.scene_score=0.000015
+frame:1095 pts:59223   pts_time:98.705
+lavfi.scene_score=0.000043
+frame:1096 pts:59234   pts_time:98.723333
+lavfi.scene_score=0.000014
+frame:1097 pts:59244   pts_time:98.74
+lavfi.scene_score=0.000040
+frame:1098 pts:59254   pts_time:98.756667
+lavfi.scene_score=0.000013
+frame:1099 pts:59259   pts_time:98.765
+lavfi.scene_score=0.000157
+frame:1100 pts:59269   pts_time:98.781667
+lavfi.scene_score=0.000018
+frame:1101 pts:59279   pts_time:98.798333
+lavfi.scene_score=0.000046
+frame:1102 pts:59281   pts_time:98.801667
+lavfi.scene_score=0.000000
+frame:1103 pts:59288   pts_time:98.813333
+lavfi.scene_score=0.000025
+frame:1104 pts:59299   pts_time:98.831667
+lavfi.scene_score=0.000026
+frame:1105 pts:59309   pts_time:98.848333
+lavfi.scene_score=0.000048
+frame:1106 pts:59319   pts_time:98.865
+lavfi.scene_score=0.000004
+frame:1107 pts:59329   pts_time:98.881667
+lavfi.scene_score=0.000019
+frame:1108 pts:59344   pts_time:98.906667
+lavfi.scene_score=0.000016
+frame:1109 pts:59346   pts_time:98.91
+lavfi.scene_score=0.000014
+frame:1110 pts:59348   pts_time:98.913333
+lavfi.scene_score=0.000003
+frame:1111 pts:59358   pts_time:98.93
+lavfi.scene_score=0.000010
+frame:1112 pts:59369   pts_time:98.948333
+lavfi.scene_score=0.000019
+frame:1113 pts:59379   pts_time:98.965
+lavfi.scene_score=0.000005
+frame:1114 pts:59389   pts_time:98.981667
+lavfi.scene_score=0.000000
+frame:1115 pts:59404   pts_time:99.006667
+lavfi.scene_score=0.000002
+frame:1116 pts:59414   pts_time:99.023333
+lavfi.scene_score=0.000002
+frame:1117 pts:59432   pts_time:99.053333
+lavfi.scene_score=0.000000
+frame:1118 pts:59436   pts_time:99.06
+lavfi.scene_score=0.000001
+frame:1119 pts:59548   pts_time:99.246667
+lavfi.scene_score=0.000001
+frame:1120 pts:59561   pts_time:99.268333
+lavfi.scene_score=0.000040
+frame:1121 pts:59584   pts_time:99.306667
+lavfi.scene_score=0.000001
+frame:1122 pts:59605   pts_time:99.341667
+lavfi.scene_score=0.000000
+frame:1123 pts:59628   pts_time:99.38
+lavfi.scene_score=0.000000
+frame:1124 pts:59748   pts_time:99.58
+lavfi.scene_score=0.000013
+frame:1125 pts:59770   pts_time:99.616667
+lavfi.scene_score=0.000039
+frame:1126 pts:59793   pts_time:99.655
+lavfi.scene_score=0.000000
+frame:1127 pts:59815   pts_time:99.691667
+lavfi.scene_score=0.000000
+frame:1128 pts:59838   pts_time:99.73
+lavfi.scene_score=0.000155
+frame:1129 pts:60138   pts_time:100.23
+lavfi.scene_score=0.000056
+frame:1130 pts:60160   pts_time:100.266667
+lavfi.scene_score=0.000066
+frame:1131 pts:60183   pts_time:100.305
+lavfi.scene_score=0.000001
+frame:1132 pts:60205   pts_time:100.341667
+lavfi.scene_score=0.000025
+frame:1133 pts:60228   pts_time:100.38
+lavfi.scene_score=0.000023
+frame:1134 pts:60348   pts_time:100.58
+lavfi.scene_score=0.000048
+frame:1135 pts:60370   pts_time:100.616667
+lavfi.scene_score=0.000035
+frame:1136 pts:60393   pts_time:100.655
+lavfi.scene_score=0.000020
+frame:1137 pts:60415   pts_time:100.691667
+lavfi.scene_score=0.000016
+frame:1138 pts:60438   pts_time:100.73
+lavfi.scene_score=0.000015
+frame:1139 pts:60477   pts_time:100.795
+lavfi.scene_score=0.000030
+frame:1140 pts:60486   pts_time:100.81
+lavfi.scene_score=0.000080
+frame:1141 pts:60495   pts_time:100.825
+lavfi.scene_score=0.141704
+frame:1142 pts:60505   pts_time:100.841667
+lavfi.scene_score=0.023801
+frame:1143 pts:60514   pts_time:100.856667
+lavfi.scene_score=0.009854
+frame:1144 pts:60523   pts_time:100.871667
+lavfi.scene_score=0.002083
+frame:1145 pts:60533   pts_time:100.888333
+lavfi.scene_score=0.007361
+frame:1146 pts:60538   pts_time:100.896667
+lavfi.scene_score=0.020205
+frame:1147 pts:60542   pts_time:100.903333
+lavfi.scene_score=0.007903
+frame:1148 pts:60547   pts_time:100.911667
+lavfi.scene_score=0.008372
+frame:1149 pts:60557   pts_time:100.928333
+lavfi.scene_score=0.023498
+frame:1150 pts:60567   pts_time:100.945
+lavfi.scene_score=0.004375
+frame:1151 pts:60571   pts_time:100.951667
+lavfi.scene_score=0.069153
+frame:1152 pts:60577   pts_time:100.961667
+lavfi.scene_score=0.027849
+frame:1153 pts:60588   pts_time:100.98
+lavfi.scene_score=0.007483
+frame:1154 pts:60592   pts_time:100.986667
+lavfi.scene_score=0.045695
+frame:1155 pts:60597   pts_time:100.995
+lavfi.scene_score=0.009653
+frame:1156 pts:60608   pts_time:101.013333
+lavfi.scene_score=0.021492
+frame:1157 pts:60613   pts_time:101.021667
+lavfi.scene_score=0.036773
+frame:1158 pts:60620   pts_time:101.033333
+lavfi.scene_score=0.009620
+frame:1159 pts:60623   pts_time:101.038333
+lavfi.scene_score=0.000014
+frame:1160 pts:60634   pts_time:101.056667
+lavfi.scene_score=0.033648
+frame:1161 pts:60637   pts_time:101.061667
+lavfi.scene_score=0.004231
+frame:1162 pts:60648   pts_time:101.08
+lavfi.scene_score=0.005696
+frame:1163 pts:60657   pts_time:101.095
+lavfi.scene_score=0.010181
+frame:1164 pts:60668   pts_time:101.113333
+lavfi.scene_score=0.005043
+frame:1165 pts:60677   pts_time:101.128333
+lavfi.scene_score=0.001149
+frame:1166 pts:60688   pts_time:101.146667
+lavfi.scene_score=0.007223
+frame:1167 pts:60698   pts_time:101.163333
+lavfi.scene_score=0.000768
+frame:1168 pts:60707   pts_time:101.178333
+lavfi.scene_score=0.001351
+frame:1169 pts:60717   pts_time:101.195
+lavfi.scene_score=0.001082
+frame:1170 pts:60721   pts_time:101.201667
+lavfi.scene_score=0.004839
+frame:1171 pts:60725   pts_time:101.208333
+lavfi.scene_score=0.001372
+frame:1172 pts:60729   pts_time:101.215
+lavfi.scene_score=0.000606
+frame:1173 pts:60731   pts_time:101.218333
+lavfi.scene_score=0.001501
+frame:1174 pts:60739   pts_time:101.231667
+lavfi.scene_score=0.002503
+frame:1175 pts:60751   pts_time:101.251667
+lavfi.scene_score=0.000324
+frame:1176 pts:60759   pts_time:101.265
+lavfi.scene_score=0.000060
+frame:1177 pts:60769   pts_time:101.281667
+lavfi.scene_score=0.001224
+frame:1178 pts:60779   pts_time:101.298333
+lavfi.scene_score=0.000634
+frame:1179 pts:60790   pts_time:101.316667
+lavfi.scene_score=0.000313
+frame:1180 pts:60800   pts_time:101.333333
+lavfi.scene_score=0.000681
+frame:1181 pts:60811   pts_time:101.351667
+lavfi.scene_score=0.000077
+frame:1182 pts:60821   pts_time:101.368333
+lavfi.scene_score=0.000513
+frame:1183 pts:60831   pts_time:101.385
+lavfi.scene_score=0.000144
+frame:1184 pts:60841   pts_time:101.401667
+lavfi.scene_score=0.000280
+frame:1185 pts:60850   pts_time:101.416667
+lavfi.scene_score=0.000024
+frame:1186 pts:60865   pts_time:101.441667
+lavfi.scene_score=0.003918
+frame:1187 pts:60873   pts_time:101.455
+lavfi.scene_score=0.000050
+frame:1188 pts:60880   pts_time:101.466667
+lavfi.scene_score=0.000000
+frame:1189 pts:60888   pts_time:101.48
+lavfi.scene_score=0.000000
+frame:1190 pts:60899   pts_time:101.498333
+lavfi.scene_score=0.000126
+frame:1191 pts:60908   pts_time:101.513333
+lavfi.scene_score=0.000000
+frame:1192 pts:60918   pts_time:101.53
+lavfi.scene_score=0.000000
+frame:1193 pts:60928   pts_time:101.546667
+lavfi.scene_score=0.000041
+frame:1194 pts:60938   pts_time:101.563333
+lavfi.scene_score=0.000000
+frame:1195 pts:60948   pts_time:101.58
+lavfi.scene_score=0.000001
+frame:1196 pts:60962   pts_time:101.603333
+lavfi.scene_score=0.000126
+frame:1197 pts:60972   pts_time:101.62
+lavfi.scene_score=0.000000
+frame:1198 pts:60985   pts_time:101.641667
+lavfi.scene_score=0.000042
+frame:1199 pts:60992   pts_time:101.653333
+lavfi.scene_score=0.000001
+frame:1200 pts:61002   pts_time:101.67
+lavfi.scene_score=0.000000
+frame:1201 pts:61012   pts_time:101.686667
+lavfi.scene_score=0.000124
+frame:1202 pts:61041   pts_time:101.735
+lavfi.scene_score=0.000041
+frame:1203 pts:61071   pts_time:101.785
+lavfi.scene_score=0.000087
+frame:1204 pts:61102   pts_time:101.836667
+lavfi.scene_score=0.000042
+frame:1205 pts:61131   pts_time:101.885
+lavfi.scene_score=0.000083
+frame:1206 pts:61161   pts_time:101.935
+lavfi.scene_score=0.000042
+frame:1207 pts:61191   pts_time:101.985
+lavfi.scene_score=0.000087
+frame:1208 pts:61227   pts_time:102.045
+lavfi.scene_score=0.000044
+frame:1209 pts:61239   pts_time:102.065
+lavfi.scene_score=0.649223
+frame:1210 pts:61242   pts_time:102.07
+lavfi.scene_score=0.027711
+frame:1211 pts:61245   pts_time:102.075
+lavfi.scene_score=0.002440
+frame:1212 pts:61254   pts_time:102.09
+lavfi.scene_score=0.028161
+frame:1213 pts:61260   pts_time:102.1
+lavfi.scene_score=0.004035
+frame:1214 pts:61271   pts_time:102.118333
+lavfi.scene_score=0.004908
+frame:1215 pts:61281   pts_time:102.135
+lavfi.scene_score=0.003227
+frame:1216 pts:61291   pts_time:102.151667
+lavfi.scene_score=0.003236
+frame:1217 pts:61301   pts_time:102.168333
+lavfi.scene_score=0.006528
+frame:1218 pts:61311   pts_time:102.185
+lavfi.scene_score=0.003139
+frame:1219 pts:61321   pts_time:102.201667
+lavfi.scene_score=0.002277
+frame:1220 pts:61330   pts_time:102.216667
+lavfi.scene_score=0.005320
+frame:1221 pts:61340   pts_time:102.233333
+lavfi.scene_score=0.002207
+frame:1222 pts:61352   pts_time:102.253333
+lavfi.scene_score=0.003462
+frame:1223 pts:61360   pts_time:102.266667
+lavfi.scene_score=0.000760
+frame:1224 pts:61370   pts_time:102.283333
+lavfi.scene_score=0.002817
+frame:1225 pts:61380   pts_time:102.3
+lavfi.scene_score=0.001587
+frame:1226 pts:61390   pts_time:102.316667
+lavfi.scene_score=0.000379
+frame:1227 pts:61404   pts_time:102.34
+lavfi.scene_score=0.000143
+frame:1228 pts:61409   pts_time:102.348333
+lavfi.scene_score=0.000260
+frame:1229 pts:61420   pts_time:102.366667
+lavfi.scene_score=0.000296
+frame:1230 pts:61430   pts_time:102.383333
+lavfi.scene_score=0.000163
+frame:1231 pts:61440   pts_time:102.4
+lavfi.scene_score=0.000072
+frame:1232 pts:61450   pts_time:102.416667
+lavfi.scene_score=0.000083
+frame:1233 pts:61462   pts_time:102.436667
+lavfi.scene_score=0.000119
+frame:1234 pts:61471   pts_time:102.451667
+lavfi.scene_score=0.000076
+frame:1235 pts:74767   pts_time:124.611667
+lavfi.scene_score=0.000025
+frame:1236 pts:75056   pts_time:125.093333
+lavfi.scene_score=0.000071

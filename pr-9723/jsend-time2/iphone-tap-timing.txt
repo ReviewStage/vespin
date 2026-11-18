@@ -1,0 +1,19 @@
+probe rows 1554, commands 40, frames 1237
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+send-text | 6 | topTouchEnd | 1086 | 4 | 64 | 3444 | 261 | 120 | 67 | 2 | 31 | 263 | 1369 | 286
+send-photo | 1 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | None | None | None | None
+
+most rendered components per path (summed over its taps):
+send-text: Button×1535, Text×1313, TextView×1238, Slot×930, SlotView×930, obj×921, Image×750, ImageView×722, HStack×719, HStackView×719, GlyphLabel×490, Label×490
+send-photo: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+send-text: ThreadDetail 18.3, InboxRowView 16.2, Markdown 2.2, ImageView 1.2, Text 1.1, GuardedScreens 0.7, Button 0.7, TextView 0.7, SlotView 0.4, MenuCommands 0.4
+send-photo: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+send-text: markdown 2.2, rest 41.6
+send-photo: markdown 0.0, rest 0.0
+
+whole run: 74s, 159 commits, 194971 components rendered, 4548 ms of stalls over 21 stalls
+events: topTransitionProgress×82, topTextChange×60, topHeaderHeightChange×45, topLoad×13, topLoadEnd×13, topLoadStart×13, topTouchStart×12, topTouchEnd×12, topInsetsChange×6, topFinishTransitioning×6, topButtonPress×6, topWillAppear×5, topOverlap×5, topAppear×4, topGlobalEvent×4
