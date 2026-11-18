@@ -54,6 +54,7 @@ const PLACEHOLDER_TASK = {
 const PLACEHOLDER_AGENT = {
   id: "00000000-0000-4000-8000-000000000001",
   runsOn: { machine: AGENT_MACHINE.VERCEL },
+  developer: { userId: "00000000-0000-4000-8000-000000000002", name: "Ada Lovelace" },
 } as const;
 
 /**
