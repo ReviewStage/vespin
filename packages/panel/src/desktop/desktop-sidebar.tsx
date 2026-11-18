@@ -1311,7 +1311,7 @@ function PinnedSection({
 /**
  * The Following group, under Pinned and above the Tasks head: the tasks the
  * reader follows that no other list holds (`followingTasks`), a teammate's
- * they keep up with, newest active first, its rows naming no repository, as
+ * or one no one is on, newest active first, its rows naming no repository, as
  * Pinned's and a section's do not. It stands only
  * while it holds a task, so a task followed lands in it at once and one
  * unfollowed leaves it, as the live list moves. Its head is led by the eye
