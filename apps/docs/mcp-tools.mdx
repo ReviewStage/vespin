@@ -583,7 +583,7 @@ Reads a pull request's chapters.
 
 ### generate_pull_request_chapters
 
-Generates chapters on your own Anthropic or OpenAI key, which you pay for.
+Generates chapters on your own key of the provider you name, Anthropic or OpenAI, which you pay for.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -591,6 +591,7 @@ Generates chapters on your own Anthropic or OpenAI key, which you pay for.
 | `repository` | string | The repository whose pull request to read, as owner/name, with number; leave it out with agentId. (up to 140 characters) |
 | `number` | integer | The pull request's number: with repository, the one to read; with agentId, another pull request of the agent's repository, left out for the agent's own. (at least 1) |
 | `workspace` | string | With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `provider` | `anthropic` \| `openai`, required | The provider whose API key the member saved to generate on, one of the chaptersProviders list_models answers. |
 
 ## Comments on pages
 
