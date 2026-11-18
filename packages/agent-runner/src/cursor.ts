@@ -325,7 +325,7 @@ const accepted = Effect.fn("agent-runner/cursor/accepted")(function* (
   }
 });
 
-/** What a run's silence is read from: when it last streamed a message, and its tool calls running. */
+/** What a run's silence is read from: when it last streamed a message, on `monotonicMillis`, and its tool calls running. */
 interface Heard {
   at: number;
   readonly calls: Set<string>;
@@ -333,6 +333,13 @@ interface Heard {
 
 /** The SDK's word for a tool call under way; any other status ends it. */
 const TOOL_CALL_RUNNING = "running";
+
+/**
+ * Milliseconds on the monotonic clock, which a run's silence is measured on.
+ * Note that the wall clock is not, because a host's clock set forward would
+ * count as silence and end a run that just spoke.
+ */
+const monotonicMillis = Effect.map(Clock.monotonicTimeNanos, (nanos) => Number(nanos / 1_000_000n));
 
 /** Notes a message the run streamed: heard now, and the tool call it starts or ends. */
 function hear(heard: Heard, message: SDKMessage, now: number) {
@@ -357,7 +364,7 @@ const watchSilence = Effect.fn("agent-runner/cursor/watchSilence")(function* (
   heard: Heard,
 ) {
   for (;;) {
-    const quiet = (yield* Clock.currentTimeMillis) - heard.at;
+    const quiet = (yield* monotonicMillis) - heard.at;
 
     if (quiet >= CURSOR_SILENCE.LIMIT_MS && heard.calls.size === 0) break;
     const wait = heard.calls.size > 0 ? CURSOR_SILENCE.LIMIT_MS : CURSOR_SILENCE.LIMIT_MS - quiet;
@@ -373,12 +380,12 @@ const follow = Effect.fn("agent-runner/cursor/follow")(function* (
   launch: CursorLaunch,
   run: CursorRun,
 ) {
-  const heard: Heard = { at: yield* Clock.currentTimeMillis, calls: new Set() };
+  const heard: Heard = { at: yield* monotonicMillis, calls: new Set() };
 
   const posted = Stream.fromAsyncIterable(run.stream(), (cause) => cause).pipe(
     Stream.runForEach((message: SDKMessage) =>
       Effect.gen(function* () {
-        hear(heard, message, yield* Clock.currentTimeMillis);
+        hear(heard, message, yield* monotonicMillis);
 
         // A summary written drops the instructions, so the next message leads with them again.
         if (message.type === "summary" && message.status === SUMMARY_COMPLETED) {
