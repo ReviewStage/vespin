@@ -179,7 +179,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
   text style, never a fixed size: a row's title 15 pt (`subheadline`),
   semibold while unread and regular once read, over a 13 pt muted line
-  (`footnote`); a time 12 pt (`caption`); a group header 13 pt muted; a
+  (`footnote`); an Inbox thread's task line over its title, the row's
+  largest words, 17 pt semibold (`headline`), its time at that line's end
+  and its title and preview flush with its ring, as the panel's lead row; a time 12 pt (`caption`); a group header 13 pt muted; a
   screen's title 17 pt semibold, inline in its bar; and a page's heading,
   a thread's or a task's title, 20 pt semibold (`title3`, the style nearest
   21). React Native's words, Markdown's, take `PROSE_SIZE`, 15 pt, which
