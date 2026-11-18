@@ -13,7 +13,6 @@ import { readForkCut, readNativeRewind } from "@repo/database/models/conversatio
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   type NoteFiles,
   type Replay,
@@ -798,8 +797,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(source.userId, source.id));
   const read = Option.getOrUndefined(routing);
 
-  // Note that a Cursor session is never carried, since Cursor's store forks none yet: the new agent is handed the source's steps.
-  if (read?.nativeSession == null || read.runtime === CONVERSATION_RUNTIME.CURSOR) return undefined;
+  if (read?.nativeSession == null) return undefined;
 
   if ((yield* runtime) !== read.runtime) return undefined;
 
@@ -962,7 +960,7 @@ export const openedTakingOver = <E, R>(
       // Note that a Mac the account no longer holds standing launches nothing, so its copy is left unkeyed.
       const rekey = Option.map(checkouts, (each) => ({
         projectKey: claudeProjectKey(each.checkoutPathOf(agent.id)),
-        keptProject: RUNNER_TRANSCRIPTS.CODEX_PROJECT,
+        keptProjects: [RUNNER_TRANSCRIPTS.CODEX_PROJECT, RUNNER_TRANSCRIPTS.CURSOR_PROJECT],
       }));
 
       yield* hostedStoreOrUnavailable(
