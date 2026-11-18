@@ -1,0 +1,7 @@
+== bundle P9853b base a95cc32c90
+  built a95cc32c90 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-tasks: fails 1 shots 33 Assert that "Archive agent?" is visible... FAILED
