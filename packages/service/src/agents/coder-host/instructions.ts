@@ -2,14 +2,21 @@ import { SHARED_FILES_DIRECTORY } from "@repo/agent-runner/pins";
 import { type Agent, agentBriefOf } from "@repo/database/models/agent-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { AGENT_BRIEF, AGENT_MACHINE, type AgentBrief } from "@repo/features/agent-wire";
+import {
+  AGENT_BRIEF,
+  AGENT_MACHINE,
+  type AgentBrief,
+  type AgentRunsOnRequest,
+} from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import { LINK_ORIGIN } from "@repo/features/link-home";
+import { MENTION_KIND } from "@repo/features/mention-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { GITHUB_WAKE, type GitHubWake } from "@repo/settings";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
+import { writtenMention } from "../written-mentions.js";
 import { CODER } from "./bounds.js";
 import { COMMIT_BY, type CommitAuthorship } from "./checkout.js";
 import { EDIT_DESCRIPTION_TOOL } from "./description-edit.js";
@@ -100,6 +107,41 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
   ];
 }
 
+/**
+ * The agent's own values, as a tool input that asks for them takes them:
+ * its id, its task's id, where it runs as `start_agent`'s `runsOn` names
+ * it, its repository, and the branch it was cloned at; then the developer it
+ * works for, by their id and mention link, as `list_agents`' `startedBy`,
+ * `post_thread`'s `to`, and a task's `assignee` take them, so it names them
+ * without reading the workspace's members for a guess. Note that they sit in
+ * the instructions, since none changes over a session, so the prompt cache
+ * holds them; the branch it pushes to is its own to read with git.
+ */
+function ownLine(
+  ownTask: OwnTask,
+  own: OwnAgent,
+  repository: string | null,
+  startBranch: string | null,
+  workspace: string,
+): string {
+  const values = [
+    `agentId \`${own.id}\``,
+    `taskId \`${ownTask.id}\``,
+    ...(own.runsOn === null ? [] : [`runsOn \`${JSON.stringify(own.runsOn)}\``]),
+    ...(repository === null ? [] : [`repository \`${repository}\``]),
+    ...(repository === null || startBranch === null ? [] : [`branch \`${startBranch}\``]),
+  ];
+
+  const { developer } = own;
+
+  const mention =
+    developer.name === undefined
+      ? ""
+      : `, mention \`${writtenMention({ kind: MENTION_KIND.PERSON, userId: developer.userId }, developer.name, workspace)}\``;
+
+  return `Your own values, for a tool input that asks for yours: ${values.join(", ")}. The developer you work for: userId \`${developer.userId}\`${mention}, as \`startedBy\`, \`to\`, and \`assignee\` take them.`;
+}
+
 /** Whose the agent's commits are, the developer's or the App's bot's, and the trailer naming the other as co-author where one is handed. */
 function authorshipLine(authorship: CommitAuthorship | undefined): string {
   const whose =
@@ -166,7 +208,11 @@ function publishLines(
   posts: boolean,
 ): string[] {
   const from = startBranch === null ? "the default branch" : `\`${startBranch}\``;
-  const base = startBranch === null ? "" : ` with \`base: "${startBranch}"\``;
+
+  const base =
+    startBranch === null
+      ? " with `base` naming the default branch, which `gh api repos/{owner}/{repo} --jq .default_branch` answers, and `draft: false`"
+      : ` with \`base: "${startBranch}"\` and \`draft: false\``;
 
   return [
     `Work on a branch named \`${CODER.BRANCH_PREFIX}<slug>\` cut from ${from}, never on ${from} itself, unless your first message names an open pull request's branch to push to.`,
@@ -223,7 +269,8 @@ interface QueueUntold {
  * withdraws the task's open asks and archives its agents, the one that
  * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
  * on both; a turn starting on the task moves it back into progress from
- * any status. A pull request merged or closed is told to the agent on the
+ * any status, though a tool that would start one on a done or canceled
+ * task is refused (`settledTaskRefusal`). A pull request merged or closed is told to the agent on the
  * App's access as a message from GitHub (`../../github/agent-wakes.ts`),
  * which it marks the task Done on where that finishes the work; one on its
  * starter's own token, or whose starter turned that wake off, hears of no
@@ -269,6 +316,7 @@ export function coderInstructions(
   repository: string | null,
   brief: AgentBrief,
   ownTask: OwnTask,
+  own: OwnAgent,
   standing: AgentStanding,
   authorship: CommitAuthorship | undefined = undefined,
   startBranch: string | null = null,
@@ -293,6 +341,7 @@ export function coderInstructions(
     repository === null
       ? `You work in no repository. Your folder is \`${machine.checkoutPath}\`; ${shell} starts there.`
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
+    ownLine(ownTask, own, repository, startBranch, workspace),
     ...machineLines(machine, repository !== null),
     ...(posts ? [UNCLEAR_LINE] : []),
     ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
@@ -328,12 +377,36 @@ export interface OwnTask {
   readonly id: string;
 }
 
+/** The developer an agent works for, its starter: their account id, and their name where it was read, which their mention link is labeled with. */
+export interface OwnDeveloper {
+  readonly userId: string;
+  readonly name: string | undefined;
+}
+
+/** The agent itself: its id, where it runs as `start_agent`'s `runsOn` names it (none for a local agent whose device is gone), and the developer it works for. */
+export interface OwnAgent {
+  readonly id: string;
+  readonly runsOn: AgentRunsOnRequest | null;
+  readonly developer: OwnDeveloper;
+}
+
+/** Where the agent its row names runs, as `start_agent`'s `runsOn` names it. */
+function runsOnOf(agent: Agent): AgentRunsOnRequest | null {
+  if (agent.machine !== AGENT_MACHINE.DEVICE) return { machine: AGENT_MACHINE.VERCEL };
+
+  return agent.deviceId === null || agent.deviceId === undefined
+    ? null
+    : { machine: AGENT_MACHINE.DEVICE, deviceId: agent.deviceId };
+}
+
 /** What an agent's instructions are composed on beyond its row. */
 export interface AgentInstructionsContext {
   /** Whose its commits are, and the trailer naming the other as co-author where one is. */
   readonly authorship: CommitAuthorship | undefined;
   /** The workspace its links are written under. */
   readonly workspace: string;
+  /** The name its starter goes by, which their mention link is labeled with; none where it was not read, and they are named by id alone. */
+  readonly developerName: string | undefined;
   /** The number its task goes by in that workspace, which the task's link names it by; none where it is not known, and the link names the task's id. */
   readonly taskNumber?: number | undefined;
   /** Where it stands against the gates of our tools (`../tool-catalog/gates.ts`), which decide the tools' words it is told. */
@@ -372,6 +445,11 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
     agent.repository,
     agentBriefOf(agent),
     ownTask,
+    {
+      id: agent.id,
+      runsOn: runsOnOf(agent),
+      developer: { userId: agent.userId, name: context.developerName },
+    },
     context.standing,
     context.authorship,
     agent.startBranch,

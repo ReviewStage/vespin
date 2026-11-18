@@ -67,6 +67,16 @@ import type { IntegrationConnect } from "../../integrations/integration-connect.
 import type { PageLinks } from "../../pages/page-links.js";
 import type { ModelCatalog } from "../../providers/model-catalog.js";
 import {
+  LIST_SLACK_CHANNELS_TOOL,
+  REACT_SLACK_TOOL,
+  READ_SLACK_TOOL,
+  runListSlackChannels,
+  runReactSlack,
+  runReadSlack,
+} from "../../slack/slack-agent-tools.js";
+import type { SlackBot } from "../../slack/slack-bot.js";
+import { runSendSlackMessage, SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
+import {
   type CommentToolName,
   commentToolOf,
   READ_COMMENTS_TOOL,
@@ -82,15 +92,18 @@ import {
   pictureNotLooked,
 } from "../../tasks/picture-look.js";
 import type { SentryApp } from "../../triggers/sentry/sentry-app-config.js";
+import { READ_AGENT_CHANGES_TOOL, runReadAgentChanges } from "../agent-changes-tool.js";
 import {
   AGENT_CALLER,
   type AgentCall,
+  ARCHIVE_AGENT_TOOL,
   agentToolRejected,
   CODER_READ_AGENT_TOOL,
   LIST_AGENTS_TOOL,
   LIST_MODELS_TOOL,
   LIST_TASKS_TOOL,
   READ_PAGE_TOOL,
+  runArchiveAgent,
   runListAgents,
   runListModels,
   runListTasks,
@@ -98,11 +111,13 @@ import {
   runReadPage,
   runStartAgent,
   runStopAgent,
+  runUnarchiveAgent,
   runUpdateAgent,
   runUpdateTask,
   START_AGENT_TOOL,
   STOP_AGENT_TOOL,
   startAgentToolOf,
+  UNARCHIVE_AGENT_TOOL,
   UPDATE_AGENT_TOOL,
   UPDATE_TASK_TOOL,
   updateTaskToolOf,
@@ -161,6 +176,7 @@ import {
   storedComputerOutput,
 } from "../computer-tool.js";
 import { machineCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../machine-command.js";
+import { LIST_MACHINES_TOOL, runAgentListMachines } from "../machines-tool.js";
 import {
   FORGET_MEMORY_TOOL,
   LIST_MEMORIES_TOOL,
@@ -196,6 +212,7 @@ import {
 } from "../task-tools.js";
 import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import type { ExperimentsOn } from "../workspace-experiment-on.js";
+import { LIST_WORKSPACE_MEMBERS_TOOL, runListWorkspaceMembers } from "../workspace-member-tool.js";
 import { type AgentStanding, GATES, standingOf, TOOL_GATE, type ToolGate } from "./gates.js";
 
 /** What a door answers: the tool's own result, the value the model is handed. */
@@ -211,6 +228,7 @@ export type WorkspaceMcpServices =
   | IntegrationConnect
   | HostedEnvironment
   | SentryApp
+  | SlackBot
   | PageLinks;
 
 /** What a tool runs against: the doors' services, and the agent's browser and sandbox, which the server provides itself (`../workspace-mcp/app.ts`). */
@@ -589,13 +607,21 @@ const CATALOG = [
   agentTool(STOP_AGENT_TOOL, runStopAgent),
   agentTool(LIST_AGENTS_TOOL, runListAgents, LOADED),
   agentTool(CODER_READ_AGENT_TOOL, runReadAgent),
+  agentTool(READ_AGENT_CHANGES_TOOL, runReadAgentChanges),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
   agentTool(ADD_SUGGESTION_TOOL, runAddSuggestion, {
     gate: TOOL_GATE.REPLY_BUTTONS,
     alwaysLoad: true,
   }),
   agentTool(UPDATE_AGENT_TOOL, runUpdateAgent),
+  agentTool(ARCHIVE_AGENT_TOOL, runArchiveAgent),
+  agentTool(UNARCHIVE_AGENT_TOOL, runUnarchiveAgent),
   agentTool(LIST_MODELS_TOOL, runListModels),
+  served(LIST_MACHINES_TOOL, (admitted, input, { standing }) =>
+    Option.isNone(standing.agent)
+      ? Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT))
+      : runAgentListMachines(standing.agent.value.userId, admitted.target, input),
+  ),
   // Tasks and sections.
   agentTool(LIST_TASKS_TOOL, runListTasks),
   agentTool(READ_TASK_TOOL, runReadTask, { ...LOADED, variant: readTaskToolOf }),
@@ -603,6 +629,8 @@ const CATALOG = [
   agentTool(UPDATE_TASK_TOOL, runUpdateTask, { ...LOADED, variant: updateTaskToolOf }),
   agentTool(CREATE_SECTION_TOOL, runCreateSection),
   agentTool(DELETE_SECTION_TOOL, runDeleteSection),
+  // The workspace's members, by the mention link a call names a person by.
+  agentTool(LIST_WORKSPACE_MEMBERS_TOOL, runListWorkspaceMembers),
   // Automations.
   agentTool(LIST_AUTOMATIONS_TOOL, runListAutomations),
   agentTool(CREATE_AUTOMATION_TOOL, runCreateAutomation),
@@ -642,6 +670,11 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
+  // Slack as the bot: where the agent may act, a message, a read, and a reaction.
+  agentTool(LIST_SLACK_CHANNELS_TOOL, runListSlackChannels),
+  agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage),
+  agentTool(READ_SLACK_TOOL, runReadSlack),
+  agentTool(REACT_SLACK_TOOL, runReactSlack),
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.

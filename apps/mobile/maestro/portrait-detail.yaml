@@ -1,4 +1,4 @@
-# portrait-detail.yaml -- a portrait iPad's two columns: a task's agent and its pull request pushed inside the detail column beside the Tasks list, each under its own bar with the stack's Back, and Back returning to the task, as Mail opens a message's related pages in portrait; skipped on a compact window, which stands no list beside its detail.
+# portrait-detail.yaml -- a portrait iPad's two columns: a task's agent and its pull request pushed on the Tasks tab's own stack over the whole window, as a compact window pushes them, each under the stack's bar with its Back, and Back returning to the split view with the task still picked; skipped on a compact window, which stands no list beside its detail.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -37,39 +37,59 @@ onFlowComplete:
       - waitForAnimationToEnd:
           timeout: 5000
       - takeScreenshot: portrait-task
-      # The agent opens inside the detail column, the Tasks list still
-      # beside it, under its own bar: its name, Archive and Pin, its ⋯, and
-      # the stack's Back, with the composer at the column's foot.
-      - tapOn: "Build teammate invitations"
+      # The agent opens over the whole window on the tab's stack, under the
+      # stack's bar: its name, Archive and Pin, its ⋯, and Back, with the
+      # composer docked at its foot.
+      # Note that the tap is never retried, because a retry on a screen still
+      # pushing lands on the page opened.
+      - tapOn:
+          text: "Build teammate invitations"
+          retryTapIfNoChange: false
       - extendedWaitUntil:
           visible: "Add a way to resend an invite that expired."
           timeout: 30000
-      - assertVisible: "Teammate invitations"
       - waitForAnimationToEnd:
           timeout: 5000
       - takeScreenshot: portrait-agent
-      # Back pops the column alone, landing on the task's page.
+      # Back pops the tab's stack, landing on the split view, the task
+      # still picked.
       - tapOn:
-          text: "Back"
-          optional: true
+          id: "BackButton"
       - waitForAnimationToEnd:
           timeout: 5000
       - assertVisible: "Agents"
       - takeScreenshot: portrait-agent-back
-      # The pull request opens in the same column from its agent's row,
-      # its bar standing Open on GitHub and Refresh as glyphs, its merge
-      # under the checks.
-      - tapOn: "#128"
+      # A tap on the agent's row's second line, where its pull request's
+      # number stands, opens the agent too, never the pull request.
+      - tapOn:
+          text: "#128"
+          retryTapIfNoChange: false
+      - extendedWaitUntil:
+          visible: "Add a way to resend an invite that expired."
+          timeout: 30000
+      - assertNotVisible: "Ready to merge"
+      - tapOn:
+          id: "BackButton"
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - assertVisible: "Agents"
+      # The pull request opens on the same stack from its agent's row's
+      # long-press menu, its bar standing Open on GitHub and Refresh as
+      # glyphs, its merge under the checks.
+      - runFlow:
+          file: subflows/row-menu.yaml
+          env:
+            ROW: Build teammate invitations
+            ITEM: Open pull request
+      - tapOn: "Open pull request"
       - extendedWaitUntil:
           visible: "Ready to merge"
           timeout: 30000
-      - assertVisible: "Teammate invitations"
       - waitForAnimationToEnd:
           timeout: 5000
       - takeScreenshot: portrait-pull-request
       - tapOn:
-          text: "Back"
-          optional: true
+          id: "BackButton"
       - waitForAnimationToEnd:
           timeout: 5000
       - assertVisible: "Agents"

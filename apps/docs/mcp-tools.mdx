@@ -120,20 +120,12 @@ The workspace's tasks, newest first, 50 a page, and your sidebar sections.
 
 ### read_task
 
-One task: its key, status, priority, repository, assignee, blockers, and brief.
+One task, by its id or its key, such as ACME-42: its key, status, priority, repository, assignee, blockers, and brief.
 
 | Input | Type | Description |
 | --- | --- | --- |
-| `taskId` | string, required | The task to read, by the id list_tasks answered. (1–36 characters) |
-
-### find_task
-
-Finds a task by its number or key, such as ACME-42, and reads it.
-
-| Input | Type | Description |
-| --- | --- | --- |
-| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
-| `task` | string, required | The task's number in the workspace, such as 42, or its key, such as ACME-42; the key's prefix is not checked, since it follows the workspace's name. (1–64 characters) |
+| `workspace` | string | The workspace the task stands in, by the slug list_workspaces answered: required with a key, and with an id the workspace that must hold the task; leave it out with an id to read the task in whichever workspace it stands. (1–48 characters) |
+| `taskId` | string, required | The task to read, by the id list_tasks answered or by its key, such as ACME-42, whose prefix must be its workspace's. (1–64 characters) |
 
 ### create_task
 
@@ -143,9 +135,9 @@ Creates a task you own, with no agent on it.
 | --- | --- | --- |
 | `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
 | `name` | string, required | The task's name, as the developer would name it in the sidebar. (1–200 characters) |
-| `repository` | string or null | The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach; null or left out for none, or the parent's where you give a parent. |
+| `repository` | string or null | The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach, or null for none; required, but left out where you give a parentTaskId or subTaskIds, whose repository it takes. |
 | `brief` | string | The developer's own words about the task, which Vespin is handed when they open a call on it; their words where they gave them, left out otherwise. (up to 16000 characters) |
-| `status` | `backlog` \| `todo` \| `in-progress` \| `done` \| `canceled` | Where the task stands: backlog for work filed for later; todo where left out. |
+| `status` | `backlog` \| `todo` \| `in-progress` \| `done` \| `canceled`, required | Where the task stands: todo for work to start, backlog for work filed for later. |
 | `priority` | `none` \| `urgent` \| `high` \| `medium` \| `low` | How much the task matters; none for a task no one has weighed yet. |
 | `assignee` | string or null | The member the task is assigned to, who is on it now, by their mention link as list_tasks or another read names them, `[@Name](https://vespin.dev/&lt;workspace&gt;/person/&lt;id&gt;)`, or its address alone; a member of the task's workspace. null for no one. |
 | `parentTaskId` | string | The task to make it a child of, by the id list_tasks answered: a task of your workspace, whose repository it works in. Left out, it stands at the top. (1–36 characters) |
@@ -184,7 +176,7 @@ Turns one relation between two tasks into another kind, in one step.
 
 ### delete_task
 
-Deletes a task for good, after stopping its agents.
+Deletes a task for good. It stops no agent: while one of its agents is starting or running it is refused, and `stop_agent` stops each first.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -253,15 +245,11 @@ Agents, newest first, 50 a page, with each one's status, model, branch, and task
 
 ### read_agent
 
-One agent: its branch, its pull request, and a page of its transcript. The agent isn't told.
+One agent: what list_agents says of it, and the messages waiting in its queue. Its transcript is read_agent_transcript's, and its branch and pull request read_agent_changes'. The agent isn't told.
 
 | Input | Type | Description |
 | --- | --- | --- |
 | `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
-| `from` | `end` \| `start` | Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with. |
-| `before` | object | The older place a page answered, to read the page of entries before it. |
-| `after` | object | The newer place a page answered, to read the page of entries after it. |
-| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. (1–200) |
 
 ### read_agent_transcript
 
@@ -288,20 +276,19 @@ The agent's pull request: its state, checks, reviewers, and changed files, or on
 
 ### start_agent
 
-Starts an agent on a task, on a new task, or from another agent. Answers once its session opens, which can take a minute or two. The agent doesn't report back to the caller.
+Starts an agent on a task, or from another agent on its task. Make a new task first with `create_task`. Answers once its session opens, which can take a minute or two. The agent doesn't report back to the caller.
 
 | Input | Type | Description |
 | --- | --- | --- |
-| `workspace` | string | Where you name no taskId and no from, the workspace of the task made for the agent, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
-| `taskId` | string | The task to start the agent on, by the id list_tasks answered; leave it out to start it on a new task made for it. (1–36 characters) |
-| `repository` | string or null | Where you name no taskId and no from, the GitHub repository of the task made for the agent, as owner/name, which the workspace's GitHub installation must reach; null or left out for none. A task's agent works in the task's own. |
+| `taskId` | string, required | The task to start the agent on, by the id list_tasks answered; with from, the task of the agent it starts from. (1–36 characters) |
 | `prompt` | string | What the agent should do, typed to it as its first message: everything it needs to start on its work, or the developer's words where they named the job. Every start takes one but a start from another agent, which takes none. (1–64000 characters) |
 | `note` | string | Everything else the agent should hear as it starts (what to start with, what to watch out for, what to leave alone), handed to it after the prompt in the same first message; leave it out where there is nothing beyond the prompt. (1–64000 characters) |
 | `title` | string | The agent's title from the start, how the developer sees it named, such as the pull request it will open; leave it out to have it named from what it is told. (1–80 characters) |
 | `branch` | string | The branch of the task's repository to clone the agent's checkout at and cut its own branch from, such as the head branch of a pull request it builds on; it must already be on GitHub. Leave it out for the repository's default branch. (1–255 characters) |
-| `model` | string | The model to run on, by its catalog id (such as anthropic/claude-opus-5.5); leave it out with the effort for the member's default. (1–200 characters) |
+| `model` | string | The model to run on, by its catalog id (such as anthropic/claude-opus-5.5), as list_models lists it. Every start names it but one with from, which runs on the model of the agent it starts from unless it names another. (1–200 characters) |
 | `effort` | string | The reasoning effort, as the model lists it (such as high); given with the model or not at all. (1–200 characters) |
-| `runsOn` | object | Where the agent runs: &#123;"machine":"vercel"&#125; for the cloud, or &#123;"machine":"device","device":"&lt;name&gt;"&#125; for one of the member's own devices (a Mac or a host) by its name, or &#123;"machine":"device","deviceId":"&lt;id&gt;"&#125; by its id; it must be online, and a name matching none of their devices, or several, is refused with the devices listed. Left out: where the agent it starts from runs, with from; else where the member's newest agent on the task runs; else where the member last chose to run one; else the cloud. With from, another place than that agent's moves it there. |
+| `permissionMode` | string, required | How the agent's tool calls are answered: full_access runs every one unasked, ask asks a member before a file edit or a shell command, and auto leaves each to the harness's own review, which asks where it cannot decide. A Cursor model takes auto or full_access, and another mode on it is refused. Every start names it, one with from included. (full_access, ask, or auto) |
+| `runsOn` | object | Where the agent runs: &#123;"machine":"vercel"&#125; for the cloud, or &#123;"machine":"device","device":"&lt;name&gt;"&#125; for one of the member's own devices (a Mac or a host) by its name, or &#123;"machine":"device","deviceId":"&lt;id&gt;"&#125; by its id; it must be online, and a name matching none of their devices, or several, is refused with the devices listed. list_machines lists each place with the runsOn to pass. Every start names it but one with from, which runs where the agent it starts from runs unless it names another place, which moves it there. |
 | `from` | object | Another agent of your workspace to take over from, on its own task: the new agent is handed its brief and its transcript (with Vespin's summary of the steps that do not fit) and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on. |
 
 ### message_agent
@@ -349,16 +336,16 @@ Changes an agent's title, model, effort, context window, pin, or MCP servers, or
 
 ### rewind_agent
 
-Takes an agent back to the moment before one of its lines. Its checkout stays as it is.
+Takes an agent back to the moment before one of its lines. Its checkout stays as it is. It stops nothing: an agent starting or running is refused, and `stop_agent` stops it first.
 
 | Input | Type | Description |
 | --- | --- | --- |
 | `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
-| `lineId` | string, required | The line to take the agent back to the moment before, by the lineId read_agent names on a line sent to the agent. (1–128 characters) |
+| `lineId` | string, required | The line to take the agent back to the moment before, by the lineId read_agent_transcript names on a line sent to the agent. (1–128 characters) |
 
 ### delete_agent
 
-Deletes an agent for good. Its branch and pull request stay on GitHub.
+Deletes an agent for good. Its branch and pull request stay on GitHub. It stops nothing: an agent starting or running is refused, and `stop_agent` stops it first.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -597,7 +584,7 @@ Reads a pull request's chapters.
 
 ### generate_pull_request_chapters
 
-Generates chapters on your own Anthropic or OpenAI key, which you pay for.
+Generates chapters on your own key of the provider you name, Anthropic or OpenAI, which you pay for.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -605,6 +592,7 @@ Generates chapters on your own Anthropic or OpenAI key, which you pay for.
 | `repository` | string | The repository whose pull request to read, as owner/name, with number; leave it out with agentId. (up to 140 characters) |
 | `number` | integer | The pull request's number: with repository, the one to read; with agentId, another pull request of the agent's repository, left out for the agent's own. (at least 1) |
 | `workspace` | string | With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `provider` | `anthropic` \| `openai`, required | The provider whose API key the member saved to generate on, one of the chaptersProviders list_models answers. |
 
 ## Comments on pages
 
@@ -616,7 +604,7 @@ The comment threads on one of a task's pages.
 | --- | --- | --- |
 | `taskId` | string, required | The task whose pages' comments to act on, by the id list_tasks answered. (1–36 characters) |
 | `page` | string, required | One of the task's pages, by the id a mention of it or a link to it names, whose threads to read. (1–36 characters) |
-| `status` | `open` \| `resolved` | Which threads to read: open, the default, or resolved. |
+| `status` | `open` \| `resolved`, required | Which threads to read: open or resolved. |
 
 ### reply_to_comment
 
@@ -740,13 +728,7 @@ Adds, changes, or removes a repository's run action. Owners and admins only.
 | --- | --- | --- |
 | `workspace` | string | The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
 | `repository` | string, required | The repository whose run actions to edit, as owner/name, under any casing of its name. (up to 140 characters) |
-| `actionId` | string | The action to change or remove, by the id read_sandbox_setup answered; leave it out to add one, which then needs a label and a command. (1–36 characters) |
-| `remove` | boolean | true to remove the action actionId names; nothing else given is then read. |
-| `label` | string | What the Run menu and the action's Terminal tab call it. (1–40 characters) |
-| `command` | string | The bash it runs from the repository's checkout, with the workspace's environment variables, such as pnpm dev. (up to 4096 characters) |
-| `icon` | object or null | The icon it wears in the Run menu, one emoji or one Lucide icon by its kebab-case name in a color or none, such as rocket; null for the menu's own. |
-| `isDefault` | boolean | true to make it the repository's default, which the Run button runs, so no other action is; false to make it no longer the default. |
-| `position` | integer | Its place in the list after the edit, from 0, a place past the end being the last; an added action goes last and a changed one stays where it stood where left out. (0–19) |
+| `edit` | object, required | The edit, by its operation, with only the fields it takes: add (label, command, and optionally icon, isDefault, and position); change (actionId, and any of label, command, icon, isDefault, and position, each left out unchanged); or remove (actionId). |
 
 ### list_environment_variables
 
@@ -796,14 +778,14 @@ Creates an automation on a schedule, a GitHub event, or a Sentry event. Webhook 
 | `name` | string, required | (1–80 characters) |
 | `prompt` | string, required | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
 | `trigger` | object, required | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
-| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
-| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
-| `effort` | string | (1–200 characters) |
+| `repositories` | array of string, required | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. (up to 10 items) |
+| `model` | string, required | Catalog id from list_models, given with effort. (1–200 characters) |
+| `effort` | string, required | (1–200 characters) |
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
-| `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
-| `archiveSuccessful` | boolean | Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open. |
-| `slackDelivery` | boolean | Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected. |
+| `scope` | `personal` \| `workspace`, required | personal is its creator's alone; workspace is every member's. |
+| `archiveSuccessful` | boolean, required | Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open. |
+| `slackDelivery` | boolean, required | Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected. |
 
 ### update_automation
 
@@ -816,12 +798,12 @@ Changes an automation. A new trigger replaces the old one whole.
 | `name` | string | (1–80 characters) |
 | `prompt` | string | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
 | `trigger` | object | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
-| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
-| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
+| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. (up to 10 items) |
+| `model` | string | Catalog id from list_models, given with effort. (1–200 characters) |
 | `effort` | string | (1–200 characters) |
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
-| `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
+| `scope` | `personal` \| `workspace` | personal is its creator's alone; workspace is every member's. |
 | `archiveSuccessful` | boolean | Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open. |
 | `slackDelivery` | boolean | Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected. |
 
@@ -856,8 +838,7 @@ Answers a link that connects an integration, for you to open in your browser.
 | Input | Type | Description |
 | --- | --- | --- |
 | `provider` | `executor` \| `github` \| `gmail` \| `google-calendar` \| `google-drive` \| `granola` \| `linear` \| `mercury` \| `neon` \| `notion` \| `posthog` \| `resend` \| `sentry` \| `slack` \| `stripe` \| `supabase` \| `vercel` \| `ycombinator`, required | The provider to sign in to. |
-| `connection` | string | An account the member holds, by the connection name list_integrations answered, to sign it in again; leave it out for the provider's first account. |
-| `add` | boolean | true to sign in another account at the provider, where it takes more than one. |
+| `account` | object, required | Which account: &#123;"connection":"&lt;name&gt;"&#125; to sign one in by the connection name list_integrations answered, or the provider's own name, such as notion, for its first account; or &#123;"add":true&#125; to sign in another account at the provider, where it takes more than one. |
 
 ### list_integration_tools
 

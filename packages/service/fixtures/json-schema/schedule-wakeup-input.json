@@ -1,22 +1,24 @@
 {
   "type": "object",
   "properties": {
+    "stop": {
+      "type": "boolean",
+      "description": "false to book a wakeup, with delaySeconds and prompt; true to cancel the wakeup you booked, such as once what you waited on reached you first, with no other field."
+    },
     "delaySeconds": {
       "type": "integer",
       "minimum": 1,
-      "description": "Seconds from now to wake up, held to 60 through 601200, a minute through 7 days less an hour. Required unless stop is true."
+      "description": "Seconds from now to wake up, held to 60 through 601200, a minute through 7 days less an hour. Required when stop is false; refused when stop is true."
     },
     "prompt": {
       "type": "string",
       "minLength": 1,
       "maxLength": 4000,
-      "description": "What to do once it fires, as the first line of your next turn, such as `Read the checks on pull request #<number>`. Required unless stop is true."
-    },
-    "stop": {
-      "type": "boolean",
-      "description": "true to cancel the wakeup you booked, such as once what you waited on reached you first; nothing else is read then."
+      "description": "What to do once it fires, as the first line of your next turn, such as `Read the checks on pull request #<number>`. Required when stop is false; refused when stop is true."
     }
   },
-  "required": [],
+  "required": [
+    "stop"
+  ],
   "additionalProperties": false
 }

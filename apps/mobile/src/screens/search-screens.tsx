@@ -1,4 +1,4 @@
-// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, each row drawn by its own list's row, its results beside the app sidebar in a window wide enough for three columns.
+// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, each row drawn by its own list's row.
 
 import { READING_INBOX } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
@@ -17,62 +17,40 @@ import {
   showAllHeard,
   shownOfWords,
 } from "@repo/features/search-found-model";
+import { NO_RESULTS_HINT, noResultsForWords, readingWords } from "@repo/features/words";
 import {
-  CHOOSE_AN_ITEM_WORDS,
-  NO_RESULTS_HINT,
-  noResultsForWords,
-  readingWords,
-} from "@repo/features/words";
-import {
-  type BarMenu,
-  type ColumnBar,
   EmptyState,
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
   type ListScopes,
   ListSection,
-  NoSelection,
   RowList,
   type RowSubmenu,
   Screen,
-  UNDER_SPLIT_SCREEN,
-  useThreeColumns,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
-import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import {
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { useDetailStack, useStackRoot } from "../detail-stack.js";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { type ReactNode, useEffect, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { lowerKeyboard } from "../native-interactions-module.js";
-import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { AgentConversation } from "./agent-screens.js";
-import { PLUS_TAB, SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
+import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
-import { InboxItemRows, ThreadColumn } from "./inbox-screens.js";
+import { InboxItemRows } from "./inbox-screens.js";
 import {
   type AgentArchiving,
   StatusQuestionAsk,
   TaskAgentRow,
   TaskRows,
   useAgentArchiveAsk,
-  useTaskDetail,
   useTaskRowDoors,
 } from "./task-screens.js";
 
@@ -124,44 +102,6 @@ function scopeReading(found: SearchFound, scope: SearchScope): string | undefine
   return tasks && found.tasksReading ? READING_TASKS : undefined;
 }
 
-/** What kind of row a wide window's Search picked, whose page stands beside the results. */
-const SEARCH_PICK = {
-  TASK: "task",
-  THREAD: "thread",
-  AGENT: "agent",
-} as const;
-
-/** A row a wide window's Search picked, by its kind and its id, with the route its own tab opens it on, which a narrower window pushes in its place; none where no route names it. */
-type SearchPick = {
-  readonly kind: (typeof SEARCH_PICK)[keyof typeof SEARCH_PICK];
-  readonly id: string;
-  readonly route: string | undefined;
-};
-
-/** The row a wide window's Search stands beside its results, and how a press picks another. */
-type SearchPicking = {
-  readonly picked: SearchPick | undefined;
-  /** Picks a row, or none, as an agent picked and then archived leaves nothing beside the results; or reads the pick standing and answers the next. */
-  readonly choose: Dispatch<SetStateAction<SearchPick | undefined>>;
-};
-
-/** The pick a row found makes, by its id: a task, a thread, or an agent; none for an id the query no longer finds. */
-function foundPick(found: SearchFound, id: string): SearchPick | undefined {
-  const route = foundRoutes(found).get(id);
-
-  if (found.tasks.some((task) => task.id === id)) return { kind: SEARCH_PICK.TASK, id, route };
-
-  if (found.inbox.some(({ item }) => item.id === id)) {
-    return { kind: SEARCH_PICK.THREAD, id, route };
-  }
-
-  if (found.agents.some(({ agent }) => agent.id === id)) {
-    return { kind: SEARCH_PICK.AGENT, id, route };
-  }
-
-  return undefined;
-}
-
 /** The query and the scope, and how to change them, held by the tab's root screen above its two layouts. */
 type SearchWords = {
   readonly query: string;
@@ -183,7 +123,6 @@ function FoundList({
   scope,
   setScope,
   listing,
-  selected,
   onOpen,
   remindMenu,
   archiving,
@@ -198,8 +137,6 @@ function FoundList({
   readonly setScope: (scope: SearchScope) => void;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
-  /** The row drawn selected, whose page stands beside the results; none in a compact window. */
-  readonly selected?: string | undefined;
   readonly onOpen: (id: string) => void;
   /** Remind me's times on a thread found, as the Inbox's row offers them. */
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
@@ -237,7 +174,6 @@ function FoundList({
       look={LIST_LOOK.PLAIN}
       searched={query}
       scopes={scopes}
-      selected={selected}
       onSelect={onOpen}
       onRefresh={async () => {
         await Promise.all([refresh(), refreshTasks()]);
@@ -297,17 +233,13 @@ const SEARCH_IDLE = null;
  * What the Search tab reads and draws once something is typed, in either
  * window: what the query finds of the workspace's tasks, the reader's Inbox,
  * and the agents on its tasks, each kind best first, under the scopes, and
- * what opens a row found, each in its own tab or, in a wide window, beside
- * the results; the questions and sheets a found row's acts raise stand
- * beside it. Note that only a typed query, or a wide window's pick, mounts
- * it, because the tab stays mounted behind the others, and building every
- * listing on each delivery with nothing typed cost every tap in the app.
+ * what opens a row found, each in its own tab; the questions and sheets a
+ * found row's acts raise stand beside it. Note that only a typed query
+ * mounts it, because the tab stays mounted behind the others, and building
+ * every listing on each delivery with nothing typed cost every tap in the
+ * app.
  */
-function useSearchScreen(
-  { query, scope, setScope }: SearchWords,
-  pick?: SearchPicking | undefined,
-  leave?: () => void,
-) {
+function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => void) {
   const router = useRouter();
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
@@ -319,18 +251,8 @@ function useSearchScreen(
   const onTab = useOnTab();
 
   const open = (id: string) => {
-    // Note that a pick lowers the keyboard the query raised, as Mail and Notes do, since a split view's field keeps its focus while the pick opens beside it.
+    // Note that a pick lowers the keyboard the query raised, as Mail and Notes do.
     lowerKeyboard();
-    const picked = pick === undefined ? undefined : foundPick(found, id);
-
-    if (pick !== undefined && picked !== undefined) {
-      pick.choose(picked);
-      // Note that the keyboard is lowered again once the pick has drawn beside the results, since the column's field may take its focus back as its column draws anew.
-      requestAnimationFrame(lowerKeyboard);
-
-      return;
-    }
-
     const route = routes.get(id);
 
     if (route === undefined) return;
@@ -362,7 +284,6 @@ function useSearchScreen(
       scope={scope}
       setScope={setScope}
       listing={listing}
-      selected={pick?.picked?.id}
       onOpen={open}
       remindMenu={remind.itemMenu}
       archiving={archiving}
@@ -388,7 +309,7 @@ function SearchStackFound({
   leave,
   ...words
 }: SearchWords & { readonly leave: (() => void) | undefined }) {
-  const { results, status, deletion, remind } = useSearchScreen(words, undefined, leave);
+  const { results, status, deletion, remind } = useSearchScreen(words, leave);
 
   return (
     <>
@@ -466,204 +387,10 @@ function SearchStackScreen(words: SearchWords) {
   );
 }
 
-/**
- * The page a pick in a wide window's Search stands beside the results, each
- * kind's own detail from its own tab: a thread as the Inbox's detail draws
- * it, a task as the Tasks detail draws it, and an agent as its page pushed
- * over a detail draws it; Choose an item before anything is picked. A
- * thread a pick's box started takes its place, as it does in the Inbox.
- */
-function useSearchDetail(
-  picked: SearchPick | undefined,
-  listing: TasksListing,
-  remindMenu: (item: InboxItem) => BarMenu,
-  choose: Dispatch<SetStateAction<SearchPick | undefined>>,
-) {
-  const task = useTaskDetail(
-    picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined,
-    listing,
-    undefined,
-    SIDEBAR_PLACE.SEARCH,
-  );
-
-  if (picked === undefined)
-    return { detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />, asks: null };
-
-  switch (picked.kind) {
-    case SEARCH_PICK.TASK:
-      return { detail: task.detail, detailBar: task.detailBar, asks: task.asks };
-    case SEARCH_PICK.THREAD:
-      return {
-        detail: (
-          <ThreadColumn
-            key={picked.id}
-            id={picked.id}
-            remindMenu={remindMenu}
-            onOpen={(id) =>
-              choose({
-                kind: SEARCH_PICK.THREAD,
-                id,
-                route: iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }),
-              })
-            }
-          />
-        ),
-        asks: null,
-      };
-    case SEARCH_PICK.AGENT:
-      return {
-        detail: (
-          <AgentConversation
-            key={picked.id}
-            id={picked.id}
-            inColumn
-            // Note that a leave lands once its archive or delete is answered, so it clears the pick only while it still names this agent, never a row picked meanwhile.
-            onLeave={() =>
-              choose((was) =>
-                was?.kind === SEARCH_PICK.AGENT && was.id === picked.id ? undefined : was,
-              )
-            }
-          />
-        ),
-        asks: null,
-      };
-  }
-}
-
-/**
- * A wide window's Search: what the query finds, under the system's field in
- * the list column's bar, handed to the tabs' one split view beside the app
- * sidebar, as the iPad's Mail searches beside its mailboxes. A row found
- * opens beside the results, in Search's own detail (`useSearchDetail`), and
- * a page it opens is pushed over that detail in the same column. Note that
- * the results stand in the list column, as every tab's list does, because a
- * split view that loses its middle column as the tabs change is a different
- * view and is drawn anew.
- */
-function SearchSplitScreen({
-  picking,
-  ...words
-}: SearchWords & { readonly picking: SearchPicking }) {
-  // Note that a pick still standing keeps what the query found mounted with the query cleared, since its detail draws from the listing.
-  const found = words.query.trim() !== "" || picking.picked !== undefined;
-
-  return (
-    <>
-      <Stack.Screen options={UNDER_SPLIT_SCREEN} />
-      {found ? (
-        <SearchSplitFound {...words} picking={picking} />
-      ) : (
-        <SearchSplitColumns words={words} content={SEARCH_IDLE} />
-      )}
-    </>
-  );
-}
-
-/** Hands the split view Search's list column, under the system's field in its bar, and the detail beside it: a pick's page, or the line that says to pick a row. */
-function SearchSplitColumns({
-  words,
-  content,
-  detail,
-  detailBar,
-  root,
-}: {
-  readonly words: SearchWords;
-  readonly content: ReactNode;
-  readonly detail?: ReactNode | undefined;
-  readonly detailBar?: ColumnBar | undefined;
-  readonly root?: string | undefined;
-}) {
-  const { query, setQuery, scope } = words;
-  useStackRoot(SIDEBAR_PLACE.SEARCH, root);
-  useHandColumns(SIDEBAR_PLACE.SEARCH, {
-    content,
-    contentBar: {
-      title: SEARCH_TITLE,
-      search: { placeholder: searchPlaceholder(scope), text: query, onChange: setQuery },
-    },
-    detail: detail ?? <NoSelection title={CHOOSE_AN_ITEM_WORDS} />,
-    detailBar,
-    root,
-  });
-
-  return null;
-}
-
-/** What the query finds in the split view's list column, the pick's page beside it, and the questions and sheets its rows' acts raise. */
-function SearchSplitFound({
-  picking,
-  ...words
-}: SearchWords & { readonly picking: SearchPicking }) {
-  const { listing, results, status, deletion, remind } = useSearchScreen(words, picking);
-
-  const { detail, detailBar, asks } = useSearchDetail(
-    picking.picked,
-    listing,
-    remind.itemMenu,
-    picking.choose,
-  );
-
-  return (
-    <>
-      <SearchSplitColumns
-        words={words}
-        content={words.query.trim() === "" ? SEARCH_IDLE : results}
-        detail={detail}
-        detailBar={detailBar}
-        root={picking.picked?.id}
-      />
-      <StatusQuestionAsk question={status} />
-      <StatusQuestionAsk question={deletion} />
-      {remind.sheet}
-      {asks}
-    </>
-  );
-}
-
-/**
- * Keeps Search's pick in front as the window narrows past three columns,
- * where Search's results stand alone with no detail beside them: the pick
- * is pushed as its own tab's route on Search's stack, and let go, so a
- * wider window again opens on the results. Note that a pick with a page
- * pushed over it is left to `useStackToRoutes`, which pushes that page.
- */
-function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking): void {
-  const router = useRouter();
-  const onTab = useOnTab();
-  const stack = useDetailStack(SIDEBAR_PLACE.SEARCH);
-  const was = useRef(threeColumns);
-  // Note that the pick and its stack are read through a ref the commit writes, before the layout lets the stack go.
-  const held = useRef({ picked, stacked: false });
-  useEffect(() => {
-    held.current = { picked, stacked: stack.pages.length > 0 };
-  }, [picked, stack]);
-
-  // Note that only a focused Search hands its pick on, so a rotation while another tab shows leaves the pick for Search's return; focus is heard through an effect, because a read would draw Search's root again on every tab switch.
-  useFocusEffect(
-    useCallback(() => {
-      const before = was.current;
-      was.current = threeColumns;
-      const { picked: shown, stacked } = held.current;
-
-      if (!before || threeColumns || stacked || shown?.route === undefined) return;
-      router.push(onTab(shown.route));
-      choose(undefined);
-    }, [threeColumns, router, onTab, choose]),
-  );
-}
-
-/** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise, the query and its scope held here so a rotation across the line keeps them. */
+/** The Search tab's root screen, under the Stack's bar, the query and its scope held here. */
 export function SearchScreen() {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>(SEARCH_SCOPE.ALL);
-  const [picked, choose] = useState<SearchPick | undefined>(undefined);
-  const words = { query, setQuery, scope, setScope };
-  const threeColumns = useThreeColumns();
-  usePickToRoute(threeColumns, { picked, choose });
 
-  return threeColumns ? (
-    <SearchSplitScreen {...words} picking={{ picked, choose }} />
-  ) : (
-    <SearchStackScreen {...words} />
-  );
+  return <SearchStackScreen query={query} setQuery={setQuery} scope={scope} setScope={setScope} />;
 }

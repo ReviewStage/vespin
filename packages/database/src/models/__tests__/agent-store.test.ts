@@ -991,15 +991,6 @@ it.layer(getTestDB())("the coding-agent store's agents of a workspace", (it) => 
           web.agentId,
         ]);
         assert.deepEqual(yield* listWorkspaceAgents(outsider, workspace, { limit: 10 }), []);
-        // Only the account's own, where asked, held to the limit after the narrowing.
-        assert.deepEqual(
-          ids(yield* listWorkspaceAgents(starter, workspace, { ownOnly: true, limit: 2 })),
-          [newest.agentId, oldest.agentId],
-        );
-        assert.deepEqual(
-          ids(yield* listWorkspaceAgents(teammate, workspace, { ownOnly: true, limit: 10 })),
-          [web.agentId],
-        );
 
         // An agent on a plan is listed with the rest, and alone where its plan is named.
         const invitations = yield* createTask(teammate, {

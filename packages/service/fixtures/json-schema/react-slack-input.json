@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "channel": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A channel the bot is in, by the id or name list_slack_channels answered, or your own thread's channel."
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The `ts` of the message."
+    },
+    "emoji": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The emoji by Slack's name, such as `thumbsup` or `eyes`."
+    },
+    "remove": {
+      "type": "boolean",
+      "description": "true to take the bot's reaction off instead."
+    }
+  },
+  "required": [
+    "channel",
+    "message",
+    "emoji"
+  ],
+  "additionalProperties": false
+}

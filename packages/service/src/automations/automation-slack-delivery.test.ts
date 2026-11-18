@@ -26,10 +26,12 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
-import { TURN_STATUS } from "@repo/wire";
+import { ACTION_RESULT_STATUS, TURN_STATUS } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
+import { AGENT_CALLER } from "../agents/agent-tools.js";
 import { postTurnToSlack } from "../slack/slack-agent-starts.js";
 import { SlackBot, SlackBotFailure, type SlackWebApi, slackBotOver } from "../slack/slack-bot.js";
+import { runSendSlackMessage } from "../slack/slack-message-tool.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import { endedAt } from "../testing/agent-turns.js";
 
@@ -54,6 +56,8 @@ function recordingSlack() {
 
   const api: SlackWebApi = (method, args) => {
     switch (method) {
+      case "auth.test":
+        return Effect.succeed({ ok: true, team_id: "T0001", team: "Team" });
       case "users.lookupByEmail":
         return Effect.succeed({ ok: true, user: { id: SLACK_USER } });
       case "chat.postMessage":
@@ -210,7 +214,49 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
   );
 
   it.effect(
-    "a run's result DM is kept as its agent's thread, so the turn a reply there starts is answered under it and the next run is sent as a DM of its own",
+    "an agent's send_slack_message is refused while no thread speaks for it, then posted in the thread its run's result was kept as",
+    () =>
+      Effect.gen(function* () {
+        const slack = recordingSlack();
+        const bot = slackBotOver(slack.api);
+        const { agent } = yield* openDeliveringRun();
+        const caller = { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false } as const;
+
+        const send = (text: string) =>
+          runSendSlackMessage({ caller }, { text }).pipe(Effect.provideService(SlackBot, bot));
+
+        const early = yield* send("Too soon.");
+
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0, "Nothing needs you today.").pipe(
+          Effect.provide(
+            Layer.succeed(SettledTurnListener, {
+              heard: (turn) => postTurnToSlack(turn).pipe(Effect.provideService(SlackBot, bot)),
+            }),
+          ),
+        );
+
+        const sent = yield* send("Yes, it counts.");
+
+        // The fake Slack answers the run's result DM under this timestamp.
+        const digest = "1700000000.000001";
+        assert.equal(early.status, ACTION_RESULT_STATUS.REJECTED);
+        assert.deepEqual(sent, {
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          channelId: DM_CHANNEL,
+          ts: "1700000000.000002",
+          threadTs: digest,
+        });
+        const [, reply, ...more] = slack.posted;
+        assert.equal(more.length, 0);
+        assert.deepEqual(
+          [reply?.channel, reply?.thread_ts, reply?.text],
+          [DM_CHANNEL, digest, "Yes, it counts."],
+        );
+      }),
+  );
+
+  it.effect(
+    "a run's result DM is kept as its agent's thread, where a turn a reply starts posts none of its words, one that failed says so, and the next run is sent as a DM of its own",
     () =>
       Effect.gen(function* () {
         const slack = recordingSlack();
@@ -227,13 +273,14 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
         // The fake Slack answers the first message posted under this timestamp.
         const digest = "1700000000.000001";
         const kept = yield* slackAgentThreadAt(organizationId, DM_CHANNEL, digest);
-        // The member's reply in the DM's thread starts a turn that is no run's.
+        // The member's replies in the DM's thread start turns that are no run's.
         yield* endedAt(
           agent,
           RUN_STATUS.SUCCEEDED,
           T0 + 60_000,
           "Yes, black cold brew counts.",
         ).pipe(Effect.provide(posting));
+        yield* endedAt(agent, RUN_STATUS.FAILED, T0 + 120_000).pipe(Effect.provide(posting));
         yield* runOn(automation, agent.id, T0 + 86_400_000);
         yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0 + 86_460_000, "Two threads need you.").pipe(
           Effect.provide(posting),
@@ -243,11 +290,12 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           Option.map(kept, (thread) => thread.agentId),
           Option.some(agent.id),
         );
-        const [, answer, nextDigest, ...more] = slack.posted;
+        const [, notice, nextDigest, ...more] = slack.posted;
         assert.equal(more.length, 0);
-        assert.equal(answer?.channel, DM_CHANNEL);
-        assert.equal(answer?.thread_ts, digest);
-        assert.match(answer?.text ?? "", /black cold brew/u);
+        assert.deepEqual(
+          [notice?.channel, notice?.thread_ts, notice?.text],
+          [DM_CHANNEL, digest, "The agent failed: model."],
+        );
         assert.equal(nextDigest?.channel, SLACK_USER);
         assert.equal(nextDigest?.thread_ts, undefined);
         assert.match(nextDigest?.text ?? "", /^Email digest: Two threads/u);

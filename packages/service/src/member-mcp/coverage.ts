@@ -91,14 +91,9 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { workspaceInvitations: ["cancel"] },
   [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { workspaces: ["setPhoto"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { tasks: ["list"], taskSections: ["list"] },
-  [MEMBER_MCP_TOOL.READ_TASK]: { tasks: ["open"] },
-  [MEMBER_MCP_TOOL.FIND_TASK]: { tasks: ["find", "open"] },
+  [MEMBER_MCP_TOOL.READ_TASK]: { tasks: ["open", "find"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
-  [MEMBER_MCP_TOOL.READ_AGENT]: {
-    agents: ["read"],
-    agentPullRequests: ["pullRequest"],
-    messages: ["agentNewest", "agent"],
-  },
+  [MEMBER_MCP_TOOL.READ_AGENT]: { agents: ["read"] },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: {
     messages: [
@@ -111,6 +106,7 @@ export const MEMBER_MCP_COVERAGE = {
     ],
   },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
+  [MEMBER_MCP_TOOL.LIST_MACHINES]: { hosts: ["list", "presence"] },
   [MEMBER_MCP_TOOL.UPDATE_PREFERENCES]: { account: ["writePreferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
   [MEMBER_MCP_TOOL.READ_TASK_FILE]: { taskFiles: ["file"] },
@@ -125,11 +121,13 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION]: { tasks: ["restoreDescription"] },
   [MEMBER_MCP_TOOL.CREATE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
-  [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"], tasks: ["create"] },
+  [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"] },
   [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send", "queue"] },
   [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { messages: ["queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.ARCHIVE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.UNARCHIVE_AGENT]: { agents: ["change"] },
   [MEMBER_MCP_TOOL.REWIND_AGENT]: { agents: ["rewind"] },
   [MEMBER_MCP_TOOL.DELETE_AGENT]: { agents: ["delete"] },
   [MEMBER_MCP_TOOL.WAKE_AGENT]: { agents: ["sandboxResume", "warm"] },
@@ -337,8 +335,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   githubToken: { read: SECRET, save: SECRET, remove: SECRET },
   hosts: {
-    list: INTERNAL,
-    presence: INTERNAL,
     // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
     allowedApps: SCREEN_ONLY,
     remove: INTERNAL,

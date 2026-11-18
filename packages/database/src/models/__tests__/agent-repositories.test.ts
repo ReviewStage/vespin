@@ -73,9 +73,9 @@ it.layer(getTestDB())("the repositories an agent works in", (it) => {
       ]);
 
       assert.deepEqual(yield* readAgentRepositories(userId, agentId), [
-        { repository: "acme/api", baseBranch: "release", headBranch: null, pullRequest: null },
-        { repository: "acme/web", baseBranch: null, headBranch: null, pullRequest: null },
-        { repository: "acme/docs", baseBranch: "next", headBranch: null, pullRequest: null },
+        { repository: "acme/api", headBranch: null, pullRequest: null },
+        { repository: "acme/web", headBranch: null, pullRequest: null },
+        { repository: "acme/docs", headBranch: null, pullRequest: null },
       ]);
     }),
   );
@@ -88,7 +88,7 @@ it.layer(getTestDB())("the repositories an agent works in", (it) => {
       const inNone = yield* startedIn(userId, workspace, null);
 
       assert.deepEqual(yield* readAgentRepositories(userId, inOne), [
-        { repository: "acme/api", baseBranch: "release", headBranch: null, pullRequest: null },
+        { repository: "acme/api", headBranch: null, pullRequest: null },
       ]);
       assert.deepEqual(yield* readAgentRepositories(userId, inNone), []);
       assert.deepEqual([...(yield* extraRows(inOne)), ...(yield* extraRows(inNone))], []);

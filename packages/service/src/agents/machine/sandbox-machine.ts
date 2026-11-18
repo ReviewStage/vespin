@@ -137,6 +137,7 @@ import {
   Result,
   Tracer,
 } from "effect";
+import { bookSandboxUsageCheck } from "../../billing/usage-queues.js";
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import {
   AGENT_OWN_DRIVE,
@@ -484,7 +485,7 @@ const workspaceVcpusOf = (
 /** Why the sandbox could not be readied for the agent's runner. */
 const NOT_READIED = "the sandbox could not be readied for the agent's runner";
 
-/** Why the sandbox was not opened where the workspace it is billed to could not be recorded first. */
+/** Why the sandbox was not opened where the workspace it is billed to could not be recorded, or its usage check booked, first. */
 const OWNER_NOT_RECORDED = "the sandbox's workspace could not be recorded";
 
 /** How the read exits where the path is no regular file the sandbox's user may read. */
@@ -1154,7 +1155,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       let refused: CheckoutRefused | undefined;
       const vcpus = yield* workspaceVcpusOf(agent);
 
-      // Note that the owner is recorded before the open, so no sandbox we create stands unbilled.
+      // Note that the owner is recorded and the usage check booked before the open, so no sandbox we create stands unbilled or uncharged.
       yield* recordSandboxOwner({
         sandboxName: agentSandboxName(sessionId),
         organizationId: agent.organizationId,
@@ -1162,6 +1163,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         userId: agent.userId,
         createdAt: yield* DateTime.nowAsDate,
       }).pipe(
+        Effect.andThen(bookSandboxUsageCheck(agentSandboxName(sessionId))),
         Effect.mapError(
           () => new SandboxUnavailable({ retryable: true, detail: OWNER_NOT_RECORDED }),
         ),

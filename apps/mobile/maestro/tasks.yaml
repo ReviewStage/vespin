@@ -144,7 +144,8 @@ env:
 # tap, because after the steps above a tap on it as soon as the menu showed
 # it closed the menu with no question, even tapped once and waited on for
 # 5 s, while the same steps scrolled first asked every time (jtdel and
-# jndel, Nov 18).
+# jndel, Nov 18). The tap is never retried, because a retry once the menu
+# has closed lands behind the question and puts it away.
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
@@ -299,21 +300,13 @@ env:
     visible: "Invites sent in the staging workspace.*"
     timeout: 90000
 - takeScreenshot: task-page
-# Note that a page pushed over an iPad's detail column stands Open in
-# browser in the column's bar itself, and a compact window keeps it in ⋯
-# (`PageScreen`'s `inColumn`), so ⋯ is opened, and closed, only there.
-- runFlow:
-    file: subflows/bar-act.yaml
-    env:
-      ACT: Open in browser
+# Note that the page is pushed over the whole window in every window, on
+# the tab's own stack, so its ⋯ holds Open in browser on an iPad too.
+- tapOn: "More"
 - assertVisible: "Open in browser"
 - takeScreenshot: task-page-menu
 - runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - runFlow:
-          file: subflows/dismiss.yaml
+    file: subflows/dismiss.yaml
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
@@ -383,7 +376,11 @@ env:
 - assertVisible: "Copy link"
 - assertVisible: "Permanently delete"
 - takeScreenshot: task-more-menu
-- tapOn: "Permanently delete"
+# Note that the tap is never retried, because a retry once the menu has
+# closed lands behind the question and puts it away.
+- tapOn:
+    text: "Permanently delete"
+    retryTapIfNoChange: false
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
 - takeScreenshot: task-delete-ask
@@ -444,7 +441,7 @@ env:
     id: "BackButton"
 - waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: on an iPad
-# the app sidebar, the list, and the task side by side.
+# the system's tab sidebar beside the list and the task.
 - runFlow:
     file: subflows/tab.yaml
     env:

@@ -386,7 +386,7 @@ export function NewTaskComposer({
 
   const openSettings = useOpenSettings();
 
-  // Note that no agent has started, so the popover offers no Built in section (`luke`).
+  // Note that no agent has started, so the popover offers no Built in section.
   const servers: AgentServersControl = {
     disabled: disabledServers,
     onSwitch: setDisabledServers,
@@ -680,8 +680,6 @@ export function NewTaskComposer({
     });
   };
 
-  // Talk starts the task and its agent blank, handed nothing, on the card's choices, and the
-  // call opens on the agent once it lands, so its first words are the caller's (Dean, Nov 17).
   // Note that each press mints its own key, since a blank start carries nothing a Retry could ask again.
   const talk = (call: CallWhenStarted) => {
     if (devicesUnread || unpaid !== undefined) return call(undefined);

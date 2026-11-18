@@ -11,7 +11,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 36,
-      "description": "A coding agent whose pull request it is, by its id as list_agents answered it; leave it out to name a repository's pull request instead."
+      "description": "A coding agent whose repository the pull request is of, by its id as list_agents answered it, with number; leave it out to name the repository instead."
     },
     "repository": {
       "type": "string",
@@ -22,7 +22,7 @@
     "number": {
       "type": "integer",
       "minimum": 1,
-      "description": "The pull request's number: with repository, the one meant; with agentId, another pull request of the agent's repository, left out for the agent's own."
+      "description": "The pull request's number, in the repository that repository or agentId names. For an agent's own pull request, pass the number read_agent_changes answers."
     },
     "paths": {
       "type": "array",
@@ -41,6 +41,7 @@
     }
   },
   "required": [
+    "number",
     "paths",
     "viewed"
   ],

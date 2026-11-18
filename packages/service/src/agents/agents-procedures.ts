@@ -68,14 +68,8 @@ import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_AGENT_TOOL, SERVER_EVENT } from "../events/server-events.js";
-import type { GitHubBearer } from "../github/github-app.js";
-import { changesPeople, namedReviewOptions } from "../github/github-people.js";
-import {
-  pullRequestByNumber,
-  pullRequestFiles,
-  pullRequestReviewOptions,
-  readCommits,
-} from "../github/pull-requests.js";
+import { namedReviewOptions } from "../github/github-people.js";
+import { pullRequestReviewOptions } from "../github/pull-requests.js";
 import { afterResponse } from "../http/after-response.js";
 import {
   HOSTED_REFUSAL,
@@ -101,12 +95,7 @@ import {
 } from "./agent-lifecycle.js";
 import { admitsPlanWriter, controlsAgent, reachedAgentById } from "./agent-reach.js";
 import { agentSandboxName } from "./agent-sandbox-open.js";
-import {
-  askedPullRequest,
-  githubReadRefusal,
-  type PullRequestSubject,
-  pullRequestNumberOf,
-} from "./asked-pull-request.js";
+import { askedPullRequest, githubReadRefusal, pullRequestNumberOf } from "./asked-pull-request.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { answeredApproval } from "./coder-host/approval-answer.js";
 import { retryBoot } from "./coder-host/boot.js";
@@ -136,6 +125,7 @@ import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-hos
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
+import { pullRequestChangesRead } from "./pull-request-changes.js";
 import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
 import { ranRunAction, stoppedRunAction } from "./run-actions.js";
 import {
@@ -226,43 +216,6 @@ const committedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 /** The session alone of the agent the path names, as `reachedAgentSession` reads it. */
 const reachedSession = (userId: string, id: string) =>
   Effect.map(reachedAgentSession(userId, id), ({ sessionId }) => sessionId);
-
-/**
- * A pull request's changes: its files, who it names (`github-people.ts`),
- * and the commits its changed files are read whole at (`readCommits`), read
- * from GitHub afresh on the token minted for its repository, with who its
- * subject says it writes as. Shared with the reads of a pull request by
- * its repository (`github/repository-pull-request.ts`).
- */
-export const pullRequestChangesRead = (
-  bearer: GitHubBearer,
-  subject: PullRequestSubject,
-  pullRequest: AgentPullRequest,
-) =>
-  Effect.gen(function* () {
-    // Note that the pull request itself is read beside its files for its head and base, which its changed files are read whole at; a read that does not land names neither.
-    const [files, people, whole] = yield* Effect.all(
-      [
-        pullRequestFiles(bearer, subject.repository, pullRequest),
-        changesPeople(bearer, subject, pullRequest.number),
-        Effect.orElseSucceed(
-          pullRequestByNumber(bearer, subject.repository, pullRequest.number),
-          () => Option.none(),
-        ),
-      ],
-      { concurrency: "unbounded" },
-    );
-
-    const commits = yield* readCommits(bearer, subject.repository, whole, files.files);
-
-    return {
-      url: pullRequest.url,
-      ...commits,
-      ...files,
-      ...people,
-      ...(subject.author === null ? undefined : { writtenAs: subject.author }),
-    };
-  });
 
 /**
  * The changes of the pull request asked about of an agent (`askedPullRequest`),

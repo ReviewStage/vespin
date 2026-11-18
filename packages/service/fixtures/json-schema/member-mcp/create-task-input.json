@@ -24,7 +24,7 @@
           "type": "null"
         }
       ],
-      "description": "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach; null or left out for none, or the parent's where you give a parent."
+      "description": "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach, or null for none; required, but left out where you give a parentTaskId or subTaskIds, whose repository it takes."
     },
     "brief": {
       "type": "string",
@@ -45,7 +45,7 @@
         "done",
         "canceled"
       ],
-      "description": "Where the task stands: backlog for work filed for later; todo where left out."
+      "description": "Where the task stands: todo for work to start, backlog for work filed for later."
     },
     "priority": {
       "type": "string",
@@ -74,42 +74,43 @@
     "parentTaskId": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 36,
-      "description": "The task to make it a child of, by the id list_tasks answered: a task of your workspace, whose repository it works in. Left out, it stands at the top."
+      "maxLength": 64,
+      "description": "The task to make it a child of, by the id list_tasks answered or its key, such as ACME-42: a task of your workspace, whose repository it works in. Left out, it stands at the top."
     },
     "subTaskIds": {
       "type": "array",
       "items": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 36
+        "maxLength": 64
       },
       "maxItems": 50,
-      "description": "Its sub-tasks (the tasks it is the parent of), by the id list_tasks answered, each a task of your workspace with no parent yet, working in one repository with it, which it takes, so leave repository out. Left out, it has none."
+      "description": "Its sub-tasks (the tasks it is the parent of), each by the id list_tasks answered or its key, such as ACME-42, each a task of your workspace with no parent yet, working in one repository with it, which it takes, so leave repository out. Left out, it has none."
     },
     "blockedBy": {
       "type": "array",
       "items": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 36
+        "maxLength": 64
       },
       "maxItems": 50,
-      "description": "Its blocked-by (the tasks it waits on), by the id list_tasks answered, each a task of your workspace, such as a sibling whose work comes first. Left out, it waits on none."
+      "description": "Its blocked-by (the tasks it waits on), each by the id list_tasks answered or its key, such as ACME-42, each a task of your workspace, such as a sibling whose work comes first. Left out, it waits on none."
     },
     "blocks": {
       "type": "array",
       "items": {
         "type": "string",
         "minLength": 1,
-        "maxLength": 36
+        "maxLength": 64
       },
       "maxItems": 50,
-      "description": "Its blocks (the tasks that wait on it), by the id list_tasks answered, each a task of your workspace. Left out, none waits on it."
+      "description": "Its blocks (the tasks that wait on it), each by the id list_tasks answered or its key, such as ACME-42, each a task of your workspace. Left out, none waits on it."
     }
   },
   "required": [
-    "name"
+    "name",
+    "status"
   ],
   "additionalProperties": false
 }

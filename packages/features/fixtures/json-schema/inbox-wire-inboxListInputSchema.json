@@ -1,15 +1,37 @@
 {
   "type": "object",
   "properties": {
-    "agentId": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 36
-    },
-    "taskId": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 36
+    "of": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "agentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36
+            }
+          },
+          "required": [
+            "agentId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "taskId"
+          ],
+          "additionalProperties": false
+        }
+      ]
     },
     "status": {
       "type": "string",
@@ -20,6 +42,8 @@
       ]
     }
   },
-  "required": [],
+  "required": [
+    "of"
+  ],
   "additionalProperties": false
 }

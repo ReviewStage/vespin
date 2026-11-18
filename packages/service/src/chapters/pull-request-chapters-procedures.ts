@@ -76,6 +76,7 @@ import {
   chaptersModelOn,
 } from "@repo/features/chapters-model-choice";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
+import type { ModelApiProvider } from "@repo/features/provider-key-wire";
 import { chapterSchema } from "@repo/features/pull-request-chapters";
 import type { ChaptersGenerator } from "@repo/features/pull-request-chapters-live";
 import {
@@ -300,14 +301,14 @@ const generatingNow = /* @__PURE__ */ Effect.fnUntraced(function* (subject: Chap
 
 /**
  * The member's own API keys a model may be called on, the one it is called
- * on first: the provider they last picked where they saved both,
- * Anthropic's until they pick, and the other's where the picked one cannot
- * be opened; none where they saved none.
+ * on first: the provider named, else the one they last picked where they
+ * saved both, Anthropic's until they pick, and the other's where the picked
+ * one cannot be opened; none where they saved none.
  */
-const ownKeysFor = (userId: string) =>
+const ownKeysFor = (userId: string, named: ModelApiProvider | undefined) =>
   Effect.gen(function* () {
     const environment = yield* HostedEnvironment;
-    const preferred = yield* hostedStoreOrUnavailable(accountChaptersProvider(userId));
+    const preferred = named ?? (yield* hostedStoreOrUnavailable(accountChaptersProvider(userId)));
 
     return yield* hostedStoreOrUnavailable(ownKeysOf(userId, preferred, environment));
   });
@@ -342,8 +343,15 @@ function generatorOf(keys: readonly OwnKey[]): ChaptersGenerator {
   };
 }
 
+/** The providers the member may generate chapters on, by an API key of theirs that opens, in the providers' own order; none where they saved none. */
+export const chaptersProvidersFor = (userId: string) =>
+  Effect.map(ownKeysFor(userId, undefined), (keys): readonly ModelProvider[] =>
+    PROVIDER_ORDER.filter((provider) => keys.some((own) => own.provider === provider)),
+  );
+
 /** What the member's Generate stands on: nothing to run on where they saved no API key. */
-export const generatorFor = (userId: string) => Effect.map(ownKeysFor(userId), generatorOf);
+export const generatorFor = (userId: string) =>
+  Effect.map(ownKeysFor(userId, undefined), generatorOf);
 
 /** The model a Generate tells chapters on, and what it stands on as the answer names it. */
 interface GenerateOn {
@@ -351,12 +359,20 @@ interface GenerateOn {
   readonly generator: ChaptersGenerator;
 }
 
-/** Haiku's tier, which every Generate runs on, on the member's own API key, the one they picked first; none where they saved none. */
-const modelOf = (seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">, userId: string) =>
-  Effect.map(ownKeysFor(userId), (keys): GenerateOn | undefined => {
+/**
+ * Haiku's tier, which every Generate runs on, on the member's own API key:
+ * the named provider's alone, where a tool names one, else the one they
+ * picked first; none where they saved none, or none of the provider named.
+ */
+const modelOf = (
+  seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">,
+  userId: string,
+  named: ModelApiProvider | undefined,
+) =>
+  Effect.map(ownKeysFor(userId, named), (keys): GenerateOn | undefined => {
     const [own] = keys;
 
-    return own === undefined
+    return own === undefined || (named !== undefined && own.provider !== named)
       ? undefined
       : {
           model: (seams.chaptersModel ?? chaptersModelOf)(own, CHAPTERS_MODEL.HAIKU),
@@ -584,16 +600,22 @@ export const agentChaptersRead = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* answerOf(kept.value, asked, generator);
 });
 
-/** The agent's own pull request's chapters generated now, or another of its repository's the number names, on the asker's own key; unavailable where they saved none. */
+/**
+ * The agent's own pull request's chapters generated now, or another of its
+ * repository's the number names, on the asker's own key of the provider
+ * named, or of the one they last picked where none is named, as the tab's
+ * Generate names none; unavailable where they saved no such key.
+ */
 export const agentChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(function* (
   seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">,
   published: Effect.Effect<PublishedCache>,
   userId: string,
   agent: Agent,
   number: string | undefined,
+  provider: ModelApiProvider | undefined,
 ) {
   // The model runs on the presser's own key, while the chapters it tells are the workspace's.
-  const on = yield* modelOf(seams, userId);
+  const on = yield* modelOf(seams, userId, provider);
 
   if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   const subject = yield* subjectOf(published, userId, agent, number);
@@ -614,15 +636,16 @@ export const repositoryChaptersRead = /* @__PURE__ */ Effect.fnUntraced(function
   return yield* answerOf(subject, query.number, yield* generatorFor(userId));
 });
 
-/** That pull request's chapters generated now on the asker's own key; not found where the repository holds none of the number. */
+/** That pull request's chapters generated now on the asker's own key, chosen as the agent's Generate chooses it; not found where the repository holds none of the number. */
 export const repositoryChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(function* (
   seams: Pick<PullRequestChaptersProcedureSeams, "chaptersModel">,
   userId: string,
   query: RepositoryPullRequest,
+  provider: ModelApiProvider | undefined,
 ) {
   // The pull request is reached before the presser's key is asked about, so a non-member is refused alike whatever key they saved.
   const { bearer, subject, found } = yield* reachedByNumber(userId, query, pullRequestByNumber);
-  const on = yield* modelOf(seams, userId);
+  const on = yield* modelOf(seams, userId, provider);
 
   if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
 
@@ -659,6 +682,8 @@ export function pullRequestChaptersProcedures(seams: PullRequestChaptersProcedur
         context.userId,
         agent,
         input.query?.number,
+        // The tab's Generate runs on the provider the member last picked there.
+        undefined,
       );
     }),
 
@@ -667,7 +692,7 @@ export function pullRequestChaptersProcedures(seams: PullRequestChaptersProcedur
     }),
 
     repositoryGenerate: signedIn.repositoryGenerate.effect(function* ({ input, context }) {
-      return yield* repositoryChaptersGenerate(seams, context.userId, input.query);
+      return yield* repositoryChaptersGenerate(seams, context.userId, input.query, undefined);
     }),
   };
 }
