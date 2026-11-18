@@ -22,7 +22,7 @@ import { MediaFailed } from "./media-failed.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { TEXT_SIZE } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 
 /** What a clip says where the player cannot play it, such as an Ogg, which AVPlayer has no reader for. */
 const CANNOT_PLAY = "This clip can't play here.";
@@ -246,7 +246,7 @@ export function AudioClip({ source, label, onRetry }: AudioClipProps) {
           accessible
           accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
         >
-          <Text style={{ flexShrink: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+          <Text style={{ flexShrink: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
             {CANNOT_PLAY}
           </Text>
         </View>
@@ -291,7 +291,7 @@ export function AudioClip({ source, label, onRetry }: AudioClipProps) {
         </View>
         <Text
           style={{
-            fontSize: TEXT_SIZE.CAPTION,
+            fontSize: ROLE_SIZE.TIME,
             color: colors.TEXT_MUTED,
             fontVariant: ["tabular-nums"],
           }}
