@@ -145,6 +145,16 @@ export function useMenuPictures(addresses: readonly string[]): MenuPictures {
 
     for (const address of new Set(addresses)) {
       if (freshSince(files.get(address)?.at)) continue;
+
+      // Note that a photo tried again is on its way again, not failed, so its choice shows nothing rather than its fallback until this try settles.
+      setMissed((held) => {
+        if (!held.has(address)) return held;
+        const next = new Set(held);
+        next.delete(address);
+
+        return next;
+      });
+
       void downloaded(address).then((photo) => {
         if (!live) return;
 
