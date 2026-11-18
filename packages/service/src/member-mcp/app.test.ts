@@ -60,6 +60,7 @@ import { INBOX_ANSWER_LEAD, INBOX_ASK, INBOX_REPLY, INBOX_STATUS } from "@repo/f
 import { SKILL_PASTE_KIND } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
@@ -2160,6 +2161,67 @@ it.effect(
         decodeDefault(JSON.parse(after.text)),
         decodeDefault(JSON.parse(before.text)),
       );
+    }),
+);
+
+it.effect(
+  "update_preferences refuses a model of two context windows named without one, naming both, and a model of one named with one",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* memberMcpStanding({
+        catalog: [
+          {
+            id: "anthropic/claude-opus-5.5",
+            name: "Claude Opus 5.5",
+            provider: MODEL_PROVIDER.ANTHROPIC,
+            efforts: ["high"],
+            contextWindows: { standardTokens: 200_000, longTokens: 1_000_000 },
+          },
+          {
+            id: "anthropic/claude-haiku-5.5",
+            name: "Claude Haiku 5.5",
+            provider: MODEL_PROVIDER.ANTHROPIC,
+            efforts: ["high"],
+          },
+        ],
+      });
+
+      const member = yield* Effect.promise(() => signUp(auth));
+
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
+      const call = (args: ToolArguments) =>
+        Effect.promise(async () => {
+          const answer = decodeAnswer(
+            await client.callTool({ name: MEMBER_MCP_TOOL.UPDATE_PREFERENCES, arguments: args }),
+          );
+
+          return { refused: answer.isError === true, text: answer.content[0].text };
+        });
+
+      const unnamed = yield* call({ model: "anthropic/claude-opus-5.5", effort: "high" });
+
+      const named = yield* call({
+        model: "anthropic/claude-haiku-5.5",
+        effort: "high",
+        contextWindow: "standard",
+      });
+
+      yield* Effect.promise(() => client.close());
+
+      assert.equal(unnamed.refused, true);
+      assert.match(unnamed.text, /contextWindow is required/u);
+      assert.match(unnamed.text, /standard \(200000 tokens\) or long \(1000000 tokens\)/u);
+      assert.equal(named.refused, true);
+      assert.match(named.text, /takes no contextWindow/u);
     }),
 );
 
