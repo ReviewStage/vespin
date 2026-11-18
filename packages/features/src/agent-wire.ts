@@ -762,7 +762,9 @@ export const startBranchSchema = EffectSchema.String.check(
  * moves; one that names none runs where its source runs, for a continue or
  * a fork, else where the starting member's newest agent on the task runs,
  * else where the member last named (`account_preference.runs_on_*`), else
- * in the cloud; a task holds no place of its own. An automation's run reads
+ * in the cloud; a task holds no place of its own. Note that only the app's
+ * own Starts reach that default: a `start_agent` call names its place, or
+ * starts from another agent. An automation's run reads
  * neither of its owner's own and runs in the cloud. A Start's `branch` names the branch its agent's checkout is cloned at,
  * which must already be on GitHub, as the member MCP server's `start_agent`
  * takes it: refused as not found where the repository has no such branch,

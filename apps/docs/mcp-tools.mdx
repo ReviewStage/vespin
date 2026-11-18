@@ -287,7 +287,7 @@ Starts an agent on a task, or from another agent on its task. Make a new task fi
 | `branch` | string | The branch of the task's repository to clone the agent's checkout at and cut its own branch from, such as the head branch of a pull request it builds on; it must already be on GitHub. Leave it out for the repository's default branch. (1–255 characters) |
 | `model` | string | The model to run on, by its catalog id (such as anthropic/claude-opus-5.5); leave it out with the effort for the member's default. (1–200 characters) |
 | `effort` | string | The reasoning effort, as the model lists it (such as high); given with the model or not at all. (1–200 characters) |
-| `runsOn` | object | Where the agent runs: &#123;"machine":"vercel"&#125; for the cloud, or &#123;"machine":"device","device":"&lt;name&gt;"&#125; for one of the member's own devices (a Mac or a host) by its name, or &#123;"machine":"device","deviceId":"&lt;id&gt;"&#125; by its id; it must be online, and a name matching none of their devices, or several, is refused with the devices listed. Left out: where the agent it starts from runs, with from; else where the member's newest agent on the task runs; else where the member last chose to run one; else the cloud. With from, another place than that agent's moves it there. |
+| `runsOn` | object | Where the agent runs: &#123;"machine":"vercel"&#125; for the cloud, or &#123;"machine":"device","device":"&lt;name&gt;"&#125; for one of the member's own devices (a Mac or a host) by its name, or &#123;"machine":"device","deviceId":"&lt;id&gt;"&#125; by its id; it must be online, and a name matching none of their devices, or several, is refused with the devices listed. list_machines lists each place with the runsOn to pass. Every start names it but one with from, which runs where the agent it starts from runs unless it names another place, which moves it there. |
 | `from` | object | Another agent of your workspace to take over from, on its own task: the new agent is handed its brief and its transcript (with Vespin's summary of the steps that do not fit) and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on. |
 
 ### message_agent
@@ -583,7 +583,7 @@ Reads a pull request's chapters.
 
 ### generate_pull_request_chapters
 
-Generates chapters on your own Anthropic or OpenAI key, which you pay for.
+Generates chapters on your own key of the provider you name, Anthropic or OpenAI, which you pay for.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -591,6 +591,7 @@ Generates chapters on your own Anthropic or OpenAI key, which you pay for.
 | `repository` | string | The repository whose pull request to read, as owner/name, with number; leave it out with agentId. (up to 140 characters) |
 | `number` | integer | The pull request's number: with repository, the one to read; with agentId, another pull request of the agent's repository, left out for the agent's own. (at least 1) |
 | `workspace` | string | With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
+| `provider` | `anthropic` \| `openai`, required | The provider whose API key the member saved to generate on, one of the chaptersProviders list_models answers. |
 
 ## Comments on pages
 
@@ -776,9 +777,9 @@ Creates an automation on a schedule, a GitHub event, or a Sentry event. Webhook 
 | `name` | string, required | (1–80 characters) |
 | `prompt` | string, required | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
 | `trigger` | object, required | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
-| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
-| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
-| `effort` | string | (1–200 characters) |
+| `repositories` | array of string, required | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. (up to 10 items) |
+| `model` | string, required | Catalog id from list_models, given with effort. (1–200 characters) |
+| `effort` | string, required | (1–200 characters) |
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
 | `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
@@ -796,8 +797,8 @@ Changes an automation. A new trigger replaces the old one whole.
 | `name` | string | (1–80 characters) |
 | `prompt` | string | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
 | `trigger` | object | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
-| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
-| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
+| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. (up to 10 items) |
+| `model` | string | Catalog id from list_models, given with effort. (1–200 characters) |
 | `effort` | string | (1–200 characters) |
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |

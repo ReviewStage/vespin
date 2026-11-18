@@ -23,10 +23,19 @@
       "minLength": 1,
       "maxLength": 48,
       "description": "With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "anthropic",
+        "openai"
+      ],
+      "description": "The provider whose API key the member saved to generate on, one of the chaptersProviders list_models answers."
     }
   },
   "required": [
-    "number"
+    "number",
+    "provider"
   ],
   "additionalProperties": false
 }

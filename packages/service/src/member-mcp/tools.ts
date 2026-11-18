@@ -115,8 +115,13 @@ import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-m
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { contextWindowsOf } from "@repo/features/model-effort";
 import { agentName } from "@repo/features/model-label";
-import { type ContextWindows, modelChoiceSchema } from "@repo/features/models-wire";
+import {
+  type ContextWindows,
+  type ModelProvider,
+  modelChoiceSchema,
+} from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { modelApiProviderSchema } from "@repo/features/provider-key-wire";
 import {
   PULL_REQUEST_CHAPTERS_STATE,
   type PullRequestChaptersAnswer,
@@ -3890,6 +3895,24 @@ const PullRequestChaptersInputSchema = Schema.Struct({
 
 type PullRequestChaptersInput = typeof PullRequestChaptersInputSchema.Type;
 
+/** A Generate names the pull request as a read does, and the provider whose key it spends. */
+const GeneratePullRequestChaptersInputSchema = Schema.Struct({
+  ...PullRequestChaptersInputSchema.fields,
+  provider: describeWire(
+    modelApiProviderSchema,
+    "The provider whose API key the member saved to generate on, one of the chaptersProviders " +
+      `${MEMBER_MCP_TOOL.LIST_MODELS} answers.`,
+  ),
+});
+
+/** Why a Generate naming a provider the member saved no key of ran nothing, naming those they did. */
+function chaptersProviderRefusal(providers: readonly ModelProvider[]): string {
+  return providers.length === 0
+    ? CHAPTERS_REFUSAL.NO_KEY
+    : `Not generated: the member saved no API key of that provider; name one they did as ` +
+        `provider: ${providers.map((provider) => `\`${provider}\``).join(", ")}.`;
+}
+
 /** The two ways a chapters call reaches its pull request: through the agent that published it, or by its repository and number. */
 interface ChaptersCall<R> {
   /** Whether it generates, which spends the member's key, rather than reads. */
@@ -3966,18 +3989,32 @@ const GENERATE_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
     `more: read first with ${MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS}, and generate only ` +
     "where no chapters stand, they are stale, or they failed. Where another Generate of the " +
     "same head is under way, it answers that one as generating rather than starting a second. " +
-    "A pull request too large to tell is answered as failed, too_large. Refused where the " +
-    "member saved no API key (generatable false). Name the pull request as the read does. " +
+    "A pull request too large to tell is answered as failed, too_large. It runs on the " +
+    "provider named, whose API key the member saved, as chaptersProviders in " +
+    `${MEMBER_MCP_TOOL.LIST_MODELS} lists them, and is refused where they saved none of it. ` +
+    "Name the pull request as the read does. " +
     CHAPTERS_ANSWER_WORDS,
-  input: PullRequestChaptersInputSchema,
+  input: GeneratePullRequestChaptersInputSchema,
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-  run: (asked) =>
-    chaptersAsMember(asked, {
-      generates: true,
-      agent: (userId, agent, number) =>
-        agentChaptersGenerate({}, KEPT_PUBLISHED, userId, agent, String(number)),
-      repository: (userId, query) => repositoryChaptersGenerate({}, userId, query),
-    }),
+  run: ({ provider, ...asked }) =>
+    Effect.flatMap(AdmittedMember, (member) =>
+      Effect.gen(function* () {
+        const saved = yield* Effect.result(chaptersProvidersFor(member.userId));
+
+        if (Result.isFailure(saved)) return agentToolRejected(CHAPTERS_REFUSAL.UNANSWERED);
+
+        if (!saved.success.includes(provider)) {
+          return agentToolRejected(chaptersProviderRefusal(saved.success));
+        }
+
+        return yield* chaptersAsMember(asked, {
+          generates: true,
+          agent: (userId, agent, number) =>
+            agentChaptersGenerate({}, KEPT_PUBLISHED, userId, agent, String(number), provider),
+          repository: (userId, query) => repositoryChaptersGenerate({}, userId, query, provider),
+        });
+      }),
+    ),
 });
 
 /*
@@ -4500,7 +4537,7 @@ const MEMBER_AUTOMATION_FIELDS = {
     describeWire(
       automationCreateRequestSchema.fields.repositories.schema,
       "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] " +
-        "for none, which a GitHub trigger cannot take. Create defaults to none.",
+        "for none, which a GitHub trigger cannot take.",
     ),
   ),
   disabledServers: Schema.optionalKey(
@@ -4564,6 +4601,7 @@ const CreateAutomationInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   ...CREATE_AUTOMATION_TOOL.inputSchema.fields,
   ...MEMBER_AUTOMATION_FIELDS,
+  repositories: MEMBER_AUTOMATION_FIELDS.repositories.schema,
 });
 
 const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
@@ -4574,7 +4612,9 @@ const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
     "repositories or in none, on the member's keys and connections, on a task of its own with no " +
     "one watching, or hands the run to the one agent named. It is on as it is made, runs as the " +
     "member, and the desktop shows it as one they made. It works in the repositories named, " +
-    `or in none where you name none. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
+    "or in none where you name []. Name its repositories, model, and effort: none is taken " +
+    `from the member's defaults, and ${MEMBER_MCP_TOOL.LIST_MODELS} answers the models and ` +
+    `efforts. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
     `integration installed on the workspace first. ${WEBHOOK_WORDS} ${WORKSPACE_WORDS} Make ` +
     `one when the member asks for it, and read ${MEMBER_MCP_TOOL.LIST_AUTOMATIONS} first so ` +
     "you make none they already have. Each call makes an automation of its own, so call it " +

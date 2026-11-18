@@ -248,13 +248,13 @@
         "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$"
       },
       "maxItems": 10,
-      "description": "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none."
+      "description": "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take."
     },
     "model": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Catalog id from list_models, given with effort; neither for the creator's default."
+      "description": "Catalog id from list_models, given with effort."
     },
     "effort": {
       "type": "string",
