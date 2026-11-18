@@ -41,18 +41,20 @@
               "type": "string",
               "minLength": 1,
               "maxLength": 200,
-              "description": "The model to run on, by its catalog id, as list_models lists it; leave it out with the effort for the default of the member who sends it."
+              "description": "The model to run on, by its catalog id, as list_models lists it."
             },
             "effort": {
               "type": "string",
               "minLength": 1,
               "maxLength": 200,
-              "description": "The reasoning effort, as the model lists it; given with the model or not at all."
+              "description": "The reasoning effort, as the model lists it."
             }
           },
           "required": [
             "kind",
-            "prompt"
+            "prompt",
+            "model",
+            "effort"
           ],
           "additionalProperties": false
         },

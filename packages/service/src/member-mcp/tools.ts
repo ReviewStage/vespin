@@ -879,7 +879,8 @@ const MEMBER_LIST_MODELS_TOOL = memberMcpTool({
     "multiple of the standard price, or none where it runs on one window, and its payers, the " +
     "kinds of credential the member keeps that pay for it (subscription, api_key, both, or none " +
     "where nothing does); the member's default model, effort, and the window it runs on, which " +
-    "a start naming neither runs on, and whether it is still offered; and chaptersProviders, " +
+    `the app's own Starts run on and a ${MEMBER_MCP_TOOL.START_AGENT} call never does, and ` +
+    "whether it is still offered; and chaptersProviders, " +
     "the providers whose API key the member saved, which " +
     `${MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS} may run on, none where they saved none. ` +
     "The models are the member's own, the same in every workspace.",
@@ -1729,6 +1730,7 @@ const StartAgentInputSchema = Schema.Struct({
   branch: START_AGENT_TOOL.inputSchema.fields.branch,
   model: START_AGENT_TOOL.inputSchema.fields.model,
   effort: START_AGENT_TOOL.inputSchema.fields.effort,
+  permissionMode: START_AGENT_TOOL.inputSchema.fields.permissionMode,
   runsOn: START_AGENT_TOOL.inputSchema.fields.runsOn,
   from: START_AGENT_TOOL.inputSchema.fields.from,
 });
@@ -1776,7 +1778,7 @@ function memberStartAgentWords(handed: string): string {
     "be on GitHub, and every start on a task with a repository but one from another agent " +
     `names it; ${MEMBER_MCP_TOOL.LIST_REPOSITORIES} answers each one's defaultBranch. ` +
     "It runs on the model and effort " +
-    "named, as the member is offered them, or on the member's default with neither; " +
+    "named, as the member is offered them, which every start names but one with from; " +
     `${MEMBER_MCP_TOOL.LIST_MODELS} lists them. With from, it starts from another agent ` +
     "instead: continue an agent that failed, ended, or ran out of context with mode continue, " +
     "which hands it over and stops it, or fork one with mode fork at a messageId to try " +
