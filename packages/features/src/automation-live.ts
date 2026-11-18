@@ -93,7 +93,8 @@ const automationLiveRowSchema = EffectSchema.Struct({
   enabled: EffectSchema.Boolean,
   trigger: automationTriggerSchema,
   action: automationActionSchema,
-  guards: automationGuardsSchema,
+  /** The limits it once ran under, which nothing reads; a service still sends them for the builds before it that require them. */
+  guards: EffectSchema.optionalKey(automationGuardsSchema),
   nextRunAt: EffectSchema.NullOr(countedNumber),
   organizationId: EffectSchema.NullOr(EffectSchema.String),
   scope: automationScopeSchema,
@@ -343,7 +344,7 @@ export function automationsOfLiveRows(
       pausedReason: null,
       trigger: row.trigger,
       action: row.action,
-      guards: row.guards,
+      ...(row.guards === undefined ? undefined : { guards: row.guards }),
       nextRunAt: row.nextRunAt,
       lastRun: lastRunOf(row, now),
       createdAt: row.createdAt,
