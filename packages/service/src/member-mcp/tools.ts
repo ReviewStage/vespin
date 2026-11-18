@@ -239,6 +239,7 @@ import {
   READ_PAGE_CHARS,
   READ_PAGE_REFUSAL,
   READ_PAGE_TOOL,
+  runArchiveAgent,
   runListAgents,
   runListMemberModels,
   runListTasks,
@@ -246,6 +247,7 @@ import {
   runReadPage,
   runStartAgent,
   runStopAgent,
+  runUnarchiveAgent,
   runUpdateAgent,
   runUpdateTask,
   START_AGENT_REFUSAL,
@@ -2057,25 +2059,6 @@ const UpdateAgentInputSchema = Schema.Struct({
       "Whether the member keeps it pinned in their sidebar, the pin theirs alone.",
     ),
   ),
-  archived: Schema.optionalKey(
-    describeWire(
-      Schema.Boolean,
-      "true to archive it, as the member's Archive agent would: it leaves the sidebar, its " +
-        "task's tabs, and every list but the archived ones, takes no message, and is not woken, " +
-        "its transcript, branch, and pull request kept; a turn still running is stopped first. " +
-        "false to bring an archived one back.",
-    ),
-  ),
-  reason: Schema.optionalKey(
-    describeWire(
-      Schema.Trim.check(
-        Schema.isNonEmpty(),
-        Schema.isMaxLength(AGENT_BOUNDS.MAX_ARCHIVE_REASON_CHARS),
-      ),
-      "Why it is archived, in a short sentence its archived banner shows beside the member's " +
-        "name, such as its pull request having merged; only with archived true.",
-    ),
-  ),
 });
 
 const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
@@ -2084,15 +2067,11 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     "Change a coding agent the member can see, by its id, as the member's own menu, model " +
     "chip, and composer would: rename it (empty clears the title), move it to another model " +
     `and effort, and context window, from its next step, as ${MEMBER_MCP_TOOL.LIST_MODELS} ` +
-    "lists them, pin or unpin it in the member's sidebar, replace the list of MCP servers " +
-    "switched off for it, archive it or bring it back, the archive recorded as the " +
-    "member's own. Name at least one " +
-    "change, a model only with its effort, a contextWindow only with them, and a reason only " +
-    "with archived true; an archive is checked first, and " +
-    "the rest land together or not at all. One still working is stopped first, as the Stop " +
-    "button would, and one still starting is refused until it can be. Answers `accepted` with the agent " +
-    "as it then stands, whether archived among it, or `rejected` and why; a rejected model " +
-    "or effort lists the choices.",
+    "lists them, pin or unpin it in the member's sidebar, or replace the list of MCP servers " +
+    "switched off for it. Name at least one change, a model only with its effort and a " +
+    "contextWindow only with them; the changes land together or not at all. Archive it with " +
+    `${MEMBER_MCP_TOOL.ARCHIVE_AGENT}. Answers \`accepted\` with the agent as it then stands, or ` +
+    "`rejected` and why; a rejected model or effort lists the choices.",
   input: UpdateAgentInputSchema,
   annotations: DESTRUCTIVE,
   run: (asked) =>
@@ -2100,6 +2079,56 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       AGENT_TOOL_REFUSAL.NO_AGENT,
       (call) => runUpdateAgent(call, asked),
+    ),
+});
+
+/** An archive names the agent and why, which its archived banner shows beside the member's name. */
+const ArchiveAgentInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  reason: describeWire(
+    Schema.Trim.check(
+      Schema.isNonEmpty(),
+      Schema.isMaxLength(AGENT_BOUNDS.MAX_ARCHIVE_REASON_CHARS),
+    ),
+    "Why it is archived, in a short sentence its archived banner shows beside the member's " +
+      "name, such as its pull request having merged.",
+  ),
+});
+
+const MEMBER_ARCHIVE_AGENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.ARCHIVE_AGENT,
+  description:
+    "Archive a coding agent the member can see, by its id, as the member's own Archive agent " +
+    "would, the archive recorded as the member's own: a turn still under way is stopped first, " +
+    "as the Stop button would, and its open asks are withdrawn; then it leaves the sidebar, its " +
+    "task's tabs, and every list but the archived ones, takes no message, and is not woken, its " +
+    "transcript, branch, and pull request kept. One still starting is refused until it can be " +
+    `stopped. ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT} brings it back. Answers \`accepted\` with the ` +
+    "agent as it then stands, archived among it, or `rejected` and why.",
+  input: ArchiveAgentInputSchema,
+  annotations: DESTRUCTIVE,
+  run: (asked) =>
+    writeAsMember(
+      (userId) => agentWorkspace(userId, { id: asked.agentId }),
+      AGENT_TOOL_REFUSAL.NO_AGENT,
+      (call) => runArchiveAgent(call, asked),
+    ),
+});
+
+const MEMBER_UNARCHIVE_AGENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.UNARCHIVE_AGENT,
+  description:
+    "Bring an archived coding agent the member can see back, by its id, as the member's own " +
+    "Unarchive would: it stands in its task's lists again and takes messages, its archive's " +
+    "record cleared; it starts no turn, and the asks its archive withdrew stay withdrawn. " +
+    "Answers `accepted` with the agent as it then stands, archived among it, or `rejected` and why.",
+  input: AgentIdInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: (asked) =>
+    writeAsMember(
+      (userId) => agentWorkspace(userId, { id: asked.agentId }),
+      AGENT_TOOL_REFUSAL.NO_AGENT,
+      (call) => runUnarchiveAgent(call, asked),
     ),
 });
 
@@ -2586,7 +2615,7 @@ const DELETE_AGENT_TOOL = memberMcpTool({
     "and its session ended, and nothing brings it back. Its branch and pull request on " +
     "GitHub stay. Any member who can see an agent may delete it, as in the app. Delete only an " +
     "agent the member asked you to; to put one away and keep it, archive it with " +
-    `${MEMBER_MCP_TOOL.UPDATE_AGENT} instead. Answers \`accepted\` once it is deleted, or ` +
+    `${MEMBER_MCP_TOOL.ARCHIVE_AGENT} instead. Answers \`accepted\` once it is deleted, or ` +
     "`rejected` and why, such as a stop that did not take.",
   input: AgentIdInputSchema,
   annotations: DESTRUCTIVE,
@@ -5867,6 +5896,8 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   CHANGE_AGENT_QUEUE_TOOL,
   MEMBER_STOP_AGENT_TOOL,
   MEMBER_UPDATE_AGENT_TOOL,
+  MEMBER_ARCHIVE_AGENT_TOOL,
+  MEMBER_UNARCHIVE_AGENT_TOOL,
   REWIND_AGENT_TOOL,
   DELETE_AGENT_TOOL,
   WAKE_AGENT_TOOL,

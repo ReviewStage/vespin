@@ -1119,7 +1119,7 @@ function commentUpdateKind(input: WireValue | undefined): CallKind {
   return resolved === false ? CALL_KIND.REOPEN_THREAD : CALL_KIND.RESOLVE_THREAD;
 }
 
-/** How an agent's change is said on its row: archived or unarchived where it named its archive, and changed otherwise. */
+/** How an agent's change is said on its row: archived or unarchived where it named its archive, as an `update_agent` call written before `archive_agent` came back may, and changed otherwise. */
 function agentUpdateKind(input: WireValue | undefined): CallKind {
   const archived = isRecord(input) ? input.archived : undefined;
 
@@ -1470,6 +1470,10 @@ const AGENT_TOOL_VIEWS = {
     answeredAgentCall(CALL_KIND.STOP_AGENT, input, output),
   [AGENT_TOOL.UPDATE_AGENT]: ({ input, output }) =>
     answeredAgentCall(agentUpdateKind(input), input, output),
+  [AGENT_TOOL.ARCHIVE_AGENT]: ({ input, output }) =>
+    answeredAgentCall(CALL_KIND.ARCHIVE_AGENT, input, output),
+  [AGENT_TOOL.UNARCHIVE_AGENT]: ({ input, output }) =>
+    answeredAgentCall(CALL_KIND.UNARCHIVE_AGENT, input, output),
   [AGENT_TOOL.LIST_TASKS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_TASKS, input, output, undefined),
   [AGENT_TOOL.READ_TASK]: ({ input, output }) =>
@@ -1754,10 +1758,6 @@ const RETIRED_TOOL_VIEWS = {
       output,
       stringAt(input, "prompt") === undefined ? "task" : "prompt",
     ),
-  [RETIRED_TOOL.ARCHIVE_AGENT]: ({ input, output }) =>
-    answeredAgentCall(CALL_KIND.ARCHIVE_AGENT, input, output),
-  [RETIRED_TOOL.UNARCHIVE_AGENT]: ({ input, output }) =>
-    answeredAgentCall(CALL_KIND.UNARCHIVE_AGENT, input, output),
   [RETIRED_TOOL.MOVE_TASK]: ({ input, output }) =>
     answeredCall(CALL_KIND.MOVE_TASK, input, output, "task", "name"),
   [RETIRED_TOOL.CLOSE_INBOX_ITEM]: READ_INBOX_CALL,
@@ -2070,7 +2070,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.READ_AGENT, namedAgent],
   [AGENT_TOOL.MESSAGE_AGENT, namedAgent],
   [AGENT_TOOL.START_AGENT, startedAgent],
-  [RETIRED_TOOL.UNARCHIVE_AGENT, namedAgent],
+  [AGENT_TOOL.UNARCHIVE_AGENT, namedAgent],
   [AGENT_TOOL.STOP_AGENT, namedAgent],
   [AGENT_TOOL.UPDATE_TASK, answeredTask],
   [AGENT_TOOL.CREATE_TASK, answeredTask],
@@ -2183,8 +2183,8 @@ const AGENT_CALL_TOOLS: ReadonlySet<string> = new Set([
   AGENT_TOOL.READ_AGENT,
   AGENT_TOOL.MESSAGE_AGENT,
   AGENT_TOOL.START_AGENT,
-  RETIRED_TOOL.ARCHIVE_AGENT,
-  RETIRED_TOOL.UNARCHIVE_AGENT,
+  AGENT_TOOL.ARCHIVE_AGENT,
+  AGENT_TOOL.UNARCHIVE_AGENT,
   AGENT_TOOL.STOP_AGENT,
   AGENT_TOOL.UPDATE_AGENT,
   RETIRED_TOOL.READ_CODING_AGENT,

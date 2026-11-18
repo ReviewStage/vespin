@@ -1057,7 +1057,7 @@ export type AgentRenameRequest = typeof agentRenameRequestSchema.Type;
  * awaiting its turn, has no turn to stop yet and is refused as not ready,
  * to be tried again. An archived agent takes no message. An archive may say
  * why, in a short sentence its archived banner shows, as the member MCP
- * server's `update_agent` does; bringing one back says nothing.
+ * server's `archive_agent` does; bringing one back says nothing.
  */
 export const agentArchiveRequestSchema = EffectSchema.Struct({
   archived: EffectSchema.Boolean,

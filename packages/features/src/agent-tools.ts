@@ -29,6 +29,9 @@ export const AGENT_TOOL = {
   ADD_SUGGESTION: "add_suggestion",
   STOP_AGENT: "stop_agent",
   UPDATE_AGENT: "update_agent",
+  // An agent put away, its turn stopped first, and one brought back.
+  ARCHIVE_AGENT: "archive_agent",
+  UNARCHIVE_AGENT: "unarchive_agent",
   LIST_TASKS: "list_tasks",
   READ_TASK: "read_task",
   CREATE_TASK: "create_task",
@@ -158,9 +161,7 @@ export const RETIRED_TOOL = {
   READ_CODING_AGENT: "read_coding_agent",
   MESSAGE_CODING_AGENT: "message_coding_agent",
   START_CODING_AGENT: "start_coding_agent",
-  // Folded into `update_agent` (`archived`, `reason`) and `update_task` (`sectionId`).
-  ARCHIVE_AGENT: "archive_agent",
-  UNARCHIVE_AGENT: "unarchive_agent",
+  // Folded into `update_task` (`sectionId`).
   MOVE_TASK: "move_task",
   // Folded into `post_to_inbox` (a post that asks nothing) and `withdraw_ask`.
   CLOSE_INBOX_ITEM: "close_inbox_item",

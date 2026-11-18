@@ -1078,21 +1078,27 @@ export const UPDATE_AGENT_REFUSAL = {
     `Not changed: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered and at least one ` +
     `change: a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} characters (empty clears ` +
     "it), a model with its effort, both or neither, a contextWindow only with them, pinned, or " +
-    "disabledServers as connection names, or archived, with a reason only where it is true.",
+    `disabledServers as connection names; archive it with ${AGENT_TOOL.ARCHIVE_AGENT}.`,
   UNAVAILABLE: "Not changed: the models could not be read just now. The call may be made again.",
+} as const;
+
+/** Why an archive or a bring-back changed nothing, in words the model can act on; one refused for its starter's subscription names the starter (`archiveRefusalWords`). */
+export const ARCHIVE_AGENT_REFUSAL = {
+  UNREADABLE:
+    `Not archived: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered as agentId, and ` +
+    `why it is archived as reason, a sentence of at most ${AGENT_BOUNDS.MAX_ARCHIVE_REASON_CHARS} ` +
+    "characters, such as its pull request having merged.",
+  UNREADABLE_UNARCHIVE: `Not brought back: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered as agentId.`,
   SELF: "Not archived: that id is your own, and an agent does not archive itself; say you are done, and the developer archives you.",
-  STILL_WORKING:
-    "Not archived: that agent is still working. Wait until its turn ends and call again, or stop " +
-    `it with ${AGENT_TOOL.STOP_AGENT} first where it should not go on. Nothing else asked was changed.`,
   NOT_READY:
     "Not archived: that agent's turn is still coming up, so there is no turn to stop yet; call " +
-    "again in a moment. Nothing else asked was changed.",
+    "again in a moment.",
   NATIVE_NOT_HERE:
     "Not archived: that agent runs on Claude Code or Codex, which cannot be reached from here " +
-    "to stop its turn yet; a member archives it from the agent's own tab. Nothing else asked was changed.",
-  UNAVAILABLE_ARCHIVE:
+    "to stop its turn yet; a member archives it from the agent's own tab.",
+  UNAVAILABLE:
     "Not archived: the service could not reach that agent's session to stop its turn just now. " +
-    "The call may be made again. Nothing else asked was changed.",
+    "The call may be made again.",
 } as const;
 
 /** The lead a refused choice of a change is said under. */
@@ -1106,17 +1112,13 @@ function updateNamesAChange(update: {
   readonly contextWindow?: string;
   readonly pinned?: boolean;
   readonly disabledServers?: readonly string[];
-  readonly archived?: boolean;
-  readonly reason?: string;
 }): boolean {
-  const { title, model, effort, contextWindow, pinned, disabledServers, archived, reason } = update;
-  const changes = [title, model, pinned, disabledServers, archived];
+  const { title, model, effort, contextWindow, pinned, disabledServers } = update;
+  const changes = [title, model, pinned, disabledServers];
 
   if ((model === undefined) !== (effort === undefined)) return false;
 
   if (contextWindow !== undefined && model === undefined) return false;
-
-  if (reason !== undefined && archived !== true) return false;
 
   return changes.some((field) => field !== undefined);
 }
@@ -1169,25 +1171,6 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
         "replaces the one standing; empty switches every server back on. Its next turn reads it.",
     ),
   ),
-  archived: Schema.optionalKey(
-    describeWire(
-      Schema.Boolean,
-      "true to archive it, as the developer's Archive agent would: it leaves every list but the " +
-        "archived ones, and is not woken by GitHub or an automation; a message brings it back. Its " +
-        "transcript, branch, and pull request are kept; refused while it is still working, and " +
-        "never yourself. false brings it back.",
-    ),
-  ),
-  reason: Schema.optionalKey(
-    describeWire(
-      Schema.Trim.check(
-        Schema.isNonEmpty(),
-        Schema.isMaxLength(AGENT_BOUNDS.MAX_ARCHIVE_REASON_CHARS),
-      ),
-      "Why it is archived, in a short sentence the developer reads on its archived banner " +
-        "beside your name, such as its pull request having merged; only with archived true.",
-    ),
-  ),
 }).check(Schema.makeFilter(updateNamesAChange));
 
 const readUpdateAsked = Schema.decodeUnknownResult(UPDATE_AGENT_INPUT);
@@ -1197,14 +1180,51 @@ export const UPDATE_AGENT_TOOL = {
   description:
     "Change an agent of your workspace by its id, as the developer's own menu, model chip, and " +
     "composer would, for the developer you work for: rename it, move it to another model, effort, " +
-    "and context window from its next step, pin it, replace the MCP servers switched off for it, " +
-    "or archive it or bring it back. An archive is checked first, and the rest land together or " +
-    "not at all. Archive an idle helper agent whose work is done, such as one whose pull request " +
-    "merged, or one the developer asked you to clean up, with a short reason; one still working " +
-    "is refused, and no agent archives itself. Change a teammate's agent still in use only where " +
-    "the developer asked for it. A rejected model or effort lists the choices. Then say which " +
-    "agent you changed and how.",
+    "and context window from its next step, pin it, or replace the MCP servers switched off for " +
+    "it; the changes land together or not at all. Change a teammate's agent still in use only " +
+    "where the developer asked for it. A rejected model or effort lists the choices. Then say " +
+    "which agent you changed and how.",
   inputSchema: UPDATE_AGENT_INPUT,
+} as const;
+
+/** An archive names the agent and why it is archived, which its archived banner shows. */
+const ARCHIVE_AGENT_INPUT = Schema.Struct({
+  agentId: AGENT_ID,
+  reason: describeWire(
+    Schema.Trim.check(
+      Schema.isNonEmpty(),
+      Schema.isMaxLength(AGENT_BOUNDS.MAX_ARCHIVE_REASON_CHARS),
+    ),
+    "Why it is archived, in a short sentence the developer reads on its archived banner " +
+      "beside your name, such as its pull request having merged.",
+  ),
+});
+
+const readArchiveAsked = Schema.decodeUnknownResult(ARCHIVE_AGENT_INPUT);
+
+export const ARCHIVE_AGENT_TOOL = {
+  name: AGENT_TOOL.ARCHIVE_AGENT,
+  description:
+    "Archive an agent of your workspace by its id, as the developer's Archive agent would, for " +
+    "the developer you work for: a turn it still has under way is stopped first, as " +
+    `${AGENT_TOOL.STOP_AGENT} would, and its open asks are withdrawn; then it leaves every list ` +
+    "but the archived ones, takes no message, and is not woken by GitHub or an automation. Its " +
+    "transcript, branch, and pull request are kept. Archive a helper agent whose work is done, " +
+    "such as one whose pull request merged, or one the developer asked you to clean up, with a " +
+    "short reason; never a teammate's agent still in use unless the developer asked for it. No " +
+    `agent archives itself. ${AGENT_TOOL.UNARCHIVE_AGENT} brings one back. Then say which agent ` +
+    "you archived and why.",
+  inputSchema: ARCHIVE_AGENT_INPUT,
+} as const;
+
+export const UNARCHIVE_AGENT_TOOL = {
+  name: AGENT_TOOL.UNARCHIVE_AGENT,
+  description:
+    "Bring an archived agent of your workspace back by its id, as the developer's Unarchive " +
+    "would: it stands in its task's lists again and takes messages, its archive's record " +
+    "cleared; it starts no turn, and the asks its archive withdrew stay withdrawn. One not " +
+    "archived is answered as it stands. Then say which agent you brought back.",
+  inputSchema: READ_AGENT_INPUT,
 } as const;
 
 /** A list of tasks names its words to look for at most, and how many of the matching tasks to pass over. */
@@ -2867,30 +2887,117 @@ const archiveRefusalWords = (refusal: HostedRefusal, agent: Agent) =>
   Effect.gen(function* () {
     if (refusal.error === HOSTED_API_ERROR.NOT_FOUND) return AGENT_TOOL_REFUSAL.NO_AGENT;
 
-    if (refusal.error === HOSTED_API_ERROR.AGENT_NOT_READY) return UPDATE_AGENT_REFUSAL.NOT_READY;
+    if (refusal.error === HOSTED_API_ERROR.AGENT_NOT_READY) return ARCHIVE_AGENT_REFUSAL.NOT_READY;
 
     if (refusal.error === HOSTED_API_ERROR.NOT_PERMITTED) {
-      return `Not archived: ${yield* agentStarterName(agent)}'s own subscription pays for that agent, so only they and their agents can stop and archive it. Nothing else asked was changed.`;
+      return `Not archived: ${yield* agentStarterName(agent)}'s own subscription pays for that agent, so only they and their agents can stop and archive it.`;
     }
 
     if (refusal.error === HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE) {
-      return UPDATE_AGENT_REFUSAL.NATIVE_NOT_HERE;
+      return ARCHIVE_AGENT_REFUSAL.NATIVE_NOT_HERE;
     }
 
-    return UPDATE_AGENT_REFUSAL.UNAVAILABLE_ARCHIVE;
+    return ARCHIVE_AGENT_REFUSAL.UNAVAILABLE;
   });
+
+/** An agent as an archive or a bring-back answers it: whether it now stands archived among it. */
+function archiveAnswer(agent: Agent, task: AgentTaskReading): WireRecord {
+  return {
+    status: ACTION_RESULT_STATUS.ACCEPTED,
+    agent: {
+      id: agent.id,
+      title: agent.title ?? agent.model,
+      task: task.task === null ? null : { ...task.task },
+      onYourTask: task.onYourTask,
+      archived: agent.archivedAt !== null,
+    },
+  };
+}
+
+/** An agent of the caller's workspace archived or brought back by the one operation the app's menu runs (`agent-change.ts`), as the caller, for `reason` on an archive. */
+const archiveOrBringBack = (
+  call: AgentCall,
+  agentId: string,
+  archived: boolean,
+  reason: string | undefined,
+) =>
+  orStoreRefusal(
+    Effect.gen(function* () {
+      const { caller } = call;
+      const found = yield* workspaceAgentOf(caller, agentId);
+
+      if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
+      const { agent, task } = found.value;
+
+      const written = yield* Effect.result(
+        archivedAgent(
+          deploymentSandboxDeletes,
+          call.writer,
+          callerUserId(caller),
+          agent,
+          archived,
+          archiverOf(caller, reason),
+        ),
+      );
+
+      if (Result.isFailure(written)) {
+        return agentToolRejected(yield* archiveRefusalWords(written.failure, agent));
+      }
+
+      if (Option.isNone(written.success)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
+
+      return archiveAnswer(written.success.value.agent, task);
+    }),
+  );
+
+/**
+ * One call of `archive_agent`: an agent of the caller's workspace archived
+ * as the app's menu archives it, a turn still under way stopped first as
+ * its Stop would, refused for the caller itself and for one whose turn is
+ * still coming up; an archive already standing is answered as it stands,
+ * its first record kept.
+ */
+export function runArchiveAgent(
+  call: AgentCall,
+  input: UnparsedWireValue,
+): Effect.Effect<WireRecord, never, AgentToolServices> {
+  const asked = readArchiveAsked(input);
+
+  if (Result.isFailure(asked)) {
+    return Effect.succeed(agentToolRejected(ARCHIVE_AGENT_REFUSAL.UNREADABLE));
+  }
+
+  const { agentId, reason } = asked.success;
+
+  if (agentId === callerAgent(call.caller)?.id) {
+    return Effect.succeed(agentToolRejected(ARCHIVE_AGENT_REFUSAL.SELF));
+  }
+
+  return archiveOrBringBack(call, agentId, true, reason);
+}
+
+/** One call of `unarchive_agent`: an agent of the caller's workspace brought back, its archive's record cleared, one standing unarchived answered as it stands. */
+export function runUnarchiveAgent(
+  call: AgentCall,
+  input: UnparsedWireValue,
+): Effect.Effect<WireRecord, never, AgentToolServices> {
+  const asked = readAgentRef(input);
+
+  if (Result.isFailure(asked)) {
+    return Effect.succeed(agentToolRejected(ARCHIVE_AGENT_REFUSAL.UNREADABLE_UNARCHIVE));
+  }
+
+  return archiveOrBringBack(call, asked.success.agentId, false, undefined);
+}
 
 /**
  * One call of `update_agent`: an agent of the caller's workspace renamed,
  * moved to another choice the catalog takes, pinned or unpinned for the
- * caller's member, given another list of servers switched off, or archived
- * or brought back, each by the one operation the app's menu runs
- * (`agent-change.ts`). A choice is checked before anything is written, so
- * one refused changes nothing; an archive goes first, an agent's refused
- * for one still starting or working and a member's stopping a turn still
- * running as the app's does, so one refused changes nothing either; and
- * every other change asked is written in one transaction, so none stands
- * where another failed.
+ * caller's member, or given another list of servers switched off, by the
+ * one operation the app's menu runs (`agent-change.ts`). A choice is
+ * checked before anything is written, so one refused changes nothing, and
+ * every change asked is written in one transaction, so none stands where
+ * another failed.
  */
 export function runUpdateAgent(
   call: AgentCall,
@@ -2903,13 +3010,7 @@ export function runUpdateAgent(
   }
 
   const { agentId, title, model, effort, contextWindow, pinned, disabledServers } = asked.success;
-  const { archived, reason } = asked.success;
   const { caller } = call;
-
-  if (archived === true && agentId === callerAgent(caller)?.id) {
-    return Effect.succeed(agentToolRejected(UPDATE_AGENT_REFUSAL.SELF));
-  }
-
   const userId = callerUserId(caller);
 
   return orStoreRefusal(
@@ -2949,47 +3050,8 @@ export function runUpdateAgent(
 
       // The catalog's own reading of the choice is written, a window the model does not offer apart dropped.
       const choice = accepted === undefined ? undefined : Result.getOrUndefined(accepted);
-      let agent = found.value.agent;
 
-      // Note that an agent archives only an idle agent, because stopping another's work is a member's call.
-      if (archived === true && callerAgent(caller) !== undefined) {
-        const { status } = (yield* standingsOf([agent]))(agent);
-
-        const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
-          agent.conversationId,
-        );
-
-        // A turn whose Stop is on its way reads as canceled, yet is still ending.
-        if (
-          status === AGENT_STATUS.STARTING ||
-          status === AGENT_STATUS.RUNNING ||
-          stopStands(turn)
-        ) {
-          return agentToolRejected(UPDATE_AGENT_REFUSAL.STILL_WORKING);
-        }
-      }
-
-      if (archived !== undefined) {
-        const archive = yield* Effect.result(
-          archivedAgent(
-            deploymentSandboxDeletes,
-            call.writer,
-            userId,
-            agent,
-            archived,
-            archiverOf(caller, reason),
-          ),
-        );
-
-        if (Result.isFailure(archive)) {
-          return agentToolRejected(yield* archiveRefusalWords(archive.failure, agent));
-        }
-
-        if (Option.isNone(archive.success)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-        agent = archive.success.value.agent;
-      }
-
-      const written = yield* changedAgent(userId, agent, {
+      const written = yield* changedAgent(userId, found.value.agent, {
         title,
         choice,
         pinned,
@@ -2997,7 +3059,7 @@ export function runUpdateAgent(
       });
 
       if (Option.isNone(written)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      agent = written.value.agent;
+      const { agent } = written.value;
 
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,

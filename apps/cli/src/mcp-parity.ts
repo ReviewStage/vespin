@@ -67,6 +67,8 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { command: ["agent", "queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { command: ["agent", "stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { command: ["agent", "update"] },
+  [MEMBER_MCP_TOOL.ARCHIVE_AGENT]: { command: ["agent", "update"] },
+  [MEMBER_MCP_TOOL.UNARCHIVE_AGENT]: { command: ["agent", "update"] },
   [MEMBER_MCP_TOOL.REWIND_AGENT]: { command: ["agent", "rewind"] },
   [MEMBER_MCP_TOOL.DELETE_AGENT]: { command: ["agent", "delete"] },
   [MEMBER_MCP_TOOL.WAKE_AGENT]: { command: ["agent", "wake"] },

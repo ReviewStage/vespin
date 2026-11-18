@@ -173,6 +173,7 @@ import {
   AGENT_CALLER,
   AGENT_TOOL_BOUNDS,
   AGENT_TOOL_REFUSAL,
+  ARCHIVE_AGENT_REFUSAL,
   LIST_MODELS_REFUSAL,
   READ_PAGE_REFUSAL,
   START_AGENT_REFUSAL,
@@ -2777,7 +2778,7 @@ test("an agent whose starter no longer sees its task keeps its own tools: it rea
   assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(sent));
 });
 
-test("update_agent archives a teammate's idle agent on another task for the caller's starter, recording the calling agent and its reason, answers a call run again as done with the first record kept, and brings it back with the record cleared", async () => {
+test("archive_agent archives a teammate's idle agent on another task for the caller's starter, recording the calling agent and its reason, answers a call run again as done with the first record kept, and unarchive_agent brings it back with the record cleared", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -2793,10 +2794,14 @@ test("update_agent archives a teammate's idle agent on another task for the call
     return isRecord(answer.agent) ? answer.agent.archived : undefined;
   };
 
-  const archive = (input: Readonly<Record<string, WireBoundaryInput>>, callId?: string) =>
-    call(AGENT_TOOL.UPDATE_AGENT, { agentId: agents.teammates.id, ...input }, callId);
+  const agentId = agents.teammates.id;
 
-  assert.equal(archivedAs(await archive({ archived: true, reason })), true);
+  const archive = (why: string, callId?: string) =>
+    call(AGENT_TOOL.ARCHIVE_AGENT, { agentId, reason: why }, callId);
+
+  const unarchive = (callId: string) => call(AGENT_TOOL.UNARCHIVE_AGENT, { agentId }, callId);
+
+  assert.equal(archivedAs(await archive(reason)), true);
 
   const record = {
     by: AGENT_ARCHIVER.AGENT,
@@ -2808,17 +2813,16 @@ test("update_agent archives a teammate's idle agent on another task for the call
 
   assert.ok((await row()).archivedAt !== null);
   assert.deepEqual((await row()).archivedBy, record);
-  assert.equal(archivedAs(await archive({ archived: true, reason: "Again." }, "call-2")), true);
+  assert.equal(archivedAs(await archive("Again.", "call-2")), true);
   assert.deepEqual((await row()).archivedBy, record, "a second archive keeps the first record");
 
-  // An unarchive, here beside a rename, brings it back with the record cleared, and again is done.
-  assert.equal(archivedAs(await archive({ archived: false, title: "Billing" }, "call-3")), false);
+  // An unarchive brings it back with the record cleared, and again is done.
+  assert.equal(archivedAs(await unarchive("call-3")), false);
   assert.deepEqual([(await row()).archivedAt, (await row()).archivedBy], [null, null]);
-  assert.equal((await row()).title, "Billing");
-  assert.equal(archivedAs(await archive({ archived: false }, "call-4")), false);
+  assert.equal(archivedAs(await unarchive("call-4")), false);
 });
 
-test("update_agent's archive of a teammate's agent on its starter's device queues that device a discard line", async () => {
+test("archive_agent's archive of a teammate's agent on its starter's device queues that device a discard line", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -2841,7 +2845,7 @@ test("update_agent's archive of a teammate's agent on its starter's device queue
   );
   await turnOn(teammates, true);
 
-  await call(AGENT_TOOL.UPDATE_AGENT, { agentId: teammates.id, archived: true });
+  await call(AGENT_TOOL.ARCHIVE_AGENT, { agentId: teammates.id, reason: "Merged." });
 
   const waiting = await database.run(deviceAgentLinesWaiting(teammates.userId, deviceId));
   assert.deepEqual(
@@ -2850,57 +2854,42 @@ test("update_agent's archive of a teammate's agent on its starter's device queue
   );
 });
 
-test("update_agent refuses to archive an agent still working, stopping nothing and writing none of the other changes asked, and archives neither the caller itself, an agent of another workspace its starter is also in, nor a stranger's", async () => {
+test("archive_agent stops the turn of an agent still working before it archives it, and archives neither the caller itself, an agent of another workspace its starter is also in, nor a stranger's", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
   await turnOn(agents.teammates, false);
 
   const archive = (agentId: string, input: Readonly<Record<string, WireBoundaryInput>> = {}) =>
-    call(AGENT_TOOL.UPDATE_AGENT, { agentId, archived: true, ...input });
+    call(AGENT_TOOL.ARCHIVE_AGENT, { agentId, reason: "Superseded.", ...input });
 
   const rejected = (reason: string) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason });
 
-  assert.deepEqual(
-    await archive(agents.teammates.id, { title: "Renamed" }),
-    rejected(UPDATE_AGENT_REFUSAL.STILL_WORKING),
-  );
+  const archived = await archive(agents.teammates.id);
+  assert.equal(archived.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(archived));
   assert.equal(
     agentSessions.sent.filter((sent) => sent.path.endsWith("/cancel")).length,
-    0,
-    "its turn was left running",
+    1,
+    "its turn was stopped",
   );
 
   const teammates = Option.getOrThrow(
     await database.run(readAgent(agents.teammates.userId, agents.teammates.id)),
   );
 
-  assert.deepEqual([teammates.title, teammates.archivedAt], [null, null]);
-  // A turn stopped but still ending is refused too, until its end.
-  await call(AGENT_TOOL.STOP_AGENT, { agentId: agents.teammates.id });
-  assert.deepEqual(
-    await archive(agents.teammates.id),
-    rejected(UPDATE_AGENT_REFUSAL.STILL_WORKING),
-  );
-  assert.deepEqual(await archive(agents.caller.id), rejected(UPDATE_AGENT_REFUSAL.SELF));
+  assert.ok(teammates.archivedAt !== null);
+  assert.deepEqual(await archive(agents.caller.id), rejected(ARCHIVE_AGENT_REFUSAL.SELF));
   assert.deepEqual(await archive(agents.otherWorkspaces.id), rejected(AGENT_TOOL_REFUSAL.NO_AGENT));
   assert.deepEqual(await archive(agents.strangers.id), rejected(AGENT_TOOL_REFUSAL.NO_AGENT));
   assert.deepEqual(
-    await call(AGENT_TOOL.UPDATE_AGENT, { agentId: agents.strangers.id, archived: false }),
+    await call(AGENT_TOOL.UNARCHIVE_AGENT, { agentId: agents.strangers.id }),
     rejected(AGENT_TOOL_REFUSAL.NO_AGENT),
   );
 
-  for (const input of [
-    { reason: "r".repeat(AGENT_BOUNDS.MAX_ARCHIVE_REASON_CHARS + 1) },
-    { archived: false, reason: "Back." },
-  ]) {
+  for (const input of [{ reason: "r".repeat(AGENT_BOUNDS.MAX_ARCHIVE_REASON_CHARS + 1) }, {}]) {
     assert.deepEqual(
-      await call(AGENT_TOOL.UPDATE_AGENT, {
-        agentId: agents.teammates.id,
-        archived: true,
-        ...input,
-      }),
-      rejected(UPDATE_AGENT_REFUSAL.UNREADABLE),
+      await call(AGENT_TOOL.ARCHIVE_AGENT, { agentId: agents.caller.id, ...input }),
+      rejected(ARCHIVE_AGENT_REFUSAL.UNREADABLE),
     );
   }
 
@@ -3579,7 +3568,7 @@ test("an agent whose starter has left the workspace archives no agent of it", as
   await database.run(leaveWorkspace(workspaceId, agents.caller.userId));
 
   assert.deepEqual(
-    await call(AGENT_TOOL.UPDATE_AGENT, { agentId: agents.teammates.id, archived: true }),
+    await call(AGENT_TOOL.ARCHIVE_AGENT, { agentId: agents.teammates.id, reason: "Merged." }),
     {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason: CODER_REFUSAL.NO_AGENT,

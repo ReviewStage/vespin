@@ -1445,10 +1445,12 @@ the Stop button's own path (`src/agents/coder-host/stop.ts`), the agent
 staying available and an idle one answered as idle; `update_agent`, which
 renames an agent of the workspace, moves it to another model and effort the
 catalog takes, pins one on no task for the starter, or switches its MCP
-servers, every change asked in one transaction, and archives an idle agent
-of the workspace, never itself or one still working, on the rule the Archive
-agent menu keeps for the agent's starter, recording the archiving agent and
-its reason on the archived agent's row (`archived_by`), or brings one back; `read_page`, a page shown on any task
+servers, every change asked in one transaction; `archive_agent`, which
+archives an agent of the workspace, never itself, on the rule the Archive
+agent menu keeps for the agent's starter, a turn still under way stopped
+first as the Stop button stops it, recording the archiving agent and its
+reason on the archived agent's row (`archived_by`), and `unarchive_agent`,
+which brings one back; `read_page`, a page shown on any task
 of the workspace by its id, its HTML cut on a line to a bound, which a
 mention of a page points the agent at; `list_tasks`, the workspace's
 open tasks, and its archived ones too where asked, each with the sidebar

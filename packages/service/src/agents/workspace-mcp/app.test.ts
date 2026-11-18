@@ -440,6 +440,8 @@ const AGENT_TOOLS = [
   "message_agent",
   "add_suggestion",
   "update_agent",
+  "archive_agent",
+  "unarchive_agent",
   "list_models",
   "list_tasks",
   "read_task",
