@@ -14,10 +14,32 @@
     return undefined;
   }
 
+  // The components whose renders are explained: which props moved by identity, or which hooks (by their place in the component's list), or neither (a context).
+  var EXPLAIN = { InboxRowView: true };
+
+  function why(fiber, old, into) {
+    var reasons = [];
+    var a = old.memoizedProps || {};
+    var b = fiber.memoizedProps || {};
+    for (var key in b) if (a[key] !== b[key]) reasons.push("prop:" + key);
+    var h0 = old.memoizedState;
+    var h1 = fiber.memoizedState;
+    var i = 0;
+    while (h0 && h1 && typeof h1 === "object" && "next" in h1) {
+      if (h0.memoizedState !== h1.memoizedState) reasons.push("hook:" + i);
+      h0 = h0.next;
+      h1 = h1.next;
+      i += 1;
+    }
+    if (reasons.length === 0) reasons.push("context");
+    for (var r = 0; r < reasons.length; r += 1) into[reasons[r]] = (into[reasons[r]] || 0) + 1;
+  }
+
   // Note that a fiber rendered this commit where it mounted or its props or state are new, the heuristic React DevTools uses; a subtree React bailed out of keeps its child objects and is skipped.
   function walk(root) {
     var counts = {};
     var times = {};
+    var whys = {};
     var rendered = 0,
       mounted = 0,
       hosts = 0,
@@ -41,6 +63,7 @@
           rendered += 1;
           counts[name] = (counts[name] || 0) + 1;
           times[name] = (times[name] || 0) + (fiber.selfBaseDuration || 0);
+          if (EXPLAIN[name] && old !== null) why(fiber, old, whys);
         } else if (typeof fiber.type === "string") hosts += 1;
       }
       if (fiber.sibling) stack.push(fiber.sibling);
@@ -56,6 +79,7 @@
       mounted: mounted,
       hostRendered: hosts,
       total: total,
+      why: whys,
       top: top.slice(0, 25),
       slow: slow.slice(0, 25),
       renderMs: Math.round((root.current.actualDuration || 0) * 10) / 10,
