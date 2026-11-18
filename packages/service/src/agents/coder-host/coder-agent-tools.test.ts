@@ -1341,6 +1341,31 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   );
 });
 
+test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+
+  const filed = await database.run(
+    createTask(agents.caller.userId, {
+      organizationId: workspaceId,
+      name: "Metered billing",
+      repository: RELAY_FULL_NAME,
+      status: TASK_STATUS.BACKLOG,
+    }),
+  );
+
+  const started = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: filed.id, prompt: "Bill by seat.", runsOn: { machine: AGENT_MACHINE.VERCEL } },
+    "call-start-filed",
+  );
+
+  assert.equal(started.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(started));
+  const stored = Option.getOrThrow(await database.run(readTask(agents.caller.userId, filed.id)));
+  assert.deepEqual([stored.task.status, stored.task.assignee], [TASK_STATUS.BACKLOG, undefined]);
+});
+
 test("start_agent naming another member's device is refused in words that name the device and its owner and offer the cloud, starting nothing, and runs in the cloud once runsOn names it", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);

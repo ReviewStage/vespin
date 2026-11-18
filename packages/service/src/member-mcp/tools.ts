@@ -256,6 +256,7 @@ import {
   runUpdateTask,
   START_AGENT_REFUSAL,
   START_AGENT_TOOL,
+  START_LEAVES_TASK_WORDS,
   startAgentToolOf,
   TASKS_LIST_LIMIT,
   TRANSCRIPT_PAGE_WORDS,
@@ -1778,9 +1779,9 @@ const MEMBER_START_AGENT_TOOL = memberMcpTool({
 /** The words of a member's start, how it is handed what it is told as their workspaces' Task descriptions words it. */
 function memberStartAgentWords(handed: string): string {
   return (
-    "Start a new coding agent as the member, exactly as their own Start would: on a task " +
+    "Start a new coding agent as the member: on a task " +
     `they can open by its taskId, ${handed}; make a task for it first with ` +
-    `${MEMBER_MCP_TOOL.CREATE_TASK}. ` +
+    `${MEMBER_MCP_TOOL.CREATE_TASK}. ${START_LEAVES_TASK_WORDS} ` +
     "This one call carries everything the agent is told as it starts, and the " +
     "agent sets to work on it at once. Its checkout is the repository's default branch, or " +
     "the branch named, which must already be on GitHub. It runs on the model and effort " +

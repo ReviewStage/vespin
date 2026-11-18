@@ -170,7 +170,9 @@ import {
  * agent on a task, the task moves into progress from the backlog or to do
  * and never back (`beginTaskWork`), a move that fails logged rather than
  * the Start's failure; a Start by hand on a task no one is assigned to assigns it to
- * its starter (`assignUnassignedTask`), as that fails logged too.
+ * its starter (`assignUnassignedTask`), as that fails logged too. A tool's
+ * Start (`start_agent`) does neither, since its words say it leaves the task
+ * alone.
  * A Start from another agent, to continue it or to fork it at one of its messages,
  * inherits from that agent what `takeover.ts` decides and reads: its brief,
  * its transcript replayed, its work, its choice, servers, place, branch, and
@@ -271,6 +273,8 @@ export type StartAsk = StartPlace & {
   readonly permissionMode?: AgentPermissionMode | undefined;
   /** The suggestion in another agent's reply the brief was sent from, which the first line keeps (`reply-buttons/press.ts`); none for every other Start. */
   readonly suggestedBy?: SuggestedBy | undefined;
+  /** Whether a tool's call asks (`start_agent`), which leaves the task's assignee and status as they stand; none for a Start by hand or an automation's. */
+  readonly byTool?: boolean | undefined;
 };
 
 /** A repository as a task's start reached it: the full name its row keeps, and how it was reached. */
@@ -1110,8 +1114,9 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   // one before it, so a client waiting on it sees the agent and its task's standing alike.
   let committed = txid;
 
-  // A blank agent was handed no work, so its task stands where it is.
-  if (handed !== null) {
+  // A blank agent was handed no work, and a tool's start says what it does to the task, which is
+  // nothing, so either task stands where it is.
+  if (handed !== null && ask.byTool !== true) {
     const begun = yield* beginTaskWorkCommitted(userId, landing.task.id).pipe(
       Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
     );
@@ -1120,8 +1125,8 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   }
 
   // Its starter is on a task no one was, where they started it by hand, a blank agent among them;
-  // an automation's run assigns no one.
-  if (ask.automationOrigin === undefined) {
+  // an automation's run and a tool's call assign no one.
+  if (ask.automationOrigin === undefined && ask.byTool !== true) {
     const assigned = yield* assignUnassignedTaskCommitted(userId, landing.task.id).pipe(
       Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
     );

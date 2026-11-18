@@ -963,6 +963,11 @@ const START_HANDED_WORDS = {
     "images.",
 } as const;
 
+/** What a tool's start does to its task, which the coding agent's and the member MCP's descriptions share: nothing, but for its first turn's move. */
+export const START_LEAVES_TASK_WORDS =
+  "The start leaves the task's assignee and status as they stand, and the agent's first turn " +
+  "moves the task to In progress from any other status, as every agent's turn does.";
+
 /** `start_agent` in the words of the workspace's experiments: its name, its words, and its input schema. */
 export function startAgentToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
@@ -977,7 +982,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
 
   return (
     "Start a new agent on the task its taskId names, your own or another of your workspace, " +
-    `exactly as the developer would: ${START_HANDED_WORDS[words]} ` +
+    `${START_HANDED_WORDS[words]} ${START_LEAVES_TASK_WORDS} ` +
     "Start it on the task you work on, by your own taskId, for any part of that task's work, even one " +
     "that runs apart from yours, so its branch, pull request, and transcript stand under that task; " +
     "name another task only for work unrelated to it, or where the developer asked for that, and for " +
@@ -2321,6 +2326,7 @@ export function runStartAgent(
         from,
         runsOn: runsOn.success,
         summaryModel: call.summaryModel,
+        byTool: true,
         ...(calling === undefined
           ? undefined
           : { noteHeading: START_NOTE_HEADING.AGENT, startedBy: calling }),
