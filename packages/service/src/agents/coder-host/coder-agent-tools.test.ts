@@ -4577,20 +4577,16 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
     filed.assignee,
   );
 
-  // A child made with no assignee named takes its parent's; a null names no one.
-  const childAssignee = async (input: { assignee?: null; parentTaskId?: string }, key: string) => {
-    const child = taskOf(
-      await call(AGENT_TOOL.CREATE_TASK, { name: key, parentTaskId: filed.id, ...input }, key),
-    );
+  // A child made with no assignee named is no one's, though its parent has one.
+  const child = taskOf(
+    await call(AGENT_TOOL.CREATE_TASK, { name: "Child", parentTaskId: filed.id }, "call-child"),
+  );
 
-    assert.ok(isWireString(child.id), JSON.stringify(child));
-
-    return Option.getOrThrow(await database.run(readTask(caller.userId, child.id))).task.assignee
-      ?.userId;
-  };
-
-  assert.equal(await childAssignee({}, "child-inherits"), teammates.userId);
-  assert.equal(await childAssignee({ assignee: null }, "child-unassigned"), undefined);
+  assert.ok(isWireString(child.id), JSON.stringify(child));
+  assert.equal(
+    Option.getOrThrow(await database.run(readTask(caller.userId, child.id))).task.assignee,
+    undefined,
+  );
 
   const cleared = await call(
     AGENT_TOOL.UPDATE_TASK,
@@ -4639,19 +4635,6 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
     Option.getOrThrow(await database.run(readTask(caller.userId, filed.id))).task.assignee,
     undefined,
   );
-
-  // A parent's assignee who has since left the workspace gives the child none, and no error.
-  const assigned = taskOf(
-    await call(
-      AGENT_TOOL.CREATE_TASK,
-      { name: "Leaver's", assignee: personLink(teammates.userId) },
-      "call-leaver",
-    ),
-  );
-
-  assert.ok(isWireString(assigned.id), JSON.stringify(assigned));
-  await database.run(leaveWorkspace(workspaceId, teammates.userId));
-  assert.equal(await childAssignee({ parentTaskId: assigned.id }, "child-of-leaver"), undefined);
 });
 
 test("list_automations, create_automation, update_automation, and delete_automation keep the automations of the caller's workspace as its starter may, under the automations page's own checks and access, once under the call's key, never as a webhook, and reach none of another workspace", async () => {

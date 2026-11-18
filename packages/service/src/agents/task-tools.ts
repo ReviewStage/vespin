@@ -536,7 +536,8 @@ export function runCreateTask(
               ...(brief === undefined ? undefined : { brief }),
               ...(status === undefined ? undefined : { status }),
               ...(priority === undefined ? undefined : { priority }),
-              ...(assignee === undefined ? undefined : { assigneeId: assigneeId ?? null }),
+              // Note that a child left without one is no one's, since an agent names who works a task, never the parent.
+              assigneeId: assigneeId ?? null,
               ...(parentTaskId === undefined ? undefined : { parentTaskId }),
               ...originOf(call),
               text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
