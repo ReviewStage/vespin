@@ -112,11 +112,16 @@ export interface CarryOnInput {
 /** The lead of the prompt, so the agent reads it as the app's word rather than the developer's. */
 const PROMPT_LEAD = `From ${PRODUCT_NAME}:`;
 
-/** What cut the turn off, in the prompt's words, by reason. */
+/**
+ * What cut the turn off, in the prompt's words, by reason. Note that a
+ * runner lost says only that the run stopped answering, because the sweep
+ * fails a turn as its runner lost whether its sandbox stopped or the sandbox
+ * is still up and the runner within it exited or was replaced.
+ */
 const CUT_OFF_WORDS = {
   [CARRY_ON_REASON.HOST_RESTART]:
     "the host on the Mac it ran on stopped before the turn ended, and is back now",
-  [CARRY_ON_REASON.RUNNER_LOST]: "its sandbox stopped before the turn ended",
+  [CARRY_ON_REASON.RUNNER_LOST]: "your run stopped answering before the turn ended",
   [CARRY_ON_REASON.CONNECTION_LOST]:
     "the connection to the model's provider was lost, and is back now",
 } as const satisfies Record<CarryOnReason, string>;

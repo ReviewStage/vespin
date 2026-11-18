@@ -23,6 +23,10 @@
  * run goes. A Stop cancels the run going (`run.cancel`) and ends the launch
  * as `stopped` once it ends, or within `RUNNER_CONTROL.ANSWER_MS` where it
  * never does; a run that fails ends it as `failed` with Cursor's words.
+ * A run that streams nothing for `RUNNER_UNANSWERED.SILENCE_MS` while none of
+ * its tool calls runs ends the launch as `failed` too, its run canceled, so
+ * a turn Cursor stopped answering ends rather than holding until a Stop or
+ * the service's progress deadline (`watchSilence`).
  * Cursor keeps no goal, so a line marked `goal` goes as words, as it does to
  * a runner from before the mark.
  *
@@ -65,7 +69,18 @@ import type {
   SendOptions,
   SteerAckOutcome,
 } from "@cursor/sdk";
-import { Data, Duration, Effect, Option, Queue, Result, Schema, type Scope, Stream } from "effect";
+import {
+  Clock,
+  Data,
+  Duration,
+  Effect,
+  Option,
+  Queue,
+  Result,
+  Schema,
+  type Scope,
+  Stream,
+} from "effect";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { type CursorAgentHandle, type CursorRun, CursorSdk } from "./cursor-sdk.js";
 import { type CursorStore, cursorStore, restoredEntries } from "./cursor-store.js";
@@ -76,6 +91,7 @@ import {
   type CheckoutSnapshot,
   type ContentBlock,
   CURSOR_SIGNED_OUT_DETAIL,
+  CURSOR_SILENT_DETAIL,
   type CursorConfig,
   type CursorModelSelection,
   INPUT_LINE,
@@ -85,6 +101,7 @@ import {
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
+  RUNNER_UNANSWERED,
   RUNNER_WARM,
   type RunnerEnd,
   type TurnFilesSummary,
@@ -137,6 +154,8 @@ const SIGNAL = {
   STEERED: "steered",
   /** A Stop's cancel left the run going past `RUNNER_CONTROL.ANSWER_MS`. */
   CANCEL_UNANSWERED: "cancel_unanswered",
+  /** A run streamed nothing for `RUNNER_UNANSWERED.SILENCE_MS` with none of its tool calls running. */
+  RUN_SILENT: "run_silent",
   CUT_OFF: "cut_off",
 } as const;
 
@@ -156,6 +175,7 @@ type Signal =
       readonly outcome: SteerAckOutcome | undefined;
     }
   | { readonly kind: typeof SIGNAL.CANCEL_UNANSWERED; readonly run: CursorRun }
+  | { readonly kind: typeof SIGNAL.RUN_SILENT; readonly run: CursorRun }
   | { readonly kind: typeof SIGNAL.CUT_OFF; readonly why: string };
 
 const LAUNCH_STATE = {
@@ -305,22 +325,78 @@ const accepted = Effect.fn("agent-runner/cursor/accepted")(function* (
   }
 });
 
-/** Posts a run's messages as the SDK streams them, and signals its end with its outcome. */
+/** What a run's silence is read from: when it last streamed a message, on `monotonicMillis`, and its tool calls running. */
+interface Heard {
+  at: number;
+  readonly calls: Set<string>;
+}
+
+/** The SDK's word for a tool call under way; any other status ends it. */
+const TOOL_CALL_RUNNING = "running";
+
+/**
+ * Milliseconds on the monotonic clock, which a run's silence is measured on.
+ * Note that the wall clock is not, because a host's clock set forward would
+ * count as silence and end a run that just spoke.
+ */
+const monotonicMillis = Effect.map(Clock.monotonicTimeNanos, (nanos) => Number(nanos / 1_000_000n));
+
+/** Notes a message the run streamed: heard now, and the tool call it starts or ends. */
+function hear(heard: Heard, message: SDKMessage, now: number) {
+  heard.at = now;
+
+  if (message.type !== "tool_call") return;
+
+  if (message.status === TOOL_CALL_RUNNING) heard.calls.add(message.call_id);
+  else heard.calls.delete(message.call_id);
+}
+
+/**
+ * Signals the run silent once it has streamed nothing for
+ * `RUNNER_UNANSWERED.SILENCE_MS` with none of its tool calls running. Note that
+ * a call running holds the watch off however long it runs, since a long
+ * command or one of our own tools streams nothing until it ends, and its
+ * end is heard as a message, from which the silence counts afresh.
+ */
+const watchSilence = Effect.fn("agent-runner/cursor/watchSilence")(function* (
+  launch: CursorLaunch,
+  run: CursorRun,
+  heard: Heard,
+) {
+  for (;;) {
+    const quiet = (yield* monotonicMillis) - heard.at;
+
+    if (quiet >= RUNNER_UNANSWERED.SILENCE_MS && heard.calls.size === 0) break;
+
+    const wait =
+      heard.calls.size > 0 ? RUNNER_UNANSWERED.SILENCE_MS : RUNNER_UNANSWERED.SILENCE_MS - quiet;
+
+    yield* Effect.sleep(Duration.millis(wait));
+  }
+
+  yield* Effect.logWarning("agent-runner: the Cursor run went silent");
+  yield* Queue.offer(launch.signals, { kind: SIGNAL.RUN_SILENT, run });
+});
+
+/** Posts a run's messages as the SDK streams them, and signals its end with its outcome, or its silence where it goes quiet first. */
 const follow = Effect.fn("agent-runner/cursor/follow")(function* (
   launch: CursorLaunch,
   run: CursorRun,
 ) {
+  const heard: Heard = { at: yield* monotonicMillis, calls: new Set() };
+
   const posted = Stream.fromAsyncIterable(run.stream(), (cause) => cause).pipe(
     Stream.runForEach((message: SDKMessage) =>
-      Effect.andThen(
-        Effect.sync(() => {
-          // A summary written drops the instructions, so the next message leads with them again.
-          if (message.type === "summary" && message.status === SUMMARY_COMPLETED) {
-            launch.instruct.value = true;
-          }
-        }),
-        launch.context.sink.emit(message),
-      ),
+      Effect.gen(function* () {
+        hear(heard, message, yield* monotonicMillis);
+
+        // A summary written drops the instructions, so the next message leads with them again.
+        if (message.type === "summary" && message.status === SUMMARY_COMPLETED) {
+          launch.instruct.value = true;
+        }
+
+        yield* launch.context.sink.emit(message);
+      }),
     ),
     Effect.andThen(Effect.tryPromise(() => run.wait())),
     Effect.match({
@@ -340,7 +416,10 @@ const follow = Effect.fn("agent-runner/cursor/follow")(function* (
     Effect.flatMap((signal) => Queue.offer(launch.signals, signal)),
   );
 
-  yield* Effect.forkScoped(posted);
+  // The watch is the following fiber's child, so it ends once the run's end is signaled.
+  yield* Effect.forkScoped(
+    Effect.andThen(Effect.forkChild(watchSilence(launch, run, heard)), posted),
+  );
 });
 
 /** The send options of the launch's next run: its model, and our tools as they now stand. */
@@ -680,6 +759,14 @@ function takeSignal(
       const going = state.kind === LAUNCH_STATE.RUN && state.run === signal.run && state.stopping;
 
       return Effect.succeed(going ? ended(RUNNER_END.STOPPED) : undefined);
+    }
+
+    case SIGNAL.RUN_SILENT: {
+      // Note that the launch's end cancels the run going, as it does any run it cuts short; a run a Stop cancels ends as stopped.
+      const { state } = launch;
+      const going = state.kind === LAUNCH_STATE.RUN && state.run === signal.run && !state.stopping;
+
+      return Effect.succeed(going ? ended(RUNNER_END.FAILED, CURSOR_SILENT_DETAIL) : undefined);
     }
 
     case SIGNAL.CUT_OFF:

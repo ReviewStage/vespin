@@ -17,10 +17,11 @@ import { PRODUCT_NAME } from "./product-name.js";
  * to: a runner gone.
  */
 
-/** What the transcript's line says of each reason: what cut the turn off, then that it went on by itself. */
+/** What the transcript's line says of each reason: what cut the turn off, then that it went on by itself. A runner lost names no sandbox stopping, since its sandbox may still be up. */
 const CARRY_ON_LINE_WORDS = {
   [CARRY_ON_REASON.HOST_RESTART]: `Interrupted when ${PRODUCT_NAME} stopped on the Mac · carried on by itself`,
-  [CARRY_ON_REASON.RUNNER_LOST]: "Interrupted when the sandbox stopped · carried on by itself",
+  [CARRY_ON_REASON.RUNNER_LOST]:
+    "Interrupted when the agent stopped answering · carried on by itself",
   [CARRY_ON_REASON.CONNECTION_LOST]:
     "Lost the connection to the provider · carried on when it came back",
 } as const satisfies Record<CarryOnReason, string>;
