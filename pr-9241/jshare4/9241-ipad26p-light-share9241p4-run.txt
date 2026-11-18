@@ -1,0 +1,29 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow share9241p4
+Set orientation PORTRAIT... COMPLETED
+Launch app "com.apple.mobilesafari"... COMPLETED
+Open https://example.com in browser... COMPLETED
+Tap on (Optional) "Not Now"... WARNED
+Open https://example.com in browser... COMPLETED
+Assert that "Example Domain" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot share-00-page... COMPLETED
+Tap on (Optional) "Share"... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Vespin" is not visible...
+  Tap on (Optional) "Page Menu"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on (Optional) "Share.*"... WARNED
+Run flow when "Vespin" is not visible... COMPLETED
+Assert that (Optional) "Vespin" is visible... WARNED
+Take screenshot share-01-sheet... COMPLETED
+Tap on point (80%,21.7%)... FAILED
+
+Invalid point value "80%,21.7%": expected two whole-number coordinates like "x,y" or "x%,y%". If they come from variables, make sure the variables resolve to numbers.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sshare4/9241-ipad26p-light/share9241p4/2026-11-18_124427

@@ -1,0 +1,2 @@
+9241-ipad26p-light share9241p4: fails 1 shots 6 Tap on point (80%,21.7%)... FAILED | extension log lines 0 | crash reports 0
+9241-ipad26p-light app group drafts:  (group missing)
