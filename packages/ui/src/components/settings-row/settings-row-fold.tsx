@@ -51,9 +51,36 @@ import { SettingsRowFoldPress } from "./settings-row-press.js";
  */
 
 /**
+ * The ⌄ a fold turns, named `label`: the keyboard's one stop for the fold,
+ * marked so a section can tell it from a ⋯ (`settings-section.css`).
+ */
+function FoldGlyph({
+  label,
+  open,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}): React.JSX.Element {
+  return (
+    <span className="ui-settings-fold-glyph contents">
+      <IconButton
+        icon={<DisclosureChevron turn={DISCLOSURE_TURN.DOWN} />}
+        label={label}
+        aria-expanded={open}
+        onClick={onToggle}
+      />
+    </span>
+  );
+}
+
+/**
  * A row named `label` that folds `children` open under its words, its
  * glyph named `foldLabel`, open at first where `defaultOpen` says, and
- * the row's ⋯ (`actions`) after the glyph in its end; what rides its
+ * the row's ⋯ (`actions`) after the glyph in its end, or the ⋯'s room
+ * where it draws none, so its glyph stands in the column of the glyphs of
+ * the rows around it that hold one; what rides its
  * label's line (`adornment`) and its controls (`control`) stand as a plain
  * row's do, as a run action's Default badge and its Discard and Save.
  */
@@ -115,13 +142,8 @@ export function SettingsFoldRow({
           }
           end={(ids) => (
             <>
-              <IconButton
-                icon={<DisclosureChevron turn={DISCLOSURE_TURN.DOWN} />}
-                label={foldLabel}
-                aria-expanded={state.open}
-                onClick={state.toggle}
-              />
-              {actions?.(ids)}
+              <FoldGlyph label={foldLabel} open={state.open} onToggle={state.toggle} />
+              {actions?.(ids) ?? <SettingsRowActSlot />}
             </>
           )}
         >
@@ -175,12 +197,7 @@ export function SettingsRowsFold({
       <SettingsRowFoldPress.Provider value={folds ? state.toggle : undefined}>
         {head(
           folds ? (
-            <IconButton
-              icon={<DisclosureChevron turn={DISCLOSURE_TURN.DOWN} />}
-              label={label}
-              aria-expanded={state.open}
-              onClick={state.toggle}
-            />
+            <FoldGlyph label={label} open={state.open} onToggle={state.toggle} />
           ) : room ? (
             <SettingsRowActSlot />
           ) : null,
