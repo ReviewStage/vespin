@@ -627,6 +627,7 @@ function TitleWords({
 export function RowHead({
   dot = true,
   unread,
+  marked,
   faded,
   fold,
   mark,
@@ -640,6 +641,8 @@ export function RowHead({
   /** Whether the unread dot stands in the margin; a task's row draws none, its unread name standing in semibold alone, as the panel's task rows do. */
   readonly dot?: boolean | undefined;
   readonly unread: boolean;
+  /** Whether the dot shows in the margin, where the row marks another line instead: an Inbox thread with a task marks its task's line, so its title's margin stands empty. The title's weight still follows `unread`. */
+  readonly marked?: boolean | undefined;
   readonly faded: boolean;
   /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
   readonly fold?: ReactNode;
@@ -698,7 +701,7 @@ export function RowHead({
 
   return (
     <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
-      <UnreadDot unread={unread} faded={faded} />
+      <UnreadDot unread={marked ?? unread} faded={faded} />
       {line}
     </HStack>
   );
@@ -721,19 +724,27 @@ function LineGlyph({ line }: { readonly line: InboxLineKind | undefined }) {
 }
 
 /**
- * An Inbox row's first line, over the title: the task's status ring in the
- * lead column and the task's name, 13 pt in the muted ink, as the panel's row
- * heads its title with the task. The unread dot's column stands empty, so
- * the dot keeps its place beside the title.
+ * An Inbox row's first line, over the title: the copper dot in the margin
+ * while the thread is unread, the task's status ring in the lead column and
+ * the task's name, 13 pt in the muted ink, as the panel's row heads its title
+ * with the task and stands its dot level with that first line.
  */
-function TaskLine({ task }: { readonly task: NonNullable<ListRowProps["task"]> }) {
+function TaskLine({
+  task,
+  unread,
+  faded,
+}: {
+  readonly task: NonNullable<ListRowProps["task"]>;
+  readonly unread: boolean;
+  readonly faded: boolean;
+}) {
   const colors = useColors();
   const lines = useRowLines();
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
 
   return (
     <HStack spacing={SPACE.TIGHT} alignment="center">
-      <UnreadDot unread={false} />
+      <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment="center">
         <HStack modifiers={[frame({ width: leadWidth })]}>
           {task.status === undefined ? null : <TaskStatusMark status={task.status} />}
@@ -795,11 +806,12 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
 
 /**
  * One Inbox thread, in the panel's three lines: its task, the task's status
- * ring and name in a 13 pt muted line; its title in 15 pt with the time at
- * the line's end and the copper dot in the margin while it is unread; and
- * the glyph and words of what it asks, in a 13 pt muted line. An agent's own
- * thread, which has no task, stands in two, the glyph of what it asks
- * leading its title. A teammate's face stands before the time on a thread
+ * ring and name in a 13 pt muted line, with the copper dot in the margin
+ * while it is unread; its title in 15 pt with the time at the line's end;
+ * and the glyph and words of what it asks, in a 13 pt muted line. An agent's
+ * own thread, which has no task, stands in two, the glyph of what it asks
+ * leading its title and the dot beside the title, as the panel stands the
+ * dot level with a row's first line. A teammate's face stands before the time on a thread
  * that waits on them, and a thread put away until a reminder says when it
  * comes back in its time's place, as the panel's row does. It stands
  * roomier than a task's row, with Mail's breathing room above, below, and
@@ -814,9 +826,10 @@ export function ListRow(props: ListRowProps) {
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={ROW_INSET.THREAD_LINE_GAP}>
-      {task === undefined ? null : <TaskLine task={task} />}
+      {task === undefined ? null : <TaskLine task={task} unread={unread} faded={done} />}
       <RowHead
         unread={unread}
+        marked={task === undefined && unread}
         faded={done}
         lead={task === undefined ? <LineGlyph line={line} /> : null}
         title={title}
