@@ -1,0 +1,51 @@
+probe rows 3687, commands 182, frames 7411
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | 222 | 222 | 222 | 562
+scope-all | 6 | topTouchEnd | 826 | 0 | 0 | 0 | 0 | None | 288 | 0 | 1200 | None | None | 1500
+scope-questions | 5 | topTouchEnd | 752 | 0 | 0 | 0 | 0 | None | 353 | 0 | 1197 | None | None | 1537
+scope-open | 5 | topTouchEnd | 874 | 0 | 0 | 0 | 0 | None | 374 | 0 | 1197 | None | None | 1639
+settings-open | 6 | topButtonPress | 626 | 0 | 0 | 0 | 0 | None | 44 | 0 | 615 | 968 | 1139 | 615
+settings-close | 5 | topTouchStart | 209 | 0 | 0 | 0 | 0 | None | 59 | 0 | 314 | 1239 | 22 | 332
+workspace-settings-open | 6 | topButtonPress | 662 | 0 | 0 | 0 | 0 | None | 66 | 0 | 604 | 1224 | 1899 | 604
+switcher-open | 6 | topTouchEnd | 772 | 0 | 0 | 0 | 0 | None | 0 | 0 | 982 | 1322 | 2680 | 1170
+switch-workspace | 5 | topIsOnChange | 633 | 0 | 0 | 0 | 0 | None | 0 | 0 | 1045 | 1243 | 1897 | 1450
+switch-back | 5 | topIsOnChange | 574 | 0 | 0 | 0 | 0 | None | 377 | 0 | 1061 | 1233 | 1800 | 1490
+
+most rendered components per path (summed over its taps):
+cold-launch: 
+scope-all: 
+scope-questions: 
+scope-open: 
+settings-open: 
+settings-close: 
+workspace-settings-open: 
+switcher-open: 
+switch-workspace: 
+switch-back: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch: 
+scope-all: 
+scope-questions: 
+scope-open: 
+settings-open: 
+settings-close: 
+workspace-settings-open: 
+switcher-open: 
+switch-workspace: 
+switch-back: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch: markdown 0.0, rest 0.0
+scope-all: markdown 0.0, rest 0.0
+scope-questions: markdown 0.0, rest 0.0
+scope-open: markdown 0.0, rest 0.0
+settings-open: markdown 0.0, rest 0.0
+settings-close: markdown 0.0, rest 0.0
+workspace-settings-open: markdown 0.0, rest 0.0
+switcher-open: markdown 0.0, rest 0.0
+switch-workspace: markdown 0.0, rest 0.0
+switch-back: markdown 0.0, rest 0.0
+
+whole run: 241s, 0 commits, 0 components rendered, 18479 ms of stalls over 54 stalls
+events: topTransitionProgress×1634, topHeaderHeightChange×475, topLoad×365, topLoadEnd×365, topLoadStart×365, topFinishTransitioning×58, topTouchStart×45, topWillAppear×35, topTouchEnd×35, topAppear×31, topGlobalEvent×24, topWindowChange×24, topWillDisappear×23, topDisappear×23, topSelectionChange×15
