@@ -1,4 +1,4 @@
-# settings-mcp.yaml -- Settings › Vespin MCP & CLI on the Inbox fixture: the apps the account allowed, each by its name and where it signs in from, Disconnect asked first and canceled, and the CLI section's commands to copy.
+# settings-mcp.yaml -- Settings › Vespin MCP & CLI on the Inbox fixture: the apps the account allowed, each by its name and when it was last active, an app's own page with Disconnect asked first and canceled, and the CLI section's rows that copy its commands.
 #
 # Launched on the host's Inbox fixture, whose account allowed two apps
 # (`@repo/host/fixture-inbox`), so no server is reached.
@@ -22,13 +22,13 @@ appId: dev.vespin.ios
 - assertVisible: "Claude Code"
 - assertVisible: "ChatGPT"
 - takeScreenshot: settings-mcp
-# The CLI section under the apps: the install's command, and the sign-in's
-# while the command has none, each to copy.
-- scrollUntilVisible:
-    element: "Install the vespin command"
-- assertVisible: "npm i -g vespin"
-- takeScreenshot: settings-mcp-cli
-- longPressOn: "ChatGPT"
+# An app's row opens its own page: where it signs in from, when it was
+# allowed and last active, and Disconnect in red, asked first. Note that the
+# row is one element, heard as its name and its line, so it's found by its name.
+- tapOn: "ChatGPT.*"
+- waitForAnimationToEnd
+- assertVisible: "Disconnect"
+- takeScreenshot: settings-mcp-app
 - tapOn: "Disconnect"
 - assertVisible: "Disconnect ChatGPT?"
 - waitForAnimationToEnd
@@ -37,3 +37,14 @@ appId: dev.vespin.ios
     file: subflows/dismiss-ask.yaml
     env:
       QUESTION: "Disconnect ChatGPT?"
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+# The CLI section under the apps: a row that copies the install's command,
+# and one the sign-in's while the command has none, the commands spelled out
+# in the section's footer.
+- scrollUntilVisible:
+    element: "Copy install command"
+    centerElement: true
+- assertVisible: ".*npm i -g vespin.*"
+- takeScreenshot: settings-mcp-cli
