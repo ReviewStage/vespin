@@ -63,7 +63,7 @@
     "@orpc/server": "catalog:",
     "@shikijs/langs": "4.6.0",
     "@shikijs/themes": "4.6.0",
-    "@tanstack/db": "1.0.0-rc.1.5",
+    "@tanstack/db": "catalog:",
     "effect": "catalog:",
     "shiki": "4.6.0"
   },

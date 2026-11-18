@@ -33,6 +33,48 @@ catalog:
   "@vercel/oidc": 4.0.9
   "@tanstack/react-router": 1.170.46
   "@tanstack/react-store": 0.11.2
+  "@better-auth/oauth-provider": 1.7.7
+  "@electric-sql/pglite": 0.5.16
+  "@expo/ui": 58.0.27
+  "@fontsource-variable/bricolage-grotesque": 5.3.0
+  "@fontsource-variable/geist": 5.3.0
+  "@fontsource-variable/jetbrains-mono": 5.3.0
+  "@sentry/esbuild-plugin": 5.4.0
+  "@sentry/node": 11.7.0
+  "@sentry/profiling-node": 11.7.0
+  "@tailwindcss/vite": 4.3.5
+  "@tanstack/db": 1.0.0-rc.1.5
+  "@tanstack/react-db": 1.0.0-rc.1.5
+  "@tanstack/react-query": 5.106.1
+  "@types/hast": 3.0.5
+  "@types/mdast": 4.0.4
+  "@types/pg": 8.23.1
+  "@types/react": 19.2.18
+  "@types/react-dom": 19.2.4
+  "@types/ws": 8.18.2
+  "@vercel/functions": 3.11.3
+  "@vitejs/plugin-react": 5.1.2
+  better-auth: 1.7.7
+  bottleneck: 2.19.5
+  diff: 9.0.0
+  esbuild: 0.28.2
+  expo: 58.0.23
+  expo-haptics: 58.0.7
+  expo-symbols: 58.0.4
+  expo-video: 58.0.13
+  jsdom: ^30.0.1
+  lucide-react: 1.53.0
+  mermaid: 11.17.2
+  pg: 8.23.1
+  posthog-js: 1.418.3
+  react-native: 0.88.1
+  react-native-safe-area-context: 5.11.1
+  react-native-screens: 4.30.1
+  react-native-webview: 14.0.1
+  recharts: 3.11.0
+  tailwindcss: 4.3.5
+  vite: 7.3.8
+  zod: 4.6.7
 
 # The workspace that resolves a dependency away from the catalog above, and
 # it is the compiler alone, held to TypeScript 6 because it needs the compiler
