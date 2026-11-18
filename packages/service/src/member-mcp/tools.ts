@@ -66,11 +66,8 @@ import {
   AGENT_BOUNDS,
   AGENT_STATUS,
   agentRewindRequestSchema,
-  CHANGED_FILE_STATUS,
-  CHECK_SUMMARY,
   contextWindowSchema,
   disabledServersSchema,
-  PULL_REQUEST_STATE,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { automationCreateRequestSchema } from "@repo/features/automation-wire";
@@ -214,7 +211,11 @@ import {
   openAgentBrowserTab,
   takeOverAgentBrowserTab,
 } from "../agents/agent-browser-tabs.js";
-import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
+import {
+  READ_AGENT_CHANGES_INPUT,
+  READ_AGENT_CHANGES_WORDS,
+  runReadAgentChanges,
+} from "../agents/agent-changes-tool.js";
 import {
   deletedAgent,
   resumedAgentSandbox,
@@ -810,19 +811,7 @@ const MEMBER_READ_AGENT_TOOL = memberMcpTool({
 const READ_AGENT_CHANGES_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_AGENT_CHANGES,
   description:
-    "Read what a coding agent the member can see published, by its id, as its Pull request and " +
-    "Changes tabs show it: the repository it works in, the branch it pushed, and the pull " +
-    "request from it as GitHub holds it now, with its number, title, link, state " +
-    `(${Object.values(PULL_REQUEST_STATE).join(", ")}), the head commit it stands on (headSha), ` +
-    `which a merge names, its checks ` +
-    `(${Object.values(CHECK_SUMMARY).join(", ")}), the lines it adds and removes, who opened it, ` +
-    "its reviewers and where each stands, its reviews that said something, and every file it " +
-    `changes in the order GitHub lists them, each with what became of it ` +
-    `(${Object.values(CHANGED_FILE_STATUS).join(", ")}) and the lines it adds and removes, ` +
-    "truncated true where the list was cut short; the pull request is null where the agent " +
-    "opened none yet. Name a path among its files to read that file's patch as well, cut on a " +
-    `line at ${READ_PAGE_CHARS} characters with how many were left out, or why GitHub carried ` +
-    "none. It only reads: the agent is not told.",
+    "Read what a coding agent the member can see published, by its id, " + READ_AGENT_CHANGES_WORDS,
   input: READ_AGENT_CHANGES_INPUT,
   annotations: READ_ONLY,
   run: (asked) =>

@@ -1452,6 +1452,8 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>
     namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
+  [AGENT_TOOL.READ_AGENT_CHANGES]: ({ input, output }) =>
+    namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
   [AGENT_TOOL.MESSAGE_AGENT]: ({ input, output }) => ({
     ...namedCall(CALL_KIND.MESSAGE_AGENT, input, output, undefined),
     subject: messageWords(input) ?? "",
@@ -2068,6 +2070,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.SHOW_PAGE, shownPage],
   [AGENT_TOOL.READ_PAGE, readPage],
   [AGENT_TOOL.READ_AGENT, namedAgent],
+  [AGENT_TOOL.READ_AGENT_CHANGES, namedAgent],
   [AGENT_TOOL.MESSAGE_AGENT, namedAgent],
   [AGENT_TOOL.START_AGENT, startedAgent],
   [RETIRED_TOOL.UNARCHIVE_AGENT, namedAgent],
@@ -2181,6 +2184,7 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 /** The tools whose call is about one coding agent, under every name one was made under, which a row names by the agent's chip. */
 const AGENT_CALL_TOOLS: ReadonlySet<string> = new Set([
   AGENT_TOOL.READ_AGENT,
+  AGENT_TOOL.READ_AGENT_CHANGES,
   AGENT_TOOL.MESSAGE_AGENT,
   AGENT_TOOL.START_AGENT,
   RETIRED_TOOL.ARCHIVE_AGENT,

@@ -437,6 +437,7 @@ const AGENT_TOOLS = [
   "stop_agent",
   "list_agents",
   "read_agent",
+  "read_agent_changes",
   "message_agent",
   "add_suggestion",
   "update_agent",
