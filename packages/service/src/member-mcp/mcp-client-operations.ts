@@ -22,11 +22,20 @@
 import { listOAuthGrants, revokeOAuthClient } from "@repo/database/models/oauth-grants";
 import type { McpClient, McpClientsAnswer } from "@repo/features/mcp-client-wire";
 import { Effect } from "effect";
-import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "../auth/oauth-clients.js";
+import {
+  ANDROID_OAUTH_CLIENT,
+  CLI_OAUTH_CLIENT,
+  DESKTOP_OAUTH_CLIENT,
+  IOS_OAUTH_CLIENT,
+} from "../auth/oauth-clients.js";
 import { hostedStoreOrUnavailable } from "../http/http-effect.js";
 
-/** The clients no member revokes here: the desktop's and the iPhone's own, which sign the Mac and the phone in. */
-const FIRST_PARTY_CLIENTS: readonly string[] = [DESKTOP_OAUTH_CLIENT.id, IOS_OAUTH_CLIENT.id];
+/** The clients no member revokes here: the desktop's, the iPhone's, and the Android phone's own, which sign the Mac and the phones in. */
+const FIRST_PARTY_CLIENTS: readonly string[] = [
+  DESKTOP_OAUTH_CLIENT.id,
+  IOS_OAUTH_CLIENT.id,
+  ANDROID_OAUTH_CLIENT.id,
+];
 
 /**
  * The clients that skip consent and are listed by the live token they hold:

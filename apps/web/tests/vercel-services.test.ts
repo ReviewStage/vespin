@@ -6,6 +6,7 @@ import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { POSTHOG_PROXY } from "@repo/features/posthog-proxy";
 import { RESERVED_WORKSPACE_SLUGS } from "@repo/features/workspace-wire";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import { ANDROID_ASSET_LINKS } from "@repo/service/auth/android-asset-links";
 import { APPLE_APP_SITE_ASSOCIATION } from "@repo/service/auth/apple-app-site-association";
 import { PAGE_LINK_ROUTE } from "@repo/service/pages/page-links";
 import { test } from "vitest";
@@ -423,15 +424,14 @@ test("each standalone page is served at its clean path and at its .html file's a
   }
 });
 
-test("Apple's association file is answered by its route at its exact well-known path, under no redirect and no page's headers", () => {
-  const served = servedBy(APPLE_APP_SITE_ASSOCIATION.PATH);
-  assert.ok("file" in served && served.file !== undefined && served.forced === undefined);
-  const landed = new URL(served.file, `https://${APP_HOST}`);
-  assert.equal(
-    landed.searchParams.get("route"),
-    APPLE_APP_SITE_ASSOCIATION.ROUTE.slice("/api/".length),
-  );
-  assert.deepEqual([...served.named.keys()], []);
+test("Apple's association file and Android's asset links are each answered by their route at their exact well-known path, under no redirect and no page's headers", () => {
+  for (const association of [APPLE_APP_SITE_ASSOCIATION, ANDROID_ASSET_LINKS]) {
+    const served = servedBy(association.PATH);
+    assert.ok("file" in served && served.file !== undefined && served.forced === undefined);
+    const landed = new URL(served.file, `https://${APP_HOST}`);
+    assert.equal(landed.searchParams.get("route"), association.ROUTE.slice("/api/".length));
+    assert.deepEqual([...served.named.keys()], []);
+  }
 });
 
 /** A link's token as the routing sees it: its claims and its signature, base64url, joined by a dot. */

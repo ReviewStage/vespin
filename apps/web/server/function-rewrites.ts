@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { POSTHOG_PROXY } from "@repo/features/posthog-proxy";
 import { SENTRY_TUNNEL } from "@repo/features/sentry-tunnel";
+import { ANDROID_ASSET_LINKS } from "@repo/service/auth/android-asset-links";
 import { APPLE_APP_SITE_ASSOCIATION } from "@repo/service/auth/apple-app-site-association";
 import { AUTH_SERVER_METADATA_PATHS } from "@repo/service/auth/auth-app";
 import { MEMBER_MCP_METADATA_PATHS, MEMBER_MCP_METADATA_ROUTE } from "@repo/service/member-mcp/app";
@@ -158,6 +159,10 @@ const PUBLIC_REWRITES: readonly PublicRewrite[] = [
   {
     path: APPLE_APP_SITE_ASSOCIATION.PATH,
     route: APPLE_APP_SITE_ASSOCIATION.ROUTE.slice(API_ROUTE_PREFIX.length),
+  },
+  {
+    path: ANDROID_ASSET_LINKS.PATH,
+    route: ANDROID_ASSET_LINKS.ROUTE.slice(API_ROUTE_PREFIX.length),
   },
 ];
 

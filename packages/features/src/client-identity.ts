@@ -34,11 +34,12 @@ export const CLIENT_HEADER = {
   API_VERSION: "vespin-api-version",
 } as const;
 
-/** Which app calls: the desktop, the web tab, the iOS app, or the CLI. */
+/** Which app calls: the desktop, the web tab, the iOS app, the Android app, or the CLI. */
 export const CLIENT_PLATFORM = {
   DESKTOP: PRODUCT_PLATFORM.DESKTOP,
   WEB: PRODUCT_PLATFORM.WEB,
   IOS: PRODUCT_PLATFORM.IOS,
+  ANDROID: PRODUCT_PLATFORM.ANDROID,
   CLI: "cli",
 } as const;
 

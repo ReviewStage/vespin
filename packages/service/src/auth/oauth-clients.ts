@@ -1,3 +1,4 @@
+import { ANDROID_OAUTH_CALLBACK_URL } from "@repo/features/android-sign-in-wire";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -59,6 +60,24 @@ export const IOS_OAUTH_CLIENT = {
   name: `${PRODUCT_NAME} for iPhone`,
   scopes: ["openid", "profile", "email", "offline_access"],
   redirectUris: [IOS_OAUTH_CALLBACK_URL],
+  tokenEndpointAuthMethod: "none",
+  grantTypes: ["authorization_code", "refresh_token"],
+  responseTypes: ["code"],
+  type: "native",
+} as const satisfies OAuthClient;
+
+/**
+ * The Android phone, signed in as the iPhone is, under the same scopes. Its
+ * one redirect is an App Link on the home host
+ * (`@repo/features/android-sign-in-wire`), which the provider matches
+ * exactly, and which Android opens in the app alone once the host's Digital
+ * Asset Links file verifies it.
+ */
+export const ANDROID_OAUTH_CLIENT = {
+  id: FIRST_PARTY_OAUTH_CLIENT_ID.ANDROID,
+  name: `${PRODUCT_NAME} for Android`,
+  scopes: ["openid", "profile", "email", "offline_access"],
+  redirectUris: [ANDROID_OAUTH_CALLBACK_URL],
   tokenEndpointAuthMethod: "none",
   grantTypes: ["authorization_code", "refresh_token"],
   responseTypes: ["code"],

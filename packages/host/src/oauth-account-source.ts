@@ -26,9 +26,9 @@ import {
 /**
  * Which first-party client an OAuth account signs in as, and what its
  * session-only calls ride: the Mac's own Better Auth session, handed off
- * through the browser, or, on the iPhone, the OAuth bearer itself, which the
- * service takes on every v1 write and the live socket for the `ios` client,
- * so the iPhone asks no hand-off.
+ * through the browser, or, on a phone, the OAuth bearer itself, which the
+ * service takes on every v1 write and the live socket for the `ios` and
+ * `android` clients, so a phone asks no hand-off.
  */
 export interface OAuthAccountClient {
   readonly clientId: string;
@@ -38,6 +38,7 @@ export interface OAuthAccountClient {
 export const OAUTH_ACCOUNT_CLIENT = {
   DESKTOP: { clientId: FIRST_PARTY_OAUTH_CLIENT_ID.DESKTOP, sessionHandOff: true },
   IOS: { clientId: FIRST_PARTY_OAUTH_CLIENT_ID.IOS, sessionHandOff: false },
+  ANDROID: { clientId: FIRST_PARTY_OAUTH_CLIENT_ID.ANDROID, sessionHandOff: false },
 } as const satisfies Record<string, OAuthAccountClient>;
 
 /**

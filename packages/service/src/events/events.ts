@@ -55,6 +55,7 @@ const PRODUCT_EVENT_LIB = {
   [PRODUCT_PLATFORM.DESKTOP]: "vespin-desktop",
   [PRODUCT_PLATFORM.WEB]: "vespin-web",
   [PRODUCT_PLATFORM.IOS]: "vespin-ios",
+  [PRODUCT_PLATFORM.ANDROID]: "vespin-android",
 } as const satisfies Record<ProductClientPlatform, string>;
 
 /** The property every forwarded event names its platform under. */
