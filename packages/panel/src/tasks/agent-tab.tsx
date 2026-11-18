@@ -35,6 +35,7 @@ import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_SENDER,
   AGENT_STATUS,
@@ -65,6 +66,7 @@ import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
+import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
@@ -2188,6 +2190,17 @@ export function AgentMessage({
   });
 }
 
+/** A Manager's greeting, drawn as its first message though no one sent it and nothing stores it (`@repo/features/manager-greeting`). */
+function ManagerGreetingMessage({ words }: { readonly words: string }): React.JSX.Element {
+  return (
+    <Message from={MESSAGE_ROLE.ASSISTANT} data-manager-greeting="">
+      <MessageContent>
+        <TranscriptWords text={words} />
+      </MessageContent>
+    </Message>
+  );
+}
+
 /**
  * Says the turn's end, a stop or a failure, once, as it lands. Note that it
  * is said by the transcript rather than its end line, because the line
@@ -2834,6 +2847,7 @@ function AgentTranscriptView({
   onOlder,
   olderFailed = false,
   fromStart,
+  greeting,
   overComposer = false,
   overEnd,
   earlierOmitted = false,
@@ -2904,6 +2918,8 @@ function AgentTranscriptView({
   olderFailed?: boolean;
   /** Whether the messages begin at the transcript's start, a page landed with none older, so its first line is the opening the brief draws. */
   fromStart: boolean;
+  /** The greeting a Manager's conversation opens on, drawn above its first line; none for every other agent. */
+  greeting?: string | undefined;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
   /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
@@ -3254,6 +3270,9 @@ function AgentTranscriptView({
 
                     return (
                       <>
+                        {at === 0 && fromStart && greeting !== undefined ? (
+                          <ManagerGreetingMessage words={greeting} />
+                        ) : null}
                         {heads ? (
                           <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
                         ) : null}
@@ -3345,23 +3364,23 @@ function AgentTranscriptView({
   // The log's first page, and what stands around it, wait in the tab's own placeholder, which it opened on (`AgentTab`).
   if (holding || (reading && ended === undefined)) return <TranscriptSkeleton />;
 
-  // Note that a start under way says so at the log's top, where its first line lands, rather than centered in whatever room the docks leave, so it stands still as they come and go.
+  // Note that a start under way says so at the log's top, where its first line lands, rather than centered in whatever room the docks leave, so it stands still as they come and go; a Manager's greeting stands there in place of the wait for a first line.
   if (ended === undefined && boot === undefined) {
+    const leadLine =
+      brief === AGENT_BRIEF.BLANK && origin === undefined
+        ? blankAgentLine(
+            standingCalls.length > 0,
+            ownCall?.agentId === agentId ? ownCall?.stage : undefined,
+          )
+        : lead.startingLine;
+
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {starting ?? (
-          <WorkingLine
-            startedAt={undefined}
-            words={
-              brief === AGENT_BRIEF.BLANK && origin === undefined
-                ? blankAgentLine(
-                    standingCalls.length > 0,
-                    ownCall?.agentId === agentId ? ownCall?.stage : undefined,
-                  )
-                : lead.startingLine
-            }
-          />
-        )}
+        {greeting === undefined ? null : <ManagerGreetingMessage words={greeting} />}
+        {starting ??
+          (greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
+            <WorkingLine startedAt={undefined} words={leadLine} />
+          ))}
         {endTrail}
       </ConversationLead>
     );
@@ -3897,6 +3916,11 @@ function AgentTabView({
                                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                 olderFailed={transcript.olderFailed}
                                 fromStart={transcript.pages > 0 && !transcript.hasOlder}
+                                greeting={
+                                  agent.kind === AGENT_KIND.MANAGER
+                                    ? managerGreeting(agent.title)
+                                    : undefined
+                                }
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}

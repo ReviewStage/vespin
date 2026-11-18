@@ -236,8 +236,9 @@ export type NativeAgentRuntime = (typeof NATIVE_AGENT_RUNTIMES)[number];
  * What kind of agent a row is: a coder, which every agent started on work is;
  * a manager, which works across a workspace's tasks rather than on one; or a
  * pilot, which a row from before Pilot was removed may still hold, and which
- * every reader treats as a coder. Nothing writes a pilot now. The kind never
- * leaves the service but in its counted events.
+ * every reader treats as a coder. Nothing writes a pilot now. The kind
+ * leaves the service only as a Manager's summary says it (`kind`), and in
+ * its counted events.
  */
 export const AGENT_KIND = {
   CODER: "coder",
@@ -1249,6 +1250,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   runtime: EffectSchema.optionalKey(EffectSchema.Literals(NATIVE_AGENT_RUNTIMES)),
   /** The agent's title as its tab shows it; null until one is generated, and after a rename cleared it, when the tab shows the model's name. */
   title: EffectSchema.NullOr(EffectSchema.String),
+  /** That the agent is a Manager, whose page opens on its greeting (`@repo/features/manager-greeting`); absent for a coder, and from a service older than it. */
+  kind: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_KIND.MANAGER)),
   /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
   machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
   /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */

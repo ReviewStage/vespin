@@ -17,6 +17,7 @@ import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing"
 import { BOOT_FAILURE, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
 import { AGENT_KIND, AGENT_MACHINE, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
+import { managerGreeting } from "@repo/features/manager-greeting";
 import type { ManagerCreateRequest } from "@repo/features/manager-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
@@ -52,6 +53,7 @@ import {
 } from "../sessions/agent-sessions.js";
 import { WorkspaceDriveFills } from "../workspace-drive.js";
 import { WorkspaceDriveBuilds } from "../workspace-drive-builds.js";
+import { managerInstructions } from "./instructions.js";
 import { startManager } from "./manager-start.js";
 import { changeAgentQueue } from "./queue-change.js";
 import { type StartAsk, startAgent } from "./start.js";
@@ -379,7 +381,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
   );
 
   it.effect(
-    "a Manager is made on no task as its creator's, named as asked and handed nothing, so it opens no session and sends no line, only where its workspace has Managers on, and an account outside the workspace makes none",
+    "a Manager is made on no task as its creator's, named as asked and handed nothing, so it opens no session and sends no line, told the greeting its page opens on, only where its workspace has Managers on, and an account outside the workspace makes none",
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
@@ -433,6 +435,12 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           .where(eq(messages.conversationId, agent.conversationId));
 
         assert.deepEqual(lines, [], "making a Manager sends no line");
+        assert.ok(
+          managerInstructions({ name: "Billing", deviceId: null }).includes(
+            managerGreeting("Billing"),
+          ),
+          "the Manager is told the greeting its page opens on",
+        );
       }),
   );
 
