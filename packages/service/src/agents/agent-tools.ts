@@ -165,6 +165,7 @@ import {
   tasksOfWrites,
   writeTaskBlocks,
 } from "./task-block-changes.js";
+import { TASK_REF_INPUT, TASK_REF_WORDS, taskIdOfInput } from "./task-ref.js";
 import {
   AGENT_LIST_INPUT,
   type AgentTask,
@@ -319,8 +320,8 @@ export const TASK_PRIORITY_WORDS =
 /** Why a task's change changed nothing, in words the model can act on. */
 export const UPDATE_TASK_REFUSAL = {
   UNREADABLE:
-    `Not run: name the task by the id ${AGENT_TOOL.LIST_TASKS} or ${AGENT_TOOL.LIST_AGENTS} answered, ` +
-    `and at least one change: a name of at most ${TASK_BOUNDS.MAX_NAME_CHARS} characters, a ` +
+    `Not run: name the task by the id ${AGENT_TOOL.LIST_TASKS} or ${AGENT_TOOL.LIST_AGENTS} answered ` +
+    `or by its key, and at least one change: a name of at most ${TASK_BOUNDS.MAX_NAME_CHARS} characters, a ` +
     "repository as owner/name or null, pinned, a sectionId or null, a status " +
     `(${Object.values(TASK_STATUS).join(", ")}), a priority ` +
     `(${Object.values(TASK_PRIORITY).join(", ")}), an assignee as a member's mention link or ` +
@@ -357,6 +358,10 @@ export const UPDATE_TASK_REFUSAL = {
     `(${Object.values(TASK_STATUS).join(", ")}), and archive or bring back its agents with ` +
     `${AGENT_TOOL.ARCHIVE_AGENT} or ${AGENT_TOOL.UNARCHIVE_AGENT}, each by its agentId.`,
 } as const;
+
+/** The fields `update_task` names a task in by its id or key, and the opening its refusals share. */
+const UPDATE_TASK_ID = { opening: "Not run", field: "taskId" } as const;
+const UPDATE_TASK_PARENT = { opening: "Not run", field: "parentTaskId" } as const;
 
 /** Why a stop changed nothing, in words the model can act on. */
 export const STOP_AGENT_REFUSAL = {
@@ -793,10 +798,10 @@ function wordsOf(on: Pick<ExperimentsOn, "descriptionsOn">): "on" | "off" {
 function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return Schema.Struct({
     taskId: describeWire(
-      wireUuidSchema,
-      "The task to start the agent on, by its id: the taskId in your instructions' own values for " +
-        `your own, the id ${AGENT_TOOL.LIST_TASKS} answered for another, and with from the task of ` +
-        "the agent it starts from.",
+      TASK_REF_INPUT,
+      "The task to start the agent on, by its id or its key, such as ACME-42: the taskId in " +
+        `your instructions' own values for your own, the id ${AGENT_TOOL.LIST_TASKS} answered or ` +
+        "the key for another, and with from the task of the agent it starts from.",
     ),
     prompt: Schema.optionalKey(describeWire(START_PROMPT, START_WORDS[wordsOf(on)].prompt)),
     note: Schema.optionalKey(describeWire(START_PROMPT, START_WORDS[wordsOf(on)].note)),
@@ -895,8 +900,8 @@ const UPDATE_NAME_WORDS = {
 function updateTaskInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return Schema.Struct({
     taskId: describeWire(
-      wireUuidSchema,
-      `The task's id, as ${AGENT_TOOL.LIST_TASKS} or ${AGENT_TOOL.LIST_AGENTS} answered it.`,
+      TASK_REF_INPUT,
+      `The task, by its id as ${AGENT_TOOL.LIST_TASKS} or ${AGENT_TOOL.LIST_AGENTS} answered it, or by its key, such as ACME-42.`,
     ),
     name: Schema.optionalKey(
       describeWire(
@@ -932,8 +937,8 @@ function updateTaskInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
     ),
     parentTaskId: Schema.optionalKey(
       describeWire(
-        Schema.NullOr(wireUuidSchema),
-        `The task to make it a child of, by the id ${AGENT_TOOL.LIST_TASKS} answered: a task of ` +
+        Schema.NullOr(TASK_REF_INPUT),
+        `The task to make it a child of, by ${TASK_REF_WORDS}: a task of ` +
           "your workspace working in the same repository, and neither this task nor one of its " +
           "sub-tasks; where its agents run stays its own. null takes it out from under its parent, " +
           "to stand at the top.",
@@ -1826,12 +1831,27 @@ export function runListAgents(
       const workspace = yield* callerWorkspace(caller);
 
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
+      const userId = callerUserId(caller);
+      const { taskId: taskRef } = narrowed.success;
+
+      // A task the list narrows to by its key is read in the caller's workspace alone.
+      const listedTask =
+        taskRef === undefined
+          ? Result.succeed(undefined)
+          : yield* taskIdOfInput(
+              userId,
+              workspace.value,
+              { opening: "Not run", field: "taskId" },
+              taskRef,
+            );
+
+      if (Result.isFailure(listedTask)) return agentToolRejected(listedTask.failure);
 
       const { agents, taskOf, nextOffset } = yield* workspaceAgentsOf(
-        callerUserId(caller),
+        userId,
         workspace.value,
         callerAgent(caller),
-        narrowed.success,
+        { ...narrowed.success, taskId: listedTask.success },
       );
 
       const standing = yield* standingsOf(agents);
@@ -2321,6 +2341,21 @@ function startModeRefusal(
   );
 }
 
+/** The task a start names by its id or key, read in the caller's workspace; or why it names none there. */
+const startTaskNamed = (caller: AgentCaller, written: string) =>
+  Effect.gen(function* () {
+    const workspace = yield* callerWorkspace(caller);
+
+    if (Option.isNone(workspace)) return Result.fail(START_AGENT_REFUSAL.NO_SUCH_TASK);
+
+    return yield* taskIdOfInput(
+      callerUserId(caller),
+      workspace.value,
+      { opening: "Not started", field: "taskId" },
+      written,
+    );
+  });
+
 /** Why a start's input asks for nothing that can start, read before anything is: a source with a prompt or a branch, or a coding agent continuing itself. */
 function startInputRefusal(
   caller: AgentCaller,
@@ -2422,10 +2457,10 @@ export function runStartAgent(
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.UNREADABLE));
   }
 
-  const { model, effort, taskId, permissionMode } = asked.success;
+  const { model, effort, taskId: taskRef, permissionMode } = asked.success;
   const from = startFromOf(asked.success.from);
 
-  if (taskId === undefined) return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_TASK));
+  if (taskRef === undefined) return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_TASK));
 
   if (from === undefined && model === undefined) {
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_MODEL));
@@ -2450,6 +2485,12 @@ export function runStartAgent(
 
   return orStoreRefusal(
     Effect.gen(function* () {
+      // A task named by its key is read in the caller's workspace alone.
+      const named = yield* startTaskNamed(caller, taskRef);
+
+      if (Result.isFailure(named)) return agentToolRejected(named.failure);
+      const taskId = named.success;
+
       // Another task, or another agent's, is started on only where it is of the caller's
       // own workspace; a call run again after its start landed answers what it made
       // (`startedBefore`), before a source is read, which its own continue has since stopped,
@@ -2740,8 +2781,16 @@ export function runUpdateTask(
     return Effect.succeed(agentToolRejected(UPDATE_TASK_REFUSAL.UNREADABLE));
   }
 
-  const { taskId, sectionId, assignee, archived, parentTaskId, blockedBy, blocks, ...named } =
-    asked.success;
+  const {
+    taskId: taskRef,
+    sectionId,
+    assignee,
+    archived,
+    parentTaskId: parentRef,
+    blockedBy,
+    blocks,
+    ...named
+  } = asked.success;
 
   if (archived !== undefined) {
     return Effect.succeed(agentToolRejected(UPDATE_TASK_REFUSAL.ARCHIVED));
@@ -2761,7 +2810,7 @@ export function runUpdateTask(
   if (
     Object.keys(changes).length === 0 &&
     sectionId === undefined &&
-    parentTaskId === undefined &&
+    parentRef === undefined &&
     !blockChangesNamed(blockChanges)
   ) {
     return Effect.succeed(agentToolRejected(UPDATE_TASK_REFUSAL.UNREADABLE));
@@ -2773,13 +2822,24 @@ export function runUpdateTask(
     Effect.gen(function* () {
       const userId = callerUserId(caller);
       const workspace = yield* callerWorkspace(caller);
+
+      if (Option.isNone(workspace)) return agentToolRejected(UPDATE_TASK_REFUSAL.NO_TASK);
+
+      // The task and its parent may each be named by a key, read in the caller's workspace alone.
+      const taskNamed = yield* taskIdOfInput(userId, workspace.value, UPDATE_TASK_ID, taskRef);
+
+      if (Result.isFailure(taskNamed)) return agentToolRejected(taskNamed.failure);
+      const taskId = taskNamed.success;
+
+      const parentNamed = Predicate.isString(parentRef)
+        ? yield* taskIdOfInput(userId, workspace.value, UPDATE_TASK_PARENT, parentRef)
+        : Result.succeed(parentRef);
+
+      if (Result.isFailure(parentNamed)) return agentToolRejected(parentNamed.failure);
+      const parentTaskId = parentNamed.success;
       const read = yield* readTask(userId, taskId);
 
-      if (
-        Option.isNone(workspace) ||
-        Option.isNone(read) ||
-        read.value.task.workspaceId !== workspace.value
-      ) {
+      if (Option.isNone(read) || read.value.task.workspaceId !== workspace.value) {
         return agentToolRejected(UPDATE_TASK_REFUSAL.NO_TASK);
       }
 

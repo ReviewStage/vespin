@@ -13,6 +13,7 @@ import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import { isRecord, type UnparsedWireValue, wireUuidSchema } from "../core.js";
 import { assigneeIdOf, memberLinkWrittenSchema } from "./task-assignee.js";
+import { TASK_REF_INPUT } from "./task-ref.js";
 
 /**
  * workspace-agents.ts -- the coding agents of one workspace as an agent's tools read them: on any task, by any member, one task's alone where asked, each with its task's name.
@@ -59,8 +60,8 @@ export const AGENT_LIST_FILTER_REFUSAL = {
 export const AGENT_LIST_INPUT = Schema.Struct({
   taskId: Schema.optionalKey(
     describeWire(
-      wireUuidSchema,
-      "Only the agents on this task, by the id a listed agent's task answered; leave it out for the whole workspace.",
+      TASK_REF_INPUT,
+      "Only the agents on this task, by the id a listed agent's task answered or its key, such as ACME-42; leave it out for the whole workspace.",
     ),
   ),
   words: Schema.optionalKey(

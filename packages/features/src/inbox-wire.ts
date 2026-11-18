@@ -15,6 +15,7 @@ import {
   hasWordsOrFiles,
 } from "./agent-wire.js";
 import { AUDIO_TYPE } from "./audio-signature.js";
+import { taskRefSchema } from "./cli-task-ref.js";
 import { markersAsNames } from "./file-marker.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
@@ -739,14 +740,14 @@ export type InboxPost = typeof inboxPostInputSchema.Type;
 /**
  * What a list's tool part carries as its input: whose threads, always
  * named, as one agent of its workspace by `agentId`, the agent's own
- * included, or one task of it by `taskId`, another's of which it reads and
+ * included, or one task of it by `taskId`, its id or its key, another's of which it reads and
  * never writes; and where the threads listed stand, every one where it
  * names none.
  */
 export const inboxListInputSchema = EffectSchema.Struct({
   of: EffectSchema.Union([
     EffectSchema.Struct({ agentId: wireUuidSchema }),
-    EffectSchema.Struct({ taskId: wireUuidSchema }),
+    EffectSchema.Struct({ taskId: taskRefSchema }),
   ]),
   status: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(INBOX_STATUS))),
 });

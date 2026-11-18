@@ -315,6 +315,12 @@ import {
 import { runListPortsShared, runSharePort, SHARE_PORT_TOOL } from "../agents/port-tools.js";
 import { ranRunAction, stoppedRunAction } from "../agents/run-actions.js";
 import {
+  TASK_REF_INPUT,
+  TASK_REF_MISS,
+  taskIdOfInput,
+  taskRefRefusal,
+} from "../agents/task-ref.js";
+import {
   CHANGE_TASK_RELATION_INPUT,
   runChangeTaskRelation,
 } from "../agents/task-relation-tools.js";
@@ -648,6 +654,111 @@ const pageWorkspace = (userId: string, pageId: string) =>
       : readTaskWorkspace(userId, found.value.taskId),
   );
 
+/** Why a member's call naming a task by its key ran nowhere, in the call's own opening. */
+function keyWithoutWorkspaceRefusal(opening: string): string {
+  return (
+    `${opening}: a key names a task's number in one workspace, so name that workspace in ` +
+    `workspace by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered, or name the task in ` +
+    `taskId by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`
+  );
+}
+
+/** A member's call on one task names it by its id, or by its key in the workspace named. */
+interface MemberTaskNamed {
+  readonly workspace?: string | undefined;
+  readonly taskId: string;
+}
+
+/** How a member's call on one task words a task it names none of: its opening, and its own refusal of a task the member reaches none of. */
+interface MemberTaskWords {
+  readonly opening: string;
+  readonly noTask: string;
+}
+
+/**
+ * The task a member's call names and the workspace that holds it, as the
+ * member reaches it: by its id in whichever of their workspaces it stands,
+ * or, with a workspace named, a task of that workspace by its id or its key
+ * (`taskIdOfInput`); or why there is none, in the call's own words.
+ */
+const memberTaskOf = (userId: string, named: MemberTaskNamed, words: MemberTaskWords) =>
+  Effect.gen(function* () {
+    const ref = cliTaskRefOf(named.taskId);
+
+    if (ref === undefined) {
+      return Result.fail(
+        taskRefRefusal(words.opening, "taskId", { kind: TASK_REF_MISS.UNREADABLE }),
+      );
+    }
+
+    if (named.workspace === undefined && !("id" in ref)) {
+      return Result.fail(keyWithoutWorkspaceRefusal(words.opening));
+    }
+
+    const listed =
+      named.workspace === undefined
+        ? Result.succeed(undefined)
+        : yield* listedWorkspace(userId, named.workspace);
+
+    if (Result.isFailure(listed)) return Result.fail(listed.failure);
+
+    const taskId =
+      listed.success === undefined || "id" in ref
+        ? Result.succeed("id" in ref ? ref.id : named.taskId)
+        : yield* taskIdOfInput(
+            userId,
+            listed.success,
+            { opening: words.opening, field: "taskId" },
+            named.taskId,
+          );
+
+    if (Result.isFailure(taskId)) return Result.fail(taskId.failure);
+    const holding = yield* readTaskWorkspace(userId, taskId.success);
+
+    // A workspace named holds the task, which refuses an id of a task standing in another.
+    if (
+      Option.isNone(holding) ||
+      (listed.success !== undefined && holding.value !== listed.success)
+    ) {
+      return Result.fail(words.noTask);
+    }
+
+    return Result.succeed({ taskId: taskId.success, workspaceId: holding.value });
+  });
+
+/** A call on one task run as the member, about the workspace that holds it (`memberTaskOf`), handed the task's id; refused in the call's own words where they reach none. */
+const onMemberTask = <E, R>(
+  named: MemberTaskNamed,
+  words: MemberTaskWords,
+  read: (call: AgentReadCall, taskId: string) => Effect.Effect<WireRecord, E, R>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const task = yield* memberTaskOf(member.userId, named, words);
+
+    if (Result.isFailure(task)) return agentToolRejected(task.failure);
+
+    return yield* read(memberCaller(member, task.success.workspaceId), task.success.taskId);
+  });
+
+/** The workspace a member's call on one task names it in, which a key needs. */
+const TASK_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace the task stands in, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+      "answered: required with a key, and with an id the workspace that must hold the task; " +
+      "leave it out with an id for whichever workspace it stands in.",
+  ),
+);
+
+/** A member's call names a task by the id list_tasks answered or by its key, such as ACME-42, in the workspace named. */
+const memberTaskInput = (whose: string) =>
+  describeWire(
+    TASK_REF_INPUT,
+    `${whose}, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered, or by its key, such as ACME-42, ` +
+      "with the workspace it stands in.",
+  );
+
 /** A list's input: the workspace it is about, by its slug, where the member has more than one. */
 const WORKSPACE_INPUT = Schema.optionalKey(
   describeWire(
@@ -711,10 +822,7 @@ const MEMBER_LIST_TASKS_TOOL = memberMcpTool({
 
 /** Why a member's read of a task by its key ran nowhere, in words the agent can act on. */
 const MEMBER_READ_TASK_REFUSAL = {
-  KEY_WITHOUT_WORKSPACE:
-    "Not read: a key names a task's number in one workspace, so name that workspace in " +
-    `workspace by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered, or name the task in ` +
-    `taskId by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+  KEY_WITHOUT_WORKSPACE: keyWithoutWorkspaceRefusal("Not read"),
 } as const;
 
 /** A member's read names the task by its id or its key, and the workspace it stands in, which a key needs. */
@@ -959,12 +1067,13 @@ function taskFileAnswerOf(read: Option.Option<TaskFileAnswer | TaskTreeAnswer>) 
   );
 }
 
-const TASK_FILE_TASK_INPUT = describeWire(
-  wireUuidSchema,
-  `The task whose repository to read, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
-);
+const TASK_FILE_TASK_INPUT = memberTaskInput("The task whose repository to read");
+
+/** How a read of a task's repository words a task it names none of. */
+const TASK_FILE_TASK_WORDS = { opening: "Not read", noTask: READ_TASK_REFUSAL.NO_TASK } as const;
 
 const ReadTaskFileInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: TASK_FILE_TASK_INPUT,
   path: describeWire(
     Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(CODE_PATH_MAX_CHARS)),
@@ -997,10 +1106,8 @@ const READ_TASK_FILE_TOOL = memberMcpTool({
     `why otherwise. ${MEMBER_MCP_TOOL.LIST_TASK_FOLDER} lists a folder.`,
   input: ReadTaskFileInputSchema,
   annotations: READ_ONLY,
-  run: ({ taskId, path, firstLine = 1, commit }) =>
-    Effect.gen(function* () {
-      const member = yield* AdmittedMember;
-
+  run: ({ workspace, taskId: named, path, firstLine = 1, commit }) =>
+    onMemberTask({ workspace, taskId: named }, TASK_FILE_TASK_WORDS, ({ caller }, taskId) => {
       const window = {
         path,
         firstLine,
@@ -1008,11 +1115,12 @@ const READ_TASK_FILE_TOOL = memberMcpTool({
         ...(commit === undefined ? undefined : { ref: commit }),
       };
 
-      return taskFileAnswerOf(yield* readTaskFile(member.userId, taskId, window));
+      return Effect.map(readTaskFile(callerUserId(caller), taskId, window), taskFileAnswerOf);
     }),
 });
 
 const ListTaskFolderInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: TASK_FILE_TASK_INPUT,
   path: Schema.optionalKey(
     describeWire(
@@ -1042,12 +1150,11 @@ const LIST_TASK_FOLDER_TOOL = memberMcpTool({
     `${MEMBER_MCP_TOOL.READ_TASK_FILE} reads a file it lists.`,
   input: ListTaskFolderInputSchema,
   annotations: READ_ONLY,
-  run: ({ taskId, path = "", recursive }) =>
-    Effect.gen(function* () {
-      const member = yield* AdmittedMember;
+  run: ({ workspace, taskId: named, path = "", recursive }) =>
+    onMemberTask({ workspace, taskId: named }, TASK_FILE_TASK_WORDS, ({ caller }, taskId) => {
       const folder = { path, ...(recursive === true ? { recursive } : undefined) };
 
-      return taskFileAnswerOf(yield* readTaskTree(member.userId, taskId, folder));
+      return Effect.map(readTaskTree(callerUserId(caller), taskId, folder), taskFileAnswerOf);
     }),
 });
 
@@ -1232,6 +1339,16 @@ const writeAsMember = <R, RWrite>(
   write: (call: AgentCall) => Effect.Effect<WireRecord, never, RWrite>,
 ) => readAsMember(workspaceOf, refusal, (read) => Effect.flatMap(memberWriteCall(read), write));
 
+/** A write on one task run as the member, about the workspace that holds it (`memberTaskOf`), handed the task's id; refused in the call's own words where they reach none. */
+const writeOnMemberTask = <R>(
+  named: MemberTaskNamed,
+  words: MemberTaskWords,
+  write: (call: AgentCall, taskId: string) => Effect.Effect<WireRecord, never, R>,
+) =>
+  onMemberTask(named, words, (read, taskId) =>
+    Effect.flatMap(memberWriteCall(read), (call) => write(call, taskId)),
+  );
+
 /** The workspace of one of the member's sidebar sections, by its id. */
 const sectionWorkspace = (userId: string, sectionId: string) =>
   Effect.map(listTaskSections(userId), ({ sections }) =>
@@ -1323,6 +1440,7 @@ const MEMBER_UPDATE_SECTION = Schema.optionalKey(
 /** A task's change names what the agents' own does, in the words of the experiments given, the sidebar's words the member's own. */
 const updateTaskInputOf = (on: Pick<ExperimentsOn, "descriptionsOn">) =>
   Schema.Struct({
+    workspace: TASK_WORKSPACE_INPUT,
     ...updateTaskToolOf(on).inputSchema.fields,
     pinned: MEMBER_UPDATE_PINNED,
     sectionId: MEMBER_UPDATE_SECTION,
@@ -1330,14 +1448,19 @@ const updateTaskInputOf = (on: Pick<ExperimentsOn, "descriptionsOn">) =>
 
 /** A task's change names what the agents' own does, the sidebar's words the member's own. */
 const UpdateTaskInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   ...UPDATE_TASK_TOOL.inputSchema.fields,
   pinned: MEMBER_UPDATE_PINNED,
   sectionId: MEMBER_UPDATE_SECTION,
 });
 
+/** How a member's change of a task words a task it names none of. */
+const UPDATE_TASK_WORDS = { opening: "Not run", noTask: UPDATE_TASK_REFUSAL.NO_TASK } as const;
+
 /** What a member's change of a task is told, which names no description. */
 const MEMBER_UPDATE_TASK_WORDS =
-  "Change a task the member can open, by its id, a teammate's included, as the member's own " +
+  "Change a task the member can open, by its id, or by its key in the workspace named, a " +
+  "teammate's included, as the member's own " +
   "task menu would: rename it, set or clear its repository, set where it stands (its status) " +
   "or how much it matters (its priority), assign it to a member of its workspace or to no " +
   "one, pin or unpin it in the member's sidebar, move it into one of their sidebar sections " +
@@ -1362,11 +1485,9 @@ const MEMBER_UPDATE_TASK_TOOL = memberMcpTool({
     input: updateTaskInputOf(NO_EXPERIMENT_ON),
   },
   annotations: IDEMPOTENT_CHANGE,
-  run: (asked) =>
-    writeAsMember(
-      (userId) => readTaskWorkspace(userId, asked.taskId),
-      UPDATE_TASK_REFUSAL.NO_TASK,
-      (call) => runUpdateTask(call, asked),
+  run: ({ workspace, ...asked }) =>
+    writeOnMemberTask({ workspace, taskId: asked.taskId }, UPDATE_TASK_WORDS, (call, taskId) =>
+      runUpdateTask(call, { ...asked, taskId }),
     ),
 });
 
@@ -1384,13 +1505,11 @@ const MEMBER_CHANGE_TASK_RELATION_TOOL = memberMcpTool({
     "in another repository than its child. Answers `accepted` with the task as it now stands, " +
     "its parentTaskId, blockedBy, and blocks among it, `already` true where the relation stood " +
     "as asked, or `rejected` and why.",
-  input: CHANGE_TASK_RELATION_INPUT,
+  input: Schema.Struct({ workspace: TASK_WORKSPACE_INPUT, ...CHANGE_TASK_RELATION_INPUT.fields }),
   annotations: IDEMPOTENT_CHANGE,
-  run: (asked) =>
-    writeAsMember(
-      (userId) => readTaskWorkspace(userId, asked.taskId),
-      UPDATE_TASK_REFUSAL.NO_TASK,
-      (call) => runChangeTaskRelation(call, asked),
+  run: ({ workspace, ...asked }) =>
+    writeOnMemberTask({ workspace, taskId: asked.taskId }, UPDATE_TASK_WORDS, (call, taskId) =>
+      runChangeTaskRelation(call, { ...asked, taskId }),
     ),
 });
 
@@ -1418,10 +1537,8 @@ function deleteTaskRefusalWords(refusal: HostedRefusal): string {
 }
 
 const DeleteTaskInputSchema = Schema.Struct({
-  taskId: describeWire(
-    wireUuidSchema,
-    `The task to delete, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
-  ),
+  workspace: TASK_WORKSPACE_INPUT,
+  taskId: memberTaskInput("The task to delete"),
 });
 
 /**
@@ -1434,7 +1551,8 @@ const MEMBER_DELETE_TASK_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.DELETE_TASK,
   description:
     "Delete a task the member can open for good, by its id, a teammate's included, in " +
-    "whichever of the member's workspaces it stands, as the app's Permanently delete would: " +
+    "whichever of the member's workspaces it stands, or by its key in the workspace named, " +
+    "as the app's Permanently delete would: " +
     "the task goes with everything on it, its agents and their transcripts among it, and none " +
     "of it can be brought back. It stops no agent: while any agent on the task is starting or " +
     `running it is refused, and ${MEMBER_MCP_TOOL.STOP_AGENT} stops each first. A delete ` +
@@ -1444,11 +1562,11 @@ const MEMBER_DELETE_TASK_TOOL = memberMcpTool({
     "Answers `accepted` with the task's id, or `rejected` and why.",
   input: DeleteTaskInputSchema,
   annotations: DESTRUCTIVE,
-  run: ({ taskId }) =>
-    writeAsMember(
-      (userId) => readTaskWorkspace(userId, taskId),
-      DELETE_TASK_REFUSAL.NO_TASK,
-      (call) =>
+  run: (named) =>
+    writeOnMemberTask(
+      named,
+      { opening: "Not deleted", noTask: DELETE_TASK_REFUSAL.NO_TASK },
+      (call, taskId) =>
         deleteTaskOfStoppedAgents(callerUserId(call.caller), taskId).pipe(
           Effect.map(() => ({ status: ACTION_RESULT_STATUS.ACCEPTED, taskId })),
           Effect.catch((refusal) =>
@@ -1460,17 +1578,16 @@ const MEMBER_DELETE_TASK_TOOL = memberMcpTool({
 
 /** A description's notes name the task and the notetaker's own notes. */
 const EditDescriptionInputSchema = Schema.Struct({
-  taskId: describeWire(
-    wireUuidSchema,
-    `The task whose description to edit, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
-  ),
+  workspace: TASK_WORKSPACE_INPUT,
+  taskId: memberTaskInput("The task whose description to edit"),
   ...descriptionNotesSchema.fields,
 });
 
 const MEMBER_EDIT_DESCRIPTION_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.EDIT_DESCRIPTION,
   description:
-    "Take notes on the description of a task the member can open, by its taskId, as the member's own " +
+    "Take notes on the description of a task the member can open, by its taskId, its id or its " +
+    "key in the workspace named, as the member's own " +
     `edit, which ${MEMBER_MCP_TOOL.READ_TASK} reads first: add a point under one of its ` +
     "headings, or replace text copied exactly from the saved description, as much as names one place, " +
     "headings and whole sections included, with what it becomes, or with nothing to delete " +
@@ -1484,18 +1601,18 @@ const MEMBER_EDIT_DESCRIPTION_TOOL = memberMcpTool({
     "`accepted` with how many notes it took, or `rejected` and why.",
   input: EditDescriptionInputSchema,
   annotations: { readOnlyHint: false, destructiveHint: false },
-  run: (asked) =>
-    readAsMember(
-      (userId) => readTaskWorkspace(userId, asked.taskId),
-      DESCRIPTION_EDIT_REFUSAL.NO_TASK,
-      ({ caller }) =>
+  run: ({ workspace, ...asked }) =>
+    onMemberTask(
+      { workspace, taskId: asked.taskId },
+      { opening: "Not saved", noTask: DESCRIPTION_EDIT_REFUSAL.NO_TASK },
+      ({ caller }, taskId) =>
         Effect.flatMap(
           experimentOnIn(callerWorkspaceId(caller), EXPERIMENT.DESCRIPTIONS),
           (descriptionsOn) =>
             descriptionsOn
               ? recordMemberDescriptionNotes(
-                  { userId: callerUserId(caller), taskId: asked.taskId },
-                  asked,
+                  { userId: callerUserId(caller), taskId },
+                  { ...asked, taskId },
                 )
               : Effect.succeed(agentToolRejected(EXPERIMENT_OFF_REFUSAL)),
         ),
@@ -1529,10 +1646,7 @@ const RESTORE_REFUSAL_WORDS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /** The task whose description's history a call is about. */
-const HISTORY_TASK_INPUT = describeWire(
-  wireUuidSchema,
-  `The task whose description's history to read, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
-);
+const HISTORY_TASK_INPUT = memberTaskInput("The task whose description's history to read");
 
 /** A revision a call names, by its number. */
 const revisionSeqInput = (words: string) =>
@@ -1542,6 +1656,7 @@ const revisionSeqInput = (words: string) =>
   );
 
 const ListDescriptionRevisionsInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: HISTORY_TASK_INPUT,
   before: Schema.optionalKey(
     describeWire(
@@ -1552,15 +1667,14 @@ const ListDescriptionRevisionsInputSchema = Schema.Struct({
 });
 
 const ReadDescriptionRevisionInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: HISTORY_TASK_INPUT,
   seq: revisionSeqInput("The revision to read"),
 });
 
 const RestoreDescriptionRevisionInputSchema = Schema.Struct({
-  taskId: describeWire(
-    wireUuidSchema,
-    `The task whose description to restore, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
-  ),
+  workspace: TASK_WORKSPACE_INPUT,
+  taskId: memberTaskInput("The task whose description to restore"),
   seq: revisionSeqInput("The revision to put back"),
 });
 
@@ -1581,22 +1695,25 @@ const revisionLineOf = (line: DescriptionRevisionLine) => ({
 
 /** A history call run as the member, about the workspace that holds the task as they reach it, refused where that workspace has Task descriptions off. */
 const historyAsMember = <R>(
-  taskId: string,
-  noTask: string,
-  run: (userId: string) => Effect.Effect<WireRecord, StoreFailure, R>,
+  named: MemberTaskNamed,
+  words: MemberTaskWords,
+  run: (userId: string, taskId: string) => Effect.Effect<WireRecord, StoreFailure, R>,
 ) =>
-  readAsMember(
-    (userId) => readTaskWorkspace(userId, taskId),
-    noTask,
-    ({ caller }) =>
-      Effect.flatMap(
-        experimentOnIn(callerWorkspaceId(caller), EXPERIMENT.DESCRIPTIONS),
-        (descriptionsOn) =>
-          descriptionsOn
-            ? orStoreRefusal(run(callerUserId(caller)))
-            : Effect.succeed(agentToolRejected(EXPERIMENT_OFF_REFUSAL)),
-      ),
+  onMemberTask(named, words, ({ caller }, taskId) =>
+    Effect.flatMap(
+      experimentOnIn(callerWorkspaceId(caller), EXPERIMENT.DESCRIPTIONS),
+      (descriptionsOn) =>
+        descriptionsOn
+          ? orStoreRefusal(run(callerUserId(caller), taskId))
+          : Effect.succeed(agentToolRejected(EXPERIMENT_OFF_REFUSAL)),
+    ),
   );
+
+/** How a read of a description's history words a task it names none of. */
+const HISTORY_READ_WORDS = {
+  opening: "Not read",
+  noTask: DESCRIPTION_HISTORY_REFUSAL.NO_TASK,
+} as const;
 
 const LIST_DESCRIPTION_REVISIONS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS,
@@ -1613,8 +1730,8 @@ const LIST_DESCRIPTION_REVISIONS_TOOL = memberMcpTool({
   input: ListDescriptionRevisionsInputSchema,
   annotations: READ_ONLY,
   run: (asked) =>
-    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NO_TASK, (userId) =>
-      Effect.map(listRevisions(userId, asked.taskId, asked.before), (page) => ({
+    historyAsMember(asked, HISTORY_READ_WORDS, (userId, taskId) =>
+      Effect.map(listRevisions(userId, taskId, asked.before), (page) => ({
         status: ACTION_RESULT_STATUS.ACCEPTED,
         revisions: page.revisions.map(revisionLineOf),
         ...(page.earlier === undefined ? undefined : { earlier: page.earlier }),
@@ -1633,8 +1750,8 @@ const READ_DESCRIPTION_REVISION_TOOL = memberMcpTool({
   input: ReadDescriptionRevisionInputSchema,
   annotations: READ_ONLY,
   run: (asked) =>
-    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NO_TASK, (userId) =>
-      Effect.map(readRevision(userId, asked.taskId, asked.seq), (revision) => {
+    historyAsMember(asked, HISTORY_READ_WORDS, (userId, taskId) =>
+      Effect.map(readRevision(userId, taskId, asked.seq), (revision) => {
         if (Option.isNone(revision)) {
           return agentToolRejected(DESCRIPTION_HISTORY_REFUSAL.NO_REVISION);
         }
@@ -1662,19 +1779,22 @@ const RESTORE_DESCRIPTION_REVISION_TOOL = memberMcpTool({
   input: RestoreDescriptionRevisionInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: (asked) =>
-    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_TASK, (userId) =>
-      Effect.map(restoreRevision({ userId, taskId: asked.taskId }, asked.seq), (restored) =>
-        restored.status === DESCRIPTION_SAVE_STATUS.SAVED
-          ? {
-              status: ACTION_RESULT_STATUS.ACCEPTED,
-              restored: asked.seq,
-              changed: restored.txid !== undefined,
-            }
-          : agentToolRejected(
-              RESTORE_REFUSAL_WORDS.get(restored.reason) ??
-                DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED,
-            ),
-      ),
+    historyAsMember(
+      asked,
+      { opening: "Not restored", noTask: DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_TASK },
+      (userId, taskId) =>
+        Effect.map(restoreRevision({ userId, taskId }, asked.seq), (restored) =>
+          restored.status === DESCRIPTION_SAVE_STATUS.SAVED
+            ? {
+                status: ACTION_RESULT_STATUS.ACCEPTED,
+                restored: asked.seq,
+                changed: restored.txid !== undefined,
+              }
+            : agentToolRejected(
+                RESTORE_REFUSAL_WORDS.get(restored.reason) ??
+                  DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED,
+              ),
+        ),
     ),
   experiment: EXPERIMENT.DESCRIPTIONS,
 });
@@ -1719,10 +1839,12 @@ const MEMBER_DELETE_SECTION_TOOL = memberMcpTool({
 
 /** A start names its task, the agent's own where it starts from one, and what the agents' own start names, bar pictures, since the member keeps no conversation here to hand them from. */
 const StartAgentInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: describeWire(
-    wireUuidSchema,
-    `The task to start the agent on, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered; with ` +
-      "from, the task of the agent it starts from.",
+    TASK_REF_INPUT,
+    `The task to start the agent on, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered, or by ` +
+      "its key, such as ACME-42, with the workspace it stands in; with from, the task of the " +
+      "agent it starts from.",
   ),
   prompt: START_AGENT_TOOL.inputSchema.fields.prompt,
   note: START_AGENT_TOOL.inputSchema.fields.note,
@@ -1744,12 +1866,12 @@ const StartAgentInputSchemaOff = Schema.Struct({
 
 type StartAgentInput = typeof StartAgentInputSchema.Type;
 
-/** A start in the workspace of the task it names. */
-const startedAsMember = (asked: StartAgentInput) =>
-  writeAsMember(
-    (userId) => readTaskWorkspace(userId, asked.taskId),
-    START_AGENT_REFUSAL.NO_SUCH_TASK,
-    (call: AgentCall) => runStartAgent(call, asked),
+/** A start in the workspace of the task it names, by its id or its key in the workspace named. */
+const startedAsMember = ({ workspace, ...asked }: StartAgentInput) =>
+  writeOnMemberTask(
+    { workspace, taskId: asked.taskId },
+    { opening: "Not started", noTask: START_AGENT_REFUSAL.NO_SUCH_TASK },
+    (call, taskId) => runStartAgent(call, { ...asked, taskId }),
   );
 
 const MEMBER_START_AGENT_TOOL = memberMcpTool({
@@ -4049,22 +4171,24 @@ type MemberCommentWriter = Extract<
 
 /** A comment call run as the member, on the task it names as the member reaches it, told whether its workspace has Task descriptions on, which the description's own threads stand on and a page's do not; refused where they reach no task. */
 const commentAsMember = <R>(
-  taskId: string,
+  named: MemberTaskNamed,
   act: (
     writer: MemberCommentWriter,
     descriptionsOn: boolean,
+    taskId: string,
   ) => Effect.Effect<WireRecord, never, R>,
 ) =>
-  readAsMember(
-    (userId) => readTaskWorkspace(userId, taskId),
-    COMMENT_TOOL_REFUSAL.NO_TASK,
-    ({ caller }) =>
+  onMemberTask(
+    named,
+    { opening: "Not run", noTask: COMMENT_TOOL_REFUSAL.NO_TASK },
+    ({ caller }, taskId) =>
       Effect.flatMap(
         experimentOnIn(callerWorkspaceId(caller), EXPERIMENT.DESCRIPTIONS),
         (descriptionsOn) =>
           act(
             { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId: callerUserId(caller) },
             descriptionsOn,
+            taskId,
           ),
       ),
   );
@@ -4085,10 +4209,7 @@ const memberCommented = (outcome: DescriptionCommentOutcome, comment: Mentioning
 };
 
 /** The task a comment tool acts on, by its id. */
-const COMMENTED_TASK_INPUT = describeWire(
-  wireUuidSchema,
-  `The task whose description's comments to act on, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
-);
+const COMMENTED_TASK_INPUT = memberTaskInput("The task whose description's comments to act on");
 
 /** A comment's words, as the member's own. */
 const COMMENT_WORDS_INPUT = describeWire(
@@ -4098,6 +4219,7 @@ const COMMENT_WORDS_INPUT = describeWire(
 );
 
 const ReadCommentsInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: COMMENTED_TASK_INPUT,
   page: Schema.optionalKey(
     describeWire(
@@ -4110,13 +4232,11 @@ const ReadCommentsInputSchema = Schema.Struct({
 });
 
 /** The task a comment call names where none of the member's workspaces has Task descriptions on, whose pages' comments it acts on. */
-const PAGES_COMMENTED_TASK_INPUT = describeWire(
-  wireUuidSchema,
-  `The task whose pages' comments to act on, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
-);
+const PAGES_COMMENTED_TASK_INPUT = memberTaskInput("The task whose pages' comments to act on");
 
 /** A read of a page's comments, where none of the member's workspaces has Task descriptions on: the task, the page, and which threads. */
 const ReadCommentsInputSchemaOff = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: PAGES_COMMENTED_TASK_INPUT,
   page: describeWire(
     wireUuidSchema,
@@ -4149,17 +4269,18 @@ const MEMBER_READ_COMMENTS_TOOL = memberMcpTool({
     input: ReadCommentsInputSchemaOff,
   },
   annotations: READ_ONLY,
-  run: (asked) =>
-    commentAsMember(asked.taskId, (writer, descriptionsOn) =>
+  run: ({ workspace, ...asked }) =>
+    commentAsMember({ workspace, taskId: asked.taskId }, (writer, descriptionsOn, taskId) =>
       runCommentTool(
         READ_COMMENTS_TOOL.name,
-        { taskId: asked.taskId, writer, descriptionsOn },
-        asked,
+        { taskId, writer, descriptionsOn },
+        { ...asked, taskId },
       ),
     ),
 });
 
 const CommentOnDescriptionInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: COMMENTED_TASK_INPUT,
   quote: describeWire(
     Schema.String.check(
@@ -4227,16 +4348,17 @@ const MEMBER_COMMENT_ON_DESCRIPTION_TOOL = memberMcpTool({
     "`accepted` with the thread as it stands, or `rejected` and why nothing was posted.",
   input: CommentOnDescriptionInputSchema,
   annotations: ADDITIVE,
-  run: (asked) =>
-    commentAsMember(asked.taskId, (writer, descriptionsOn) =>
+  run: ({ workspace, ...asked }) =>
+    commentAsMember({ workspace, taskId: asked.taskId }, (writer, descriptionsOn, taskId) =>
       descriptionsOn
-        ? memberDescriptionComment(writer, asked)
+        ? memberDescriptionComment(writer, { ...asked, taskId })
         : Effect.succeed(commentToolRejected(EXPERIMENT_OFF_REFUSAL)),
     ),
   experiment: EXPERIMENT.DESCRIPTIONS,
 });
 
 const ReplyToCommentInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: COMMENTED_TASK_INPUT,
   thread: REPLY_TO_COMMENT_TOOL.inputSchema.fields.thread,
   words: COMMENT_WORDS_INPUT,
@@ -4316,13 +4438,14 @@ const MEMBER_REPLY_TO_COMMENT_TOOL = memberMcpTool({
     }),
   },
   annotations: ADDITIVE,
-  run: (asked) =>
-    commentAsMember(asked.taskId, (writer, descriptionsOn) =>
-      memberReply(writer, asked, descriptionsOn),
+  run: ({ workspace, ...asked }) =>
+    commentAsMember({ workspace, taskId: asked.taskId }, (writer, descriptionsOn, taskId) =>
+      memberReply(writer, { ...asked, taskId }, descriptionsOn),
     ),
 });
 
 const UpdateCommentInputSchema = Schema.Struct({
+  workspace: TASK_WORKSPACE_INPUT,
   taskId: COMMENTED_TASK_INPUT,
   thread: UPDATE_COMMENT_TOOL.inputSchema.fields.thread,
   resolved: UPDATE_COMMENT_TOOL.inputSchema.fields.resolved,
@@ -4348,12 +4471,12 @@ const MEMBER_UPDATE_COMMENT_TOOL = memberMcpTool({
     }),
   },
   annotations: IDEMPOTENT_CHANGE,
-  run: (asked) =>
-    commentAsMember(asked.taskId, (writer, descriptionsOn) =>
+  run: ({ workspace, ...asked }) =>
+    commentAsMember({ workspace, taskId: asked.taskId }, (writer, descriptionsOn, taskId) =>
       runCommentTool(
         UPDATE_COMMENT_TOOL.name,
-        { taskId: asked.taskId, writer, descriptionsOn },
-        asked,
+        { taskId, writer, descriptionsOn },
+        { ...asked, taskId },
       ),
     ),
 });

@@ -4,8 +4,8 @@
     "taskId": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 36,
-      "description": "The task to start the agent on, by its id: the taskId in your instructions' own values for your own, the id list_tasks answered for another, and with from the task of the agent it starts from."
+      "maxLength": 64,
+      "description": "The task to start the agent on, by its id or its key, such as ACME-42: the taskId in your instructions' own values for your own, the id list_tasks answered or the key for another, and with from the task of the agent it starts from."
     },
     "prompt": {
       "type": "string",
