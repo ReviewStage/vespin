@@ -161,7 +161,7 @@ export default function SettingsScreen() {
               onPress={() => router.push(SETTINGS_ROUTE.INTEGRATIONS)}
             />
             <PushRow
-              symbol={GLYPH.MCP_CLIENTS}
+              symbol={GLYPH.PRODUCT}
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MCP]}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MCP)}
