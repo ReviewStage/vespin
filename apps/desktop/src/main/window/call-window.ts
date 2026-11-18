@@ -18,7 +18,6 @@ import { hardenedWebPreferences, refuseForeignNavigation } from "./hardened-wind
 export interface CallWindowOptions {
   runMode: RunMode;
   preloadPath: string;
-  rendererHtmlPath: string;
   rendererUrl: string;
   /** The file the place the developer last dragged the card to is kept in. */
   placementPath: string;
@@ -162,7 +161,7 @@ export class CallWindow implements CallWindowSurface {
 
       if (reopen) this.show();
     });
-    void window.loadFile(this.#options.rendererHtmlPath);
+    void window.loadURL(this.#options.rendererUrl);
 
     return window;
   }

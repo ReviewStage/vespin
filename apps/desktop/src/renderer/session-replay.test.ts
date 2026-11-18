@@ -3,10 +3,7 @@ import { test } from "vitest";
 import { withoutLocalAddress } from "./session-replay";
 
 /**
- * The renderer is a `file://` page, so its address is a path on the
- * developer's own disk and a packaged install sits under `/Users/<name>/`.
- * Switching pageviews off stops it reaching one event; this is what stops it
- * reaching everything else the library puts it in.
+ * File URLs can still appear in event data and name the developer's account.
  */
 const LOCAL = "file:///Users/someone/Applications/Vespin.app/renderer/index.html";
 

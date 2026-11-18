@@ -44,7 +44,7 @@ class FakeBrowserWindow extends EventEmitter {
     windows.push(this);
   }
   isDestroyed = () => this.destroyed;
-  loadFile = () => {
+  loadURL = () => {
     this.loads += 1;
 
     return Promise.resolve();
@@ -111,8 +111,7 @@ function drawnPanel() {
     system: SYSTEM,
     runMode: RUN_MODE,
     preloadPath: "preload.js",
-    rendererHtmlPath: "index.html",
-    rendererUrl: "file:///index.html",
+    rendererUrl: "app-renderer://desktop/index.html",
     zoomFactor: () => 1,
     placementPath: undefined,
     closing: () => quit.tearingDown,
