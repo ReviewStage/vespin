@@ -536,19 +536,32 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         assert.ok(item !== undefined && asking !== undefined);
         assert.deepEqual(alertedTokens(apns), [phoneOfA.token]);
 
+        // The app reads FCM's payload with the iPhone's reader: the second button answers with the second option.
+        const androidAsk = fcm.sent[0]?.message.data?.payload;
+        assert.ok(androidAsk !== undefined);
+        assert.deepEqual(
+          inboxPushResponseOf(inboxPushOf(JSON.parse(androidAsk)), { actionId: "1" }),
+          {
+            route: `/inbox/${item.id}`,
+            press: { kind: "choose", itemId: item.id, messageId: asking.id, option: "Redis" },
+          },
+        );
+
         assert.deepEqual(fcm.sent, [
           {
             device: { token: android.token, environment: PUSH_ENVIRONMENT.PRODUCTION },
             message: {
               data: {
-                kind: "ask",
-                itemId: item.id,
-                messageId: asking.id,
-                agentId: poster.agentId,
-                taskId: poster.taskId,
-                revision: String(item.revision),
-                ask: "decide",
-                options: JSON.stringify(["Postgres outbox", "Redis"]),
+                payload: JSON.stringify({
+                  kind: "ask",
+                  itemId: item.id,
+                  messageId: asking.id,
+                  agentId: poster.agentId,
+                  taskId: poster.taskId,
+                  revision: item.revision,
+                  ask: "decide",
+                  options: ["Postgres outbox", "Redis"],
+                }),
                 badge: "1",
               },
               notification: {
@@ -575,7 +588,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
           {
             device: { token: android.token, environment: PUSH_ENVIRONMENT.PRODUCTION },
             message: {
-              data: { kind: "settled", itemId: item.id, badge: "0" },
+              data: { payload: JSON.stringify({ kind: "settled", itemId: item.id }), badge: "0" },
               android: { priority: "NORMAL", ttl: "0s" },
             },
           },

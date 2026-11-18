@@ -41,7 +41,6 @@ const SERVICE_ACCOUNT = {
   project_id: "vespin-test",
   client_email: "push@vespin-test.iam.gserviceaccount.com",
   private_key: PRIVATE_KEY_PEM,
-  token_uri: FCM_ENDPOINT.TOKEN,
 };
 
 const VARIABLES = { [FCM_ENVIRONMENT.SERVICE_ACCOUNT]: JSON.stringify(SERVICE_ACCOUNT) };
@@ -215,6 +214,22 @@ it.layer(getTestDB())("the FCM sender", (it) => {
     }),
   );
 
+  it.effect("an access token Google says lives briefly is exchanged afresh before it lapses", () =>
+    Effect.gen(function* () {
+      const brief = { ...ACCESS_TOKEN, expires_in: 900 };
+      const { layer, exchanges } = sender(VARIABLES, [], () => jsonResponse(brief));
+      yield* Effect.gen(function* () {
+        yield* send(notification());
+        yield* TestClock.adjust("4 minutes");
+        yield* send(notification());
+        yield* TestClock.adjust("2 minutes");
+        yield* send(notification());
+      }).pipe(Effect.provide(layer));
+
+      assert.equal(exchanges().length, 2, "reused for five minutes, ten before its fifteen end");
+    }),
+  );
+
   it.effect(
     "a token Google says is gone is deleted, any other refusal or failure leaves it standing with Google's reason, and a delivery clears the reason",
     () =>
@@ -222,6 +237,7 @@ it.layer(getTestDB())("the FCM sender", (it) => {
         const account = yield* openAccount;
 
         const answers: SendAnswer[] = [
+          new Response("Not Found", { status: 404 }),
           refusal(404, "NOT_FOUND", "UNREGISTERED"),
           refusal(400, "INVALID_ARGUMENT", "INVALID_ARGUMENT"),
           refusal(403, "PERMISSION_DENIED", "SENDER_ID_MISMATCH"),
@@ -255,6 +271,7 @@ it.layer(getTestDB())("the FCM sender", (it) => {
         ).pipe(Effect.provide(layer));
 
         assert.deepEqual(outcomes, [
+          [FCM_DELIVERY.FAILED, "404"],
           [FCM_DELIVERY.TOKEN_GONE, undefined],
           [FCM_DELIVERY.REFUSED, "INVALID_ARGUMENT"],
           [FCM_DELIVERY.REFUSED, "SENDER_ID_MISMATCH"],

@@ -67,7 +67,7 @@
  * Each phone is pushed through its own service (`PUSH_PROVIDER`): an iPhone
  * or iPad through Apple (`apns.ts`), an Android phone through FCM
  * (`fcm.ts`), which carries the same alert as the words Android draws and
- * the same keys as its data, every value a string (`fcmMessageOf`). Note
+ * the same keys as one JSON text of its data (`fcmMessageOf`). Note
  * that Android draws an FCM alert itself while the app is not in front, so
  * it offers no buttons or reply until the app draws its own. Everything
  * else here, "Notify me", the holds, and a settled thread's clearing push,
@@ -112,7 +112,7 @@ import { agentName } from "@repo/features/model-label";
 import { PRESENCE } from "@repo/features/presence-wire";
 import { PUSH_NOTIFY, PUSH_PROVIDER } from "@repo/features/push-device-wire";
 import { TURN_STATUS } from "@repo/wire";
-import { Clock, Effect, Option, Predicate } from "effect";
+import { Clock, Effect, Option } from "effect";
 import { lastSaid } from "../agents/coder-host/starter-report.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { TURN_FAILURE } from "../core.js";
@@ -235,16 +235,22 @@ function actionsOf(message: InboxMessage) {
   };
 }
 
-/** A notification's `aps` alert and the app's own keys as FCM carries them: every value a string, a text as it is and anything else as its JSON. */
+/** The FCM data key the app's own keys travel under, as one JSON text, so the app reads them with the reader an iPhone's payload goes through (`inboxPushOf`). */
+const FCM_PAYLOAD_KEY = "payload";
+
+/** The FCM data key the member's Inbox count travels under, which an iPhone's `aps.badge` carries. */
+const FCM_BADGE_KEY = "badge";
+
+/**
+ * The app's own keys as FCM data carries them: every FCM data value must be
+ * a string, so the keys go whole as one JSON text, typed as the iPhone's are,
+ * and the badge as its number's words beside them.
+ */
 function fcmDataOf(payload: ApnsPayload, badge: number | undefined): Record<string, string> {
-  const data: Record<string, string> = {};
+  const { aps: _aps, ...keys } = payload;
+  const data = { [FCM_PAYLOAD_KEY]: JSON.stringify(keys) };
 
-  for (const [key, value] of Object.entries(payload)) {
-    if (key === "aps") continue;
-    data[key] = Predicate.isString(value) ? value : JSON.stringify(value);
-  }
-
-  return badge === undefined ? data : { ...data, badge: String(badge) };
+  return badge === undefined ? data : { ...data, [FCM_BADGE_KEY]: String(badge) };
 }
 
 /**
@@ -252,7 +258,7 @@ function fcmDataOf(payload: ApnsPayload, badge: number | undefined): Record<stri
  * words Android draws, high priority, its collapse id as the tag that
  * replaces it in the shade; a background push as data alone at normal
  * priority, which wakes the app to clear what settled. The app's keys go
- * as data either way, the badge among them, and Google keeps nothing for a
+ * as data either way (`fcmDataOf`), and Google keeps nothing for a
  * phone that is off, as Apple keeps nothing (`ttl` of none).
  */
 function fcmMessageOf(notification: MemberNotification): FcmMessage {

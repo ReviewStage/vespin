@@ -15,15 +15,17 @@
  * RS256 key signs, scoped to messaging alone
  * (https://developers.google.com/identity/protocols/oauth2/service-account#httprest);
  * Google issues one for an hour, so one is reused for fifty minutes
- * (`FCM_ACCESS_TOKEN_LIFETIME`), and one Google refuses as expired is
+ * (`FCM_ACCESS_TOKEN_LIFETIME`), or until ten minutes before Google says it
+ * expires where that is sooner, and one Google refuses as expired is
  * dropped so the next send exchanges afresh. FCM has one gateway, so the
  * phone's `environment` is read only as half of its row's key. FCM routes
  * a token to whatever app of the Firebase project it was issued to, so no
  * package is checked here, unlike Apple's topic.
  *
  * What Google answers is one of `FCM_DELIVERY`, the same outcomes as
- * Apple's. A token Google says is gone, `UNREGISTERED` or a 404, is
- * deleted from `push_device`. Note that `INVALID_ARGUMENT` is left
+ * Apple's. A token Google says is gone, `UNREGISTERED` (its 404), is
+ * deleted from `push_device`; a 404 naming no FCM error is not, since it
+ * says the request missed rather than that the phone left. Note that `INVALID_ARGUMENT` is left
  * standing, though Google's guide deletes on it too, because it also
  * answers a payload of ours it refused, and a bad payload would then delete
  * every phone it was sent to. A refusal of the request itself (a 400 or a
@@ -94,6 +96,9 @@ const ASSERTION_LIFETIME_SECONDS = 3_600;
 
 /** How long one access token is reused before a fresh one is exchanged; Google issues one for an hour. */
 const FCM_ACCESS_TOKEN_LIFETIME = Duration.minutes(50);
+
+/** How long before Google's own expiry a token is no longer sent, so one is never sent as it lapses. */
+const ACCESS_TOKEN_MARGIN_SECONDS = 600;
 
 /** The longest one request to Google is waited on before it is counted failed. */
 export const FCM_REQUEST_TIMEOUT = Duration.seconds(10);
@@ -177,16 +182,16 @@ const ServiceAccountSchema = Schema.Struct({
   project_id: Schema.String,
   client_email: Schema.String,
   private_key: Schema.String,
-  token_uri: Schema.optionalKey(Schema.String),
 });
 
 const decodeServiceAccount = Schema.decodeUnknownOption(
   Schema.fromJsonString(ServiceAccountSchema),
 );
 
-/** What Google's token endpoint answers: the access token and how long it lives, or why it refused. */
+/** What Google's token endpoint answers: the access token and how long it lives in seconds, or why it refused. */
 const TokenAnswerSchema = Schema.Struct({
   access_token: Schema.optionalKey(Schema.String),
+  expires_in: Schema.optionalKey(Schema.Number),
   error: Schema.optionalKey(Schema.String),
 });
 
@@ -209,13 +214,12 @@ interface FcmCredentials {
   readonly projectId: string;
   readonly clientEmail: string;
   readonly signingKey: KeyObject;
-  readonly tokenUri: string;
 }
 
-/** An access token, and when it was issued. */
+/** An access token, and when it stops being sent: the sooner of its own expiry, less a margin, and the reuse window. */
 interface AccessToken {
   readonly value: Redacted.Redacted;
-  readonly issuedAt: number;
+  readonly staleAt: number;
 }
 
 /** What a request to Google came to: its status and body, or none where it never answered. */
@@ -245,11 +249,15 @@ function credentialsOf(json: string): FcmCredentials | undefined {
     projectId: account.project_id,
     clientEmail: account.client_email,
     signingKey: parsed.success,
-    tokenUri: account.token_uri ?? FCM_ENDPOINT.TOKEN,
   };
 }
 
-/** The RS256 JWT the token endpoint exchanges for an access token: the account as issuer, messaging as its scope, the endpoint as its audience. */
+/**
+ * The RS256 JWT the token endpoint exchanges for an access token: the
+ * account as issuer, messaging as its scope, Google's endpoint as its
+ * audience. Note that the key file's own `token_uri` is not read, so the
+ * assertion is only ever posted to Google.
+ */
 function signAssertion(credentials: FcmCredentials, nowMs: number): Redacted.Redacted {
   const issuedAt = Math.floor(nowMs / 1000);
   const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
@@ -258,7 +266,7 @@ function signAssertion(credentials: FcmCredentials, nowMs: number): Redacted.Red
     JSON.stringify({
       iss: credentials.clientEmail,
       scope: FCM_SCOPE,
-      aud: credentials.tokenUri,
+      aud: FCM_ENDPOINT.TOKEN,
       iat: issuedAt,
       exp: issuedAt + ASSERTION_LIFETIME_SECONDS,
     }),
@@ -329,7 +337,7 @@ const fcmSender = Effect.fnUntraced(function* (
     const now = yield* Clock.currentTimeMillis;
 
     const answered = yield* post(
-      HttpClientRequest.post(credentials.tokenUri).pipe(
+      HttpClientRequest.post(FCM_ENDPOINT.TOKEN).pipe(
         HttpClientRequest.acceptJson,
         HttpClientRequest.bodyUrlParams({
           grant_type: JWT_BEARER_GRANT,
@@ -348,10 +356,15 @@ const fcmSender = Effect.fnUntraced(function* (
     const answer = Option.getOrUndefined(decodeTokenAnswer(answered.body));
 
     if (answered.status === 200 && answer?.access_token !== undefined) {
-      const token = { value: Redacted.make(answer.access_token), issuedAt: now };
+      const lifetime = Math.min(
+        Duration.toMillis(FCM_ACCESS_TOKEN_LIFETIME),
+        ((answer.expires_in ?? Number.POSITIVE_INFINITY) - ACCESS_TOKEN_MARGIN_SECONDS) * 1000,
+      );
+
+      const token = { value: Redacted.make(answer.access_token), staleAt: now + lifetime };
       yield* Ref.set(held, token);
 
-      return Result.succeed(token.value);
+      return Result.succeed(token);
     }
 
     // Note that the endpoint's status and its OAuth error word alone are logged, because the request carries the signed assertion.
@@ -369,21 +382,14 @@ const fcmSender = Effect.fnUntraced(function* (
   });
 
   /** The access token to send under: the one held while it is inside its lifetime, or a fresh one. */
-  const accessToken: Effect.Effect<Result.Result<Redacted.Redacted, Unsent>> = Effect.gen(
-    function* () {
-      const now = yield* Clock.currentTimeMillis;
-      const standing = yield* Ref.get(held);
+  const accessToken: Effect.Effect<Result.Result<AccessToken, Unsent>> = Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis;
+    const standing = yield* Ref.get(held);
 
-      if (
-        standing !== undefined &&
-        now - standing.issuedAt < Duration.toMillis(FCM_ACCESS_TOKEN_LIFETIME)
-      ) {
-        return Result.succeed(standing.value);
-      }
+    if (standing !== undefined && now < standing.staleAt) return Result.succeed(standing);
 
-      return yield* exchange;
-    },
-  );
+    return yield* exchange;
+  });
 
   /** A token Google says is gone, deleted; a store that would not is logged, since Google's answer stands either way. */
   const tokenGone = (device: FcmDeviceAddress) =>
@@ -406,7 +412,7 @@ const fcmSender = Effect.fnUntraced(function* (
       HttpClientRequest.post(
         `${FCM_ENDPOINT.ORIGIN}/v1/projects/${encodeURIComponent(credentials.projectId)}/messages:send`,
       ).pipe(
-        HttpClientRequest.bearerToken(Redacted.value(token.success)),
+        HttpClientRequest.bearerToken(Redacted.value(token.success.value)),
         HttpClientRequest.bodyJsonUnsafe({ message: { ...message, token: device.token } }),
       ),
     );
@@ -425,10 +431,13 @@ const fcmSender = Effect.fnUntraced(function* (
 
     const reason = reasonOf(body);
 
-    if (status === 404 || reason === TOKEN_GONE_ERROR_CODE) return yield* tokenGone(device);
+    // Note that a 404 that names no FCM error is left standing, as a fault of the request rather than of the phone.
+    if (reason === TOKEN_GONE_ERROR_CODE) return yield* tokenGone(device);
 
-    // Note that an access token Google no longer takes is dropped, so the next send exchanges a fresh one.
-    if (status === 401) yield* Ref.set(held, undefined);
+    // Note that an access token Google no longer takes is dropped, so the next send exchanges a fresh one, unless another send already has.
+    if (status === 401) {
+      yield* Ref.update(held, (standing) => (standing === token.success ? undefined : standing));
+    }
 
     // Note that the status and Google's reason alone are logged, because the request carries the token and the message's words.
     yield* Effect.logWarning(

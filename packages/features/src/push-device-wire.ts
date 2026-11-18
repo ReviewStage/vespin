@@ -71,7 +71,8 @@ const BUNDLE_ID_PATTERN = /^[A-Za-z0-9.-]+$/;
 /** An Android package name as Google spells one: segments of letters, digits, and underscores, joined by periods. */
 const ANDROID_PACKAGE_PATTERN = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
 
-const apnsTokenSchema = EffectSchema.String.check(
+/** A device token as Apple spells one, which a Live Activity's tokens are too (`live-activity-wire.ts`). */
+export const apnsTokenSchema = EffectSchema.String.check(
   EffectSchema.isMinLength(PUSH_DEVICE_BOUNDS.MIN_TOKEN_CHARS),
   EffectSchema.isMaxLength(PUSH_DEVICE_BOUNDS.MAX_APNS_TOKEN_CHARS),
   EffectSchema.isPattern(APNS_TOKEN_PATTERN),
@@ -105,10 +106,10 @@ const apnsRegisterRequestSchema = EffectSchema.Struct({
   provider: EffectSchema.optionalKey(EffectSchema.Literal(PUSH_PROVIDER.APNS)),
 });
 
-/** An Android phone's register: its FCM registration token, production as its gateway, and its app's package name. */
+/** An Android phone's register: its FCM registration token, production as its gateway, FCM's one, so a token is one row, and its app's package name. */
 const fcmRegisterRequestSchema = EffectSchema.Struct({
   token: fcmTokenSchema,
-  environment: pushEnvironmentSchema,
+  environment: EffectSchema.Literal(PUSH_ENVIRONMENT.PRODUCTION),
   bundleId: androidPackageSchema,
   provider: EffectSchema.Literal(PUSH_PROVIDER.FCM),
 });
