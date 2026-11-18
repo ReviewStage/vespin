@@ -10,12 +10,6 @@
       "type": "string",
       "description": "What the command is for, in plain English for the developer reading along: 3 to 8 words, sentence case, no trailing period, such as \"Run the unit tests\" or \"Find where invites are sent\"."
     },
-    "machine": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 64,
-      "description": "The id of the machine to run on, where the conversation asks for one other than your default machine; a call refused for its machine lists the ids of the ones that can take it. Leave it out for your default machine."
-    },
     "timeout_seconds": {
       "type": "integer",
       "minimum": 1,

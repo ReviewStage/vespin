@@ -34,7 +34,7 @@ import {
 } from "@repo/features/machine-command-wire";
 import { MACHINE_REFUSAL_NEXT } from "@repo/features/machine-refusal-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import type { UnparsedWireValue } from "@repo/wire";
+import { isRecord, type UnparsedWireValue } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Clock, Duration, Effect, Option, Result, Schema } from "effect";
 import { heldUntil } from "../http/held-read.js";
@@ -73,11 +73,11 @@ import {
  * that took a command it would not run answers why, which the call
  * answers as not run.
  *
- * An agent's call goes to one machine (`machine-routing.ts`): the one it
- * names, or else the agent's default, the machine it runs on, or the
- * machine of its task's assignee, or its starter's where the task is
- * assigned to no one, that listened last; it is queued for that machine
- * alone, and its answer names the machine. A call that can go nowhere is
+ * An agent's call goes to one machine (`machine-routing.ts`): the agent's
+ * pick, which a member sets, or else the default machine of its task's
+ * assignee, or its starter's where the task is assigned to no one; a call
+ * names none of its own. It is queued for that machine alone, and its
+ * answer names the machine. A call that can go nowhere is
  * refused with the machines that could take it. Note that who has written
  * to the agent decides nothing: the Mac's own setting (Ask every time by
  * default) is the one guard.
@@ -194,13 +194,20 @@ export type MachineCommandAsk =
 
 const readMachineCommand = readEither(machineCommandSchema);
 
-/** The machine a call names, as `run_on_mac` and `computer` take it. */
-export const MACHINE_INPUT = describeWire(
-  Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64)),
-  "The id of the machine to run on, where the conversation asks for one other than your " +
-    "default machine; a call refused for its machine lists the ids of the ones that can take " +
-    "it. Leave it out for your default machine.",
-);
+/**
+ * What a call naming a machine is told, as a session from before the tools
+ * took none still may: that the Mac is the agent's pick, which a member
+ * sets, and to call again without it.
+ */
+export const NO_MACHINE_INPUT =
+  "Not run: this tool takes no `machine`. It runs on this agent's machine, which a member " +
+  "picks in its composer, or else on the default Mac of your task's assignee. Call it again " +
+  "without `machine`.";
+
+/** Whether a call names a machine, which neither `run_on_mac` nor `computer` takes. */
+export function namesMachine(input: UnparsedWireValue): boolean {
+  return isRecord(input) && "machine" in input;
+}
 
 const RUN_ON_MAC_INPUT = Schema.Struct({
   command: describeWire(
@@ -209,7 +216,6 @@ const RUN_ON_MAC_INPUT = Schema.Struct({
       'such as "git -C ~/code/app status", "ls ~/code", or "node --version".',
   ),
   description: COMMAND_DESCRIPTION,
-  machine: Schema.optionalKey(MACHINE_INPUT),
   timeout_seconds: Schema.optionalKey(
     describeWire(
       Schema.Int.check(
@@ -400,15 +406,13 @@ export function askMacHeard(
   return Effect.catch(run, () => Effect.succeed(notRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE)));
 }
 
-/** Where a call of the kind given goes from the conversation given, naming the machine's id given or none (`machine-routing.ts`). */
+/** Where a call of the kind given goes from the conversation given (`machine-routing.ts`). */
 export function routedCall(
   target: ConversationTarget,
   kind: MachineCommandKind,
-  machineId: string | undefined,
 ): TaskStoreEffect<MachineRoute> {
   return routeOf(target, {
     kind,
-    machineId,
     accountListening: macListening,
     noMachine: MACHINE_COMMAND_KIND_REFUSAL[kind].NO_MAC,
   });
@@ -459,11 +463,12 @@ export function runOnMacTool(
   target: ConversationTarget,
   input: UnparsedWireValue,
 ): Effect.Effect<MachineCommandAnswer, never, DatabaseServices> {
+  if (namesMachine(input)) return Effect.succeed(machineCommandNotRun(NO_MACHINE_INPUT));
   const read = readInput(input);
 
   if (Result.isFailure(read))
     return Effect.succeed(machineCommandNotRun(MACHINE_COMMAND_REFUSAL.UNREADABLE));
-  const { command, timeout_seconds, machine } = read.success;
+  const { command, timeout_seconds } = read.success;
   const kind = MACHINE_COMMAND_KIND.SHELL;
 
   const ask: MachineCommandAsk =
@@ -472,7 +477,7 @@ export function runOnMacTool(
       : { kind, command, timeoutSeconds: timeout_seconds };
 
   return Effect.gen(function* () {
-    const route = yield* Effect.result(routedCall(target, kind, machine));
+    const route = yield* Effect.result(routedCall(target, kind));
 
     // Note that a read that fails refuses, because a command run on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE);
