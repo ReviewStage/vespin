@@ -1,11 +1,6 @@
-// start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules, or File for later, which files it with no agent.
+// start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
-import {
-  AGENT_ATTACHMENT_TYPE,
-  type AgentAttachment,
-  hasWordsOrFiles,
-} from "@repo/features/agent-wire";
-import { attachmentText } from "@repo/features/attachment-model";
+import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -22,14 +17,12 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
-  TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
   TASK_STATUS,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { type FiledTask, filedTaskOf } from "@repo/features/tasks-model";
 import type { VoiceCallInto } from "@repo/features/voice-call-session";
 import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
@@ -71,7 +64,6 @@ import {
   runsOnOptions,
   type StartAnswer,
   startRefusalWords,
-  useFileTask,
   useModelPick,
   useRepositoryPick,
   useStartAgent,
@@ -96,7 +88,6 @@ const WORDS = {
   EFFORT: "Effort",
   RUNS_ON: "Machine",
   START: "Start",
-  FILE_FOR_LATER: "File for later",
   PHOTOS: "Photos",
   TASK_RELATION: TASK_RELATION_MENU,
   RELATION: "Relation",
@@ -128,12 +119,6 @@ const TEST_IDS = {
   NEW_TASK: { WORDS: "new-task-words", ATTACH: "new-task-attach" },
 } as const;
 
-/** File for later, as New task's bar offers it before Start: whether it is lit, and its press. */
-interface FileForLater {
-  readonly ready: boolean;
-  readonly onFile: () => void;
-}
-
 /** Where a closing start lands once it went: on its task's page, or on to the agent it started. */
 const LANDING = {
   TASK: "task",
@@ -145,8 +130,7 @@ type Landing = (typeof LANDING)[keyof typeof LANDING];
 /**
  * The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to
  * VoiceOver), and Start at its trailing one, lit once there are words or
- * pictures to send and while no start is out, with File for later before it
- * on New task; and the ask the ✕ or a swipe down raises while the sheet
+ * pictures to send and while no start is out; and the ask the ✕ or a swipe down raises while the sheet
  * holds a draft. While the sheet holds nothing, Talk stands in Start's
  * place where the sheet offers it, the waveform on the same button, as an
  * agent's composer puts Talk in Send's (Dean, Nov 17), with the question it
@@ -156,14 +140,12 @@ function SheetBar({
   title,
   ready,
   onStart,
-  file,
   kept,
   talk,
 }: {
   readonly title: string;
   readonly ready: boolean;
   readonly onStart: () => void;
-  readonly file?: FileForLater | undefined;
   readonly kept: KeptWords;
   /** Talk while the sheet holds nothing, and whether it may be pressed; none where the sheet offers no Talk or holds something to start on. */
   readonly talk?: { readonly talk: NewAgentTalk; readonly ready: boolean } | undefined;
@@ -197,11 +179,6 @@ function SheetBar({
         />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        {file === undefined ? null : (
-          <Stack.Toolbar.Button disabled={!file.ready} onPress={file.onFile}>
-            {WORDS.FILE_FOR_LATER}
-          </Stack.Toolbar.Button>
-        )}
         {talk === undefined ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(GLYPH.SEND)}
@@ -473,8 +450,7 @@ function sameStanding(was: Standing, now: Standing): boolean {
 
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
- * gives way to its page; on a task made with no agent, filed for later or
- * whose agent was refused, to the task's page; on a refusal, the sheet stays
+ * gives way to its page; on a task made whose agent was refused, to the task's page; on a refusal, the sheet stays
  * with its words and pictures, the refusal said under them. Pictures the
  * service would refuse hold a start that carries them, saying why, as the
  * agent's composer holds a send.
@@ -553,7 +529,7 @@ function useSheetStart(
  * by its brief, as the panel's New agent lands on the agent it started. A start refused is said in the failure notice, whose Try again
  * sends the same start again. Note that this never makes a second task or
  * agent, because the task's id and its agent's key are minted once per sheet
- * (`useStartTask`, `useFileTask`, `useStartAgent`), and the service answers
+ * (`useStartTask`, `useStartAgent`), and the service answers
  * a start it already made with the same one. Pictures the service would
  * refuse still hold the sheet, saying why under its words.
  */
@@ -639,29 +615,6 @@ function useClosingStart(
   };
 
   return { starting: sent, go };
-}
-
-/**
- * The task File for later files from the sheet's words and the files it
- * holds: none while it holds a picture, which goes only with an agent's
- * start. Note that a long paste held as a text file is filed as words after
- * the words typed, since a task filed for later carries no file, so a pasted
- * description can still be filed, while it fits in a brief.
- */
-function filedOf(
-  prompt: string,
-  files: readonly AgentAttachment[] | undefined,
-): FiledTask | undefined {
-  const held = files ?? [];
-
-  if (held.some((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT)) return undefined;
-  const words = [prompt.trim(), ...held.map((file) => attachmentText(file.data).trim())];
-  const kept = words.filter((each) => each !== "").join("\n\n");
-
-  // Note that pasted text a brief would cut holds File for later back rather than being filed short, since a paste may run far past a brief's bound.
-  if (held.length > 0 && kept.length > TASK_BOUNDS.MAX_BRIEF_CHARS) return undefined;
-
-  return filedTaskOf(kept);
 }
 
 /** The skills a `/` offers, as the compose sheet takes them. */
@@ -999,10 +952,7 @@ function RelationChip({ pick }: { readonly pick: RelationPick }) {
  * were about until another is picked, or its parent's in another's tree,
  * its agent's model and effort, and where its agent runs. Start makes the
  * task and starts its agent in one act, as Home does, in the workspace the
- * app works in, or the one a share draft it opens on was kept for; File for
- * later before it files the task in the Backlog under its words with no
- * agent, offered on words and pasted text alone, since pictures go only
- * with an agent's start. A task's New sub-task opens it as a sub-task of `parent`, in the
+ * app works in, or the one a share draft it opens on was kept for. A task's New sub-task opens it as a sub-task of `parent`, in the
  * parent's workspace, which a task opened by a link may hold apart from the
  * one the app works in, since a tree stands in one.
  */
@@ -1029,12 +979,10 @@ export function NewTaskScreen({
   const relation = useRelationPick(listed, workspaceId, parent);
   const pick = useModelPick();
   const startTask = useStartTask(workspaceId);
-  const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote, draft?.pictures);
-  // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
+  // Note that a share draft's pictures are read as the sheet opens, and nothing starts until they are in, so its words never go without them.
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
-  const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
   const place = { repository: repository.picked, relation: relation.relation };
@@ -1086,10 +1034,6 @@ export function NewTaskScreen({
     );
   };
 
-  const file = () => {
-    if (filed !== undefined) go(() => fileTask({ filed, ...place }));
-  };
-
   // Talk starts the task and its agent blank on the sheet's chips and calls the agent once it lands.
   const talk = useNewAgentTalk(
     () =>
@@ -1121,7 +1065,6 @@ export function NewTaskScreen({
         title={WORDS.NEW_TASK}
         ready={drafted && placed && !starting}
         onStart={start}
-        file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
         talk={
           talk === undefined || drafted || pictures.opening
