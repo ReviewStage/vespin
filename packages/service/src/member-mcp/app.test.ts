@@ -901,7 +901,10 @@ it.effect(
 
       const answers = yield* Effect.forEach(
         [
-          [MEMBER_MCP_TOOL.CREATE_TASK, { workspace, name: "Planted" }],
+          [
+            MEMBER_MCP_TOOL.CREATE_TASK,
+            { workspace, name: "Planted", repository: null, status: TASK_STATUS.TODO },
+          ],
           [MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.DELETE_TASK, { taskId }],
           [
@@ -1152,6 +1155,8 @@ it.effect(
       const made = decodeMade(
         yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
           name: "Seat billing",
+          repository: null,
+          status: TASK_STATUS.TODO,
           description: "## Problem\n\nSeats drift.",
         }),
       );
@@ -1205,7 +1210,11 @@ it.effect(
       );
 
       const blockerId = decodeMade(
-        yield* call(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Invoice lag" }),
+        yield* call(MEMBER_MCP_TOOL.CREATE_TASK, {
+          name: "Invoice lag",
+          repository: null,
+          status: TASK_STATUS.TODO,
+        }),
       ).task.id;
 
       yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, blockedBy: { add: [blockerId] } });

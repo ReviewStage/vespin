@@ -24,7 +24,7 @@
           "type": "null"
         }
       ],
-      "description": "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach; null or left out for none, or the parent's where you give a parent."
+      "description": "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub installation must reach, or null for none; required, but left out where you give a parentTaskId or subTaskIds, whose repository it takes."
     },
     "brief": {
       "type": "string",
@@ -40,7 +40,7 @@
         "done",
         "canceled"
       ],
-      "description": "Where the task stands: backlog for work filed for later; todo where left out."
+      "description": "Where the task stands: todo for work to start, backlog for work filed for later."
     },
     "priority": {
       "type": "string",
@@ -104,7 +104,8 @@
     }
   },
   "required": [
-    "name"
+    "name",
+    "status"
   ],
   "additionalProperties": false
 }

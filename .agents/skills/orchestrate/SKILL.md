@@ -24,7 +24,7 @@ below as that one. You and the workers talk by `message_agent`.
 | Tell the user | `post_thread` without an ask, and your reply; where another coding agent started you, also send it the thread's mention, as above |
 | Valid model ids | `list_models` |
 | Your id, for reports | Nothing to record: a started agent is told your id and your mention link |
-| Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, and the PR's scope as `description` |
+| Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, `status` set to `todo`, and the PR's scope as `description` |
 | Draw a dependency | `update_task` on the subtask of the PR that builds on another, with `blockedBy: { add: [<the other PR's subtask id>] }` |
 | Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below) |
 | Start a helper | `start_agent` on your own task (`taskId` set to your own, from your instructions' own values), with the brief as `prompt` |
