@@ -1,0 +1,55 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fsignin
+Launch app "dev.vespin.ios" with clear state... COMPLETED
+Assert that "Sign in to Vespin|Don.t Allow|Continue with Google" is visible... COMPLETED
+Run flow when "Don.t Allow" is visible...
+Run flow when "Don.t Allow" is visible... SKIPPED
+Take screenshot ${P}-0-sign-in...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Run fsignin-one.yaml...
+  Tap on "Continue with ${PROV}"... COMPLETED
+  Take screenshot ${P}-${PROV}-1-at-tap... COMPLETED
+  Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+  Take screenshot ${P}-${PROV}-2-after-5s... COMPLETED
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible...
+    Tap on "Continue"... COMPLETED
+    Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+    Take screenshot ${P}-${PROV}-3-web-sheet-5s... COMPLETED
+    Tap on (Optional) "Cancel"... COMPLETED
+    Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible... COMPLETED
+  Take screenshot ${P}-${PROV}-4-after-attempt... COMPLETED
+  Tap on (Optional) "Continue with ${PROV}"... COMPLETED
+  Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+  Take screenshot ${P}-${PROV}-5-retap-4s... COMPLETED
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible...
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible... SKIPPED
+  Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+Run fsignin-one.yaml... COMPLETED
+Run fsignin-one.yaml...
+  Tap on "Continue with ${PROV}"... COMPLETED
+  Take screenshot ${P}-${PROV}-1-at-tap... COMPLETED
+  Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+  Take screenshot ${P}-${PROV}-2-after-5s... COMPLETED
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible...
+    Tap on "Continue"... COMPLETED
+    Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+    Take screenshot ${P}-${PROV}-3-web-sheet-5s... COMPLETED
+    Tap on (Optional) "Cancel"... COMPLETED
+    Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible... COMPLETED
+  Take screenshot ${P}-${PROV}-4-after-attempt... COMPLETED
+  Tap on (Optional) "Continue with ${PROV}"... COMPLETED
+  Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+  Take screenshot ${P}-${PROV}-5-retap-4s... COMPLETED
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible...
+    Tap on (Optional) "Cancel"... COMPLETED
+  Run flow when ".*[Ww]ants to [Uu]se.*" is visible... COMPLETED
+  Assert that (Optional) "ZZ-NEVER-ZZ" is visible... WARNED
+Run fsignin-one.yaml... COMPLETED

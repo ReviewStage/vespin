@@ -1,0 +1,10 @@
+== bundle SIGNmain base a83a1de077
+  built a83a1de077 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+main (a83a1de077): fails 0 shots 21 
+  main log lines:   122566
+  STALE BUNDLE, not built
+b50: build or basecheck failed
