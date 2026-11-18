@@ -259,6 +259,23 @@ const SLACK_REPLY = {
   NOT_RECIPIENT: `This thread was sent to another ${PRODUCT_NAME} member, so I didn't post your reply.`,
 } as const;
 
+/**
+ * How an agent a Slack thread speaks for replies there, told once in its
+ * start's prompt: a few short messages sent through the tool, only where
+ * they add something, and a closing message for a pull request.
+ */
+const SLACK_REPLY_GUIDE = [
+  "That thread sees only what you send there with `send_slack_message`; your final message is not posted.",
+  "Reply as a teammate would: a few short messages of a sentence or two each, one `send_slack_message` call per message, in the order they should read.",
+  "Speak only when you add something the thread doesn't already have. Silence is fine, and a wrong or needless message costs more than a skipped one. Send no \"on it\" or progress messages, and don't nudge a thread that has gone quiet. Where people in the thread are talking to each other, stay out unless a message is aimed at you.",
+  "Where the work opens a pull request, close with one message that holds a bold title, the repository, the root cause, and the pull request's link, and names the owner of the changed code from the repository's CODEOWNERS for review: as `<@USER_ID>` where the thread shows their Slack user id, and otherwise by name in plain words.",
+  "Where the change is something a person can see, record it or take a screenshot and show it with `show_image`, which the thread gets after your closing message, rather than describing how you got there.",
+].join(" ");
+
+/** What each later message in the thread reminds the agent of, so the rule rides with the message it bears on rather than piling up. */
+const SLACK_REPLY_REMINDER =
+  "That thread sees only what you send there with `send_slack_message`: a few short messages of a sentence or two each, one call per message; your final message is not posted. Answer only if you add something the thread doesn't already have; silence is fine, and send no progress messages.";
+
 /** The event callback as far as it is read: the team, Slack's id for the event, the bot's own user, and the message. */
 const EventCallbackSchema = Schema.Struct({
   type: Schema.Literal("event_callback"),
@@ -609,9 +626,9 @@ const startRepository = Effect.fnUntraced(function* (
 });
 
 /**
- * The agent's prompt: the member's words as they wrote them, then the
- * thread's earlier messages fenced as data, cut to what the bound leaves,
- * and the message's link.
+ * The agent's prompt: the member's words as they wrote them, the message's
+ * link and how to reply in its thread (`SLACK_REPLY_GUIDE`), then the
+ * thread's earlier messages fenced as data, cut to what the bound leaves.
  */
 function startPrompt(
   addressed: SlackAddressed,
@@ -628,7 +645,7 @@ function startPrompt(
   const lines = [
     words,
     "---",
-    `A member wrote this to ${PRODUCT_NAME}'s Slack bot ${where}. That thread sees only what you send there with \`send_slack_message\`; your final message is not posted.`,
+    `A member wrote this to ${PRODUCT_NAME}'s Slack bot ${where}. ${SLACK_REPLY_GUIDE}`,
   ];
 
   if (earlier.length === 0) return lines.join("\n\n");
@@ -675,8 +692,8 @@ function slackLine(
 
 /**
  * A later message in the agent's Slack thread as the agent reads it: the
- * member's words, then that it came from the thread and that the thread
- * sees only what the agent sends there, as the start's prompt says.
+ * member's words, then that it came from the thread and the reminder of how
+ * to reply there (`SLACK_REPLY_REMINDER`), the start's guide in short.
  */
 function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<string>): string {
   const where = Option.match(permalink, {
@@ -687,7 +704,7 @@ function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<stri
   return [
     addressed.text === "" ? FILES_ALONE : addressed.text.slice(0, PROMPT_BOUND / 2),
     "---",
-    `A member wrote this in ${where} you were started from. That thread sees only what you send there with \`send_slack_message\`; your final message is not posted.`,
+    `A member wrote this in ${where} you were started from. ${SLACK_REPLY_REMINDER}`,
   ].join("\n\n");
 }
 
