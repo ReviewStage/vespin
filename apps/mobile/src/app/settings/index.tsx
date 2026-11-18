@@ -5,7 +5,6 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LINK_ORIGIN, LINK_PAGE } from "@repo/features/link-home";
-import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
 import {
   PUSH_NOTIFICATIONS_STATE,
   PUSH_NOTIFICATIONS_TITLE,
@@ -174,7 +173,7 @@ export default function SettingsScreen() {
             />
             <PushRow
               symbol={GLYPH.MCP_CLIENTS}
-              label={MCP_CLIENTS_WORDS.TITLE}
+              label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MCP]}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MCP)}
             />

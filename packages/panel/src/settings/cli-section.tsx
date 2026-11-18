@@ -1,6 +1,7 @@
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { CLI_COMMAND, CLI_LINK_FOLDER } from "@repo/features/cli-release";
-import { MCP_ACCESS_TOKEN_MINUTES, type McpClient } from "@repo/features/mcp-client-wire";
+import { CLI_SIGN_OUT_QUESTION, CLI_WORDS } from "@repo/features/cli-words";
+import type { McpClient } from "@repo/features/mcp-client-wire";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -81,27 +82,27 @@ import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-section
  */
 
 const SECTION = {
-  CAPTION: `Use ${PRODUCT_NAME} from your terminal.`,
+  CAPTION: CLI_WORDS.CAPTION,
 } as const;
 
 const PAGE_LINE = {
-  INSTALL_LABEL: `Install the ${PRODUCT_NAME.toLowerCase()} command`,
+  INSTALL_LABEL: CLI_WORDS.INSTALL_LABEL,
   INSTALL_HERE: "On this Mac, or with npm anywhere.",
-  INSTALL_NPM: "With npm, on Node 20 or later.",
+  INSTALL_NPM: CLI_WORDS.INSTALL_NPM,
   INSTALL: "Install",
   REINSTALL: "Reinstall",
   INSTALLING: "Installing the command-line tool",
   NPM_COMMAND: "npm command",
-  SIGN_IN_LABEL: "Sign in from your terminal",
-  SIGN_IN_WORDS: "It opens your browser to sign in.",
+  SIGN_IN_LABEL: CLI_WORDS.SIGN_IN_LABEL,
+  SIGN_IN_WORDS: CLI_WORDS.SIGN_IN_WORDS,
   WAITING: `Waiting for the ${PRODUCT_NAME.toLowerCase()} command to sign in`,
   LOGIN_COMMAND: "Sign-in command",
-  SIGNED_IN: "Signed in",
-  SIGN_OUT: "Sign out everywhere",
-  SIGNING_OUT: "Signing out",
-  SIGN_OUT_REFUSED: "Signing out didn't finish. Try again.",
-  READ_FAILED: "The command's sign-in could not be read.",
-  NOT_SIGNED_IN: "Not signed in yet.",
+  SIGNED_IN: CLI_WORDS.SIGNED_IN,
+  SIGN_OUT: CLI_WORDS.SIGN_OUT,
+  SIGNING_OUT: CLI_WORDS.SIGNING_OUT,
+  SIGN_OUT_REFUSED: CLI_WORDS.SIGN_OUT_REFUSED,
+  READ_FAILED: CLI_WORDS.READ_FAILED,
+  NOT_SIGNED_IN: CLI_WORDS.NOT_SIGNED_IN,
 } as const;
 
 /** The section as it stands while the sign-in is read: the sign-in's row, then the install's, ending in Install where the client runs it. */
@@ -336,9 +337,7 @@ function SignedInRow({
         open
         confirm={confirm}
         question={{
-          title: `Sign out of the ${PRODUCT_NAME.toLowerCase()} command everywhere?`,
-          body: `It signs out on every computer it's signed in on. Access it already holds stops working within ${MCP_ACCESS_TOKEN_MINUTES} minutes.`,
-          verb: PAGE_LINE.SIGN_OUT,
+          ...CLI_SIGN_OUT_QUESTION,
           running: PAGE_LINE.SIGNING_OUT,
           loss: CONFIRM_LOSS.AFFECTS_OTHERS,
           replayUnmasked: true,
