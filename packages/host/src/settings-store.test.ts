@@ -817,8 +817,7 @@ it.effect("a read begun before a renewal never answers the tokens the renewal re
     yield* Deferred.await(reading);
     yield* store.setAccount(renewed, { renewal: true });
     yield* Deferred.succeed(release, undefined);
-    yield* Fiber.join(stale);
-
+    assert.deepEqual(yield* Fiber.join(stale), renewed);
     assert.deepEqual(yield* store.readAccount(), renewed);
   }).pipe(Effect.provide(NodeFileSystem.layer)),
 );

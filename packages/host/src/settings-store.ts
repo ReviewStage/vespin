@@ -499,24 +499,38 @@ function vaultTokensFor(text: string, accountEmail: string): AccountTokens | und
  * phone's launch, reads the platform's store once rather than each time. Note
  * that only text is held: a read that found none, or failed, asks again next
  * time, and a write the vault refused or a clear forgets what was held, so
- * the next read asks the vault itself, as a clear's retry needs.
+ * the next read asks the vault itself, as a clear's retry needs. A read that
+ * a write or clear overtook reads again, so it never answers, or holds, the
+ * text that change replaced.
  */
 function heldTokenVault(vault: TokenVault): TokenVault {
   let held: string | undefined;
   // Each write or clear moves this on, so a read begun before it never holds the text it replaced, which for a rotated refresh token would revoke the account's sign-in.
   let generation = 0;
 
-  return {
-    read: Effect.suspend(() => {
-      if (held !== undefined) return Effect.succeed(held);
-      const begun = generation;
+  // Note that misses read one at a time, so the follows a launch starts at once wait on the first read rather than each asking the vault.
+  const misses = Semaphore.makeUnsafe(1);
 
-      return Effect.tap(vault.read, (text) =>
-        Effect.sync(() => {
-          if (generation === begun) held = text;
-        }),
-      );
-    }),
+  /** The vault's text, read again where a write or clear landed while it was read, since what it read is then what that change replaced. */
+  const readCurrent: Effect.Effect<string | undefined> = Effect.suspend(() => {
+    const begun = generation;
+
+    return Effect.flatMap(vault.read, (text) => {
+      if (generation !== begun) return readCurrent;
+      held = text;
+
+      return Effect.succeed(text);
+    });
+  });
+
+  return {
+    read: Effect.suspend(() =>
+      held === undefined
+        ? misses.withPermits(1)(
+            Effect.suspend(() => (held === undefined ? readCurrent : Effect.succeed(held))),
+          )
+        : Effect.succeed(held),
+    ),
     write: (tokens) =>
       Effect.onExit(vault.write(tokens), (exit) =>
         Effect.sync(() => {
