@@ -248,8 +248,8 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
         assert.deepEqual(sentTo(agentSessions, sessionId), ["The second booking."]);
 
         yield* schedule(agent, { delaySeconds: 60, prompt: "Canceled before it came." }, queue);
-        // A cancel reads nothing else, so a key the described input does not name stops it all the same.
-        const stopped = yield* schedule(agent, { stop: true, minutes: 10 }, queue);
+        // A cancel reads nothing else, so a key it does not name, or a booking field out of bounds, stops it all the same.
+        const stopped = yield* schedule(agent, { stop: true, minutes: 10, delaySeconds: 0 }, queue);
         assert.deepEqual(stopped, { status: ACTION_RESULT_STATUS.ACCEPTED, wakeup: null });
         yield* deliver(agentSessions, queue.published[2]);
         assert.deepEqual(sentTo(agentSessions, sessionId), ["The second booking."]);
