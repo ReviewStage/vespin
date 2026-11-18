@@ -5091,14 +5091,19 @@ const SKILL_TOOL_REFUSAL = {
     `adds it to the installation in ${PRODUCT_NAME}'s GitHub settings.`,
   UNANSWERED: "Not run: GitHub or the store did not answer; nothing was installed. Try again.",
   NOTHING_TO_INSTALL:
-    "Not run: nothing to install. From a GitHub source, name at least one skill as " +
-    `${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} listed them; for a skill's text, give a name and ` +
-    "a summary where its frontmatter declares none; and a workspace skill is never " +
-    "installed in the member's personal workspace, where scope personal is the one there is.",
-  UNPINNED:
-    `Not run: a GitHub install takes the commit sha ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} ` +
-    "answered, so what installs is what the member was shown; call it first, show the member " +
-    "what it lists, and pass its sha.",
+    "Not run: nothing to install. Either install.skills names none of the skills the source " +
+    `holds, as ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} lists them, or scope is workspace in the ` +
+    "member's personal workspace, where scope personal is the one there is.",
+  WRONG_KIND: {
+    [SKILL_PASTE_KIND.SOURCE]:
+      "Not run: that source is a GitHub source, so install.kind is source, with install.skills " +
+      `and install.sha as ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} answered them; call it ` +
+      "first, show the member what it lists, and pass its sha.",
+    [SKILL_PASTE_KIND.TEXT]:
+      "Not run: that source is a skill's text, so install.kind is text, with install.name and " +
+      `install.summary, such as those ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} read from ` +
+      "its frontmatter.",
+  },
   UNSUPPORTED:
     "Not run: that is neither a GitHub repository, a link to one of its folders, an `npx " +
     "skills add` line naming one, nor a skill's text; skills install from GitHub alone.",
@@ -5204,6 +5209,36 @@ const PreviewSkillInstallInputSchema = Schema.Struct({
   source: SKILL_SOURCE_INPUT,
 });
 
+/** What an install takes from each kind of source, as Add skill's Install sends it once its preview is shown. */
+const SkillInstallVariantSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal(SKILL_PASTE_KIND.SOURCE),
+    skills: describeWire(
+      Schema.Array(Schema.NonEmptyString).check(Schema.isMinLength(1)),
+      `The skills to install by name, as ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} listed them; ` +
+        "at least one.",
+    ),
+    sha: describeWire(
+      installedSkillInstallRequestSchema.fields.sha.schema,
+      `The commit ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} answered, so the files installed are ` +
+        "the ones the member was shown.",
+    ),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal(SKILL_PASTE_KIND.TEXT),
+    name: describeWire(
+      Schema.NonEmptyString,
+      `The name to install the skill by, such as the one ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} ` +
+        "read from its frontmatter.",
+    ),
+    summary: describeWire(
+      Schema.NonEmptyString,
+      "The summary to install the skill by, which tells agents when to use it, such as the one " +
+        `${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} read from its frontmatter.`,
+    ),
+  }),
+]);
+
 const InstallSkillInputSchema = Schema.Struct({
   workspace: SKILL_WORKSPACE_INPUT,
   source: SKILL_SOURCE_INPUT,
@@ -5213,34 +5248,20 @@ const InstallSkillInputSchema = Schema.Struct({
       "workspace, offered to the agents of every member of the workspace, never in the " +
       "member's personal workspace.",
   ),
-  skills: Schema.optionalKey(
-    describeWire(
-      Schema.Array(Schema.NonEmptyString),
-      `From a GitHub source, the skills to install by name, as ` +
-        `${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} listed them; at least one.`,
-    ),
-  ),
-  sha: Schema.optionalKey(
-    describeWire(
-      installedSkillInstallRequestSchema.fields.sha.schema,
-      `From a GitHub source, the commit ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} answered, so ` +
-        "the files installed are the ones the member was shown.",
-    ),
-  ),
-  name: Schema.optionalKey(
-    describeWire(
-      Schema.NonEmptyString,
-      "For a skill's text, the name to install it by; its frontmatter's where left out.",
-    ),
-  ),
-  description: Schema.optionalKey(
-    describeWire(
-      Schema.NonEmptyString,
-      "For a skill's text, the summary to install it by, which tells agents when to use it; its " +
-        "frontmatter's where left out.",
-    ),
+  install: describeWire(
+    SkillInstallVariantSchema,
+    `What to install, by the kind ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} answered for the ` +
+      "source: source with the skills and the commit sha it answered, or text with the name and " +
+      "summary to install the skill by.",
   ),
 });
+
+/** What an install asks of the skills' operation, by its kind. */
+function installAsked(install: typeof SkillInstallVariantSchema.Type) {
+  return install.kind === SKILL_PASTE_KIND.SOURCE
+    ? { skills: install.skills, sha: install.sha }
+    : { name: install.name, description: install.summary };
+}
 
 const LIST_INSTALLED_SKILLS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS,
@@ -5303,27 +5324,34 @@ const INSTALL_SKILL_TOOL = memberMcpTool({
   description:
     "Install skills from a source for the member's agents, as Add skill's Install in " +
     `Settings › Skills does once its preview is shown: call ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} ` +
-    "first, show the member what it answered, and install only what they chose. From a GitHub " +
-    "source, name the skills to install and pass the commit sha the preview answered, so the " +
-    "files installed are the ones shown; from a skill's text, give its name and summary " +
-    "where its frontmatter declares none. Every skill asked is installed or none is. " +
+    "first, show the member what it answered, and install only what they chose. Pass install " +
+    "of the kind the preview answered: source with the skills to install and the commit sha " +
+    "the preview answered, so the files installed are the ones shown; or text with the name " +
+    "and summary to install the skill by. Every skill asked is installed or none is. " +
     `${WORKSPACE_WORDS} Answers \`accepted\` with the skills installed, each with its id, or ` +
     "`rejected` and why, such as a name already taken.",
   input: InstallSkillInputSchema,
   annotations: ADDITIVE,
-  run: ({ workspace, source, ...asked }) =>
-    // Note that a GitHub install takes the commit its preview pinned, as Add skill's always does, so what installs is what the member was shown.
-    parseSkillPaste(source).kind === SKILL_PASTE_KIND.SOURCE && asked.sha === undefined
-      ? Effect.succeed(agentToolRejected(SKILL_TOOL_REFUSAL.UNPINNED))
+  run: ({ workspace, source, scope, install }) => {
+    const pasted = parseSkillPaste(source).kind;
+
+    if (pasted === SKILL_PASTE_KIND.UNSUPPORTED) {
+      return Effect.succeed(agentToolRejected(SKILL_TOOL_REFUSAL.UNSUPPORTED));
+    }
+
+    // Note that the install's kind must be the source's, so a GitHub install always takes the commit its preview pinned and what installs is what the member was shown.
+    return pasted !== install.kind
+      ? Effect.succeed(agentToolRejected(SKILL_TOOL_REFUSAL.WRONG_KIND[pasted]))
       : asMemberInWorkspace(workspace, (userId, workspaceId) =>
           skillAnswer(
             Effect.map(
-              installSkills(userId, { ...asked, text: source, workspaceId }),
+              installSkills(userId, { ...installAsked(install), scope, text: source, workspaceId }),
               (installed) => ({ skills: installed.skills }),
             ),
             ABOUT_WORKSPACE,
           ),
-        ),
+        );
+  },
 });
 
 const REMOVE_INSTALLED_SKILL_TOOL = memberMcpTool({

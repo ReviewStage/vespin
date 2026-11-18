@@ -57,6 +57,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { NOTE_KIND } from "@repo/features/description-notes";
 import { INBOX_ANSWER_LEAD, INBOX_ASK, INBOX_REPLY, INBOX_STATUS } from "@repo/features/inbox-wire";
+import { SKILL_PASTE_KIND } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
@@ -2280,7 +2281,7 @@ it.effect(
 );
 
 it.effect(
-  "install_skill refuses a GitHub install without the commit its preview pinned, before reading the source",
+  "install_skill refuses a GitHub source installed as text, naming the kind and the commit it takes, before reading the source",
   () =>
     Effect.gen(function* () {
       const { auth, fetch } = yield* standing;
@@ -2303,7 +2304,7 @@ it.effect(
             arguments: {
               source: "anthropics/skills",
               scope: INSTALLED_SKILL_SCOPE.PERSONAL,
-              skills: ["pdf"],
+              install: { kind: SKILL_PASTE_KIND.TEXT, name: "pdf", summary: "Read PDFs." },
             },
           }),
         ),
@@ -2312,7 +2313,10 @@ it.effect(
       yield* Effect.promise(() => client.close());
 
       assert.equal(answer.isError, true);
-      assert.match(answer.content[0].text, /call it first/u);
+      assert.match(
+        answer.content[0].text,
+        /install\.kind is source, with install\.skills and install\.sha/u,
+      );
     }),
 );
 
