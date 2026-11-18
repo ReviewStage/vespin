@@ -245,11 +245,9 @@ import { workspaceNamingOf } from "./written-mentions.js";
  * the caller acts for: a new name, a repository confirmed through the
  * workspace's installation or none, where it stands, or that member's own
  * pin, on any task of the caller's workspace, a teammate's among them. A
- * task is archived no longer, so an archive a call from before still asks
- * for settles the task instead, Done or Canceled by whether an agent's
- * pull request merged, without asking and without stopping the task's
- * agents, and an unarchive puts it back to work (`tasks/archive-settle.ts`);
- * a change already standing answers as done.
+ * task is archived no longer, so a call naming `archived` is refused with
+ * where status and `archive_agent` go; a change already standing answers
+ * as done.
  * A stop takes the one path the Stop button's does (`coder-host/stop.ts`'s `stoppedAgent`):
  * the harness's cancel of the turn under way, named by its own id for it, then the
  * row's stamp, which `list_agents` then reads as canceled. The agent stays
@@ -345,9 +343,10 @@ export const UPDATE_TASK_REFUSAL = {
   PARENT_CYCLE:
     "Not run: that parent is the task itself or one of its sub-tasks, under which the task " +
     "would descend from itself; take that task out from under this one first.",
-  ARCHIVE_NOT_READY:
-    "Not run: an agent of that task is still starting or has a message waiting, so archiving " +
-    "the task would stop a turn no one could name yet; call again in a moment.",
+  ARCHIVED:
+    `Not run: ${AGENT_TOOL.UPDATE_TASK} takes no archived; a task is never archived. Move it with status ` +
+    `(${Object.values(TASK_STATUS).join(", ")}), and archive or bring back its agents with ` +
+    `${AGENT_TOOL.ARCHIVE_AGENT} or ${AGENT_TOOL.UNARCHIVE_AGENT}, each by its agentId.`,
 } as const;
 
 /** Why a stop changed nothing, in words the model can act on. */
@@ -885,13 +884,13 @@ function updateTaskInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
 const UPDATE_TASK_INPUT = updateTaskInputOf(EVERY_EXPERIMENT_ON);
 
 /**
- * A task's change as a call carries it: one from before a task stopped
- * being archived may still ask for its archive, which settles the task
- * instead, or its unarchive, which puts it back to work (`archive-settle.ts`).
+ * A task's change as a call carries it: `archived`, which a session still
+ * offered the tool's earlier words may send, is read so the call is refused
+ * by name rather than run with it dropped.
  */
 const UPDATE_TASK_CALL = Schema.Struct({
   ...UPDATE_TASK_INPUT.fields,
-  archived: Schema.optionalKey(Schema.Boolean),
+  archived: Schema.optionalKey(Schema.Unknown),
 });
 
 const readTaskUpdate = Schema.decodeUnknownResult(UPDATE_TASK_CALL);
@@ -2527,7 +2526,7 @@ export function repositoryRefusalWords(refusal: HostedRefusal): string {
     : AGENT_TOOL_REFUSAL.STORE;
 }
 
-/** A change's refusal in the model's words (`taskChangeAsked`, `taskChangeWritten`): a task gone, an assignee who is no member, a repository its tree holds, an archive whose agents are not ready, or the repository's own. */
+/** A change's refusal in the model's words (`taskChangeAsked`, `taskChangeWritten`): a task gone, an assignee who is no member, a repository its tree holds, or the repository's own. */
 function changeRefusalWords(refusal: HostedRefusal): string {
   switch (refusal.error) {
     case HOSTED_API_ERROR.NOT_FOUND:
@@ -2536,8 +2535,6 @@ function changeRefusalWords(refusal: HostedRefusal): string {
       return UPDATE_TASK_REFUSAL.NOT_MEMBER;
     case HOSTED_API_ERROR.CHILD_REPOSITORY_LOCKED:
       return UPDATE_TASK_REFUSAL.TREE_REPOSITORY;
-    case HOSTED_API_ERROR.AGENT_NOT_READY:
-      return UPDATE_TASK_REFUSAL.ARCHIVE_NOT_READY;
     default:
       return repositoryRefusalWords(refusal);
   }
@@ -2565,6 +2562,10 @@ export function runUpdateTask(
   const { taskId, sectionId, assignee, archived, parentTaskId, blockedBy, blocks, ...named } =
     asked.success;
 
+  if (archived !== undefined) {
+    return Effect.succeed(agentToolRejected(UPDATE_TASK_REFUSAL.ARCHIVED));
+  }
+
   const blockChanges = { ...(blockedBy && { blockedBy }), ...(blocks && { blocks }) };
 
   const assigneeId =
@@ -2578,7 +2579,6 @@ export function runUpdateTask(
 
   if (
     Object.keys(changes).length === 0 &&
-    archived === undefined &&
     sectionId === undefined &&
     parentTaskId === undefined &&
     !blockChangesNamed(blockChanges)
@@ -2621,20 +2621,13 @@ export function runUpdateTask(
         return agentToolRejected(blocking.failure);
       }
 
-      // The change itself is confirmed as the app's is (`taskChangeAsked`), an archive stopping the task's agents but the caller.
-      const asked = archived === undefined ? changes : { ...changes, archived };
-
+      // The change itself is confirmed as the app's is (`taskChangeAsked`).
       // Note that a move into progress assigns no one, because only `assignee` changes who is on the task.
       const confirmed =
-        Object.keys(asked).length === 0
+        Object.keys(changes).length === 0
           ? undefined
           : yield* Effect.result(
-              taskChangeAsked(
-                userId,
-                taskId,
-                { ...asked, assignsMover: false },
-                callerAgent(caller)?.id,
-              ),
+              taskChangeAsked(userId, taskId, { ...changes, assignsMover: false }),
             );
 
       if (confirmed !== undefined && Result.isFailure(confirmed)) {
