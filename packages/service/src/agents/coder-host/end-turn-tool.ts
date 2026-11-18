@@ -61,8 +61,8 @@ export const END_TURN_TOOL = {
     "developer, and write nothing after it. Your summary is what the developer reads as your reply, " +
     "so put in it what your last message would have said, briefly. Your follow-ups stand under it as " +
     "a list they tick and send to you with their own words. Ask what you need of them with your " +
-    "threads as before; a turn that waits on an answer offers no follow-ups. Ending a turn leaves your " +
-    "task's status as it stands; it never marks the task Done. Calling it again in the same turn " +
+    "threads as before; a turn that waits on an answer offers no follow-ups. Ending a turn never marks " +
+    "your task Done. Calling it again in the same turn " +
     "replaces the last call.",
   inputSchema: END_TURN_INPUT,
 } as const;

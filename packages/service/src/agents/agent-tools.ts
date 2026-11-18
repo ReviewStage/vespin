@@ -1121,10 +1121,9 @@ export const UPDATE_TASK_TOOL = {
   description:
     "Change a task of your workspace by its id, as the developer's own task menu would, on behalf " +
     "of the developer you work for; name at least one change, and several go in one call. Mark a task " +
-    "Done, with status done, where the developer asked you to, or else only once its work is actually " +
-    "done, such as when its pull requests merged, and you are confident the developer won't come back " +
-    "with a follow-up; answering a question or ending a turn is not that, since the conversation may " +
-    "go on. Done withdraws every ask still open on its " +
+    "Done, with status done, when the developer asks, or once its work is done and you are confident " +
+    "they won't follow up; never just because you answered a question or ended a turn. Done " +
+    "withdraws every ask still open on its " +
     "threads, so mark it done only once you no longer need them, and archives every agent on the " +
     `task, as ${AGENT_TOOL.ARCHIVE_AGENT} would but stopping none: an idle one at once, and one at ` +
     "work, you included, as its turn ends; Canceled does the same. A change of its status off Done brings those agents back, their " +
