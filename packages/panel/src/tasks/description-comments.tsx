@@ -2329,19 +2329,45 @@ export function DescriptionCommentLayer({
     [body, sections, unitClass],
   );
 
+  // The line a thread was started on from the editor, with what it began, which the editor draws no mark on.
+  const startedOn = useRef<(LineAt & { pending: PendingThread }) | undefined>(undefined);
+
+  const startedLine = useCallback(
+    (element: HTMLElement): LineAt => {
+      const line = startedOn.current;
+
+      if (line !== undefined && line.pending === pending) return line;
+      const selection = window.getSelection();
+
+      const words =
+        selection === null || selection.rangeCount === 0 || selection.isCollapsed
+          ? undefined
+          : selection.getRangeAt(0).getBoundingClientRect();
+
+      if (words === undefined) return { top: 0, middle: 0 };
+      const top = words.top - element.getBoundingClientRect().top;
+
+      return { top, middle: top + words.height / 2 };
+    },
+    [pending],
+  );
+
   const anchorAt = useCallback(
-    (thread: string, section: string): { top: number; middle: number } | undefined => {
+    (thread: string, section: string): LineAt | undefined => {
       const element = body.current;
       const anchor = anchorOf(thread, section);
 
       if (element === null || anchor === undefined) return undefined;
+
+      // Note that the editor marks no words a thread is being started on, so its card stands by the line it was started from, or the words selected, until the read view draws them, rather than at the top.
+      if (thread === PENDING_THREAD && anchor === element) return startedLine(element);
 
       return {
         top: anchor === element ? 0 : topIn(element, anchor),
         middle: firstLineIn(element, anchor).middle,
       };
     },
-    [body, anchorOf],
+    [body, anchorOf, startedLine],
   );
 
   // Note that the margin is measured again only when what it stands on
@@ -2506,8 +2532,10 @@ export function DescriptionCommentLayer({
           start: () => {
             const span = editor.current?.blockSpan(found.block);
 
-            if (span !== undefined)
-              setPending(editorPending(span, DESCRIPTION_COMMENT_SCOPE.BLOCK));
+            if (span === undefined) return;
+            const begun = editorPending(span, DESCRIPTION_COMMENT_SCOPE.BLOCK);
+            startedOn.current = { pending: begun, ...firstLineIn(element, found.block) };
+            setPending(begun);
           },
         });
 
