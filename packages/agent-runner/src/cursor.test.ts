@@ -11,7 +11,6 @@ import { TestClock } from "effect/testing";
 import { vi } from "vitest";
 import {
   CURSOR_SIGNED_OUT_DETAIL,
-  CURSOR_SILENCE,
   type CursorConfig,
   INPUT_LINE,
   type InputLine,
@@ -22,6 +21,7 @@ import {
   RUNNER_HARNESS,
   RUNNER_PLACE,
   RUNNER_TRANSCRIPTS,
+  RUNNER_UNANSWERED,
   type RunnerEvent,
 } from "./protocol.js";
 import { runAgent } from "./runner.js";
@@ -482,7 +482,7 @@ it.effect(
       yield* write(message("Read the README.", LINE.FIRST));
       yield* service.seen;
 
-      yield* TestClock.adjust(CURSOR_SILENCE.LIMIT_MS - 1);
+      yield* TestClock.adjust(RUNNER_UNANSWERED.SILENCE_MS - 1);
       assert.equal(run.pollUnsafe(), undefined);
       yield* TestClock.adjust(1);
 
@@ -492,7 +492,7 @@ it.effect(
         type: RUNNER_EVENT.END,
         reason: RUNNER_END.FAILED,
         detail:
-          "Cursor stopped answering for 3 minutes, so the turn was ended. Send a message to try again.",
+          "Cursor stopped answering for 5 minutes, so the turn was ended. Send a message to try again.",
       });
     }),
 );
@@ -525,7 +525,7 @@ it.effect("never counts a run silent while one of its tool calls runs", () =>
     yield* write(message("Run the tests.", LINE.FIRST));
     yield* service.seen;
 
-    yield* TestClock.adjust(CURSOR_SILENCE.LIMIT_MS * 3);
+    yield* TestClock.adjust(RUNNER_UNANSWERED.SILENCE_MS * 3);
     assert.equal(run.pollUnsafe(), undefined);
     assert.equal(cursor.cancels, 0);
     release();

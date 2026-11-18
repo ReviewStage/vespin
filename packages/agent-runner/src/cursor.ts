@@ -23,7 +23,7 @@
  * run goes. A Stop cancels the run going (`run.cancel`) and ends the launch
  * as `stopped` once it ends, or within `RUNNER_CONTROL.ANSWER_MS` where it
  * never does; a run that fails ends it as `failed` with Cursor's words.
- * A run that streams nothing for `CURSOR_SILENCE.LIMIT_MS` while none of
+ * A run that streams nothing for `RUNNER_UNANSWERED.SILENCE_MS` while none of
  * its tool calls runs ends the launch as `failed` too, its run canceled, so
  * a turn Cursor stopped answering ends rather than holding until a Stop or
  * the service's progress deadline (`watchSilence`).
@@ -91,7 +91,6 @@ import {
   type CheckoutSnapshot,
   type ContentBlock,
   CURSOR_SIGNED_OUT_DETAIL,
-  CURSOR_SILENCE,
   CURSOR_SILENT_DETAIL,
   type CursorConfig,
   type CursorModelSelection,
@@ -102,6 +101,7 @@ import {
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
+  RUNNER_UNANSWERED,
   RUNNER_WARM,
   type RunnerEnd,
   type TurnFilesSummary,
@@ -154,7 +154,7 @@ const SIGNAL = {
   STEERED: "steered",
   /** A Stop's cancel left the run going past `RUNNER_CONTROL.ANSWER_MS`. */
   CANCEL_UNANSWERED: "cancel_unanswered",
-  /** A run streamed nothing for `CURSOR_SILENCE.LIMIT_MS` with none of its tool calls running. */
+  /** A run streamed nothing for `RUNNER_UNANSWERED.SILENCE_MS` with none of its tool calls running. */
   RUN_SILENT: "run_silent",
   CUT_OFF: "cut_off",
 } as const;
@@ -353,7 +353,7 @@ function hear(heard: Heard, message: SDKMessage, now: number) {
 
 /**
  * Signals the run silent once it has streamed nothing for
- * `CURSOR_SILENCE.LIMIT_MS` with none of its tool calls running. Note that
+ * `RUNNER_UNANSWERED.SILENCE_MS` with none of its tool calls running. Note that
  * a call running holds the watch off however long it runs, since a long
  * command or one of our own tools streams nothing until it ends, and its
  * end is heard as a message, from which the silence counts afresh.
@@ -366,8 +366,9 @@ const watchSilence = Effect.fn("agent-runner/cursor/watchSilence")(function* (
   for (;;) {
     const quiet = (yield* monotonicMillis) - heard.at;
 
-    if (quiet >= CURSOR_SILENCE.LIMIT_MS && heard.calls.size === 0) break;
-    const wait = heard.calls.size > 0 ? CURSOR_SILENCE.LIMIT_MS : CURSOR_SILENCE.LIMIT_MS - quiet;
+    if (quiet >= RUNNER_UNANSWERED.SILENCE_MS && heard.calls.size === 0) break;
+    const wait =
+      heard.calls.size > 0 ? RUNNER_UNANSWERED.SILENCE_MS : RUNNER_UNANSWERED.SILENCE_MS - quiet;
     yield* Effect.sleep(Duration.millis(wait));
   }
 

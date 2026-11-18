@@ -1135,24 +1135,22 @@ export const RUNNER_CONTROL = {
   ANSWER_MS: 5 * 1_000,
 } as const;
 
-/** How long a launch holds a message a `result` naming no prompt left unanswered, for the CLI to take it up (`runner.ts`'s `watchUnheard`): five minutes, past the CLI's own retries of a failed model call, which put out no turn output. */
+/**
+ * How long a launch lets its harness say nothing before it gives up on the
+ * turn, the one bound every harness shares: five minutes, past the model
+ * call's own retries, which put out nothing. Claude Code's launch holds a
+ * message a `result` naming no prompt left unanswered this long
+ * (`runner.ts`'s `watchUnheard`); Cursor's lets a run stream nothing this
+ * long while none of its tool calls runs (`cursor.ts`'s `watchSilence`),
+ * since Cursor's SDK retries a stalled or failed call itself and says so to
+ * no one.
+ */
 export const RUNNER_UNANSWERED = {
   SILENCE_MS: 5 * 60 * 1_000,
 } as const;
 
-/**
- * How long a Cursor run may stream nothing while none of its tool calls is
- * running before the launch gives up on it (`cursor.ts`'s `watchSilence`):
- * three minutes. Cursor's SDK retries a stalled or failed model call itself
- * and says so to no one, so a run that never answers again would otherwise
- * hold the turn until a Stop or its progress deadline.
- */
-export const CURSOR_SILENCE = {
-  LIMIT_MS: 3 * 60 * 1_000,
-} as const;
-
-/** What a Cursor launch whose run went silent past `CURSOR_SILENCE.LIMIT_MS` ends `FAILED` with: words the member reads. */
-export const CURSOR_SILENT_DETAIL = `Cursor stopped answering for ${CURSOR_SILENCE.LIMIT_MS / 60_000} minutes, so the turn was ended. Send a message to try again.`;
+/** What a Cursor launch whose run went silent past `RUNNER_UNANSWERED.SILENCE_MS` ends `FAILED` with: words the member reads. */
+export const CURSOR_SILENT_DETAIL = `Cursor stopped answering for ${RUNNER_UNANSWERED.SILENCE_MS / 60_000} minutes, so the turn was ended. Send a message to try again.`;
 
 /** The END event; `detail` is the CLI's failure, with the launch's secrets taken out, where it failed; `files` the files the turn it ended changed, as IDLE carries them, where a turn ended with it. */
 export interface RunnerEndEvent {
