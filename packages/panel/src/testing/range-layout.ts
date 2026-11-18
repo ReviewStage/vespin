@@ -9,6 +9,6 @@
  * file by the suite's setup wherever the environment has a `Range` without one.
  */
 
-if (typeof Range !== "undefined" && !("getClientRects" in Range.prototype)) {
+if (typeof Range !== "undefined" && !Reflect.has(Range.prototype, "getClientRects")) {
   Range.prototype.getClientRects = () => document.createElement("span").getClientRects();
 }
