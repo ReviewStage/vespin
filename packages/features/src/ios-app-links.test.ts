@@ -41,10 +41,11 @@ describe("a vespin.dev link", () => {
     ["/acme/task/task-1/inbox/item-1", "/inbox/item-1"],
     ["/acme/tasks", "/tasks"],
     ["/acme/task/42", "/tasks/42?workspace=acme"],
-    ["/acme/task/task-1/page/page-1", undefined],
+    ["/acme/task/task-1/page/page-1", "/tasks/page/page-1?task=task-1"],
+    ["/acme/task/task-1/version/3", undefined],
     ["/acme/agent/agent-1", "/tasks/agent/agent-1"],
     ["/acme/task/task-1/agent/agent-1", "/tasks/agent/agent-1"],
-    ["/acme/agent/agent-1/page/page-1", undefined],
+    ["/acme/agent/agent-1/page/page-1", "/tasks/agent/agent-1/page?page=page-1"],
     ["/acme/task/task-1/agent/agent-1/changes", undefined],
     ["/acme/settings", undefined],
   ])("%s opens in the app at %s, and only then", (path, route) => {
