@@ -111,9 +111,9 @@ env:
       TAB: Tasks
 - tapOn: "Teammate invitations"
 - assertVisible: "Agents"
-# A tap anywhere on the agent's row opens the agent, its pull request's
-# number in its line included, which once took the tap for itself.
-- tapOn: "#128"
+# A tap on the agent's row, one element with its pull request's number in
+# its line, opens the agent, never the pull request.
+- tapOn: "Build teammate invitations"
 - extendedWaitUntil:
     visible: "Add a way to resend an invite that expired."
     timeout: 30000
