@@ -25,7 +25,7 @@ import { readSettingsFileText, writeSettingsFileAtomic } from "./effect/settings
 
 export type { StoredAccount } from "@repo/credentials";
 
-import type { StoredAccount } from "@repo/credentials";
+import type { AccountWrite, StoredAccount } from "@repo/credentials";
 import {
   ACCOUNT_PREFERENCE_FIELDS,
   type AccountPreferenceField,
@@ -883,11 +883,8 @@ export class SettingsStore {
     return Effect.gen({ self: this }, function* () {
       const unwritten = this.#unwritten;
 
-      if (unwritten !== undefined) {
-        yield* this.#keepRenewed(unwritten);
-
-        return unwritten;
-      }
+      // Note that held tokens a sign-out dropped while this read waited on the gate are never answered; the read goes on to what stands now.
+      if (unwritten !== undefined && (yield* this.#keepRenewed(unwritten))) return unwritten;
 
       const { account } = yield* this.#load();
 
@@ -1009,6 +1006,7 @@ export class SettingsStore {
   /** Stores both OAuth tokens, and the session when there is one, under one Keychain-backed ciphertext. */
   setAccount(
     account: StoredAccount,
+    write?: AccountWrite,
   ): Effect.Effect<AccountSnapshot, PlatformError | EncryptedStorageUnavailable> {
     return Effect.gen({ self: this }, function* () {
       const cipher = this.#cipher;
@@ -1024,27 +1022,43 @@ export class SettingsStore {
         return yield* new EncryptedStorageUnavailable();
       }
 
-      const committed = yield* Effect.result(
-        this.#accounts.withPermits(1)(this.#writeAccount(account, held)),
-      );
-
-      if (Result.isFailure(committed)) {
-        // Note that only new tokens of the account already kept are held; a sign-in whose write fails still fails.
-        if ((yield* this.#load()).account?.email !== account.email) {
-          return yield* Effect.fail(committed.failure);
-        }
-
-        this.#unwritten = account;
-      } else {
-        this.#unwritten = undefined;
-      }
+      yield* this.#accounts.withPermits(1)(this.#keepAccount(account, held, write));
 
       return yield* this.accountSnapshot();
     });
   }
 
-  /** Writes renewed tokens a failed write left held, letting them go once the write lands. */
-  #keepRenewed(account: StoredAccount): Effect.Effect<void> {
+  /**
+   * Writes `account`, run inside the account gate. A renewal's write that
+   * fails, for the account the record still names, keeps the tokens for the
+   * run (`#unwritten`) rather than lose the one pair the service still takes;
+   * any other failed write, a sign-in again for the same account among them,
+   * fails, so its caller's cleanup runs.
+   */
+  #keepAccount(
+    account: StoredAccount,
+    held: AccountTokens,
+    write: AccountWrite | undefined,
+  ): Effect.Effect<void, PlatformError | EncryptedStorageUnavailable> {
+    return Effect.gen({ self: this }, function* () {
+      const committed = yield* Effect.result(this.#writeAccount(account, held));
+
+      if (Result.isSuccess(committed)) {
+        this.#unwritten = undefined;
+
+        return;
+      }
+
+      if (write?.renewal !== true || (yield* this.#load()).account?.email !== account.email) {
+        return yield* Effect.fail(committed.failure);
+      }
+
+      this.#unwritten = account;
+    });
+  }
+
+  /** Writes renewed tokens a failed write left held, letting them go once the write lands; answers whether they were still held, which a sign-out ends. */
+  #keepRenewed(account: StoredAccount): Effect.Effect<boolean> {
     const { accessToken, refreshToken, sessionToken } = account;
 
     const held: AccountTokens = {
@@ -1057,14 +1071,17 @@ export class SettingsStore {
     return this.#accounts.withPermits(1)(
       Effect.suspend(() =>
         this.#unwritten === account
-          ? Effect.ignore(
-              Effect.tap(this.#writeAccount(account, held), () =>
-                Effect.sync(() => {
-                  this.#unwritten = undefined;
-                }),
+          ? Effect.as(
+              Effect.ignore(
+                Effect.tap(this.#writeAccount(account, held), () =>
+                  Effect.sync(() => {
+                    this.#unwritten = undefined;
+                  }),
+                ),
               ),
+              true,
             )
-          : Effect.void,
+          : Effect.succeed(false),
       ),
     );
   }
@@ -1083,36 +1100,41 @@ export class SettingsStore {
     const cipher = this.#cipher;
     const vault = this.#vault;
 
-    const tokenCipher =
+    // Note that a cipher that throws fails the write here rather than escape it, as the desktop's `safeStorage` can.
+    const sealed =
       vault !== undefined || cipher === undefined
-        ? TOKENS_IN_VAULT
-        : Base64.encode(cipher.encrypt(JSON.stringify(held)));
+        ? Effect.succeed(TOKENS_IN_VAULT)
+        : Effect.try({
+            try: () => Base64.encode(cipher.encrypt(JSON.stringify(held))),
+            catch: () => new EncryptedStorageUnavailable(),
+          });
 
-    const kept = this.#mutate((persisted) => {
-      const next: PersistedSettings = {
-        ...persisted,
-        account: {
-          tokenCipher,
-          ...(account.id ? { id: account.id } : undefined),
-          email: account.email,
-          ...(account.name ? { name: account.name } : undefined),
-          ...(account.pictureUrl ? { pictureUrl: account.pictureUrl } : undefined),
-          provider: account.provider,
-        },
-      };
+    const kept = (tokenCipher: string) =>
+      this.#mutate((persisted) => {
+        const next: PersistedSettings = {
+          ...persisted,
+          account: {
+            tokenCipher,
+            ...(account.id ? { id: account.id } : undefined),
+            email: account.email,
+            ...(account.name ? { name: account.name } : undefined),
+            ...(account.pictureUrl ? { pictureUrl: account.pictureUrl } : undefined),
+            provider: account.provider,
+          },
+        };
 
-      if (persisted.account?.email && persisted.account.email !== account.email) {
-        for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
-        delete next.accountPreferencesSync;
-        delete next.experiments;
-      }
+        if (persisted.account?.email && persisted.account.email !== account.email) {
+          for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
+          delete next.accountPreferencesSync;
+          delete next.experiments;
+        }
 
-      return next;
-    });
+        return next;
+      });
 
     return vault === undefined
-      ? kept
-      : Effect.andThen(vault.write(vaultText(held, account.email)), kept);
+      ? Effect.flatMap(sealed, kept)
+      : Effect.andThen(vault.write(vaultText(held, account.email)), Effect.flatMap(sealed, kept));
   }
 
   /**

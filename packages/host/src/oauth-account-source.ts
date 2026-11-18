@@ -97,7 +97,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     // be read before the host has linked it.
     store: {
       readAccount: () => Effect.orDie(store.readAccount()),
-      setAccount: (stored) => Effect.orDie(store.setAccount(stored)),
+      setAccount: (stored, write) => Effect.orDie(store.setAccount(stored, write)),
       clearAccount: () => Effect.orDie(store.clearAccount()),
     },
     hostedServiceBaseUrl: host.hostedServiceBaseUrl,

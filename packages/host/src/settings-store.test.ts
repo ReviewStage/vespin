@@ -708,7 +708,9 @@ it.effect(
       } as const satisfies StoredAccount;
 
       failing.writes = true;
-      yield* store.setAccount(renewed);
+      // Note that a sign-in again for the same account isn't a renewal: its failed write fails, so its own cleanup runs.
+      yield* Effect.flip(store.setAccount(renewed));
+      yield* store.setAccount(renewed, { renewal: true });
       assert.deepEqual(yield* store.readAccount(), renewed);
       failing.writes = false;
 
@@ -718,6 +720,41 @@ it.effect(
         renewed,
       );
     }).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
+it.effect("a renewal whose cipher throws keeps its tokens for the run rather than lose them", () =>
+  Effect.gen(function* () {
+    const directory = yield* temporaryDirectoryScoped("settings-");
+    const throwing = { encrypt: false };
+    const cipher = testCipher();
+
+    const store = new SettingsStore({
+      directory: () => directory,
+      cipher: {
+        ...cipher,
+        encrypt: (plainText) => {
+          if (throwing.encrypt) throw new Error("The Keychain refused the key.");
+
+          return cipher.encrypt(plainText);
+        },
+      },
+      fileSystem: FILE_SYSTEM,
+      path: PATH,
+    });
+
+    yield* store.setAccount(TEST_ACCOUNT);
+
+    const renewed = {
+      ...TEST_ACCOUNT,
+      accessToken: "renewed-access",
+      refreshToken: "renewed-refresh",
+    } as const satisfies StoredAccount;
+
+    throwing.encrypt = true;
+    yield* store.setAccount(renewed, { renewal: true });
+
+    assert.deepEqual(yield* store.readAccount(), renewed);
+  }).pipe(Effect.provide(NodeFileSystem.layer)),
 );
 
 test("tokens a failed sign-out or an uninstall left in the vault are cleared by the next read that finds no one signed in", async (t) => {
