@@ -639,7 +639,9 @@ export function runCreateTask(
       // The call run again finds the task it made, and makes no second, before the keys it names are read again.
       const before = yield* readTask(userId, id);
 
-      if (Option.isSome(before)) return createdAnswer(before.value.task, naming);
+      if (Option.isSome(before) && before.value.task.workspaceId === workspace.value) {
+        return createdAnswer(before.value.task, naming);
+      }
 
       // The tasks it names, each by its id or a key read in the caller's workspace alone.
       const named = yield* createdTasksById(userId, workspace.value, asked.success);

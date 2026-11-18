@@ -913,7 +913,16 @@ const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
     "last activity may have lost its session.",
   input: ListAgentsInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace, ...asked }) => listAsMember(workspace, (call) => runListAgents(call, asked)),
+  run: ({ workspace, ...asked }) => {
+    const ref = asked.taskId === undefined ? undefined : cliTaskRefOf(asked.taskId);
+
+    // A key names a task's number in one workspace, so the member's only one is never guessed for it.
+    if (workspace === undefined && ref !== undefined && !("id" in ref)) {
+      return Effect.succeed(agentToolRejected(keyWithoutWorkspaceRefusal("Not run")));
+    }
+
+    return listAsMember(workspace, (call) => runListAgents(call, asked));
+  },
 });
 
 const ReadAgentInputSchema = Schema.Struct({
