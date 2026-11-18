@@ -4288,10 +4288,12 @@ test("read_page reads a page a teammate showed on another task of the caller's w
     await call(AGENT_TOOL.READ_PAGE, { pageId: elsewhere.id, version: "newest" }),
     refused,
   );
+
   const unreadable = {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: READ_PAGE_REFUSAL.UNREADABLE,
   };
+
   assert.deepEqual(await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id, version: 0 }), unreadable);
   assert.deepEqual(await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id }), unreadable);
 });

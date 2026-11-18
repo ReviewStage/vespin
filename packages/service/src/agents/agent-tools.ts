@@ -3570,6 +3570,7 @@ export function runReadPage(
 
       const userId = callerUserId(caller);
       const { pageId, version } = asked.success;
+
       const found = yield* readPageById(
         userId,
         pageId,
