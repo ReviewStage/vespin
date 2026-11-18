@@ -30,10 +30,9 @@ import {
   readRunActions,
   setRunActions,
 } from "@repo/database/models/workspace-sandbox-script-store";
-import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
-import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
   joinWorkspace,
@@ -74,7 +73,6 @@ import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
-import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { EXPERIMENT_OFF_REFUSAL } from "../agents/workspace-experiment-on.js";
 import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
@@ -86,6 +84,7 @@ import {
   freshInstallation,
   type GraphqlCall,
   graphqlAnswering,
+  messagedAgent,
   mutationOf,
   openAskOf,
   openTask,
@@ -1771,18 +1770,11 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
     "an outside agent rewinds the member's agent to just before a line by the lineId read_agent_transcript names, dropping it, then deletes the agent for good",
     () =>
       Effect.gen(function* () {
-        const { owner, task, ask, mcpFetch } = yield* openTask({});
-        const { agent, target } = yield* startedAgent(owner, task.id, ask);
-        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-        yield* writer.writeAwaitingLine(
-          target,
-          {
-            text: "Why does it stall?",
-            clientKey: randomUUID(),
-            sender: { kind: MESSAGE_SENDER.MEMBER, userId: owner },
-          },
-          Effect.succeed(true),
-        );
+        // The Start's line opened a turn that has ended, so nothing of the agent runs.
+        const { owner, agent, mcpFetch } = yield* messagedAgent(fakeAgentSessions(), {
+          running: false,
+        });
+
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
         const call = (name: string, args: ToolArguments) =>
@@ -1799,7 +1791,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
 
         const line = before.at(-1);
         assert.ok(line?.lineId !== undefined, "a line sent to the agent names its lineId");
-        assert.match(line.text, /Why does it stall\?/u);
+        assert.match(line.text, /Teammate invitations/u);
 
         const rewound = yield* call(MEMBER_MCP_TOOL.REWIND_AGENT, {
           agentId: agent.id,
@@ -1901,6 +1893,49 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         );
         assert.equal(agentSessions.sent.length, before);
         assert.notEqual(Option.getOrThrow(yield* readAgent(owner, agent.id)).archivedAt, null);
+      }),
+  );
+
+  it.effect(
+    "an outside agent's rewind_agent, delete_agent, and delete_task each refuse the member's agent while its turn runs, naming stop_agent, and stop nothing",
+    () =>
+      Effect.gen(function* () {
+        const { owner, agent, task, agentSessions, mcpFetch } = yield* messagedAgent(
+          fakeAgentSessions(),
+          { running: true },
+        );
+
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
+        const call = (name: string, args: ToolArguments) =>
+          Effect.promise(async () =>
+            decodeAnswer(await client.callTool({ name, arguments: args })),
+          );
+
+        const read = yield* call(MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, {
+          agentId: agent.id,
+          from: "start",
+        });
+
+        const lineId = decodeTranscript(JSON.parse(read.content[0].text)).transcript.at(-1)?.lineId;
+        assert.ok(lineId !== undefined, "the Start's line names its lineId");
+
+        const refused = [
+          yield* call(MEMBER_MCP_TOOL.REWIND_AGENT, { agentId: agent.id, lineId }),
+          yield* call(MEMBER_MCP_TOOL.DELETE_AGENT, { agentId: agent.id }),
+          yield* call(MEMBER_MCP_TOOL.DELETE_TASK, { taskId: task.id }),
+        ];
+
+        yield* Effect.promise(() => client.close());
+
+        for (const answer of refused) {
+          assert.equal(answer.isError, true, answer.content[0].text);
+          assert.ok(answer.content[0].text.includes(MEMBER_MCP_TOOL.STOP_AGENT));
+        }
+
+        assert.deepEqual(agentSessions.canceled, [], "no turn was stopped");
+        assert.ok(Option.isSome(yield* readAgent(owner, agent.id)), "the agent stands");
+        assert.ok(Option.isSome(yield* readTask(owner, task.id)), "the task stands");
       }),
   );
 
