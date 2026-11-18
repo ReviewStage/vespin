@@ -10,9 +10,6 @@ catalogs:
     '@better-auth/oauth-provider':
       specifier: 1.7.7
       version: 1.7.7
-    '@cursor/sdk':
-      specifier: 1.4.0
-      version: 1.4.0
     '@effect/platform-node':
       specifier: 4.0.4
       version: 4.0.4
@@ -948,7 +945,7 @@ importers:
         version: 4.0.4
     devDependencies:
       '@cursor/sdk':
-        specifier: 'catalog:'
+        specifier: 1.4.0
         version: 1.4.0(zod@4.6.7)
       '@effect/vitest':
         specifier: 'catalog:'
@@ -1269,7 +1266,7 @@ importers:
         version: 4.6.0
     devDependencies:
       '@cursor/sdk':
-        specifier: 'catalog:'
+        specifier: 1.4.0
         version: 1.4.0(zod@4.6.7)
       '@effect/vitest':
         specifier: 'catalog:'
