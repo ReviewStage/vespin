@@ -146,16 +146,7 @@ export const automationsRead = bindLiveRead(AUTOMATIONS_READ, {
       .as("last_run");
 
     const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
-
-    // Note that the machine a run starts on stays off the live row, because a released desktop's part declares no column for it.
-    const {
-      nextRunAt,
-      createdAt,
-      updatedAt: _updatedAt,
-      runsOnMachine: _runsOnMachine,
-      runsOnDeviceId: _runsOnDeviceId,
-      ...columns
-    } = AUTOMATION_COLUMNS;
+    const { nextRunAt, createdAt, updatedAt: _updatedAt, ...columns } = AUTOMATION_COLUMNS;
 
     const own = {
       columns: {
