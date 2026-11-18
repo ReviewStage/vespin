@@ -121,7 +121,7 @@
     "posthog-js": "1.418.3",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "recharts": "3.10.1",
+    "recharts": "3.11.0",
     "rehype-raw": "7.0.0",
     "remark-breaks": "4.0.0",
     "unicode-emoji-json": "0.9.0"
