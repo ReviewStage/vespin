@@ -1,0 +1,31 @@
+#9967 on main
+#9970 on main
+#9972 on main
+#9973 on main
+#9977 on main
+== bundle P9967B base affe2933d9
+  built affe2933d9 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+p9967-iphone-light a: fails 0 shots 1 
+  p9967-iphone-light: More (334, 188, 378, 232) (44x44 pt), centre 356,210; tap 341,225; row (16, 167, 386, 253) (86 pt tall)
+p9967-iphone-light b: fails 0 shots 1 
+p9967-iphone-dark a: fails 0 shots 1 
+  p9967-iphone-dark: More (334, 188, 378, 232) (44x44 pt), centre 356,210; tap 341,225; row (16, 167, 386, 253) (86 pt tall)
+p9967-iphone-dark b: fails 0 shots 1 
+p9970-ipad26-light: fails 0 shots 2 
+p9967-ipad26-light a: fails 1 shots 1 Assert that "Claude Code" is visible... FAILED
+  p9967-ipad26-light: More (229, 114, 265, 122) (36x8 pt), centre 247,118; tap 232,133; row (10, 96, 330, 210) (114 pt tall)
+p9967-ipad26-light b: fails 1 shots 2 Assert that "Disconnect" is visible... FAILED
+p9972-ipad26-light: fails 1 shots 1 Assert that "Claude Code" is visible... FAILED
+p9973-ipad26-light: fails 1 shots 5 Assert that "Share usage data" is visible... FAILED
+p9977-ipad26-light: fails 0 shots 3 
+p9977-ipad26-light-alerts: fails 1 shots 4 Assert that ".*DATABASE_URL.*\?" is visible... FAILED
+p9970-ipad26-dark: fails 0 shots 2 
+p9967-ipad26-dark a: fails 1 shots 1 Assert that "Claude Code" is visible... FAILED
+  p9967-ipad26-dark: More (499, 50, 535, 58) (36x8 pt), centre 517,54; tap 502,69; row (280, 32, 600, 146) (114 pt tall)
+p9967-ipad26-dark b: fails 1 shots 2 Assert that "Disconnect" is visible... FAILED
+p9972-ipad26-dark: fails 1 shots 1 Assert that "Claude Code" is visible... FAILED
+p9973-ipad26-dark: fails 1 shots 9 Assert that "Invite as member" is visible... FAILED
