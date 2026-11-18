@@ -1725,30 +1725,12 @@ const MEMBER_DELETE_SECTION_TOOL = memberMcpTool({
     ),
 });
 
-/** A start names the task or the agent it starts from, or else the workspace of the task made for it, and what the agents' own start names, bar pictures, since the member keeps no conversation here to hand them from. */
+/** A start names its task, the agent's own where it starts from one, and what the agents' own start names, bar pictures, since the member keeps no conversation here to hand them from. */
 const StartAgentInputSchema = Schema.Struct({
-  workspace: Schema.optionalKey(
-    describeWire(
-      Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
-      "Where you name no taskId and no from, the workspace of the task made for the agent, by " +
-        `the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member ` +
-        "belongs to one workspace alone.",
-    ),
-  ),
-  taskId: Schema.optionalKey(
-    describeWire(
-      wireUuidSchema,
-      `The task to start the agent on, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered; leave ` +
-        "it out to start it on a new task made for it.",
-    ),
-  ),
-  repository: Schema.optionalKey(
-    describeWire(
-      Schema.NullOr(githubRepositoryFullNameSchema),
-      "Where you name no taskId and no from, the GitHub repository of the task made for the " +
-        "agent, as owner/name, which the workspace's GitHub installation must reach; null or " +
-        "left out for none. A task's agent works in the task's own.",
-    ),
+  taskId: describeWire(
+    wireUuidSchema,
+    `The task to start the agent on, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered; with ` +
+      "from, the task of the agent it starts from.",
   ),
   prompt: START_AGENT_TOOL.inputSchema.fields.prompt,
   note: START_AGENT_TOOL.inputSchema.fields.note,
@@ -1769,56 +1751,35 @@ const StartAgentInputSchemaOff = Schema.Struct({
 
 type StartAgentInput = typeof StartAgentInputSchema.Type;
 
-/** The workspace a start is about: its task's, the agent's it starts from, or else the one its slug names or the member's only one. */
-const startedAsMember = ({ workspace, ...asked }: StartAgentInput) => {
-  const start = (call: AgentCall) => runStartAgent(call, asked);
-
-  if (asked.taskId !== undefined) {
-    const { taskId } = asked;
-
-    return writeAsMember(
-      (userId) => readTaskWorkspace(userId, taskId),
-      START_AGENT_REFUSAL.NO_SUCH_TASK,
-      start,
-    );
-  }
-
-  if (asked.from !== undefined) {
-    const { agentId } = asked.from;
-
-    return writeAsMember(
-      (userId) => agentWorkspace(userId, { id: agentId }),
-      START_AGENT_REFUSAL.NO_SOURCE,
-      start,
-    );
-  }
-
-  return listWriteAsMember(workspace, start);
-};
+/** A start in the workspace of the task it names. */
+const startedAsMember = (asked: StartAgentInput) =>
+  writeAsMember(
+    (userId) => readTaskWorkspace(userId, asked.taskId),
+    START_AGENT_REFUSAL.NO_SUCH_TASK,
+    (call: AgentCall) => runStartAgent(call, asked),
+  );
 
 const MEMBER_START_AGENT_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.START_AGENT,
   description: memberStartAgentWords(
     "on the task's description itself with no prompt, or on the prompt " +
       "given in the description's place, with the note after either",
-    ", where it needs a prompt, since that task has no description to hand it",
   ),
   input: StartAgentInputSchema,
   descriptionsOff: {
-    description: memberStartAgentWords("on the prompt given, with the note after it", ""),
+    description: memberStartAgentWords("on the prompt given, with the note after it"),
     input: StartAgentInputSchemaOff,
   },
   annotations: ADDITIVE,
   run: startedAsMember,
 });
 
-/** The words of a member's start, how it is handed what it is told and why a start on no task needs a prompt as their workspaces' Task descriptions words them. */
-function memberStartAgentWords(handed: string, newTaskPrompt: string): string {
+/** The words of a member's start, how it is handed what it is told as their workspaces' Task descriptions words it. */
+function memberStartAgentWords(handed: string): string {
   return (
     "Start a new coding agent as the member, exactly as their own Start would: on a task " +
-    `they can open by its taskId, ${handed}; or on a new task made for it in ` +
-    "the workspace named, named as its agent is, assigned to the member, in the repository " +
-    `named or none${newTaskPrompt}. ` +
+    `they can open by its taskId, ${handed}; make a task for it first with ` +
+    `${MEMBER_MCP_TOOL.CREATE_TASK}. ` +
     "This one call carries everything the agent is told as it starts, and the " +
     "agent sets to work on it at once. Its checkout is the repository's default branch, or " +
     "the branch named, which must already be on GitHub. It runs on the model and effort " +

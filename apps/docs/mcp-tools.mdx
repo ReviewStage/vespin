@@ -276,13 +276,11 @@ The agent's pull request: its state, checks, reviewers, and changed files, or on
 
 ### start_agent
 
-Starts an agent on a task, on a new task, or from another agent. Answers once its session opens, which can take a minute or two. The agent doesn't report back to the caller.
+Starts an agent on a task, or from another agent on its task. Make a new task first with `create_task`. Answers once its session opens, which can take a minute or two. The agent doesn't report back to the caller.
 
 | Input | Type | Description |
 | --- | --- | --- |
-| `workspace` | string | Where you name no taskId and no from, the workspace of the task made for the agent, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
-| `taskId` | string | The task to start the agent on, by the id list_tasks answered; leave it out to start it on a new task made for it. (1–36 characters) |
-| `repository` | string or null | Where you name no taskId and no from, the GitHub repository of the task made for the agent, as owner/name, which the workspace's GitHub installation must reach; null or left out for none. A task's agent works in the task's own. |
+| `taskId` | string, required | The task to start the agent on, by the id list_tasks answered; with from, the task of the agent it starts from. (1–36 characters) |
 | `prompt` | string | What the agent should do, typed to it as its first message: everything it needs to start on its work, or the developer's words where they named the job. Every start takes one but a start from another agent, which takes none. (1–64000 characters) |
 | `note` | string | Everything else the agent should hear as it starts (what to start with, what to watch out for, what to leave alone), handed to it after the prompt in the same first message; leave it out where there is nothing beyond the prompt. (1–64000 characters) |
 | `title` | string | The agent's title from the start, how the developer sees it named, such as the pull request it will open; leave it out to have it named from what it is told. (1–80 characters) |

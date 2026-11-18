@@ -340,6 +340,8 @@ interface StartedAgent extends ConversationTarget {
   /** The name the agent goes by in every answer and mention: its title, or its model before it has one. */
   readonly name: string;
   readonly sessionId: string;
+  /** The task it works on, which a start beside it, or from it, names as its taskId. */
+  readonly taskId: string;
 }
 
 /** An agent started by the account on the plan, its session recorded as the store hook records it; it belongs to the run named, or to none. */
@@ -438,6 +440,7 @@ async function claimed(
     id: started.value.agent.id,
     name: started.value.agent.title ?? AGENT_CHOICE_NAME,
     sessionId: session,
+    taskId: started.value.agent.taskId,
   };
 }
 
@@ -1296,7 +1299,7 @@ test("start_agent starts an agent on the caller's own task as the deployment act
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { prompt, model: OPUS, effort: "low" },
+    { taskId: caller.taskId, prompt, model: OPUS, effort: "low" },
     "call-start",
   );
 
@@ -1325,7 +1328,7 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   // An agent's own pick of a model is no member's new default.
   assert.equal((await database.run(readAccountPreferences(caller.userId)))?.agent, undefined);
 
-  const again = await call(AGENT_TOOL.START_AGENT, { prompt }, "call-start");
+  const again = await call(AGENT_TOOL.START_AGENT, { taskId: caller.taskId, prompt }, "call-start");
   assert.ok(isRecord(again.agent));
   assert.equal(again.agent.id, startedId);
   assert.equal(agentSessions.sent.length, 1, "the same call run again starts no second agent");
@@ -1528,8 +1531,8 @@ test("start_agent hands over a prompt and a note each as long as a start allows,
   const note = `Note: ${"n".repeat(longest - 7)}.`;
 
   for (const [refused, key] of [
-    [{ prompt: `${prompt}p`, note }, "call-long-prompt"],
-    [{ prompt, note: `${note}n` }, "call-long-note"],
+    [{ taskId: agents.caller.taskId, prompt: `${prompt}p`, note }, "call-long-prompt"],
+    [{ taskId: agents.caller.taskId, prompt, note: `${note}n` }, "call-long-note"],
   ] as const) {
     assert.deepEqual(await call(AGENT_TOOL.START_AGENT, refused, key), {
       status: ACTION_RESULT_STATUS.REJECTED,
@@ -1539,7 +1542,12 @@ test("start_agent hands over a prompt and a note each as long as a start allows,
 
   assert.equal(agentSessions.sent.length, 0, "a start past the bound starts nothing");
 
-  const started = await call(AGENT_TOOL.START_AGENT, { prompt, note }, "call-longest");
+  const started = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: agents.caller.taskId, prompt, note },
+    "call-longest",
+  );
+
   assert.equal(started.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(started));
   assert.equal(agentSessions.sent.length, 1);
   const message = sentWords(agentSessions.sent[0]?.body);
@@ -1603,7 +1611,7 @@ test("start_agent on the description with a note hands the agent the pictures im
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { note: NOTE, images: [shownId, otherId] },
+    { taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
     "call-images",
   );
 
@@ -1631,7 +1639,7 @@ test("start_agent on the description with a note hands the agent the pictures im
 
   const again = await call(
     AGENT_TOOL.START_AGENT,
-    { note: NOTE, images: [shownId, otherId] },
+    { taskId: caller.taskId, note: NOTE, images: [shownId, otherId] },
     "call-images",
   );
 
@@ -1788,7 +1796,7 @@ test("start_agent refuses, in words that say why and starting nothing, a picture
     assert.deepEqual(
       await call(
         AGENT_TOOL.START_AGENT,
-        { prompt: PROMPT, note: NOTE, images },
+        { taskId: caller.taskId, prompt: PROMPT, note: NOTE, images },
         `call-${randomUUID()}`,
       ),
       { status: ACTION_RESULT_STATUS.REJECTED, reason },
@@ -1807,7 +1815,7 @@ test("start_agent with a title names the agent by it from the start, and a title
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { prompt: "Add a title to start_agent.", title: `  ${title}  ` },
+    { taskId: caller.taskId, prompt: "Add a title to start_agent.", title: `  ${title}  ` },
     "call-titled",
   );
 
@@ -1831,10 +1839,13 @@ test("start_agent with a title names the agent by it from the start, and a title
     ["   ", "call-empty"],
     ["a".repeat(AGENT_BOUNDS.MAX_TITLE_CHARS + 1), "call-long"],
   ] as const) {
-    assert.deepEqual(await call(AGENT_TOOL.START_AGENT, { title: refused }, key), {
-      status: ACTION_RESULT_STATUS.REJECTED,
-      reason: START_AGENT_REFUSAL.UNREADABLE,
-    });
+    assert.deepEqual(
+      await call(AGENT_TOOL.START_AGENT, { taskId: caller.taskId, title: refused }, key),
+      {
+        status: ACTION_RESULT_STATUS.REJECTED,
+        reason: START_AGENT_REFUSAL.UNREADABLE,
+      },
+    );
   }
 });
 
@@ -1897,18 +1908,26 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
   const prompt = "Send the reminder before the invitation expires.";
 
   assert.deepEqual(
-    await call(AGENT_TOOL.START_AGENT, { prompt, branch: "luke/never-pushed" }, "call-missing"),
+    await call(
+      AGENT_TOOL.START_AGENT,
+      { taskId: caller.taskId, prompt, branch: "luke/never-pushed" },
+      "call-missing",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_BRANCH },
   );
   assert.equal(agentSessions.sent.length, 0, "a branch GitHub does not hold starts nothing");
   assert.deepEqual(
-    await call(AGENT_TOOL.START_AGENT, { prompt, branch: "two words" }, "call-unreadable"),
+    await call(
+      AGENT_TOOL.START_AGENT,
+      { taskId: caller.taskId, prompt, branch: "two words" },
+      "call-unreadable",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.UNREADABLE },
   );
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { prompt, branch: STACKED_BRANCH },
+    { taskId: caller.taskId, prompt, branch: STACKED_BRANCH },
     "call-stacked",
   );
 
@@ -1924,7 +1943,7 @@ test("start_agent with a branch starts an agent whose checkout is cloned at that
 
   const again = await call(
     AGENT_TOOL.START_AGENT,
-    { prompt, branch: STACKED_BRANCH },
+    { taskId: caller.taskId, prompt, branch: STACKED_BRANCH },
     "call-stacked",
   );
 
@@ -2003,7 +2022,7 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
       const started = await call(
         AGENT_TOOL.START_AGENT,
-        { prompt: PROMPT, model, effort },
+        { taskId: agents.caller.taskId, prompt: PROMPT, model, effort },
         `call-${calls}`,
       );
 
@@ -2015,7 +2034,7 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
 
   const fast = await call(
     AGENT_TOOL.START_AGENT,
-    { prompt: PROMPT, model: OPUS_FAST, effort: "high" },
+    { taskId: agents.caller.taskId, prompt: PROMPT, model: OPUS_FAST, effort: "high" },
     "call-fast",
   );
 
@@ -2027,7 +2046,13 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
     ),
     String(fast.reason),
   );
-  const unnamed = await call(AGENT_TOOL.START_AGENT, { prompt: PROMPT }, "call-default");
+
+  const unnamed = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: agents.caller.taskId, prompt: PROMPT },
+    "call-default",
+  );
+
   assert.ok(isRecord(unnamed.agent), JSON.stringify(unnamed));
   assert.deepEqual(
     [unnamed.agent.model, unnamed.agent.effort],
@@ -2084,7 +2109,13 @@ test("list_models says the default is no longer offered where the catalog droppe
     contextWindow: null,
     offered: false,
   });
-  const unnamed = await call(AGENT_TOOL.START_AGENT, { prompt: PROMPT }, "call-default");
+
+  const unnamed = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: agents.caller.taskId, prompt: PROMPT },
+    "call-default",
+  );
+
   assert.equal(unnamed.status, ACTION_RESULT_STATUS.REJECTED);
   assert.equal(agentSessions.sent.length, 0);
 
@@ -2105,7 +2136,7 @@ test("list_models says the default is no longer offered where the catalog droppe
 
   const refused = await once(
     AGENT_TOOL.START_AGENT,
-    { prompt: PROMPT, model: SOL, effort: "max" },
+    { taskId: agents.caller.taskId, prompt: PROMPT, model: SOL, effort: "max" },
     "call-max",
   );
 
@@ -2146,7 +2177,7 @@ async function storedStart(userId: string, started: WireRecord) {
   return Option.getOrThrow(await database.run(readAgent(userId, started.agent.id)));
 }
 
-test("start_agent continues a teammate's agent that ended, on that agent's own task when none is named, handed its transcript and named after it; the same call run again answers the agent it made, and a second continue starts another, its answer, and that call's run again, naming the first", async () => {
+test("start_agent continues a teammate's agent that ended, on that agent's own task, handed its transcript and named after it; the same call run again answers the agent it made, and a second continue starts another, its answer, and that call's run again, naming the first", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const { caller, teammates } = agents;
   await database.run(fillAgentTitle(teammates.userId, teammates.id, "Invoice export"));
@@ -2155,7 +2186,8 @@ test("start_agent continues a teammate's agent that ended, on that agent's own t
   const call = await peerCaller(hostOf(), caller, agentSessions.services);
 
   const from = { agentId: teammates.id };
-  const started = await call(AGENT_TOOL.START_AGENT, { from, note: NOTE }, "call-continue");
+  const taskId = teammates.taskId;
+  const started = await call(AGENT_TOOL.START_AGENT, { taskId, from, note: NOTE }, "call-continue");
   const stored = await storedStart(caller.userId, started);
   assert.equal(stored.taskId, tasks.billing, "the task is the source's own");
   assert.equal(stored.startedFrom?.agentId, teammates.id);
@@ -2165,7 +2197,7 @@ test("start_agent continues a teammate's agent that ended, on that agent's own t
   assert.ok(words.includes("the CSV writer is next"), words);
   assert.ok(words.includes(NOTE) && words.includes(caller.id), words);
 
-  const again = await call(AGENT_TOOL.START_AGENT, { from, note: NOTE }, "call-continue");
+  const again = await call(AGENT_TOOL.START_AGENT, { taskId, from, note: NOTE }, "call-continue");
   assert.ok(isRecord(again.agent), JSON.stringify(again));
   assert.equal(again.agent.id, stored.id);
   const openings = agentSessions.sent.filter((each) => each.path === SESSIONS_PATH).length;
@@ -2177,7 +2209,7 @@ test("start_agent continues a teammate's agent that ended, on that agent's own t
   );
   assert.equal(again.earlierContinuations, undefined, "the first continue names none before it");
 
-  const second = await call(AGENT_TOOL.START_AGENT, { from }, "call-continue-again");
+  const second = await call(AGENT_TOOL.START_AGENT, { taskId, from }, "call-continue-again");
   const secondStored = await storedStart(caller.userId, second);
   assert.notEqual(secondStored.id, stored.id, "a second continue is an agent of its own");
   assert.equal(secondStored.startedFrom?.agentId, teammates.id);
@@ -2190,7 +2222,7 @@ test("start_agent continues a teammate's agent that ended, on that agent's own t
   const first = { id: stored.id, title: "Invoice export (continued)" };
   assert.deepEqual(second.earlierContinuations, [first]);
 
-  const secondAgain = await call(AGENT_TOOL.START_AGENT, { from }, "call-continue-again");
+  const secondAgain = await call(AGENT_TOOL.START_AGENT, { taskId, from }, "call-continue-again");
   assert.ok(isRecord(secondAgain.agent), JSON.stringify(secondAgain));
   assert.equal(secondAgain.agent.id, secondStored.id, "the call run again answers what it made");
   assert.deepEqual(secondAgain.earlierContinuations, [first], "naming the first as it did");
@@ -2211,7 +2243,7 @@ test("start_agent forks an agent at one of its messages that read_agent names, w
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { from: { agentId: teammates.id, messageId } },
+    { taskId: teammates.taskId, from: { agentId: teammates.id, messageId } },
     "call-fork",
   );
 
@@ -2227,7 +2259,7 @@ test("start_agent forks an agent at one of its messages that read_agent names, w
   );
 });
 
-test("start_agent from another agent refuses, in words the model acts on and starting nothing, an agent of no workspace of the caller's, a message none of the source's, a prompt, a branch, or a new task beside it, the caller continuing itself, a source still working, a task other than the source's, and an archived task", async () => {
+test("start_agent from another agent refuses, in words the model acts on and starting nothing, an agent of no workspace of the caller's, a message none of the source's, a prompt, a branch, or a new task beside it, the caller continuing itself, a source still working, no task named, a task other than the source's, and an archived task", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const { caller, teammates } = agents;
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -2243,19 +2275,24 @@ test("start_agent from another agent refuses, in words the model acts on and sta
   await saidTurnOn(caller, "Done with the expiry.");
 
   for (const other of [agents.otherWorkspaces, agents.strangers]) {
-    await refused({ from: { agentId: other.id } }, R.NO_SOURCE);
+    await refused({ taskId: other.taskId, from: { agentId: other.id } }, R.NO_SOURCE);
   }
 
-  await refused({ from: { agentId: randomUUID() } }, R.NO_SOURCE);
-  await refused({ from: { agentId: teammates.id, messageId: randomUUID() } }, R.NO_MESSAGE);
-  await refused({ from: { agentId: teammates.id }, prompt: "Do it again." }, R.FROM_WITH_PROMPT);
-  await refused({ from: { agentId: teammates.id }, branch: STACKED_BRANCH }, R.FROM_WITH_PROMPT);
-  await refused({ from: { agentId: caller.id } }, R.SELF_CONTINUE);
+  const theirs = { taskId: teammates.taskId, from: { agentId: teammates.id } };
+  await refused({ taskId: tasks.billing, from: { agentId: randomUUID() } }, R.NO_SOURCE);
+  const elsewhere = { agentId: teammates.id, messageId: randomUUID() };
+  await refused({ taskId: teammates.taskId, from: elsewhere }, R.NO_MESSAGE);
+  await refused({ ...theirs, prompt: "Do it again." }, R.FROM_WITH_PROMPT);
+  await refused({ ...theirs, branch: STACKED_BRANCH }, R.FROM_WITH_PROMPT);
+  await refused({ taskId: caller.taskId, from: { agentId: caller.id } }, R.SELF_CONTINUE);
   // A teammate's agent with no turn yet is still starting, and one whose turn runs is working.
-  await refused({ from: { agentId: teammates.id } }, R.SOURCE_RUNNING);
+  await refused(theirs, R.SOURCE_RUNNING);
   await turnOn(teammates, false);
-  await refused({ from: { agentId: teammates.id } }, R.SOURCE_RUNNING);
+  await refused(theirs, R.SOURCE_RUNNING);
   await saidTurnOn(teammates, "Stopped for the day.");
+  // A start names its task, from another agent as on its own, rather than landing on the caller's.
+  await refused({ from: { agentId: teammates.id } }, R.NO_TASK);
+  await refused({ prompt: "Do it again." }, R.NO_TASK);
   await refused(
     { from: { agentId: teammates.id }, taskId: tasks.invitations },
     R.SOURCE_OTHER_TASK,
@@ -2304,18 +2341,31 @@ test("start_agent refuses a coder continuing the agent that started it, directly
   assert.ok(messageId !== undefined);
 
   assert.deepEqual(
-    await call(AGENT_TOOL.START_AGENT, { from: { agentId: starter.id } }, "call-up"),
+    await call(
+      AGENT_TOOL.START_AGENT,
+      { taskId: starter.taskId, from: { agentId: starter.id } },
+      "call-up",
+    ),
     {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason: START_AGENT_REFUSAL.STARTER_CONTINUE,
     },
   );
   assert.deepEqual(
-    await deepCall(AGENT_TOOL.START_AGENT, { from: { agentId: starter.id } }, "call-up-deep"),
+    await deepCall(
+      AGENT_TOOL.START_AGENT,
+      { taskId: starter.taskId, from: { agentId: starter.id } },
+      "call-up-deep",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.STARTER_CONTINUE },
   );
   assert.equal(agentSessions.sent.length, 0, "no refusal opens a session");
-  const forked = await call(AGENT_TOOL.START_AGENT, { from: { agentId: starter.id, messageId } });
+
+  const forked = await call(AGENT_TOOL.START_AGENT, {
+    taskId: starter.taskId,
+    from: { agentId: starter.id, messageId },
+  });
+
   assert.equal(forked.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(forked));
 });
 
@@ -2346,11 +2396,22 @@ test("start_agent continuing an agent started on a branch clones the new agent a
   const agentSessions = await fakeCoderSessions(workspaceId, [STACKED_BRANCH]);
   const call = await peerCaller(hostOf(), caller, agentSessions.services);
 
-  const onHeld = await call(AGENT_TOOL.START_AGENT, { from: { agentId: held.id } }, "call-held");
+  const onHeld = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: held.taskId, from: { agentId: held.id } },
+    "call-held",
+  );
+
   const stored = await storedStart(caller.userId, onHeld);
   assert.equal(stored.startedFrom?.agentId, held.id);
   assert.equal(stored.startBranch, STACKED_BRANCH);
-  const onGone = await call(AGENT_TOOL.START_AGENT, { from: { agentId: gone.id } }, "call-gone");
+
+  const onGone = await call(
+    AGENT_TOOL.START_AGENT,
+    { taskId: gone.taskId, from: { agentId: gone.id } },
+    "call-gone",
+  );
+
   assert.equal((await storedStart(caller.userId, onGone)).startBranch, null);
 });
 
@@ -2362,8 +2423,9 @@ test("start_agent refuses to continue an agent whose session died while it still
   const agentSessions = await fakeCoderSessions(workspaceId, [], undefined, "no_active_turn");
   const call = await peerCaller(hostOf(), caller, agentSessions.services);
   const from = { agentId: teammates.id };
+  const taskId = teammates.taskId;
 
-  assert.deepEqual(await call(AGENT_TOOL.START_AGENT, { from }, "call-1"), {
+  assert.deepEqual(await call(AGENT_TOOL.START_AGENT, { taskId, from }, "call-1"), {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: START_AGENT_REFUSAL.SOURCE_RUNNING,
   });
@@ -2373,7 +2435,7 @@ test("start_agent refuses to continue an agent whose session died while it still
   assert.ok(isRecord(stopped.agent));
   assert.equal(stopped.agent.status, AGENT_STATUS.CANCELED);
 
-  const continued = await call(AGENT_TOOL.START_AGENT, { from }, "call-3");
+  const continued = await call(AGENT_TOOL.START_AGENT, { taskId, from }, "call-3");
   const stored = await storedStart(caller.userId, continued);
   assert.equal(stored.taskId, tasks.billing);
   assert.equal(stored.startedFrom?.agentId, teammates.id);
@@ -2429,7 +2491,11 @@ test("start_agent from a source whose transcript does not fit the new agent's wi
 
   await storedStart(
     caller.userId,
-    await call(AGENT_TOOL.START_AGENT, { from: { agentId: teammates.id } }, "call-long"),
+    await call(
+      AGENT_TOOL.START_AGENT,
+      { taskId: teammates.taskId, from: { agentId: teammates.id } },
+      "call-long",
+    ),
   );
   const words = openingWords(agentSessions.sent);
   assert.ok(words.includes(recap), "the steps left out are summarized");
@@ -2551,7 +2617,13 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   const runAgent = await agentOn(caller.userId, taskIds.invitations, run);
   const fromRunTask = await peerCaller(hostOf(), runAgent, agentSessions.services);
   assert.deepEqual(
-    await placeOf(await fromRunTask(AGENT_TOOL.START_AGENT, { prompt: "Sweep." }, "call-beside")),
+    await placeOf(
+      await fromRunTask(
+        AGENT_TOOL.START_AGENT,
+        { taskId: runAgent.taskId, prompt: "Sweep." },
+        "call-beside",
+      ),
+    ),
     [taskIds.invitations, workspaceId, RELAY_FULL_NAME, run],
   );
 
@@ -2559,7 +2631,13 @@ test("list_tasks names the open tasks of the caller's workspace, its own marked,
   // agents it starts from then on, from the run's claim on, before the run holds the agent.
   assert.ok(await database.run(claimAutomationRun(later, runAgent.id)));
   assert.deepEqual(
-    await placeOf(await fromRunTask(AGENT_TOOL.START_AGENT, { prompt: "Sweep." }, "call-later")),
+    await placeOf(
+      await fromRunTask(
+        AGENT_TOOL.START_AGENT,
+        { taskId: runAgent.taskId, prompt: "Sweep." },
+        "call-later",
+      ),
+    ),
     [taskIds.invitations, workspaceId, RELAY_FULL_NAME, later],
   );
   assert.equal(agentSessions.sent.length, 3);
