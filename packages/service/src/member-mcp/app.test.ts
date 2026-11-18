@@ -706,8 +706,7 @@ it.effect(
             {
               threadId: rows.strangerItem,
               askId: openAskOf(strangerAsk),
-              reply: INBOX_REPLY.CHOSE,
-              choices: ["Approve"],
+              answer: { reply: INBOX_REPLY.CHOSE, choices: ["Approve"] },
             },
           ],
           [MEMBER_MCP_TOOL.REPLY_TO_THREAD, { threadId: rows.strangerItem, text: "Approve it." }],
@@ -1642,11 +1641,16 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
 
         const read = yield* call(MEMBER_MCP_TOOL.READ_INBOX, {});
 
+        const unpicked = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
+          threadId: posted.success.id,
+          askId,
+          answer: { reply: INBOX_REPLY.CHOSE },
+        });
+
         const answered = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
           threadId: posted.success.id,
           askId,
-          reply: INBOX_REPLY.CHOSE,
-          choices: ["30 days"],
+          answer: { reply: INBOX_REPLY.CHOSE, choices: ["30 days"] },
         });
 
         yield* Effect.promise(() => client.close());
@@ -1662,6 +1666,9 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           ],
           [posted.success.id, askId, true, ["7 days", "30 days"]],
         );
+        // A reply left without its field is refused naming what each reply takes, so one retry fixes it.
+        assert.equal(unpicked.isError, true);
+        assert.match(unpicked.content[0].text, /answer\.reply "chose" takes choices/u);
         assert.notEqual(answered.isError, true, answered.content[0].text);
         assert.equal(
           decodeWritten(JSON.parse(answered.content[0].text)).thread.status,

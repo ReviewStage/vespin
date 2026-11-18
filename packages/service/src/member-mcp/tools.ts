@@ -3297,16 +3297,56 @@ const READ_INBOX_TOOL = memberMcpTool({
     }),
 });
 
-/** The answers an ask takes: a pick or words for a decide, done or not for a do, and fields or words for an answer. */
-const ANSWER_REPLIES = [
-  INBOX_REPLY.CHOSE,
-  INBOX_REPLY.ANSWERED,
-  INBOX_REPLY.SUBMITTED,
-  INBOX_REPLY.DONE,
-  INBOX_REPLY.NOT_DONE,
-] as const;
+/** What a call meets that leaves out a reply's field: what each reply takes, so one retry fixes it. */
+const ANSWER_FIELD_MISSING =
+  `Not answered: answer.reply "${INBOX_REPLY.CHOSE}" takes choices (the option labels); ` +
+  `"${INBOX_REPLY.SUBMITTED}" takes values (each field by its label); "${INBOX_REPLY.DONE}" ` +
+  `and "${INBOX_REPLY.NOT_DONE}" take steps (the places of the steps done, from 0); ` +
+  `"${INBOX_REPLY.ANSWERED}" takes none, its words in note.`;
 
-/** An answer names its thread and the ask it answers, how the member answers, and what goes with it, as the window's answer carries them. */
+/** A reply's own field, refused in those words where it is left out. */
+const answerField = <S extends Schema.Top>(schema: S, description: string) =>
+  describeWire(schema, description).pipe(
+    Schema.annotateKey({ messageMissingKey: ANSWER_FIELD_MISSING }),
+  );
+
+/** The steps of a do the member did, by their places from 0, which done and not done alike carry. */
+const DONE_STEPS = (words: string) =>
+  answerField(
+    inboxAnswersSchema.fields.steps.schema,
+    `The steps of the ${INBOX_ASK.DO} the member did, by their places from 0: ${words}`,
+  );
+
+/** One answer per reply, each carrying exactly what that reply takes, as the window's answer does. */
+const AskAnswerSchema = Schema.Union([
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.CHOSE),
+    choices: answerField(
+      inboxAnswersSchema.fields.choices.schema,
+      "The labels of the options the member picks: one, or several where the ask lets several " +
+        "be picked.",
+    ),
+  }),
+  Schema.Struct({ reply: Schema.Literal(INBOX_REPLY.ANSWERED) }),
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.SUBMITTED),
+    values: answerField(
+      inboxAnswersSchema.fields.values.schema,
+      "The fields the member fills: each by its field's label, with words, a number, one of a " +
+        "select's options, or true or false, as its type asks; every required field filled.",
+    ),
+  }),
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.DONE),
+    steps: DONE_STEPS("every one."),
+  }),
+  Schema.Struct({
+    reply: Schema.Literal(INBOX_REPLY.NOT_DONE),
+    steps: DONE_STEPS("those they did, or none."),
+  }),
+]);
+
+/** An answer names its thread and the ask it answers, how the member answers with what that takes, and their words, as the window's answer carries them. */
 const AnswerAskInputSchema = Schema.Struct({
   threadId: THREAD_ID,
   askId: describeWire(
@@ -3314,41 +3354,19 @@ const AnswerAskInputSchema = Schema.Struct({
     `The id of the message whose ask you answer: the thread's askId, as ` +
       `${MEMBER_MCP_TOOL.READ_INBOX} answered it.`,
   ),
-  reply: describeWire(
-    Schema.Literals(ANSWER_REPLIES),
-    `How the member answers: ${INBOX_REPLY.CHOSE}, with choices, for a ${INBOX_ASK.DECIDE}; ` +
-      `${INBOX_REPLY.ANSWERED}, with their words in note, where no option of a ` +
-      `${INBOX_ASK.DECIDE} fits or an ${INBOX_ASK.ANSWER} asks no fields; ` +
+  answer: describeWire(
+    AskAnswerSchema,
+    `How the member answers, by its reply: ${INBOX_REPLY.CHOSE}, with choices, for a ` +
+      `${INBOX_ASK.DECIDE}; ${INBOX_REPLY.ANSWERED}, with their words in note, where no option ` +
+      `of a ${INBOX_ASK.DECIDE} fits or an ${INBOX_ASK.ANSWER} asks no fields; ` +
       `${INBOX_REPLY.SUBMITTED}, with values, for an ${INBOX_ASK.ANSWER}'s fields; and ` +
-      `${INBOX_REPLY.DONE} or ${INBOX_REPLY.NOT_DONE} for a ${INBOX_ASK.DO}.`,
-  ),
-  choices: Schema.optionalKey(
-    describeWire(
-      inboxAnswersSchema.fields.choices.schema,
-      `The labels of the options the member picks, for ${INBOX_REPLY.CHOSE}: one, or several ` +
-        "where the ask lets several be picked.",
-    ),
-  ),
-  values: Schema.optionalKey(
-    describeWire(
-      inboxAnswersSchema.fields.values.schema,
-      `The fields the member fills, for ${INBOX_REPLY.SUBMITTED}: each by its field's label, ` +
-        "with words, a number, one of a select's options, or true or false, as its type asks; " +
-        "every required field filled.",
-    ),
-  ),
-  steps: Schema.optionalKey(
-    describeWire(
-      inboxAnswersSchema.fields.steps.schema,
-      `The steps of a ${INBOX_ASK.DO} the member did, by their places from 0: every one for ` +
-        `${INBOX_REPLY.DONE}.`,
-    ),
+      `${INBOX_REPLY.DONE} or ${INBOX_REPLY.NOT_DONE}, with steps, for a ${INBOX_ASK.DO}.`,
   ),
   note: Schema.optionalKey(
     describeWire(
       Schema.Trim.check(Schema.isMaxLength(INBOX_BOUNDS.MAX_MESSAGE_CHARS)),
       `The member's words with the answer, in Markdown: the answer itself for ` +
-        `${INBOX_REPLY.ANSWERED}, and otherwise anything they add.`,
+        `${INBOX_REPLY.ANSWERED}, and otherwise anything they add; none where left out.`,
     ),
   ),
 });
@@ -3368,18 +3386,12 @@ const ANSWER_ASK_TOOL = memberMcpTool({
     "that does not fit it.",
   input: AnswerAskInputSchema,
   annotations: IDEMPOTENT_CHANGE,
-  run: ({ threadId, askId, reply, choices, values, steps, note }) =>
+  run: ({ threadId, askId, answer, note }) =>
     Effect.flatMap(AdmittedMember, (member) =>
       answerAskAsMember(member.userId, {
         threadId,
         note: note ?? "",
-        answers: {
-          ask: askId,
-          reply,
-          ...(choices === undefined ? undefined : { choices }),
-          ...(values === undefined ? undefined : { values }),
-          ...(steps === undefined ? undefined : { steps }),
-        },
+        answers: { ask: askId, ...answer },
       }),
     ),
 });
