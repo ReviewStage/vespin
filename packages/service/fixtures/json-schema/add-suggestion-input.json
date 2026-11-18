@@ -27,7 +27,7 @@
           "minLength": 1,
           "maxLength": 255,
           "pattern": "^[^\\s~^:?*[\\\\]+$",
-          "description": "The branch of the task's repository to clone its checkout at, which must be on GitHub when the button is pressed; leave it out for the default branch."
+          "description": "The branch of the task's repository to clone its checkout at, such as the repository's default branch, which must be on GitHub when the button is pressed. Required where the task works in a repository; leave it out for a task with none."
         },
         "model": {
           "type": "string",
