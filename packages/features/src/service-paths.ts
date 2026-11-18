@@ -253,6 +253,8 @@ export const HOSTED_SERVICE_PATH = {
    * answer (`agent-wire.ts`).
    */
   AGENTS: "/api/agents",
+  /** A Manager made in a workspace (POST): an agent of kind `manager` on no task (`manager-wire.ts`). */
+  MANAGERS: "/api/managers",
   /** A runner's own token (POST): a cloud Codex runner's ChatGPT access token on its runner's bearer. */
   RUNNER_TOKEN: "/api/agents/runner-token",
   /** A local agent's Mac registered under the account, with its name, home folder, and bundled CLI (POST). `device-agent-wire.ts` declares the bodies. */

@@ -8,18 +8,21 @@ import { readAgent, readAgentByKey } from "@repo/database/models/agent-store";
 import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { recordWorkspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
+import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { BOOT_FAILURE, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
-import { AGENT_KIND, QUEUE_CHANGE } from "@repo/features/agent-wire";
+import { AGENT_KIND, AGENT_MACHINE, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
+import type { ManagerCreateRequest } from "@repo/features/manager-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { memorySandbox } from "@repo/sandbox/testing";
+import { EXPERIMENT } from "@repo/settings";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Predicate, Result } from "effect";
 import { TestClock } from "effect/testing";
@@ -49,6 +52,7 @@ import {
 } from "../sessions/agent-sessions.js";
 import { WorkspaceDriveFills } from "../workspace-drive.js";
 import { WorkspaceDriveBuilds } from "../workspace-drive-builds.js";
+import { MANAGER_OPENING, startManager } from "./manager-start.js";
 import { changeAgentQueue } from "./queue-change.js";
 import { type StartAsk, startAgent } from "./start.js";
 import { STEER_OUTCOME, steerMemberWords } from "./steer.js";
@@ -80,7 +84,7 @@ const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 14 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 15 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -370,6 +374,58 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         assert.deepEqual(
           queue.messages.map((message) => message.text),
           ["And open a pull request"],
+        );
+      }),
+  );
+
+  it.effect(
+    "a Manager is made on no task as its creator's, named as asked and opened on its introduction, only where its workspace has Managers on, and an account outside the workspace makes none",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const outsider = yield* openGithubUser();
+        yield* connectAgentApiKeys(outsider);
+        yield* openWorkspace(outsider);
+        const { opened, agentSessions } = fakeAgentSessions();
+
+        const request: ManagerCreateRequest = {
+          idempotencyKey: randomUUID(),
+          workspaceId,
+          name: "Billing",
+          repositories: [RELAY_REPOSITORY],
+          runsOn: { machine: AGENT_MACHINE.VERCEL },
+          model: AGENT_DEFAULT_CHOICE.model,
+          effort: "high",
+        };
+
+        const made = (userId: string) =>
+          Effect.result(
+            startManager(agentSessions, userId, request).pipe(Effect.provide(services)),
+          );
+
+        const off = yield* made(owner);
+        yield* setWorkspaceExperiment({
+          organizationId: workspaceId,
+          experiment: EXPERIMENT.MANAGERS,
+          on: true,
+          by: owner,
+        });
+        const outside = yield* made(outsider);
+        const started = yield* made(owner);
+
+        assert.ok(Result.isFailure(off));
+        assert.equal(off.failure, HOSTED_REFUSAL.NOT_PERMITTED);
+        assert.ok(Result.isFailure(outside));
+        assert.equal(outside.failure, HOSTED_REFUSAL.NOT_FOUND);
+        assert.ok(Result.isSuccess(started));
+        const agent = Option.getOrThrow(yield* readAgent(owner, started.success.agent.id));
+        assert.deepEqual(
+          [agent.kind, agent.taskId, agent.organizationId, agent.userId, agent.title, agent.prompt],
+          [AGENT_KIND.MANAGER, null, workspaceId, owner, "Billing", MANAGER_OPENING],
+        );
+        assert.deepEqual(
+          opened.map((message) => message.conversationId),
+          [agent.conversationId],
         );
       }),
   );
