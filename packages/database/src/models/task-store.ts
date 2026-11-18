@@ -214,8 +214,6 @@ export interface NewTask {
   readonly origin?: TaskOrigin;
   /** The task it is a child of, which the caller confirmed it reaches in the same workspace, and whose repository it took; none for a task at the top. */
   readonly parentTaskId?: string;
-  /** Whether `start_agent` made it for the agent it started, its caller on no task; not where none is named. */
-  readonly madeByStart?: boolean;
   /** The description's text as it starts; empty where none is named. */
   readonly text?: string;
 }
@@ -833,7 +831,6 @@ const TaskInsertSchema = Schema.Struct({
   parentTaskId: Schema.NullOr(Schema.String),
   description: Schema.String,
   brief: Schema.NullOr(Schema.String),
-  madeByStart: Schema.Boolean,
   now: Schema.Date,
 });
 
@@ -864,7 +861,6 @@ function taskValues(write: typeof TaskInsertSchema.Type) {
     assigneeId: write.assigneeId,
     creatorActor: write.creatorActor,
     creatorAgentId: write.creatorAgentId,
-    madeByStart: write.madeByStart,
     repository: write.repository,
     githubAccess: write.githubAccess,
     parentTaskId: write.parentTaskId,
@@ -1242,7 +1238,6 @@ const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =
       assigneeId: started.assigneeId ?? null,
       creatorActor: started.origin?.actor ?? DESCRIPTION_ACTOR.DEVELOPER,
       creatorAgentId: started.origin?.agentId ?? null,
-      madeByStart: started.madeByStart ?? false,
       number: yield* nextTaskNumber(started.organizationId),
       now,
     };
