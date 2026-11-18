@@ -29,7 +29,7 @@ below as that one. You and the workers talk by `message_agent`.
 | Start a worker | `start_agent` with `taskId` set to its PR's subtask, `title` set to the PR title, no `prompt` (it works from the subtask's description), the rest of the brief as `note`, plus `model` and `effort` (below) |
 | Start a helper | `start_agent` on your own task (`taskId` set to your own, from your instructions' own values), with the brief as `prompt` |
 | Worker's base branch | `start_agent`'s `branch` |
-| Open a PR | `open_pull_request` with `repository` and `base` |
+| Open a PR | `open_pull_request` with `repository`, `base`, and `draft: false` |
 | Message a worker | `message_agent` with the worker's agent id |
 | Worker reports back | `message_agent` with the orchestrator's agent id |
 | Check on a silent worker | `read_agent` with its agent id |

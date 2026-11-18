@@ -56,6 +56,7 @@ const INPUT = {
   body: "Invitations now expire after a week.",
   repository: RELAY_FULL_NAME,
   base: RELAY.defaultBranch,
+  draft: false,
 };
 
 /** How GitHub answers an opening, by the bearer it came on. */
@@ -269,7 +270,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
           {
             status: ACTION_RESULT_STATUS.REJECTED,
             reason:
-              "Not opened: the call needs head, title, body, repository, and base, the title at most 256 characters, repository one you work in: `Acme/Relay`, `Acme/Docs`, and base the branch it merges into: the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request.",
+              "Not opened: the call needs head, title, body, repository, base, and draft, the title at most 256 characters, repository one you work in: `Acme/Relay`, `Acme/Docs`, and base the branch it merges into: the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request, and draft false to open it ready for review or true to open it as a draft.",
           },
           {
             status: ACTION_RESULT_STATUS.REJECTED,
@@ -466,6 +467,8 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
         const accepted = yield* open(agent, agent.target, opened, stacked);
         const { base: _base, ...unbased } = INPUT;
         const baseless = yield* open(agent, agent.target, opened, unbased);
+        const { draft: _draft, ...undrafted } = INPUT;
+        const draftless = yield* open(agent, agent.target, opened, undrafted);
 
         const refused = yield* open(agent, agent.target, unknownBase, {
           ...INPUT,
@@ -475,8 +478,14 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
         assert.equal(accepted.result.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.equal(JSON.parse(accepted.openings[0]?.body ?? "{}").base, stacked.base);
         assert.ok(baseless.result.status === ACTION_RESULT_STATUS.REJECTED);
-        assert.match(baseless.result.reason, /needs head, title, body, repository, and base/u);
+        assert.match(
+          baseless.result.reason,
+          /needs head, title, body, repository, base, and draft/u,
+        );
         assert.deepEqual(baseless.openings, []);
+        assert.ok(draftless.result.status === ACTION_RESULT_STATUS.REJECTED);
+        assert.match(draftless.result.reason, /and draft false to open it ready for review/u);
+        assert.deepEqual(draftless.openings, []);
         assert.deepEqual(refused.result, {
           status: ACTION_RESULT_STATUS.REJECTED,
           reason: "Not opened: GitHub said: Validation Failed base invalid",
