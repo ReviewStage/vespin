@@ -91,8 +91,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { workspaceInvitations: ["cancel"] },
   [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { workspaces: ["setPhoto"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { tasks: ["list"], taskSections: ["list"] },
-  [MEMBER_MCP_TOOL.READ_TASK]: { tasks: ["open"] },
-  [MEMBER_MCP_TOOL.FIND_TASK]: { tasks: ["find", "open"] },
+  [MEMBER_MCP_TOOL.READ_TASK]: { tasks: ["open", "find"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
   [MEMBER_MCP_TOOL.READ_AGENT]: {
     agents: ["read"],

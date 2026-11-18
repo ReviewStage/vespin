@@ -120,20 +120,12 @@ The workspace's tasks, newest first, 50 a page, and your sidebar sections.
 
 ### read_task
 
-One task: its key, status, priority, repository, assignee, blockers, and brief.
+One task, by its id or its key, such as ACME-42: its key, status, priority, repository, assignee, blockers, and brief.
 
 | Input | Type | Description |
 | --- | --- | --- |
-| `taskId` | string, required | The task to read, by the id list_tasks answered. (1–36 characters) |
-
-### find_task
-
-Finds a task by its number or key, such as ACME-42, and reads it.
-
-| Input | Type | Description |
-| --- | --- | --- |
-| `workspace` | string | The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone. (1–48 characters) |
-| `task` | string, required | The task's number in the workspace, such as 42, or its key, such as ACME-42; the key's prefix is not checked, since it follows the workspace's name. (1–64 characters) |
+| `workspace` | string | The workspace the task stands in, by the slug list_workspaces answered: required with a key, and with an id the workspace that must hold the task; leave it out with an id to read the task in whichever workspace it stands. (1–48 characters) |
+| `taskId` | string, required | The task to read, by the id list_tasks answered or by its key, such as ACME-42; a key's prefix is not checked, since it follows the workspace's name. (1–64 characters) |
 
 ### create_task
 

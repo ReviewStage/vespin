@@ -4349,7 +4349,7 @@ test("a Codex agent on its Mac's own sign-in lists its GPT models alone with no 
   );
 });
 
-test("read_task reads a teammate's task of the caller's workspace with its description as saved, cuts a long description on a line, reads no description once the caller's workspace turned Task descriptions off, and reads no task of another workspace", async () => {
+test("read_task reads a teammate's task of the caller's workspace by its id or its key with its description as saved, cuts a long description on a line, reads no description once the caller's workspace turned Task descriptions off, and reads no task of another workspace", async () => {
   const { workspaceId, plans: taskIds, agents } = await openWorkspaces();
   const { caller, teammates } = agents;
   await turnDescriptions(workspaceId, caller.userId, true);
@@ -4373,6 +4373,10 @@ test("read_task reads a teammate's task of the caller's workspace with its descr
   assert.deepEqual(read.description, { text: description, saved: true, leftOutChars: 0 });
   const own = await call(AGENT_TOOL.READ_TASK, { taskId: taskIds.invitations });
   assert.equal(isRecord(own.task) && own.task.isYourTask, true, JSON.stringify(own));
+
+  // A key names the same task by its number in the caller's workspace.
+  const byKey = await call(AGENT_TOOL.READ_TASK, { taskId: read.task.key });
+  assert.equal(isRecord(byKey.task) && byKey.task.id, taskIds.billing, JSON.stringify(byKey));
 
   // A description past the bound is cut on a line, and what was left out is counted.
   const line = `${"x".repeat(999)}\n`;
@@ -4408,7 +4412,7 @@ test("read_task reads a teammate's task of the caller's workspace with its descr
   );
   assert.equal(isRecord(read.task) && read.task.brief, null);
 
-  for (const taskId of [taskIds.elsewhere, randomUUID()]) {
+  for (const taskId of [taskIds.elsewhere, randomUUID(), "ACME-99999"]) {
     assert.deepEqual(await call(AGENT_TOOL.READ_TASK, { taskId }), {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason: READ_TASK_REFUSAL.NO_TASK,

@@ -74,6 +74,7 @@ import {
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { automationCreateRequestSchema } from "@repo/features/automation-wire";
+import { cliTaskRefOf } from "@repo/features/cli-task-ref";
 import { dateTimeSchema } from "@repo/features/date-mention";
 import {
   DESCRIPTION_COMMENT_ACTION,
@@ -299,10 +300,8 @@ import { runListPortsShared, runSharePort, SHARE_PORT_TOOL } from "../agents/por
 import { ranRunAction, stoppedRunAction } from "../agents/run-actions.js";
 import {
   CHANGE_TASK_RELATION_INPUT,
-  FIND_TASK_INPUT,
   runChangeTaskRelation,
-  runFindTask,
-} from "../agents/task-find-relation-tools.js";
+} from "../agents/task-relation-tools.js";
 import {
   CREATE_SECTION_TOOL,
   DELETE_SECTION_TOOL,
@@ -693,59 +692,75 @@ const MEMBER_LIST_TASKS_TOOL = memberMcpTool({
   run: ({ workspace, ...asked }) => listAsMember(workspace, (call) => runListTasks(call, asked)),
 });
 
+/** Why a member's read of a task by its key ran nowhere, in words the agent can act on. */
+const MEMBER_READ_TASK_REFUSAL = {
+  KEY_WITHOUT_WORKSPACE:
+    "Not read: a key names a task's number in one workspace, so name that workspace in " +
+    `workspace by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered, or name the task in ` +
+    `taskId by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+} as const;
+
+/** A member's read names the task by its id or its key, and the workspace it stands in, which a key needs. */
+const MemberReadTaskInputSchema = Schema.Struct({
+  workspace: Schema.optionalKey(
+    describeWire(
+      Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+      `The workspace the task stands in, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+        "answered: required with a key, and with an id the workspace that must hold the task; " +
+        "leave it out with an id to read the task in whichever workspace it stands.",
+    ),
+  ),
+  ...READ_TASK_TOOL.inputSchema.fields,
+});
+
+/** How a member's read names its task, in the words both of its listings open with. */
+const MEMBER_READ_TASK_NAMING =
+  "Read one task the member can open, a teammate's included, by its id in whichever of the " +
+  "member's workspaces it stands, or by its key (such as ACME-42) in the workspace named: its " +
+  "id, key, name, where it stands (its status) and how much it matters (its priority), " +
+  "repository, who started it (startedBy, and startedByUserId to link them by), the brief it " +
+  "was started with (null for none), the tasks it is blocked by and the tasks it blocks (each " +
+  "with its id, name, and status), ";
+
 const MEMBER_READ_TASK_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_TASK,
   description:
-    "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
-    "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-    "status) and how much it matters (its priority), repository, who started it (startedBy, and " +
-    "startedByUserId to link them by), " +
-    "the brief it was started with (null for none), the tasks it is blocked by and the tasks it " +
-    "blocks (each with its id, name, and status), its followers (each with their name and id, " +
+    MEMBER_READ_TASK_NAMING +
+    "its followers (each with their name and id, " +
     "whether they are its assignee, and whether its agents may use their machines; " +
     "absent where the workspace keeps none), and its description as last saved, cut on a " +
     `line at ${DESCRIPTION_TEXT_READ_CHARS} characters with how many were left out. ` +
     `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
-  input: READ_TASK_TOOL.inputSchema,
+  input: MemberReadTaskInputSchema,
   descriptionsOff: {
     description:
-      "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
-      "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-      "status) and how much it matters (its priority), repository, who started it (startedBy, " +
-      "and startedByUserId to link them by), " +
-      "the brief it was started with (null for none), the tasks it is blocked by and the " +
-      "tasks it blocks (each with its id, name, and status), and its followers (each with their " +
+      MEMBER_READ_TASK_NAMING +
+      "and its followers (each with their " +
       "name and id, whether they are its assignee, and whether its agents may use " +
       "their machines; absent where the workspace keeps none). " +
       `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
-    input: READ_TASK_TOOL.inputSchema,
+    input: MemberReadTaskInputSchema,
   },
   annotations: READ_ONLY,
-  run: (asked) =>
-    readAsMember(
-      (userId) => readTaskWorkspace(userId, asked.taskId),
-      READ_TASK_REFUSAL.NO_TASK,
-      (call) => runReadTask(call, asked),
-    ),
-});
+  run: ({ workspace, taskId }) =>
+    Effect.gen(function* () {
+      const ref = cliTaskRefOf(taskId);
 
-/** A find names the workspace it looks in, and the task by its number or its key. */
-const FindTaskInputSchema = Schema.Struct({
-  workspace: WORKSPACE_INPUT,
-  ...FIND_TASK_INPUT.fields,
-});
+      if (ref === undefined) return agentToolRejected(READ_TASK_REFUSAL.UNREADABLE);
 
-const MEMBER_FIND_TASK_TOOL = memberMcpTool({
-  name: MEMBER_MCP_TOOL.FIND_TASK,
-  description:
-    "Find a task of a workspace the member belongs to by its number there, such as 42, or its " +
-    "key, such as ACME-42, as a link or a person names it, and read it as " +
-    `${MEMBER_MCP_TOOL.READ_TASK} reads it, its id among it; the key's prefix is not checked, ` +
-    `since it follows the workspace's name. ${WORKSPACE_WORDS} Answers \`rejected\` and why ` +
-    "where no task the member can open has that number.",
-  input: FindTaskInputSchema,
-  annotations: READ_ONLY,
-  run: ({ workspace, ...asked }) => listAsMember(workspace, (call) => runFindTask(call, asked)),
+      // A workspace named holds the read, which refuses an id of a task standing in another.
+      if (workspace !== undefined) {
+        return yield* listAsMember(workspace, (call) => runReadTask(call, { taskId }));
+      }
+
+      if (!("id" in ref)) return agentToolRejected(MEMBER_READ_TASK_REFUSAL.KEY_WITHOUT_WORKSPACE);
+
+      return yield* readAsMember(
+        (userId) => readTaskWorkspace(userId, ref.id),
+        READ_TASK_REFUSAL.NO_TASK,
+        (call) => runReadTask(call, { taskId }),
+      );
+    }),
 });
 
 /** A list of agents narrows as the agents' own does, in the workspace named, bar to a task of the caller's own, since the member works on none. */
@@ -5842,7 +5857,6 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   SET_WORKSPACE_PHOTO_TOOL,
   MEMBER_LIST_TASKS_TOOL,
   MEMBER_READ_TASK_TOOL,
-  MEMBER_FIND_TASK_TOOL,
   MEMBER_LIST_AGENTS_TOOL,
   MEMBER_READ_AGENT_TOOL,
   READ_AGENT_CHANGES_TOOL,
