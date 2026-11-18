@@ -166,7 +166,7 @@ const IOS = {
     "iOS's host colors no code (compose-mobile.ts answers plainCodeLines), so a fenced block draws plain in mono",
   ),
   DESCRIPTION_PICTURES: notYet(
-    "iOS edits a description's words; adding a picture to it from Photos is the desktop's and the web's for now",
+    "iOS edits a description's words, but its field has no caret, so a picture from Photos could only be appended at the end; adding one stays the desktop's and the web's",
   ),
   PAGE_SOURCE: byDesign(
     "iOS draws a page in its sealed view; the page tab's source view is the desktop's and the web's",
