@@ -28,6 +28,10 @@ export const SETTINGS_ROUTE = {
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
   MCP: "/settings/mcp",
+  /** A member of the workspace the app works in, by the `userId` it is pushed with, as a row of Workspace's Members opens it. */
+  MEMBER: "/settings/member",
+  /** A pending invitation of the workspace the app works in, by the `invitation` id it is pushed with, as a row of Workspace's Invitations opens it. */
+  INVITATION: "/settings/invitation",
   /** Notifications: how this phone's pushes fare, when it takes them, and iOS's own notification settings. */
   NOTIFICATIONS: "/settings/notifications",
   MEMORY: "/settings/memory",
