@@ -33,7 +33,11 @@
 // JavaScript's next state confirms. The Inbox widget, which the same
 // extension draws, is asked to draw again (`reloadInboxWidget`) once the
 // app's JavaScript has written its snapshot into the App Group
-// (`src/inbox-widget/`), since only WidgetKit's Swift can ask.
+// (`src/inbox-widget/`), since only WidgetKit's Swift can ask. It also
+// hands JavaScript iOS's background time (`beginBackgroundTask`,
+// `endBackgroundTask`), which the account's renewal holds from its refresh
+// grant through the write that keeps it, so a move to the background
+// between the two can't lose the rotated tokens.
 
 import ActivityKit
 import ExpoModulesCore
@@ -209,6 +213,21 @@ public final class LiveActivityModule: Module {
         return
       }
       defaults.set(data, forKey: keptPhoneKey)
+    }
+
+    // Background time asked for by name, answered as its identifier for `endBackgroundTask`. Note that iOS's expiry ends the task itself, as Apple's own pattern does, so a hold is never left open; JavaScript's end after an expiry only logs that the task is gone. Both calls are safe off the main thread.
+    Function("beginBackgroundTask") { (name: String) -> Int in
+      let application = UIApplication.shared
+      var identifier = UIBackgroundTaskIdentifier.invalid
+      identifier = application.beginBackgroundTask(withName: name) {
+        application.endBackgroundTask(identifier)
+      }
+      return identifier.rawValue
+    }
+
+    Function("endBackgroundTask") { (identifier: Int) -> Void in
+      guard identifier != UIBackgroundTaskIdentifier.invalid.rawValue else { return }
+      UIApplication.shared.endBackgroundTask(UIBackgroundTaskIdentifier(rawValue: identifier))
     }
 
     // The Inbox widget's kind, as `InboxWidgetSnapshot.kind` names it in the widget extension.
