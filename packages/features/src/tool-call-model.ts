@@ -1695,6 +1695,12 @@ const AGENT_TOOL_VIEWS = {
     };
   },
   [AGENT_TOOL.SEND_SLACK_MESSAGE]: ({ input, output }) => slackMessageView(input, output),
+  [AGENT_TOOL.LIST_SLACK_CHANNELS]: ({ input, output }) =>
+    namedCall(CALL_KIND.SLACK_CHANNELS, input, output, undefined),
+  [AGENT_TOOL.READ_SLACK]: ({ input, output }) =>
+    namedCall(CALL_KIND.SLACK_READ, input, output, undefined),
+  [AGENT_TOOL.REACT_SLACK]: ({ input, output }) =>
+    namedCall(CALL_KIND.SLACK_REACT, input, output, "emoji"),
   [AGENT_TOOL.END_TURN]: ({ input, output }) =>
     namedCall(CALL_KIND.END_TURN, input, output, undefined),
 } as const satisfies Record<AgentTool, ToolReader>;

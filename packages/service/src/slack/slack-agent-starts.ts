@@ -34,9 +34,9 @@
  * conversation, and the thread becomes the agent's current one once the
  * agent took the message. Where its session has ended for good (`AGENT_RETIRED`), a new
  * agent continues it as Continue does, handed its work, a summary of its
- * transcript, and the message, and the thread moves to it, with one line in
- * the thread linking it, the new agent on the ended one's own task, as
- * Continue puts it; any other
+ * transcript, and the message, and the thread moves to it, the bot saying
+ * nothing of it, the new agent on the ended one's own task, as Continue
+ * puts it; any other
  * makes a task and starts an agent as the writer on it, on the one path a
  * Start takes (`coder-host/start.ts`), both keyed by Slack's event id. The
  * task starts untitled, for its agent's title to name it, with a blank
@@ -302,15 +302,14 @@ const SLACK_REPLY = {
  */
 const SLACK_REPLY_GUIDE = [
   "That thread sees only what you send there with `send_slack_message`; your final message is not posted.",
-  "Reply as a teammate would: a few short messages of a sentence or two each, one `send_slack_message` call per message, in the order they should read.",
-  "Speak only when you add something the thread doesn't already have. Silence is fine, and a wrong or needless message costs more than a skipped one. Send no \"on it\" or progress messages, and don't nudge a thread that has gone quiet. Where people in the thread are talking to each other, stay out unless a message is aimed at you.",
+  "Reply as `send_slack_message`'s description says: only where you add something, in a few short messages, one call each.",
   "Where the work opens a pull request, close with one message that holds a bold title, the repository, the root cause, and the pull request's link, and names the owner of the changed code from the repository's CODEOWNERS for review: as `<@USER_ID>` where the thread shows their Slack user id, and otherwise by name in plain words.",
   "Where the change is something a person can see, record it or take a screenshot and show it with `show_image`, which the thread gets after your closing message, rather than describing how you got there.",
 ].join(" ");
 
 /** What each later message in the thread reminds the agent of, so the rule rides with the message it bears on rather than piling up. */
 const SLACK_REPLY_REMINDER =
-  "That thread sees only what you send there with `send_slack_message`: a few short messages of a sentence or two each, one call per message; your final message is not posted. Answer only if you add something the thread doesn't already have; silence is fine, and send no progress messages.";
+  "That thread sees only what you send there with `send_slack_message`, as its description says; your final message is not posted.";
 
 /** The event callback as far as it is read: the team, Slack's id for the event, the bot's own user, and the message. */
 const EventCallbackSchema = Schema.Struct({
@@ -750,21 +749,6 @@ const agentLink = (userId: string, organizationId: string, agentId: string) =>
     linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, step),
   );
 
-/** The words the bot links a continue with, said once in the thread: the earlier agent had stopped, and where its work goes on. */
-function continuedReply(link: string): SlackMessageContent {
-  const lead = "The earlier agent had stopped, so I continued its work in";
-
-  return {
-    text: `${lead} a new agent.`,
-    blocks: [
-      {
-        type: "section",
-        text: { type: "mrkdwn", text: `${slackEscaped(lead)} <${link}|a new agent>.` },
-      },
-    ],
-  };
-}
-
 /** The message's 👀 taken off where its thread still marks it as worked on; one marked since stands. */
 const clearedWorking = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
@@ -780,8 +764,8 @@ const clearedWorking = Effect.fnUntraced(function* (
  * steps that do not fit summarized, with the member's message as its note
  * and the files it shared as the note's files.
  * The thread moves to it, the message already marked 👀 stays marked as
- * worked on, and one line in the thread links it; a refusal is said
- * instead, and the message's 👀 taken off.
+ * worked on, and the bot says nothing more, for the new agent speaks for
+ * itself; a refusal is said instead, and the message's 👀 taken off.
  */
 const continueFromSlack = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
@@ -848,8 +832,6 @@ const continueFromSlack = Effect.fnUntraced(function* (
     userId,
     workingTs: addressed.ts,
   });
-  const link = yield* agentLink(userId, source.organizationId, agentId);
-  yield* bot.reply(addressed.channel, thread, continuedReply(link));
 });
 
 /**

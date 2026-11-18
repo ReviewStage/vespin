@@ -153,6 +153,7 @@ import {
   modelCatalogOf,
   type OfferedModel,
 } from "../../providers/model-catalog.js";
+import { REACT_SLACK_TOOL, READ_SLACK_TOOL } from "../../slack/slack-agent-tools.js";
 import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
 import { SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
@@ -1635,6 +1636,11 @@ test("send_slack_message shows the model the recorded input", async () => {
     "send-slack-message-input",
     SEND_SLACK_MESSAGE_TOOL.inputSchema,
   );
+});
+
+test("read_slack and react_slack show the model the recorded input", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "read-slack-input", READ_SLACK_TOOL.inputSchema);
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "react-slack-input", REACT_SLACK_TOOL.inputSchema);
 });
 
 test("list_memories and forget_memory show the model the recorded input", async () => {

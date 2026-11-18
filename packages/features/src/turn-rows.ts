@@ -124,6 +124,12 @@ export const CALL_KIND = {
   SLEEP: "sleep",
   /** One message a coding agent sent in its Slack thread (`send_slack_message`), its row saying the words. */
   SLACK_MESSAGE: "slack-message",
+  /** The Slack channels the bot is in, which a coding agent listed (`list_slack_channels`). */
+  SLACK_CHANNELS: "slack-channels",
+  /** A Slack channel's or thread's messages a coding agent read (`read_slack`). */
+  SLACK_READ: "slack-read",
+  /** A reaction a coding agent added to a Slack message or took off it (`react_slack`), its row naming the emoji. */
+  SLACK_REACT: "slack-react",
   /** A wakeup a coding agent booked for later (`schedule_wakeup`), its row naming how long until it fires. */
   SCHEDULE_WAKEUP: "schedule-wakeup",
   /** The wakeup a coding agent booked canceled (`schedule_wakeup` with `stop`). */
@@ -190,6 +196,9 @@ export const CALL_WORDS = {
   [CALL_KIND.READ_AGENT]: { verb: "Read the agent", code: false },
   [CALL_KIND.MESSAGE_AGENT]: { verb: "Messaged the agent", code: false },
   [CALL_KIND.SLACK_MESSAGE]: { verb: "Sent on Slack:", code: false },
+  [CALL_KIND.SLACK_CHANNELS]: { verb: "Listed the Slack channels", code: false },
+  [CALL_KIND.SLACK_READ]: { verb: "Read Slack", code: false },
+  [CALL_KIND.SLACK_REACT]: { verb: "Reacted on Slack:", code: false },
   [CALL_KIND.START_AGENT]: { verb: "Started an agent", code: false },
   [CALL_KIND.ADD_SUGGESTION]: { verb: "Suggested:", code: false },
   [CALL_KIND.ARCHIVE_AGENT]: { verb: "Archived the agent", code: false },

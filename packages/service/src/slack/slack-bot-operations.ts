@@ -93,8 +93,9 @@ const listedChannels = Effect.fn("web/slackBotChannels")(function* (
   if (Option.isNone(listed)) return undefined;
   const named = new Map(channels.map((channel) => [channel.channelId, channel.repository]));
 
-  return listed.value.map((channel): SlackBotChannel => {
-    const repository = named.get(channel.id);
+  return listed.value.map(({ id, name, private: isPrivate, member }): SlackBotChannel => {
+    const channel = { id, name, private: isPrivate, member };
+    const repository = named.get(id);
 
     return repository === undefined ? channel : { ...channel, repository };
   });
