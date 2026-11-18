@@ -16,6 +16,7 @@ import {
 import {
   claimAutomationRun,
   createAutomation,
+  deleteAutomation,
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
@@ -5310,6 +5311,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
     scope: "personal",
     archiveSuccessful: false,
     slackDelivery: false,
+    runsOn: { machine: AGENT_MACHINE.VERCEL },
   };
 
   const automationOf = (answer: WireRecord) =>
@@ -5331,6 +5333,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
       automation.enabled,
       automation.promptChars,
       automation.repositories,
+      automation.runsOn,
       automation.runsLandOn,
       automation.scope,
       automation.madeByYourDeveloper,
@@ -5341,6 +5344,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
       true,
       prompt.trim().length,
       [RELAY_FULL_NAME],
+      { machine: AGENT_MACHINE.VERCEL },
       "new-agent",
       "personal",
       true,
@@ -5418,9 +5422,45 @@ test("list_automations, create_automation, update_automation, and delete_automat
       "unnamed",
     ),
     rejected(
-      `${AUTOMATION_TOOL_REFUSAL.MISSING_CREATE} repositories, effort, scope, archiveSuccessful, slackDelivery.`,
+      `${AUTOMATION_TOOL_REFUSAL.MISSING_CREATE} repositories, effort, scope, archiveSuccessful, slackDelivery, runsOn.`,
     ),
   );
+  // Its runs start as the starter, so a device is theirs alone: a teammate's is refused with theirs listed, and theirs is kept by its id.
+  const [studio, garage] = [randomUUID(), randomUUID()];
+
+  await database.run(
+    Effect.gen(function* () {
+      yield* registerDevice(agents.caller.userId, { id: studio, name: "Studio", ...DEVICE_LAYOUT });
+      yield* registerDevice(agents.teammates.userId, {
+        id: garage,
+        name: "Garage",
+        ...DEVICE_LAYOUT,
+      });
+    }),
+  );
+
+  assert.deepEqual(
+    await make({ runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: garage } }, "teammate-device"),
+    rejected(
+      "Not made: no device of its creator's has that deviceId, and an automation's runs start " +
+        `on its creator's own machines. Their devices: "Studio" (deviceId ${studio}). Name one by ` +
+        `its name or its deviceId, or run it in the cloud with runsOn {"machine":"vercel"}.`,
+    ),
+  );
+
+  const onStudio = await make(
+    { name: "On the studio", runsOn: { machine: AGENT_MACHINE.DEVICE, device: "studio" } },
+    "own-device",
+  );
+
+  assert.deepEqual(automationOf(onStudio).runsOn, {
+    machine: AGENT_MACHINE.DEVICE,
+    deviceId: studio,
+  });
+  // Note that it is deleted in the store, because the tool's delete is counted below as the one it makes.
+  const onStudioId = automationOf(onStudio).id;
+  assert.ok(isWireString(onStudioId));
+  assert.ok(await database.run(deleteAutomation(agents.caller.userId, onStudioId)));
   const unoffered = await make({ model: SOL, effort: "high" }, "unoffered");
   assert.equal(unoffered.status, ACTION_RESULT_STATUS.REJECTED);
   assert.ok(
@@ -5488,6 +5528,26 @@ test("list_automations, create_automation, update_automation, and delete_automat
     ],
   );
   assert.deepEqual(await update({}), rejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_UPDATE));
+
+  // A change moves its runs to another machine of the starter's, never a teammate's, and what it leaves out keeps the machine.
+  assert.equal(
+    (await update({ runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: garage } }, call, "garage"))
+      .reason,
+    "Not changed: no device of its creator's has that deviceId, and an automation's runs start " +
+      `on its creator's own machines. Their devices: "Studio" (deviceId ${studio}). Name one by ` +
+      `its name or its deviceId, or run it in the cloud with runsOn {"machine":"vercel"}.`,
+  );
+  assert.deepEqual(
+    automationOf(
+      await update({ runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: studio } }, call, "studio"),
+    ).runsOn,
+    { machine: AGENT_MACHINE.DEVICE, deviceId: studio },
+  );
+  assert.deepEqual(
+    automationOf(await update({ runsOn: { machine: AGENT_MACHINE.VERCEL } }, call, "back-to-cloud"))
+      .runsOn,
+    { machine: AGENT_MACHINE.VERCEL },
+  );
 
   // A teammate reads a personal automation of the starter's not at all, then a workspace's, which it may turn on but not change or delete.
   assert.deepEqual((await teammate(AGENT_TOOL.LIST_AUTOMATIONS, {})).automations, []);
@@ -5596,6 +5656,7 @@ test("create_automation and update_automation take a Sentry trigger once the wor
     scope: "personal",
     archiveSuccessful: false,
     slackDelivery: false,
+    runsOn: { machine: AGENT_MACHINE.VERCEL },
   };
 
   const automationOf = (answer: WireRecord) =>
@@ -5625,6 +5686,7 @@ test("create_automation and update_automation take a Sentry trigger once the wor
         scope: "personal",
         archiveSuccessful: false,
         slackDelivery: false,
+        runsOn: { machine: AGENT_MACHINE.VERCEL },
       },
       "weekly",
     ),

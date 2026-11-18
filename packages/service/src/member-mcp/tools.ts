@@ -65,6 +65,7 @@ import { AGENT_QUEUE_BOUNDS } from "@repo/features/agent-queue-wire";
 import { RETIRED_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BOUNDS,
+  AGENT_MACHINE,
   AGENT_STATUS,
   agentRewindRequestSchema,
   contextWindowSchema,
@@ -263,6 +264,7 @@ import {
   START_AGENT_REFUSAL,
   START_AGENT_TOOL,
   START_LEAVES_TASK_WORDS,
+  START_RUNS_ON,
   startAgentToolOf,
   TASKS_LIST_LIMIT,
   TRANSCRIPT_PAGE_WORDS,
@@ -4724,6 +4726,16 @@ const CreateAutomationInputSchema = Schema.Struct({
   ...MEMBER_AUTOMATION_FIELDS,
   repositories: MEMBER_AUTOMATION_FIELDS.repositories.schema,
   slackDelivery: MEMBER_AUTOMATION_FIELDS.slackDelivery.schema,
+  runsOn: describeWire(
+    START_RUNS_ON,
+    `Where each run's agent starts: ${JSON.stringify({ machine: AGENT_MACHINE.VERCEL })} for ` +
+      `the cloud, or ${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for ` +
+      "one of the member's own devices (a Mac or a host) by its name, or " +
+      `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id; ` +
+      `${MEMBER_MCP_TOOL.LIST_MACHINES} lists each place with the runsOn to pass. A run that ` +
+      "fires while its device is offline fails. It places each agent a run starts: a run handed " +
+      "to the one agent named runs where that agent already runs.",
+  ),
 });
 
 const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
@@ -4735,9 +4747,9 @@ const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
     "one watching, or hands the run to the one agent named. It is on as it is made, runs as the " +
     "member, and the desktop shows it as one they made. It works in the repositories named, " +
     "or in none where you name []. Name its repositories, model, effort, scope, " +
-    "archiveSuccessful, and slackDelivery: none is taken " +
-    `from the member's defaults, and ${MEMBER_MCP_TOOL.LIST_MODELS} answers the models and ` +
-    `efforts. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
+    "archiveSuccessful, slackDelivery, and the machine its runs start on (runsOn): none is " +
+    `taken from the member's defaults; ${MEMBER_MCP_TOOL.LIST_MODELS} answers the models and ` +
+    `efforts, and ${MEMBER_MCP_TOOL.LIST_MACHINES} the machines. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
     `integration installed on the workspace first. ${WEBHOOK_WORDS} ${WORKSPACE_WORDS} Make ` +
     `one when the member asks for it, and read ${MEMBER_MCP_TOOL.LIST_AUTOMATIONS} first so ` +
     "you make none they already have. Each call makes an automation of its own, so call it " +

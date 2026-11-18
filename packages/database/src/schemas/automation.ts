@@ -1,3 +1,4 @@
+import type { AgentMachineKind } from "@repo/features/agent-wire";
 import {
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
@@ -86,6 +87,15 @@ export const automation = pgTable(
      * a row may hold a preset a reader's release does not know.
      */
     preset: text("preset"),
+    /**
+     * The machine its runs start on, the cloud or one of its creator's
+     * devices by `runs_on_device_id`, as `create_automation` names it; null
+     * where none was named, so a run is placed as a Start naming none is.
+     * Note that the device is kept by id alone, with no reference to its
+     * row, so a device since removed is answered by the start's own refusal.
+     */
+    runsOnMachine: text("runs_on_machine").$type<AgentMachineKind>(),
+    runsOnDeviceId: uuid("runs_on_device_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

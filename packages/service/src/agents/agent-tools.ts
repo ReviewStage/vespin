@@ -726,7 +726,7 @@ export const START_BRANCH = startBranchSchema;
  * its name, which the call matches to its id (`runsOnOfStart`) before the
  * start is asked.
  */
-const START_RUNS_ON = Schema.Union([
+export const START_RUNS_ON = Schema.Union([
   ...agentRunsOnRequestSchema.members,
   Schema.Struct({
     machine: Schema.Literal(AGENT_MACHINE.DEVICE),
