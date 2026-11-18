@@ -2245,7 +2245,7 @@ test("start_agent continues a teammate's agent that ended, on that agent's own t
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), caller, agentSessions.services);
 
-  const from = { agentId: teammates.id };
+  const from = { agentId: teammates.id, mode: "continue" };
   const taskId = teammates.taskId;
   const started = await call(AGENT_TOOL.START_AGENT, { taskId, from, note: NOTE }, "call-continue");
   const stored = await storedStart(caller.userId, started);
@@ -2303,7 +2303,7 @@ test("start_agent forks an agent at one of its messages that read_agent names, w
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: teammates.taskId, from: { agentId: teammates.id, messageId } },
+    { taskId: teammates.taskId, from: { agentId: teammates.id, mode: "fork", messageId } },
     "call-fork",
   );
 
@@ -2335,26 +2335,39 @@ test("start_agent from another agent refuses, in words the model acts on and sta
   await saidTurnOn(caller, "Done with the expiry.");
 
   for (const other of [agents.otherWorkspaces, agents.strangers]) {
-    await refused({ taskId: other.taskId, from: { agentId: other.id } }, R.NO_SOURCE);
+    await refused(
+      { taskId: other.taskId, from: { agentId: other.id, mode: "continue" } },
+      R.NO_SOURCE,
+    );
   }
 
-  const theirs = { taskId: teammates.taskId, from: { agentId: teammates.id } };
-  await refused({ taskId: tasks.billing, from: { agentId: randomUUID() } }, R.NO_SOURCE);
-  const elsewhere = { agentId: teammates.id, messageId: randomUUID() };
+  const theirs = { taskId: teammates.taskId, from: { agentId: teammates.id, mode: "continue" } };
+  await refused(
+    { taskId: tasks.billing, from: { agentId: randomUUID(), mode: "continue" } },
+    R.NO_SOURCE,
+  );
+  const elsewhere = { agentId: teammates.id, mode: "fork", messageId: randomUUID() };
   await refused({ taskId: teammates.taskId, from: elsewhere }, R.NO_MESSAGE);
+  // A from must say how it takes the agent over, and a fork where.
+  await refused({ taskId: teammates.taskId, from: { agentId: teammates.id } }, R.FROM_UNREADABLE);
+  const forkNowhere = { agentId: teammates.id, mode: "fork" };
+  await refused({ taskId: teammates.taskId, from: forkNowhere }, R.FROM_UNREADABLE);
   await refused({ ...theirs, prompt: "Do it again." }, R.FROM_WITH_PROMPT);
   await refused({ ...theirs, branch: STACKED_BRANCH }, R.FROM_WITH_PROMPT);
-  await refused({ taskId: caller.taskId, from: { agentId: caller.id } }, R.SELF_CONTINUE);
+  await refused(
+    { taskId: caller.taskId, from: { agentId: caller.id, mode: "continue" } },
+    R.SELF_CONTINUE,
+  );
   // A teammate's agent with no turn yet is still starting, and one whose turn runs is working.
   await refused(theirs, R.SOURCE_RUNNING);
   await turnOn(teammates, false);
   await refused(theirs, R.SOURCE_RUNNING);
   await saidTurnOn(teammates, "Stopped for the day.");
   // A start names its task, from another agent as on its own, rather than landing on the caller's.
-  await refused({ from: { agentId: teammates.id } }, R.NO_TASK);
+  await refused({ from: { agentId: teammates.id, mode: "continue" } }, R.NO_TASK);
   await refused({ prompt: "Do it again." }, R.NO_TASK);
   await refused(
-    { from: { agentId: teammates.id }, taskId: tasks.invitations },
+    { from: { agentId: teammates.id, mode: "continue" }, taskId: tasks.invitations },
     R.SOURCE_OTHER_TASK,
   );
   assert.equal(agentSessions.sent.length, 0, "no refusal opens a session");
@@ -2403,7 +2416,7 @@ test("start_agent refuses a coder continuing the agent that started it, directly
   assert.deepEqual(
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: starter.taskId, from: { agentId: starter.id } },
+      { taskId: starter.taskId, from: { agentId: starter.id, mode: "continue" } },
       "call-up",
     ),
     {
@@ -2414,7 +2427,7 @@ test("start_agent refuses a coder continuing the agent that started it, directly
   assert.deepEqual(
     await deepCall(
       AGENT_TOOL.START_AGENT,
-      { taskId: starter.taskId, from: { agentId: starter.id } },
+      { taskId: starter.taskId, from: { agentId: starter.id, mode: "continue" } },
       "call-up-deep",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.STARTER_CONTINUE },
@@ -2423,7 +2436,7 @@ test("start_agent refuses a coder continuing the agent that started it, directly
 
   const forked = await call(AGENT_TOOL.START_AGENT, {
     taskId: starter.taskId,
-    from: { agentId: starter.id, messageId },
+    from: { agentId: starter.id, mode: "fork", messageId },
   });
 
   assert.equal(forked.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(forked));
@@ -2458,7 +2471,7 @@ test("start_agent continuing an agent started on a branch clones the new agent a
 
   const onHeld = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: held.taskId, from: { agentId: held.id } },
+    { taskId: held.taskId, from: { agentId: held.id, mode: "continue" } },
     "call-held",
   );
 
@@ -2468,7 +2481,7 @@ test("start_agent continuing an agent started on a branch clones the new agent a
 
   const onGone = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: gone.taskId, from: { agentId: gone.id } },
+    { taskId: gone.taskId, from: { agentId: gone.id, mode: "continue" } },
     "call-gone",
   );
 
@@ -2482,7 +2495,7 @@ test("start_agent refuses to continue an agent whose session died while it still
   await turnOn(teammates, false);
   const agentSessions = await fakeCoderSessions(workspaceId, [], undefined, "no_active_turn");
   const call = await peerCaller(hostOf(), caller, agentSessions.services);
-  const from = { agentId: teammates.id };
+  const from = { agentId: teammates.id, mode: "continue" };
   const taskId = teammates.taskId;
 
   assert.deepEqual(await call(AGENT_TOOL.START_AGENT, { taskId, from }, "call-1"), {
@@ -2490,7 +2503,7 @@ test("start_agent refuses to continue an agent whose session died while it still
     reason: START_AGENT_REFUSAL.SOURCE_RUNNING,
   });
   // The harness runs no turn on the dead session, so the Stop stops nothing there, yet the turn reads canceled.
-  const stopped = await call(AGENT_TOOL.STOP_AGENT, from, "call-2");
+  const stopped = await call(AGENT_TOOL.STOP_AGENT, { agentId: teammates.id }, "call-2");
   assert.equal(stopped.stopped, false, JSON.stringify(stopped));
   assert.ok(isRecord(stopped.agent));
   assert.equal(stopped.agent.status, AGENT_STATUS.CANCELED);
@@ -2553,7 +2566,7 @@ test("start_agent from a source whose transcript does not fit the new agent's wi
     caller.userId,
     await call(
       AGENT_TOOL.START_AGENT,
-      { taskId: teammates.taskId, from: { agentId: teammates.id } },
+      { taskId: teammates.taskId, from: { agentId: teammates.id, mode: "continue" } },
       "call-long",
     ),
   );

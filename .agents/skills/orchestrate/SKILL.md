@@ -35,7 +35,7 @@ below as that one. You and the workers talk by `message_agent`.
 | Check on a silent worker | `read_agent` with its agent id |
 | Read a worker's PR | `read_agent_changes` with its agent id |
 | Stop a worker | `stop_agent` with its agent id |
-| Continue a dead or stalled worker | `start_agent` with `from: { agentId }`, `taskId` set to that worker's subtask, and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
+| Continue a dead or stalled worker | `start_agent` with `from: { agentId, mode: "continue" }` (which stops that worker), `taskId` set to that worker's subtask, and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
 | Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless its worker already marked it done, or `canceled` for a PR cut from the plan, once its worker is stopped and its PR closed; then archive its worker |
 | Archive a worker | `archive_agent` with a short `reason`, which stops a turn still under way first |
 | List the rollout's agents | `list_agents` with a subtask's `taskId` for its workers, and with `thisTask` (or the rollout task's `taskId`) for the helpers |

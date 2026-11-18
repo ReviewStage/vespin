@@ -1785,8 +1785,9 @@ function memberStartAgentWords(handed: string): string {
     "the branch named, which must already be on GitHub. It runs on the model and effort " +
     "named, as the member is offered them, or on the member's default with neither; " +
     `${MEMBER_MCP_TOOL.LIST_MODELS} lists them. With from, it starts from another agent ` +
-    "instead: continue an agent that failed, ended, or ran out of context, which is handed " +
-    "over and stopped, or fork one at a messageId to try another direction while it goes on. " +
+    "instead: continue an agent that failed, ended, or ran out of context with mode continue, " +
+    "which hands it over and stops it, or fork one with mode fork at a messageId to try " +
+    "another direction while it goes on. " +
     "Each call starts an agent of its own, so call it once for each. Answers `accepted` with " +
     "the agent's id, title, model, the model's name to say it by, effort, and status once " +
     "its session is open, which may take a minute or two, or `rejected` and why nothing was " +
