@@ -55,9 +55,9 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  *   again after one that did not finish, Retry where its tools could not be
  *   read. Add account stands in the section's head where the provider
  *   offers another, and an account it adds waits as a row of its own.
- * - Last, the Disconnect of each account, a danger outline that asks
- *   first, named for the provider where it holds one account and for the
- *   account where it holds several.
+ * - Last, where the provider holds one account, its Disconnect, a danger
+ *   outline that asks first; where it holds several, each account's ⋯
+ *   keeps its own Disconnect instead, so the page stays one row an account.
  *
  * A provider the account holds nothing at stands as the list's own row
  * for it, with Connect, so a link landing here before the sign-in does
@@ -215,15 +215,17 @@ export function IntegrationProviderPage({
             // Note that Add account's refusal is said under the first account, the row nearest the press, and a search result lands there.
             refusal={at === 0 ? adding.rejection : undefined}
             anchor={at === 0 ? provider : undefined}
+            leaves={held.length > 1}
             onRetryTools={() => retry(row.connection)}
           />
         ))}
       </SettingsSection>
-      <SettingsSection>
-        {held.map((row) => (
-          <IntegrationDisconnectRow key={row.connection} row={row} />
-        ))}
-      </SettingsSection>
+      {/* Note that one account's Disconnect stands last as a row of its own, while several accounts each keep theirs in their ⋯, so two accounts are never four rows. */}
+      {held.length === 1 && held[0] !== undefined ? (
+        <SettingsSection>
+          <IntegrationDisconnectRow row={held[0]} />
+        </SettingsSection>
+      ) : null}
     </Stack>
   );
 }

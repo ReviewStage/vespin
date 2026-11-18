@@ -738,9 +738,10 @@ export function IntegrationLinkRow({
  * problem its server answered, a sign-in waited on, or one that did not
  * finish. Its one control is what it needs next (`rowControl`), and its ⋯
  * keeps what today's row kept short of Add another account, which heads
- * the page's accounts, and Disconnect, which stands last on the page:
- * Rename where the provider holds several, and Reconnect while the
- * connection stands quiet.
+ * the page's accounts: Rename where the provider holds several, Reconnect
+ * while the connection stands quiet, and, where the provider holds several
+ * (`leaves`), Disconnect last in red, asked first; a provider's one account
+ * keeps its Disconnect in a row of its own at the page's foot.
  */
 export function IntegrationAccountRow({
   row,
@@ -748,12 +749,15 @@ export function IntegrationAccountRow({
   health,
   refusal,
   anchor,
+  leaves = false,
   onRetryTools,
 }: {
   row: ServerRow;
   statuses: IntegrationStatuses;
   /** How the account's server answered when asked for its tools. */
   health: ConnectionHealth;
+  /** Whether its ⋯ keeps its Disconnect, as each of several accounts' does, rather than a row of its own at the page's foot. */
+  leaves?: boolean;
   /** Why a press elsewhere on the page that acted for this account could not go, as Add account's. */
   refusal?: string | undefined;
   /** The id a pressed search result lands on. */
@@ -799,7 +803,15 @@ export function IntegrationAccountRow({
       : [];
 
   const held = heldStatus(status);
-  const actions = held ? [naming, reconnect].filter((group) => group.length > 0) : [];
+  const disconnect = useDisconnect(row, held && leaves);
+
+  const leave =
+    leaves && held
+      ? [{ label: INTEGRATION_ROW_WORDS.DISCONNECT, danger: true, onSelect: disconnect.ask }]
+      : [];
+
+  const actions = held ? [naming, reconnect, leave].filter((group) => group.length > 0) : [];
+
   const words = accountName ?? INTEGRATION_NAME[provider];
 
   return (
@@ -845,15 +857,30 @@ export function IntegrationAccountRow({
           control: rowControl({ row, status, health, signIn }, grant, onRetryTools),
         }}
       />
+      {leaves ? (
+        <ConfirmDialog
+          open
+          confirm={disconnect}
+          question={{
+            ...disconnectQuestion(name, provider, {
+              bySignIn: grantedBySignIn(provider),
+              several,
+            }),
+            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+            replayUnmasked: true,
+            titleReplayMasked: true,
+          }}
+        />
+      ) : null}
     </Stack>
   );
 }
 
 /**
- * The Disconnect of an account its provider's page holds, last on the page
- * in a danger outline: named for the provider where it holds one account,
- * and for the account where it holds several, saying what goes, and asking
- * first in the confirm dialog, as the account's ⋯ once did.
+ * The Disconnect of a provider's one account, last on its page in a danger
+ * outline, named for the provider, saying what goes, and asking first in
+ * the confirm dialog, as the account's ⋯ once did. Where the provider
+ * holds several, each account's ⋯ keeps its own instead.
  */
 export function IntegrationDisconnectRow({ row }: { row: ServerRow }): React.JSX.Element {
   const { provider, name, account } = row;

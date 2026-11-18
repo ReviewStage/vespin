@@ -1152,7 +1152,7 @@ test("Command-F lands in the page's search, and Escape clears it, then lets go o
   assert.deepEqual(reachedWindow, []);
 });
 
-test("two accounts at a provider stand as one row naming both, whose page offers each Rename and Reconnect, a Disconnect of each, and Add account at their head", async () => {
+test("two accounts at a provider stand as one row naming both, whose page offers each Rename, Reconnect, and Disconnect in its ⋯, and Add account at their head", async () => {
   const notion = INTEGRATION_PROVIDER.NOTION;
   standing.set(notion, INTEGRATION_STATUS.CONNECTED);
   addable = [notion];
@@ -1174,9 +1174,16 @@ test("two accounts at a provider stand as one row naming both, whose page offers
   assert.deepEqual(rowButtons(row), []);
 
   for (const label of ["Acme", "Personal"]) {
-    assert.deepEqual(menuOf(rowNamed(page, label)).items, ["Rename", "Reconnect"]);
-    assert.deepEqual(rowButtons(rowNamed(page, `Disconnect Notion · ${label}`)), ["Disconnect"]);
+    assert.deepEqual(menuOf(rowNamed(page, label)).items, ["Rename", "Reconnect", "Disconnect"]);
   }
+
+  // Two accounts are two rows, each keeping its Disconnect in its ⋯ rather than a row of its own.
+  assert.deepEqual(rowNames(page), ["Acme", "Personal"]);
+  await choose(rowNamed(page, "Personal"), "Disconnect");
+  assert.match(
+    document.querySelector('[role="alertdialog"]')?.textContent ?? "",
+    /Agents lose this account\. Your other Notion accounts stay connected\./u,
+  );
 
   await addAccount(page);
   const connects = sent.filter((request) => request.kind === ACT_KIND.INTEGRATIONS_CONNECT);
