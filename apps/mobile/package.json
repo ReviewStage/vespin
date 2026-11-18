@@ -24,6 +24,7 @@
     "@formatjs/intl-pluralrules": "7.0.3",
     "@formatjs/intl-segmenter": "12.3.2",
     "@orpc/client": "catalog:",
+    "@react-native-community/netinfo": "12.0.1",
     "@repo/brand": "workspace:*",
     "@repo/credentials": "workspace:*",
     "@repo/features": "workspace:*",
