@@ -48,7 +48,7 @@ import { GlassDock } from "./glass-bar.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent, PickOption } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
-import { HarnessMark } from "./marks.js";
+import { HarnessMark, RepositoryPicture } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -81,10 +81,19 @@ export type ChipMenu = {
   readonly submenus?: readonly BarMenu[] | undefined;
 };
 
-/** What leads a capsule's words: the panel's glyph for what it picks, or, for a model, the mark of the harness its agent runs in, as the panel's model chip leads with it. */
+/** What leads a capsule's words: the panel's glyph for what it picks; for a model, the mark of the harness its agent runs in, as the panel's model chip leads with it; or, for a repository, its owner's picture, as the panel's repository chip leads with it. */
 type ChipLead =
-  | { readonly symbol?: Glyph | undefined; readonly harness?: undefined }
-  | { readonly harness: ModelProvider; readonly symbol?: undefined };
+  | {
+      readonly symbol?: Glyph | undefined;
+      readonly harness?: undefined;
+      readonly repository?: undefined;
+    }
+  | {
+      readonly harness: ModelProvider;
+      readonly symbol?: undefined;
+      readonly repository?: undefined;
+    }
+  | { readonly repository: string; readonly symbol?: undefined; readonly harness?: undefined };
 
 type MenuChipProps = ChipLead & {
   /** What is picked, as the capsule says it: a repository, a model and its effort, where an agent runs. */
@@ -101,10 +110,19 @@ type MenuChipProps = ChipLead & {
   );
 
 /** The capsule's words, what leads them before them, in the capsule's small type. */
-function ChipLabel({ label, symbol, harness }: ChipLead & { readonly label: string }) {
+function ChipLabel({ label, symbol, harness, repository }: ChipLead & { readonly label: string }) {
   const markSize = useScaledSize(MARK_SIZE.FACE);
   const type = font({ textStyle: TYPE_ROLE.ROW_TITLE });
   const words = <Text modifiers={[type, lineLimit(1)]}>{label}</Text>;
+
+  if (repository !== undefined) {
+    return (
+      <HStack spacing={SPACE.TIGHT + 2}>
+        <RepositoryPicture repository={repository} size={markSize} />
+        {words}
+      </HStack>
+    );
+  }
 
   if (harness !== undefined) {
     return (
@@ -135,7 +153,8 @@ function chipStyle(look: MenuChipLook): readonly ModifierConfig[] {
 /**
  * A choice among many as one of the system's capsules, opening its menu on
  * a press, as Mail's and Notes' compose stand one: it says what is picked,
- * after the panel's glyph for it (or a model's harness mark), with the
+ * after the panel's glyph for it (or a model's harness mark, or a
+ * repository's owner's picture), with the
  * system's chevron after it, and its menu checks the one on in each group,
  * under the group's heading, then its acts and the menus within it. In a
  * composer's row it stands plain on the composer's glass; on the page, as
@@ -234,6 +253,8 @@ function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
 
 /** What leads a capsule's words, as its props name it. */
 function leadOf(props: ChipLead): ChipLead {
+  if (props.repository !== undefined) return { repository: props.repository };
+
   return props.harness === undefined ? { symbol: props.symbol } : { harness: props.harness };
 }
 
