@@ -97,12 +97,11 @@ const FOLD_SECONDS = 0.25;
  * stand rather than as grouped cards; a page of one thing's sections, such
  * as a task's, whose headers scroll away with their rows, as Reminders' and
  * Settings' do, rather than pinning to the bar as a long list's do, its rows
- * still plain on the ground; or a split view's sidebar.
+ * still plain on the ground.
  */
 export const LIST_LOOK = {
   PLAIN: "plain",
   DETAIL: "grouped",
-  SIDEBAR: "sidebar",
 } as const;
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
@@ -190,13 +189,9 @@ function selectedId(selection: readonly (string | number)[]): string | undefined
   return Predicate.isString(first) ? first : undefined;
 }
 
-/**
- * What a list paints under itself: the brand's ground, never the system's
- * grays, but nothing for a sidebar, which stands clear on the system's own
- * floating glass pane, as Mail's and Notes' do on iPadOS 26 and 27.
- */
-function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfig[] {
-  return look === LIST_LOOK.SIDEBAR ? [] : [background(colors.GROUND)];
+/** What a list paints under itself: the brand's ground, never the system's grays. */
+function listGround(colors: BrandColors): readonly ModifierConfig[] {
+  return [background(colors.GROUND)];
 }
 
 /**
@@ -282,8 +277,8 @@ export function RowList({
   const colors = useColors();
   const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
-  // Note that a page's grouped list stands in the reading column too, as a plain one does; only the app sidebar keeps its width.
-  const sides = look === LIST_LOOK.SIDEBAR ? 0 : Math.max(0, (width - READING_WIDTH) / 2);
+  // Note that a page's grouped list stands in the reading column too, as a plain one does.
+  const sides = Math.max(0, (width - READING_WIDTH) / 2);
   // Whether a two-finger drag started Select mode before the list was drawn in it.
   const dragged = useRef(false);
   const chooses = choosing !== undefined;
@@ -339,7 +334,7 @@ export function RowList({
       modifiers={[
         listStyle(look),
         scrollContentBackground("hidden"),
-        ...listGround(colors, look),
+        ...listGround(colors),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [scrollContentMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a page's sections stand as close as the system lets them, since its small headers already part them.

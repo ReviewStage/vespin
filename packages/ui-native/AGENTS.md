@@ -15,10 +15,7 @@ builds a control of its own.
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
-  `WordsRow` for its description), `GroupRow` (a place a regular window's
-  sidebar opens, such as the Inbox with its count, at Mail's mailbox
-  measures: its glyph a step over its 17 pt name, the count muted, and a
-  rounded selection fill set in from the sidebar's edges), `SplitView` (a tab's list
+  `WordsRow` for its description), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
   `ColumnBar`: its inline title, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,

@@ -12,13 +12,10 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  accessibilityHidden,
-  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
   buttonStyle,
   disabled,
-  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -51,14 +48,12 @@ import type { RowQuestion } from "./asks.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { dropLink } from "./interactions.js";
 import {
   actionButton,
   FoldChevron,
   type FoldWords,
   foldActions,
   ROW_ACTION_TONE,
-  ROW_PLACE,
   type RowAction,
   type RowFold,
   RowFrame,
@@ -724,98 +719,6 @@ export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
       <Spacer />
       <Button label={act} look={BUTTON_LOOK.BORDERED} size={BUTTON_SIZE.SMALL} onPress={onPress} />
     </HStack>
-  );
-}
-
-type GroupRowProps = {
-  /** The row's id, which its list's `onSelect` is called with. */
-  readonly id: string;
-  readonly title: string;
-  readonly symbol: Glyph;
-  /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
-  readonly emoji?: string | undefined;
-  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given or it holds none, as Mail shows none on an empty mailbox. */
-  readonly count?: number | undefined;
-  /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
-  readonly testId?: string | undefined;
-  /** Takes a row dragged onto it, on an iPad, and hands on the row's link, as a `ListSection`'s header does. */
-  readonly onDropLink?: ((url: string) => void) | undefined;
-};
-
-/**
- * A place a wide window's sidebar picks, such as the Inbox, Tasks, or a
- * section of tasks, as Mail draws a mailbox: its glyph a step over its name
- * in a column of its own, so every name starts at one edge, its name at the
- * body's size, and how many it holds at the trailing edge in the muted ink,
- * the whole row in a rounded fill while it is picked.
- */
-export function GroupRow({
-  id,
-  title,
-  symbol,
-  emoji,
-  count: held,
-  testId,
-  onDropLink,
-}: GroupRowProps) {
-  const colors = useColors();
-  const count = held === 0 ? undefined : held;
-  const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
-  const rolling = useRollingCount(count ?? 0);
-
-  // Note that the name keeps one line at every text size and is cut short, and the count holds the line's end at its own width, as Mail's mailboxes stand, so a large size never breaks a name mid-word or drops the count under it.
-  const row: ReactElement = (
-    <HStack spacing={SPACE.ROW} alignment="center">
-      <HStack modifiers={[frame({ width: leadWidth })]}>
-        {emoji === undefined ? (
-          <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
-        ) : (
-          <Text modifiers={[font({ textStyle: TYPE_ROLE.SIDEBAR_GLYPH }), accessibilityHidden()]}>
-            {emoji}
-          </Text>
-        )}
-      </HStack>
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
-          foregroundStyle(colors.TEXT),
-          lineLimit(1),
-        ]}
-      >
-        {title}
-      </Text>
-      <Spacer />
-      {count === undefined ? null : (
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
-            monospacedDigit(),
-            foregroundStyle(colors.TEXT_MUTED),
-            lineLimit(1),
-            fixedSize(),
-            ...rolling,
-          ]}
-        >
-          {String(count)}
-        </Text>
-      )}
-    </HStack>
-  );
-
-  const heard = { label: title, value: count === undefined ? [] : [String(count)] };
-
-  const modifiers = [
-    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
-    ...(onDropLink === undefined ? [] : [dropLink(onDropLink)]),
-  ];
-
-  return (
-    <RowFrame
-      id={id}
-      row={modifiers.length === 0 ? row : <HStack modifiers={modifiers}>{row}</HStack>}
-      heard={heard}
-      place={ROW_PLACE.SIDEBAR}
-    />
   );
 }
 
