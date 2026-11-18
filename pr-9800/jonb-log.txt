@@ -1,0 +1,19 @@
+flows at 6aef751201: /Users/deanstratakos/vespin-ipad-agent/out/sonb/m/apps/mobile/maestro/settings-agent-keys.yaml:1 /Users/deanstratakos/vespin-ipad-agent/out/sonb/m/apps/mobile/maestro/settings-workspace-github.yaml:1 /Users/deanstratakos/vespin-ipad-agent/out/sonb/m/apps/mobile/maestro/setup.yaml:1 
+== bundle ONB base 6aef751201
+  built 6aef751201 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-settings-agent-keys: fails 0 shots 4 
+iphone-light-settings-workspace-github: fails 0 shots 1 
+iphone-light-setup: fails 0 shots 3 
+iphone-dark-settings-agent-keys: fails 0 shots 4 
+iphone-dark-settings-workspace-github: fails 0 shots 1 
+iphone-dark-setup: fails 0 shots 3 
+ipad26-light-settings-agent-keys: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+ipad26-light-settings-workspace-github: fails 0 shots 1 
+ipad26-light-setup: fails 0 shots 3 
+ipad26-dark-settings-agent-keys: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+ipad26-dark-settings-workspace-github: fails 0 shots 1 
+ipad26-dark-setup: fails 0 shots 3 
