@@ -25,9 +25,11 @@
  * names none, so a call made again is a second answer, which an ask no
  * longer open refuses, or a second message. A refusal is told in words the
  * outside agent can act on: an answer that does not fit its ask in the
- * check's own words. A call that would hand a line to an agent whose task
- * stands done or canceled is refused before anything is written
- * (`unlessSettled`), since the turn it starts would reopen the task.
+ * check's own words. A call that would reach an archived agent, which the
+ * window's own doors bring back first, or hand a line to an agent whose
+ * task stands done or canceled, whose turn would reopen the task, is
+ * refused before anything is written (`unlessUnreachable`), since a tool
+ * does only what it names.
  */
 
 import { randomUUID } from "node:crypto";
@@ -97,6 +99,9 @@ const MEMBER_INBOX_REFUSAL = {
     "Not done: the thread's agent runs on its starter's own GitHub token or plan, so only its starter's words reach it.",
   UNTOLD:
     "Not done: it could not be handed to the thread's agent just now, so nothing was kept; try again in a moment.",
+  ARCHIVED: (agentId: string) =>
+    `Not done: the thread's agent ${agentId} is archived, and a tool never brings an agent back. ` +
+    `Bring it back first with ${MEMBER_MCP_TOOL.UNARCHIVE_AGENT} (agentId ${agentId}), then call again.`,
   NO_AGENT: `Not started: the member reaches no such agent, or it no longer stands to hear them; ${MEMBER_MCP_TOOL.LIST_AGENTS} names their agents.`,
   UNMARKED: "Not done: it could not be written just now; try again in a moment.",
   PAST: "Not set: that time is not after now; name a time to come, or null to end the reminder.",
@@ -176,46 +181,68 @@ function accepted(item: InboxItem, userId: string): WireRecord {
   return { status: ACTION_RESULT_STATUS.ACCEPTED, thread: threadOf(item, userId) };
 }
 
+/** The agent a call reaches, which the window's doors bring back first where it stands archived, and whether the call hands it a line, which wakes it. */
+interface ReachedAgent {
+  readonly agentId: string;
+  readonly wakes: boolean;
+}
+
 /**
- * The call made unless it would wake an agent whose task stands done or
- * canceled, which is refused in `settledTaskRefusal`'s words: a tool never
- * reopens a task, so the outside agent moves it first. Only a call that
- * hands an agent a line is held, the agent `agentOf` names; a thread or an
- * agent the member does not reach is left to the call, which refuses it in
- * its own words.
+ * The call made unless the agent it reaches stands archived, refused in
+ * words naming `unarchive_agent`, since the window's own doors bring an
+ * archived agent back and a tool does only what it names; or unless it
+ * would wake an agent whose task stands done or canceled, refused in
+ * `settledTaskRefusal`'s words, since a tool never reopens a task. Note
+ * that the settled task is told first, because moving it off Done brings
+ * its agents back too. Only a call that reaches an agent is held, the agent
+ * `reached` names; a thread or an agent the member does not reach is left
+ * to the call, which refuses it in its own words.
  */
-function unlessSettled<R>(
+function unlessUnreachable<R>(
   userId: string,
-  agentOf: Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices>,
+  reached: Effect.Effect<Option.Option<ReachedAgent>, StoreFailure, DatabaseServices>,
   call: Effect.Effect<WireRecord, never, R>,
 ) {
   return orStoreRefusal(
     Effect.gen(function* () {
-      const agentId = yield* agentOf;
+      const target = yield* reached;
 
-      if (Option.isNone(agentId)) return yield* call;
-      const agent = yield* readVisibleAgent(userId, agentId.value);
+      if (Option.isNone(target)) return yield* call;
+      const { agentId, wakes } = target.value;
+      const agent = yield* readVisibleAgent(userId, agentId);
 
       if (Option.isNone(agent)) return yield* call;
-      const settled = yield* settledTaskRefusal(userId, agent.value.taskId);
+      const { taskId, archivedAt } = agent.value;
+      const settled = wakes ? yield* settledTaskRefusal(userId, taskId) : Option.none<string>();
 
-      return Option.isSome(settled) ? agentToolRejected(settled.value) : yield* call;
+      if (Option.isSome(settled)) return agentToolRejected(settled.value);
+
+      if (archivedAt !== null) return agentToolRejected(MEMBER_INBOX_REFUSAL.ARCHIVED(agentId));
+
+      return yield* call;
     }),
   );
 }
 
-/** The agent of the thread, where the member reaches it and the call would hand that agent a line (`wakes`). */
-function wakingThreadAgent(userId: string, threadId: string, wakes: (item: InboxItem) => boolean) {
+/** The agent of the thread, where the member reaches it and the call reaches that agent (`reaches`), and whether it hands it a line (`wakes`). */
+function threadAgent(
+  userId: string,
+  threadId: string,
+  reaches: (item: InboxItem) => boolean,
+  wakes: (item: InboxItem) => boolean,
+) {
   return Effect.map(
     readInboxItem(userId, threadId),
-    Option.flatMap(({ item }) => (wakes(item) ? Option.some(item.agentId) : Option.none())),
+    Option.flatMap(({ item }) =>
+      reaches(item) ? Option.some({ agentId: item.agentId, wakes: wakes(item) }) : Option.none(),
+    ),
   );
 }
 
 /** Whether a nod or a close without words reaches the thread's agent: only where it waits on the member's answer (`inboxAnswerHeard`). */
 const heardBare = (item: InboxItem) => inboxAnswerHeard(item, { reply: INBOX_REPLY.ACKNOWLEDGED });
 
-/** A message on a thread reaches its agent whatever the thread holds. */
+/** A message on a thread reaches its agent whatever the thread holds, as an answer does, which brings the agent back before it is taken. */
 const always = () => true;
 
 /** A hand-off's refusal in the outside agent's words: a thread the member does not reach, an agent only its starter reaches, or one that could not be told now. */
@@ -286,7 +313,7 @@ export function answerAskAsMember(
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
   );
 
-  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, wakes), answered);
+  return unlessUnreachable(userId, threadAgent(userId, asked.threadId, always, wakes), answered);
 }
 
 /** The member's Got it on an open thread that holds no ask, at the revision read, handed to its agent where the notice asks to be heard back; refused where the thread holds an ask or moved on since. */
@@ -309,7 +336,11 @@ export function acknowledgeThreadAsMember(
     ),
   );
 
-  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, heardBare), acknowledged);
+  return unlessUnreachable(
+    userId,
+    threadAgent(userId, asked.threadId, heardBare, heardBare),
+    acknowledged,
+  );
 }
 
 /** The member's message on a thread, open or settled, handed to its agent; it answers no ask. */
@@ -324,7 +355,7 @@ export function replyAsMember(
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
   );
 
-  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, always), replied);
+  return unlessUnreachable(userId, threadAgent(userId, asked.threadId, always, always), replied);
 }
 
 /** The member's close of an open thread without an answer, at the revision read, handed to its agent where it waits on one; refused where the thread moved on since. */
@@ -341,7 +372,11 @@ export function closeThreadAsMember(
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
   );
 
-  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, heardBare), closed);
+  return unlessUnreachable(
+    userId,
+    threadAgent(userId, asked.threadId, heardBare, heardBare),
+    closed,
+  );
 }
 
 /** A new thread the member starts with an agent they may message, its first message handed to the agent; its subject, where they name none, stands for the message's first line until it is titled. */
@@ -369,7 +404,11 @@ export function startThreadAsMember(
     ),
   );
 
-  return unlessSettled(userId, Effect.succeed(Option.some(asked.agentId)), started);
+  return unlessUnreachable(
+    userId,
+    Effect.succeed(Option.some({ agentId: asked.agentId, wakes: true })),
+    started,
+  );
 }
 
 /** The member's own read of a thread written: read, or unread until they read it again; no agent hears of it. */

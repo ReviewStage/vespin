@@ -3496,7 +3496,7 @@ test("add_suggestion keeps the start or the send a suggestion runs, answers the 
   );
 });
 
-test("message_agent brings an archived agent back and hands it the words", async () => {
+test("message_agent refuses an archived agent, naming unarchive_agent, and leaves it archived", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   await database.run(archiveAgent(agents.teammates.userId, agents.teammates.id, true));
@@ -3508,10 +3508,11 @@ test("message_agent brings an archived agent back and hands it the words", async
     agentSessions.services,
   );
 
-  assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(sent));
-  assert.ok(sentWords(agentSessions.sent.at(-1)?.body).includes(NOTE));
+  assert.equal(sent.status, ACTION_RESULT_STATUS.REJECTED, JSON.stringify(sent));
+  assert.match(String(sent.reason), new RegExp(AGENT_TOOL.UNARCHIVE_AGENT, "u"));
+  assert.equal(agentSessions.sent.length, 0);
   const read = await database.run(readAgent(agents.teammates.userId, agents.teammates.id));
-  assert.equal(Option.getOrThrow(read).archivedAt, null);
+  assert.notEqual(Option.getOrThrow(read).archivedAt, null);
 });
 
 test("message_agent refuses an agent whose task is done, naming update_task, and leaves the task done", async () => {
