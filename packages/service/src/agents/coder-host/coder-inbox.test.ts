@@ -420,7 +420,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             decide({ ...QUEUE.ask, multiple: true, recommended: ["Redis", "Redis"] }),
             INBOX_REFUSAL.SEVERAL_RECOMMENDED,
           ],
-          [answer([{ type: INBOX_FIELD.SELECT, label: "Channel" }]), INBOX_REFUSAL.SELECT_OPTIONS],
+          [answer([{ type: INBOX_FIELD.SELECT, label: "Channel" }]), INBOX_REFUSAL.UNREADABLE_POST],
           [
             answer([
               {
@@ -430,10 +430,6 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
                 recommended: "SMS",
               },
             ]),
-            INBOX_REFUSAL.SELECT_RECOMMENDATION,
-          ],
-          [
-            answer([{ type: INBOX_FIELD.TEXT, label: "Channel", recommended: "Slack" }]),
             INBOX_REFUSAL.SELECT_RECOMMENDATION,
           ],
           [

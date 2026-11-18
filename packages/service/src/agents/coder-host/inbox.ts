@@ -21,7 +21,6 @@ import {
   INBOX_TOOL,
   type InboxAnswers,
   type InboxAskInput,
-  type InboxField,
   type InboxItem,
   type InboxMessage,
   type InboxOptionMedia,
@@ -336,7 +335,8 @@ export const INBOX_REFUSAL = {
     "Not posted: the post does not read. key is a lowercase slug of letters, digits, dots, dashes, and underscores; " +
     `body is Markdown of at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters; title is one line of at most ${INBOX_BOUNDS.MAX_TITLE_CHARS}; ` +
     `ask is decide with two to ${INBOX_BOUNDS.MAX_OPTIONS} options, do with at most ${INBOX_BOUNDS.MAX_STEPS} steps, ` +
-    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none; ` +
+    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none, each {type, label, required} with type text, number, select, or boolean, ` +
+    `a select also naming two to ${INBOX_BOUNDS.MAX_OPTIONS} options and perhaps the one it recommends, and no other type taking options or recommended; ` +
     "an option's media is {path, caption}, {page, version} with the version show_page answered, or {url, label}.",
   NO_TITLE:
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
@@ -350,10 +350,8 @@ export const INBOX_REFUSAL = {
   SEVERAL_RECOMMENDED:
     "Not posted: recommended names each label once, and several only where multiple lets them pick several.",
   FIELD_LABELS: "Not posted: an answer names each field by a label of its own.",
-  SELECT_OPTIONS:
-    "Not posted: a select field offers its options, each once, and no other field offers options.",
-  SELECT_RECOMMENDATION:
-    "Not posted: a select field's recommended names one of its options, and no other field recommends one.",
+  SELECT_OPTIONS: "Not posted: a select field names each of its options once.",
+  SELECT_RECOMMENDATION: "Not posted: a select field's recommended names one of its options.",
   UNREADABLE_WITHDRAW: "Not withdrawn: name the thread's key and why you withdraw its ask.",
   UNREADABLE_LIST:
     'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
@@ -677,22 +675,21 @@ function distinct(labels: readonly string[]): boolean {
   return new Set(labels).size === labels.length;
 }
 
-/** An answer's fields' own refusal: a label used twice, a select with no options or one twice, options on a field that takes none, or a recommendation naming none of a select's options. */
-function fieldsRefusal(fields: readonly InboxField[]): string | undefined {
+/** The fields of an `answer` ask as the agent posts them, one variant per type. */
+type PostedFields = NonNullable<
+  Extract<InboxAskInput, { type: typeof INBOX_ASK.ANSWER }>["fields"]
+>;
+
+/** An answer's fields' own refusal: a label used twice, a select's option named twice, or a select's recommendation naming none of its options. */
+function fieldsRefusal(fields: PostedFields): string | undefined {
   if (!distinct(fields.map((field) => field.label))) return INBOX_REFUSAL.FIELD_LABELS;
 
   for (const field of fields) {
-    const options = field.options;
-    const select = field.type === INBOX_FIELD.SELECT;
+    if (field.type !== INBOX_FIELD.SELECT) continue;
 
-    if (select ? options === undefined || !distinct(options) : options !== undefined) {
-      return INBOX_REFUSAL.SELECT_OPTIONS;
-    }
+    if (!distinct(field.options)) return INBOX_REFUSAL.SELECT_OPTIONS;
 
-    if (
-      field.recommended !== undefined &&
-      !(select && options?.includes(field.recommended) === true)
-    ) {
+    if (field.recommended !== undefined && !field.options.includes(field.recommended)) {
       return INBOX_REFUSAL.SELECT_RECOMMENDATION;
     }
   }
