@@ -92,6 +92,19 @@ const unbindRefreshedTokens = createAuthMiddleware(async (ctx) => {
   await unbindFromSession(ctx.context, storedRefreshToken(answered.refresh_token));
 });
 
+/**
+ * How the provider answers a refresh token presented again just after its
+ * rotation: within a minute, by the same client asking the same, with the
+ * tokens its rotation issued, the grace RFC 9700 §4.14.2 allows, rather than
+ * as a replay that deletes every one of the account's tokens for that client.
+ * Note that a client whose process stopped before it kept the answer (an
+ * iPhone suspended mid-renewal) or whose two renewals raced sends it again,
+ * and was signed out on every device for it; past the minute, a replay still
+ * ends the whole family. It holds for every client, the desktop's and the
+ * CLI's as much as the iPhone's.
+ */
+export const OFFLINE_TOKEN_ROTATION = { refreshTokenReuseInterval: 60 } as const;
+
 /** Better Auth's plugin that gives a refreshed `offline_access` sign-in a lifetime of its own, as an after hook of the token endpoint. */
 export const offlineTokensOutliveSession = () =>
   ({
