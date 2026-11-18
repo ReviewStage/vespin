@@ -9,8 +9,8 @@
  *
  * Usage is sent to Metronome only where its token and the two ids made in
  * its one-time setup are all set (`metronome.ts`); with any of them unset
- * the daily job writes the ledger and sends nothing, so the service deploys
- * before the account exists. A blank value is unset.
+ * the ledger is written and the usage queues send nothing, so the service
+ * deploys before the account exists. A blank value is unset.
  *
  * Stage's own workspace is named by its id (`BILLING_EXEMPT_WORKSPACE_ID`),
  * since nothing else marks it and a slug can change; the start gate never
