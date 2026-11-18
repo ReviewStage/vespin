@@ -33,6 +33,7 @@ export const nativeCallKey = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.conversationId, table.digest] }),
+    // A conversation's delete cascades to its native call keys.
     index("native_call_key_conversation_id").on(table.conversationId),
   ],
 );

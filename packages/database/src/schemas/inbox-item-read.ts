@@ -53,6 +53,7 @@ export const inboxItemRead = pgTable(
     remindThrough: timestamptz("remind_through"),
   },
   (table) => [
+    // An account's delete cascades to its read markers.
     index("inbox_item_read_user_id").on(table.userId),
     // One marker per member per item, which every read of an item's unread state looks up.
     uniqueIndex("inbox_item_read_item_user").on(table.itemId, table.userId),

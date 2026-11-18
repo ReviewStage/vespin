@@ -50,7 +50,9 @@ export const descriptionRevision = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.taskId, table.seq] }),
+    // An account's delete clears its revision attribution.
     index("description_revision_user_id").on(table.userId),
+    // An agent's delete clears its revision attribution.
     index("description_revision_agent_id").on(table.agentId),
   ],
 );
