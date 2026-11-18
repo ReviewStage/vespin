@@ -3,10 +3,10 @@
  *
  * An agent's address, `/<workspace>/agent/<agentId>`, is a routed place
  * (`panel-router.tsx`) under the workspace it names, read from the address
- * alone, as a person's page is (`workspace-routes.ts`). Its page opens the
- * agent on its task (`desktop-agent-page.tsx`), so a door naming an agent
- * the task list does not carry yet opens it here and the agent lands on its
- * task once read. Opening one is a visit; opening the one already standing
+ * alone, as a person's page is (`workspace-routes.ts`). Its page opens an
+ * agent on a task on its task (`desktop-agent-page.tsx`), so a door naming an
+ * agent the task list does not carry yet opens it here and the agent lands
+ * on its task once read; an agent on no task is drawn there as its own page. Opening one is a visit; opening the one already standing
  * moves nothing.
  */
 

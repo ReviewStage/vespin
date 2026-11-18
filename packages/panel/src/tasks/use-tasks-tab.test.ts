@@ -2468,6 +2468,28 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   );
 });
 
+test("a Vespin link to an Inbox thread on no task opens its agent's own page", async () => {
+  const tab = mount(
+    { shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "notes" } },
+    {
+      [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
+      [ACT_KIND.AGENTS_INBOX_ITEM_HOME]: () =>
+        Promise.resolve({ agentId: AGENT_ID, taskId: null, workspaceId: ACME.id }),
+    },
+  );
+
+  act(() =>
+    tab.control().onOpenLink({
+      workspace: "acme",
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: ITEM_ID },
+    }),
+  );
+  await settle();
+
+  assert.equal(tab.control().agentView.agentId, AGENT_ID);
+  assert.equal(inboxNow().open, false);
+});
+
 test.each([
   [
     "an Inbox item named by its id alone",

@@ -2781,13 +2781,21 @@ export function useTasksTab(input: {
           return;
         }
 
+        // A thread on no task stands under its agent, so it opens that agent's own page.
+        if (home.taskId === null) {
+          const where = workspaceOfSlug(viewed.workspaces, home.workspaceId);
+          openAgentPage(home.agentId, where === undefined ? home.workspaceId : stepOf(where));
+
+          return;
+        }
+
         const found = {
           kind: LINK_DESTINATION.INBOX_ITEM,
           agentId: home.agentId,
           itemId: place.itemId,
         };
 
-        openInboxItemOn(home.workspaceId, found, home.taskId ?? undefined);
+        openInboxItemOn(home.workspaceId, found, home.taskId);
       });
     });
   };
