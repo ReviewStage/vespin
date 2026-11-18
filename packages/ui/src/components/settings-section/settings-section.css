@@ -89,18 +89,6 @@
     display: none;
   }
 
-  /* A fold row's room for a ⋯ it lacks, after its ⌄ (`SettingsFoldRow`),
-     keeps that room only while a row of its section draws a ⋯ or another
-     glyph that is no fold's; where none does, the ⌄ ends the row. */
-  .ui-settings-section:not(
-      :has(.ui-settings-row-end > :not(.ui-settings-row-act-slot, .ui-settings-fold-glyph))
-    )
-    .ui-settings-row-end
-    > .ui-settings-fold-glyph
-    ~ .ui-settings-row-act-slot {
-    display: none;
-  }
-
   /* The rows a setting reveals (reveal.css) are ruled as the card's own,
      and a reveal with none to draw stands nowhere, so it draws no rule. */
   .ui-settings-section-card .ui-reveal > * + * {
