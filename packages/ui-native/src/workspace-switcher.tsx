@@ -107,9 +107,12 @@ function heardAs(chosen: SwitcherWorkspace): string {
  * as Notion's switcher leads each workspace with its icon.
  */
 function workspaceChoice(workspace: SwitcherWorkspace, dark: boolean) {
+  // Note that a row whose photo is still on its way stands with no image rather than its letter, so the letter never shows where a photo is coming.
   return menuActContent(
     workspace.name,
-    letterTileGlyph(identityLetter(workspace.name)),
+    workspace.menuPhotoComing === true
+      ? undefined
+      : letterTileGlyph(identityLetter(workspace.name)),
     workspace.line,
     tileHue(workspace.id, dark),
     workspace.menuPhoto,

@@ -146,8 +146,8 @@ const REPOSITORY_CORNER = 0.25;
 /**
  * A repository as the panel's sidebar marks it (`@repo/ui`'s
  * `RepositoryPicture`): its owner's GitHub picture on a tile's rounded
- * corners, with the repository's glyph standing in, in the muted ink, until
- * the picture draws and once it fails. It is never heard, since the words
+ * corners, with the repository's glyph standing in, in the muted ink, only
+ * once the picture fails, never while it loads. It is never heard, since the words
  * beside it name the repository.
  */
 export function RepositoryPicture({
@@ -161,24 +161,22 @@ export function RepositoryPicture({
 }) {
   const colors = useColors();
   const address = repositoryOwnerPictureUrl(repository);
-  const [drawn, setDrawn] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState<string | undefined>(undefined);
-  const shown = address === drawn && address !== failed;
+  const shown = address !== failed;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
       {shown ? null : (
         <Image {...glyphImage(GLYPH.REPOSITORY)} size={size} color={colors.TEXT_MUTED} />
       )}
-      {address === failed ? null : (
+      {shown ? (
         <AvatarPhoto
           address={address}
           size={size}
           corner={size * REPOSITORY_CORNER}
-          onLoad={() => setDrawn(address)}
           onFail={() => setFailed(address)}
         />
-      )}
+      ) : null}
     </ZStack>
   );
 }
@@ -255,15 +253,12 @@ export function AvatarPhoto({
   address,
   size,
   corner = size / 2,
-  onLoad,
   onFail,
 }: {
   readonly address: string;
   readonly size: number;
   /** How round its corners stand, in points; a circle's where none is given. */
   readonly corner?: number | undefined;
-  /** Told once the photo has drawn, so the mark behind it can step aside. */
-  readonly onLoad: () => void;
   readonly onFail: () => void;
 }) {
   const round = { width: size, height: size, borderRadius: corner, overflow: "hidden" } as const;
@@ -275,7 +270,7 @@ export function AvatarPhoto({
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >
-        <Photo source={{ uri: address }} onLoad={onLoad} onError={onFail} style={round} />
+        <Photo source={{ uri: address }} onError={onFail} style={round} />
       </View>
     </RNHostView>
   );
@@ -290,8 +285,8 @@ export function AvatarPhoto({
  * the panel and GitHub tell one from a person. The letter stands on the
  * identity hue read off its id, or its name where none is given, as the panel's `Avatar` draws a person's letter, so
  * a face holds its edge on the dark ground too. Note that the letter stands
- * only until the photo has drawn, so it shows while the photo loads and once it
- * fails, which takes the photo away, but never through a photo's
+ * only where there is no photo or it failed, never while one loads, so a
+ * face with a photo never shows its letter first, nor through the photo's
  * transparent pixels.
  */
 export function Avatar({
@@ -310,13 +305,12 @@ export function Avatar({
   const dark = useColorScheme() === "dark";
   const pinned = pinnedPictureUrl(picture);
   const [failed, setFailed] = useState<string | undefined>(undefined);
-  const [drawn, setDrawn] = useState<string | undefined>(undefined);
-  const photoDrawn = pinned !== undefined && pinned === drawn && pinned !== failed;
+  const photographed = pinned !== undefined && pinned !== failed;
   const corner = kind === FACE_KIND.APP ? size * TILE_ROUNDING : size / 2;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
-      {photoDrawn ? null : (
+      {photographed ? null : (
         <>
           <RoundedRectangle
             cornerRadius={corner}
@@ -333,15 +327,14 @@ export function Avatar({
           </Text>
         </>
       )}
-      {pinned === undefined || pinned === failed ? null : (
+      {photographed ? (
         <AvatarPhoto
           address={accountPictureAt(pinned, size * PixelRatio.get())}
           size={size}
           corner={corner}
-          onLoad={() => setDrawn(pinned)}
           onFail={() => setFailed(pinned)}
         />
-      )}
+      ) : null}
     </ZStack>
   );
 }

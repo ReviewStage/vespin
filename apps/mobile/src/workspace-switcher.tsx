@@ -15,7 +15,7 @@ import { useRouter } from "expo-router";
 import { type ComponentProps, useMemo } from "react";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
-import { menuAddress, useMenuPictureFiles } from "./menu-photos.js";
+import { type MenuPictures, menuAddress, useMenuPictures } from "./menu-photos.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
 
 /** No workspaces read yet, one list for every render. */
@@ -42,7 +42,7 @@ export function switcherWorkspace(
   workspace: Workspace,
   first: boolean,
   photos: AppStateSnapshot[typeof LIVE_READ.WORKSPACE_PHOTOS] | undefined,
-  fileOf?: (address: string) => string | undefined,
+  pictures?: MenuPictures,
 ): SwitcherWorkspace {
   const held = photos?.[workspace.id]?.rows;
 
@@ -60,7 +60,8 @@ export function switcherWorkspace(
     line: workspaceSharedWords(workspace.memberCount, first),
     photo,
     picture,
-    menuPhoto: address === undefined ? undefined : fileOf?.(address),
+    menuPhoto: address === undefined ? undefined : pictures?.fileOf(address),
+    menuPhotoComing: address !== undefined && pictures?.coming(address) === true,
   };
 }
 
@@ -111,9 +112,9 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     return own === undefined ? held : [...held, own];
   }, [workspaces, photos, accountPicture]);
 
-  const fileOf = useMenuPictureFiles(addresses);
+  const pictures = useMenuPictures(addresses);
   const ownAddress = menuAddress(accountPicture);
-  const accountMenuPhoto = ownAddress === undefined ? undefined : fileOf(ownAddress);
+  const accountMenuPhoto = ownAddress === undefined ? undefined : pictures.fileOf(ownAddress);
 
   // Note that the switcher is drawn from the same props while nothing it shows moved, so every tab root's switcher and its SwiftUI host draw nothing anew when the screen around it does, as an Inbox screen does on each delivery.
   return useMemo(() => {
@@ -122,9 +123,9 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
 
     return {
       workspaces: workspaces.map((workspace) =>
-        switcherWorkspace(workspace, workspace.id === first, photos, fileOf),
+        switcherWorkspace(workspace, workspace.id === first, photos, pictures),
       ),
-      chosen: switcherWorkspace(chosen, chosen.id === first, photos, fileOf),
+      chosen: switcherWorkspace(chosen, chosen.id === first, photos, pictures),
       onChoose: choose,
       account: signedIn
         ? {
@@ -149,7 +150,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     accountAddress,
     openSettings,
     router,
-    fileOf,
+    pictures,
     accountMenuPhoto,
   ]);
 }

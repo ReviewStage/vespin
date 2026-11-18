@@ -97,7 +97,6 @@ export function AttachedPictures({
                 address={picture.address}
                 size={THUMBNAIL.SIZE}
                 corner={THUMBNAIL.CORNER}
-                onLoad={ignore}
                 onFail={ignore}
               />
             )}
