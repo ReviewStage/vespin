@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { ANDROID_APP_LINK_PATTERNS } from "./android-app-links.js";
+import { ANDROID_OAUTH_CALLBACK_PATH } from "./android-sign-in-wire.js";
+import { HOST_WIRE } from "./host-wire.js";
 import {
   IOS_APP_LINK_COMPONENTS,
   iosAgentPullRequestOf,
@@ -32,7 +35,12 @@ function claimed(path: string): boolean {
   return match !== undefined && match.exclude !== true;
 }
 
-// Note that the regression these catch is the two lists drifting: a link claimed that the app
+/** Whether Android would open `path` in the app: some intent filter's advanced pattern matching the whole path. */
+function claimedOnAndroid(path: string): boolean {
+  return ANDROID_APP_LINK_PATTERNS.some((pattern) => new RegExp(`^${pattern}$`, "u").test(path));
+}
+
+// Note that the regression these catch is the lists drifting, Android's among them: a link claimed that the app
 // cannot route lands nowhere, and one routed but not claimed never arrives by a tap.
 describe("a vespin.dev link", () => {
   it.each([
@@ -51,14 +59,21 @@ describe("a vespin.dev link", () => {
     const read = readLink(`https://vespin.dev${path}`);
     expect(read === undefined ? undefined : iosAppRouteOf(read.place, read.workspace)).toBe(route);
     expect(claimed(path)).toBe(route !== undefined);
+    expect(claimedOnAndroid(path)).toBe(route !== undefined);
   });
 });
 
 // Note that the regression this catches is a pairing's link left to Safari, or one the app is handed and cannot read.
 it("a machine's pairing link opens in the app with its code", () => {
   expect(claimed("/connect/BCDF-GHJK")).toBe(true);
+  expect(claimedOnAndroid(`${HOST_WIRE.CONNECT_PATH}/BCDF-GHJK`)).toBe(true);
   expect(iosHostConnectCode("https://vespin.dev/connect/bcdf-ghjk")).toBe("BCDFGHJK");
   expect(iosHostConnectCode("https://vespin.dev/acme/task/42")).toBeUndefined();
+});
+
+// Note that the regression this catches is the Android client's registered return left unclaimed, so its sign-in lands in the browser.
+it("the Android sign-in's return opens in the app", () => {
+  expect(claimedOnAndroid(ANDROID_OAUTH_CALLBACK_PATH)).toBe(true);
 });
 
 // Note that the regression these catch is a pull request a link names opening another pull request, as one agent's

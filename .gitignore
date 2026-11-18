@@ -24,6 +24,7 @@ vite.config.ts.timestamp-*
 .build/
 dist-server/
 dist-functions/
+dist-android/
 
 # Generated evidence is never committed; a pull request links it from CI.
 artifacts/

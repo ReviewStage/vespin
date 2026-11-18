@@ -20,6 +20,7 @@
     "./agent-queue-words": "./src/agent-queue-words.js",
     "./agent-refusal-words": "./src/agent-refusal-words.js",
     "./agent-todos": "./src/agent-todos.js",
+    "./android-app-links": "./src/android-app-links.js",
     "./android-sign-in-wire": "./src/android-sign-in-wire.js",
     "./app-links": "./src/app-links.js",
     "./automation-live": "./src/automation-live.js",

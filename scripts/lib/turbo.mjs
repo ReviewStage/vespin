@@ -15,12 +15,13 @@ export const ROOT_TASKS = ["lint"];
 
 /**
  * The checks that run once per workspace, in every workspace that declares
- * the script: the typecheck everywhere, the iOS app's Metro bundle
- * (`apps/mobile`'s `export:ios`), a portable check that needs no Xcode, and
+ * the script: the typecheck everywhere, the app's Metro bundles for iOS and
+ * Android (`apps/mobile`'s `export:ios` and `export:android`), portable
+ * checks that need neither Xcode nor the Android SDK, and
  * the shipped Node bundles built and started once (`smoke`, in `apps/host`
  * and `apps/cli`).
  */
-export const WORKSPACE_TASKS = ["typecheck", "export:ios", "smoke"];
+export const WORKSPACE_TASKS = ["typecheck", "export:ios", "export:android", "smoke"];
 
 /**
  * The tests, one task per workspace holding a `vitest.config.ts`. CI cuts the
