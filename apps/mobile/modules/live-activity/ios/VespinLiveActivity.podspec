@@ -2,7 +2,7 @@
 Pod::Spec.new do |s|
   s.name           = 'VespinLiveActivity'
   s.version        = '0.1.0'
-  s.summary        = "The tokens, end, and Stop requests of Vespin's Live Activity, handed to the app's JavaScript"
+  s.summary        = "The tokens and end of Vespin's Live Activity, handed to the app's JavaScript, and its Stop, sent from Swift"
   s.license        = 'UNLICENSED'
   s.author         = 'Vespin'
   s.homepage       = 'https://vespin.dev'

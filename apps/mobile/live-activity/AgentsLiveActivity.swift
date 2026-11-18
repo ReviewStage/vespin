@@ -250,14 +250,8 @@ extension AgentsActivityAttributes.ContentState {
     return URL(string: "vespin://tasks")!
   }
 
-  /// An agent's page in the app.
-  static func route(agent id: String) -> URL {
-    var components = URLComponents()
-    components.scheme = "vespin"
-    components.host = "tasks"
-    components.path = "/agent/\(id)"
-    return components.url!
-  }
+  /// An agent's page in the app, as Stop opens it where it can't send.
+  static func route(agent id: String) -> URL { StopAgentIntent.page(agent: id) }
 }
 
 // MARK: - Previews
