@@ -140,8 +140,15 @@ env:
     env:
       ROW: Weekly digest email
       ITEM: Permanently delete
-# Note that the tap is never retried, because a retry once the menu has
-# closed lands behind the question and puts it away.
+# Note that the menu is scrolled until its last act stands whole before the
+# tap, because after the steps above a tap on it as soon as the menu showed
+# it closed the menu with no question, even tapped once and waited on for
+# 5 s, while the same steps scrolled first asked every time (jtdel and
+# jndel, Nov 18). The tap is never retried, because a retry once the menu
+# has closed lands behind the question and puts it away.
+- scrollUntilVisible:
+    element: "Permanently delete"
+    direction: DOWN
 - tapOn:
     text: "Permanently delete"
     retryTapIfNoChange: false
