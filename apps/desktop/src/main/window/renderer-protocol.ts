@@ -14,7 +14,13 @@ export const CALL_RENDERER_URL = `${CALL_PREFIX}call.html`;
 
 export const RENDERER_SCHEME_PRIVILEGES: CustomScheme = {
   scheme: RENDERER_SCHEME,
-  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true,
+    corsEnabled: true,
+    stream: true,
+  },
 };
 
 function assetPath(url: string): string | undefined {
