@@ -283,7 +283,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`SCOPE_LOOK.MENU`). A list with rows stands them as its first row
   (`RowList`'s `scopes`), so they scroll away with the rows as Mail's
   categories do; one listing nothing stands them over its empty state
-  (`ScopePicker`), so another scope is one tap away. `Chip` is a capsule an act or a choice stands in, such as a
+  (`ScopePicker`), so another scope is one tap away. The Inbox stands its
+  scopes in its ⋯ menu instead, the one shown checked over its other acts,
+  as Mail's filter does, and its bar names a scope other than the one it
+  opens on under its title (`ColumnBar`'s `subtitle`, `Screen`'s). `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do.
