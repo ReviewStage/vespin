@@ -1,0 +1,35 @@
+probe rows 662, commands 91, frames 4245
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+inbox-row | 11 | topTouchEnd | 922 | 0 | 0 | 0 | 0 | None | 140 | 0 | -16 | 330 | 1254 | 1009
+more-menu | 6 | topTouchEnd | 985 | 0 | 0 | 0 | 0 | None | 0 | 0 | -23 | 64 | 1172 | 1313
+new-task | 6 | topTouchEnd | 924 | 0 | 0 | 0 | 0 | None | 58 | 0 | -3 | 397 | 1402 | 2100
+new-task-cancel | 5 | topTouchEnd | 879 | 0 | 0 | 0 | 0 | None | 287 | 0 | -25 | 155 | 1046 | 1678
+tab-tasks | 2 | None | 1703 | 0 | 0 | 0 | 0 | None | 80 | 0 | -16 | 94 | 1219 | 1341
+tab-inbox | 1 | topTouchEnd | 547 | 0 | 0 | 0 | 0 | None | 0 | 0 | -12 | None | None | 678
+
+most rendered components per path (summed over its taps):
+inbox-row: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+tab-tasks: 
+tab-inbox: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+inbox-row: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+tab-tasks: 
+tab-inbox: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+inbox-row: markdown 0.0, rest 0.0
+more-menu: markdown 0.0, rest 0.0
+new-task: markdown 0.0, rest 0.0
+new-task-cancel: markdown 0.0, rest 0.0
+tab-tasks: markdown 0.0, rest 0.0
+tab-inbox: markdown 0.0, rest 0.0
+
+whole run: 147s, 0 commits, 0 components rendered, 4780 ms of stalls over 25 stalls
+events: topTransitionProgress×246, topHeaderHeightChange×72, topTouchStart×27, topTouchEnd×27, topFinishTransitioning×26, topGlobalEvent×25, topOverlap×20, topLoad×17, topLoadEnd×17, topLoadStart×17, topWindowChange×17, topWillAppear×16, topAppear×14, topWillDisappear×13, topInsetsChange×12
