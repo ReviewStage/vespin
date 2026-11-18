@@ -2846,7 +2846,11 @@ export function DescriptionCommentLayer({
   // Note that a pending thread begun while the thread is on its way takes a place of its own, so the two never share one.
   const startedFromPending = (threadId: string) => {
     if (pending === undefined) return;
-    const slot = pendingSlot.current;
+
+    // Note that words sent again from a card whose first send was refused before its thread was drawn keep the card's place.
+    const slot =
+      handing !== undefined && pending === handing.from ? handing.slot : pendingSlot.current;
+
     pendingSlot.current = crypto.randomUUID();
     takenOver.current.set(threadId, slot);
     setHanding({ thread: threadId, from: pending, slot });
@@ -3046,7 +3050,16 @@ export function DescriptionCommentLayer({
         >
           {/* Note that a line holding more threads than the view has room for scrolls them all, so no card is pressed below its own reply field. */}
           <ScrollArea size={SCROLL_SIZE.CONTENT} overscroll={SCROLL_OVERSCROLL.CHAIN}>
-            <div className="comment-float-cards">
+            {/* Note that the card the pointer is on lights its words, as a margin's card does (`MarginSlot`). */}
+            <div
+              className="comment-float-cards"
+              onPointerOver={(event) => {
+                if (event.pointerType === "touch" || !(event.target instanceof Element)) return;
+                const card = event.target.closest<HTMLElement>(".comment-card[data-thread]");
+                setCardPointed(card?.dataset.thread);
+              }}
+              onPointerLeave={() => setCardPointed(undefined)}
+            >
               {(counts.get(shownTop) ?? [shown]).map((thread) => (
                 <ThreadCard
                   key={thread.id}
