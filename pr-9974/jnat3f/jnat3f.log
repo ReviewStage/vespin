@@ -1,0 +1,30 @@
+Auto-merging packages/ui-native/src/glyph.ts
+built main 4aa8d5b6c9 + #9974 2f4222def1 as eaef6be9a2
+install 0
+curve 10:47:14 34581 MB
+curve 10:47:44 32251 MB
+curve 10:48:14 31819 MB
+curve 10:48:46 31976 MB
+curve 10:49:16 31676 MB
+curve 10:49:48 31504 MB
+curve 10:50:19 31444 MB
+curve 10:50:49 31349 MB
+curve 10:51:22 31092 MB
+curve 10:51:52 32006 MB
+curve 10:52:24 31763 MB
+curve 10:52:54 31127 MB
+curve 10:53:27 30776 MB
+curve 10:53:57 30517 MB
+curve 10:54:28 30417 MB
+curve 10:54:58 30360 MB
+BUILD EXIT 0 10:55:29
+actool: 2 warnings or errors
+/Users/deanstratakos/vespin-ipad-agent/Vjnat3f.app: replacing existing signature
+p9974-iphone-light-large: fails 0 shots 1 
+p9974-iphone-light-ax3: fails 1 shots 1 Scrolling DOWN until ".*MCP.*CLI.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
+p9974-iphone-dark-large: fails 0 shots 1 
+p9974-iphone-dark-ax3: fails 1 shots 1 Scrolling DOWN until ".*MCP.*CLI.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
+p9974-ipad26-light-large: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9974-ipad26-light-ax3: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9974-ipad26-dark-large: fails 1 shots 1 Tap on "Settings, .*"... FAILED
+p9974-ipad26-dark-ax3: fails 1 shots 1 Tap on "Settings, .*"... FAILED
