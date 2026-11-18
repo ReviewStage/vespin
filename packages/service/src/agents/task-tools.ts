@@ -15,18 +15,14 @@ import {
   TASK_STATUS,
   type TaskCreateRelation,
   type TaskOrigin,
+  type TaskSummary,
   taskPrioritySchema,
   taskStatusSchema,
 } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Match, Option, Predicate, Result, Schema } from "effect";
-import {
-  ACTION_RESULT_STATUS,
-  type UnparsedWireValue,
-  type WireRecord,
-  wireUuidSchema,
-} from "../core.js";
+import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../core.js";
 import { SERVER_TASK_SOURCE } from "../events/server-events.js";
 import type { HostedRefusal } from "../http/http-effect.js";
 import {
@@ -51,11 +47,19 @@ import {
   repositoryRefusalWords,
   TASK_PRIORITY_WORDS,
   taskStandingOf,
-  workedRepository,
 } from "./agent-tools.js";
 import { calledId } from "./called-id.js";
 import { assigneeIdOf, TASK_ASSIGNEE_INPUT } from "./task-assignee.js";
 import { TASK_IDS, taskBlockReadings } from "./task-block-changes.js";
+import {
+  TASK_REF_INPUT,
+  TASK_REF_MISS,
+  TASK_REF_WORDS,
+  type TaskRefMiss,
+  taskIdOfInput,
+  taskIdOfRef,
+  taskIdsOfInput,
+} from "./task-ref.js";
 import {
   EVERY_EXPERIMENT_ON,
   type ExperimentsOn,
@@ -68,7 +72,9 @@ import { workspaceNamingOf } from "./written-mentions.js";
  *
  * Every coding agent is offered the same `read_task`,
  * one implementation, beside `list_tasks` (`agent-tools.ts`), which
- * names the tasks it reads by id. It reads any task of the caller's
+ * names the tasks it reads by id; a key such as `ACME-42` names its number
+ * in the caller's workspace, and one whose prefix is not that workspace's is
+ * refused, naming the prefix it holds (`task-ref.ts`). It reads any task of the caller's
  * workspace, a teammate's included, as the member the
  * caller acts for could open it in the sidebar, read on that member's
  * standing now; a task of another workspace is none of the caller's, even
@@ -95,14 +101,27 @@ export const DESCRIPTION_TEXT_READ_CHARS = 40_000;
 
 /** Why a read answered nothing, in words the model can act on. */
 export const READ_TASK_REFUSAL = {
-  UNREADABLE: `Not read: name the task by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
-  NO_TASK: `Not read: no task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
+  UNREADABLE:
+    `Not read: name the task in taskId by the id ${AGENT_TOOL.LIST_TASKS} answered or by its ` +
+    "key, such as ACME-42.",
+  NO_TASK:
+    "Not read: no task of your workspace has that id or key; " +
+    `${AGENT_TOOL.LIST_TASKS} names them.`,
 } as const;
+
+/** Why a key of another workspace's prefix read nothing, naming the prefix the caller's workspace keys its tasks by. */
+export function readTaskOtherPrefixRefusal(miss: { prefix: string; key: string }): string {
+  return (
+    `Not read: that key names no task of your workspace, whose keys open with ${miss.prefix}-; ` +
+    `name the task in taskId by a key such as ${miss.key}, or by the id ${AGENT_TOOL.LIST_TASKS} answered.`
+  );
+}
 
 const READ_TASK_INPUT = Schema.Struct({
   taskId: describeWire(
-    wireUuidSchema,
-    `The task to read, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+    TASK_REF_INPUT,
+    `The task to read, by the id ${AGENT_TOOL.LIST_TASKS} answered or by its key, such as ` +
+      "ACME-42, whose prefix must be its workspace's.",
   ),
 });
 
@@ -122,15 +141,11 @@ export function readTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
     name: AGENT_TOOL.READ_TASK,
     description:
-      "Read one task of your workspace by its id, a teammate's included: its " +
-      "key (such as ACME-42), name, where it stands (its status) and how much it matters (its " +
-      "priority), repository, who started it (startedBy, and startedByUserId to link them by), whether it is the task you " +
-      "work on, the brief the developer started it with (null for none), the tasks " +
-      "it is blocked by and the tasks it blocks (each with its id, name, and status), its followers " +
-      "(each with their name and id, whether they are its assignee, and whether its " +
-      "agents may use their machines; absent where your workspace keeps none)" +
-      `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about; ` +
-      `${AGENT_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
+      "Read one task of your workspace by its id or its key, a teammate's included: its " +
+      "key, name, status, priority, repository, who started it (startedBy, and startedByUserId to " +
+      "link them by), whether it is the task you work on, the brief the developer started it with, " +
+      "the tasks it is blocked by and the tasks it blocks, its followers" +
+      `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about.`,
     inputSchema: READ_TASK_INPUT,
   } as const;
 }
@@ -144,6 +159,19 @@ function callerDescriptionsOn(caller: AgentCall["caller"]) {
     : experimentOnIn(caller.workspaceId, EXPERIMENT.DESCRIPTIONS);
 }
 
+/** The refusal a task ref that found nothing reads as. */
+function readTaskMissRefusal(miss: TaskRefMiss): WireRecord {
+  return agentToolRejected(
+    Match.value(miss).pipe(
+      Match.discriminatorsExhaustive("kind")({
+        [TASK_REF_MISS.UNREADABLE]: () => READ_TASK_REFUSAL.UNREADABLE,
+        [TASK_REF_MISS.NO_TASK]: () => READ_TASK_REFUSAL.NO_TASK,
+        [TASK_REF_MISS.OTHER_PREFIX]: readTaskOtherPrefixRefusal,
+      }),
+    ),
+  );
+}
+
 /** One call of `read_task`: a task of the caller's workspace, its description cut to the bound, or why there is none; no description where the caller has Task descriptions off. */
 export function runReadTask(
   call: AgentReadCall,
@@ -155,8 +183,6 @@ export function runReadTask(
     return Effect.succeed(agentToolRejected(READ_TASK_REFUSAL.UNREADABLE));
   }
 
-  const { taskId } = asked.success;
-
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
@@ -166,7 +192,13 @@ export function runReadTask(
       }
 
       const userId = callerUserId(call.caller);
-      const stored = yield* readTask(userId, taskId);
+
+      // A key names its number in the caller's workspace, and only under that workspace's prefix.
+      const taskId = yield* taskIdOfRef(userId, workspace.value, asked.success.taskId);
+
+      if (Result.isFailure(taskId)) return readTaskMissRefusal(taskId.failure);
+
+      const stored = yield* readTask(userId, taskId.success);
 
       // A task of another workspace, even one the member is also in, is none of the caller's.
       if (Option.isNone(stored) || stored.value.task.workspaceId !== workspace.value) {
@@ -213,13 +245,20 @@ export function runReadTask(
 export const CREATE_TASK_REFUSAL = {
   UNREADABLE:
     `Not made: give a name of at most ${TASK_BOUNDS.MAX_NAME_CHARS} characters, a repository as ` +
-    `owner/name, null for none, or none for the one you work in, a brief of at most ` +
+    `owner/name or null for none, a brief of at most ` +
     `${TASK_BOUNDS.MAX_BRIEF_CHARS} characters or none, a description of at most ` +
     `${TASK_BOUNDS.MAX_BODY_CHARS} characters or none, a status ` +
-    `(${Object.values(TASK_STATUS).join(", ")}) or none, a priority ` +
+    `(${Object.values(TASK_STATUS).join(", ")}), a priority ` +
     `(${Object.values(TASK_PRIORITY).join(", ")}) or none, an assignee as a member's ` +
-    `mention link or none, a parent task by the id ${AGENT_TOOL.LIST_TASKS} answered or none, ` +
-    "and subTaskIds, blockedBy, and blocks as lists of such ids or none.",
+    `mention link or none, a parent task by the id ${AGENT_TOOL.LIST_TASKS} answered or its key, ` +
+    "or none, and subTaskIds, blockedBy, and blocks as lists of such ids or keys, or none.",
+  NO_REPOSITORY:
+    "Not made: repository is required for a task with no parentTaskId or subTaskIds; give the " +
+    "repository its agents work in as owner/name, or null for none.",
+  NO_STATUS:
+    "Not made: status is required; give where the task stands, one of " +
+    `${Object.values(TASK_STATUS).join(", ")}, such as ${TASK_STATUS.TODO} for work to start ` +
+    `or ${TASK_STATUS.BACKLOG} for work filed for later.`,
   NOT_MEMBER:
     "Not made: that assignee is no member of the workspace, or names no person; name a member by " +
     `the mention link ${AGENT_TOOL.LIST_TASKS} hands you, or leave it out for no one.`,
@@ -263,8 +302,8 @@ const CREATE_TASK_FIELDS_BEFORE = {
     describeWire(
       Schema.NullOr(githubRepositoryFullNameSchema),
       "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub " +
-        "installation must reach; null for none, and left out for the one you work in, or the " +
-        "parent's where you give a parent.",
+        "installation must reach, or null for none; required, but left out where you give a " +
+        "parentTaskId or subTaskIds, whose repository it takes.",
     ),
   ),
   brief: Schema.optionalKey(
@@ -278,33 +317,31 @@ const CREATE_TASK_FIELDS_BEFORE = {
 
 /** `create_task`'s fields after its description, which every workspace offers. */
 const CREATE_TASK_FIELDS_AFTER = {
-  status: Schema.optionalKey(
-    describeWire(
-      taskStatusSchema,
-      "Where the task stands: backlog for work filed for later; todo where left out.",
-    ),
+  status: describeWire(
+    taskStatusSchema,
+    "Where the task stands: todo for work to start, backlog for work filed for later.",
   ),
   priority: Schema.optionalKey(describeWire(taskPrioritySchema, TASK_PRIORITY_WORDS)),
   assignee: Schema.optionalKey(TASK_ASSIGNEE_INPUT),
   parentTaskId: Schema.optionalKey(
     describeWire(
-      wireUuidSchema,
-      `The task to make it a child of, by the id ${AGENT_TOOL.LIST_TASKS} answered: a task of ` +
+      TASK_REF_INPUT,
+      `The task to make it a child of, by ${TASK_REF_WORDS}: a task of ` +
         "your workspace, whose repository it works in. Left out, it stands at the top.",
     ),
   ),
   subTaskIds: Schema.optionalKey(
     describeWire(
       TASK_IDS,
-      `Its sub-tasks (the tasks it is the parent of), by the id ${AGENT_TOOL.LIST_TASKS} ` +
-        "answered, each a task of your workspace with no parent yet, working in one repository " +
+      `Its sub-tasks (the tasks it is the parent of), each by ${TASK_REF_WORDS}, ` +
+        "each a task of your workspace with no parent yet, working in one repository " +
         "with it, which it takes, so leave repository out. Left out, it has none.",
     ),
   ),
   blockedBy: Schema.optionalKey(
     describeWire(
       TASK_IDS,
-      `Its blocked-by (the tasks it waits on), by the id ${AGENT_TOOL.LIST_TASKS} answered, ` +
+      `Its blocked-by (the tasks it waits on), each by ${TASK_REF_WORDS}, ` +
         "each a task of your workspace, such as a sibling whose work comes first. Left out, it " +
         "waits on none.",
     ),
@@ -312,7 +349,7 @@ const CREATE_TASK_FIELDS_AFTER = {
   blocks: Schema.optionalKey(
     describeWire(
       TASK_IDS,
-      `Its blocks (the tasks that wait on it), by the id ${AGENT_TOOL.LIST_TASKS} answered, each ` +
+      `Its blocks (the tasks that wait on it), each by ${TASK_REF_WORDS}, each ` +
         "a task of your workspace. Left out, none waits on it.",
     ),
   ),
@@ -353,6 +390,9 @@ const namesRetiredPlan = Schema.is(Schema.Struct({ plan: Schema.Unknown }));
 /** A make that names one relation, as the tool took before the tree and the blocks were lists of their own. */
 const namesRetiredRelation = Schema.is(Schema.Struct({ relation: Schema.Unknown }));
 
+/** A make that names a status, which every make must. */
+const namesStatus = Schema.is(Schema.Struct({ status: Schema.Unknown }));
+
 /** What a made task starts with, as a workspace with Task descriptions on or off words it. */
 const CREATE_TASK_STARTS_WITH = {
   on: "with their brief and a description to start from where given",
@@ -371,19 +411,13 @@ export function createTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
 function createTaskWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
   return (
     "Make a task in your workspace for the developer you work for, as the sidebar's New task " +
-    "would: owned by them, on the repository named or the one you work in, " +
-    `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it. ` +
-    "Make one for a separate piece of work that should stand as a task of its own, " +
-    "where the developer asked for it; " +
-    `then start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
-    "Give it a status, a priority, and an assignee where the developer said them. Give it a " +
-    "parentTaskId to make it a child task of another, to any depth: a child always works in " +
-    "its parent's repository, so leave repository out for one. Give it subTaskIds to make it " +
-    "the parent of tasks that have none, and blockedBy and blocks for the tasks it waits on and " +
-    `the tasks that wait on it, as ${AGENT_TOOL.UPDATE_TASK} names them, all written in the same ` +
-    "call: a child that waits on a sibling takes a parentTaskId and a blockedBy. Answers " +
-    "`accepted` with the task's id, key, name, status, priority, assignee, and repository, or " +
-    "`rejected` and why."
+    "would: owned by them, on the repository named, " +
+    `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it, for work that ` +
+    "should stand as a task of its own where the developer asked for one; " +
+    `start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
+    "Give it a status, a priority, and an assignee where the developer said them. Its parent, " +
+    "sub-tasks, and blocks are all written in the same call: a child always works in its parent's " +
+    "repository, and a child that waits on a sibling takes a parentTaskId and a blockedBy."
   );
 }
 
@@ -425,6 +459,54 @@ function relationsOf(asked: {
     ...sideOf(asked.blocks, TASK_CREATE_RELATION_KIND.BLOCKS),
   ];
 }
+
+/** The tasks a make names, as their fields carry them. */
+interface CreatedTasks {
+  readonly parentTaskId?: string;
+  readonly subTaskIds?: readonly string[];
+  readonly blockedBy?: readonly string[];
+  readonly blocks?: readonly string[];
+}
+
+/** The lists of tasks a make names, by their fields. */
+const CREATED_TASK_LISTS = ["subTaskIds", "blockedBy", "blocks"] as const;
+
+/** The tasks a make names, each by id or key read as its id in the workspace; or the refusal naming its field. */
+const createdTasksById = (userId: string, workspaceId: string, asked: CreatedTasks) =>
+  Effect.gen(function* () {
+    const parent =
+      asked.parentTaskId === undefined
+        ? Result.succeed(undefined)
+        : yield* taskIdOfInput(
+            userId,
+            workspaceId,
+            { opening: "Not made", field: "parentTaskId" },
+            asked.parentTaskId,
+          );
+
+    if (Result.isFailure(parent)) return Result.fail(parent.failure);
+    const byId: { -readonly [K in keyof CreatedTasks]: CreatedTasks[K] } = {};
+
+    if (parent.success !== undefined) byId.parentTaskId = parent.success;
+
+    for (const field of CREATED_TASK_LISTS) {
+      const written = asked[field];
+
+      if (written === undefined) continue;
+
+      const ids = yield* taskIdsOfInput(
+        userId,
+        workspaceId,
+        { opening: "Not made", field },
+        written,
+      );
+
+      if (Result.isFailure(ids)) return Result.fail(ids.failure);
+      byId[field] = ids.success;
+    }
+
+    return Result.succeed(byId);
+  });
 
 /** Who made a task for the caller's member: the coding agent by its id; none for the member calling, as for one they make by hand. */
 function originOf(call: AgentCall): { readonly origin?: TaskOrigin } {
@@ -481,6 +563,25 @@ const madeRefusal =
     );
   };
 
+/** A made task as `create_task` answers it. */
+function createdAnswer(
+  made: Pick<
+    TaskSummary,
+    "id" | "name" | "repository" | "number" | "status" | "priority" | "assignee"
+  >,
+  naming: { readonly step: string; readonly name: string },
+) {
+  return {
+    status: ACTION_RESULT_STATUS.ACCEPTED,
+    task: {
+      id: made.id,
+      ...taskStandingOf(made, naming),
+      name: made.name,
+      repository: made.repository ?? null,
+    },
+  };
+}
+
 /** One call of `create_task`: a task made in the caller's workspace for its member, once under the call's key. */
 export function runCreateTask(
   call: AgentCall,
@@ -494,14 +595,27 @@ export function runCreateTask(
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.RENAMED_RELATION));
   }
 
+  if (!namesStatus(input)) {
+    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.NO_STATUS));
+  }
+
   const asked = readCreateAsked(input);
 
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.UNREADABLE));
   }
 
-  const { name, brief, description, status, priority, assignee, parentTaskId } = asked.success;
-  const relations = relationsOf(asked.success);
+  const { repository } = asked.success;
+
+  // A task in a tree takes the tree's repository, so only a task standing alone must name one.
+  const inTree =
+    asked.success.parentTaskId !== undefined || (asked.success.subTaskIds ?? []).length > 0;
+
+  if (repository === undefined && !inTree) {
+    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.NO_REPOSITORY));
+  }
+
+  const { name, brief, description, status, priority, assignee } = asked.success;
 
   const assigneeId =
     assignee === undefined || assignee === null ? undefined : assigneeIdOf(assignee);
@@ -521,55 +635,50 @@ export function runCreateTask(
       const userId = callerUserId(call.caller);
       const id = calledId(userId, call.clientKey);
       const naming = yield* workspaceNamingOf(userId, workspace.value);
-      // Left out, the repository is the one the caller works in, unless the task joins a tree, whose it takes.
-      const inTree = parentTaskId !== undefined || (asked.success.subTaskIds ?? []).length > 0;
 
-      const repository =
-        asked.success.repository !== undefined || inTree
-          ? asked.success.repository
-          : yield* workedRepository(call.caller);
-
-      // The call run again finds the task it made, and makes no second.
+      // The call run again finds the task it made, and makes no second, before the keys it names are read again.
       const before = yield* readTask(userId, id);
+
+      if (Option.isSome(before) && before.value.task.workspaceId === workspace.value) {
+        return createdAnswer(before.value.task, naming);
+      }
+
+      // The tasks it names, each by its id or a key read in the caller's workspace alone.
+      const named = yield* createdTasksById(userId, workspace.value, asked.success);
+
+      if (Result.isFailure(named)) return agentToolRejected(named.failure);
+      const { parentTaskId } = named.success;
+      const relations = relationsOf(named.success);
       // Note that a description is written only for a caller with Task descriptions on; the schema takes one alike, so the tool's words stay the same.
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
 
-      const made = Option.isSome(before)
-        ? before.value.task
-        : yield* createTaskAsked(
-            userId,
-            {
-              id,
-              organizationId: workspace.value,
-              name,
-              ...(repository === undefined ? undefined : { repository }),
-              ...(brief === undefined ? undefined : { brief }),
-              ...(status === undefined ? undefined : { status }),
-              ...(priority === undefined ? undefined : { priority }),
-              ...(assignee === undefined ? undefined : { assigneeId: assigneeId ?? null }),
-              ...(parentTaskId === undefined ? undefined : { parentTaskId }),
-              ...originOf(call),
-              text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
-              writer: revisionWriterOf(call),
-              relations,
-            },
-            SERVER_TASK_SOURCE.AGENT,
-          ).pipe(
-            Effect.map((created) => created.task.task),
-            Effect.catch(madeRefusal(parentTaskId !== undefined)),
-          );
+      const made = yield* createTaskAsked(
+        userId,
+        {
+          id,
+          organizationId: workspace.value,
+          name,
+          ...(repository === undefined ? undefined : { repository }),
+          ...(brief === undefined ? undefined : { brief }),
+          status,
+          ...(priority === undefined ? undefined : { priority }),
+          // Note that a child left without one is no one's, since an agent names who works a task, never the parent.
+          assigneeId: assigneeId ?? null,
+          ...(parentTaskId === undefined ? undefined : { parentTaskId }),
+          ...originOf(call),
+          text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
+          writer: revisionWriterOf(call),
+          relations,
+        },
+        SERVER_TASK_SOURCE.AGENT,
+      ).pipe(
+        Effect.map((created) => created.task.task),
+        Effect.catch(madeRefusal(parentTaskId !== undefined)),
+      );
 
       if (Predicate.isString(made)) return agentToolRejected(made);
 
-      return {
-        status: ACTION_RESULT_STATUS.ACCEPTED,
-        task: {
-          id: made.id,
-          ...taskStandingOf(made, naming),
-          name: made.name,
-          repository: made.repository ?? null,
-        },
-      };
+      return createdAnswer(made, naming);
     }),
   );
 }

@@ -1,14 +1,17 @@
 import {
   type AppSettingField,
+  type DrawnSchemaSettingRow,
   isAppSettingId,
+  optionFromSetting,
   type SETTINGS_PAGE as SCHEMA_SETTINGS_PAGE,
   SETTING_SECTION,
   type SettingSection,
   type SettingsRowsInput,
   settingFromOption,
-  settingRowsForPage,
+  settingRowsDrawnForPage,
+  type settingRowsForPage,
 } from "@repo/settings";
-import type { FootRow, RowActions } from "@repo/ui";
+import { type FootRow, Reveal, type RowActions } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { APP_SETTING_KIND, APP_TOGGLE_VALUE } from "@repo/wire/app-settings";
 import { useSettingRowWrite } from "./row-write.js";
@@ -31,7 +34,11 @@ interface OwnOptions {
     readonly actions?: RowActions | undefined;
   }[];
   readonly chosen: string | undefined;
+  /** Whether the own option chosen stands for the row though the setting does not store its token yet, as while a pick of one is out. */
+  readonly standing: boolean;
   readonly pick: (value: string) => void;
+  /** Lets go of an own pick still out, as a pick of the schema's options replaces it. */
+  readonly letGo: () => void;
 }
 
 /**
@@ -136,12 +143,19 @@ function SchemaChoiceRow({
   /** What the section adds to the menu, where it adds anything. */
   menu: ChoiceMenu | undefined;
 }): React.JSX.Element {
-  const write = useSettingRowWrite(field, (token: string) => settingFromOption(field, token, view));
+  const write = useSettingRowWrite(
+    field,
+    (token: string) => settingFromOption(field, token, view),
+    (value) => optionFromSetting(field, value),
+  );
+
   const own = menu?.own;
 
-  // Note that an own option stands for its token in the setting, so the menu draws the own option chosen where the token is stored.
+  // Note that an own option stands for its token in the setting, so the menu draws the own option chosen where the token is stored, or from the pick while it is out.
   const shown =
-    own !== undefined && value === own.token && own.chosen !== undefined ? own.chosen : value;
+    own !== undefined && (value === own.token || own.standing) && own.chosen !== undefined
+      ? own.chosen
+      : value;
 
   const listed = [
     ...(own?.options.map((option) => ({
@@ -158,6 +172,18 @@ function SchemaChoiceRow({
         section: menu?.section?.(option.value) ?? option.group,
       })),
   ];
+
+  // Note that a pick of the schema's options lets go of an own pick still out, so the newest pick is the one that stands.
+  const picked =
+    own === undefined
+      ? write
+      : {
+          ...write,
+          run: (token: string) => {
+            own.letGo();
+            write.run(token);
+          },
+        };
 
   return (
     <SelectRow
@@ -183,7 +209,7 @@ function SchemaChoiceRow({
       action={action}
       foot={menu?.foot}
       error={menu?.error}
-      write={write}
+      write={picked}
     />
   );
 }
@@ -226,11 +252,11 @@ export function SchemaSettingRows({
   /** What a toggle's turn does beside its write, in the press itself, by the setting it stores; none where the write is all. */
   onTurned?: ((field: AppSettingField, enabled: boolean) => void) | undefined;
 }): React.JSX.Element {
-  const rows = settingRowsForPage(page, section, view).flatMap((row) => {
+  const rowOf = (row: DrawnSchemaSettingRow): React.ReactNode => {
     const { field, entry, control } = row;
 
     if (entry.kind === APP_SETTING_KIND.TOGGLE) {
-      return [
+      return (
         <SchemaToggleRow
           key={entry.id}
           id={entry.id}
@@ -239,13 +265,13 @@ export function SchemaSettingRows({
           detail={entry.detail}
           checked={entry.value === APP_TOGGLE_VALUE.ON}
           onTurned={onTurned === undefined ? undefined : (enabled) => onTurned(field, enabled)}
-        />,
-      ];
+        />
+      );
     }
 
-    if (entry.kind !== APP_SETTING_KIND.CHOICE || !control) return [];
+    if (entry.kind !== APP_SETTING_KIND.CHOICE || !control) return null;
 
-    return [
+    return (
       <SchemaChoiceRow
         key={entry.id}
         id={entry.id}
@@ -260,9 +286,20 @@ export function SchemaSettingRows({
         icons={icons === undefined ? undefined : (token) => icons(field, token)}
         action={actions?.(field)}
         menu={menus?.(field)}
-      />,
-    ];
-  });
+      />
+    );
+  };
+
+  // Note that a row standing only while its condition holds is revealed, so it unrolls in and rolls up with what turned it rather than popping.
+  const rows = settingRowsDrawnForPage(page, section, view).map((row) =>
+    row.revealed ? (
+      <Reveal key={row.entry.id} shown={row.shown}>
+        {rowOf(row)}
+      </Reveal>
+    ) : (
+      rowOf(row)
+    ),
+  );
 
   return <>{rows}</>;
 }

@@ -70,10 +70,10 @@ interface WriteSaying<Answer> {
   /**
    * Says the refusal in place, beside what the write came from, rather than
    * in the notice, such as a send whose words go back into its field; it is
-   * told the refusal's words, the offline hint among them, and the error
-   * buzz still plays.
+   * told the refusal's words, the offline hint among them, and whether the
+   * offline notice already said it, and the error buzz still plays.
    */
-  readonly inPlace?: ((words: string) => void) | undefined;
+  readonly inPlace?: ((words: string, noticed: boolean) => void) | undefined;
 }
 
 /** Sends `act`, says what came back, and answers whether it went. Never rejects. */
@@ -87,21 +87,24 @@ export const WRITE_SUBJECT = {
   THREAD_READ: "thread-read",
   THREAD_REMINDER: "thread-reminder",
   TASK_STATUS: "task-status",
+  TASK_DESCRIPTION: "task-description",
   TASK_PRIORITY: "task-priority",
   TASK_ASSIGNEE: "task-assignee",
   TASK_PIN: "task-pin",
+  AGENT_PIN: "agent-pin",
   TASK_READ: "task-read",
   TASK_NAME: "task-name",
   TASK_REPOSITORY: "task-repository",
   TASK_PARENT: "task-parent",
   TASK_SECTION: "task-section",
   TASK_FOLLOWING: "task-following",
+  TASK_COMMENT: "task-comment",
   TASK_WORKSPACE: "task-workspace",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
 
-/** One thing a write sets: its kind, and the thread's or the task's id. */
+/** One thing a write sets: its kind, and the thread's, task's, or agent's id. */
 export interface WriteSubject {
   readonly kind: WriteSubjectKind;
   readonly id: string;
@@ -211,7 +214,7 @@ export function useWrite(): Write {
 
           if (offline) notices.say({ kind: NOTICE_KIND.OFFLINE, words: said });
 
-          if (saying.inPlace !== undefined) saying.inPlace(said);
+          if (saying.inPlace !== undefined) saying.inPlace(said, offline);
           else if (!offline) {
             notices.say({
               kind: NOTICE_KIND.REFUSED,

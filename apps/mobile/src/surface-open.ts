@@ -6,11 +6,15 @@ import {
   type ProductLayout,
   type ProductSurface,
 } from "@repo/features/analytics";
+import {
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+  type WindowSizeClass,
+  windowSizeClass,
+} from "@repo/ui-native";
 import { useEffect, useRef } from "react";
 import { Dimensions } from "react-native";
 import { useHostCount } from "./host/host-provider.js";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS, type WindowSizeClass, windowSizeClass } from "./window-size-class.js";
 
 /** The layout a window's size class stands the panel's in: side by side in a regular window, one at a time in a compact one. */
 const LAYOUT_OF_SIZE_CLASS = {
@@ -33,7 +37,9 @@ const handed = new Map<ProductSurface, readonly HandedOpen[]>();
 
 /** The layout the window stands in now, read live rather than from a render. */
 function layoutNow(): ProductLayout {
-  return LAYOUT_OF_SIZE_CLASS[windowSizeClass(Dimensions.get("window").width)];
+  const { width, height } = Dimensions.get("window");
+
+  return LAYOUT_OF_SIZE_CLASS[windowSizeClass(width, height)];
 }
 
 /** Takes the open of `surface` and `of` a layout change closed lately, if one waits, so it is carried on rather than counted. */

@@ -16,9 +16,10 @@
 FROM vcr.vercel.com/vercel/sandbox/node:24
 
 ARG PLAYWRIGHT_VERSION=1.64.1
-ARG CLAUDE_AGENT_SDK_VERSION=0.3.325
-ARG CLAUDE_CODE_VERSION=2.1.325
+ARG CLAUDE_AGENT_SDK_VERSION=0.3.326
+ARG CLAUDE_CODE_VERSION=2.1.326
 ARG CODEX_VERSION=0.169.0
+ARG CURSOR_SDK_VERSION=1.4.0
 ARG GH_STACK_VERSION=v0.2.1
 
 USER root
@@ -72,6 +73,16 @@ RUN npm install --prefix /opt/agent/claude-agent-sdk --no-audit --no-fund --save
  && npm install --global --prefix /opt/agent/codex --no-audit --no-fund @openai/codex@${CODEX_VERSION} \
  && ln -sfn /opt/agent/codex/bin/codex /usr/local/bin/codex \
  && codex --version | grep -Fxq "codex-cli ${CODEX_VERSION}" \
+ && npm cache clean --force
+
+# Cursor's TypeScript SDK and the Linux x86-64 platform package npm installs beside it, its
+# tree-sitter bindings and the `rg` its search tools run, under a prefix only root writes. The runner
+# imports the SDK from here rather than bundling it, so the SDK finds that package beside itself; the
+# last check fails the image where npm left the platform package out or at another release.
+RUN npm install --prefix /opt/agent/cursor-sdk --no-audit --no-fund --save-exact \
+      @cursor/sdk@${CURSOR_SDK_VERSION} \
+ && node -p "require('/opt/agent/cursor-sdk/node_modules/@cursor/sdk-linux-x64/package.json').version" \
+      | grep -Fxq "${CURSOR_SDK_VERSION}" \
  && npm cache clean --force
 
 # `gh` with a token of no worth, so it asks GitHub at all: the sandbox's firewall sets the

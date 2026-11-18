@@ -18,6 +18,8 @@
     },
     "timeout_seconds": {
       "type": "integer",
+      "minimum": 1,
+      "maximum": 480,
       "description": "Seconds before the command is killed; 60 when left out, at most 480. Ask for longer only for a command that needs it, such as a test suite or a build."
     }
   },

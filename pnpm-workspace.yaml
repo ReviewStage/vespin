@@ -15,7 +15,7 @@ catalog:
   react: 19.2.8
   react-dom: 19.2.8
   ws: 8.21.3
-  ai: 7.0.173
+  ai: 7.0.176
   drizzle-orm: 1.0.0-rc.4
   drizzle-kit: 1.0.0-rc.4
   vitest: 5.1.0
@@ -69,6 +69,10 @@ catalogs:
   mobile:
     react: 19.3.0
     "@types/react": 19.3.0
+    # The iPhone's SQLite, which the account's local database opens on
+    # (`apps/mobile/src/host/expo-sqlite-driver.ts`), at the patch line Expo
+    # SDK 58 pins (`expo/bundledNativeModules.json`).
+    expo-sqlite: 58.0.17
 
 # Every dependency here builds nothing this repository needs: esbuild runs from
 # its platform package, @sentry/cli is only reached with an auth token no check
@@ -182,20 +186,22 @@ patchedDependencies:
 # in the menu's ink; so the Status menu's marks lost the status tones the
 # panel's menu draws them in. The patch adds `originalColor`, which tints the
 # symbol's own image (`withTintColor`, rendering kept original), as Mail's Flag
-# menu hands its colored flags to the menu. Delete it when an `@expo/ui`
-# release offers a tinted image a menu keeps.
+# menu hands its colored flags to the menu; and `photoSize`, which draws a `file://`
+# `uiImage` round at a menu glyph's size with its rendering kept original, so
+# the Assignee menu leads each member with their face. It also adds
+# `scrollContentMargins`, SwiftUI's `contentMargins(_:_:for: .scrollContent)`,
+# which stands a plain list's rows in the reading column across a wide window
+# while the list keeps the whole width, so a drag beside the column scrolls it
+# as Mail's does; `listSectionMargins` moved no plain list's rows. And it hands
+# a `List` its edit mode as a binding (`editing`, `onEditingChange`), so a
+# two-finger drag down a list can switch Select mode on. And it gives a
+# `ToolbarItem` a `spacerBefore`, which stands the item after a `Spacer` in
+# one `ToolbarItemGroup`, since iOS 26 centers a keyboard bar's lone item,
+# such as a number pad's Done, which neither a `Spacer` inside the item nor
+# a `ToolbarSpacer` moves to the trailing edge. Delete it when an `@expo/ui` release offers a tinted
+# image and a photo a menu keeps, scroll content margins, and a toolbar
+# spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
-#
-# `@sentry/react-native` 8.28.0's native start (`RNSentrySDK.start`, which the
-# iOS app's AppDelegate calls first at launch, `useNativeInit`) reads the
-# bundled `sentry.options.json`; where that names no DSN, as a local or
-# simulator build's does, both its parse and its `{}` fallback fail ("Invalid
-# DSN URL") and it starts the SDK with no options at all, which faults in
-# `+[SentrySDKInternal startWithOptions:]` (EXC_BAD_ACCESS at 0x10) on some
-# launches. The patch returns without starting where no options could be made,
-# so a DSN-less build starts nothing natively and a build with a DSN is
-# unchanged. Delete it when a release stops starting with nil options.
-  "@sentry/react-native@8.28.0": patches/@sentry__react-native@8.28.0.patch
 #
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
 # lines by the marker's width less its `.` or `)`, so each line of a code

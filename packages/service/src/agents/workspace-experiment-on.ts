@@ -13,13 +13,15 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { accountExperimentOn } from "@repo/database/models/account-store";
+import { accountExperimentOn, readAccountPreferences } from "@repo/database/models/account-store";
 import { machineOwnerOf } from "@repo/database/models/machine-command-store";
+import { readTaskHeader } from "@repo/database/models/task-store";
 import {
   workspaceExperimentOn,
   workspaceExperimentsOf,
 } from "@repo/database/models/workspace-experiment-store";
-import { EXPERIMENT, type WorkspaceExperiment } from "@repo/settings";
+import { isWorkspaceMember } from "@repo/database/models/workspace-store";
+import { EXPERIMENT, experimentOn, type WorkspaceExperiment } from "@repo/settings";
 import { Effect, Option } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
 
@@ -72,6 +74,8 @@ export interface ExperimentsOn {
   readonly turnEndOn: boolean;
   readonly replyButtonsOn: boolean;
   readonly computerUseOn: boolean;
+  /** Whether the member its threads would land with keeps an Inbox (`@repo/settings`'s `inbox`): its task's assignee, else its starter (`inboxKeeperOf`), which offers it the threads it posts there; no experiment, but read and gated as Done and follow-ups is. */
+  readonly inboxOn: boolean;
 }
 
 /** Every experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
@@ -81,6 +85,7 @@ export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   turnEndOn: true,
   replyButtonsOn: true,
   computerUseOn: true,
+  inboxOn: true,
 };
 
 /** Every experiment off. */
@@ -90,13 +95,34 @@ export const NO_EXPERIMENT_ON: ExperimentsOn = {
   turnEndOn: false,
   replyButtonsOn: false,
   computerUseOn: false,
+  inboxOn: false,
 };
 
-/** The agent an agent's experiments are read for: its workspace, the account that started it, and the conversation whose Mac owner's own Computer use is read. */
+/** The agent an agent's experiments are read for: its workspace, the account that started it, its task, whose assignee's Inbox is read, and the conversation whose Mac owner's own Computer use is read. */
 export interface ExperimentsOf {
   readonly organizationId: string;
   readonly userId: string;
+  readonly taskId: string;
   readonly conversationId: string;
+}
+
+/**
+ * Whose Inbox an agent's threads would land in, and so whose choice of
+ * keeping one decides whether it posts any: its task's assignee while they
+ * stand in the agent's workspace, else the agent's starter, the order a
+ * thread picks who it waits on by (`inboxItemWaitsOn`). Note that it is read
+ * again as each session opens and each tool is called, so a task
+ * reassigned moves its agents to the new assignee's choice.
+ */
+function inboxKeeperOf(agent: ExperimentsOf) {
+  return Effect.gen(function* () {
+    const header = yield* readTaskHeader(agent.userId, agent.taskId);
+    const assignee = Option.getOrUndefined(header)?.assigneeId ?? null;
+
+    if (assignee === null || assignee === agent.userId) return agent.userId;
+
+    return (yield* isWorkspaceMember(assignee, agent.organizationId)) ? assignee : agent.userId;
+  });
 }
 
 /**
@@ -113,23 +139,31 @@ export function experimentsReadIn(
   return Effect.all(
     [
       workspaceExperimentsOf(agent.organizationId),
-      accountExperimentOn(agent.userId, EXPERIMENT.TURN_END),
+      readAccountPreferences(agent.userId),
       Effect.flatMap(machineOwnerOf(target), (owner) =>
         accountExperimentOn(owner, EXPERIMENT.COMPUTER_USE),
+      ),
+      // Note that the assignee's row is read only where they, not the starter, keep the threads.
+      Effect.flatMap(inboxKeeperOf(agent), (keeper) =>
+        keeper === agent.userId
+          ? Effect.succeed(Option.none())
+          : Effect.map(readAccountPreferences(keeper), Option.some),
       ),
     ],
     { concurrency: "unbounded" },
   ).pipe(
-    Effect.map(([standings, turnEndOn, computerUseOn]) => {
+    Effect.map(([standings, starter, computerUseOn, assignee]) => {
       const on = (experiment: WorkspaceExperiment) =>
         standings.some((standing) => standing.experiment === experiment && standing.on);
 
       return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         memoryOn: on(EXPERIMENT.MEMORY),
-        turnEndOn,
+        turnEndOn: starter !== undefined && experimentOn(starter.experiments, EXPERIMENT.TURN_END),
         replyButtonsOn: on(EXPERIMENT.REPLY_BUTTONS),
         computerUseOn,
+        // Note that the keeper's own choice stands, an assignee who stored none reading as on, as the setting's default is, rather than as the starter's.
+        inboxOn: Option.getOrElse(assignee, () => starter)?.preferences.inbox ?? true,
       });
     }),
     Effect.tapError(logStoreFailure),

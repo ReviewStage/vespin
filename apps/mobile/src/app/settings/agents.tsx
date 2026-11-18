@@ -42,6 +42,8 @@ import {
   settingRowsForPage,
 } from "@repo/settings";
 import {
+  FOOTER_TONE,
+  footerToneOf,
   ListSection,
   MenuPickRow,
   rejectionWords,
@@ -53,6 +55,7 @@ import {
 import { actionRefused } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
+import { AgentKeySections, useAgentKeyRemoval } from "../../agent-keys/agent-keys.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { effortOptions, modelOptions, useModelCatalog } from "../../tasks/use-start.js";
@@ -124,6 +127,7 @@ function modelPicked(
 
 export default function AgentsScreen() {
   const acts = useHostActs();
+  const removal = useAgentKeyRemoval();
   const catalog = useModelCatalog()?.models ?? NO_MODELS;
   const { data: current } = useQuery({ ...appStateQuery, select: selectAgentDefault });
   const { data: settings } = useQuery({ ...appStateQuery, select: selectAppSettingsView });
@@ -234,77 +238,89 @@ export default function AgentsScreen() {
     );
 
   return (
-    <Screen ground={SCREEN_GROUND.GROUPED}>
-      <SettingsForm>
-        {current === undefined && newAgentRows.length === 0 ? null : (
-          <ListSection title={DEFAULT_WORDS.SECTION} footer={refusalOf(newAgentRows, write.said)}>
-            {current === undefined || standard === undefined ? null : (
-              <Fragment key={defaultRound}>
-                <MenuPickRow
-                  label={DEFAULT_WORDS.MODEL}
-                  options={modelOptions(catalog)}
-                  picked={standard}
-                  onPick={(id) => {
-                    const now = latest();
-
-                    if (now !== undefined && id !== standardModelIdOf(now.model)) {
-                      choose(modelPicked(catalog, id, now));
-                    }
-                  }}
-                />
-                {effortOptions(catalog, current.model).length <= 1 ? null : (
+    <>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
+        <SettingsForm>
+          <AgentKeySections onRemove={removal.remove} />
+          {current === undefined && newAgentRows.length === 0 ? null : (
+            <ListSection
+              title={DEFAULT_WORDS.SECTION}
+              footer={refusalOf(newAgentRows, write.said)}
+              footerTone={FOOTER_TONE.FAILURE}
+            >
+              {current === undefined || standard === undefined ? null : (
+                <Fragment key={defaultRound}>
                   <MenuPickRow
-                    label={DEFAULT_WORDS.EFFORT}
-                    options={effortOptions(catalog, current.model)}
-                    picked={current.effort}
-                    onPick={(effort) => {
+                    label={DEFAULT_WORDS.MODEL}
+                    options={modelOptions(catalog)}
+                    picked={standard}
+                    onPick={(id) => {
                       const now = latest();
 
-                      if (now === undefined) return;
-                      // Note that the efforts drawn are the drawn model's, so one picked while a newer model waits is fitted to that model's, as a model pick fits its effort.
-                      const fitted = effortFor(effortsOf(catalog, now.model), effort);
-
-                      if (fitted === undefined || fitted === now.effort) return;
-                      choose({
-                        model: now.model,
-                        effort: fitted,
-                        ...(now.contextWindow === undefined
-                          ? undefined
-                          : { contextWindow: now.contextWindow }),
-                      });
+                      if (now !== undefined && id !== standardModelIdOf(now.model)) {
+                        choose(modelPicked(catalog, id, now));
+                      }
                     }}
                   />
-                )}
-                {/* Note that a model with only a fast version beside its standard one is switched, as the panel's Fast row is, and one with more speeds is picked among them. */}
-                {speeds.length === 2 && speeds.includes(MODEL_SPEED.FAST) ? (
-                  <ToggleRow
-                    label={FAST_WORD}
-                    on={speed === MODEL_SPEED.FAST}
-                    onChange={(on) => atSpeed(on ? MODEL_SPEED.FAST : MODEL_SPEED.STANDARD)}
-                  />
-                ) : speeds.length > 2 ? (
-                  <MenuPickRow
-                    label={SPEED_LABEL}
-                    options={speeds.map((each) => ({ id: each, label: SPEED_WORD[each] }))}
-                    picked={speed}
-                    onPick={(picked) => {
-                      const next = speeds.find((each) => each === picked);
+                  {effortOptions(catalog, current.model).length <= 1 ? null : (
+                    <MenuPickRow
+                      label={DEFAULT_WORDS.EFFORT}
+                      options={effortOptions(catalog, current.model)}
+                      picked={current.effort}
+                      onPick={(effort) => {
+                        const now = latest();
 
-                      if (next !== undefined) atSpeed(next);
-                    }}
-                  />
-                ) : null}
-              </Fragment>
-            )}
-            {newAgentRows.map(pickRow)}
-          </ListSection>
-        )}
-        {preferenceRows.map((row) => (
-          <ListSection key={row.entry.id} footer={refusalOf([row]) ?? detailOf(row)}>
-            {pickRow(row)}
-          </ListSection>
-        ))}
-      </SettingsForm>
-    </Screen>
+                        if (now === undefined) return;
+                        // Note that the efforts drawn are the drawn model's, so one picked while a newer model waits is fitted to that model's, as a model pick fits its effort.
+                        const fitted = effortFor(effortsOf(catalog, now.model), effort);
+
+                        if (fitted === undefined || fitted === now.effort) return;
+                        choose({
+                          model: now.model,
+                          effort: fitted,
+                          ...(now.contextWindow === undefined
+                            ? undefined
+                            : { contextWindow: now.contextWindow }),
+                        });
+                      }}
+                    />
+                  )}
+                  {/* Note that a model with only a fast version beside its standard one is switched, as the panel's Fast row is, and one with more speeds is picked among them. */}
+                  {speeds.length === 2 && speeds.includes(MODEL_SPEED.FAST) ? (
+                    <ToggleRow
+                      label={FAST_WORD}
+                      on={speed === MODEL_SPEED.FAST}
+                      onChange={(on) => atSpeed(on ? MODEL_SPEED.FAST : MODEL_SPEED.STANDARD)}
+                    />
+                  ) : speeds.length > 2 ? (
+                    <MenuPickRow
+                      label={SPEED_LABEL}
+                      options={speeds.map((each) => ({ id: each, label: SPEED_WORD[each] }))}
+                      picked={speed}
+                      onPick={(picked) => {
+                        const next = speeds.find((each) => each === picked);
+
+                        if (next !== undefined) atSpeed(next);
+                      }}
+                    />
+                  ) : null}
+                </Fragment>
+              )}
+              {newAgentRows.map(pickRow)}
+            </ListSection>
+          )}
+          {preferenceRows.map((row) => (
+            <ListSection
+              key={row.entry.id}
+              footer={refusalOf([row]) ?? detailOf(row)}
+              footerTone={footerToneOf(refusalOf([row]))}
+            >
+              {pickRow(row)}
+            </ListSection>
+          ))}
+        </SettingsForm>
+      </Screen>
+      {removal.ask}
+    </>
   );
 }

@@ -8,6 +8,7 @@ import {
   markdownBlocks,
   markdownGithubPages,
   markdownReplyButtons,
+  markdownShows,
 } from "./markdown-model.js";
 
 const READING = {
@@ -25,7 +26,8 @@ const words = (text: string) => ({
 });
 
 describe("markdownBlocks", () => {
-  it("draws a mention as its chip, a date by its day, and any other link as a link", () => {
+  // A pull request's chip named by its whole title moved to a line of its own and cut it there, where the panel's stands in the line by its key.
+  it("draws a mention as its chip, a pull request by its key alone, a date by its day, and any other link as a link", () => {
     const [paragraph] = markdownBlocks(
       "[@#42 Fix the refresh](https://github.com/acme/app/pull/42) on " +
         "[@Oct 20, 2026](mention://date/2026-10-20), see [the docs](https://example.com/docs)",
@@ -39,10 +41,11 @@ describe("markdownBlocks", () => {
           kind: MARKDOWN_RUN.CHIP,
           chip: {
             entity: "pull-request",
-            name: "#42 Fix the refresh",
-            heard: "pull request #42 Fix the refresh",
+            name: "#42",
+            heard: "pull request #42",
             target: { kind: LINK_TARGET.WEB, href: "https://github.com/acme/app/pull/42" },
             github: "https://github.com/acme/app/pull/42",
+            of: { kind: "pull-request", url: "https://github.com/acme/app/pull/42" },
           },
         },
         words(" on "),
@@ -141,6 +144,16 @@ describe("markdownBlocks", () => {
     ]);
   });
 
+  it("hides raw HTML where the words are drawn as GitHub's page draws a pull request body", () => {
+    const body =
+      "<!-- What changed and why? -->\n\nAdds a row.\n\n<details><summary>Log</summary></details>";
+
+    expect(markdownBlocks(body, { ...READING, hidesHtml: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("Adds a row.")] },
+    ]);
+    expect(markdownShows("<!-- What changed and why? -->\n", { hidesHtml: true })).toBe(false);
+  });
+
   it("draws a table as rows as wide as its header, each column aligned as written", () => {
     const [table] = markdownBlocks("| Name | Count |\n| :-- | --: |\n| a | 1 |\n| b |", READING);
     expect(table).toEqual({
@@ -189,6 +202,18 @@ describe("markdownBlocks", () => {
     ]);
   });
 
+  // A description's Mermaid fence drew as its code on iOS where the panel draws its diagram, and a transcript still being written must not redraw one at each word.
+  it("draws a Mermaid fence as its diagram where the words are read for diagrams, and as code elsewhere", () => {
+    const words = "```mermaid\nflowchart LR\n  A --> B\n```";
+
+    expect(markdownBlocks(words, { ...READING, diagrams: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.DIAGRAM, code: "flowchart LR\n  A --> B" },
+    ]);
+    expect(markdownBlocks(words, READING)).toEqual([
+      { kind: MARKDOWN_BLOCK.CODE, text: "flowchart LR\n  A --> B" },
+    ]);
+  });
+
   it("draws words nested too deep to parse as one block of plain text", () => {
     const deep = `${">".repeat(8000)} **hi**`;
     expect(markdownBlocks(deep, READING)).toEqual([{ kind: MARKDOWN_BLOCK.CODE, text: deep }]);
@@ -221,7 +246,7 @@ describe("heardLine", () => {
     );
 
     expect(chipLine?.kind === MARKDOWN_BLOCK.PARAGRAPH && heardLine(chipLine.runs)).toBe(
-      "Pull request: pull request #128 Invite a teammate by email",
+      "Pull request: pull request #128",
     );
     expect(plainLine?.kind === MARKDOWN_BLOCK.PARAGRAPH && heardLine(plainLine.runs)).toBe(
       undefined,

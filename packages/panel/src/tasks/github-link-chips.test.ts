@@ -276,23 +276,23 @@ function standingsHeld(asked: readonly AnyAct[]) {
   );
 }
 
-/** Each chip drawn: the name it says, the state after it, and the pull request's mark it wears, if any. */
+/** Each chip drawn: the name it says, the state a screen reader hears after it, and the pull request's mark it wears, if any. */
 function chips(container: HTMLElement): [string | null, string | null, string | undefined][] {
   return [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")].map((chip) => [
     chip.querySelector(".ui-inline-ref-label")?.textContent ?? null,
-    chip.querySelector(".ui-inline-ref-state")?.textContent ?? null,
+    chip.querySelector(".ui-visually-hidden:last-child")?.textContent ?? null,
     chip.querySelector<SVGElement>("[data-pull-request-mark]")?.dataset.pullRequestState,
   ]);
 }
 
-/** Each chip drawn: the name it says, the state after it, and the issue's mark it wears, if any, by its state and the words a reader who cannot see it hears. */
+/** Each chip drawn: the name it says, the state a screen reader hears after it, and the issue's mark it wears, if any, by its state and the words a reader who cannot see it hears. */
 function issueChips(container: HTMLElement): (string | null | undefined)[][] {
   return [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")].map((chip) => {
     const mark = chip.querySelector<SVGElement>("[data-issue-mark]");
 
     return [
       chip.querySelector(".ui-inline-ref-label")?.textContent ?? null,
-      chip.querySelector(".ui-inline-ref-state")?.textContent ?? null,
+      chip.querySelector(".ui-visually-hidden:last-child")?.textContent ?? null,
       mark?.dataset.issueState,
       mark?.getAttribute("aria-label"),
     ];

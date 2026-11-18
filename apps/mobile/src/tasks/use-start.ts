@@ -19,12 +19,14 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
+  billingRequiredWords,
   localAgentRefusalWords,
   type RefusedCall,
   startFailureWords,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
+import type { DevicePlatform } from "@repo/features/device-agent-wire";
 import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import { modelLabel } from "@repo/features/model-label";
 import {
@@ -88,6 +90,10 @@ export function startRefusalWords(refused: RefusedCall): string {
     return localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice);
   }
 
+  if (refused.failure === AGENT_CALL_FAILURE.BILLING_REQUIRED) {
+    return billingRequiredWords(refused.billingRefusal, refused.billingManager);
+  }
+
   return startFailureWords(refused.failure);
 }
 
@@ -138,6 +144,26 @@ export function effortOptions(
     id: effort,
     label: effortLabel(effort),
   }));
+}
+
+/**
+ * The platform of one of the account's devices, by its id, as the models'
+ * read lists the devices a task may run its agents on; none while that read
+ * hasn't landed, or for a device it doesn't name. Note that the read is
+ * followed only while a device is named, so a row of a cloud agent reads
+ * nothing, and a row of a device's agent draws its platform's mark on a
+ * cold launch without waiting for a sheet to read the devices.
+ */
+export function useDevicePlatform(deviceId: string | undefined): DevicePlatform | undefined {
+  const acts = useHostActs();
+  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  const following = deviceId === undefined ? undefined : signedInAccountId(account);
+  useLiveFollow(following, () => acts[ACT_KIND.AGENTS_MODELS_FOLLOW]());
+  const { data } = useQuery({ ...appStateQuery, select: selectModels });
+
+  if (deviceId === undefined) return undefined;
+
+  return data?.rows?.macs?.find((device) => device.deviceId === deviceId)?.platform;
 }
 
 /** The models the account may start an agent on, followed while the screen that reads them stands, and the read itself: none before it lands. */
@@ -316,11 +342,17 @@ export function useRepositoryPick(
 
 /** The words, pictures, and choices a start carries. */
 interface StartAsk {
-  readonly prompt: string;
+  /** The words the agent starts on; none for Talk's, which starts it blank, its first words said on the call. */
+  readonly prompt: string | undefined;
   /** The pictures attached, in the order attached; none where nothing is. */
   readonly attachments: readonly AgentAttachment[] | undefined;
   readonly picked: ModelChoice | undefined;
   readonly runsOn: string;
+}
+
+/** What a start hands its agent: the words, or nothing for Talk's blank start. */
+function briefOf(prompt: string | undefined) {
+  return prompt === undefined ? { blank: true } : { prompt };
 }
 
 /**
@@ -336,7 +368,7 @@ export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartA
     const answer = await acts[ACT_KIND.AGENTS_START]({
       taskId,
       idempotencyKey: key,
-      prompt,
+      ...briefOf(prompt),
       ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
       ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
       ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
@@ -391,14 +423,17 @@ export function useStartTask(
 ): (ask: StartAsk & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
+  // Note that the task's id is minted once, as the agent's key is, so a start sent again makes no second task.
+  const [id] = useState(randomUUID);
 
   return async ({ prompt, attachments, picked, runsOn, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       planning: false,
       agent: {
         idempotencyKey: key,
-        prompt,
+        ...briefOf(prompt),
         ...(attachments === undefined ? undefined : { attachments: [...attachments] }),
         ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
         ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
@@ -429,9 +464,12 @@ export function useFileTask(
   workspaceId: string | undefined,
 ): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
+  // Note that the task's id is minted once per sheet, so a filing sent again files no second task.
+  const [id] = useState(randomUUID);
 
   return async ({ filed, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       ...filed,
       status: TASK_STATUS.BACKLOG,

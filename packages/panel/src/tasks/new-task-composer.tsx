@@ -37,6 +37,7 @@ import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
 import { unrunnableChoice } from "./agent-model.js";
@@ -121,8 +122,13 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * the default Settings holds as Start is pressed, which may be newer than
  * the one the chip read, as on Home's card left standing; a draft
  * handed over on a refusal names none either, and its tab reads the
- * default afresh. A call starts only from an agent's own tab, so starting
- * a task never opens one.
+ * default afresh. A Start on words opens no call. Talk, in the round
+ * button's place while the box is empty, starts the task and its agent
+ * blank, handed nothing, on the card's chips, opens the task on the agent's
+ * tab as any start does, and calls the agent once it lands, so its first
+ * words are the caller's (`agent-talk.tsx`); a call that ends with nothing
+ * said lets the agent and its empty task go. An automation's card offers no
+ * Talk.
  *
  * An agent's start carries a key the card mints, and a press asking the
  * same again, as Retry after a start the service never answered does,
@@ -380,7 +386,7 @@ export function NewTaskComposer({
 
   const openSettings = useOpenSettings();
 
-  // Note that no agent has started, so the popover offers no Built in section (`luke`).
+  // Note that no agent has started, so the popover offers no Built in section.
   const servers: AgentServersControl = {
     disabled: disabledServers,
     onSwitch: setDisabledServers,
@@ -674,6 +680,37 @@ export function NewTaskComposer({
     });
   };
 
+  // Note that each press mints its own key, since a blank start carries nothing a Retry could ask again.
+  const talk = (call: CallWhenStarted) => {
+    if (devicesUnread || unpaid !== undefined) return call(undefined);
+
+    const ask: AgentAsk = {
+      repository,
+      workspaceId,
+      deviceId: device?.deviceId,
+      relations: relationsAsked(relations),
+      agent: {
+        prompt: "",
+        attachments: [],
+        choice: pickedModel,
+        disabledServers,
+        ...(pickedMode === undefined ? undefined : { permissionMode: pickedMode }),
+      },
+    };
+
+    const press = { ask, key: crypto.randomUUID() };
+    // Note that a refused Talk opens the card again on why, as a refused Start does, with its box empty.
+    begin({
+      handed: { idempotencyKey: press.key, ...ask.agent, talk: call },
+      card: { relations, repository, choice: pickedModel, press, words: "" },
+    });
+  };
+
+  // An automation's agent is handed its brief, so it starts on words alone and offers no Talk.
+  const startsTalk = forAutomation
+    ? undefined
+    : { start: talk, starting: starting || devicesUnread || unpaid !== undefined };
+
   // ⌘Return on a box with nothing in it starts a bare task: no call and no agent.
   const bare = () => begin();
   const startsBare = !forAutomation && !filled;
@@ -806,6 +843,7 @@ export function NewTaskComposer({
         plus={relationPlus}
         skills={skills}
         onStop={() => Promise.resolve(false)}
+        startsTalk={startsTalk}
         followsUp={false}
         onKey={onKey}
         onLeave={onLeave}

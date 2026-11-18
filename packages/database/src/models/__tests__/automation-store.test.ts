@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import {
   AUTOMATION_ACTION,
@@ -14,7 +15,7 @@ import {
 } from "@repo/features/automation-wire";
 import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import { eq } from "drizzle-orm";
-import { DateTime, Duration, Effect, Option } from "effect";
+import { DateTime, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
@@ -22,10 +23,9 @@ import { member, organization, user } from "../../schemas/auth.js";
 import { getTestDB, openAgentOnOwnTask } from "../../testing/index.js";
 import {
   attachRunAgent,
-  automationRunsSince,
+  automationRunsOn,
   automationRunToAct,
   claimAutomationRun,
-  claimedRunsStarting,
   createAutomation,
   deleteAutomation,
   failClaimedRun,
@@ -39,7 +39,6 @@ import {
   readWebhookAutomation,
   recordAutomationRun,
   settleAutomationRun,
-  subjectRunStartedSince,
   updateAutomation,
 } from "../automation-store.js";
 
@@ -180,7 +179,7 @@ it.layer(getTestDB())("the automation store", (it) => {
   );
 
   it.effect(
-    "a new automation takes the workspace and repositories named, its owner's alone, a new agent each run, and no preset where the maker names none",
+    "a new automation takes the workspace, repositories, and machine named, its owner's alone, a new agent each run, and no preset or machine where the maker names none",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
@@ -213,6 +212,43 @@ it.layer(getTestDB())("the automation store", (it) => {
           ],
         );
         assert.equal(fromCard.preset, AUTOMATION_PRESET.MEMORY_DIGEST);
+
+        const deviceId = randomUUID();
+
+        const onDevice = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            ...nightly(workspaceId),
+            runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
+          }),
+        );
+
+        const inCloud = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            ...nightly(workspaceId),
+            runsOn: { machine: AGENT_MACHINE.VERCEL },
+          }),
+        );
+
+        assert.deepEqual(
+          [automationRunsOn(made), automationRunsOn(onDevice), automationRunsOn(inCloud)],
+          [null, { machine: AGENT_MACHINE.DEVICE, deviceId }, { machine: AGENT_MACHINE.VERCEL }],
+        );
+
+        // A change of machine replaces the one standing, and one naming none leaves it.
+        const moved = Option.getOrThrow(
+          yield* updateAutomation(owner, onDevice.id, {
+            runsOn: { machine: AGENT_MACHINE.VERCEL },
+          }),
+        );
+
+        const renamed = Option.getOrThrow(
+          yield* updateAutomation(owner, onDevice.id, { name: "Renamed" }),
+        );
+
+        assert.deepEqual(
+          [automationRunsOn(moved), automationRunsOn(renamed)],
+          [{ machine: AGENT_MACHINE.VERCEL }, { machine: AGENT_MACHINE.VERCEL }],
+        );
       }),
   );
 
@@ -303,15 +339,6 @@ it.layer(getTestDB())("the automation store", (it) => {
           [[AUTOMATION_RUN_STATUS.SKIPPED, AUTOMATION_RUN_REASON.CONCURRENCY]],
         );
         assert.deepEqual(yield* listAutomationRuns(other, made.id), []);
-        assert.equal(
-          (yield* automationRunsSince(made.id, new Date("2026-10-15T00:00:00Z"))).length,
-          1,
-        );
-        assert.equal(
-          (yield* automationRunsSince(made.id, new Date("2026-10-15T02:00:00Z"))).length,
-          0,
-          "a run fired before the instant is not counted",
-        );
       }),
   );
 
@@ -466,94 +493,7 @@ it.layer(getTestDB())("the automation store", (it) => {
   );
 
   it.effect(
-    "a run started on a Sentry issue holds its cooldown for that issue alone from when it started, however late after it fired, and a skipped one holds nothing",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openAccount;
-        const workspaceId = yield* openWorkspace(owner);
-
-        const made = Option.getOrThrow(
-          yield* createAutomation(owner, {
-            ...nightly(workspaceId),
-            trigger: {
-              kind: AUTOMATION_TRIGGER.INTEGRATION,
-              provider: TRIGGER_PROVIDER.SENTRY,
-              event: SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
-            },
-            nextRunAt: null,
-          }),
-        );
-
-        const fireOn = (subjectId: string) =>
-          Effect.map(
-            recordAutomationRun(made, {
-              dedupeKey: randomUUID(),
-              firing: {
-                kind: AUTOMATION_FIRING.INTEGRATION,
-                provider: TRIGGER_PROVIDER.SENTRY,
-                event: SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
-                subject: { id: subjectId, title: "TypeError: x is undefined" },
-              },
-              firedAt: new Date("2026-10-15T12:00:00Z"),
-            }),
-            Option.getOrThrow,
-          );
-
-        yield* TestClock.setTime(Date.parse("2026-10-15T12:00:00Z"));
-        const started = yield* fireOn("4001");
-        // The sweep starts it three quarters of an hour after it fired; a claim is a start, its agent still to come.
-        yield* TestClock.adjust(Duration.minutes(45));
-        yield* claimAutomationRun(started.id);
-        const skipped = yield* fireOn("4002");
-        yield* settleAutomationRun(skipped.id, {
-          status: AUTOMATION_RUN_STATUS.SKIPPED,
-          reason: AUTOMATION_RUN_REASON.CONCURRENCY,
-        });
-
-        const within = yield* subjectRunStartedSince(
-          made.id,
-          "4001",
-          new Date("2026-10-15T00:00:00Z"),
-        );
-
-        const startedAfterFiring = yield* subjectRunStartedSince(
-          made.id,
-          "4001",
-          new Date("2026-10-15T12:30:00Z"),
-        );
-
-        const after = yield* subjectRunStartedSince(
-          made.id,
-          "4001",
-          new Date("2026-10-15T12:45:01Z"),
-        );
-
-        const skippedIssue = yield* subjectRunStartedSince(
-          made.id,
-          "4002",
-          new Date("2026-10-15T00:00:00Z"),
-        );
-
-        const otherIssue = yield* subjectRunStartedSince(
-          made.id,
-          "4003",
-          new Date("2026-10-15T00:00:00Z"),
-        );
-
-        assert.equal(within, true);
-        assert.equal(
-          startedAfterFiring,
-          true,
-          "a run that fired earlier but started since holds it",
-        );
-        assert.equal(after, false, "a run started before the instant holds nothing");
-        assert.equal(skippedIssue, false);
-        assert.equal(otherIssue, false);
-      }),
-  );
-
-  it.effect(
-    "a started run whose agent was deleted is no claim: it counts nothing against concurrency, and neither a start nor a failed start rewrites it",
+    "a started run whose agent was deleted is neither started again nor failed by a later start",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -575,13 +515,9 @@ it.layer(getTestDB())("the automation store", (it) => {
         );
 
         yield* claimAutomationRun(run.id);
-        const since = new Date("2026-10-15T11:50:00Z");
-        const claimedBefore = yield* claimedRunsStarting(made.id, since);
         const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
         assert.equal(yield* attachRunAgent(run.id, agentId), true);
         yield* db.delete(agentTable).where(eq(agentTable.id, agentId));
-
-        const claimedAfter = yield* claimedRunsStarting(made.id, since);
 
         const restarted = yield* attachRunAgent(
           run.id,
@@ -589,10 +525,8 @@ it.layer(getTestDB())("the automation store", (it) => {
         );
 
         const refused = yield* failClaimedRun(run.id, AUTOMATION_RUN_REASON.MODEL);
-        const [kept] = yield* automationRunsSince(made.id, since);
+        const [kept] = yield* listAutomationRuns(owner, made.id);
 
-        assert.equal(claimedBefore, 1, "a claim still starting counts");
-        assert.equal(claimedAfter, 0);
         assert.equal(restarted, false);
         assert.equal(refused, false);
         assert.equal(kept?.status, AUTOMATION_RUN_STATUS.STARTED);

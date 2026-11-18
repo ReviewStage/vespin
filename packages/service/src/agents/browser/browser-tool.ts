@@ -35,7 +35,7 @@
  * (`browserModelOutput`) and its base64 is left out of the stored
  * conversation (`storedBrowserOutput`); the transcript's copy, the page at
  * its own size and good quality (`BROWSER_KEPT_SCREENSHOT`), is kept beside
- * the transcript the call is written to as `show_image`'s pictures are
+ * the transcript the call is written to as `show_media`'s pictures are
  * (`@repo/database/models/conversation-pictures`), deleted with that
  * conversation, and the step names it by id (`picture`), or says why it was
  * not kept (`omitted`). Nothing a page holds is logged or traced here: a
@@ -107,27 +107,22 @@ export const BROWSER_TOOL = {
   description:
     "Drive a real browser, a Chromium in your own sandbox, whose tabs the developer can watch " +
     "and take over in its Browser tab. Your own dev server is at localhost " +
-    "there, such as http://localhost:3000/. Each call takes up to " +
-    `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, run in order: list the tabs, open one at an ` +
-    "address, navigate, go back or forward, click, type, choose an option in a dropdown, press " +
-    "a key, scroll, wait, take a screenshot to see the page, take a snapshot to read it as " +
-    "text with a ref beside each element, read its console, or close it. To show the developer " +
-    "a flow you built or tested, record it: record starts a video of whatever the browser shows, " +
-    "your pointer drawn on the page while it records, " +
-    `up to ${BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS} seconds and across calls, and ` +
-    "stop_recording, with a caption, stops it and keeps it in your transcript, where it plays; " +
-    "stop it before your turn ends, or it is lost. Its answer names the path the video stays at in " +
-    "your sandbox until your next recording, by which you can post it to a thread. Take a snapshot for " +
+    "there, such as http://localhost:3000/. Use it for what the developer should see or finish " +
+    "themselves, such as a flow to show them or a sign-in, and keep your own checks on Playwright " +
+    "from your shell. Each call takes up to " +
+    `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, run in order. Take a snapshot for ` +
     "the refs before you click or type on an element. Choose in a native dropdown, a select " +
     "the snapshot shows as a combobox or listbox, with select on its ref and the option's " +
-    "label, rather than clicking it or its options, whose popup no click reaches. An action that leaves out its tab acts on the tab the action before " +
-    "it acted on in the same call only, so open and go on in one call; a new call names its " +
-    "tab. While the developer drives a tab, actions on " +
-    "it are refused until they hand it back: wait, or ask them. You may find a tab the " +
-    "developer opened in your browser, such as one they signed in on for you, which the tabs " +
-    "answered say they opened: use it once they hand it back. Answers each step that ran and " +
-    "the tabs it acted on as they now stand, or `not-run` and why, such as the browser not " +
-    "being reachable.",
+    "label, since no click reaches its popup. Every action on a tab names it, by the id list or " +
+    "open answered; an open names its new tab too, such as docs, so later actions in the same " +
+    "call pass that name to go on in it. To show the developer a flow, record it: record " +
+    "starts a video of what " +
+    `the browser shows, your pointer drawn on it, up to ${BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS} seconds and across calls, ` +
+    "and stop_recording, with a caption, keeps it in your transcript; stop it before your turn " +
+    "ends, or it is lost. Its answer names the video's path in your sandbox until your next " +
+    "recording, by which you can post it to a thread. While the developer drives a tab, actions on " +
+    "it are refused until they hand it back: wait, or ask them. A tab the developer opened in your " +
+    "browser, such as one they signed in on for you, is yours to use once they hand it back.",
   inputSchema: BROWSER_INPUT,
 } as const;
 
@@ -195,6 +190,37 @@ export const BROWSER_TOOL_REFUSAL = {
   NO_SANDBOX: "Not run: your sandbox could not be opened. The call may be made again.",
 } as const;
 
+/** What an action whose fields take one of several forms takes, in words, so a call it refused is fixed in one retry. */
+const ACTION_FIELD_WORDS: ReadonlyMap<unknown, string> = new Map([
+  [
+    BROWSER_AGENT_ACTION.CLICK,
+    "A click takes `tab` and `target`, either {ref} for an element or {x, y} for a point, and no other field.",
+  ],
+  [
+    BROWSER_AGENT_ACTION.TYPE,
+    "A type takes `tab`, `text`, and `target`, either {ref} for a field or {focused: true} for the element that has the focus, and no other field.",
+  ],
+  [
+    BROWSER_AGENT_ACTION.SCROLL,
+    "A scroll takes `tab` and `by`, either {ref} to bring an element into view or {deltaX, deltaY} for a distance, and no other field.",
+  ],
+]);
+
+/** Why an input did not read, naming the field it failed at and, for an action of several forms, what that action takes. */
+function unreadable(input: UnparsedWireValue, path: readonly (string | number)[]): string {
+  const at = path.join(".");
+  const [, index] = path;
+  const actions = isRecord(input) && Array.isArray(input.actions) ? input.actions : [];
+  const named = Predicate.isNumber(index) ? actions.at(index) : undefined;
+  const takes = isRecord(named) ? ACTION_FIELD_WORDS.get(named.action) : undefined;
+
+  return (
+    `Not run: the input did not read${at === "" ? "" : ` at ${at}`}. ` +
+    (takes ??
+      `Name 1 to ${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, each as the tool's input says.`)
+  );
+}
+
 /** What a call runs under: the session whose sandbox its browser is in, the conversation its tabs belong to, and the transcript its screenshots are kept beside. */
 export interface BrowserCall {
   /** The session whose sandbox the browser runs in: the root's own (`browserSessionOf`). */
@@ -222,29 +248,24 @@ function drivenWords(tab: string): string {
 
 /**
  * The first action that acts on a tab a member drives, and that tab, read
- * ahead of the run as the run itself names tabs: a tab left out is the one
- * the action before acted on, a tab just opened is driven by no one, and a
- * closed one leaves the next to name its own.
+ * ahead of the run: a tab named by an `open` earlier in the call was just
+ * opened, and no one drives it.
  */
 function firstDriven(
   actions: readonly BrowserAgentAction[],
   driven: ReadonlySet<string>,
 ): { readonly index: number; readonly tab: string } | undefined {
-  // Note that `null` is a tab this call opened, whose id is not known until it runs.
-  let tab: string | null | undefined;
+  const opened = new Set<string>();
 
   for (const [index, action] of actions.entries()) {
     if (action.action === BROWSER_AGENT_ACTION.LIST || isRecordingAction(action)) continue;
 
     if (action.action === BROWSER_AGENT_ACTION.OPEN) {
-      tab = null;
+      opened.add(action.name);
       continue;
     }
 
-    const named = action.tab ?? tab;
-
-    if (Predicate.isString(named) && driven.has(named)) return { index, tab: named };
-    tab = action.action === BROWSER_AGENT_ACTION.CLOSE ? undefined : named;
+    if (!opened.has(action.tab) && driven.has(action.tab)) return { index, tab: action.tab };
   }
 
   return undefined;
@@ -652,14 +673,7 @@ export function runBrowserTool(
   const read = readInput(input);
 
   if (Result.isFailure(read)) {
-    const at = read.failure.path.join(".");
-
-    return Effect.succeed(
-      browserNotRun(
-        `Not run: the input did not read${at === "" ? "" : ` at ${at}`}. Name 1 to ` +
-          `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, each as the tool's input says.`,
-      ),
-    );
+    return Effect.succeed(browserNotRun(unreadable(input, read.failure.path)));
   }
 
   const { actions } = read.success;

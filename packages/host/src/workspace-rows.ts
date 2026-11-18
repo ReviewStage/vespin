@@ -2,8 +2,8 @@
  * workspace-rows.ts -- the account's workspaces in the sync engine's pool, as the workspaces' follow answers them, drawn on the view, and a workspace's rename, its slug, and a photo the service answered drawn over them the moment each is asked or answered.
  *
  * Each workspace is one row of the pool (`@repo/sync`), by its id, for the
- * signed-in session: the follow, or the entity store before it, answers the
- * account's workspaces whole (`answer`), and the view draws them as the pool
+ * signed-in session: the local database draws what it held of them as they
+ * stand, the follow answers the account's workspaces whole (`answer`), and the view draws them as the pool
  * shows them, every write standing drawn over them. A rename and a slug are
  * writes drawn at once (`workspaceWrite`); a photo is drawn once the service
  * answers it, since it uploads (`answered`).
@@ -23,6 +23,7 @@
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { EntityPool, HeldRows, Refused, RowKind, WriteDeclaration, Written } from "@repo/sync";
 import { Effect, Equal, type Scope } from "effect";
+import { KEPT_LIST } from "./kept-lists.js";
 import { carriedWaits } from "./live-collection.js";
 
 /** A change to a workspace: the row as it leaves it, from the row as it is drawn now. */
@@ -68,7 +69,9 @@ export interface WorkspaceRowsDependencies {
 
 /** The account's workspaces in the pool, and the writes drawn over them. */
 export interface WorkspaceRows {
-  /** Takes the workspaces the follow, or the entity store, answered, whole, and draws them. */
+  /** Whether the workspaces were drawn as the local database held them as they stood, before the follow answered. */
+  readonly loaded: boolean;
+  /** Takes the workspaces the follow answered, whole, and draws them. */
   readonly answer: (workspaces: readonly Workspace[]) => Effect.Effect<void>;
   /** A write to `workspaceId` carried to the service by `send`, as the pool takes what it answered (`workspaceWrite`); refused as `unsent`, and never sent, once this session has closed. */
   readonly sent: <Answer>(
@@ -115,7 +118,13 @@ export function workspaceRows(
       redraw: () => drawn,
       // Note that no workspace write answers a transaction, so the read hands no wait and each write waits on the follow's next move (`carried`).
       confirmation: () => undefined,
+      kept: KEPT_LIST.WORKSPACES,
     });
+
+    // Note that what the local database held is drawn at once, before the follow answers, and that a list of none is no list.
+    const loaded = held.loaded && held.synced().length > 0;
+    answered = loaded;
+    yield* drawn;
 
     const waits = yield* carriedWaits(() => held.synced());
     const movesOf = (workspaceId: string) => moves.get(workspaceId) ?? 0;
@@ -143,6 +152,7 @@ export function workspaceRows(
         open ? change(row) : row;
 
     return {
+      loaded,
       answer: (workspaces) =>
         Effect.gen(function* () {
           const moved = yield* held.answer(workspaces);

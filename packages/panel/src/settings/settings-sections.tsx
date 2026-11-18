@@ -111,6 +111,11 @@ function workspaceShown(input: SettingsSearchInput): boolean {
   return input.workspace !== undefined;
 }
 
+/** Whether the workspace Settings shows has billing on and the reader manages it, as every Billing section needs. */
+function billingShown(input: SettingsSearchInput): boolean {
+  return workspaceShown(input) && input.billing === true;
+}
+
 /** Whether an account is signed in, as every account section needs. */
 function accountDrawn(input: SettingsSearchInput): boolean {
   return input.accountDrawn;
@@ -124,6 +129,9 @@ function accountDrawn(input: SettingsSearchInput): boolean {
 export const SECTION = {
   MEMBERS: SETTINGS_SECTION.MEMBERS,
   WORKSPACE_CONNECTIONS: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+  BILLING_USAGE: SETTINGS_SEARCH_ROW.BILLING_USAGE,
+  BILLING_STATUS: SETTINGS_SEARCH_ROW.BILLING_STATUS,
+  ENVIRONMENT_SANDBOX: SETTINGS_SEARCH_ROW.ENVIRONMENT_SANDBOX,
   ENVIRONMENT_VARIABLES: SETTINGS_SEARCH_ROW.ENVIRONMENT_VARIABLES,
   ENVIRONMENT_INSTALL: SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL,
   ENVIRONMENT_SETUP: SETTINGS_SEARCH_ROW.ENVIRONMENT_SETUP,
@@ -194,6 +202,27 @@ const SETTINGS_SECTIONS = {
     page: SETTINGS_VIEW.WORKSPACE,
     head: WORKSPACE_CONNECTIONS,
     words: "integrations GitHub repositories connect choose manage disconnect organization",
+    drawn: workspaceShown,
+  },
+  [SECTION.BILLING_USAGE]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.BILLING,
+    head: "Usage",
+    words: "billing usage this month sandbox included free allowance owed cost spend",
+    drawn: billingShown,
+  },
+  [SECTION.BILLING_STATUS]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.BILLING,
+    head: "Billing",
+    words: "billing set up manage card payment invoices stripe portal failed blocked",
+    drawn: billingShown,
+  },
+  [SECTION.ENVIRONMENT_SANDBOX]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.ENVIRONMENT,
+    head: "Sandbox",
+    words: `sandbox size vcpus cpu cores memory ram gb machine larger bigger faster ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_VARIABLES]: {

@@ -1,3 +1,4 @@
+import { goalRefusalWords } from "@repo/features/agent-goal-model";
 import { newerTurn } from "@repo/features/agent-status";
 import {
   AGENT_CALL_FAILURE,
@@ -8,12 +9,13 @@ import {
   AGENT_BOUNDS,
   type AgentAttachment,
   type AgentPayer,
+  type AgentRuntime,
   type AgentTranscriptMessage,
   type AgentTurn,
   agentAttachmentsSchema,
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
-import { type Failure, remedyLabel } from "@repo/features/failure-remedy";
+import { FAILURE_REASON, type Failure, remedyLabel } from "@repo/features/failure-remedy";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DraftSuggestion, SuggestionSendResult } from "@repo/features/suggestion-model";
 import { STATUS_TONE } from "@repo/ui";
@@ -129,7 +131,6 @@ export interface AgentComposerControl {
   sent: readonly SentLine[];
 }
 
-/** No send's call waiting on its answer. */
 const NOTHING_ASKING: ReadonlySet<string> = new Set();
 
 interface Held {
@@ -321,6 +322,8 @@ export function useAgentComposer(input: {
   rewind?: MessageRewinder | undefined;
   /** Who pays for the agent, which a plan's refusal names; none for an agent from before payers. */
   payer?: AgentPayer | undefined;
+  /** The harness the agent runs on, whose refusal of a `/goal` line it keeps no goal for says so; none where not known. */
+  runtime?: AgentRuntime | undefined;
   /** The teammate who started the agent (`teammateStarter`), whose own credentials a refusal names; none for the reader's own. */
   starter?: string | undefined;
   /** Whether the tab is on screen, which a refusal landing while it is not says in a toast; on screen where unsaid. */
@@ -377,14 +380,21 @@ export function useAgentComposer(input: {
 
   const at = latest.current;
 
-  /** Why a refused message did not go, in the box's words. */
-  const noteOf = (message: SendingMessage): ComposerNote | undefined =>
-    message.refused === undefined
-      ? undefined
-      : {
-          ...messageFailureNote(message.refused, at.taskId, at.payer, at.starter),
-          cause: message.refused,
-        };
+  /** Why a refused message did not go, in the box's words: a `/goal` line to a harness that keeps no goal, refused as asking what it does not offer, says so. */
+  const noteOf = (message: SendingMessage): ComposerNote | undefined => {
+    const { refused } = message;
+
+    if (refused === undefined) return undefined;
+
+    const goalWords =
+      refused.failure === AGENT_CALL_FAILURE.INVALID_CHOICE
+        ? goalRefusalWords(at.runtime, message.text)
+        : undefined;
+
+    return goalWords === undefined
+      ? { ...messageFailureNote(refused, at.taskId, at.payer, at.starter), cause: refused }
+      : { reason: FAILURE_REASON.OTHER, text: goalWords, cause: refused };
+  };
 
   // A refusal for good, the agent's session ended, closes the box, said in the words of the newest one.
   const ending = sending.findLast(
@@ -529,15 +539,18 @@ export function useAgentComposer(input: {
     if (lead !== undefined) onLeadSent?.();
   };
 
-  // Note that a suggestion's words are sent through it rather than as a
-  // line of the box's own, since the service sends them once, under the
-  // suggestion's key, and the transcript reads them back as its line. The
-  // box holds them until that send answers: a send refused, or one another
-  // member landed first, leaves them in the box, saying why in a toast. The
-  // host sends it behind the agent's messages still on their way, as every
-  // send to the agent goes, so the agent takes them in the order they were sent.
+  // Whether a suggestion's send is out, which holds the box.
   const [suggesting, setSuggesting] = useState(false);
 
+  /**
+   * Note that a suggestion's words are sent through it rather than as a
+   * line of the box's own, since the service sends them once, under the
+   * suggestion's key, and the transcript reads them back as its line. The
+   * box holds them until that send answers: a send refused, or one another
+   * member landed first, leaves them in the box, saying why in a toast. The
+   * host sends it behind the agent's messages still on their way, as every
+   * send to the agent goes, so the agent takes them in the order they were sent.
+   */
   const sendThroughSuggestion = (
     suggestion: DraftSuggestion,
     text: string,
@@ -700,7 +713,6 @@ export function useAgentComposer(input: {
     });
   };
 
-  /** Lets a refused line go, sending nothing. */
   const dropLine = (id: string) => {
     if (refusedLine(id) === undefined) return;
     latest.current.unsend(agentId, id);

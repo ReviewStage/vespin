@@ -6,7 +6,7 @@
  * revision line alone (`revisionWriterName`), since it draws no actor.
  */
 
-import { PRODUCT_NAME } from "./product-name.js";
+import { VERSION_CHANGE, type VersionUnit } from "./description-version-diff.js";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionLastEdit,
@@ -31,7 +31,16 @@ export const VERSION_HISTORY_WORDS = {
   UNREAD: "The history could not be read.",
   OLDER_UNREAD: "Could not read older versions.",
   VERSION_UNREAD: "Could not read this version.",
+  /** What a version that changed nothing from the one before it says over its words. */
+  NO_CHANGE: "This version changed nothing from the one before it.",
 } as const;
+
+/** What a section a version changed is heard as, by how it changed, since its mark is drawn and not read. */
+export const VERSION_CHANGE_HEARD = {
+  [VERSION_CHANGE.ADDED]: "Added section",
+  [VERSION_CHANGE.CHANGED]: "Changed section",
+  [VERSION_CHANGE.REMOVED]: "Removed section",
+} as const satisfies Record<Exclude<VersionUnit["change"], typeof VERSION_CHANGE.SAME>, string>;
 
 /** What a writer the history cannot name is called, as the panel's actor model names them. */
 const UNNAMED_WRITER = {
@@ -53,7 +62,7 @@ export function revisionSummary(line: DescriptionRevisionLine): string {
   return line.changes === 1 ? "1 change" : `${line.changes} changes`;
 }
 
-/** Who wrote a revision, as the panel's row names them: You for the reader's own, a member by name, the app, a coding agent by its title, or Earlier for the description before history. */
+/** Who wrote a revision, as the panel's row names them: You for the reader's own, a member by name, a coding agent by its title, or Earlier for the description before history. */
 export function revisionWriterName(
   lastEdit: Pick<DescriptionLastEdit, "actor" | "by" | "label">,
   readerId: string | undefined,
@@ -65,8 +74,6 @@ export function revisionWriterName(
       return readerId !== undefined && lastEdit.by.userId === readerId
         ? UNNAMED_WRITER.YOU
         : lastEdit.by.name;
-    case DESCRIPTION_ACTOR.NOTETAKER:
-      return PRODUCT_NAME;
     case DESCRIPTION_ACTOR.AGENT:
       return lastEdit.label ?? UNNAMED_WRITER.AGENT;
     case DESCRIPTION_ACTOR.EARLIER:

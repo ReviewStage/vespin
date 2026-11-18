@@ -5,11 +5,12 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace to list, by the slug list_workspaces answered."
     },
     "repository": {
       "type": "string",
       "maxLength": 140,
+      "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$",
       "description": "The repository, by its full name (owner/name), as list_repositories lists it."
     },
     "path": {
@@ -20,10 +21,19 @@
     "recursive": {
       "type": "boolean",
       "description": "true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries."
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^\\s~^:?*[\\\\]+$",
+      "description": "The branch or commit to read at: a branch by its name, such as the defaultBranch list_repositories answers, read at its head, or a commit by its full SHA, such as the head a pull request stands on."
     }
   },
   "required": [
-    "repository"
+    "workspace",
+    "repository",
+    "ref"
   ],
   "additionalProperties": false
 }

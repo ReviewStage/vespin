@@ -22,7 +22,6 @@ import { WRITE_UNTAKEN } from "@repo/features/keyed-write";
 import { LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER } from "@repo/features/page-wire";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
-import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { subTaskCount, subTasksOf } from "@repo/features/task-list-model";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_SECTION_WRITE, type TaskSection } from "@repo/features/task-section-wire";
@@ -49,15 +48,15 @@ import {
 } from "@repo/features/tasks-view";
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { type EntityPool, entityPool } from "@repo/sync";
+import { entityPool } from "@repo/sync";
 import { isRecord, type WireValue } from "@repo/wire";
-import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope } from "effect";
+import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppDescriptionComments } from "./app-state.js";
 import type { TasksClient } from "./compose-tasks.js";
-import { KEPT_READ, openEntityStore } from "./entity-store.js";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "./fixture-stage.js";
-import { memoryFileSystem } from "./testing/memory-file-system.js";
+import { localCopy } from "./local-copy.js";
+import { nodeSqliteDriverLayer } from "./node/index.js";
 import { polledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
 import {
@@ -85,7 +84,6 @@ import {
   task,
   workspacesLiveRows,
 } from "./testing/tasks-subject.js";
-import { testCipher } from "./testing/test-cipher.js";
 
 it.effect(
   "a run that sends nothing reads its fixture's page, each version it stages, and no other page",
@@ -250,103 +248,90 @@ it.effect("the window's refresh lists the plans and opening one draws its saved 
 );
 
 it.effect(
-  "the account gate opening draws the lists kept on disk while the service answers nothing, and reads the list past where it was kept",
+  "a launch draws the task list the local database kept before the service answers, and reads the list past the sync id it was kept at",
   () =>
     Effect.gen(function* () {
-      const directory = yield* temporaryDirectoryScoped("tasks-entities-");
-      const earlier = yield* Scope.make();
-
-      const kept = yield* Scope.provide(earlier)(
-        openEntityStore({ directory, cipher: testCipher(), accountId: "user-dana" }),
-      );
-
-      yield* kept.keep(KEPT_READ.TASK_LIST, {
-        rows: { tasks: [rowOfTask(task(INVITES, "Kept invitations", "# Kept", 10))], agents: [] },
-        at: "7",
-      });
-      yield* kept.keep(KEPT_READ.WORKSPACES, [PERSONAL, ACME]);
-      yield* kept.keep(KEPT_READ.SIDEBAR, {
-        sections: [],
-        entries: [],
-        agentEntries: [],
-        pins: [{ repository: "acme/relay", pinnedAt: 3 }],
-      });
-      yield* Scope.close(earlier, Exit.void);
-
-      const entities = yield* openEntityStore({
-        directory,
-        cipher: testCipher(),
-        accountId: "user-dana",
-      });
-
-      const service = fakeService([task(INVITES, "Teammate invitations", "# Draft", 10)]);
-      service.live.list.refuse({ failure: TASK_CALL_FAILURE.UNANSWERED });
-      service.workspacesFail = true;
-      // Note that the list is read through the same client call as every other live read, which answers nothing here but the list.
-      const { liveRead } = service;
-      // SAFETY: the stand-in answers the list read as the client does and hands every other read on unchanged.
-      service.liveRead = ((read, params, poll) =>
-        read.name === TASK_LIST_READ.name
-          ? liveRead(read, params, poll)
-          : Effect.succeed({ failure: TASK_CALL_FAILURE.UNANSWERED })) as TasksClient["liveRead"];
+      const root = yield* temporaryDirectoryScoped("tasks-local-");
+      const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       const asked: (string | undefined)[] = [];
       const { listLive } = service;
+
       service.listLive = (userId, sync) => {
         asked.push(sync);
 
         return listLive(userId, sync);
       };
 
-      const { last, settled, open } = yield* subject(service, { entities });
+      /** One launch as the host makes it: the pool on the local copy, the composers on the pool, then the database opened and the gate opened. */
+      const launched = Effect.gen(function* () {
+        const local = yield* localCopy(root);
 
-      yield* open;
+        const pool = yield* entityPool({
+          mintKey: () => "key",
+          replayRefused: Effect.void,
+          store: local.store,
+        });
+
+        const launch = yield* subject(service, { pool });
+        yield* local.open("user-dana", {
+          kept: () => [],
+          moves: Stream.empty,
+          restored: () => Effect.void,
+        });
+        yield* launch.open;
+
+        return launch;
+      });
+
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(launched);
+      yield* first.listed();
+      // Note that the follow polls past the sync id its answer was read at, which is the id the database kept it at.
+      const keptAt = asked.at(-1);
+      yield* Scope.close(quit, Exit.void);
+
+      service.tasks = [task(INVITES, "Renamed on the service", "# Invites", 11)];
+      service.live.list.refuse({ failure: TASK_CALL_FAILURE.UNANSWERED });
+      asked.length = 0;
+      const { last, settled } = yield* launched;
       yield* settled;
 
       assert.deepEqual(
         last()?.tasks.map((each) => each.name),
-        ["Kept invitations"],
+        ["Teammate invitations"],
       );
-      assert.deepEqual(last()?.workspaces, [PERSONAL, ACME]);
-      assert.deepEqual(last()?.repositoryPins, [{ repository: "acme/relay", pinnedAt: 3 }]);
-      assert.equal(asked[0], "7");
-    }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
+      assert.ok(
+        keptAt !== undefined && keptAt !== "",
+        "the first launch read the list at a sync id",
+      );
+      assert.equal(asked[0], keptAt);
+    }).pipe(
+      Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer)),
+    ),
 );
 
-it.effect(
-  "an answer of the list that moves no row writes nothing to disk, and the sync id it reached is written as the store closes",
-  () =>
-    Effect.gen(function* () {
-      const disk = Layer.merge(memoryFileSystem().layer, NodePath.layer);
+/** The platform a launch keeps its waiting writes on: Node's files and `node:sqlite`. */
+const LOCAL_PLATFORM = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
 
-      const opened = Effect.provide(
-        openEntityStore({ directory: "/state", cipher: testCipher(), accountId: "user-dana" }),
-        disk,
-      );
+/** One launch of Dana's account over `directory`: a pool whose waiting writes, each sent under `key`, are kept in the local database, and the writes it held at the last quit, to lay back. */
+const launchedOver = (directory: string, key: string) =>
+  Effect.gen(function* () {
+    const copy = yield* localCopy(directory);
 
-      /** The sync id the list stands at on disk, as a store opened over it reads it. */
-      const keptAt = Effect.map(
-        Effect.scoped(opened),
-        (store) => store.stored(KEPT_READ.TASK_LIST)?.at,
-      );
+    const pool = yield* entityPool({
+      mintKey: () => key,
+      replayRefused: Effect.void,
+      store: copy.store,
+    });
 
-      const quit = yield* Scope.make();
-      const entities = yield* Scope.provide(quit)(opened);
-      const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
-      const { call, listed } = yield* Scope.provide(quit)(subject(service, { entities }));
-      yield* call("TASKS_REFRESH", undefined);
-      yield* listed();
-      yield* TestClock.adjust("30 seconds");
-      const first = yield* keptAt;
+    const waiting = yield* copy.open("user-dana", {
+      kept: () => [],
+      moves: Stream.empty,
+      restored: () => Effect.void,
+    });
 
-      // The service answers past the id it answered last, nothing having moved since.
-      yield* listed();
-      yield* TestClock.adjust("30 seconds");
-      const meanwhile = yield* keptAt;
-      yield* Scope.close(quit, Exit.void);
-
-      assert.deepEqual([first, meanwhile, yield* keptAt], ["1", "1", "2"]);
-    }),
-);
+    return { pool, waiting };
+  });
 
 it.effect(
   "a rename the service did not answer stays drawn through a relaunch on the same disk, and is sent once more under its key",
@@ -355,20 +340,11 @@ it.effect(
       const directory = yield* temporaryDirectoryScoped("tasks-queue-");
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       service.renameUntaken = WRITE_UNTAKEN.UNANSWERED;
-      const options = { mintKey: () => "rename-key", replayRefused: Effect.void };
-
-      const opened = (pool: EntityPool) =>
-        openEntityStore({
-          directory,
-          cipher: testCipher(),
-          accountId: "user-dana",
-          queued: pool.queued,
-        });
+      const launched = launchedOver(directory, "rename-key");
 
       const quit = yield* Scope.make();
-      const before = yield* Scope.provide(quit)(entityPool(options));
-      const kept = yield* Scope.provide(quit)(opened(before));
-      const first = yield* Scope.provide(quit)(subject(service, { entities: kept, pool: before }));
+      const before = yield* Scope.provide(quit)(launched);
+      const first = yield* Scope.provide(quit)(subject(service, { pool: before.pool }));
       yield* first.call("TASKS_REFRESH", undefined);
       yield* first.listed();
 
@@ -379,10 +355,9 @@ it.effect(
 
       yield* Scope.close(quit, Exit.void);
 
-      const pool = yield* entityPool(options);
-      const entities = yield* opened(pool);
-      const relaunched = yield* subject(service, { entities, pool });
-      yield* pool.requeue(entities.queue, relaunched.tasks.queueable);
+      const { pool, waiting } = yield* launched;
+      const relaunched = yield* subject(service, { pool });
+      yield* pool.requeue(waiting, relaunched.tasks.queueable);
       service.renameUntaken = undefined;
       yield* relaunched.call("TASKS_REFRESH", undefined);
       yield* relaunched.listed();
@@ -395,7 +370,7 @@ it.effect(
       );
       assert.deepEqual(service.renameKeys, ["rename-key", "rename-key"]);
       assert.deepEqual(pool.queued(), []);
-    }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
+    }).pipe(Effect.provide(LOCAL_PLATFORM)),
 );
 
 it.effect(
@@ -444,20 +419,11 @@ it.effect(
         failure: TASK_CALL_FAILURE.UNANSWERED,
         untaken: WRITE_UNTAKEN.UNANSWERED,
       };
-      const options = { mintKey: () => "start-key", replayRefused: Effect.void };
-
-      const opened = (pool: EntityPool) =>
-        openEntityStore({
-          directory,
-          cipher: testCipher(),
-          accountId: "user-dana",
-          queued: pool.queued,
-        });
+      const launched = launchedOver(directory, "start-key");
 
       const quit = yield* Scope.make();
-      const before = yield* Scope.provide(quit)(entityPool(options));
-      const kept = yield* Scope.provide(quit)(opened(before));
-      const first = yield* Scope.provide(quit)(subject(service, { entities: kept, pool: before }));
+      const before = yield* Scope.provide(quit)(launched);
+      const first = yield* Scope.provide(quit)(subject(service, { pool: before.pool }));
       yield* first.call("TASKS_REFRESH", undefined);
       yield* first.listed();
 
@@ -469,10 +435,9 @@ it.effect(
       const waiting = first.last();
       yield* Scope.close(quit, Exit.void);
 
-      const pool = yield* entityPool(options);
-      const entities = yield* opened(pool);
-      const relaunched = yield* subject(service, { entities, pool });
-      yield* pool.requeue(entities.queue, relaunched.tasks.queueable);
+      const { pool, waiting: kept } = yield* launched;
+      const relaunched = yield* subject(service, { pool });
+      yield* pool.requeue(kept, relaunched.tasks.queueable);
       const made = { ...task(INVITES, "Invitation expiry", "", 30), createdAt: 3_000 };
       service.tasks = [...service.tasks, made];
       service.createAnswer = { ok: true, answer: { task: made } };
@@ -494,7 +459,7 @@ it.effect(
         [INVITES, BILLING],
       );
       assert.deepEqual(pool.queued(), []);
-    }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
+    }).pipe(Effect.provide(LOCAL_PLATFORM)),
 );
 
 it.effect(
@@ -2731,7 +2696,14 @@ it.effect(
       yield* TestClock.adjust(Duration.seconds(2));
       yield* followSettled;
       yield* answered(() => pages.set({ pages: [{ ...FUNNEL, shownBy: null }] }));
-      const shown = { ...FUNNEL, version: 2, at: 2_500, shownBy: { kind: PAGE_SHOWER.APP } };
+
+      const shown = {
+        ...FUNNEL,
+        version: 2,
+        at: 2_500,
+        shownBy: { kind: PAGE_SHOWER.AGENT, agentId: "8d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a" },
+      };
+
       yield* answered(() => pages.set({ pages: [shown] }));
       assert.deepEqual(pushed.slice(1), [held({ rows: [FUNNEL] }), held({ rows: [shown] })]);
       assert.equal(told.length, 0, "a plan's pages held for the Inbox are never told in the view");
@@ -3191,19 +3163,32 @@ it.effect(
       };
       const history = polledLive<"revisions">(["revisions"]);
       service.historyLives[INVITES] = history;
-      const { follow, call } = yield* subject(service);
+      const { follow, call, pushed } = yield* subject(service);
       yield* follow("TASKS_HISTORY_FOLLOW", { taskId: INVITES });
       yield* followSettled;
       // An answer Sync woke hands the held history its wait for a write's transaction.
       yield* answered(() => history.set({ revisions: [historyRow(1, 1_000)] }, ["tx-earlier"]));
 
-      const restoring = yield* Effect.forkChild(call("TASKS_RESTORE", { taskId: INVITES, seq: 1 }));
+      // The version history as it stood the moment the restore was answered.
+      const restoring = yield* Effect.forkChild(
+        Effect.map(call("TASKS_RESTORE", { taskId: INVITES, seq: 1 }), (restored) => ({
+          restored,
+          shown: pushed.findLast(([kind]) => kind === LIVE_READ.HISTORY),
+        })),
+      );
+
       yield* followSettled;
       assert.equal(restoring.pollUnsafe(), undefined, "no answer before the history carries it");
       yield* answered(() =>
         history.set({ revisions: [historyRow(2, 2_000), historyRow(1, 1_000)] }, ["txid-1"]),
       );
-      assert.deepEqual(yield* Fiber.join(restoring), true);
+      assert.deepEqual(yield* Fiber.join(restoring), {
+        restored: true,
+        shown: [
+          LIVE_READ.HISTORY,
+          { [INVITES]: { rows: { revisions: [historyLine(2, 2_000), historyLine(1, 1_000)] } } },
+        ],
+      });
     }),
 );
 

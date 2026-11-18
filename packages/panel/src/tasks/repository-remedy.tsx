@@ -16,7 +16,8 @@ import { useOpenSettings } from "../open-settings.js";
  * in Settings › Profile, through the window's Settings opener, and a
  * missing subscription or API key connected at its harness's row in
  * Settings › Agents, or authorized for an organization's SAML SSO on
- * GitHub. Outside the window, as in a test of one surface, every door does
+ * GitHub. A cloud Start billing refused opens Stripe's page for the task's
+ * workspace, to set billing up or manage it. Outside the window, as in a test of one surface, every door does
  * nothing.
  */
 
@@ -30,6 +31,8 @@ export interface RepositoryRemedyDoors {
   readonly chooseRepository: (taskId: string) => void;
   /** The task moved to the workspace; answers whether it moved. */
   readonly moveTask: (taskId: string, workspaceId: string) => Promise<boolean>;
+  /** Stripe's page for the task's workspace: the Customer Portal where `manage`, else Checkout to set billing up. */
+  readonly openBilling: (taskId: string, manage: boolean) => void;
 }
 
 const NO_DOORS: RepositoryRemedyDoors = {
@@ -37,6 +40,7 @@ const NO_DOORS: RepositoryRemedyDoors = {
   openGitHub: () => undefined,
   chooseRepository: () => undefined,
   moveTask: () => Promise.resolve(false),
+  openBilling: () => undefined,
 };
 
 const RepositoryRemedyContext = createContext<RepositoryRemedyDoors>(NO_DOORS);
@@ -76,6 +80,10 @@ export function useRepositoryRemedy(): (
         return () => openSettings(agentKeyLink(failure.provider));
       case FAILURE_REASON.CHOOSE_REPOSITORY:
         return () => doors.chooseRepository(failure.taskId);
+      case FAILURE_REASON.SET_UP_BILLING:
+        return () => doors.openBilling(failure.taskId, false);
+      case FAILURE_REASON.MANAGE_BILLING:
+        return () => doors.openBilling(failure.taskId, true);
       case FAILURE_REASON.MOVE_TASK:
         return () => {
           void doors.moveTask(failure.taskId, failure.workspace.id).then((moved) => {

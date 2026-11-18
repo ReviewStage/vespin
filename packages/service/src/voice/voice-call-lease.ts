@@ -39,7 +39,12 @@
  * successor loses the call and lets go at its next fenced act, so one lease
  * still acts at a time. A sideband that drops with no close fails the
  * delivery the same way; one that will not attach for now fails it before
- * it claims anything.
+ * it claims anything. A session that closed while no lease listened may go
+ * on refusing every attach as unavailable rather than not found, which
+ * would bring its lease again for as long as the queue keeps it, its row
+ * standing: so a lease refused as unavailable on a late enough delivery
+ * reads the session as gone (`sessionGone`), counted by the queue's own
+ * deliveries and no timer of its own.
  *
  * The driver (`holdVoiceCall`) names nothing of Functions: it takes a lease
  * and runs until it hands over or the call ends, so a longer-lived host can
@@ -54,7 +59,7 @@ import { PROVIDER_KEY_UNREADABLE } from "@repo/database/models/provider-key-seal
 import { spendVoiceMeter } from "@repo/database/models/quota";
 import {
   claimVoiceCallLease,
-  deleteVoiceCall,
+  endVoiceCall,
   readVoiceCall,
   type VoiceCallRow,
 } from "@repo/database/models/voice-calls";
@@ -127,9 +132,9 @@ const VoiceCallLeaseMessageSchema = Schema.Struct({
 
 export type VoiceCallLeaseMessage = typeof VoiceCallLeaseMessageSchema.Type;
 
-/** One delivery of a lease: its message, and whether the queue brought it before. */
+/** One delivery of a lease: its message, and which delivery of it this is, the first being 1. */
 export interface VoiceCallLease extends VoiceCallLeaseMessage {
-  readonly redelivered: boolean;
+  readonly delivery: number;
 }
 
 /** A lease's message the queue did not take. */
@@ -157,12 +162,23 @@ interface VoiceCallLeasesService {
  * its seconds kept on the caller's day and the call counted once, by its
  * length and the agent's harness, in the agent's workspace. A meter the
  * store refused is logged and the call still counted, as dictation's is.
+ * The delete lets go of the caller's blank agent nobody spoke to, and of its
+ * task where that holds nothing else (`endVoiceCall`), so the agent is read
+ * for its harness and workspace before it.
  */
 const endCall = Effect.fnUntraced(function* (
   call: VoiceCallRow,
   seconds: Option.Option<number>,
 ): Effect.fn.Return<void, StoreFailure, DatabaseServices> {
-  const deleted = yield* deleteVoiceCall(call.callerId, call.id);
+  const routing = yield* readAgentRouting(call.callerId, call.agentId).pipe(
+    Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
+  );
+
+  const workspace = yield* readVisibleAgentWorkspace(call.callerId, call.agentId).pipe(
+    Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
+  );
+
+  const deleted = yield* endVoiceCall(call.callerId, call.id);
 
   if (!deleted || Option.isNone(seconds)) return;
   const now = yield* Clock.currentTimeMillis;
@@ -171,21 +187,15 @@ const endCall = Effect.fnUntraced(function* (
     Effect.catch(logStoreFailure),
   );
 
-  const routing = yield* readAgentRouting(call.callerId, call.agentId).pipe(
-    Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
-  );
-
   const harness = Option.flatMapNullishOr(routing, (agent) => harnessOf(agent.runtime));
 
   // Note that a call whose agent is gone, or ended for good, is metered but not counted, since it has no harness to count it by.
   if (Option.isNone(harness)) return;
 
-  yield* recordServerEventIn(
-    SERVER_EVENT.VOICE_CALL,
-    call.callerId,
-    readVisibleAgentWorkspace(call.callerId, call.agentId),
-    { duration: voiceCallDurationOf(seconds.value * MS_PER_SECOND), harness: harness.value },
-  );
+  yield* recordServerEventIn(SERVER_EVENT.VOICE_CALL, call.callerId, Effect.succeed(workspace), {
+    duration: voiceCallDurationOf(seconds.value * MS_PER_SECOND),
+    harness: harness.value,
+  });
 });
 
 /** The caller's own OpenAI key the session was opened on; none where they no longer have one this deployment can open. */
@@ -205,7 +215,7 @@ const claimLease = Effect.fnUntraced(function* (
   startedAt: number,
 ) {
   const until = new Date(startedAt + VOICE_CALL_LEASE.MAX_DURATION_SECONDS * MS_PER_SECOND);
-  const epoch = lease.redelivered ? standing.leaseEpoch : lease.epoch;
+  const epoch = lease.delivery > 1 ? standing.leaseEpoch : lease.epoch;
 
   return yield* claimVoiceCallLease(lease.callId, epoch, until);
 });
@@ -260,7 +270,7 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
       );
 
       // Note that an attach that may pass later claims nothing, so the lease comes again at the epoch it names.
-      if (Result.isFailure(attached) && !sessionGone(attached.failure)) {
+      if (Result.isFailure(attached) && !sessionGone(attached.failure, lease.delivery)) {
         return yield* new SidebandUnattached({ status: attached.failure.status });
       }
 
@@ -391,18 +401,18 @@ const vercelPublish = (lease: VoiceCallLeaseMessage) =>
 
 /**
  * A lease's deliveries in this process, as the queue would make them:
- * handed to the driver, and handed again after a failure, marked as come
- * before, until a lease's let-go has passed since the first.
+ * handed to the driver, and handed again after a failure, counted, until a
+ * lease's let-go has passed since the first.
  */
 const deliveredInProcess = (message: VoiceCallLeaseMessage) =>
   Effect.gen(function* () {
     const until =
       (yield* Clock.currentTimeMillis) + Duration.toMillis(VOICE_CALL_LEASE.LET_GO_AFTER);
 
-    let redelivered = false;
+    let delivery = 1;
 
     while (true) {
-      const failed = yield* consumeVoiceCallLease({ ...message, redelivered }).pipe(
+      const failed = yield* consumeVoiceCallLease({ ...message, delivery }).pipe(
         Effect.as(false),
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -418,7 +428,7 @@ const deliveredInProcess = (message: VoiceCallLeaseMessage) =>
 
       if (!failed) return;
       yield* Effect.sleep(VOICE_CALL_LEASE.FAILED_AGAIN);
-      redelivered = true;
+      delivery += 1;
 
       if ((yield* Clock.currentTimeMillis) >= until) return;
     }
@@ -479,7 +489,7 @@ export function voiceCallLeasesHandler(
           return QUEUE_ACKNOWLEDGED;
         }
 
-        yield* consumeVoiceCallLease({ ...decoded.value, redelivered: deliveryCount > 1 }).pipe(
+        yield* consumeVoiceCallLease({ ...decoded.value, delivery: deliveryCount }).pipe(
           Effect.tapCause((cause) =>
             Effect.logWarning(`a voice call's lease will be delivered again: ${causeKind(cause)}`),
           ),

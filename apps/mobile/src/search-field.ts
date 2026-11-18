@@ -1,12 +1,21 @@
 // search-field.ts -- the Stack's search field refilled with a tab's words when it stands again, so a rotation or a fold that swaps a tab's layout keeps what was typed.
 
 import { type RefObject, useState } from "react";
-import type { SearchBarCommands } from "react-native-screens";
+import type { SearchBarCommands, SearchBarPlacement } from "react-native-screens";
 
-/** A ref that, the first time the field it is handed stands, tells it `text`, and never again, so nothing typed after is overwritten. */
-function refillingRef(text: string): RefObject<SearchBarCommands | null> {
+/** The param code opens Search with to have its field focused, such as ⌘F, since the system activates the field only when its tab is tapped. */
+export const SEARCH_FOCUS_PARAM = "focus";
+
+/** The Stack's search field, held by a tab: its ref, and a focus asked of it, which waits for the field to stand where it doesn't yet. */
+export type SearchFieldRef = RefObject<SearchBarCommands | null> & {
+  readonly focusOnce: () => void;
+};
+
+/** A ref that, the first time the field it is handed stands, tells it `text`, and never again, so nothing typed after is overwritten; and focuses it as it stands where a focus was asked before it did. */
+function refillingRef(text: string): SearchFieldRef {
   let held = text;
   let field: SearchBarCommands | null = null;
+  let focusWaiting = false;
 
   return {
     get current() {
@@ -15,9 +24,26 @@ function refillingRef(text: string): RefObject<SearchBarCommands | null> {
     set current(next) {
       field = next;
 
-      if (next === null || held === "") return;
-      next.setText(held);
-      held = "";
+      if (next === null) return;
+
+      if (held !== "") {
+        next.setText(held);
+        held = "";
+      }
+
+      if (focusWaiting) {
+        focusWaiting = false;
+        next.focus();
+      }
+    },
+    focusOnce() {
+      if (field === null) {
+        focusWaiting = true;
+
+        return;
+      }
+
+      field.focus();
     },
   };
 }
@@ -30,10 +56,27 @@ function refillingRef(text: string): RefObject<SearchBarCommands | null> {
  * is drawn, so it is told them once rather than left blank over a filtered
  * list. It refills as the field is attached rather than in an effect,
  * because expo-router may attach the field after the screen's own effects
- * ran.
+ * ran, which is why a focus asked before then waits for it too.
  */
-export function useRefilledSearchField(text: string): RefObject<SearchBarCommands | null> {
+export function useRefilledSearchField(text: string): SearchFieldRef {
   const [field] = useState(() => refillingRef(text));
 
   return field;
+}
+
+/**
+ * Where a list's search field stands in a compact bar: behind the bar's
+ * search button, as the Inbox and Tasks keep it, or open under the title
+ * when the list mounts holding words, as after a turn or a fold that swapped
+ * its layout. Note that a field behind its button never shows the words it
+ * is refilled with, so it would leave the list filtered with no words in
+ * sight and nothing to clear them by. It is read once as the list mounts, so
+ * the field never moves while one types or clears it.
+ */
+export function useHeldSearchPlacement(text: string): SearchBarPlacement {
+  const [placement] = useState<SearchBarPlacement>(() =>
+    text === "" ? "integratedButton" : "stacked",
+  );
+
+  return placement;
 }

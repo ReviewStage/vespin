@@ -5,6 +5,7 @@ import {
   ADMIN_METRICS_WINDOW,
   ADMIN_METRICS_WINDOW_DEFAULT,
   ADMIN_METRICS_WINDOW_PARAM,
+  ADMIN_MONTH_PARAM,
   ADMIN_PAGE_PATH,
   ADMIN_RELIABILITY_WINDOWS,
   ADMIN_USER_ID_PARAM,
@@ -13,6 +14,7 @@ import {
   ADMIN_WORKSPACE_ID_PARAM,
   ADMIN_WORKSPACES_KIND,
   ADMIN_WORKSPACES_KIND_PARAM,
+  type AdminBillingQuery,
   type AdminDayQuery,
   type AdminMetricsWindow,
   type AdminUserQuery,
@@ -23,6 +25,7 @@ import {
   isUtcDayKey,
 } from "@repo/features/admin-wire";
 import { ADMIN_LINK_SECTION, type AdminLinkSection } from "@repo/features/link-grammar";
+import { formatDayHeading } from "@repo/features/time-format";
 
 /**
  * The page's own addresses, distinct from the API's parameters so a pasted
@@ -57,6 +60,7 @@ export const SEARCH_DEBOUNCE_MS = 250;
 export const ADMIN_TAB = {
   DASHBOARD: "dashboard",
   COST: "cost",
+  BILLING: "billing",
   RELIABILITY: "reliability",
   AGENTS: "agents",
   TOOLS: "tools",
@@ -73,6 +77,26 @@ export const ADMIN_PAGE = {
   ACCOUNT: "account",
   WORKSPACE: "workspace",
   DAY: "day",
+} as const;
+
+/** What each section is called, by the tab it opens: the sidebar's row, and the name the window's history gives a step on it. */
+export const ADMIN_SECTION_WORDS = {
+  [ADMIN_TAB.DASHBOARD]: "Overview",
+  [ADMIN_TAB.COST]: "Cost",
+  [ADMIN_TAB.BILLING]: "Billing",
+  [ADMIN_TAB.RELIABILITY]: "Reliability",
+  [ADMIN_TAB.AGENTS]: "Agents",
+  [ADMIN_TAB.TOOLS]: "Tools",
+  [ADMIN_TAB.PROMPTS]: "Prompts",
+  [ADMIN_TAB.WORKSPACES]: "Workspaces",
+  [ADMIN_TAB.USERS]: "Users",
+  [ADMIN_TAB.LIMITS]: "Limits",
+} as const satisfies { readonly [Tab in AdminTab]: string };
+
+/** What an account's and a workspace's page are called until what they show is read, and in the window's history, which reads neither. */
+export const ADMIN_PAGE_WORDS = {
+  [ADMIN_PAGE.ACCOUNT]: "Account",
+  [ADMIN_PAGE.WORKSPACE]: "Workspace",
 } as const;
 
 /** Which of the page's views the address bar names. */
@@ -101,6 +125,17 @@ export function adminSectionOf(view: AdminView): AdminTab {
   if (view.kind === ADMIN_PAGE.DAY) return ADMIN_TAB.DASHBOARD;
 
   return view.kind;
+}
+
+/** What a view is called under the place's name, as the window's history and ⌃Tab's cards list it: a section by its name, an account's or a workspace's page by the word for one, and a day's page by its day. */
+export function adminViewWords(view: AdminView): string {
+  if (view.kind === ADMIN_PAGE.ACCOUNT || view.kind === ADMIN_PAGE.WORKSPACE) {
+    return ADMIN_PAGE_WORDS[view.kind];
+  }
+
+  if (view.kind === ADMIN_PAGE.DAY) return formatDayHeading(view.day);
+
+  return ADMIN_SECTION_WORDS[view.kind];
 }
 
 export function viewFromLocation(): AdminView {
@@ -292,6 +327,11 @@ export function accountReadQuery(id: string, windowDays: AdminMetricsWindow): Ad
   };
 }
 
+/** The Billing read's query: the current month rides as no param. */
+export function billingReadQuery(month: string | undefined): AdminBillingQuery {
+  return month === undefined ? {} : { [ADMIN_MONTH_PARAM]: month };
+}
+
 /** One workspace's read query. */
 export function workspaceReadQuery(id: string): AdminWorkspaceQuery {
   return { [ADMIN_WORKSPACE_ID_PARAM]: id };
@@ -340,6 +380,8 @@ export function adminLinkFields(view: AdminView): AdminLinkFieldsResult {
       return { day: view.day };
     case ADMIN_TAB.COST:
       return { section: ADMIN_LINK_SECTION.COST };
+    case ADMIN_TAB.BILLING:
+      return { section: ADMIN_LINK_SECTION.BILLING };
     case ADMIN_TAB.RELIABILITY:
       return { section: ADMIN_LINK_SECTION.RELIABILITY };
     case ADMIN_TAB.AGENTS:

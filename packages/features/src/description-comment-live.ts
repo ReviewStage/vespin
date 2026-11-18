@@ -146,9 +146,6 @@ function groupedBy<Row>(rows: readonly Row[], keyOf: (row: Row) => string): Map<
 
 /** Whom an ask sent the thread to, as the wire names them; nothing for any other entry. */
 function askedOf(row: EntryLiveRow): DescriptionCommentAsked | undefined {
-  if (row.askedActor === DESCRIPTION_COMMENT_ACTOR.APP)
-    return { actor: DESCRIPTION_COMMENT_ACTOR.APP };
-
   return row.askedActor === DESCRIPTION_COMMENT_ACTOR.AGENT && row.askedAgentId !== null
     ? { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: row.askedAgentId }
     : undefined;

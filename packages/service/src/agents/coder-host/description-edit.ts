@@ -29,19 +29,12 @@ import {
 } from "@repo/features/description-notes";
 import { placeholderLinksIn } from "@repo/features/mention-link";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { trimmedText } from "@repo/features/text-schema";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Data, Effect, Option, Result, Schema } from "effect";
 import { SqlClient } from "effect/sql";
-import {
-  ACTION_RESULT_STATUS,
-  EXCESS_KEYS,
-  isRecord,
-  type UnparsedWireValue,
-  wireUuidSchema,
-} from "../../core.js";
+import { ACTION_RESULT_STATUS, EXCESS_KEYS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import {
   DESCRIPTION_SAVE_REFUSAL,
@@ -51,7 +44,8 @@ import {
   saveNotes,
 } from "../../tasks/description-notes.js";
 import { placeholderLinksWords } from "../link-rule.js";
-import { CODER } from "./bounds.js";
+import { TASK_REF_INPUT, TASK_REF_WORDS } from "../task-ref.js";
+
 import { type InboxSandboxDoor, readSandboxBodyFile } from "./inbox-image.js";
 
 /**
@@ -76,9 +70,10 @@ import { type InboxSandboxDoor, readSandboxBodyFile } from "./inbox-image.js";
  * the description under the developer.
  *
  * Beside its notes the agent may add pictures, which the notetaker cannot,
- * having none: a screenshot it took, or a recording it made of a flow, named
- * by its file in its sandbox, read as an inbox post's is (`inbox-image.ts`),
- * a recording as it is and up to a video's bound, kept as one of the description's
+ * having none: a screenshot it took, a recording it made of a flow, or a
+ * sound clip it made, named by its file in its sandbox, read as an inbox
+ * post's is (`inbox-image.ts`), a recording or a clip as it is and up to a
+ * video's bound, kept as one of the description's
  * pictures as the member the turn runs for, and written as the picture's
  * line at the end of its section, an added point like any other, so the
  * save is the agent's and its byline names it. A PDF named the same way, a
@@ -110,9 +105,9 @@ const pictureSchema = Schema.Struct({
   section: descriptionNoteSectionSchema,
   path: describeWire(
     trimmedText(DESCRIPTION_EDIT.MAX_PATH_CHARS),
-    "The picture's file in your sandbox, such as a screenshot you took or a recording you made of " +
-      `a flow, relative to your working folder or absolute: a PNG, JPEG, or WebP of at most ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, ` +
-      `a WebM or MP4 video of at most ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, which the description plays, ` +
+    "The picture's file in your sandbox, such as a screenshot you took, a recording you made of " +
+      `a flow, or a sound clip you made, relative to your working folder or absolute: a PNG, JPEG, or WebP of at most ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, ` +
+      `a WebM or MP4 video or a WAV, MP3, M4A, AAC, or Ogg sound clip of at most ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, which the description plays, ` +
       `or a PDF of at most ${MAX_PDF_MB} MB, which it keeps as a file under the file's own name.`,
   ),
   alt: describeWire(
@@ -132,7 +127,7 @@ const picturesSchema = Schema.Array(pictureSchema).check(
 
 const readPictures = readEither(picturesSchema);
 
-const editedTaskSchema = Schema.Struct({ taskId: wireUuidSchema });
+const editedTaskSchema = Schema.Struct({ taskId: TASK_REF_INPUT });
 
 // The call's notes and pictures stand beside its task, and are read on their own.
 const readEditedTask = readEither(editedTaskSchema, { excess: EXCESS_KEYS.DROP });
@@ -140,8 +135,8 @@ const readEditedTask = readEither(editedTaskSchema, { excess: EXCESS_KEYS.DROP }
 /** What a call carries: the task whose description it edits, the notetaker's notes, and the pictures only an agent adds. */
 const EDIT_DESCRIPTION_INPUT = Schema.Struct({
   taskId: describeWire(
-    wireUuidSchema,
-    `The task whose description to edit, your own or another of your workspace, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+    TASK_REF_INPUT,
+    `The task whose description to edit, your own or another of your workspace, by ${TASK_REF_WORDS}.`,
   ),
   ...descriptionNotesSchema.fields,
   pictures: Schema.optionalKey(
@@ -156,20 +151,14 @@ const EDIT_DESCRIPTION_INPUT = Schema.Struct({
 export const EDIT_DESCRIPTION_TOOL = {
   name: "edit_description",
   description:
-    "Take notes on the description of the task taskId names, your own task or any other of your " +
-    `workspace, which ${AGENT_TOOL.READ_TASK} reads first, as its notetaker does: add a point ` +
-    "under one of its headings, or replace text copied exactly from the saved description, as much as " +
-    "names one place, headings and whole sections included, with what it becomes, or with " +
-    "nothing to delete it. A note's text may open headings of its own, so you can rename, " +
-    "split, merge, move, and drop sections. Use it to record a question the description does not answer under its open " +
-    "questions together with the assumption you go on under, to correct a fact you verified in " +
-    "the code, to record a hard part you met, an interface you had to change, or a decision you " +
-    "made, each under the heading it belongs to. Write a file, a pull request, or an issue a note names as a mention, " +
-    "a Markdown link to its page whose words start with @, such as [@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>), so the description draws it as a chip. " +
-    "To add a picture, such as a screenshot of what you built, name its file in your sandbox " +
-    "under pictures, with alt text saying what it shows; a PDF you wrote goes there too. " +
-    "Every save is recorded in the description as yours. The developer reads the description when they next " +
-    `open it in ${PRODUCT_NAME}; you do not wait for an answer. A call's notes and pictures land together ` +
+    "Take notes on the description of a task of your workspace, your own or another, which " +
+    `${AGENT_TOOL.READ_TASK} reads first, as its notetaker does: add a point under a heading, or replace ` +
+    "text copied exactly from it, headings and whole sections included, with what it becomes, or with " +
+    "nothing to delete it; a note may open headings of its own, to rename, split, merge, move, or drop sections. " +
+    "Write a file, a pull request, or an issue a note names as a mention, such as " +
+    "[@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>). " +
+    "Add a picture, such as a screenshot of what you built, or a PDF you wrote, by its file in your sandbox under pictures. " +
+    "Every save is recorded in the description as yours, and you do not wait for an answer. A call's notes and pictures land together " +
     "or not at all: where one names text or a heading the description does not hold exactly once, " +
     "nothing is saved and the call answers the description as it stands, to retry from. " +
     `A turn may take at most ${DESCRIPTION_EDIT.MAX_NOTES_PER_TURN} notes, each picture one.`,
@@ -181,12 +170,11 @@ export const DESCRIPTION_EDIT_REFUSAL = {
   UNREADABLE: "Not saved: the notes do not read under the notes' schema.",
   TOO_MANY: `Not saved: a turn may take at most ${DESCRIPTION_EDIT.MAX_NOTES_PER_TURN} notes on the description. Go on, and name what you would have noted in your message.`,
   UNAVAILABLE: "Not saved: the service could not reach its store.",
-  NO_TASK_NAMED: `Not saved: name the task whose description to edit as taskId, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+  NO_TASK_NAMED: `Not saved: name the task whose description to edit as taskId, by ${TASK_REF_WORDS}.`,
   NO_TASK: `Not saved: no task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
   NO_TURN:
     "Not saved: your turn is not recorded yet, so its notes cannot be counted. Try again in a moment.",
   TOO_MANY_PICTURES: `Not saved: the description holds ${DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION} pictures, as many as a description may. Leave the pictures out.`,
-  TOO_MANY_VIDEOS: `Not saved: the description holds ${DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION} videos, as many as a description may. Leave the videos out, or show them with show_image instead.`,
   TASK_GONE:
     "Not saved: this task no longer exists, so no picture can be added to its description.",
 } as const;
@@ -198,8 +186,8 @@ const MISSED_FIND_CHARS = 200;
 export const TASK_PICTURE_FILE_REFUSAL = {
   NO_FILE: "Not saved: a picture names no file in your sandbox:",
   NOT_IMAGE:
-    "Not saved: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a PDF:",
-  TOO_LARGE: `Not saved: a picture names an image larger than ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, a video larger than ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, or a PDF larger than ${MAX_PDF_MB} MB; take it smaller, or at one screen scale, or record a shorter flow:`,
+    "Not saved: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, a WAV, MP3, M4A, AAC, or Ogg sound clip, or a PDF:",
+  TOO_LARGE: `Not saved: a picture names an image larger than ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, a video or a sound clip larger than ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, or a PDF larger than ${MAX_PDF_MB} MB; take it smaller, or at one screen scale, or record a shorter flow or clip:`,
   UNREADABLE: "Not saved: a picture's file could not be read from your sandbox:",
 } as const;
 
@@ -317,15 +305,12 @@ function readPictureFiles(
     for (const picture of pictures) {
       const { path } = picture;
 
-      const file = yield* readSandboxBodyFile(
-        sandbox,
-        CODER.CHECKOUT_PATH,
-        path,
-        TASK_PICTURE_FILE_REFUSAL,
-      );
+      const file = yield* readSandboxBodyFile(sandbox, path, TASK_PICTURE_FILE_REFUSAL);
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
-      read.push({ picture, file: file.success, name: posix.basename(path) || path });
+      const { contentType, bytes } = file.success;
+
+      read.push({ picture, file: { contentType, bytes }, name: posix.basename(path) || path });
     }
 
     return Result.succeed(read);
@@ -396,12 +381,6 @@ function keptAsNotes(
       if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY) {
         return yield* new EditRefused({
           refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_PICTURES),
-        });
-      }
-
-      if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS) {
-        return yield* new EditRefused({
-          refusal: refused(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_VIDEOS),
         });
       }
 

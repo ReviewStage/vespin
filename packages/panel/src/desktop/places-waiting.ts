@@ -1,28 +1,28 @@
-import type { TaskSummary } from "@repo/features/task-wire";
-import type { AppInboxTask, AppInboxTaskHolding, AppInboxWaitingItem } from "@repo/host/app-state";
-import { useMinute } from "@repo/ui";
+import {
+  INBOX_SHOW,
+  INBOX_SHOW_COUNT,
+  type InboxShow,
+  inboxAtNow,
+  inboxCounts,
+} from "@repo/features/inbox-list-model";
+import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
+import { type BarCount, type BarCountTone, STATUS_TONE, useMinute } from "@repo/ui";
 import { useMemo } from "react";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { useListedInboxGroups } from "../tasks/use-waiting-items.js";
+import { useInboxViewChoices } from "./folded-groups.js";
 
 /**
- * places-waiting.ts -- how many wait on the developer in the Inbox, the one
- * reading the places that count them draw from: the sidebar's rows
- * (`desktop-sidebar.tsx`), a phone's places bar (`mobile-bar.tsx`), and
- * each task's badge on the Tasks page's List and Board. The Inbox's row
- * counts the open threads that wait on the developer, a question or an
- * update not yet opened, as the Inbox's own marks do (`inbox-model.ts`'s
- * `needsYou`), and a task's badge counts the same threads of that task, as
- * main counts them.
+ * places-waiting.ts -- what the places that count the Inbox draw from: the
+ * sidebar's Inbox row (`desktop-sidebar.tsx`) and a phone's places bar
+ * (`mobile-bar.tsx`), which count what the Inbox's chosen view lists, and
+ * each task's badge on the Tasks page's List and Board, which counts the
+ * open threads of that task that wait on the developer, a question or an
+ * update not yet opened, as main counts them.
  */
 
 const NO_COUNTS: ReadonlyMap<string, number> = new Map();
-
-/** Whether an item waits now: it holds no reminder the developer set for after `now`. */
-function dueBy(item: Pick<AppInboxWaitingItem, "remindAt">, now: number): boolean {
-  return item.remindAt === undefined || item.remindAt <= now;
-}
 
 /**
  * How many threads wait on the developer on each task main lists, every
@@ -54,29 +54,6 @@ function toDoByTask(
   return new Map([...counted].filter(([, count]) => count > 0));
 }
 
-/**
- * Every thread waiting on the developer in the listed workspace's Inbox:
- * each task of `listed`'s open items main lists as theirs, a question or a
- * notice alike, as Needs you lists them, less those whose reminder the developer set for after `now`, which Needs you
- * leaves out until they come back. Note that a notice counts until it is opened or marked read, because either
- * settles it as Got it does (`settledOnRead`); a teammate's thread and a settled one never
- * count, and one the reader settles leaves main's read the moment it is
- * asked (`@repo/host`'s `account-inbox-follow.ts`).
- */
-function waitingThreads(
-  listed: readonly TaskSummary[],
-  inboxWaiting: readonly AppInboxTask[],
-  now: number,
-): readonly AppInboxWaitingItem[] {
-  // Note that only the standing tasks are counted, as To do lists them, so a task not listed yet counts nowhere.
-  const standing = new Set(listed.map((task) => task.id));
-
-  return inboxWaiting
-    .filter((task) => standing.has(task.taskId))
-    .flatMap((task) => task.items)
-    .filter((item) => dueBy(item, now));
-}
-
 /** How many threads wait on the developer on each task, by task, as main counts them, less those reminded for later; a task where none waits is left out, and every one while signed out. */
 export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number> {
   const now = useMinute();
@@ -87,16 +64,35 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
   return tasks.signedIn ? byTask : NO_COUNTS;
 }
 
-/**
- * How many threads wait on the developer in the Inbox, a question or an
- * update not yet opened, the number that reaches zero once each question is answered and
- * each update opened (`waitingThreads`); a teammate's is listed in the
- * Inbox, and waits on the teammate. None while signed out.
- */
-export function useInboxWaiting(tasks: TasksControl): number {
-  const now = useMinute();
-  const waiting = useInboxWaitingTasks();
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+/** Where a scope's count is drawn in the tone of what needs the reader: what waits on them and what they are not done with; everything, or what they put off, is a tally. */
+const SHOW_TONE = {
+  [INBOX_SHOW.NEEDS_ME]: STATUS_TONE.ATTENTION,
+  [INBOX_SHOW.OPEN]: STATUS_TONE.ATTENTION,
+  [INBOX_SHOW.ALL]: STATUS_TONE.NEUTRAL,
+  [INBOX_SHOW.REMINDERS]: STATUS_TONE.NEUTRAL,
+} as const satisfies Record<InboxShow, BarCountTone>;
 
-  return tasks.signedIn ? waitingThreads(listed, waiting, now).length : 0;
+/**
+ * The Inbox's count as its row and a phone's bar draw it, each in its tone: how many items
+ * the scope the Inbox shows lists, addressed to whom its Addressed to names
+ * (`inboxCounts`), so Questions counts what waits on the developer and Open
+ * what they are not done with, read with that scope's words and tone; it
+ * follows the view as the Inbox's menu changes it. None while signed out.
+ */
+export function useInboxViewCount(tasks: TasksControl): BarCount {
+  const now = useMinute();
+  const { show, whose } = useInboxViewChoices();
+  const { groups } = useListedInboxGroups(tasks);
+  const me = tasks.me;
+
+  // Note that a reminder is weighed on the window's clock, as the Inbox weighs it, so an item comes back within the minute its reminder comes due.
+  const counts = useMemo(
+    () => inboxCounts(inboxAtNow(groups, now), me, whose),
+    [groups, now, me, whose],
+  );
+
+  const value = tasks.signedIn ? counts[show] : 0;
+  const noun = INBOX_SHOW_COUNT[show];
+
+  return { value, noun: value === 1 ? noun.one : noun.many, tone: SHOW_TONE[show] };
 }

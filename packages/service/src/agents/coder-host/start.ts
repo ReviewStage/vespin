@@ -48,14 +48,19 @@ import {
   type AgentSummary,
   LOCAL_AGENT_REFUSAL,
 } from "@repo/features/agent-wire";
+import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import type { GitHubAccess } from "@repo/features/github-repositories-wire";
 import { automationRun } from "@repo/features/model-label";
-import { agentFallbackChoice, type ModelChoice } from "@repo/features/models-wire";
+import {
+  agentFallbackChoice,
+  type ModelChoice,
+  type ModelProvider,
+} from "@repo/features/models-wire";
 import type { Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, experimentOn } from "@repo/settings";
 import {
   MESSAGE_CHANNEL,
   type SlackLineMetadata,
@@ -64,6 +69,7 @@ import {
 } from "@repo/wire";
 import { Cause, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
+import { cloudStartGate } from "../../billing/billing-gate.js";
 import {
   recordServerEvent,
   SERVER_AGENT_START_FAILURE,
@@ -85,6 +91,11 @@ import {
 } from "../../http/http-effect.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
+import {
+  CursorModelCatalog,
+  offersCursor,
+  withCursorModels,
+} from "../../providers/cursor-models.js";
 import {
   ModelCatalog,
   ModelChoiceRefused,
@@ -112,6 +123,8 @@ import {
   localAgentRuntimeChoice,
   markedUnconnected,
   modelRuntimeOf,
+  type PayerKind,
+  providerPayerKinds,
 } from "./agent-runtime-choice.js";
 import { startBoot } from "./boot.js";
 import type { NativeRuntime } from "./native-runtime.js";
@@ -157,7 +170,9 @@ import {
  * agent on a task, the task moves into progress from the backlog or to do
  * and never back (`beginTaskWork`), a move that fails logged rather than
  * the Start's failure; a Start by hand on a task no one is assigned to assigns it to
- * its starter (`assignUnassignedTask`), as that fails logged too.
+ * its starter (`assignUnassignedTask`), as that fails logged too. A tool's
+ * Start (`start_agent`) does neither, since its words say it leaves the task
+ * alone.
  * A Start from another agent, to continue it or to fork it at one of its messages,
  * inherits from that agent what `takeover.ts` decides and reads: its brief,
  * its transcript replayed, its work, its choice, servers, place, branch, and
@@ -192,7 +207,8 @@ import {
  * account's default, which only
  * Settings writes. Where the agent runs is the place the ask names, else
  * its source's, else its starter's default (`machineOfStart`); unlike a
- * choice, a place the ask names is kept as the starter's last pick. Who reaches the agent is the caller's: the route holds the developer's
+ * choice, a place a Start by hand names is kept as the starter's last pick,
+ * though never one a tool's call names. Who reaches the agent is the caller's: the route holds the developer's
  * own bearer, and a coding agent's tool acts as the
  * deployment for the account; the agent's harness answers the opening, and
  * the cancel that stops a continue's source, either way
@@ -258,6 +274,8 @@ export type StartAsk = StartPlace & {
   readonly permissionMode?: AgentPermissionMode | undefined;
   /** The suggestion in another agent's reply the brief was sent from, which the first line keeps (`reply-buttons/press.ts`); none for every other Start. */
   readonly suggestedBy?: SuggestedBy | undefined;
+  /** Whether a tool's call asks (`start_agent`), which leaves the task's assignee and status as they stand and keeps no Runs on pick; none for a Start by hand or an automation's. */
+  readonly byTool?: boolean | undefined;
 };
 
 /** A repository as a task's start reached it: the full name its row keeps, and how it was reached. */
@@ -292,6 +310,27 @@ export interface AccountModelChoices {
  */
 export const accountModelChoices = (userId: string) =>
   Effect.map(modelChoicesRead(userId), (read) => read.choices);
+
+/**
+ * The account's choices as `accountModelChoices` reads them, and beside
+ * them the kinds of credential that may pay for each provider's models
+ * (`providerPayerKinds`), decided from the one read of its credentials.
+ */
+export const accountModelPayers = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+): Effect.fn.Return<
+  {
+    readonly choices: AccountModelChoices;
+    readonly payers: ReadonlyMap<ModelProvider, readonly PayerKind[]>;
+  },
+  HostedRefusal,
+  DatabaseServices | ModelCatalog
+> {
+  const { choices, keys } = yield* modelChoicesRead(userId);
+  const payers = yield* hostedStoreOrUnavailable(providerPayerKinds(userId, keys));
+
+  return { choices, payers };
+});
 
 /**
  * The account's choices as `accountModelChoices` reads them, with its
@@ -331,8 +370,24 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   const fastOffer = yield* hostedStoreOrUnavailable(accountFastOffer(userId, keys));
 
+  // Note that this build's own version is the client here, since these choices are checked and listed in the service and never cross the wire whole.
+  const cursor = {
+    experimentOn:
+      preferences !== undefined && experimentOn(preferences.experiments, EXPERIMENT.CURSOR),
+    apiVersion: HOSTED_API_VERSION,
+  };
+
+  // Cursor's own list is read with the account's key only where it is offered at all.
+  const cursorModels = offersCursor(cursor)
+    ? yield* (yield* CursorModelCatalog).forAccount(userId)
+    : [];
+
   const offered = yield* hostedStoreOrUnavailable(
-    markedUnconnected(userId, offeredToAccount(read, fastOffer), keys),
+    markedUnconnected(
+      userId,
+      withCursorModels(offeredToAccount(read, fastOffer), cursor, cursorModels),
+      keys,
+    ),
   );
 
   const stored = preferences?.agent;
@@ -707,8 +762,9 @@ const IN_THE_CLOUD: StartMachine = { asked: { machine: AGENT_MACHINE.VERCEL } };
  * agent, by its starter's account: where the starter's newest agent on the
  * task runs, never a teammate's, since a device is one member's; else where
  * the starter last named a place (`runs-on-pick.ts`); else the cloud. A
- * task holds no place of its own. Note that an automation's run reads
- * neither of the starter's own and runs in the cloud, because no member is
+ * task holds no place of its own. Note that an automation's run whose
+ * automation names no machine reads neither of the starter's own and runs
+ * in the cloud, because no member is
  * there to have chosen for it, and a Mac its owner last picked may be asleep
  * when the run fires, which would fail the run rather than start it.
  */
@@ -790,13 +846,16 @@ const machineOfStart = Effect.fnUntraced(function* (
 /**
  * The place a Start named, kept as its starter's last pick, which a later
  * Start naming none and a task an agent makes for them run at; nothing for
- * a Start that named none. Note that a pick that fails to keep fails
- * nothing, because the agent already stands.
+ * a Start that named none, for a tool's call (`start_agent`), whose
+ * place is the caller's for that one agent and never the member's pick, or
+ * for an automation's run, whose place is the automation's own.
+ * Note that a pick that fails to keep fails nothing, because the agent
+ * already stands.
  */
-const keptPick = (userId: string, runsOn: AgentRunsOnRequest | undefined) =>
-  runsOn === undefined
+const keptPick = (userId: string, ask: Pick<StartAsk, "runsOn" | "byTool" | "automationOrigin">) =>
+  ask.runsOn === undefined || ask.byTool === true || ask.automationOrigin !== undefined
     ? Effect.void
-    : keepRunsOnPick(userId, runsOn).pipe(
+    : keepRunsOnPick(userId, ask.runsOn).pipe(
         Effect.catch((failure) =>
           Effect.logWarning(`the last Runs on pick could not be kept: ${failure._tag}`),
         ),
@@ -895,6 +954,9 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     runtime.runtime,
     landing.repository !== null,
   );
+
+  // A cloud agent's Start alone asks the billing gate, before anything is written; a Mac's never does.
+  if (placed.machine === AGENT_MACHINE.VERCEL) yield* cloudStartGate(userId, landing.workspaceId);
 
   const started = yield* hostedStoreOrUnavailable(
     createAgent(userId, {
@@ -1047,7 +1109,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     );
   }).pipe(
     // A place named is kept only once the agent stands for good, so a refused opening changes no pick.
-    Effect.andThen(keptPick(userId, ask.runsOn)),
+    Effect.andThen(keptPick(userId, ask)),
   );
 
   // The source's transcript is the new agent's own before its first open forks it, and a continue's
@@ -1057,8 +1119,9 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   // one before it, so a client waiting on it sees the agent and its task's standing alike.
   let committed = txid;
 
-  // A blank agent was handed no work, so its task stands where it is.
-  if (handed !== null) {
+  // A blank agent was handed no work, and a tool's start says what it does to the task, which is
+  // nothing, so either task stands where it is.
+  if (handed !== null && ask.byTool !== true) {
     const begun = yield* beginTaskWorkCommitted(userId, landing.task.id).pipe(
       Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
     );
@@ -1067,8 +1130,8 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   }
 
   // Its starter is on a task no one was, where they started it by hand, a blank agent among them;
-  // an automation's run assigns no one.
-  if (ask.automationOrigin === undefined) {
+  // an automation's run and a tool's call assign no one.
+  if (ask.automationOrigin === undefined && ask.byTool !== true) {
     const assigned = yield* assignUnassignedTaskCommitted(userId, landing.task.id).pipe(
       Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
     );

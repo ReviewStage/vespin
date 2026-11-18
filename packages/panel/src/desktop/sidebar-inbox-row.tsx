@@ -1,9 +1,7 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
-import { commandKeyshortcuts, NAV_CURRENT, NavItem, Shortcut, STATUS_TONE } from "@repo/ui";
+import { commandKeyshortcuts, NAV_CURRENT, type NavCount, NavItem, Shortcut } from "@repo/ui";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { groupCount } from "./sidebar-fold.js";
 
 /**
  * sidebar-inbox-row.tsx -- the sidebar's Inbox row.
@@ -11,10 +9,11 @@ import { groupCount } from "./sidebar-fold.js";
 
 /**
  * The Inbox's row, last of the rows heading the list and drawn as they are:
- * the tray, its name, and how many threads Needs you lists at its end
- * (`useInboxWaiting`), in even figures and the needs-you tone the phone's
- * bar fills its badge with (`mobile-bar.tsx`), and
- * nothing at none. Its chord takes the count's place
+ * the tray, its name, and at its end how many items the view the Inbox
+ * shows lists, Questions what waits on the developer and Open what they are
+ * not done with (`useInboxViewCount`), in even figures, read with that
+ * view's words and drawn in its tone, as the phone's bar counts it
+ * (`mobile-bar.tsx`), and nothing at none. Its chord takes the count's place
  * while the row is hovered or reached from the keyboard, as New task's and
  * Search's show theirs. A press opens the window's Inbox
  * (`desktop-inbox.tsx`), and a middle-click opens it in a tab of its own
@@ -23,13 +22,14 @@ import { groupCount } from "./sidebar-fold.js";
  * head, where its reader looks for it.
  */
 export function SidebarInboxRow({
-  waiting,
+  count,
   current,
   disabled,
   onOpen,
   onOpenInTab,
 }: {
-  waiting: number;
+  /** What the Inbox's chosen view lists (`useInboxViewCount`). */
+  count: NavCount;
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
@@ -40,10 +40,7 @@ export function SidebarInboxRow({
     <NavItem
       icon={<EntityGlyph kind={ENTITY_KIND.INBOX} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
-      count={{
-        ...groupCount(waiting, NEEDS_YOU.COUNT),
-        tone: STATUS_TONE.ATTENTION,
-      }}
+      count={count}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.INBOX)}
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.INBOX].chord} />}
       disabled={disabled}

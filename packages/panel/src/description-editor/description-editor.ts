@@ -21,6 +21,8 @@ import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
+import { bareAddresses } from "./bare-addresses.js";
+import { chipSpacing, typedAtChipSpace } from "./chip-spacing.js";
 import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
 import {
@@ -482,6 +484,7 @@ export function markdownExtensions(
     mentionNode(drawMention),
     SoftBreak,
     linkLook(namesChip),
+    bareAddresses,
     writingKeys,
     dividerLines,
   ];
@@ -785,7 +788,7 @@ export function mountDescriptionEditor(
   const written = () =>
     withLineEnding(documentMarkdown(manager, editor.state.doc, held, ends), ending);
 
-  const opened = documentOpened(manager, source, mentions?.namesChip);
+  const opened = documentOpened(manager, source, mentions);
   held = { sources: new Map(), lead: opened.lead, ending: opened.ending };
   // The threads the editor carries marks for, and whether they are being laid on, which hands over no draft.
   let carried: readonly string[] = [];
@@ -803,6 +806,7 @@ export function mountDescriptionEditor(
       ...extensions,
       Placeholder.configure({ placeholder: placeholderOf(placeholder, blocks !== undefined) }),
       commentAnchorMark,
+      chipSpacing,
       ...formatReports(format),
     ],
     content: opened.content,
@@ -823,8 +827,9 @@ export function mountDescriptionEditor(
       handleDrop: (view, event, _slice, moved) =>
         pictures === undefined ? false : droppedPictures(view, event, moved, pictures),
       // Note that words typed over a selected picture start a line below it, where they would replace it.
-      handleTextInput: (view, _from, _to, words) =>
-        pictures !== undefined && pictureTyped(view, words),
+      handleTextInput: (view, from, to, words) =>
+        typedAtChipSpace(view, from, to, words) ||
+        (pictures !== undefined && pictureTyped(view, words)),
       transformPasted: (slice) =>
         pictures === undefined ? slice : copiedPictures(slice, pictures),
       handleKeyDown: (view, event) => {
@@ -940,20 +945,14 @@ export function mountDescriptionEditor(
   return {
     ...editorFormatting(editor),
     take: (sent, merged) => {
-      const answer = documentTook(
-        editor,
-        manager,
-        held,
-        withLf(sent),
-        withLf(merged),
-        mentions?.namesChip,
-      );
+      const answer = documentTook(editor, manager, held, withLf(sent), withLf(merged), mentions);
 
       held = answer.held;
 
       return { base: withLineEnding(answer.base, ending), text: written() };
     },
     chooseMention: (mention) => picking?.choose(editor, mention),
+    retypeMention: (words) => picking?.retype(editor, words),
     insertBlock: (block) => slash?.insert(editor, block),
     markdown: written,
     replaceAnchors: (text, next, open) => {

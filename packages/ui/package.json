@@ -42,6 +42,7 @@
     "./quote-face": "./src/quote-face.js",
     "./code-face": "./src/code-face.js",
     "./picture-read": "./src/picture-read.js",
+    "./waveform": "./src/waveform.js",
     "./image-zoom": "./src/image-zoom.js",
     "./confirm-state": "./src/confirm-state.js",
     "./error-boundary": "./src/components/error-boundary/error-boundary.js",
@@ -90,7 +91,7 @@
     "pdfjs-dist": "6.5.438",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "recharts": "3.10.1",
+    "recharts": "3.11.0",
     "remark-gfm": "4.0.1",
     "streamdown": "2.7.1",
     "tailwind-merge": "3.7.0"

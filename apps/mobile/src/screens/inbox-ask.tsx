@@ -1,6 +1,6 @@
 // inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
@@ -36,6 +36,7 @@ import {
   AnswerFields,
   AskActs,
   AskNote,
+  AttachedPictures,
   type BarAction,
   type BarFootItem,
   type BarMenu,
@@ -49,12 +50,21 @@ import {
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
+import {
+  attachedFiles,
+  PICKER_FAILED,
+  pickPictures,
+  takePictures,
+} from "../use-attached-pictures.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
 const THREAD_MORE = { label: "More", symbol: GLYPH.MORE } as const;
+
+/** The box's + item that attaches pictures, as an agent's composer names it. */
+const ATTACH_PHOTOS = { label: "Photos", symbol: GLYPH.ATTACH } as const;
 
 /** Each field type an answer ask names, as the card draws it. */
 const FIELD_KIND = {
@@ -88,26 +98,41 @@ function typedValue(
 
 /** What an open ask's option media is opened and drawn by: each file's bytes as read, a page in the app or Safari, an address in Safari, and a recording the player cannot read on the web. */
 export interface OptionMediaDoors {
-  readonly source: (attachmentId: string) => string | undefined;
+  /** A file's bytes as read: none while on their way, and `null` where they could not be read. */
+  readonly source: (attachmentId: string) => string | null | undefined;
+  /** Reads a file whose bytes could not be read again. */
+  readonly retry: (attachmentId: string) => void;
   readonly openPage: (page: InboxOptionPage) => void;
   readonly openLink: (address: string) => void;
   readonly openVideoElsewhere: () => void;
 }
 
-/** What a picture's and a recording's tile is called where its agent gave it no caption. */
+/** What a picture's, a recording's, and a sound clip's tile is called where its agent gave it no caption, as the CLI names each. */
 const PICTURE_WORD = "Picture";
 const RECORDING_WORD = "Recording";
+const SOUND_CLIP_WORD = "Sound clip";
 
 /** One piece of an option's media as the card draws it: a file from its bytes as read, under its caption, and a page or an address opened through `doors`. */
 function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
       const recording = isVideoType(piece.mediaType);
+      const source = doors.source(piece.attachmentId);
+
+      if (isAudioType(piece.mediaType)) {
+        return {
+          kind: CHOICE_MEDIA.AUDIO,
+          title: piece.caption ?? SOUND_CLIP_WORD,
+          source,
+          onRetry: () => doors.retry(piece.attachmentId),
+        };
+      }
 
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
         title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
-        source: doors.source(piece.attachmentId),
+        source,
+        onRetry: () => doors.retry(piece.attachmentId),
         onOpen: recording ? doors.openVideoElsewhere : undefined,
       };
     }
@@ -168,8 +193,10 @@ function controlsStand(item: InboxItem): boolean {
  * to tick, with Mark done and Couldn't do it, each sending at once with the
  * note typed; an answer's fields to fill. A notice asking nothing offers Got
  * it while the box is empty, as the panel's Send reads then, which settles it
- * without messaging its agent. What the last send said where it did not go
- * stands under it. None where nothing is asked and nothing was said.
+ * without messaging its agent, and steps aside once pressed. What the last
+ * send said where it did not go stands in the box's head
+ * (`ThreadComposer`), beside the words it put back. None where nothing is
+ * asked.
  */
 export function OpenAskCard({
   item,
@@ -180,49 +207,42 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, note, send, nods, acknowledge, asNew } = answer;
+  const { draft, onDraft, send, nods, acknowledge, asNew } = answer;
   // Note that the ask's controls step aside while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
   const ask = asNew ? undefined : openAsk(item);
-  const said = note === undefined ? null : <AskNote words={note} />;
 
   if (ask === undefined && nods) {
     return (
-      <>
-        <AskActs
-          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK, onPress: acknowledge }]}
-        />
-        {said}
-      </>
+      <AskActs
+        acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK, onPress: acknowledge }]}
+      />
     );
   }
 
-  if (ask === undefined) return said;
+  if (ask === undefined) return null;
 
   if (ask.type === INBOX_ASK.DECIDE) {
     const cards = optionsCarryMedia(ask);
 
     return (
-      <>
-        <ChoiceList
-          choices={ask.options.map((option) => cardChoice(option, doors))}
-          recommended={recommendedLabels(ask)}
-          picked={draft.choices}
-          multiple={ask.multiple === true}
-          // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
-          title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
-          onChange={(choices) => onDraft(withPicks(draft, choices))}
-          none={
-            cards
-              ? {
-                  label: NONE_OF_THESE,
-                  picked: picksNone(draft),
-                  onPress: () => onDraft(withNoneOfThese(draft)),
-                }
-              : undefined
-          }
-        />
-        {said}
-      </>
+      <ChoiceList
+        choices={ask.options.map((option) => cardChoice(option, doors))}
+        recommended={recommendedLabels(ask)}
+        picked={draft.choices}
+        multiple={ask.multiple === true}
+        // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
+        title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
+        onChange={(choices) => onDraft(withPicks(draft, choices))}
+        none={
+          cards
+            ? {
+                label: NONE_OF_THESE,
+                picked: picksNone(draft),
+                onPress: () => onDraft(withNoneOfThese(draft)),
+              }
+            : undefined
+        }
+      />
     );
   }
 
@@ -234,26 +254,24 @@ export function OpenAskCard({
     const ticked = shownTicks(ask, draft);
 
     return (
-      <>
-        <StepList
-          steps={ask.steps.length === 0 ? [item.title] : ask.steps}
-          ticked={ticked}
-          onToggle={(at) => onDraft(withStep(ask, draft, at))}
-          acts={[
-            { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
-            {
-              label: ASK_PRESS.NOT_DONE,
-              symbol: GLYPH.UNDO,
-              onPress: () => press(INBOX_REPLY.NOT_DONE),
-            },
-          ]}
-        />
-        {said}
-      </>
+      <StepList
+        steps={ask.steps.length === 0 ? [item.title] : ask.steps}
+        ticked={ticked}
+        onToggle={(at) => onDraft(withStep(ask, draft, at))}
+        acts={[
+          { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
+          {
+            label: ASK_PRESS.NOT_DONE,
+            symbol: GLYPH.UNDO,
+            quiet: true,
+            onPress: () => press(INBOX_REPLY.NOT_DONE),
+          },
+        ]}
+      />
     );
   }
 
-  if (ask.fields === undefined) return said;
+  if (ask.fields === undefined) return null;
 
   const fields: readonly AnswerField[] = ask.fields.map((field) => {
     const kind = FIELD_KIND[field.type];
@@ -270,17 +288,14 @@ export function OpenAskCard({
   });
 
   return (
-    <>
-      <AnswerFields
-        fields={fields}
-        recommendedWord={RECOMMENDED.toLowerCase()}
-        onChange={(label, typed) => {
-          const kind = fields.find((field) => field.label === label)?.kind ?? ANSWER_FIELD.TEXT;
-          onDraft(withValue(draft, label, typedValue(kind, typed)));
-        }}
-      />
-      {said}
-    </>
+    <AnswerFields
+      fields={fields}
+      recommendedWord={RECOMMENDED.toLowerCase()}
+      onChange={(label, typed) => {
+        const kind = fields.find((field) => field.label === label)?.kind ?? ANSWER_FIELD.TEXT;
+        onDraft(withValue(draft, label, typedValue(kind, typed)));
+      }}
+    />
   );
 }
 
@@ -288,24 +303,70 @@ export function OpenAskCard({
  * The box under a thread: the composer, its line asking for a note while an
  * ask's controls stand over it and a reply otherwise, Send lit once an answer
  * is picked; docked in a compact window, or at a split view column's foot.
- * Its + holds the panel's "Send as a new thread to" the thread's agent,
- * which turns the next send into a new thread's first message, its line
- * asking to start one.
+ * Its + attaches pictures from Photos, as the panel's box attaches files,
+ * held on the thread's draft as capsules over the field until a send
+ * carries them, and holds the panel's "Send as a new thread to" the
+ * thread's agent, which turns the next send into a new thread's first
+ * message, its line asking to start one. What the picker or a bound said
+ * of the pictures stands in the field's head.
  */
 export function ThreadComposer({
   item,
   answer,
   agentName,
-  inColumn = false,
+  inColumn,
 }: {
   readonly item: InboxItem;
   readonly answer: ThreadAnswer;
   /** The thread's agent's name, which the new thread's switch names. */
   readonly agentName: string;
   /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
-  readonly inColumn?: boolean;
+  readonly inColumn?: boolean | undefined;
 }) {
-  const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
+  const { draft, onDraft, note: sendNote, answerReady, send, asNew, setAsNew, start } = answer;
+  const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
+
+  // Note that the pictures picked are named and bounded against the draft as it stands when the picker answers, since a refused send may have put words and pictures back while it stood open.
+  const attach = () => {
+    pickPictures(draft.attachments.length)
+      .then((picked) => {
+        if (picked.length === 0) return;
+        let note: string | undefined;
+        onDraft((now) => {
+          const taken = takePictures(now.attachments, picked);
+          note = taken.note;
+
+          return { ...now, attachments: [...now.attachments, ...taken.files] };
+        });
+        setPictureNote(note);
+      })
+      // Note that a picker that did not open says so in the box's head, as a refusal does, rather than leaving the press unanswered.
+      .catch((cause: unknown) => {
+        console.error("The photo picker did not open.", cause);
+        setPictureNote(PICKER_FAILED);
+      });
+  };
+
+  const detach = (name: string) => {
+    setPictureNote(undefined);
+    onDraft((now) => ({
+      ...now,
+      attachments: now.attachments.filter((file) => file.name !== name),
+    }));
+  };
+
+  // Note that each picture's thumbnail draws from its bytes, made once for the files the draft holds, so a redraw neither builds its address anew nor hands the thumbnail a new string.
+  const pictures = useMemo(() => attachedFiles(draft.attachments), [draft.attachments]);
+
+  // Note that the box's head holds the pictures attached, then what the picker refused, then why the last send didn't go.
+  const head =
+    pictures.length === 0 && pictureNote === undefined && sendNote === undefined ? undefined : (
+      <>
+        <AttachedPictures pictures={pictures} onDetach={detach} />
+        {pictureNote === undefined ? null : <AskNote words={pictureNote} />}
+        {sendNote === undefined ? null : <AskNote words={sendNote} />}
+      </>
+    );
 
   const placeholder = asNew
     ? INBOX_BOX_WORDS.NEW_THREAD_PLACEHOLDER
@@ -320,8 +381,10 @@ export function ThreadComposer({
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && answerReady,
     onSend: () => (asNew ? start() : send()),
+    // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
+    head,
     addMenu: {
-      actions: [],
+      actions: [{ ...ATTACH_PHOTOS, onPress: attach }],
       switches: [
         {
           label: `${INBOX_BOX_WORDS.SEND_AS_NEW} ${agentName}`,
@@ -332,7 +395,7 @@ export function ThreadComposer({
     },
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return !inColumn ? <Composer {...props} /> : <ComposerFoot {...props} />;
 }
 
 /** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */

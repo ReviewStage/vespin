@@ -13,8 +13,10 @@
  * A request may name a kind (`provider-key-wire.ts`'s `PROVIDER_KEY_KIND`);
  * one that names none is an API key's, as every desktop before kinds sends.
  * A subscription credential, a Claude setup-token, is braked and sealed as
- * a key is but never sent to its provider: it is kept unverified, and a
- * credential spelled as no credential of its kind is refused as invalid.
+ * a key is but not sent to its provider on save: it is kept unverified, and a
+ * credential spelled as no credential of its kind is refused as invalid. It
+ * reaches Anthropic from here only when the account refreshes the plan's
+ * usage by hand (`claude-usage.ts`).
  * An account may keep several API keys of a provider: a save adds one at
  * the bottom of its order, or replaces the one its id names. The answer's
  * `keys` are API keys alone, and the subscriptions stand apart beside them.
@@ -42,8 +44,17 @@
  * A save is braked per account, ten an hour, because a check is an
  * authenticated call to the provider and an endpoint that answers whether a
  * key is good is worth hammering with keys that are not the caller's.
+ *
+ * Cursor's keys stand behind the account's Cursor experiment while Cursor is
+ * built: a save of one is refused as an invalid request unless the account
+ * has it on, as a provider the service does not offer it; that is the
+ * refusal every procedure declares, so no client's contract widens for it. Every answer leaves Cursor's keys out for a client built before
+ * `HOSTED_API_VERSION` 4, or one that names no version, since such a build
+ * cannot decode a key whose provider is `cursor` and would lose the whole
+ * answer over it; it is answered the rest, as if Cursor's were not there.
  */
 
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import { dropChatGptDeviceLogin } from "@repo/database/models/chatgpt-device-login-store";
 import {
   type KeyRing,
@@ -59,6 +70,7 @@ import {
   setProviderKeyForAgents,
   setSubscriptionLabel,
 } from "@repo/database/models/provider-key-store";
+import { presentedClient } from "@repo/features/client-identity";
 import {
   CHATGPT_DEVICE_FAILURE_MESSAGE,
   CHATGPT_DEVICE_LOGIN,
@@ -77,6 +89,7 @@ import {
   SUBSCRIPTION_KIND_PROVIDER,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
+import { EXPERIMENT } from "@repo/settings";
 import { Clock, DateTime, Duration, Effect, Option, Redacted, Result } from "effect";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import {
@@ -100,7 +113,8 @@ import {
 } from "./chatgpt-credentials.js";
 import { pollChatGptDeviceLogin, startChatGptDeviceLogin } from "./chatgpt-device-login.js";
 import { spentResetCredit } from "./chatgpt-reset-credits.js";
-import { readChatGptUsage } from "./chatgpt-usage.js";
+import { readChatGptUsage, rereadPlanUsage } from "./chatgpt-usage.js";
+import { rereadClaudeUsage } from "./claude-usage.js";
 
 const SAVE_BRAKE = {
   windowMs: Duration.toMillis(Duration.hours(1)),
@@ -131,6 +145,16 @@ const SUBSCRIPTION_KINDS = Object.values(PROVIDER_KEY_KIND).filter(
 
 /** Every Claude setup-token's own prefix, an OAuth token's, which no API key carries. */
 const CLAUDE_SETUP_TOKEN_PREFIX = "sk-ant-oat";
+
+/** The first hosted API version whose builds read Cursor as a provider (`client-identity.ts`'s `HOSTED_API_VERSION`). */
+const CURSOR_API_VERSION = 4;
+
+/** Whether the build asking can decode a Cursor key in an answer: one that names a hosted API version from Cursor's on. */
+function readsCursor(request: Request): boolean {
+  const client = presentedClient(request.headers);
+
+  return client !== undefined && client.apiVersion >= CURSOR_API_VERSION;
+}
 
 /** A plan's usage windows as last heard, the shortest first and a length's window on every model before one on a model alone, each left out once its reset has passed. */
 function usageOf(row: ProviderKeyRow, now: number): readonly PlanUsage[] {
@@ -194,15 +218,23 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   });
 });
 
+/** Who the keys are answered to: the account, under its deployment's ring, and the request it asked in, whose build says whether it reads Cursor's keys. */
+interface KeysReader {
+  readonly userId: string;
+  readonly ring: KeyRing;
+  readonly request: Request;
+}
+
 const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
-  userId: string,
-  ring: KeyRing,
+  { userId, ring, request }: KeysReader,
   rejected?: ProviderKeyRejection,
   revocationUnconfirmed = false,
 ) {
-  const keys = (yield* summariesOf(userId, PROVIDER_KEY_KIND.API_KEY, ring)).map(
-    (read) => read.summary,
-  );
+  const cursorRead = readsCursor(request);
+
+  const keys = (yield* summariesOf(userId, PROVIDER_KEY_KIND.API_KEY, ring))
+    .map((read) => read.summary)
+    .filter((key) => cursorRead || key.provider !== PROVIDER_KEY_PROVIDER.CURSOR);
 
   const subscriptions: SubscriptionKeySummary[] = [];
 
@@ -279,7 +311,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
     providerKeys: keyed.providerKeys.effect(function* ({ context }) {
       yield* readChatGptUsage(context.userId, context.ring);
 
-      return yield* keysAnswer(context.userId, context.ring);
+      return yield* keysAnswer(context);
     }),
 
     /** A save: braked, checked with the provider, and kept sealed only where the provider accepts it. */
@@ -289,14 +321,22 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       const kind = input.kind ?? PROVIDER_KEY_KIND.API_KEY;
       const key = Redacted.make(input.key);
 
+      // Note that a Cursor key is kept only for an account trying Cursor, since a build that cannot read one would lose its keys' answer over it.
+      if (
+        provider === PROVIDER_KEY_PROVIDER.CURSOR &&
+        !(yield* hostedStoreOrUnavailable(accountExperimentOn(userId, EXPERIMENT.CURSOR)))
+      ) {
+        return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+      }
+
       if (!(yield* brake.check(userId))) {
-        return yield* keysAnswer(userId, ring, PROVIDER_KEY_REJECTION.TOO_MANY_TRIES);
+        return yield* keysAnswer(context, PROVIDER_KEY_REJECTION.TOO_MANY_TRIES);
       }
 
       if (kind !== PROVIDER_KEY_KIND.API_KEY) {
         const refused = subscriptionRefusalOf(provider, kind, key);
 
-        if (refused !== undefined) return yield* keysAnswer(userId, ring, refused);
+        if (refused !== undefined) return yield* keysAnswer(context, refused);
         const now = yield* DateTime.nowAsDate;
         const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
 
@@ -322,7 +362,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         );
         yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
 
-        return yield* keysAnswer(userId, ring);
+        return yield* keysAnswer(context);
       }
 
       // An Anthropic key is asked about fast mode beside the check, which the catalog offers by; OpenAI has none we run.
@@ -337,7 +377,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       );
 
       // Note that a refusal's wording is never logged or answered, because it may quote the key.
-      if (checked !== PROVIDER_KEY_CHECK.ACCEPTED) return yield* keysAnswer(userId, ring, checked);
+      if (checked !== PROVIDER_KEY_CHECK.ACCEPTED) return yield* keysAnswer(context, checked);
       const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
       const now = yield* DateTime.nowAsDate;
       // Note that a key is added at the bottom of the order unless the save names the one it replaces.
@@ -356,7 +396,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       );
       yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
 
-      return yield* keysAnswer(userId, ring);
+      return yield* keysAnswer(context);
     }),
 
     /** One provider's credential removed, by the provider, the kind, and the subscription the query names; an API key where it names no kind, the first of its kind where it names no subscription. A ChatGPT plan is revoked at OpenAI first. */
@@ -373,19 +413,19 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
           removeChatGptCredentials(userId, ring, subscriptionId),
         );
 
-        return yield* keysAnswer(userId, ring, undefined, !confirmed);
+        return yield* keysAnswer(context, undefined, !confirmed);
       }
 
       yield* hostedStoreOrUnavailable(
         removeProviderKey(userId, input.query.provider, kind, subscriptionId),
       );
 
-      return yield* keysAnswer(userId, ring);
+      return yield* keysAnswer(context);
     }),
 
     /** A connected plan's default for the account's coding agents turned on or off; a plan the account does not hold changes nothing. */
     setProviderKeyForAgents: keyed.setProviderKeyForAgents.effect(function* ({ context, input }) {
-      const { userId, ring } = context;
+      const { userId } = context;
       yield* hostedStoreOrUnavailable(
         setProviderKeyForAgents(
           userId,
@@ -396,7 +436,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         ),
       );
 
-      return yield* keysAnswer(userId, ring);
+      return yield* keysAnswer(context);
     }),
 
     /** One of the account's ChatGPT plan's reset credits spent under the press's key, answering the keys as they then stand and how the spend went. */
@@ -410,14 +450,36 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         input.idempotencyKey,
       );
 
-      const keys = yield* keysAnswer(userId, ring);
+      const keys = yield* keysAnswer(context);
 
       return Option.isNone(outcome) ? keys : { ...keys, resetCredit: outcome.value };
     }),
 
+    /** One of the account's plans' usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's read from the headers of a one-token quota check (`claude-usage.ts`). Answers the keys as they then stand; a plan it does not hold, or one whose provider answered nothing keeps what it held. */
+    refreshPlanUsage: keyed.refreshPlanUsage.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+
+      const [codex, claude] = yield* hostedStoreOrUnavailable(
+        Effect.all([
+          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
+          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
+        ]),
+      );
+
+      const mine = (row: ProviderKeyRow) => row.id === input.subscriptionId;
+      const codexPlan = codex.find(mine);
+      const claudePlan = claude.find(mine);
+
+      if (codexPlan !== undefined) yield* rereadPlanUsage(userId, ring, codexPlan);
+
+      if (claudePlan !== undefined) yield* rereadClaudeUsage(userId, ring, claudePlan);
+
+      return yield* keysAnswer(context);
+    }),
+
     /** One of the account's subscriptions or API keys named, or its name cleared; one it does not hold changes nothing. */
     renameSubscription: keyed.renameSubscription.effect(function* ({ context, input }) {
-      const { userId, ring } = context;
+      const { userId } = context;
       // Note that a name is kept as typed but for its ends, and one left empty is the default's.
       const label = input.label?.trim() ?? "";
       yield* hostedStoreOrUnavailable(
@@ -430,17 +492,17 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         ),
       );
 
-      return yield* keysAnswer(userId, ring);
+      return yield* keysAnswer(context);
     }),
 
     /** The account's credentials of the provider, its plans and its API key, put in the order named, the first paying first. */
     reorderSubscriptions: keyed.reorderSubscriptions.effect(function* ({ context, input }) {
-      const { userId, ring } = context;
+      const { userId } = context;
       yield* hostedStoreOrUnavailable(
         reorderSubscriptions(userId, input.provider, input.subscriptionIds),
       );
 
-      return yield* keysAnswer(userId, ring);
+      return yield* keysAnswer(context);
     }),
 
     /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. A start that adds keeps the plan it connects at the bottom of the account's order. */
@@ -482,7 +544,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
 
       if (polled.outcome !== CHATGPT_DEVICE_LOGIN.CONNECTED) return answered;
 
-      return { ...answered, keys: yield* keysAnswer(userId, ring) };
+      return { ...answered, keys: yield* keysAnswer(context) };
     }),
 
     /** The account's device-code login dropped, braked with its polls; a plan it already connected stands. */

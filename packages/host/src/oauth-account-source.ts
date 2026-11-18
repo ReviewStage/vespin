@@ -7,10 +7,11 @@ import {
   sessionBearer,
 } from "@repo/features";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Option } from "effect";
 import type { AccountSession, AccountSourceHost } from "./account-source.js";
 import {
   AccountSource,
+  PlatformTokenVault,
   SecretCipher,
   SignInConsent,
   type SignInConsentSeam,
@@ -49,9 +50,11 @@ export const oauthAccountSourceLayerFor = (
     Effect.gen(function* () {
       const cipher = yield* SecretCipher;
       const consent = yield* SignInConsent;
+      const vault = yield* Effect.serviceOption(PlatformTokenVault);
 
       return {
         tokenCipher: cipher,
+        ...(Option.isSome(vault) ? { tokenVault: vault.value } : undefined),
         open: (host: AccountSourceHost) => openOAuthSession(host, consent.open, client),
       };
     }),

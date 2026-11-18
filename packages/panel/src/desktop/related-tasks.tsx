@@ -202,7 +202,7 @@ export function RelatedTasks({
                 lines: (
                   <QuickAddLines
                     quick={adding.quick}
-                    line={rowQuickAddLine(cells, true)}
+                    line={rowQuickAddLine(cells)}
                     order={QUICK_ADD_ORDER.ADDS_FIRST}
                   />
                 ),

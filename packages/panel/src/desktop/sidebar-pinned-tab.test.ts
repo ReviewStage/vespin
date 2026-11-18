@@ -53,6 +53,9 @@ const TASK: TaskSummary = {
 
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
+/** The agent's pull request, by its repository and number. */
+const RELAY_42 = { repository: "acme/relay", number: 42 } as const;
+
 const PIN: SidebarPin = {
   task: TASK.id,
   tab: agentTab(AGENT),
@@ -77,7 +80,7 @@ beforeEach(() => {
   });
   fakeActPort({
     ...fakeActPortCalls(),
-    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: ({ agentId }) => {
+    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW]: ({ agentId }) => {
       reads.push(agentId);
 
       return quietHold();
@@ -164,8 +167,13 @@ test("a pointer crossing a pinned agent's row asks the service nothing", async (
   assert.deepEqual(reads, []);
 });
 
-test("a pinned Changes tab wears its pull request's mark and current label where its task's pull requests hold it, and the gray icon and pinned label where they do not", () => {
-  const pin: SidebarPin = { task: TASK.id, tab: changesTab(AGENT), label: "#42 Old title", at: 1 };
+test("a pinned Pull request tab wears its pull request's mark and current label where its task's pull requests hold it, and the gray icon and pinned label where they do not", () => {
+  const pin: SidebarPin = {
+    task: TASK.id,
+    tab: changesTab(RELAY_42),
+    label: "#42 Old title",
+    at: 1,
+  };
 
   const held: TaskSummary = {
     ...TASK,
@@ -180,6 +188,7 @@ test("a pinned Changes tab wears its pull request's mark and current label where
       checks: CHECK_SUMMARY.PASSING,
       additions: 4,
       deletions: 1,
+      url: "https://github.com/acme/relay/pull/42",
       agentId: AGENT,
     },
   ]);
@@ -224,64 +233,10 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
   assert.equal(unnamed.textContent, "Expiry job");
 });
 
-test("a pinned Changes tab of an agent that shares its pull request with a newer one wears the open task's read of its own", () => {
-  const pin: SidebarPin = { task: TASK.id, tab: changesTab(AGENT), label: "#42 Old title", at: 1 };
-  const newer = "9d2b7b5f-4e3f-4e9c-9c77-7a5d8b3f4c32";
-
-  const held: TaskSummary = {
-    ...TASK,
-    agents: { total: 2, working: 0, pullRequestTotal: 1 },
-  };
-
-  holdPullRequests([
-    {
-      number: 42,
-      title: "Newer title",
-      state: PULL_REQUEST_STATE.OPEN,
-      checks: CHECK_SUMMARY.PASSING,
-      additions: 4,
-      deletions: 1,
-      agentId: newer,
-    },
-  ]);
-  const base = tasksControl({ tasks: [held] });
-
-  const control: TasksControl = {
-    ...base,
-    activeTaskId: TASK.id,
-    agents: {
-      ...base.agents,
-      agents: undefined,
-      pullRequests: new Map([
-        [
-          AGENT,
-          {
-            number: 42,
-            title: "Newer title",
-            url: "https://github.com/acme/relay/pull/42",
-            state: PULL_REQUEST_STATE.MERGED,
-            checks: CHECK_SUMMARY.PASSING,
-            additions: 4,
-            deletions: 1,
-            changedFiles: 1,
-          },
-        ],
-      ]),
-    },
-  };
-
-  const row = drawPin(pin, held, control);
-  assert.equal(row.textContent, "#42 Newer title");
-  assert.equal(
-    row.querySelector("[data-pull-request-mark]")?.getAttribute("data-pull-request-state"),
-    PULL_REQUEST_STATE.MERGED,
-  );
-});
-
-test("a pinned Changes tab naming a pull request by number keeps its pinned label where the task's pull requests stand in more than one repository, since a number names one only within its repository", () => {
+test("a pinned Pull request tab wears the line of its own repository where the task's pull requests stand in more than one, since a number names one only within its repository", () => {
   const pin: SidebarPin = {
     task: TASK.id,
-    tab: changesTab(AGENT, 42),
+    tab: changesTab({ repository: "Acme/New", number: 42 }),
     label: "#42 Old title",
     at: 1,
   };
@@ -303,12 +258,16 @@ test("a pinned Changes tab naming a pull request by number keeps its pinned labe
 
   holdPullRequests([line("old"), line("new")]);
   const row = drawPin(pin, held);
-  assert.equal(row.textContent, "#42 Old title");
-  assert.equal(row.querySelector("[data-pull-request-mark]"), null);
+  assert.equal(row.textContent, "#42 Title in new");
 });
 
-describe("a pinned Changes tab's card", () => {
-  const pin: SidebarPin = { task: TASK.id, tab: changesTab(AGENT), label: "#42 Old title", at: 1 };
+describe("a pinned Pull request tab's card", () => {
+  const pin: SidebarPin = {
+    task: TASK.id,
+    tab: changesTab(RELAY_42),
+    label: "#42 Old title",
+    at: 1,
+  };
 
   const summary: AgentSummary = {
     id: AGENT,
@@ -343,7 +302,7 @@ describe("a pinned Changes tab's card", () => {
     };
   };
 
-  test("is the Changes tab's own card where the open task holds its agent, read without asking the service", async () => {
+  test("is the Pull request tab's own card where one of the open task's agents opened it, read without asking the service", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     restOn(drawPin(pin, TASK, openTask([summary])));
     await settled();
@@ -363,6 +322,7 @@ describe("a pinned Changes tab's card", () => {
         ...IDLE_TASKS_VIEW,
         tasks: [TASK],
         agentPullRequests: [{ agentId: AGENT, taskId: TASK.id, pullRequest: read }],
+        taskPullRequests: [{ taskId: TASK.id, pullRequests: [{ ...read, agentId: AGENT }] }],
       },
     };
 
@@ -375,14 +335,6 @@ describe("a pinned Changes tab's card", () => {
     assert.match(card()?.textContent ?? "", /Newer title/u);
     assert.equal(document.querySelector(".ui-tooltip-card [data-pull-request-card]"), null);
     assert.deepEqual(reads, []);
-  });
-
-  test("is the pin's own card where the open task no longer holds the agent", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
-    restOn(drawPin(pin, TASK, openTask([])));
-    await settled();
-    assert.match(card()?.textContent ?? "", /No longer on this task/u);
-    assert.equal(document.querySelector(".ui-tooltip-card [data-pull-request-card]"), null);
   });
 });
 

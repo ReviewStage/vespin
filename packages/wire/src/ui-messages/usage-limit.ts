@@ -2,7 +2,9 @@
 import { Schema } from "effect";
 
 export const USAGE_LIMIT_PART = "data-usage-limit";
-export const USAGE_LIMIT_AGENT = { CLAUDE: "Claude", CODEX: "Codex" } as const;
+
+/** The harness whose limit was reached, by the name the notice says. A client from before a name reads the notice as a part it does not know, and draws nothing. */
+export const USAGE_LIMIT_AGENT = { CLAUDE: "Claude", CODEX: "Codex", CURSOR: "Cursor" } as const;
 
 export type UsageLimitAgent = (typeof USAGE_LIMIT_AGENT)[keyof typeof USAGE_LIMIT_AGENT];
 

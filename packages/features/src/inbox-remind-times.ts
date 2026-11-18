@@ -35,6 +35,8 @@ export const REMIND_WORDS = {
 interface RemindTime {
   readonly label: string;
   readonly at: (now: number) => number;
+  /** Whether the moment it names holds through the day, so a menu built that morning still says it rightly that night; In 1 hour's moves with the minute. */
+  readonly steady: boolean;
 }
 
 /** `now`'s day in the reader's own zone, `days` on, at `hour` sharp. */
@@ -48,10 +50,11 @@ function dayAt(now: number, days: number, hour: number): number {
 
 /** The times every Remind me menu offers, in its order: an hour on, tomorrow morning, and next Monday morning. */
 export const REMIND_TIMES: readonly RemindTime[] = [
-  { label: REMIND_WORDS.IN_AN_HOUR, at: (now) => now + HOUR_MS },
-  { label: REMIND_WORDS.TOMORROW, at: (now) => dayAt(now, 1, MORNING_HOUR) },
+  { label: REMIND_WORDS.IN_AN_HOUR, at: (now) => now + HOUR_MS, steady: false },
+  { label: REMIND_WORDS.TOMORROW, at: (now) => dayAt(now, 1, MORNING_HOUR), steady: true },
   {
     label: REMIND_WORDS.NEXT_WEEK,
+    steady: true,
     // Note that a Monday's next week is the Monday after, never the day itself.
     at: (now) => dayAt(now, (8 - new Date(now).getDay()) % 7 || 7, MORNING_HOUR),
   },

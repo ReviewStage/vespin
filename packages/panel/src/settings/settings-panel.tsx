@@ -16,9 +16,11 @@ import { SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views"
 import type { AppSettingsView } from "@repo/settings/wire";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { useBillingShown } from "../billing.js";
 import { AccountSection } from "./account-section.js";
 import { AgentsPage } from "./agents-page.js";
 import { AppearanceSection } from "./appearance-page.js";
+import { BillingPage } from "./billing-page.js";
 import { CliSection } from "./cli-section.js";
 import { CloudEnvironmentPage } from "./cloud-environment-page.js";
 import { ExperimentalPage } from "./experimental-page.js";
@@ -85,7 +87,9 @@ export function SettingsPanel({
   integrationsFilter?: IntegrationsFilter | undefined;
 }): React.JSX.Element {
   const writes = useSettingsWrites();
-  const panelView = settingsRowsInput({ settings, account, capabilities, workspace });
+  const shown = workspace ? shownWorkspace(workspace) : undefined;
+  const billing = useBillingShown(shown);
+  const panelView = settingsRowsInput({ settings, account, capabilities, workspace, billing });
   // The experiments on where Settings shows: the account's own, and the shown workspace's.
   const experiments = panelView?.settings.experiments ?? NO_EXPERIMENTS;
   const signedIn = account.status === ACCOUNT_STATUS.SIGNED_IN;
@@ -137,8 +141,12 @@ export function SettingsPanel({
         <WorkspacePage control={workspace} readerId={account.id} />
       ) : null}
 
+      {view === SETTINGS_VIEW.BILLING && billing && shown ? (
+        <BillingPage workspace={shown} />
+      ) : null}
+
       {view !== SETTINGS_VIEW.ENVIRONMENT ? null : signedIn ? (
-        <CloudEnvironmentPage control={workspace} view={panelView} />
+        <CloudEnvironmentPage control={workspace} view={panelView} readerId={account.id} />
       ) : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
           {SIGNED_OUT_WORDS}
@@ -212,7 +220,11 @@ export function SettingsPanel({
       ) : null}
 
       {view === SETTINGS_VIEW.SHORTCUTS ? (
-        <WindowShortcutSections experiments={experiments} capabilities={capabilities} />
+        <WindowShortcutSections
+          experiments={experiments}
+          capabilities={capabilities}
+          inbox={panelView?.settings.inbox !== false}
+        />
       ) : null}
     </ReplayUnmask>
   );

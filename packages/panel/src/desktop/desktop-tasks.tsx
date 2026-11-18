@@ -1,7 +1,11 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type NumberedAddress,
+  pullRequestAddressOf,
+} from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -35,7 +39,6 @@ import {
 } from "@repo/ui";
 import { DescriptionCommentsProvider } from "@repo/ui/description-comments";
 import { GLYPH } from "@repo/ui/icons";
-import { pullRequestAgentOf } from "@repo/ui/pull-request-link";
 import {
   agentOfTab,
   agentTab,
@@ -59,6 +62,7 @@ import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
 import { PageIntro } from "../page-intro.js";
+import { useBackToOr } from "../places/narrow-backs.js";
 import { HERE } from "../places/pressed-address.js";
 import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
@@ -114,7 +118,7 @@ import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
 import { AGENTS_SECTION } from "./agent-entries.js";
-import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
+import { AgentThreads } from "./agent-threads.js";
 import {
   AutomationRunSteps,
   AutomationRunStrip,
@@ -144,7 +148,7 @@ import {
   type TaskHeadBack,
 } from "./phone-head.js";
 import {
-  changesTabOf,
+  listedAgentOf,
   SIDE_PANEL_HOLDER,
   SidePanel,
   type SidePanelDrawing,
@@ -604,7 +608,8 @@ function DescriptionDocument({
 
   const openMention = tasks.onShowMention;
   const revealed = tasks.sectionReveal;
-  const { mainTabs, sidePanel, agents } = tasks;
+  const { mainTabs, sidePanel, agents, agentThreads } = tasks;
+  const backToOr = useBackToOr();
 
   // What a row, a link, or a chip on the page names opens through the window's one door for a press,
   // which hands the keys to the column it opened in, so ⌘W closes the tab it opened (`tab-press.ts`).
@@ -646,9 +651,9 @@ function DescriptionDocument({
   // The description stands in the column's Overview, so a row that opens it chooses that tab.
   const openOverview = () => openColumnTab(MAIN_TAB.OVERVIEW);
 
-  // The task's details go back to the agent's tab they were opened over, or the agents' last, or
-  // a new agent's draft where no agent's tab stands, as a task with none opens on.
-  const leaveDetails = () => {
+  // The agents' tab the task's details stand over: the agent's tab they were opened over, or the agents' last, or a new
+  // agent's draft where no agent's tab stands, as a task with none opens on, shown in the details' step.
+  const showAgents = () => {
     const { returnTab } = mainTabs;
 
     if (returnTab !== undefined) {
@@ -662,12 +667,41 @@ function DescriptionDocument({
     if (start !== undefined && start.disabled !== true) start.onSelect();
   };
 
+  // The column's agent's card as it stands for `column`: its threads where it shows them, else its transcript.
+  const threadsOf = (column: MainTab) => {
+    const agentId = agentOfTab(column);
+
+    const shown =
+      agentId === undefined || taskId === undefined
+        ? undefined
+        : agentThreads.shown(taskId, agentId);
+
+    return agentId === undefined || shown === undefined
+      ? undefined
+      : { agentId, itemId: shown.itemId };
+  };
+
+  // ‹ Agents is Back where the step behind is this task on the agent the details were opened over, so Back from there
+  // leaves the task rather than opening the details again; else the agents take the details' step (`useBackToOr`).
+  const leaveDetails = () => {
+    const { returnTab } = mainTabs;
+
+    if (returnTab === undefined || taskId === undefined) {
+      showAgents();
+
+      return;
+    }
+
+    backToOr({ task: { taskId, column: returnTab, threads: threadsOf(returnTab) } }, showAgents);
+  };
+
   // Details opens the task's details in the column's place, and pressed again goes back to the agents.
   const toggleDetails = () =>
     tab !== undefined && isOverviewTab(tab) ? leaveDetails() : openOverview();
 
   // The way back to the agents stands pinned in the details' own card; a phone's head is its way back.
   const leaveDetailsDoor = useSteadyDoor(leaveDetails);
+  const showAgentsDoor = useSteadyDoor(showAgents);
 
   const detailsLead = useMemo(
     () =>
@@ -677,7 +711,7 @@ function DescriptionDocument({
     [phone, leaveDetailsDoor],
   );
 
-  // The panel opened over the task's details, as a file a mention names opens it, goes back to the agents,
+  // The panel opened over the task's details, as a file a mention names opens it, shows the agents in their step,
   // beside which the panel stands, since the details take the panel's room too.
   const detailsOver = isOverviewTab(tab) && !phone;
   const panelWasOpen = useRef(sidePanel.open);
@@ -685,8 +719,8 @@ function DescriptionDocument({
     const opened = sidePanel.open && !panelWasOpen.current;
     panelWasOpen.current = sidePanel.open;
 
-    if (opened && detailsOver) leaveDetailsDoor();
-  }, [sidePanel.open, detailsOver, leaveDetailsDoor]);
+    if (opened && detailsOver) showAgentsDoor();
+  }, [sidePanel.open, detailsOver, showAgentsDoor]);
 
   // A row, a link, or a chip that opens a tab of the side panel, a transcript's among them, hands
   // the panel the keys, as a terminal shown does, so ⌘W closes the tab it opened.
@@ -739,14 +773,12 @@ function DescriptionDocument({
   };
 
   // An agent's pull request chip opens its pull request in the side panel, beside its tab, in
-  // the one Pull request tab the "+" offers for that pull request (`showPullRequest`), on its conversation.
-  const openPullRequest = (agentId: string, number?: number) =>
+  // the one Pull request tab for that pull request (`showPullRequest`), on its conversation.
+  const openPullRequest = (pullRequest: NumberedAddress) =>
     showPullRequest(
       { ...sidePanel, onOpen: openPanelTab },
-      agents,
-      agentId,
+      pullRequest,
       PULL_REQUEST_VIEW.CONVERSATION,
-      number,
     );
 
   // An agent a mention names wears its tab's tile and hangs its tab's card, read as its tab reads them.
@@ -763,19 +795,25 @@ function DescriptionDocument({
   const agentPullRequests = agents.pullRequests;
 
   const changesPeople = useChangesPeopleOf(
-    useMemo(() => [...agentPullRequests.keys()], [agentPullRequests]),
+    useMemo(
+      () =>
+        [...agentPullRequests].flatMap(([agentId, each]) => {
+          const address = pullRequestAddressOf(each.url);
+
+          return address === undefined ? [] : [[agentId, address] as const];
+        }),
+      [agentPullRequests],
+    ),
   );
 
   const pullRequestCard = (url: string) => {
-    const owned = [...agents.pullRequests].map(([agentId, each]) => ({ agentId, url: each.url }));
     // A page under an agent's pull request, as its files, is still that pull request, as its press says.
-    const owner = pullRequestAgentOf(url, owned);
+    const address = pullRequestAddressOf(url);
+    const listed = address === undefined ? undefined : listedAgentOf(agents, address);
 
-    if (owner === undefined) return undefined;
-    const agentId = changesTabOf(agents, owner, tasks.sidePanel.changes).changes;
-    const pullRequest = agents.pullRequests.get(agentId);
-
-    if (pullRequest === undefined) return undefined;
+    if (listed === undefined) return undefined;
+    const { pullRequest } = listed;
+    const agentId = listed.agent.id;
 
     const card = tabCard({
       kind: TAB_KIND.CHANGES,
@@ -868,20 +906,22 @@ function DescriptionDocument({
   // dock opens in the agent's card, on the next of them (`agent-threads.tsx`); a phone, with no room
   // for the list beside the thread, opens them in the Inbox narrowed to the task.
   const waitingOf = useMemo(() => waitingByAgent(inbox.board.waiting), [inbox.board.waiting]);
-  const agentThreads = useAgentThreadViews();
 
   const openWaitingThread = useSteadyDoor((item: InboxItem) => {
     if (openedId === undefined) return;
 
-    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id });
-    else agentThreads.onOpen(item.agentId, item.id);
+    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id, itemAgentId: item.agentId });
+    else agentThreads.onOpen(openedId, item.agentId, item.id);
   });
 
   const tabAgent = tab === undefined ? undefined : agentOfTab(tab);
 
   // The column's agent whose card shows its threads in its transcript's place, which main is told is not on screen.
   const threadsAgent =
-    phone || tabAgent === undefined || agentThreads.shown(tabAgent) === undefined
+    phone ||
+    tabAgent === undefined ||
+    openedId === undefined ||
+    agentThreads.shown(openedId, tabAgent) === undefined
       ? undefined
       : tabAgent;
 
@@ -1163,9 +1203,9 @@ function DescriptionDocument({
   // The task's pages stand under its agents, a row opening its page in the side panel and handing
   // the panel the keys, as the panel's "+" row for it does.
   const openPageTab = useSteadyDoor((pageId: string) => {
-    // Note that the details take the panel's room too, so a page opened from them goes back to the
-    // agents first, beside which the panel stands, and the panel keeps the keys.
-    if (detailsOver) leaveDetails();
+    // Note that the details take the panel's room too, so a page opened from them shows the agents
+    // first, beside which the panel stands, and the panel keeps the keys.
+    if (detailsOver) showAgents();
     openPanelTab(pageTab(pageId));
   });
 
@@ -1244,7 +1284,6 @@ function DescriptionDocument({
           kind: HERE.TASK,
           taskId: openedId ?? "",
           repository: openedRepository,
-          pullRequests: agents.pullRequests,
           agentIds: agents.agentIds,
           heldIds: agents.heldIds,
         },
@@ -1349,11 +1388,22 @@ function DescriptionDocument({
   // The panel holds the keys while the focus went into it last, or while it
   // fills the window over this column; shut, it hands them back.
   const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
+
   // The agent's threads, where its card shows them in its transcript's place.
-  const threadsShown = threadsAgent === undefined ? undefined : agentThreads.shown(threadsAgent);
+  const threadsShown =
+    threadsAgent === undefined || taskId === undefined
+      ? undefined
+      : agentThreads.shown(taskId, threadsAgent);
+
+  // ‹ Transcript is Back where the step behind is this agent's transcript, else the transcript takes the threads' step.
+  const leaveThreads = (agentId: string) => {
+    if (taskId === undefined) return;
+    const transcript = { taskId, column: agentTab(agentId), threads: undefined };
+    backToOr({ task: transcript }, () => agentThreads.onClose(taskId, agentId));
+  };
 
   const agentThreadsView =
-    tabAgent === undefined || threadsShown === undefined ? undefined : (
+    tabAgent === undefined || threadsShown === undefined || taskId === undefined ? undefined : (
       <AgentThreads
         key={tabAgent}
         agentId={tabAgent}
@@ -1363,8 +1413,8 @@ function DescriptionDocument({
         chosen={threadsShown.itemId}
         shown={tasks.shown && !sidePanel.fullScreen}
         active={tasks.shown && !sideFocused}
-        onChoose={(itemId) => agentThreads.onOpen(tabAgent, itemId)}
-        onBack={() => agentThreads.onClose(tabAgent)}
+        onChoose={(itemId) => agentThreads.onOpen(taskId, tabAgent, itemId)}
+        onBack={() => leaveThreads(tabAgent)}
       />
     );
 
@@ -1458,13 +1508,21 @@ function DescriptionDocument({
       : undefined;
 
   // Back leaves the task on Overview, and goes back a screen anywhere else: the panel shuts over
-  // the column, and the column goes back to Overview, which lets an empty draft go (`use-main-tabs.ts`).
+  // the column, and the column goes back to Overview, which lets an empty draft go (`use-main-tabs.ts`),
+  // a step back where Overview is the step behind, else Overview in the screen's step (`useBackToOr`).
+  const chooseOverview = () => mainTabs.onChoose(MAIN_TAB.OVERVIEW);
+  const overview = { column: MAIN_TAB.OVERVIEW, panel: { open: false, tab: undefined } };
+
   const back =
     pane === TASK_PANE.OVERVIEW
       ? away
       : pane === TASK_PANE.PANEL
         ? screenBack(columnLabel ?? planLabel, sidePanel.onToggle)
-        : screenBack(planLabel, () => mainTabs.onChoose(MAIN_TAB.OVERVIEW));
+        : screenBack(planLabel, () =>
+            taskId === undefined
+              ? chooseOverview()
+              : backToOr({ task: { taskId, ...overview } }, chooseOverview),
+          );
 
   // What the header's ⋯ offers follows what is on screen: the task's own menu on Overview, the
   // agent's on its screen, Discard draft on a draft's, and the tab's on one of the panel's, each
@@ -1798,7 +1856,7 @@ interface WorkColumnProps {
   looks: TaskLooks;
   /** The room the panel's stage gives; narrow, a task is headed by one row of its own (`task-pane-switcher.tsx`). */
   room?: ShellRoom;
-  /** A phone's way back out of the task, to the page it was opened from (`WindowHistory`'s `onLeave`); Home where none is handed. */
+  /** A phone's way back out of the task, the window's Back; Home where none is handed. */
   away?: TaskHeadBack | undefined;
 }
 

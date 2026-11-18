@@ -249,7 +249,7 @@ body,
 ) .title-bar-controls:not([data-edge]),
 .desktop-shell:has(.side-panel:not([data-inbox-shown="false"] > [data-page="inbox"] *))
   .title-bar-controls[data-edge="end"] {
-  --title-bar-ground: var(--ui-color-well);
+  --title-bar-ground: var(--ui-color-ground);
 }
 
 /* Every page stands its top row on the frame (shell.css), so the toggle at
@@ -643,8 +643,11 @@ body,
   .desktop-task:has(> .desktop-task-main)
   > .side-panel
   > .side-panel-bar {
+  /* Note that the row is a pane bar's height, padded as `PaneBar` is, because
+     it stands level with the bar heading the column beside it (an automation
+     run's, a tab's), and a row inset over and under its tabs stood it taller. */
   min-height: var(--ui-pane-bar-height);
-  padding: var(--ui-row-inset) var(--column-inset);
+  padding: var(--ui-tight-gap) var(--column-inset);
   border-bottom: 1px solid var(--ui-color-border);
   -webkit-app-region: no-drag;
 }
@@ -733,6 +736,19 @@ body,
   --sheet-top-left-radius: 0px;
 }
 
+/* A task's banner (`task-banner.tsx`) heads the column's sheet over the bar
+   it would otherwise start with, so it rounds the sheet's top corners as
+   that bar does (shell.css), or its tint paints square over them. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task
+  > .desktop-task-main
+  > .ui-banner:nth-child(1 of :not([hidden])) {
+  border-top-left-radius: var(--sheet-top-left-radius, var(--sheet-radius));
+  border-top-right-radius: var(--sheet-top-right-radius, var(--sheet-radius));
+}
+
 /* The agent's tabs are parted from its conversation by a hairline, which
    its edge is dragged on to resize them. */
 :where(:root):not([data-ui-room="narrow"])
@@ -742,14 +758,6 @@ body,
   > .side-panel:not([data-full-screen="true"]) {
   margin-left: 0;
   border-left: 1px solid var(--ui-color-border);
-}
-
-:where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main
-  .desktop-task:has(> .desktop-task-main)
-  > .side-panel {
-  --side-panel-ground: var(--ui-color-ground);
 }
 
 :where(:root):not([data-ui-room="narrow"])
@@ -894,6 +902,8 @@ body,
 .desktop-agent,
 .desktop-inbox {
   --reading-room: calc((100% - var(--ui-page-measure)) / 2);
+  /* The column's inset, which the way back to the newest line keeps to (`--spacing-conversation-scroll-end`). */
+  --conversation-column-inset: max(var(--content-inset), var(--reading-room));
   position: relative;
 }
 
@@ -1264,23 +1274,13 @@ body,
   }
 }
 
-/* The Automations list's toolbar: where its two acts' words would crowd the
-   title, Create with an agent folds to its glyph and New automation keeps
-   its words (`automation-list-frame.tsx`). */
-/* off-scale: 600px, where the Automations toolbar's acts stop fitting */
-@container automations-toolbar (width < 600px) {
-  .automations-acts {
-    --ui-fold: folded;
-  }
-}
-
 /* The prompt's placeholder, the height of its field at the rows it stands
    (`--automation-prompt-rows`, the editor's `PROMPT_ROWS`), its insets and
    its border (`text-field.css`). */
 .automation-prompt-skeleton {
   height: calc(
     var(--automation-prompt-rows) *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     2 *
     var(--ui-space-6) +
     2px
@@ -1295,7 +1295,7 @@ body,
   --agent-composer-field-block: calc(2 * var(--ui-space-6));
   --agent-composer-field-lines: calc(
     24 *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
 }
@@ -1303,7 +1303,7 @@ body,
 .automation-prompt .agent-composer-input {
   min-height: calc(
     var(--automation-prompt-rows) *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
   padding: var(--ui-space-6) var(--ui-control-inset);
@@ -1490,11 +1490,12 @@ body,
    it, or its sheet does where the shell stands it on one (shell.css), and
    whatever in a tab must paint a ground of its own paints this one (a Pull
    request tab's stuck headings and folding header, the list of changed
-   files), so none shows as a strip or a sheet of another ground. A page that stands the panel on
-   another ground changes this one name (`.desktop-task` beside its
-   conversation, below). */
+   files), so none shows as a strip or a sheet of another ground. Note that
+   it is the window's own ground, the conversation's beside it, on every
+   page, because on the well, the sidebar's shade, the panel read as a
+   second, darker window beside the Inbox's conversation. */
 .side-panel {
-  --side-panel-ground: var(--ui-color-well);
+  --side-panel-ground: var(--ui-color-ground);
   background: var(--side-panel-ground);
 }
 
@@ -1608,6 +1609,7 @@ body,
      where it is spent: a percentage there is of the box's frame, which is
      the panel's width. */
   --reading-room: calc((100% - var(--ui-page-measure)) / 2);
+  --conversation-column-inset: max(var(--content-inset), var(--reading-room));
   position: relative;
   /* The container every tab answers its width from (`@container
      side-panel`, tasks.css), so one width lays out every tab narrow; it
@@ -1730,7 +1732,7 @@ body,
 /* The words field stands at least five lines tall, so a task's prompt has
    room before it is written; it still grows to the agent box's eight. */
 .new-task-composer .agent-composer-input {
-  min-height: calc(5 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(5 * var(--agent-composer-line) + var(--agent-composer-field-block));
 }
 
 /* In the dialog, which does not scroll, a window too short for five lines,
@@ -1739,7 +1741,7 @@ body,
    its composer keeps the five lines but in a narrow room (below). */
 .new-task .new-task-composer .agent-composer-input {
   min-height: min(
-    calc(5 * var(--ui-type-body-leading) + var(--agent-composer-field-block)),
+    calc(5 * var(--agent-composer-line) + var(--agent-composer-field-block)),
     calc(var(--ui-stage-height) * 0.25)
   );
 }
@@ -1748,7 +1750,7 @@ body,
    rather than five, so Home's Inbox stays in view under it; it still grows
    to the cap as the words are written. */
 :where(:root)[data-ui-room="narrow"] .new-task-composer .agent-composer-input {
-  min-height: calc(2 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(2 * var(--agent-composer-line) + var(--agent-composer-field-block));
 }
 
 /* The foot stands on one row however narrow the card: the Runs on chip and
@@ -1855,6 +1857,15 @@ body,
 .tasks-board-draft .tasks-board-name [data-slot="input"] {
   min-inline-size: 0;
   flex: 1 1 auto;
+}
+
+/* A mouse's card draws its ⋯, a compact button, at its foot's end, which
+   stands the foot that tall; the draft keeps that height, so its chips
+   stand as far under its title as a card's. A finger's card draws no ⋯. */
+@media not (pointer: coarse) {
+  .tasks-board-draft .tasks-board-card-foot {
+    min-height: var(--ui-space-24);
+  }
 }
 
 :where(:root)[data-ui-room="narrow"] .desktop-shell .tasks-board-column {

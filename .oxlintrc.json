@@ -101,7 +101,8 @@
     "vespin/sandbox-delete-in-one-place": "error",
     "vespin/settings-row-end": "error",
     "vespin/settings-section-declared": "error",
-    "vespin/skeleton-through-components": "error"
+    "vespin/skeleton-through-components": "error",
+    "vespin/write-through-mutation": "error"
   },
   "overrides": [
     {

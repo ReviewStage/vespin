@@ -29,6 +29,10 @@ export const QUERY_ROOT = {
   WORKSPACE_ENVIRONMENT: "workspace-environment",
   /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup script (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
+  /** A workspace's cloud sandbox size and the most it may choose (`workspace-sandbox-size.ts`). */
+  WORKSPACE_SANDBOX_SIZE: "workspace-sandbox-size",
+  /** A workspace's billing as its owners and admins read it (`billing.ts`). */
+  WORKSPACE_BILLING: "workspace-billing",
   /** The Merge queue page: every pull request a workspace's merge queues hold (`desktop/merge-queue-page.tsx`). */
   MERGE_QUEUE: "merge-queue",
   /** The machines of a workspace's members, as the `@` list offers them and a machine's chip names its owner (`tasks/workspace-machines.tsx`). */
@@ -67,7 +71,7 @@ export const QUERY_ROOT = {
   TASK_BY_NUMBER: "task-by-number",
   AGENT_MESSAGES: "agent-messages",
   REPOSITORY_SKILLS: "repository-skills",
-  AGENT_CHANGES: "agent-changes",
+  PULL_REQUEST_CHANGES: "pull-request-changes",
   AGENT_TURN_CHANGES: "agent-turn-changes",
   /** A cloud agent's listening ports and its shared link, as a host that forwards none asks the service for them (`tasks/agent-forward.tsx`). */
   AGENT_PORTS: "agent-ports",
@@ -103,13 +107,15 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.REPOSITORY_PATHS,
   QUERY_ROOT.AGENT_PART,
   QUERY_ROOT.TASK_NEWEST_REVISION,
-  QUERY_ROOT.AGENT_CHANGES,
+  QUERY_ROOT.PULL_REQUEST_CHANGES,
   QUERY_ROOT.TASK_REVISION,
   QUERY_ROOT.INSTALLED_SKILL,
   QUERY_ROOT.INSTALLED_SKILL_PREVIEW,
   QUERY_ROOT.HOST_PAIRING,
   QUERY_ROOT.WORKSPACE_ENVIRONMENT,
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
+  QUERY_ROOT.WORKSPACE_SANDBOX_SIZE,
+  QUERY_ROOT.WORKSPACE_BILLING,
   QUERY_ROOT.MERGE_QUEUE,
   QUERY_ROOT.MACHINE_ALLOWED_APPS,
   QUERY_ROOT.WORKSPACE_MACHINES,

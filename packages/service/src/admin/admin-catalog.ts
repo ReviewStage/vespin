@@ -22,7 +22,7 @@ import {
   type AdminPromptSection,
   type AdminTurnPipeline,
 } from "@repo/features/admin-catalog-wire";
-import { AGENT_BRIEF } from "@repo/features/agent-wire";
+import { AGENT_BRIEF, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import { Clock, Duration, Effect, Option } from "effect";
 import { AGENT_WAKEUP } from "../agents/coder-host/agent-wakeup-bounds.js";
@@ -51,20 +51,27 @@ const PLACEHOLDER_TASK = {
   id: "00000000-0000-4000-8000-000000000000",
 } as const;
 
+const PLACEHOLDER_AGENT = {
+  id: "00000000-0000-4000-8000-000000000001",
+  runsOn: { machine: AGENT_MACHINE.VERCEL },
+  developer: { userId: "00000000-0000-4000-8000-000000000002", name: "Ada Lovelace" },
+} as const;
+
 /**
  * A sandbox agent on a repository in a workspace with Task descriptions on,
- * the settings' default, and every other gated experiment off. Note that it
+ * the settings' default, whose starter keeps an Inbox, and every other gated experiment off. Note that it
  * names no agent's row, because the instructions read the gates it opens alone.
  */
 const PLACEHOLDER_STANDING: AgentStanding = {
   agent: Option.none(),
-  open: new Set([TOOL_GATE.REPOSITORY, TOOL_GATE.SANDBOX, TOOL_GATE.DESCRIPTIONS]),
+  open: new Set([TOOL_GATE.REPOSITORY, TOOL_GATE.SANDBOX, TOOL_GATE.DESCRIPTIONS, TOOL_GATE.INBOX]),
   experiments: {
     descriptionsOn: true,
     memoryOn: false,
     turnEndOn: false,
     replyButtonsOn: false,
     computerUseOn: false,
+    inboxOn: true,
   },
 };
 
@@ -82,6 +89,7 @@ const QUEUED_ENVIRONMENTS: ReadonlySet<string> = new Set([
 const HARNESS_LABEL = {
   [CODER_HARNESS.CLAUDE_CODE]: "Coding agent instructions, Claude Code",
   [CODER_HARNESS.CODEX]: "Coding agent instructions, Codex",
+  [CODER_HARNESS.CURSOR]: "Coding agent instructions, Cursor",
 } as const satisfies Record<CoderHarness, string>;
 
 const ms = (duration: Duration.Duration) => Duration.toMillis(duration);
@@ -229,6 +237,7 @@ function prompts(): AdminCatalogPrompt[] {
         PLACEHOLDER_REPOSITORY,
         AGENT_BRIEF.DESCRIPTION,
         PLACEHOLDER_TASK,
+        PLACEHOLDER_AGENT,
         PLACEHOLDER_STANDING,
         undefined,
         null,

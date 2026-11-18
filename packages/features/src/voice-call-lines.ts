@@ -222,6 +222,29 @@ export function opensTurn(message: AgentTranscriptMessage): boolean {
 }
 
 /**
+ * The agent's turns a call's delegation opened, by their ids: each turn
+ * whose opening line, the last line before it that opens a turn, is a line
+ * the caller said on a call, which a delegation handed the agent. Its
+ * written words are folded once it has finished, whether or not the voice
+ * said them aloud (Dean, Nov 17).
+ */
+export function delegatedTurnsOf(rows: readonly PlacedRow[]): ReadonlySet<string> {
+  const delegated = new Set<string>();
+  let openedOnCall = false;
+
+  for (const { message } of rows) {
+    if (isAgentTurn(message)) {
+      if (openedOnCall) delegated.add(message.id);
+      openedOnCall = false;
+    } else if (opensTurn(message)) {
+      openedOnCall = spokenLineOf(message) !== undefined;
+    }
+  }
+
+  return delegated;
+}
+
+/**
  * How a tab draws a transcript's rows with the calls among them.
  *
  * The rules, settled with Dean (Nov 13, 2026), each because the transcript
@@ -236,7 +259,9 @@ export function opensTurn(message: AgentTranscriptMessage): boolean {
  * 3. A turn is one row, its journal, written as it starts and grown in place
  *    (`writer.ts`), so a line said while it runs stands after all of it.
  * 4. A spoken turn draws as a typed one does: its words, its runs of calls
- *    folded as any turn's are, and its foot.
+ *    folded as any turn's are, and its foot; but a turn a call's delegation
+ *    opened folds its written words with its work once it has finished
+ *    (`delegatedTurnsOf`).
  * 5. A call is marked by its start and end alone: its lines are drawn as
  *    any line of the member's and any reply of the agent's are, so two calls
  *    into the agent at once interleave by `seq` between their own starts

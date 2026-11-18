@@ -71,14 +71,17 @@ it.layer(getTestDB())("the account sounds store", (it) => {
           { name: "Glass", sha256: FIRST_SHA256 },
         );
         const knock = yield* addSound(owner, "Knock", clipOf(2));
-        assert.equal(yield* chooseSound(owner, ASK, knock.id), knock.id);
+        const chosen = yield* chooseSound(owner, ASK, knock.id);
+        assert.equal(chosen.id, knock.id);
+        assert.notEqual(chosen.txid, undefined);
         assert.deepEqual(yield* choicesOf(owner), { [FINISH]: glass.id, [ASK]: knock.id });
         // A choice naming no sound the account keeps chooses nothing, and answers the standing one.
-        assert.equal(yield* chooseSound(owner, ASK, randomUUID()), knock.id);
+        assert.deepEqual(yield* chooseSound(owner, ASK, randomUUID()), { id: knock.id });
         assert.deepEqual(yield* choicesOf(owner), { [FINISH]: glass.id, [ASK]: knock.id });
 
         const renamed = yield* renameSound(owner, glass.id, "Bell");
-        assert.equal(Option.getOrUndefined(renamed)?.name, "Bell");
+        assert.equal(Option.getOrUndefined(renamed)?.sound.name, "Bell");
+        assert.notEqual(Option.getOrUndefined(renamed)?.txid, undefined);
 
         yield* removeSound(owner, glass.id);
         assert.ok(Option.isNone(yield* readSoundClip(owner, glass.id)));
@@ -95,7 +98,7 @@ it.layer(getTestDB())("the account sounds store", (it) => {
 
       assert.ok(Option.isNone(yield* readSoundClip(other, sound.id)));
       assert.ok(Option.isNone(yield* renameSound(other, sound.id, "Taken")));
-      assert.equal(yield* chooseSound(other, FINISH, sound.id), null);
+      assert.deepEqual(yield* chooseSound(other, FINISH, sound.id), { id: null });
       yield* removeSound(other, sound.id);
 
       assert.deepEqual(yield* choicesOf(other), {});

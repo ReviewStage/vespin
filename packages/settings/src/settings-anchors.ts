@@ -38,6 +38,7 @@ export const SETTINGS_SEARCH_ROW = {
   ALWAYS_ALLOWED: "always-allowed",
   API_KEY_ANTHROPIC: "api-key-anthropic",
   API_KEY_OPENAI: "api-key-openai",
+  API_KEY_CURSOR: "api-key-cursor",
   /** Skills' first group, whose heading holds its Add skill. */
   ADD_SKILL: "add-skill",
   /** Our MCP & CLI page's Connected, the outside agents the account let in. */
@@ -62,6 +63,12 @@ export const SETTINGS_SEARCH_ROW = {
   EXPERIMENTS_WORKSPACE: "experiments-workspace",
   /** Settings › Experimental's group of the experiments the account chooses for itself alone. */
   EXPERIMENTS_ACCOUNT: "experiments-account",
+  /** Billing's Usage: this month's usage against the included allowance, and what is owed past it. */
+  BILLING_USAGE: "billing-usage",
+  /** Billing's own section: where billing stands, and where it is set up and managed. */
+  BILLING_STATUS: "billing-status",
+  /** Cloud environment's Sandbox, the size every cloud agent's sandbox in the workspace opens with. */
+  ENVIRONMENT_SANDBOX: "environment-sandbox",
   /** Cloud environment's Variables, the workspace's variables its cloud agents start with. */
   ENVIRONMENT_VARIABLES: "environment-variables",
   /** Cloud environment's Install software, the workspace's install script. */
@@ -89,7 +96,7 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.TURN_CHANGES]: "experiment-turn-changes",
   [EXPERIMENT.REPLY_BUTTONS]: "experiment-reply-buttons",
   [EXPERIMENT.COMPUTER_USE]: "experiment-computer-use",
-  [EXPERIMENT.VOICE]: "experiment-voice",
   [EXPERIMENT.GOALS]: "experiment-goals",
   [EXPERIMENT.MOVE_AGENTS]: "experiment-move-agents",
+  [EXPERIMENT.CURSOR]: "experiment-cursor",
 } as const satisfies Record<Experiment, string>;

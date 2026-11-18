@@ -1,9 +1,11 @@
+import { billingContract } from "./contract/billing.js";
 import { githubContract } from "./contract/github.js";
 import { workspaceEnvironmentContract } from "./contract/workspace-environment.js";
 import { workspaceGithubContract } from "./contract/workspace-github.js";
 import { workspaceInvitationsContract } from "./contract/workspace-invitations.js";
 import { workspaceMergeQueueContract } from "./contract/workspace-merge-queue.js";
 import { workspaceSandboxSetupContract } from "./contract/workspace-sandbox-setup.js";
+import { workspaceSandboxSizeContract } from "./contract/workspace-sandbox-size.js";
 import { workspaceSentryContract } from "./contract/workspace-sentry.js";
 import { workspaceSlackBotContract } from "./contract/workspace-slack-bot.js";
 import { workspacesContract } from "./contract/workspaces.js";
@@ -41,6 +43,8 @@ const WORKSPACE_CALLS = {
   workspaceInvitations: workspaceInvitationsContract,
   workspaceEnvironment: workspaceEnvironmentContract,
   workspaceSandboxSetup: workspaceSandboxSetupContract,
+  workspaceSandboxSize: workspaceSandboxSizeContract,
+  billing: billingContract,
   workspaceMergeQueue: workspaceMergeQueueContract,
   workspaceGithub: workspaceGithubContract,
   workspaceSentry: workspaceSentryContract,

@@ -11,6 +11,7 @@ import {
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
 import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import type { Sandbox } from "@repo/sandbox";
@@ -140,7 +141,8 @@ const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
  * above, its files put back too where `restoreFiles` asks. Refused where
  * the caller may not write to the agent, where no such line stands, where
  * the line sits inside a turn's work, where a voice call stands on the
- * agent, or where the files are asked back and no snapshot of them stands.
+ * agent, where it runs on Cursor, whose session no cut resumes yet, or
+ * where the files are asked back and no snapshot of them stands.
  */
 export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(function* (
   account: string,
@@ -162,6 +164,12 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   const calls = yield* hostedStoreOrUnavailable(listStandingVoiceCalls(account, agent.id));
 
   if (calls.length > 0) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  // Cursor's store keeps no checkpoint a cut could resume at yet, so a Cursor agent is never rewound.
+  const routing = yield* hostedStoreOrUnavailable(readAgentRouting(agent.userId, agent.id));
+
+  if (Option.getOrUndefined(routing)?.runtime === CONVERSATION_RUNTIME.CURSOR) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  }
 
   // The files go back only while the account rewinding has the experiment on: off, no window of theirs offers the choice, so a request asking it is malformed.
   if (

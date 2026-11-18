@@ -253,7 +253,8 @@ const settledShot = EffectSchema.optionalKey(computerShotRequestSchema);
  * One action on one app, as the helper reads it. Note that its fields are
  * spelled as the helper's own (`element_index`, not `elementIndex`), so the
  * Mac hands an action to the helper as it came, and the model's tool, which
- * names them so too, hands its input to the service as it came.
+ * names them so too, hands its fields on as they came, a click's `target`
+ * unwrapped.
  */
 export const macComputerActionSchema = EffectSchema.Union([
   EffectSchema.Struct({ op: EffectSchema.Literal(COMPUTER_ACTION.LIST_APPS) }),
@@ -732,7 +733,7 @@ export const MACHINE_UNREACHED = {
   UNKNOWN_MACHINE: "unknown-machine",
   /** The call named no machine, its agent picked none, and its owner has no default machine. */
   NO_MACHINE: "no-machine",
-  /** A terminal command for the machine a local agent runs on itself, whose own shell runs there already. */
+  /** A terminal command for the machine a local agent runs on itself. No longer sent; kept for the transcripts and released clients that still read it. */
   OWN_SHELL: "own-shell",
 } as const;
 

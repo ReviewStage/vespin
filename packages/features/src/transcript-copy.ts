@@ -24,6 +24,7 @@ import {
   applyMessagesPage,
 } from "./agent-wire.js";
 import { threadLineTitle, threadLineWords } from "./inbox-wire.js";
+import type { IntegrationProvider } from "./integration-wire.js";
 import { fencedBlock } from "./markdown-fence.js";
 import { cardTitle, plainWords } from "./plain-words.js";
 import {
@@ -53,11 +54,13 @@ import {
 } from "./transcript-lines.js";
 import {
   CALL_KIND,
+  CALL_MARK,
   CALL_WORDS,
   type CallKind,
   callLine,
   callPlace,
   isCommandKind,
+  searchToolsLine,
   TURN_ROW,
   type TurnRow,
 } from "./turn-rows.js";
@@ -166,6 +169,10 @@ type CopiedBlock =
       readonly description: string | undefined;
       /** For a call of an MCP server's tool, the server it ran on. */
       readonly server?: string | undefined;
+      /** For a call of an integration's tool, the integration, whose mark leads its row in the panel. */
+      readonly provider?: IntegrationProvider | undefined;
+      /** For a call of an integration's tool, the account among its owner's several it ran on. */
+      readonly account?: string | undefined;
       readonly input: ToolBlock | undefined;
       /** Nothing while the call has not answered. */
       readonly output: ToolBlock | undefined;
@@ -239,7 +246,7 @@ function agentBlock(part: AgentPart): CopiedBlock[] {
   }
 
   const view = toolCallView(part);
-  const { input, output, subject, description, server } = view;
+  const { input, output, subject, description, server, provider, account } = view;
 
   return [
     {
@@ -248,6 +255,8 @@ function agentBlock(part: AgentPart): CopiedBlock[] {
       subject,
       description,
       server,
+      provider,
+      account,
       input,
       output,
       error,
@@ -256,26 +265,42 @@ function agentBlock(part: AgentPart): CopiedBlock[] {
 }
 
 /**
- * A block's words as its row draws them, open: words and a thought as they
- * are; a call's line as one phrase, its verb or a described command's
- * purpose, its subject where the body does not say it whole (`blockSays`),
- * and where it ran; then its body as its cards draw it (`bodyWords`).
+ * A call's line as its open row draws it, in its order: its verb or a
+ * described command's purpose, its subject where the body does not say it
+ * whole (`blockSays`), and where it ran; or, for a search of a server's
+ * tools, the verb, the server its chip names, and its words whole after
+ * them (`searchToolsLine`).
  */
-function drawnWords(block: CopiedBlock): readonly string[] {
-  if (block.kind !== COPIED_BLOCK.CALL) return [block.text];
-  const { call, subject, description, server, input, output, error } = block;
-  const line = callLine(call, subject, description);
+function drawnLead(call: CopiedCall): string {
+  const { call: kind, subject, description, server, provider, account, input } = call;
+
+  if (kind === CALL_KIND.SEARCH_TOOLS) {
+    const searched = searchToolsLine(subject);
+
+    return [searched.verb, server, searched.subject]
+      .filter((words) => words !== undefined)
+      .join(" ");
+  }
+
+  const line = callLine(kind, subject, description);
 
   const said =
     input !== undefined &&
-    ((isCommandKind(call) && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject));
+    ((isCommandKind(kind) && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject));
 
-  const lead = [line.verb, said ? undefined : line.subject, callPlace(call, server)];
+  // Note that the panel's row leads with the integration's mark, so it names only what the mark does not.
+  const place = callPlace({ kind, server, provider, account }, CALL_MARK.LEADS);
 
-  return [
-    lead.filter((words) => words !== undefined).join(" "),
-    ...bodyWords(input, output, error),
-  ];
+  return [line.verb, said ? undefined : line.subject, place]
+    .filter((words) => words !== undefined)
+    .join(" ");
+}
+
+/** A block's words as its row draws them, open: words and a thought as they are; a call's line as one phrase (`drawnLead`), then its body as its cards draw it (`bodyWords`). */
+function drawnWords(block: CopiedBlock): readonly string[] {
+  if (block.kind !== COPIED_BLOCK.CALL) return [block.text];
+
+  return [drawnLead(block), ...bodyWords(block.input, block.output, block.error)];
 }
 
 /** Which of a message's drawn words a find reads: what was said, or its details, the calls and thoughts its folds hold, which it may leave out. */
@@ -480,14 +505,16 @@ function oneLine(text: string): string {
 function callParts(call: CopiedCall) {
   const worker = call.call === CALL_KIND.WORKER;
   const said = call.description ?? CALL_WORDS[call.call].verb;
-  const place = callPlace(call.call, call.server);
+  // Note that a copy carries no mark, so it names the server an integration's call ran on ("Linear · Acme").
+  const place = callPlace({ kind: call.call, server: call.server }, CALL_MARK.NONE);
   // Note that a server's name keeps its own capitals ("PostHog"), where the other places read as words in a sentence.
   const named = call.server === undefined ? place?.replace(/^./u, (c) => c.toLowerCase()) : place;
 
   return {
     verb: named === undefined ? said : `${said} (${named})`,
     subject: oneLine(call.subject),
-    joiner: worker || call.description !== undefined ? ": " : " ",
+    // Note that a description that already ends in a colon, as a refused Slack message's does, takes no second one.
+    joiner: worker || (call.description !== undefined && !said.endsWith(":")) ? ": " : " ",
     code: !worker && CALL_WORDS[call.call].code,
   };
 }

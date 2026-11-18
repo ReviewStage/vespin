@@ -13,20 +13,35 @@ function escaped(text: string): string {
   return text.replace(MARKDOWN_MARKS, (mark) => `\\${mark}`);
 }
 
+/** Whether a character, a whole code point, is a letter or a digit. */
+function isWordCharacter(character: string | undefined): boolean {
+  return character !== undefined && WORD_CHARACTER.test(character);
+}
+
 /**
  * A match drawn in from either end past what is not a letter or a digit,
  * none where nothing is left. Note that Markdown takes `**` as bold only
  * where the mark's inner side is a letter or a digit beside a word, so a
- * match such as "(bar" in "foo(bar" would otherwise print its stars.
+ * match such as "(bar" in "foo(bar" would otherwise print its stars. Note
+ * that it steps by code point, not by UTF-16 unit, so a letter past the
+ * Basic Multilingual Plane, such as 𠮷, is read whole at a match's edge
+ * rather than as a lone half that is no letter, which split its pair.
  */
 function wordBound(text: string, range: MatchRange): MatchRange | undefined {
-  let { start, end } = range;
+  const characters = Array.from(text.slice(range.start, range.end));
+  let first = 0;
+  let last = characters.length;
 
-  while (start < end && !WORD_CHARACTER.test(text.charAt(start))) start += 1;
+  while (first < last && !isWordCharacter(characters[first])) first += 1;
 
-  while (end > start && !WORD_CHARACTER.test(text.charAt(end - 1))) end -= 1;
+  while (last > first && !isWordCharacter(characters[last - 1])) last -= 1;
 
-  return start < end ? { start, end } : undefined;
+  if (first === last) return undefined;
+
+  return {
+    start: range.start + characters.slice(0, first).join("").length,
+    end: range.end - characters.slice(last).join("").length,
+  };
 }
 
 /**

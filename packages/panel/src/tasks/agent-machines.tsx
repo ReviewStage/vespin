@@ -16,9 +16,16 @@ import {
 import { personActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
-import { useQuery } from "@tanstack/react-query";
+import {
+  type Mutation,
+  mutationOptions,
+  useMutation,
+  useMutationState,
+  useQuery,
+} from "@tanstack/react-query";
 import { useMemo } from "react";
-import { askAct, toastActFailure } from "../act.js";
+import { type ActResult, type ActVariables, toastActFailure } from "../act.js";
+import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
@@ -27,7 +34,7 @@ import { showToast } from "../toast.js";
 import { MachineGlyph } from "./workspace-machines.js";
 
 /**
- * agent-machines.tsx -- the machine an agent's terminal commands and computer use go to: its Default machine row in the Cloud chip's popover, and the machine a call still unanswered names.
+ * agent-machines.tsx -- the machine an agent's terminal commands and computer use go to: its Default machine row in its place chip's popover, and the machine a call still unanswered names.
  *
  * The agent's tools as the service answers them (`LIVE_READ.WORKSPACE_TOOLS`)
  * say where a call naming no machine would go now (`runOnMac.machine`), and
@@ -39,8 +46,10 @@ import { MachineGlyph } from "./workspace-machines.js";
  * with the reason. Its submenu, under the one heading that says what it is
  * for, lists each machine with the same dot and its owner's face, an offline one
  * still picked, since it may come back, and a pick sets the agent's default
- * on the service, which answers the agent's tools as they then stand. An
- * agent offered no `run_on_mac`, one on a device, has no such row.
+ * on the service, which answers the agent's tools as they then stand. A
+ * local agent with no default reads None, since a call naming no machine
+ * would go to the one it runs on, whose own shell runs it. An agent
+ * offered no `run_on_mac` has no such row.
  */
 
 /** The Default machine row's id, which no place's id is. */
@@ -59,24 +68,49 @@ function useAgentTools(agentId: string | undefined): WorkspaceToolsAnswer | unde
   return useQuery(workspaceToolsQuery(agentId)).data;
 }
 
-/** The machine a call the agent makes now would go to, by its id and name, the same object while neither moved; none where the service names none. */
-export function useRoutedMachine(
-  agentId: string | undefined,
-): { readonly id: string; readonly name: string } | undefined {
-  const machine = useAgentTools(agentId)?.runOnMac?.machine;
-  const id = machine?.id;
-  const name = machine?.name;
-
-  return useMemo(
-    () => (id === undefined || name === undefined ? undefined : { id, name }),
-    [id, name],
-  );
+/** A machine a call still unanswered names, by its id and name. */
+export interface CallRouteMachine {
+  readonly id: string;
+  readonly name: string;
 }
 
-/** The agent's default machine set on the service, a refusal said in a toast. */
-function setDefaultMachine(agentId: string, machineId: string): void {
-  void askAct(ACT_KIND.AGENTS_SET_DEFAULT_MACHINE, { agentId, machineId }).then(
-    (answer) => {
+/** The machine a call still unanswered goes to, given the id of the machine it names, none where it names none; none where the window cannot tell. */
+export type CallRoute = (named: string | undefined) => CallRouteMachine | undefined;
+
+/**
+ * Where a call the agent makes now goes, as the service routes it
+ * (`machine-routing.ts`): the machine it names, found among those the agent
+ * may use, or else the one a call naming none goes to now. A call naming a
+ * machine the agent's tools do not list goes unnamed until it answers,
+ * rather than naming the default it does not go to.
+ */
+function callRouteOf(tools: WorkspaceToolsAnswer | undefined): CallRoute {
+  const routed = tools?.runOnMac?.machine;
+  const machines = tools?.machines ?? [];
+
+  return (named) => {
+    const machine = named === undefined ? routed : machines.find((listed) => listed.id === named);
+
+    return machine === undefined ? undefined : { id: machine.id, name: machine.name };
+  };
+}
+
+/** Where a call the agent makes now goes (`callRouteOf`), the same door while the agent's tools stand as they were. */
+export function useCallRoute(agentId: string | undefined): CallRoute {
+  const tools = useAgentTools(agentId);
+
+  return useMemo(() => callRouteOf(tools), [tools]);
+}
+
+/**
+ * The agent's default machine set on the service, as a mutation of the row's
+ * own: each refusal or failure said in a toast, as the mutation's options
+ * hear every call, a choice a later one replaced among them.
+ */
+function defaultMachineMutation(agentId: string) {
+  return mutationOptions({
+    ...actMutation(ACT_KIND.AGENTS_SET_DEFAULT_MACHINE),
+    onSuccess: (answer) => {
       if (!("failure" in answer)) return;
       showToast({
         replayUnmasked: true,
@@ -85,18 +119,59 @@ function setDefaultMachine(agentId: string, machineId: string): void {
         failure: { surface: FAILURE_SURFACE.ACT, cause: answer, about: { agentId } },
       });
     },
-    (cause: unknown) =>
+    onError: (cause) =>
       toastActFailure({
         surface: FAILURE_SURFACE.ACT,
         act: ACT_KIND.AGENTS_SET_DEFAULT_MACHINE,
         cause,
         about: { agentId },
       }),
-  );
+  });
 }
 
-/** The value the row ends in, muted as the Agent runs in row's is: a teammate's face where the machine is theirs, then its name; or None. */
-function DefaultValue({
+/** A pick of the agent's default machine, as its act asks it. */
+type DefaultMachinePick = ActVariables<typeof ACT_KIND.AGENTS_SET_DEFAULT_MACHINE>;
+
+/** A pick as the window's mutations hold it: what it asked, whether it is still out, and when it was made. */
+interface PickState {
+  readonly pick: DefaultMachinePick | undefined;
+  readonly out: boolean;
+  readonly at: number;
+}
+
+/**
+ * The machine the agent's newest pick set its default to while that pick is
+ * still out, read from the window's mutations (`useMutationState`), as the
+ * Optimistic Updates guide reads another component's, so every surface
+ * drawing the agent's row draws the pick, one mounted since among them.
+ * None once the newest pick answered, so the default the service holds
+ * stands then, whatever an older pick still out asked for.
+ */
+function usePickedMachine(agentId: string): string | undefined {
+  const picks = useMutationState<
+    PickState,
+    Mutation<ActResult<typeof ACT_KIND.AGENTS_SET_DEFAULT_MACHINE>, Error, DefaultMachinePick>
+  >({
+    filters: { mutationKey: actMutation(ACT_KIND.AGENTS_SET_DEFAULT_MACHINE).mutationKey },
+    select: (mutation) => ({
+      pick: mutation.state.variables,
+      out: mutation.state.status === "pending",
+      at: mutation.state.submittedAt,
+    }),
+  });
+
+  const newest = picks
+    .filter((each) => each.pick?.agentId === agentId)
+    .reduce<PickState | undefined>(
+      (latest, each) => (latest === undefined || each.at >= latest.at ? each : latest),
+      undefined,
+    );
+
+  return newest?.out === true ? newest.pick?.machineId : undefined;
+}
+
+/** The value a row of the place popover ends in, muted: a teammate's face where the machine is theirs, then its name; or None, for the Default machine row with none. */
+export function MachineValue({
   name,
   face,
 }: {
@@ -122,11 +197,15 @@ function DefaultValue({
 /**
  * The Default machine row of the agent's place popover, as the module
  * says; none for an agent offered no `run_on_mac`, or before its tools are
- * read. Note that a machine none of the list names, as the owner's from
- * before machines were named, is named as the answer names it.
+ * read. A pick is drawn as the default from the press, while the service
+ * has yet to answer (`usePickedMachine`). Note that a machine none of the list names, as
+ * the owner's from before machines were named, is named as the answer
+ * names it.
  */
 export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
   const tools = useAgentTools(agentId);
+  const { mutate: setDefault } = useMutation(defaultMachineMutation(agentId));
+  const pickedId = usePickedMachine(agentId);
   const thisMac = useThisMac();
   const { members, readerId, former } = useMemberDirectory();
   const standing = tools?.runOnMac;
@@ -138,7 +217,10 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
   const nameOf = (machine: { readonly id: string; readonly name: string }) =>
     machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac);
 
-  const chosen = standing.machine;
+  const picked = machines.find((machine) => machine.id === pickedId);
+
+  const chosen = picked ?? standing.machine;
+  const owner = picked?.owner ?? standing.owner;
   const online = machines.find((machine) => machine.id === chosen?.id)?.online ?? standing.on;
 
   // Note that only a teammate's machine wears its owner's face, since the reader's own needs no saying whose it is.
@@ -157,9 +239,9 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
         <MachineGlyph machine={{ online }} />
       ),
     end: (
-      <DefaultValue
+      <MachineValue
         name={chosen === undefined ? undefined : nameOf(chosen)}
-        face={chosen === undefined ? undefined : faceOf(standing.owner)}
+        face={chosen === undefined ? undefined : faceOf(owner)}
       />
     ),
     submenu:
@@ -180,7 +262,7 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
             value: chosen?.id,
             width: SUBMENU_WIDTH.WIDE,
             onPick: (machineId) => {
-              if (machineId !== chosen?.id) setDefaultMachine(agentId, machineId);
+              if (machineId !== chosen?.id) setDefault({ agentId, machineId });
             },
           },
   };

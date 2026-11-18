@@ -261,7 +261,7 @@ const FIXTURE_HISTORY: readonly {
     line: {
       seq: 3,
       lastEdit: {
-        actor: DESCRIPTION_ACTOR.NOTETAKER,
+        actor: DESCRIPTION_ACTOR.DEVELOPER,
         by: FIXTURE_PERSON.ADA,
         at: CALL_AT - 5 * HOUR,
         duringCall: false,
@@ -528,7 +528,7 @@ const FIXTURE_THREADS: readonly DescriptionCommentThread[] = [
       ),
       comment(
         "8c1d3e5f-7a9b-4c2d-8e4f-6a8b0c2d4e64",
-        { actor: DESCRIPTION_COMMENT_ACTOR.APP },
+        { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: FIXTURE_AGENT_ID },
         CALL_AT - 4 * HOUR + 2 * 60_000,
         'Added under Hard parts: a withdrawn link reads "This invite is no longer valid" and grants nothing.',
       ),
@@ -785,6 +785,7 @@ export function fixtureAppState(state: AppStateSnapshot): AppStateSnapshot {
           agentAppState(
             settingsAppState(state.run.profile, plannedAppState(state)),
             FIXTURE_TASK_ID,
+            FIXTURE_FIRST.id,
           ),
           FIXTURE_WORKSPACE_IDS,
         ),

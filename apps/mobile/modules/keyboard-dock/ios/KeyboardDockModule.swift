@@ -15,6 +15,12 @@
 // window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
 //
+// The bar is lifted over the typing field's input accessory too, such as the
+// Done bar SwiftUI stands over a number pad (`ToolbarItem(placement:
+// .keyboard)`), which iOS 26 stands over the keyboard but outside the
+// layout guide, so the composer stood under the Done bar, its Send half
+// covered.
+//
 // The bar also stands as the content's bottom edge element, so iOS 26 draws
 // its soft scroll edge under the bar, as it does under its own bars: words
 // scrolling under the composer's glass fade rather than standing sharp behind
@@ -71,6 +77,9 @@ final class KeyboardDockView: ExpoView {
   /// Follows the keyboard each frame while it stands, since a drag that pulls it down moves the layout guide without asking this view for a layout pass.
   private var frames: CADisplayLink?
 
+  /// What last took the keyboard, read as the keyboard moves, whose input accessory the bar is lifted over too.
+  private weak var typing: UIResponder?
+
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     keyboardLayoutGuide.followsUndockedKeyboard = false
@@ -90,17 +99,20 @@ final class KeyboardDockView: ExpoView {
 
   /// Lays the view out inside the keyboard's announced move, so the bar's lift rides the keyboard's own curve rather than landing after it.
   @objc private func keyboardWillMove() {
+    typing = FirstResponder.current()
     setNeedsLayout()
     layoutIfNeeded()
   }
 
   /// Reads the overlap again once the keyboard has settled, since a form sheet lifts itself after the keyboard's announced move, which only moves this view's place, not its size.
   @objc private func keyboardDidMove() {
+    typing = FirstResponder.current()
     follow()
   }
 
   /// Follows the keyboard frame by frame while it stands.
   @objc private func keyboardDidShow() {
+    typing = FirstResponder.current()
     followFrames()
   }
 
@@ -226,7 +238,7 @@ final class KeyboardDockView: ExpoView {
   /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap where the keyboard has settled or is announced to move, never on a frame drawn.
   private func follow() {
     guard window != nil else { return }
-    let overlap = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
+    let overlap = max(0, bounds.maxY - keyboardTop())
     let lift = max(0, overlap - safeAreaInsets.bottom)
 
     if let bar = subviews.last, subviews.count > 1 {
@@ -244,6 +256,36 @@ final class KeyboardDockView: ExpoView {
     if let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
     told = overlap
     onOverlap(["overlap": overlap])
+  }
+}
+
+extension KeyboardDockView {
+  /// Where the keyboard's top stands in this view: the layout guide's, or the typing field's input accessory's where one stands docked on it. Note that an accessory standing clear of the guide's top, over a keyboard floating on an iPad, is passed over, as the guide passes the keyboard over.
+  fileprivate func keyboardTop() -> CGFloat {
+    let guideTop = keyboardLayoutGuide.layoutFrame.minY
+    guard let accessory = typing?.inputAccessoryView, accessory.window != nil, !accessory.isHidden else {
+      return guideTop
+    }
+
+    let placed = accessory.convert(accessory.bounds, to: self)
+    return placed.maxY >= guideTop - overlapStep ? min(guideTop, placed.minY) : guideTop
+  }
+}
+
+/// The app's first responder, found by the one action every responder answers, which UIKit sends to the first responder alone.
+private final class FirstResponder: NSObject {
+  static weak var found: UIResponder?
+
+  static func current() -> UIResponder? {
+    found = nil
+    UIApplication.shared.sendAction(#selector(UIResponder.vespinDockClaimFirstResponder), to: nil, from: nil, for: nil)
+    return found
+  }
+}
+
+extension UIResponder {
+  @objc fileprivate func vespinDockClaimFirstResponder() {
+    FirstResponder.found = self
   }
 }
 

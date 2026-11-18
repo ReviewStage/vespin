@@ -10,12 +10,13 @@ import {
   CircleDollarSignIcon,
   GaugeIcon,
   LayoutDashboardIcon,
+  ReceiptIcon,
   ScrollTextIcon,
   UsersIcon,
   WrenchIcon,
 } from "@repo/ui/icons";
 import { EntityGlyph } from "../../entities/entity-glyph.js";
-import { ADMIN_TAB, type AdminTab } from "../routing.js";
+import { ADMIN_SECTION_WORDS, ADMIN_TAB, type AdminTab } from "../routing.js";
 
 /** One section: the tab it opens, its name, and its glyph. */
 export interface AdminPlace {
@@ -24,26 +25,28 @@ export interface AdminPlace {
   icon: React.ReactNode;
 }
 
-/** Each section's name and glyph, by the tab it opens. */
-const PLACE_BY_TAB = {
-  [ADMIN_TAB.DASHBOARD]: { label: "Overview", icon: <LayoutDashboardIcon /> },
-  [ADMIN_TAB.COST]: { label: "Cost", icon: <CircleDollarSignIcon /> },
-  [ADMIN_TAB.RELIABILITY]: { label: "Reliability", icon: <ActivityIcon /> },
-  [ADMIN_TAB.AGENTS]: { label: "Agents", icon: <EntityGlyph kind={ENTITY_KIND.AGENT} /> },
-  [ADMIN_TAB.TOOLS]: { label: "Tools", icon: <WrenchIcon /> },
-  [ADMIN_TAB.PROMPTS]: { label: "Prompts", icon: <ScrollTextIcon /> },
-  [ADMIN_TAB.WORKSPACES]: { label: "Workspaces", icon: <Building2Icon /> },
-  [ADMIN_TAB.USERS]: { label: "Users", icon: <UsersIcon /> },
-  [ADMIN_TAB.LIMITS]: { label: "Limits", icon: <GaugeIcon /> },
-} satisfies { readonly [Tab in AdminTab]: Omit<AdminPlace, "tab"> };
+/** Each section's glyph, by the tab it opens. */
+const GLYPH_BY_TAB = {
+  [ADMIN_TAB.DASHBOARD]: <LayoutDashboardIcon />,
+  [ADMIN_TAB.COST]: <CircleDollarSignIcon />,
+  [ADMIN_TAB.BILLING]: <ReceiptIcon />,
+  [ADMIN_TAB.RELIABILITY]: <ActivityIcon />,
+  [ADMIN_TAB.AGENTS]: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
+  [ADMIN_TAB.TOOLS]: <WrenchIcon />,
+  [ADMIN_TAB.PROMPTS]: <ScrollTextIcon />,
+  [ADMIN_TAB.WORKSPACES]: <Building2Icon />,
+  [ADMIN_TAB.USERS]: <UsersIcon />,
+  [ADMIN_TAB.LIMITS]: <GaugeIcon />,
+} satisfies { readonly [Tab in AdminTab]: React.ReactNode };
 
 /** The sidebar's places, in the order it lists them. */
 export const ADMIN_PLACES: readonly AdminPlace[] = Object.values(ADMIN_TAB).map((tab) => ({
   tab,
-  ...PLACE_BY_TAB[tab],
+  label: ADMIN_SECTION_WORDS[tab],
+  icon: GLYPH_BY_TAB[tab],
 }));
 
 /** The section `tab` opens. */
 export function adminPlace(tab: AdminTab): AdminPlace {
-  return { tab, ...PLACE_BY_TAB[tab] };
+  return { tab, label: ADMIN_SECTION_WORDS[tab], icon: GLYPH_BY_TAB[tab] };
 }

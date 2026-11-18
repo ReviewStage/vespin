@@ -17,6 +17,7 @@ import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
 import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { Tooltip } from "../tooltip/hint.js";
 import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
@@ -370,7 +371,7 @@ export function SettingsRow({
             <div className={cn(wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN, top)}>{words}</div>
             <div
               className={cn(
-                "ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden",
+                "ui-settings-row-end flex-none items-center gap-control-gap empty:hidden",
                 top,
               )}
             >
@@ -382,8 +383,8 @@ export function SettingsRow({
           <div
             className={
               led
-                ? "ui-settings-row-below mt-ui-8 min-w-0 ps-settings-row-words-inset"
-                : "ui-settings-row-below mt-ui-8 min-w-0"
+                ? "ui-settings-row-below min-w-0 ps-settings-row-words-inset"
+                : "ui-settings-row-below min-w-0"
             }
             data-led={led}
           >
@@ -520,7 +521,11 @@ export function SettingsRowValue({ children }: { children: ReactNode }): React.J
   );
 }
 
-/** The room of a row's ⋯ on a row with none, so every row's value ends in one column. */
+/**
+ * The room of a row's ⋯ on a row with none, so every row's value ends in one
+ * column; where no row of its section ends in a glyph, it and the row's end
+ * stand nowhere (`settings-section.css`), so no row keeps blank room.
+ */
 export function SettingsRowActSlot(): React.JSX.Element {
   return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;
 }
@@ -560,12 +565,15 @@ export function SettingsSavedMark(): React.JSX.Element {
   );
 }
 
-/** The small mark beside a name while the feature it belongs to still needs a hand, its `note` the hover's and the screen reader's words. */
+/** The small mark beside a name while the feature it belongs to still needs a hand, its `note` the words of the tooltip it raises on hover and of the screen reader. */
 export function SettingsAttentionMark({ note }: { note: string }): React.JSX.Element {
   return (
-    <span className="ui-settings-attention-mark inline-flex flex-none text-attention" title={note}>
-      <AlertIcon />
-      <VisuallyHidden>({note})</VisuallyHidden>
-    </span>
+    <Tooltip label={note}>
+      {/* Note that a screen reader hears the note in the line's own words, so the mark takes no focus of its own. */}
+      <span className="ui-settings-attention-mark inline-flex flex-none text-attention">
+        <AlertIcon />
+        <VisuallyHidden>({note})</VisuallyHidden>
+      </span>
+    </Tooltip>
   );
 }

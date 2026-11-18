@@ -89,7 +89,7 @@ function AccountFoot({
     <>
       <NavItem
         variant={NAV_ITEM_VARIANT.IDENTITY}
-        icon={<AccountAvatar account={account} size={AVATAR_SIZE.ACCOUNT} />}
+        icon={<AccountAvatar account={account} size={AVATAR_SIZE.ROW} />}
         menu={menu.trigger(riseAbove)}
       >
         {accountLabel(account)}

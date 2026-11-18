@@ -5,7 +5,6 @@ import {
   NO_TASKS_MATCH,
   relationSubject,
   relationWhyNot,
-  TASK_RELATION_MENU,
   TASK_RELATION_ORDER,
   TASK_RELATION_SEARCH,
   TASK_RELATION_VERBS,
@@ -29,12 +28,9 @@ import {
   LIST_LOOK,
   LinkRow,
   ListSection,
-  PUSH_ROW_GOES,
-  PushRow,
   RelationRow,
   RowList,
   Screen,
-  SettingsForm,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -43,6 +39,7 @@ import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
+import { TaskMissing } from "./task-missing.js";
 
 /** The sheet's own words. */
 const WORDS = {
@@ -58,18 +55,15 @@ export const RELATION_KIND_SYMBOL = {
   [TASK_RELATION_KIND.BLOCKS]: GLYPH.BLOCKS,
 } as const satisfies Record<TaskRelationKind, Glyph>;
 
-/** Opens the Task relation sheet over a task, on `kind`, or on the four kinds where none is named. */
-export type OpenRelation = (taskId: string, kind?: TaskRelationKind) => void;
+/** Opens the Task relation sheet over a task, on the kind of relation it makes. */
+export type OpenRelation = (taskId: string, kind: TaskRelationKind) => void;
 
 /** The door to the Task relation sheet, as a task's menus and page open it. */
 export function useOpenRelation(): OpenRelation {
   const router = useRouter();
 
   return (taskId, kind) =>
-    router.push({
-      pathname: "/task-relation",
-      params: kind === undefined ? { task: taskId } : { task: taskId, kind },
-    });
+    router.push({ pathname: "/task-relation", params: { task: taskId, kind } });
 }
 
 /** What the sheet says while the task's document, which holds its blocks where its row names none, is first read. */
@@ -96,7 +90,7 @@ interface Candidate {
 /**
  * The tasks the sheet offers for `kind`: the workspace's others, or those
  * a search finds by name, repository, or key, each one that cannot take the
- * kind kept with why, as the panel's menu dims it.
+ * kind kept with why, as the panel's menu dims it, after those that can.
  */
 function candidatesFor(
   subject: TaskRelationSubject,
@@ -113,7 +107,7 @@ function candidatesFor(
       ? tasks.filter((each) => each.workspaceId === subject.workspaceId)
       : searchedTasks({ tasks, workspaceId: subject.workspaceId, workspaceName, tokens });
 
-  return offered
+  const candidates = offered
     .filter((each) => each.id !== subject.id)
     .map((each) => ({
       task: each,
@@ -123,31 +117,17 @@ function candidatesFor(
           : taskKey(workspaceName, each.number),
       why: relationWhyNot(subject, each, kind, byId),
     }));
-}
 
-/** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does, as one grouped card of the form's own rows, each going on to its tasks, as a sheet that picks stands (the Move sheet's form). */
-function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => void }) {
-  return (
-    <SettingsForm>
-      <ListSection>
-        {TASK_RELATION_ORDER.map((kind) => (
-          <PushRow
-            key={kind}
-            symbol={RELATION_KIND_SYMBOL[kind]}
-            label={TASK_RELATION_VERBS[kind].choose}
-            goes={PUSH_ROW_GOES.PAGE}
-            onPress={() => onKind(kind)}
-          />
-        ))}
-      </ListSection>
-    </SettingsForm>
-  );
+  // Note that the tasks it can take stand first, each group in the list's order, so a phone's short sheet opens on what a press can pick rather than on rows dimmed with why.
+  return [
+    ...candidates.filter((each) => each.why === undefined),
+    ...candidates.filter((each) => each.why !== undefined),
+  ];
 }
 
 /**
- * The Task relation sheet over a task, as the panel's menu asks: opened on
- * no kind, the four kinds, each what choosing it does; a kind chosen, or
- * named by the route, the workspace's other tasks under the system's search
+ * The Task relation sheet over a task, on the kind its menu named, as the
+ * panel's menu asks: the workspace's other tasks under the system's search
  * field, which says which way round the relation stands, each by its status
  * ring, its name, and its key, or, where it cannot take the kind, dimmed with
  * why. A pick relates the two at once and closes the sheet; a dimmed task
@@ -156,19 +136,18 @@ function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => voi
  */
 export function TaskRelationScreen({
   taskId,
-  kind: opened,
+  kind,
 }: {
   readonly taskId: string;
-  readonly kind?: TaskRelationKind | undefined;
+  readonly kind: TaskRelationKind;
 }) {
   const router = useRouter();
   const colors = useColors();
   const overview = useTaskOverview(taskId);
   const writes = useTaskRelationWrites();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const [chosen, setChosen] = useState<TaskRelationKind | undefined>(opened);
   const [search, setSearch] = useState("");
-  const kind = chosen;
+  const closeSheet = () => router.back();
 
   const bar = (
     <>
@@ -177,46 +156,33 @@ export function TaskRelationScreen({
           headerShown: true,
           headerTintColor: colors.TEXT,
           headerShadowVisible: false,
-          // Note that the kinds stand as a grouped card on the form's ground, and the tasks to pick from as a plain list on the sheet's.
-          contentStyle: { backgroundColor: kind === undefined ? colors.GROUPED : colors.SIDEBAR },
+          contentStyle: { backgroundColor: colors.SIDEBAR },
         }}
       >
         {/* Note that the title is the bar's own (`Stack.Title`), as its search and Cancel are, since the root stack's title for the sheet stood over one set in the options. */}
         <Stack.Title style={{ ...BAR_TITLE.SCREEN, color: colors.TEXT }}>
-          {kind === undefined ? TASK_RELATION_MENU : TASK_RELATION_VERBS[kind].head}
+          {TASK_RELATION_VERBS[kind].head}
         </Stack.Title>
-        {kind === undefined ? null : (
-          <Stack.SearchBar
-            placeholder={TASK_RELATION_SEARCH[kind].find}
-            hideWhenScrolling={false}
-            onChangeText={(event) => setSearch(event.nativeEvent.text)}
-            onCancelButtonPress={() => setSearch("")}
-          />
-        )}
+        <Stack.SearchBar
+          placeholder={TASK_RELATION_SEARCH[kind].find}
+          hideWhenScrolling={false}
+          onChangeText={(event) => setSearch(event.nativeEvent.text)}
+          onCancelButtonPress={() => setSearch("")}
+        />
       </Stack.Screen>
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={closeSheet}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
   );
 
+  // Note that a task not yet read is on its way, so the sheet reads rather than say it is gone (`TaskMissing`).
   if (overview === undefined) {
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
-        </Screen>
-      </>
-    );
-  }
-
-  if (kind === undefined) {
-    return (
-      <>
-        {bar}
-        <Screen>
-          <KindRows onKind={setChosen} />
+          <TaskMissing taskId={taskId} notFound={WORDS.TASK_NOT_FOUND} />
         </Screen>
       </>
     );
@@ -256,7 +222,7 @@ export function TaskRelationScreen({
 
     if (picked === undefined || picked.why !== undefined) return;
     writes.relate(subject.id, kind, id);
-    router.back();
+    closeSheet();
   };
 
   const newSubTask =

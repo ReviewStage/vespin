@@ -156,7 +156,8 @@ const APPROVAL_ANSWER_REFUSALS = [
  * of reach or unread off GitHub, and why the
  * agent's sessions would not take it (`runtime-sessions.ts`'s
  * `failedCallRefusal`): its device away or removed, a plan or a key that
- * cannot pay, its harness not reached, or the agent gone from its routing.
+ * cannot pay, its harness not reached, or the agent gone from its routing,
+ * and a cloud agent refused for billing (`billing-gate.ts`).
  * A choice the catalog refuses is an invalid request.
  */
 const START_REFUSALS = [
@@ -168,6 +169,7 @@ const START_REFUSALS = [
   HOSTED_API_ERROR.GITHUB_UNANSWERED,
   HOSTED_API_ERROR.LOCAL_AGENT_REFUSED,
   HOSTED_API_ERROR.DEVICE_REMOVED,
+  HOSTED_API_ERROR.BILLING_REQUIRED,
   HOSTED_API_ERROR.AGENT_CREDENTIAL_MISSING,
   HOSTED_API_ERROR.AGENT_API_KEY_UNREADABLE,
   HOSTED_API_ERROR.AGENT_PLAN_SIGNED_OUT,

@@ -113,6 +113,10 @@ export const GITHUB_LINE_EVENT = {
   CHECKS_COMPLETED: "checks_completed",
   /** The merge queue took the pull request out without merging it. */
   DEQUEUED: "dequeued",
+  /** The pull request merged. */
+  MERGED: "merged",
+  /** The pull request closed without merging. */
+  CLOSED: "closed",
 } as const;
 
 /**

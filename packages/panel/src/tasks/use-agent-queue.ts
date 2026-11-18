@@ -9,6 +9,14 @@ import {
   hasWordsOrFiles,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import {
+  QUEUE_EDIT_SEND,
+  type QueueEditSend,
+  type QueueEditStash,
+  queueEditChange,
+  queueEditLeft,
+  queueEditStash,
+} from "@repo/features/queue-edit-model";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
@@ -216,13 +224,6 @@ function readQueuedFiles(
   ).then((read) => Option.getOrUndefined(Schema.decodeUnknownOption(agentAttachmentsSchema)(read)));
 }
 
-/** The box's words and files kept aside while it holds a queued message's words being edited. */
-interface Stashed {
-  readonly id: string;
-  readonly text: string;
-  readonly attachments: readonly AgentAttachment[];
-}
-
 /** How an agent's box queues its message and edits one queued already, as the composer's `queueing` takes it. */
 export interface QueueEditing {
   /** The message the box is editing, by its id; none while none is. */
@@ -266,7 +267,7 @@ export function useQueueEditing(
   files: AgentPictureDoor,
 ): QueueEditing {
   const queryClient = useQueryClient();
-  const [stashed, setStashed] = useState<Stashed | undefined>();
+  const [stashed, setStashed] = useState<QueueEditStash | undefined>();
   const held = useRef<string | undefined>(undefined);
   held.current = stashed?.id;
   // Whether the service's queue has listed the message since its edit opened, which its leaving the queue is read against.
@@ -281,7 +282,7 @@ export function useQueueEditing(
   // A message that left the queue while its edit stood open, sent or deleted elsewhere, is no longer the box's to
   // edit: the edit closes, its words left in the box. One that left on the box's own Save or Steer is closed by its
   // answer instead, which gives the box back.
-  const left = stashed !== undefined && seen.current && !listed && settling !== stashed.id;
+  const left = queueEditLeft(stashed, seen.current, listed, settling);
   useEffect(() => {
     if (left) setStashed(undefined);
   }, [left]);
@@ -291,13 +292,13 @@ export function useQueueEditing(
   const reading = useRef<string | undefined>(undefined);
   const { change } = queue;
 
-  const giveBack = (stash: Stashed) => {
+  const giveBack = (stash: QueueEditStash) => {
     composer.updateHeld(() => ({ text: stash.text, attachments: stash.attachments }));
     setStashed(undefined);
   };
 
   /** The edit closed once the queue took `edit`, where it is still this message's; left open where it was refused. */
-  const closing = (stash: Stashed, edit: AgentQueueChange) => {
+  const closing = (stash: QueueEditStash, edit: AgentQueueChange) => {
     setSettling(stash.id);
     void change(edit).then((answer) => {
       setSettling((was) => (was === stash.id ? undefined : was));
@@ -307,13 +308,22 @@ export function useQueueEditing(
   };
 
   /** The edit of `stash` given up, its mark cleared and the box given back what it held. */
-  const cancelOf = (stash: Stashed) => {
+  const cancelOf = (stash: QueueEditStash) => {
     void change({ change: QUEUE_CHANGE.HOLD, messageId: stash.id, held: false });
     giveBack(stash);
   };
 
   const cancel = () => {
     if (stashed !== undefined) cancelOf(stashed);
+  };
+
+  /** The edit saved or steered with what the box holds, once its files are read; given up where the box was emptied. */
+  const sendEdit = (way: QueueEditSend) => {
+    if (stashed === undefined || reading.current === stashed.id) return;
+    const edit = queueEditChange(way, stashed.id, composer.held);
+
+    if (edit === undefined) return cancel();
+    closing(stashed, edit);
   };
 
   return {
@@ -353,13 +363,7 @@ export function useQueueEditing(
       if (stashed !== undefined)
         void change({ change: QUEUE_CHANGE.HOLD, messageId: stashed.id, held: false });
 
-      const kept = stashed ?? {
-        id: message.id,
-        text: composer.held.text,
-        attachments: composer.held.attachments,
-      };
-
-      const stash = { ...kept, id: message.id };
+      const stash = queueEditStash(stashed, message.id, composer.held);
       setStashed(stash);
       composer.updateHeld(() => ({ text: message.text, attachments: [] }));
       // A message the queue would not mark, already on its way, is no longer the box's to edit.
@@ -380,32 +384,8 @@ export function useQueueEditing(
         composer.updateHeld((now) => ({ ...now, attachments: [...read, ...now.attachments] }));
       });
     },
-    save: () => {
-      if (stashed === undefined || reading.current === stashed.id) return;
-      const text = composer.held.text.trim();
-      const { attachments } = composer.held;
-
-      if (!hasWordsOrFiles(text, attachments)) return cancel();
-      closing(stashed, {
-        change: QUEUE_CHANGE.EDIT,
-        messageId: stashed.id,
-        text,
-        ...(attachments.length === 0 ? undefined : { attachments }),
-      });
-    },
-    steer: () => {
-      if (stashed === undefined || reading.current === stashed.id) return;
-      const text = composer.held.text.trim();
-      const { attachments } = composer.held;
-
-      if (!hasWordsOrFiles(text, attachments)) return cancel();
-      closing(stashed, {
-        change: QUEUE_CHANGE.STEER,
-        messageId: stashed.id,
-        text,
-        ...(attachments.length === 0 ? undefined : { attachments }),
-      });
-    },
+    save: () => sendEdit(QUEUE_EDIT_SEND.SAVE),
+    steer: () => sendEdit(QUEUE_EDIT_SEND.STEER),
     cancel,
     cancelRow: (message) => {
       if (message.id === stashed?.id) return cancel();

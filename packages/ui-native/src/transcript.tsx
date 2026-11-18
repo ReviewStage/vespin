@@ -1,15 +1,18 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
   ActivityIndicator,
-  FlatList,
   type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -19,39 +22,57 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  useAccessibilitySize,
-  useReduceMotion,
-  useReduceTransparency,
-  useScaledSize,
-} from "./accessibility.js";
+import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
-import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
-import { GLYPH, glyphSymbol } from "./glyph.js";
+import { FileChip } from "./file-chip.js";
+import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
+import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { IntegrationMark } from "./marks.js";
+import { MEDIA_BOUNDS } from "./media-frame.js";
+import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
   type CallStanding,
   type OriginPart,
+  type SaidFile,
+  SHOWN_MEDIA,
+  type ShownMedia,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
 import { Video } from "./video.js";
 
+/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
+const RUN_GAP = 1;
+
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
+
+/** The most of its row a sent line's bubble spans, as Messages leaves the far side open. */
+const BUBBLE_SHARE = 0.82;
+
+/** How far a bubble's words stand in from its sides. */
+const BUBBLE_PADDING = SPACE.ROW + 4;
+
+/** How near its newest row, as a share of the list's height, the reader stands for a row that lands to be scrolled into view, as FlashList's chat lists keep their end. */
+const AUTOSCROLL_SHARE = 0.1;
+
+/** How far past its newest row's top the list opens, which the scroll view clamps to its end: as far as any row could stand, so a newest row taller than the screen opens at its end rather than its top. */
+const OPEN_PAST_NEWEST = Number.MAX_SAFE_INTEGER;
 
 /** How far the list stands from its newest row before Jump to latest is offered, in points. */
 const LATEST_REACH = 240;
@@ -59,16 +80,11 @@ const LATEST_REACH = 240;
 /** How near its newest row the list stands to keep it in view as rows land, in points. */
 const ANCHOR_REACH = 48;
 
-/**
- * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row stands clear of. Note
- * that the list keeps it at its own end, because a scroll to the end reaches
- * the end of the rows alone and not the room the system keeps for the bar.
- */
-const TAB_BAR_ROOM = 64;
+/** How wide the round control that brings the newest row into view stands, in points: the system's least target, as wide as Send's press frame, so it stands centered over Send. */
+const JUMP_SIZE = PRESS_SIZE;
 
-/** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
-const JUMP_SIZE = 44;
+/** How far the round control's circle stands past the arrow inside it, on each axis, in points, as the composer's round button stands past its mark. */
+const JUMP_EDGE = 12;
 
 /** What the control that brings the newest row into view says. */
 const JUMP_TO_LATEST = "Jump to latest";
@@ -122,10 +138,11 @@ const styles = StyleSheet.create({
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
+  stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   said: {
-    maxWidth: "82%",
-    borderRadius: 18,
-    paddingHorizontal: SPACE.ROW + 4,
+    maxWidth: `${BUBBLE_SHARE * 100}%`,
+    borderRadius: RADIUS.BUBBLE,
+    paddingHorizontal: BUBBLE_PADDING,
     paddingVertical: SPACE.ROW,
   },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
@@ -134,7 +151,7 @@ const styles = StyleSheet.create({
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
@@ -143,10 +160,12 @@ const styles = StyleSheet.create({
     gap: SPACE.TIGHT + 2,
     paddingTop: SPACE.TIGHT,
   },
-  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },
+  // Note that each picture or recording sizes itself by the media's one rule (`mediaFrame`), and its caption wraps at the widest one stands.
+  shown: { maxWidth: MEDIA_BOUNDS.WIDTH, alignItems: "flex-start", gap: SPACE.TIGHT },
   page: {
     flexDirection: "row",
     alignItems: "center",
@@ -159,13 +178,6 @@ const styles = StyleSheet.create({
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute" },
-  jumpFace: {
-    width: JUMP_SIZE,
-    height: JUMP_SIZE,
-    borderRadius: JUMP_SIZE / 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });
 
 /** How far the list stands from its newest row's end, in points. */
@@ -187,7 +199,17 @@ type InsetResult = { readonly paddingLeft: number };
 
 /** The step a row stands in by, for the folds that hold it. */
 function inset(depth: number): InsetResult {
-  return { paddingLeft: SPACE.PAGE + depth * DEPTH_INSET };
+  return { paddingLeft: SPACE.EDGE + depth * DEPTH_INSET };
+}
+
+/** How wide a row's own content stands, inside its sides and the steps it is held in, in a column of `column` points. */
+function rowWidth(column: number, depth = 0): number {
+  return column - SPACE.EDGE * 2 - depth * DEPTH_INSET;
+}
+
+/** The widest a sent line's words stand inside its bubble, in a column of `column` points. */
+function bubbleWordsWidth(column: number): number {
+  return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING * 2;
 }
 
 /** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well; heard in its row's value rather than apart. */
@@ -246,18 +268,35 @@ function BodyBlock({
   );
 }
 
-/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
-function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
+/**
+ * A call's glyph at a row mark's size, the panel's own for its kind, through
+ * the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's
+ * row costs no SwiftUI host; or, for a call of an integration's tool, the
+ * integration's mark, as the panel's row leads with it. Note that the mark
+ * alone takes a SwiftUI host, because the symbol view tints whatever it draws
+ * in one ink, which would flatten a mark in its brand's own colors.
+ */
+function CallGlyph({
+  callKind,
+  provider,
+}: {
+  readonly callKind: CallKind;
+  readonly provider: IntegrationProvider | undefined;
+}) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  return (
+  return provider === undefined ? (
     <SymbolView
       name={glyphSymbol(CALL_SYMBOL[callKind])}
       size={size}
       tintColor={colors.TEXT_MUTED}
       accessibilityElementsHidden
     />
+  ) : (
+    <InlineHost style={{ width: size, height: size }}>
+      <IntegrationMark provider={provider} size={size} ink={colors.TEXT_MUTED} />
+    </InlineHost>
   );
 }
 
@@ -288,6 +327,8 @@ function CallRow({
   const lines = large ? undefined : 1;
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
+  // Note that the integration's mark is hidden from VoiceOver, so its name is heard in the mark's place.
+  const mark = item.provider === undefined ? undefined : INTEGRATION_NAME[item.provider];
   const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
 
   return (
@@ -297,7 +338,7 @@ function CallRow({
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
-        accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
+        accessibilityLabel={[line.verb, chip, subject, mark, item.runOn].filter(Boolean).join(" ")}
         accessibilityValue={{
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
@@ -305,7 +346,7 @@ function CallRow({
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
-        <CallGlyph callKind={item.callKind} />
+        <CallGlyph callKind={item.callKind} provider={item.provider} />
         <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
             numberOfLines={lines}
@@ -320,7 +361,10 @@ function CallRow({
           </Text>
           {chip === undefined ? null : (
             <View
-              style={[styles.chip, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}
+              style={[
+                styles.chip,
+                { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+              ]}
             >
               <Text
                 numberOfLines={lines}
@@ -533,6 +577,8 @@ function FoldRow({
 interface RowDrawing {
   readonly repository: string | null | undefined;
   readonly now: number;
+  /** How wide the column the rows stand in is, inside the window's safe area and the reading width, known before any row is laid out. */
+  readonly column: number;
   /** Opens a link or a chip a message names, by the address it was written as, where the app draws it or in Safari. */
   readonly onOpenLink: (address: string) => void;
   readonly onToggle: (item: TranscriptItem) => void;
@@ -540,8 +586,14 @@ interface RowDrawing {
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
-  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way. */
-  readonly mediaSource: (id: string) => string | undefined;
+  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly mediaSource: (id: string) => string | null | undefined;
+  /** Reads a picture or a recording whose bytes could not be read again, by its id. */
+  readonly onRetryMedia?: ((id: string) => void) | undefined;
+  /** Where a file a sent line carried was written for its chip to open, by the line's message and the file's place on it; none while it is written, and `null` where it could not be. A file the line kept no bytes of is drawn by its name and kind alone. */
+  readonly fileSource?: ((message: string, key: string) => string | null | undefined) | undefined;
+  /** Writes a sent line's file again where it could not be written, by the line's message and the file's place on it. */
+  readonly onRetryFile?: ((message: string, key: string) => void) | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
@@ -563,6 +615,67 @@ interface RowDrawing {
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
+/** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
+function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
+  return pictureId === undefined ? null : drawing.mediaSource(pictureId);
+}
+
+/** Where a sent line's file is opened from: the file the app wrote of its bytes, none while it is written, or `null` where it could not be or the list writes none, which the chip says it could not read. */
+function sentFileSource(
+  drawing: RowDrawing,
+  message: string,
+  file: SaidFile,
+): string | null | undefined {
+  return drawing.fileSource === undefined ? null : drawing.fileSource(message, file.key);
+}
+
+/** What writes a sent line's file again, where the transcript offers it. */
+function sentFileRetry(
+  drawing: RowDrawing,
+  message: string,
+  file: SaidFile,
+): (() => void) | undefined {
+  const retry = drawing.onRetryFile;
+
+  return retry === undefined ? undefined : () => retry(message, file.key);
+}
+
+/** What reads a picture or a recording again, by its id, where the transcript offers it. */
+function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
+  const retry = drawing.onRetryMedia;
+
+  return retry === undefined ? undefined : () => retry(id);
+}
+
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; one whose bytes could not be read offers Try again. */
+function ShownMediaView({
+  shown,
+  source,
+  onOpenElsewhere,
+  onRetry,
+}: {
+  readonly shown: ShownMedia;
+  readonly source: string | null | undefined;
+  readonly onOpenElsewhere: (() => void) | undefined;
+  readonly onRetry: (() => void) | undefined;
+}) {
+  switch (shown.kind) {
+    case SHOWN_MEDIA.VIDEO:
+      return (
+        <Video
+          source={source}
+          label={shown.label}
+          onOpenElsewhere={onOpenElsewhere}
+          onRetry={onRetry}
+        />
+      );
+    case SHOWN_MEDIA.AUDIO:
+      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
+    case SHOWN_MEDIA.PICTURE:
+      return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
+  }
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -579,11 +692,23 @@ function TranscriptRow({
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
       return (
-        <View style={[styles.row, styles.saidRow]}>
+        <View
+          style={[
+            styles.row,
+            styles.saidRow,
+            item.joinsAbove ? { paddingTop: RUN_GAP } : null,
+            item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
+          ]}
+        >
+          {item.stamp === undefined ? null : (
+            <Text style={[styles.stamp, { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }]}>
+              {item.stamp}
+            </Text>
+          )}
           {item.from === undefined ? null : (
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
-          {item.sender === undefined ? null : (
+          {item.sender === undefined || item.joinsAbove ? null : (
             <Text
               accessibilityRole="header"
               style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}
@@ -591,24 +716,48 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          <CopyWordsMenu words={item.words}>
-            <View style={styles.saidHeld}>
-              <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
-                <Markdown
-                  words={item.words}
-                  typed
-                  repository={drawing.repository}
-                  onOpenLink={drawing.onOpenLink}
-                />
+          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
+          <PictureSet
+            atEnd
+            pictures={(item.pictures ?? []).map((picture) => ({
+              key: picture.key,
+              source: picture.url ?? saidSource(drawing, picture.pictureId),
+              alt: picture.name,
+              onRetry:
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+            }))}
+          />
+          {/* Note that the other files a line carried, such as a PDF, stand under its pictures as their chips, as the panel stands a message's files over its bubble. */}
+          {(item.files ?? []).map((file) => (
+            <FileChip
+              key={file.key}
+              atEnd
+              held={file.base64 !== undefined}
+              name={file.name}
+              mediaType={file.mediaType}
+              source={sentFileSource(drawing, item.place.row, file)}
+              size={file.size}
+              onRetry={sentFileRetry(drawing, item.place.row, file)}
+            />
+          ))}
+          {/* Note that a line of files alone draws no empty bubble under them. */}
+          {item.words.trim() === "" &&
+          (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
+            <CopyWordsMenu words={item.words} width={rowWidth(drawing.column)}>
+              <View style={styles.saidHeld}>
+                <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
+                  <Markdown
+                    words={item.words}
+                    typed
+                    repository={drawing.repository}
+                    onOpenLink={drawing.onOpenLink}
+                    width={bubbleWordsWidth(drawing.column)}
+                  />
+                </View>
               </View>
-            </View>
-          </CopyWordsMenu>
-          {item.body === undefined ? null : <OriginBody body={item.body} />}
-          {item.sent === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
-              {item.sent}
-            </Text>
+            </CopyWordsMenu>
           )}
+          {item.body === undefined ? null : <OriginBody body={item.body} />}
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:
@@ -639,13 +788,14 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.WORDS:
       return (
         <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
-          <CopyWordsMenu words={item.words}>
+          <CopyWordsMenu words={item.words} width={rowWidth(drawing.column, item.depth)}>
             <View>
               <Markdown
                 words={item.words}
                 repository={drawing.repository}
                 onOpenLink={drawing.onOpenLink}
                 suggestion={drawing.suggestion}
+                width={rowWidth(drawing.column, item.depth)}
               />
             </View>
           </CopyWordsMenu>
@@ -663,19 +813,35 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.MEDIA:
+      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
+      if (
+        item.media.length > 1 &&
+        item.media.every((shown) => shown.kind === SHOWN_MEDIA.PICTURE && shown.caption === "")
+      ) {
+        return (
+          <View style={[styles.row, inset(item.depth), styles.media]}>
+            <PictureSet
+              pictures={item.media.map((shown) => ({
+                key: shown.id,
+                source: drawing.mediaSource(shown.id),
+                alt: shown.label,
+                onRetry: retryOf(drawing, shown.id),
+              }))}
+            />
+          </View>
+        );
+      }
+
       return (
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
-            <View key={shown.id} style={{ gap: SPACE.TIGHT }}>
-              {shown.video ? (
-                <Video
-                  source={drawing.mediaSource(shown.id)}
-                  label={shown.label}
-                  onOpenElsewhere={drawing.onOpenElsewhere}
-                />
-              ) : (
-                <Picture source={drawing.mediaSource(shown.id)} alt={shown.label} />
-              )}
+            <View key={shown.id} style={styles.shown}>
+              <ShownMediaView
+                shown={shown}
+                source={drawing.mediaSource(shown.id)}
+                onOpenElsewhere={drawing.onOpenElsewhere}
+                onRetry={retryOf(drawing, shown.id)}
+              />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
                   {shown.caption}
@@ -756,13 +922,13 @@ function TranscriptRow({
 }
 
 /**
- * The control that brings the newest row into view: a round button of
- * Liquid Glass holding a down arrow, standing only once the reader has
- * scrolled back, over the list's foot at the end of the rows' words, as the
- * panel's way back stands in its log's corner, so it covers at most a
- * line's end rather than the middle of the words. Note that where Liquid Glass is unavailable, before iOS 26, or the
- * reader turned on Reduce Transparency, it is drawn solid on the surface's
- * ground inside the quiet ink rather than a hand-drawn copy of glass.
+ * The control that brings the newest row into view: the system's round glass
+ * button holding a down arrow, standing only once the reader has scrolled
+ * back, over the list's foot at the end of the rows' words, as the panel's
+ * way back stands in its log's corner, so it covers at most a line's end
+ * rather than the middle of the words, and centered over the composer's
+ * Send, the bar's last press, at its size. iOS draws its glass solid where
+ * the reader turned on Reduce Transparency.
  */
 function JumpToLatest({
   bottom,
@@ -770,50 +936,30 @@ function JumpToLatest({
   onPress,
 }: {
   readonly bottom: number;
-  /** How far in from the list's trailing edge it stands: where the rows' words end. */
+  /** How far in from the list's trailing edge it stands: where the composer's bar stands its last press. */
   readonly end: number;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-
-  const arrow = (
-    <SymbolView
-      name={glyphSymbol(GLYPH.JUMP_DOWN)}
-      size={MARK_SIZE.GLYPH + 2}
-      weight="semibold"
-      tintColor={colors.TEXT}
-      accessibilityElementsHidden
-    />
-  );
 
   return (
-    <Press
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={JUMP_TO_LATEST}
-      hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom, right: end }]}
-    >
-      {solid ? (
-        <View
-          style={[
-            styles.jumpFace,
-            {
-              backgroundColor: colors.SURFACE,
-              borderColor: colors.TEXT_MUTED,
-              borderWidth: StyleSheet.hairlineWidth,
-            },
-          ]}
-        >
-          {arrow}
-        </View>
-      ) : (
-        <GlassView glassEffectStyle="regular" isInteractive style={styles.jumpFace}>
-          {arrow}
-        </GlassView>
-      )}
-    </Press>
+    <InlineHost matchContents style={[styles.jump, { bottom, right: end }]}>
+      <SwiftUIButton
+        onPress={onPress}
+        modifiers={[
+          buttonStyle("glass"),
+          SwiftModifiers.buttonBorderShape("circle"),
+          tint(colors.TEXT),
+          accessibilityLabel(JUMP_TO_LATEST),
+        ]}
+      >
+        <Image
+          {...glyphImage(GLYPH.JUMP_DOWN)}
+          size={MARK_SIZE.GLYPH + 2}
+          modifiers={[frame({ width: JUMP_SIZE - JUMP_EDGE, height: JUMP_SIZE - JUMP_EDGE })]}
+        />
+      </SwiftUIButton>
+    </InlineHost>
   );
 }
 
@@ -861,7 +1007,7 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
   );
 }
 
-type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
+type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   /** The rows, oldest first (`transcriptItems`). */
   readonly items: readonly TranscriptItem[];
   /** What stands over the oldest row, such as the agent's head. */
@@ -887,11 +1033,12 @@ const REVEAL_POSITION = 0.35;
 
 /**
  * An agent's transcript as one lazy list, the app's one React Native list,
- * since SwiftUI has no piece for its rows: it opens at its newest row and
- * stays anchored there, so a row that lands while the reader stands at the
- * newest comes into view, and one that lands while they read back holds
- * their place; a reader scrolled back is offered Jump to latest. Only the rows near the
- * screen are drawn, however long the transcript runs.
+ * since SwiftUI has no piece for its rows: FlashList's own chat list, which
+ * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
+ * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
+ * while one that lands as they read back holds their place; a reader scrolled
+ * back is offered Jump to latest. Only the rows near the screen are drawn,
+ * however long the transcript runs.
  */
 export function AgentTranscript({
   items,
@@ -905,13 +1052,15 @@ export function AgentTranscript({
   const colors = useColors();
   const reduceMotion = useReduceMotion();
   const { bottom, left, right } = useSafeAreaInsets();
-  const list = useRef<FlatList<TranscriptItem>>(null);
-  // Whether the reader stands at the newest row, which the list keeps in view as rows land; it opens there.
+  const list = useRef<FlashListRef<TranscriptItem>>(null);
+  // Whether the reader stands at the newest row, which the keyboard's rise keeps in view; it opens there.
   const anchored = useRef(true);
   const [away, setAway] = useState(false);
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
+  const column = width - left - right - sides * 2;
+
   // The calls' rows as they stand, and the call a reader was sent to whose row has not yet taken VoiceOver's focus.
   const calls = useRef(new Map<string, HostInstance>());
   const sentTo = useRef<string | undefined>(undefined);
@@ -946,16 +1095,19 @@ export function AgentTranscript({
     [focusSentTo],
   );
 
-  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), placeCall };
+  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), column, placeCall };
+  // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
+  const measured = width > 0;
+  const hasRows = items.length > 0;
   const keyboard = useDockKeyboard();
   const dock = useDockRoom();
-  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript, and no more, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`). While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the bar stands right on it.
   // Note that a keyboard standing only partway over that room, as one an interactive drag is pulling down, takes only the part it covers, since the bar stands clear of the safe area until the keyboard rises past it.
-  const foot = Math.max(0, bottom + TAB_BAR_ROOM - keyboard) + dock;
-  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area, rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
+  const foot = Math.max(0, bottom - keyboard) + dock;
+  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
   const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
-  // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
+  // Note that only the reader's own scroll moves the anchor, never the list's own: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
   }, []);
@@ -966,7 +1118,7 @@ export function AgentTranscript({
     olderNow.current = older;
   }, [older]);
 
-  // Note that only the reader's own scroll up reads an older page, never the list's scroll as it opens, and a read that failed waits for Try again.
+  // Note that only the reader's own scroll up reads an older page, never the list's as it opens at its newest row, and a read that failed waits for Try again.
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setAway(fromEnd(event.nativeEvent) > LATEST_REACH);
     const pages = olderNow.current;
@@ -979,6 +1131,14 @@ export function AgentTranscript({
   const onScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     anchored.current = fromEnd(event.nativeEvent) < ANCHOR_REACH;
   }, []);
+
+  // Note that a drag let go with speed carries on in its momentum, which settles it, so the anchor stays let go until then rather than taken where the finger left, and a room or a keyboard that changes meanwhile never pulls the list back under the reader.
+  const onDragEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if ((event.nativeEvent.velocity?.y ?? 0) === 0) onScrollSettled(event);
+    },
+    [onScrollSettled],
+  );
 
   // The rows as they stand now, which a reveal reads without being asked anew as each lands.
   const itemsNow = useRef(items);
@@ -998,7 +1158,11 @@ export function AgentTranscript({
     anchored.current = false;
     sentTo.current = reveal.callId;
     settled.current = false;
-    list.current?.scrollToIndex({ index, viewPosition: REVEAL_POSITION, animated: !reduceMotion });
+    void list.current?.scrollToIndex({
+      index,
+      viewPosition: REVEAL_POSITION,
+      animated: !reduceMotion,
+    });
 
     // Note that a scroll that moves the list ends in its momentum's end, which sends the focus, while one that has nowhere to go, the row already in view, ends at once, so the focus is also sent once the scroll would have settled.
     const settling = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
@@ -1006,97 +1170,84 @@ export function AgentTranscript({
     return () => clearTimeout(settling);
   }, [reveal, reduceMotion, focusSentTo]);
 
-  // Note that a row not yet measured cannot be scrolled to by its index, so the list goes to where the rows' average height puts it, then to the row once it is drawn.
-  const onScrollToIndexFailed = useCallback(
-    (info: { readonly index: number; readonly averageItemLength: number }) => {
-      list.current?.scrollToOffset({
-        offset: info.averageItemLength * info.index,
-        animated: false,
-      });
-      requestAnimationFrame(() => {
-        list.current?.scrollToIndex({
-          index: info.index,
-          viewPosition: REVEAL_POSITION,
-          animated: false,
-        });
-        requestAnimationFrame(focusSentTo);
-      });
-    },
-    [focusSentTo],
-  );
-
   // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
   useEffect(() => {
-    if (keyboard > 0 && anchored.current)
-      list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+    if (keyboard > 0 && anchored.current) list.current?.scrollToEnd({ animated: !reduceMotion });
   }, [keyboard, reduceMotion]);
 
-  // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
-  const onContentSizeChange = useCallback(() => {
-    // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
-    if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
-  }, []);
+  // Note that the dock's room growing under a reader at the newest row, as it does once the dock is first measured or a queued line or a held call joins the composer's head, keeps the row clear of it, as the keyboard's rise does, since the list holds the row the reader reads where it stood rather than its end.
+  useEffect(() => {
+    if (dock > 0 && anchored.current) list.current?.scrollToEnd({ animated: false });
+  }, [dock]);
 
   return (
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
     >
-      <FlatList
-        ref={list}
-        data={items}
-        keyExtractor={itemKey}
-        renderItem={({ item }) => <TranscriptRow item={item} drawing={rowDrawing} />}
-        ListHeaderComponent={
-          <>
-            {head}
-            {older === undefined ? null : <OlderRow older={older} />}
-          </>
-        }
-        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app. The host fills the room the list leaves rather than matching its content, since the state asks for all the height it is offered, so a host sized to its content stood at no height and a brand-new agent's page was blank.
-        ListEmptyComponent={
-          empty === undefined ? undefined : (
-            <InlineHost style={styles.emptyHost}>
-              <EmptyState {...empty} />
-            </InlineHost>
-          )
-        }
-        ListFooterComponent={<View style={{ height: foot }} />}
-        // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
-        contentContainerStyle={[
-          styles.content,
-          items.length === 0 ? styles.emptyContent : undefined,
-          { paddingLeft: left + sides, paddingRight: right + sides },
-        ]}
-        contentInsetAdjustmentBehavior="automatic"
-        // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
-        automaticallyAdjustKeyboardInsets
-        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
-        keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
-        onContentSizeChange={onContentSizeChange}
-        onScrollToIndexFailed={onScrollToIndexFailed}
-        onScroll={onScroll}
-        onScrollBeginDrag={onScrollBegin}
-        onScrollEndDrag={onScrollSettled}
-        onMomentumScrollEnd={(event) => {
-          onScrollSettled(event);
-          focusSentTo();
-        }}
-        scrollEventThrottle={64}
-        initialNumToRender={16}
-        windowSize={9}
-        accessibilityLabel="Transcript"
-      />
+      {measured ? (
+        <FlashList
+          ref={list}
+          data={items}
+          keyExtractor={itemKey}
+          // Note that each row is keyed by its item, so a cell FlashList recycles for another item mounts that item's row afresh rather than keeping the last one's state, such as a fold left open or a picture's measured size.
+          renderItem={({ item }) => (
+            <TranscriptRow key={itemKey(item)} item={item} drawing={rowDrawing} />
+          )}
+          ListHeaderComponent={
+            <>
+              {head}
+              {older === undefined ? null : <OlderRow older={older} />}
+            </>
+          }
+          // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app. The host fills the room the list leaves rather than matching its content, since the state asks for all the height it is offered, so a host sized to its content stood at no height and a brand-new agent's page was blank.
+          ListEmptyComponent={
+            empty === undefined || hasRows ? undefined : (
+              <InlineHost style={styles.emptyHost}>
+                <EmptyState {...empty} />
+              </InlineHost>
+            )
+          }
+          ListFooterComponent={<View style={{ height: foot }} />}
+          // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
+          contentContainerStyle={[
+            styles.content,
+            hasRows ? undefined : styles.emptyContent,
+            { paddingLeft: left + sides, paddingRight: right + sides },
+          ]}
+          contentInsetAdjustmentBehavior="automatic"
+          // Note that FlashList opens at its newest row's top, so the list asks it for an offset past that row which the scroll view clamps to the content's end, and a newest row taller than the screen opens at its end, clear of the composer, as the rest do.
+          initialScrollIndex={hasRows ? items.length - 1 : undefined}
+          initialScrollIndexParams={{ viewOffset: OPEN_PAST_NEWEST }}
+          // Note that the list opens at its newest row, keeps it in view as rows land while the reader stands near it, and, as an older page lands before the oldest row, leaves the row the reader reads where it stood, as FlashList's chat lists do.
+          maintainVisibleContentPosition={{
+            startRenderingFromBottom: true,
+            autoscrollToBottomThreshold: AUTOSCROLL_SHARE,
+            animateAutoScrollToBottom: false,
+          }}
+          // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
+          automaticallyAdjustKeyboardInsets
+          // Note that a drag lowers the keyboard under the finger, as Messages' does, since the composer docked over the list holds no key that does and the dock follows the keyboard frame by frame.
+          keyboardDismissMode="interactive"
+          onScroll={onScroll}
+          onScrollBeginDrag={onScrollBegin}
+          onScrollEndDrag={onDragEnd}
+          onMomentumScrollEnd={(event) => {
+            onScrollSettled(event);
+            focusSentTo();
+          }}
+          scrollEventThrottle={64}
+          accessibilityLabel="Transcript"
+        />
+      ) : null}
       {away ? (
         <JumpToLatest
           bottom={jumpFoot}
-          end={right + sides + SPACE.EDGE}
+          end={right + sides + BAR_MARGIN + BAR_EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.
-            list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+            list.current?.scrollToEnd({ animated: !reduceMotion });
           }}
         />
       ) : null}

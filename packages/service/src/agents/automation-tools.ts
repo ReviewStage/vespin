@@ -6,16 +6,19 @@ import {
   listAutomations,
   readAutomation,
 } from "@repo/database/models/automation-store";
+import { type Device, devicesSeenSince } from "@repo/database/models/device-store";
 import { workspaceIntegrationInstallations } from "@repo/database/models/integration-installation-store";
 import { workspaceSlackInstallation } from "@repo/database/models/slack-installation-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { disabledServersSchema } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  type AgentRunsOnRequest,
+  disabledServersSchema,
+} from "@repo/features/agent-wire";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_BOUNDS,
-  AUTOMATION_DEFAULT_GUARDS,
-  AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -25,13 +28,14 @@ import {
   type AutomationTarget,
   automationActionSchema,
   automationCreateRequestSchema,
-  automationGuardsSchema,
   automationScopeSchema,
+  GITHUB_TRIGGER_EVENT,
   githubTriggerSchema,
   scheduleTriggerSchema,
   sentryTriggerSchema,
 } from "@repo/features/automation-wire";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
+import { cleanMachineName } from "@repo/features/machine-name";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
@@ -70,7 +74,7 @@ import {
   callerWorkspace,
   choiceRefusal,
   orStoreRefusal,
-  workedRepository,
+  START_RUNS_ON,
 } from "./agent-tools.js";
 import { calledId } from "./called-id.js";
 import { acceptedAgentChoice } from "./coder-host/start.js";
@@ -104,6 +108,9 @@ const RUNS_READ = 10;
 /** The most characters of a prompt the list shows of each automation; a read by its id shows it whole. */
 const LISTED_PROMPT_CHARS = 300;
 
+/** The cloud as `create_automation`'s runsOn names it, which a device's refusal offers instead. */
+const IN_THE_CLOUD_WORDS = JSON.stringify({ machine: AGENT_MACHINE.VERCEL });
+
 /** Why a call changed nothing, in words the model can act on. */
 export const AUTOMATION_TOOL_REFUSAL = {
   UNREADABLE_CREATE:
@@ -111,12 +118,31 @@ export const AUTOMATION_TOOL_REFUSAL = {
     `of at most ${AUTOMATION_BOUNDS.MAX_PROMPT_CHARS}, and a trigger: a schedule as ` +
     '{"kind":"schedule","cron":"<five-field cron>","timezone":"<IANA zone>"} or once as ' +
     '{"kind":"schedule","at":"<YYYY-MM-DDTHH:mm>","timezone":"<IANA zone>"}, a GitHub event ' +
-    'as {"kind":"github","event":"<event>"}, or a Sentry event as ' +
-    '{"kind":"integration","provider":"sentry","event":"alert-triggered"}; and a model with its ' +
-    "effort, both or neither.",
+    'as {"kind":"github","event":"<event>","senders":["people"]} with the flags its event takes, ' +
+    "or a Sentry event as " +
+    '{"kind":"integration","provider":"sentry","event":"alert-triggered"}; repositories as ' +
+    `owner/name, [] for none; a model with one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them; ` +
+    "scope as personal or workspace; archiveSuccessful and slackDelivery as true or false; " +
+    `and runsOn as ${IN_THE_CLOUD_WORDS} or a device of the developer's by its name or its id.`,
+  MISSING_CREATE:
+    "Not made: every automation names its repositories, model, effort, scope, archiveSuccessful, " +
+    "slackDelivery, and runsOn; none is taken from where you work or from the developer's " +
+    "defaults. repositories is an array of owner/name the workspace's GitHub installation " +
+    "reaches, the one you work in among them where the run should work there, or [] for none; " +
+    `model is a catalog id and effort one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them; ` +
+    "scope is personal or workspace; archiveSuccessful and slackDelivery are true or false; " +
+    `runsOn is ${IN_THE_CLOUD_WORDS} for the cloud, or one of the developer's own devices as ` +
+    `${AGENT_TOOL.LIST_MACHINES} lists it, with the runsOn to pass. Missing:`,
+  GITHUB_FLAGS_MISSING:
+    "Not run: a GitHub trigger names whose events fire it and whether a draft, a fork's pull " +
+    "request, or a prerelease does, on the events each applies to; none has a default. senders " +
+    "is an array of people, app-agents, and other-bots; drafts, forks, and prereleases are true " +
+    "or false. Missing:",
+  GITHUB_FLAG_EXTRA: "Not run: a GitHub trigger takes",
   UNREADABLE_UPDATE:
     `Not run: name the automation by the id ${AGENT_TOOL.LIST_AUTOMATIONS} answered, and at ` +
-    "least one change, a model with its effort, both or neither.",
+    "least one change, a model with its effort, both or neither, and runsOn, where given, as " +
+    `${IN_THE_CLOUD_WORDS} or a device of its creator's by its name or its id.`,
   UNREADABLE_ID: `Not run: name the automation by the id ${AGENT_TOOL.LIST_AUTOMATIONS} answered.`,
   NO_AUTOMATION:
     "Not run: no automation of your workspace that the developer you work for may read has that " +
@@ -150,19 +176,19 @@ export const AUTOMATION_TOOL_REFUSAL = {
   SLACK_NOT_CONNECTED:
     `Not run: the workspace has not connected ${PRODUCT_NAME}'s Slack bot, so no run's result ` +
     "could be sent on Slack. A workspace owner or admin connects it in Workspace settings; " +
-    "leave slackDelivery out until that is done.",
+    "pass slackDelivery false until that is done.",
   NO_AGENT:
     "Not run: no agent of your workspace has that agentId to hand each run to; " +
     `${AGENT_TOOL.LIST_AGENTS} names them, or leave agentId out for a new agent each run.`,
   WORKSPACE_SCOPE:
     "Not run: this is the developer's personal workspace, where every automation is theirs " +
-    "alone; leave scope out or name personal.",
+    "alone; name scope personal.",
   INVALID:
     `Not run: ${PRODUCT_NAME} does not take the automation as asked. Check the trigger, the repositories, ` +
-    "the scope, and the agentId, and that the guards are whole numbers within their bounds.",
+    "the scope, and the agentId.",
   UNKNOWN_SERVERS:
-    "Not run: name each connection in disabledServers as your connections are named in your " +
-    "instructions, such as neon, sentry, or notion-2 for a second Notion account; these name none:",
+    "Not run: name each MCP server in disabledServers by its server name, such as `linear` for " +
+    "`mcp__linear__…`; these name none:",
   NOT_RUNNABLE:
     "Not run: the developer you work for may read that automation but not run it. A personal " +
     "automation is its creator's to run, and a workspace's every member's.",
@@ -180,13 +206,114 @@ const PROMPT = describeWire(
   "Each run's first message; make it stand alone, since no one watches a run.",
 );
 
+/** The flags a GitHub trigger names beside its event, each on the events it applies to. */
+const GITHUB_TRIGGER_FLAG = {
+  SENDERS: "senders",
+  DRAFTS: "drafts",
+  FORKS: "forks",
+  PRERELEASES: "prereleases",
+} as const;
+
+type GitHubTriggerFlag = (typeof GITHUB_TRIGGER_FLAG)[keyof typeof GITHUB_TRIGGER_FLAG];
+
+const {
+  kind: githubKind,
+  labels,
+  branches,
+  defaultBranch,
+  moments,
+  tags,
+} = githubTriggerSchema.fields;
+
+/** The filters every GitHub trigger may name, each keeping nothing out where it is left out. */
+const GITHUB_FILTERS = { kind: githubKind, labels, branches, defaultBranch, moments, tags };
+
+const SENDERS = { [GITHUB_TRIGGER_FLAG.SENDERS]: githubTriggerSchema.fields.senders.schema };
+const DRAFTS = { [GITHUB_TRIGGER_FLAG.DRAFTS]: Schema.Boolean };
+const FORKS = { [GITHUB_TRIGGER_FLAG.FORKS]: Schema.Boolean };
+const PRERELEASES = { [GITHUB_TRIGGER_FLAG.PRERELEASES]: Schema.Boolean };
+
+/**
+ * A GitHub trigger as the tools take it: one variant per set of events
+ * that take the same flags, each flag required where its event has it, so
+ * no call leaves whose events fire it, or whether a draft, a fork's pull
+ * request, or a prerelease does, to a default. Note that a check has no
+ * sender and a merged pull request is never a draft, so neither takes
+ * those. The stored trigger (`githubTriggerSchema`) and the automations
+ * page keep their own reading.
+ */
+const toolGithubTriggerSchema = Schema.Union([
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([
+      GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
+      GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
+      GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+    ]),
+    ...SENDERS,
+    ...DRAFTS,
+    ...FORKS,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED]),
+    ...SENDERS,
+    ...FORKS,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([
+      GITHUB_TRIGGER_EVENT.ISSUE_OPENED,
+      GITHUB_TRIGGER_EVENT.ISSUE_LABELED,
+      GITHUB_TRIGGER_EVENT.PUSH,
+    ]),
+    ...SENDERS,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED]),
+    ...SENDERS,
+    ...PRERELEASES,
+  }),
+  Schema.Struct({
+    ...GITHUB_FILTERS,
+    event: Schema.Literals([GITHUB_TRIGGER_EVENT.CHECK_FAILED]),
+  }),
+]);
+
+const GITHUB_FLAGS: readonly GitHubTriggerFlag[] = Object.values(GITHUB_TRIGGER_FLAG);
+
+/** The flags a GitHub trigger on each event must name, read off the variants above. */
+const GITHUB_EVENT_FLAGS: ReadonlyMap<string, readonly GitHubTriggerFlag[]> = new Map(
+  toolGithubTriggerSchema.members.flatMap((variant) =>
+    variant.fields.event.literals.map((event) => [
+      event,
+      GITHUB_FLAGS.filter((flag) => flag in variant.fields),
+    ]),
+  ),
+);
+
+/** The events that take a flag, in the catalog's order, as a refusal names them. */
+function eventsTaking(flag: GitHubTriggerFlag): string {
+  return Object.values(GITHUB_TRIGGER_EVENT)
+    .filter((event) => GITHUB_EVENT_FLAGS.get(event)?.includes(flag) === true)
+    .join(", ");
+}
+
 const TRIGGER = describeWire(
-  Schema.Union([...scheduleTriggerSchema.members, githubTriggerSchema, sentryTriggerSchema]),
+  Schema.Union([
+    ...scheduleTriggerSchema.members,
+    ...toolGithubTriggerSchema.members,
+    sentryTriggerSchema,
+  ]),
   "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and " +
-    "time on that zone's clock, to run once, after which it is paused. GitHub senders " +
-    "default to people (for pull-request-merged, whose pull request it is), moments " +
-    "(pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) " +
-    "to false; tags match a release's tag exactly. " +
+    "time on that zone's clock, to run once, after which it is paused. GitHub: senders names " +
+    "whose events fire it, of people, app-agents (our agents), and other-bots (for " +
+    "pull-request-merged, whose pull request it is), on every event but check-failed; drafts " +
+    "on pull-request-opened, -labeled, and -updated, forks on every pull-request event, and " +
+    "prereleases on release-published say whether a draft, a fork's pull request, or a " +
+    "prerelease fires it. moments (pull-request-updated only) left out is every moment; tags " +
+    "match a release's tag exactly. " +
     "Sentry: prefer alert-triggered, fired by an alert rule whose action is " +
     `"Send a notification via ${PRODUCT_NAME}"; issue-created fires on every new issue. A ` +
     "filter matches any of its values, and every filter given must. Webhooks are made only on " +
@@ -196,36 +323,39 @@ const TRIGGER = describeWire(
 const REPOSITORIES = describeWire(
   automationCreateRequestSchema.fields.repositories.schema,
   "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] " +
-    "for none, which a GitHub trigger cannot take. Create defaults to the one you work in, if any.",
+    "for none, which a GitHub trigger cannot take.",
 );
 
 const MODEL = describeWire(
   modelChoiceSchema.fields.model,
-  `Catalog id from ${AGENT_TOOL.LIST_MODELS}, given with effort; neither for the creator's default.`,
+  `Catalog id from ${AGENT_TOOL.LIST_MODELS}, given with effort.`,
 );
 
 const SERVERS = describeWire(
   disabledServersSchema,
-  "Connections, as your instructions name them, each run's agent is not handed; the whole list.",
+  "MCP servers each run's agent is not handed, by server name (`linear` for `mcp__linear__…`); " +
+    "the whole list.",
 );
 
-const GUARDS = describeWire(
-  automationGuardsSchema,
-  `maxConcurrentRuns 1 to ${AUTOMATION_BOUNDS.MAX_CONCURRENT_RUNS}, default ` +
-    `${AUTOMATION_DEFAULT_GUARDS.maxConcurrentRuns}; dailyRunCap 1 to ` +
-    `${AUTOMATION_BOUNDS.MAX_DAILY_RUNS}, default ${AUTOMATION_DEFAULT_GUARDS.dailyRunCap}; ` +
-    `subjectCooldownHours, per Sentry issue, 1 to ${AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS}, ` +
-    `default ${AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS}.`,
+const RUNS_ON = describeWire(
+  START_RUNS_ON,
+  `Where each run's agent starts: ${IN_THE_CLOUD_WORDS} for the cloud, or ` +
+    `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for one of the ` +
+    "automation's creator's own devices (a Mac or a host) by its name, or " +
+    `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id; ` +
+    `${AGENT_TOOL.LIST_MACHINES} lists each place with the runsOn to pass. A run that fires while ` +
+    "its device is offline fails. It places each agent a run starts: a run handed to the one " +
+    "agent named runs where that agent already runs.",
 );
 
 const SCOPE = describeWire(
   automationScopeSchema,
-  "personal, the default, is its creator's; workspace is every member's.",
+  "personal is its creator's alone; workspace is every member's.",
 );
 
 const ARCHIVE_SUCCESSFUL = describeWire(
   Schema.Boolean,
-  "Archive each run's agent once it succeeds and leaves no thread open.",
+  "Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open.",
 );
 
 const SLACK_DELIVERY = describeWire(
@@ -250,7 +380,7 @@ const LIST_AUTOMATIONS_INPUT = Schema.Struct({
   ),
 });
 
-/** An automation as both tools take it: create needs its name, prompt, and trigger, and update takes any of them. */
+/** An automation as both tools take it: create needs all but disabledServers and agentId, and update takes any of them. */
 const AUTOMATION_FIELDS = {
   name: automationCreateRequestSchema.fields.name,
   prompt: PROMPT,
@@ -260,15 +390,29 @@ const AUTOMATION_FIELDS = {
   effort: modelChoiceSchema.fields.effort,
   disabledServers: SERVERS,
   agentId: AGENT_ID,
-  guards: GUARDS,
   scope: SCOPE,
   archiveSuccessful: ARCHIVE_SUCCESSFUL,
   slackDelivery: SLACK_DELIVERY,
 };
 
-const CREATE_AUTOMATION_INPUT = Schema.Struct(
-  Struct.mapOmit(AUTOMATION_FIELDS, ["name", "prompt", "trigger"], Schema.optionalKey),
-);
+const CREATE_AUTOMATION_INPUT = Schema.Struct({
+  ...Struct.mapOmit(
+    AUTOMATION_FIELDS,
+    [
+      "name",
+      "prompt",
+      "trigger",
+      "repositories",
+      "model",
+      "effort",
+      "scope",
+      "archiveSuccessful",
+      "slackDelivery",
+    ],
+    Schema.optionalKey,
+  ),
+  runsOn: RUNS_ON,
+});
 
 const UPDATE_AUTOMATION_INPUT = Schema.Struct({
   automationId: AUTOMATION_ID,
@@ -279,11 +423,23 @@ const UPDATE_AUTOMATION_INPUT = Schema.Struct({
     ),
   ),
   ...Struct.map(AUTOMATION_FIELDS, Schema.optionalKey),
+  runsOn: Schema.optionalKey(RUNS_ON),
 });
 
 const DELETE_AUTOMATION_INPUT = Schema.Struct({ automationId: AUTOMATION_ID });
 
 const RUN_AUTOMATION_INPUT = Schema.Struct({ automationId: AUTOMATION_ID });
+
+/** What create_automation takes from the caller alone, never from where it works or its starter's defaults. */
+const CREATE_REQUIRED = [
+  "repositories",
+  "model",
+  "effort",
+  "scope",
+  "archiveSuccessful",
+  "slackDelivery",
+  "runsOn",
+] as const;
 
 const readListAsked = Schema.decodeUnknownResult(LIST_AUTOMATIONS_INPUT);
 const readCreateAsked = Schema.decodeUnknownResult(CREATE_AUTOMATION_INPUT);
@@ -297,12 +453,12 @@ export const LIST_AUTOMATIONS_TOOL = {
   description:
     "List the automations of your workspace that the developer you work for may read, newest " +
     "first: each with its id, name, whether it is on, its trigger, the start of its prompt, the " +
-    "model and effort its runs take, its repositories, where its runs land, its guards, scope, " +
+    "model and effort its runs take, its repositories, where its runs land, its scope, " +
     "when it is next due, its newest run, and whether the developer made it. Name an " +
     "automationId to read that one whole, its prompt in full and its newest runs, each with why " +
     "it was skipped or failed and the agent it started. An automation fires on a schedule, a " +
     "GitHub event, a webhook, or a Sentry event, and starts an agent on its prompt, as " +
-    "its creator. Answers `accepted` with them, or `rejected` and why.",
+    "its creator.",
   inputSchema: LIST_AUTOMATIONS_INPUT,
 } as const;
 
@@ -313,10 +469,13 @@ export const CREATE_AUTOMATION_TOOL = {
     `page would: each time its trigger fires, ${PRODUCT_NAME} starts an agent on its prompt, in its ` +
     "repositories or in none, on its creator's keys and connections, on a task of its own with no one watching, or " +
     "hands the run to the one agent named. It is on as it is made, and runs as the developer. " +
+    "Name its repositories, model, effort, scope, archiveSuccessful, slackDelivery, and the " +
+    "machine its runs start on (runsOn): none is taken from where you work or the developer's " +
+    `defaults; ${AGENT_TOOL.LIST_MODELS} answers the models and efforts, and ` +
+    `${AGENT_TOOL.LIST_MACHINES} the machines. ` +
     `One fired by Sentry needs ${PRODUCT_NAME}'s Sentry integration installed on the workspace first. ` +
     "Make one when the developer asks for it, never otherwise on your own, and read " +
-    `${AGENT_TOOL.LIST_AUTOMATIONS} first so you make none they already have. Answers ` +
-    "`accepted` with the automation as it stands, or `rejected` and why.",
+    `${AGENT_TOOL.LIST_AUTOMATIONS} first so you make none they already have.`,
   inputSchema: CREATE_AUTOMATION_INPUT,
 } as const;
 
@@ -327,8 +486,7 @@ export const UPDATE_AUTOMATION_TOOL = {
     `${AGENT_TOOL.LIST_AUTOMATIONS} answered it, as its editor on the automations page would: ` +
     "what you leave out stands, and a trigger given replaces the one standing whole, a switch " +
     `to Sentry needing ${PRODUCT_NAME}'s Sentry integration installed on the workspace. Change one only ` +
-    "where the developer asked for it. Answers `accepted` with the automation as it now " +
-    "stands, or `rejected` and why.",
+    "where the developer asked for it.",
   inputSchema: UPDATE_AUTOMATION_INPUT,
 } as const;
 
@@ -338,8 +496,7 @@ export const DELETE_AUTOMATION_TOOL = {
     "Delete an automation of your workspace with its history of runs, by its id as " +
     `${AGENT_TOOL.LIST_AUTOMATIONS} answered it, as its Delete on the automations page would; ` +
     "the agents its runs started stay. Delete one only when the developer asks for it, and " +
-    `pause one with ${AGENT_TOOL.UPDATE_AUTOMATION} where they only want it to stop. Answers ` +
-    "`accepted` with the automation's id and name, or `rejected` and why.",
+    `pause one with ${AGENT_TOOL.UPDATE_AUTOMATION} where they only want it to stop.`,
   inputSchema: DELETE_AUTOMATION_INPUT,
 } as const;
 
@@ -348,11 +505,9 @@ export const RUN_AUTOMATION_TOOL = {
   description:
     `Run an automation of your workspace now, by its id as ${AGENT_TOOL.LIST_AUTOMATIONS} ` +
     "answered it, as its Run now on the automations page would: one run, whatever its trigger, " +
-    "through the same guards a firing takes, starting its agent on its prompt as a " +
+    "starting its agent on its prompt as a " +
     "scheduled run would, or handing it to the one agent it names. Run one when the developer " +
-    "asks for it, such as to try an automation just made, never otherwise on your own. Answers " +
-    "`accepted` with the run, started with its agent or skipped or failed and why, or " +
-    "`rejected` and why.",
+    "asks for it, such as to try an automation just made, never otherwise on your own.",
   inputSchema: RUN_AUTOMATION_INPUT,
 } as const;
 
@@ -394,6 +549,100 @@ function unknownServers(input: UnparsedWireValue): readonly string[] {
   return named.filter(
     (name): name is string =>
       Predicate.isString(name) && integrationConnectionOf(name) === undefined,
+  );
+}
+
+/** A device of the creator's as a refusal lists it: its name and its id. */
+function listedDevice(device: Device): string {
+  return `${JSON.stringify(device.name)} (deviceId ${device.id})`;
+}
+
+/** A machine's name as a make matches it: as a machine's name is kept (`cleanMachineName`), any case, as start_agent reads it. */
+function machineNameKey(name: string): string {
+  return cleanMachineName(name).toLowerCase();
+}
+
+/**
+ * The machine a make's or a change's runsOn names, as a start names it: the
+ * cloud, or one of the automation's creator's own registered devices, by its
+ * name or its id; a device that is not theirs, or a name matching none or
+ * several of theirs, is refused, opening with `lead`, with their devices
+ * listed. Note that only the creator's own devices are read, whoever calls,
+ * because every run starts as its creator, and a device runs only its
+ * owner's agents.
+ */
+const runsOnOfAutomation = Effect.fnUntraced(function* (
+  creatorId: string,
+  runsOn: typeof START_RUNS_ON.Type,
+  lead: string,
+): Effect.fn.Return<Result.Result<AgentRunsOnRequest, string>, StoreFailure, DatabaseServices> {
+  if (runsOn.machine === AGENT_MACHINE.VERCEL) return Result.succeed(runsOn);
+  const devices = yield* devicesSeenSince(creatorId, new Date(0));
+
+  if (devices.length === 0) {
+    return Result.fail(
+      `${lead}: its creator has no device registered to run agents on, and an automation's ` +
+        `runs start on its creator's own machines. Run it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+    );
+  }
+
+  const matched =
+    "device" in runsOn
+      ? devices.filter((device) => machineNameKey(device.name) === machineNameKey(runsOn.device))
+      : devices.filter((device) => device.id === runsOn.deviceId);
+
+  const [only] = matched;
+
+  if (matched.length === 1 && only !== undefined) {
+    return Result.succeed({ machine: AGENT_MACHINE.DEVICE, deviceId: only.id });
+  }
+
+  const asked = "device" in runsOn ? `named ${JSON.stringify(runsOn.device)}` : "has that deviceId";
+
+  const why =
+    matched.length === 0
+      ? `no device of its creator's ${"device" in runsOn ? "is " : ""}${asked}`
+      : `${matched.length} devices of its creator's are ${asked}, so name the one you mean by its deviceId`;
+
+  return Result.fail(
+    `${lead}: ${why}, and an automation's runs start on its creator's own machines. Their ` +
+      `devices: ${devices.map(listedDevice).join("; ")}. Name one by its name or its deviceId, ` +
+      `or run it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+  );
+});
+
+/** The fields a make must name that the input as sent leaves out, in the schema's order. */
+function missingCreateFields(input: UnparsedWireValue): readonly string[] {
+  const named = isRecord(input) ? input : {};
+
+  return CREATE_REQUIRED.filter((field) => named[field] === undefined);
+}
+
+/** A GitHub trigger's refusal in the model's words, where the call names one on a known event that leaves out a flag its event takes or names one it does not; nothing otherwise, the schema's read standing for the rest. */
+function githubFlagsRefused(input: UnparsedWireValue): WireRecord | undefined {
+  const trigger = isRecord(input) ? input.trigger : undefined;
+
+  if (!isRecord(trigger) || trigger.kind !== AUTOMATION_TRIGGER.GITHUB) return undefined;
+  const event = trigger.event;
+  const takes = Predicate.isString(event) ? GITHUB_EVENT_FLAGS.get(event) : undefined;
+
+  if (takes === undefined) return undefined;
+  const missing = takes.filter((flag) => trigger[flag] === undefined);
+
+  if (missing.length > 0) {
+    return agentToolRejected(
+      `${AUTOMATION_TOOL_REFUSAL.GITHUB_FLAGS_MISSING} ${missing.join(", ")} (${String(event)} takes ${takes.join(", ")}).`,
+    );
+  }
+
+  const extra = GITHUB_FLAGS.filter((flag) => !takes.includes(flag) && flag in trigger);
+
+  if (extra.length === 0) return undefined;
+
+  return agentToolRejected(
+    `${AUTOMATION_TOOL_REFUSAL.GITHUB_FLAG_EXTRA} ${extra
+      .map((flag) => `${flag} only on ${eventsTaking(flag)}`)
+      .join("; ")}; leave ${extra.join(", ")} out of one on ${String(event)}.`,
   );
 }
 
@@ -464,8 +713,8 @@ function automationReading(summary: AutomationSummary, whole: boolean): WireReco
     effort: summary.action.choice?.effort ?? null,
     disabledServers: [...(summary.action.disabledServers ?? [])],
     repositories: [...(summary.repositories ?? [])],
+    runsOn: summary.runsOn ?? null,
     runsLandOn: landingOf(summary),
-    guards: { ...summary.guards },
     scope: summary.scope ?? AUTOMATION_SCOPE.PERSONAL,
     archiveSuccessful: summary.archiveSuccessful ?? false,
     slackDelivery: summary.slackDelivery ?? false,
@@ -658,14 +907,25 @@ export function runCreateAutomation(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
-  const asked = readCreateAsked(input);
-  const choice = Result.isSuccess(asked) ? namedChoice(asked.success) : null;
+  const missing = missingCreateFields(input);
 
-  if (Result.isFailure(asked) || choice === null) {
+  if (missing.length > 0) {
+    return Effect.succeed(
+      agentToolRejected(`${AUTOMATION_TOOL_REFUSAL.MISSING_CREATE} ${missing.join(", ")}.`),
+    );
+  }
+
+  const flags = githubFlagsRefused(input);
+
+  if (flags !== undefined) return Effect.succeed(flags);
+  const asked = readCreateAsked(input);
+
+  if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_CREATE));
   }
 
   const made = asked.success;
+  const choice: ModelChoice = { model: made.model, effort: made.effort };
   const servers = serversRefused(input);
 
   if (servers !== undefined) return Effect.succeed(servers);
@@ -703,6 +963,9 @@ export function runCreateAutomation(
       const model = yield* choiceRefused(userId, choice, "Not made");
 
       if (model !== undefined) return agentToolRejected(model);
+      const runsOn = yield* runsOnOfAutomation(userId, made.runsOn, "Not made");
+
+      if (Result.isFailure(runsOn)) return agentToolRejected(runsOn.failure);
 
       const landing = yield* landingNamed(
         userId,
@@ -712,13 +975,11 @@ export function runCreateAutomation(
       );
 
       if (Result.isFailure(landing)) return agentToolRejected(landing.failure);
-      const worked = yield* workedRepository(call.caller);
-      const repositories = made.repositories ?? (worked === null ? [] : [worked]);
 
       const action: AutomationAction = {
         kind: AUTOMATION_ACTION.AGENT,
         prompt: made.prompt,
-        ...(choice === undefined ? undefined : { choice }),
+        choice,
         ...(made.disabledServers === undefined
           ? undefined
           : { disabledServers: made.disabledServers }),
@@ -729,19 +990,17 @@ export function runCreateAutomation(
         {
           id,
           workspaceId: workspace.value,
-          repositories,
+          repositories: made.repositories,
           name: made.name,
           trigger: made.trigger,
           action,
-          ...(made.guards === undefined ? undefined : { guards: made.guards }),
-          ...(made.scope === undefined ? undefined : { scope: made.scope }),
+          scope: made.scope,
           ...(landing.success === undefined ? undefined : { target: landing.success }),
-          ...(made.archiveSuccessful === undefined
-            ? undefined
-            : { archiveSuccessful: made.archiveSuccessful }),
-          ...(made.slackDelivery === undefined ? undefined : { slackDelivery: made.slackDelivery }),
+          archiveSuccessful: made.archiveSuccessful,
+          slackDelivery: made.slackDelivery,
         },
         SERVER_AUTOMATION_SOURCE.AGENT,
+        runsOn.success,
       ).pipe(Effect.result);
 
       if (Result.isFailure(written)) {
@@ -776,6 +1035,9 @@ export function runUpdateAutomation(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
+  const flags = githubFlagsRefused(input);
+
+  if (flags !== undefined) return Effect.succeed(flags);
   const asked = readUpdateAsked(input);
   const choice = Result.isSuccess(asked) ? namedChoice(asked.success) : null;
 
@@ -790,6 +1052,7 @@ export function runUpdateAutomation(
     agentId,
     prompt,
     disabledServers,
+    runsOn,
     ...rest
   } = asked.success;
 
@@ -800,7 +1063,12 @@ export function runUpdateAutomation(
   const changesAction =
     prompt !== undefined || choice !== undefined || disabledServers !== undefined;
 
-  if (!changesAction && agentId === undefined && Object.keys(rest).length === 0) {
+  if (
+    !changesAction &&
+    agentId === undefined &&
+    runsOn === undefined &&
+    Object.keys(rest).length === 0
+  ) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_UPDATE));
   }
 
@@ -831,6 +1099,24 @@ export function runUpdateAutomation(
 
       if (model !== undefined) return agentToolRejected(model);
 
+      // Note that a machine is read against the creator's devices, since every run starts as its creator,
+      // and only once the caller may change it, because a refusal lists those devices.
+      const changeable =
+        runsOn === undefined
+          ? true
+          : Option.isSome(yield* readAutomation(userId, automationId, AUTOMATION_ACCESS.CHANGE));
+
+      if (!changeable) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NOT_PERMITTED);
+
+      const machine =
+        runsOn === undefined
+          ? undefined
+          : yield* runsOnOfAutomation(standing.userId, runsOn, "Not changed");
+
+      if (machine !== undefined && Result.isFailure(machine)) {
+        return agentToolRejected(machine.failure);
+      }
+
       const landing = yield* landingNamed(
         userId,
         workspace.value,
@@ -858,6 +1144,7 @@ export function runUpdateAutomation(
           ...(landing.success === undefined ? undefined : { target: landing.success }),
         },
         SERVER_AUTOMATION_SOURCE.AGENT,
+        machine?.success,
       ).pipe(Effect.result);
 
       if (Result.isFailure(written)) {

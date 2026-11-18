@@ -103,10 +103,10 @@ state, and checks, and any chapters you generate for it.
 
 ### Credentials you save
 
-If you save an Anthropic or OpenAI API key, a GitHub personal access token, or
-your Claude plan's setup token, or sign in with your ChatGPT plan, we store it
-encrypted with AES-256-GCM under a per-credential key that is itself encrypted
-with a server-only secret held outside the database. We keep a short hint
+If you save an Anthropic, OpenAI, or Cursor API key, a GitHub personal access
+token, or your Claude plan's setup token, or sign in with your ChatGPT plan, we
+store it encrypted with AES-256-GCM under a per-credential key that is itself
+encrypted with a server-only secret held outside the database. We keep a short hint
 (such as `sk-ant-…abcd`), the email of the ChatGPT account a plan signed in
 as, the name you give a plan, and whether the provider accepts it. We never
 log a saved credential or include it in analytics, error reports, or screen
@@ -117,7 +117,12 @@ A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
 agents is handed them as environment variables in its sandbox as it starts a
 turn, so the agent can read them, and a value it reads or prints may reach its
-model and its transcript. Agents on your Mac are never handed them.
+model and its transcript. Agents on your Mac are never handed them. A variable
+is a secret unless the one who saves it marks it otherwise: a secret's value is
+never shown to anyone once saved, while one saved as a config, such as
+`NODE_ENV`, is shown to every member of the workspace in Settings. We keep who
+added each variable and who last changed it, and show both to the workspace's
+members.
 
 ### Integrations and connected apps
 
@@ -132,9 +137,19 @@ out, goes to the agent's model and into its transcript. Where you connect more
 than one account at a service, a call your agent makes keeps the display name
 of the account it ran on (which can be an email address), and anyone who can
 open the task sees it beside the call. If your workspace
-connects Vespin's Slack bot, we store your Slack user id, and messages you send
-the bot, with the earlier messages of that Slack thread, are handed to an
-agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
+adds Vespin's Slack bot to its Slack, we store the bot token Slack grants that
+install, encrypted the same way as the credentials you save (see Credentials
+you save above), with the Slack team's id and name, the bot's own Slack ids,
+and the scopes it was granted; we delete them when the workspace disconnects
+the bot, when the app is uninstalled from that Slack or its token revoked
+there, and with the workspace. The bot also keeps your Slack user id, and
+messages you send the bot, with the earlier messages of that Slack thread, are
+handed to an agent. Your workspace's agents can also read, post, and react as the bot in
+any Slack channel it has been added to, private channels included, so
+messages in those channels may reach the agent that reads them, its
+transcript, and its traces. A private channel's messages an agent reads land
+in its transcript, which anyone who can open the task can read, whether or
+not they are in that channel. If you allow an app such as Claude Code or Cursor to connect to our MCP
 server, we store a record of the app, your consent, and hashed tokens.
 
 ### Commands on your Mac
@@ -241,7 +256,15 @@ screen you open (the Inbox, a thread, a task, an agent, a page, a pull
 request, or Settings) and whether the window showed one column or two, never
 which thread, task, or agent it was, and, once each time it opens, how long
 it took to show your Inbox, rounded down to a step (under a second, then 1,
-2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held. They go through the Service, as the Mac
+2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held,
+with how long the app took to start before it, on the same steps, whether
+the lists it keeps on the phone were there to draw from, dropped by an
+update, or missing, whether the Inbox first showed those kept threads or
+the Service's answer, and the app's build number, and,
+each time you send a reply in a thread, how long it took to show in the
+thread, rounded down to a step (under 0.1 seconds, then 0.1, 0.2, 0.3, 0.5,
+0.8, 1.3, 2, 3, or 5 seconds or more), and whether it carried pictures, never
+what it said, its pictures, or which thread. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
 While you are signed in, the Mac app and the web app record how you use
@@ -290,7 +313,10 @@ your Mac.
 
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
 the next time you open the app, a crash as the app starts, before its first
-screen, among them), and reports of a screen that could not be drawn. It uses Sentry's default data collection, so reports may include error
+screen, among them), reports of a screen that could not be drawn, and a report
+of each sign-in that ended without signing you in, naming the provider (Google
+or GitHub) and how it ended, with the app's own lines about its sign-in before
+it. It uses Sentry's default data collection, so reports may include error
 messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
 naming a sign-in token in an address is dropped, and reports name your
@@ -333,7 +359,10 @@ Apple's gateways the token belongs to and the app it was issued to, and we
 keep them with your account. When the Service pushes a notification to your
 phone, it sends Apple that token and the notification itself: **its title and
 body, which may carry the words of an Inbox thread, and the agent's or the
-task's name**, with the ids the app opens on a tap. Apple delivers it under
+task's name**, with the ids the app opens on a tap. A post's notification also
+carries the post's words as written, as many of them as fit Apple's 4 KB
+limit on a notification, which the app shows formatted when you press and
+hold it. Apple delivers it under
 its own policies, and your phone keeps it in its notification history under
 its own settings, outside Vespin. We keep the token while the phone stays
 registered: the app unregisters it when you sign out, we delete it when
@@ -420,12 +449,21 @@ delivered, with the names of their files, and **your Inbox's newest threads**,
 up to about 150 KB of them: each thread's title, who it waits on, and its
 messages' words and the names of their files (never a file itself), as the
 Inbox last showed them, so it can draw your Inbox at once when it opens. All
-of it is in one file, `entities.sealed`, encrypted under a key in the macOS
-Keychain and deleted when you sign out. Your sign-in tokens are kept
-encrypted the same way. The Vespin iOS app keeps the same file on your
-iPhone, encrypted under a key it keeps in the iPhone's Keychain, which never
-leaves that iPhone, and deletes it when you sign out. Transcripts and
-pictures you open are held in memory only.
+of it is in a local database kept for each account you sign in with,
+`local.sqlite`, which only your user account on the Mac can read. It is not
+encrypted under a key of Vespin's own: like the rest of your files, it is
+protected by your Mac's disk encryption (FileVault) where you turn it on. The
+app deletes it when you sign out. The Vespin iOS app keeps the same database
+on your iPhone, in its own storage, protected by the iPhone's Data
+Protection, and deletes it when you sign out. On the Mac your sign-in tokens
+are kept encrypted under a key in the macOS Keychain. On the iPhone they are
+kept in the iPhone's Keychain itself, readable after the phone's first unlock
+since it started, never synced to iCloud or moved to another device, and
+deleted when you sign out; an update moves tokens an earlier version of the
+app kept encrypted in its own files into the Keychain the first time it
+opens.
+
+Transcripts and pictures you open are held in memory only.
 
 ### Spotlight and Handoff on your iPhone
 
@@ -442,6 +480,18 @@ While you look at a thread, task, agent, or pull request, the app tells iOS
 its title and its vespin.dev link, so Handoff can offer it on your other
 devices signed in to the same Apple Account. iOS hands them to those devices
 directly, and the app does not offer them to Siri suggestions or to search.
+
+### Members' and workspaces' pictures on your iPhone
+
+So a menu can lead each member of a workspace with their face, such as a
+task's Assignee menu, and each of your workspaces with its photo, such as the
+workspace switcher, the Vespin iOS app keeps a small copy of each member's
+sign-in picture, your own included, and of each of your workspaces' photos as
+a file in its caches on your iPhone or iPad. It downloads a sign-in picture
+from the Google or GitHub address the app already draws it from, and writes a
+workspace's photo from the copy the app already holds, sends neither
+anywhere else, and keeps them only in the caches iOS may clear when the
+device needs room; deleting the app deletes them.
 
 ## 3\. Legal basis for processing
 
@@ -466,6 +516,8 @@ laws:
 - Run your agents and the models they use, on your own keys
 - Authenticate your identity and manage your account and workspaces
 - Send workspace invitations and the Slack messages your workspace asked for
+- Send you onboarding emails and product updates, which you can unsubscribe
+  from at any time
 - Monitor and analyze usage to improve the Service
 - Detect, prevent, and address technical issues and security threats
 - Comply with legal obligations
@@ -491,7 +543,9 @@ data with:
   you saved, never ours. Titles, of your agents, tasks, and the threads you
   start, are generated on Anthropic under Vespin's own API key, from excerpts
   of an agent's opening message, your latest message, and its latest answer,
-  or of a thread's first message.
+  or of a thread's first message. An agent you run on Cursor runs on Cursor,
+  on the Cursor API key you saved, and Cursor's SDK, which runs it in the
+  agent's sandbox, also sends Cursor its own usage analytics of each run.
   Each call carries what the model needs, such as the description, the conversation,
   attached files, and what the agent read. These providers process it under
   their own policies.
@@ -500,14 +554,20 @@ data with:
   check for updates and load avatars.
 - **Apple:** notifications to the Vespin iOS app go through Apple's Push
   Notification service, which receives your phone's push token and each
-  notification's title and body, as the Notifications section says.
+  notification's title, body and, for a post, its words as written, as the
+  Notifications section says.
 - **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
   Connect, which holds integration tokens), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
-  performance monitoring), Resend (email: for the onboarding emails a new account is sent,
+  performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
   you accepted a workspace invitation, and on which days you started a task),
-  and Slack (feedback, setup answers, and Vespin's Slack bot).
+  Metronome (billing: each workspace's id and what each of its agents' cloud
+  sandbox sessions cost, which Metronome totals into the workspace's monthly
+  usage), Stripe (billing: the card and billing details a workspace's owner or
+  admin gives it to pay the workspace's invoices, which Metronome hands it
+  with each workspace's monthly usage total), and Slack (feedback, setup
+  answers, and Vespin's Slack bot).
 - **Integrations and connected apps:** the services and MCP clients you connect
   receive what your agents send them, or what our tools answer, and keep it
   under their own policies.

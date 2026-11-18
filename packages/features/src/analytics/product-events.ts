@@ -52,6 +52,8 @@ export const PRODUCT_EVENT = {
   MIRROR_READY: "mirror:ready",
   /** A launch drew its first Inbox rows, counted once a launch by how long that took from the app's start, on a rung. */
   APP_READY: "app:ready",
+  /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
+  REPLY_DRAWN: "reply:drawn",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -73,6 +75,7 @@ export const PRODUCT_SURFACE_EVENT = {
   SEARCH_OPEN: PRODUCT_EVENT.SEARCH_OPEN,
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
   APP_READY: PRODUCT_EVENT.APP_READY,
+  REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -110,6 +113,11 @@ export const PRODUCT_EVENT_PROPERTY = {
   ATTEMPT: "attempt",
   ELAPSED_SECONDS: "elapsed_seconds",
   LAUNCH_SECONDS: "launch_seconds",
+  DRAWN_MS: "drawn_ms",
+  REPLY_KIND: "reply_kind",
+  STANDING_SECONDS: "standing_seconds",
+  APP_BUILD: "app_build",
+  FIRST_ROWS: "first_rows",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -193,6 +201,7 @@ export const PRODUCT_SETTINGS_VIEW = {
   PLAN_TEMPLATE: "plan_template",
   WORKSPACE: "workspace",
   ENVIRONMENT: "environment",
+  BILLING: "billing",
   /** No page since Settings › Cloud setup was folded into the Environment page; an older build still counts a visit to it. */
   CLOUD_SETUP: "cloud_setup",
   ACCOUNT: "account",
@@ -333,9 +342,13 @@ export const PRODUCT_EXPERIMENT = {
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   FOLLOWING: "following",
   COMPUTER_USE: "computer-use",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   VOICE: "voice",
   GOALS: "goals",
   MOVE_AGENTS: "move-agents",
+  CURSOR: "cursor",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
+  STARTER_TASKS: "starter-tasks",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];
@@ -440,6 +453,14 @@ const PRODUCT_LAUNCH_SECONDS = {
 export type ProductLaunchSeconds =
   (typeof PRODUCT_LAUNCH_SECONDS)[keyof typeof PRODUCT_LAUNCH_SECONDS];
 
+/** Which rows a launch's Inbox first showed: the ones kept on the phone, or the service's answer. */
+export const PRODUCT_FIRST_ROWS = {
+  KEPT: "kept",
+  FEED: "feed",
+} as const;
+
+export type ProductFirstRows = (typeof PRODUCT_FIRST_ROWS)[keyof typeof PRODUCT_FIRST_ROWS];
+
 const PRODUCT_LAUNCH_LADDER: readonly ProductLaunchSeconds[] = Object.values(
   PRODUCT_LAUNCH_SECONDS,
 ).sort((left, right) => right - left);
@@ -452,6 +473,46 @@ export function productLaunchSeconds(milliseconds: number): ProductLaunchSeconds
 
   return PRODUCT_LAUNCH_LADDER.find((rung) => seconds >= rung) ?? PRODUCT_LAUNCH_SECONDS.UNDER_ONE;
 }
+
+/**
+ * The rungs a reply travels on, in milliseconds from its Send to its standing
+ * in its thread, each the shortest wait that reaches it: fine through the
+ * first second, where a send feels instant or slow, and coarse past it, for
+ * the reason a wait travels on rungs.
+ */
+const PRODUCT_DRAWN_MS = {
+  UNDER_100: 0,
+  MS_100: 100,
+  MS_200: 200,
+  MS_300: 300,
+  MS_500: 500,
+  MS_800: 800,
+  MS_1300: 1300,
+  MS_2000: 2000,
+  MS_3000: 3000,
+  MS_5000: 5000,
+} as const;
+
+export type ProductDrawnMilliseconds = (typeof PRODUCT_DRAWN_MS)[keyof typeof PRODUCT_DRAWN_MS];
+
+const PRODUCT_DRAWN_LADDER: readonly ProductDrawnMilliseconds[] = Object.values(
+  PRODUCT_DRAWN_MS,
+).sort((left, right) => right - left);
+
+/** The highest rung a send's wait in milliseconds reaches; anything under the first rung, or a wait that is no number, is the first. */
+export function productDrawnMilliseconds(milliseconds: number): ProductDrawnMilliseconds {
+  if (!Number.isFinite(milliseconds)) return PRODUCT_DRAWN_MS.UNDER_100;
+
+  return PRODUCT_DRAWN_LADDER.find((rung) => milliseconds >= rung) ?? PRODUCT_DRAWN_MS.UNDER_100;
+}
+
+/** What a reply carried, never what it said: words alone, or pictures, with words or without. */
+export const PRODUCT_REPLY_KIND = {
+  WORDS: "words",
+  PICTURES: "pictures",
+} as const;
+
+export type ProductReplyKind = (typeof PRODUCT_REPLY_KIND)[keyof typeof PRODUCT_REPLY_KIND];
 
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
@@ -474,6 +535,11 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: ProductElapsedSeconds;
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: ProductLaunchSeconds;
+  [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: ProductDrawnMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: ProductReplyKind;
+  [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
+  [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
+  [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
 }
 
 /**
@@ -490,6 +556,9 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.ATTEMPT
   | typeof PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS
+  | typeof PRODUCT_EVENT_PROPERTY.DRAWN_MS
+  | typeof PRODUCT_EVENT_PROPERTY.STANDING_SECONDS
+  | typeof PRODUCT_EVENT_PROPERTY.APP_BUILD
 >;
 
 /** Every value each enumerable property may ever hold. */
@@ -508,6 +577,8 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT]: Object.values(PRODUCT_EXPERIMENT),
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
+  [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
+  [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -553,11 +624,35 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS,
   ],
   [PRODUCT_EVENT.APP_READY]: [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS],
+  [PRODUCT_EVENT.REPLY_DRAWN]: [PRODUCT_EVENT_PROPERTY.DRAWN_MS, PRODUCT_EVENT_PROPERTY.REPLY_KIND],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 
-/** Exactly the properties one event carries, each with its own value type. */
+/**
+ * The properties an event may carry beyond those it must, each read where it
+ * came and left off where it didn't. Note that a property added to an event
+ * a released build already sends goes here, because one it must carry would
+ * refuse that build's events, and with them its whole batch, until every
+ * phone has updated.
+ */
+const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
+  [PRODUCT_EVENT.APP_READY]: [
+    PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
+    PRODUCT_EVENT_PROPERTY.APP_BUILD,
+    PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
+  ],
+} as const satisfies { readonly [Name in ProductEventName]?: readonly ProductEventProperty[] };
+
+/** The properties `Name` may leave off; none for an event with no entry. */
+type OptionalPropertyOf<Name extends ProductEventName> =
+  Name extends keyof typeof PRODUCT_EVENT_OPTIONAL_PROPERTIES
+    ? (typeof PRODUCT_EVENT_OPTIONAL_PROPERTIES)[Name][number]
+    : never;
+
+/** Exactly the properties one event carries, each with its own value type: those it must, and those it may. */
 export type ProductEventPropertiesFor<Name extends ProductEventName> = {
   readonly [Property in (typeof PRODUCT_EVENT_PROPERTIES)[Name][number]]: ProductEventPropertyValue[Property];
+} & {
+  readonly [Property in OptionalPropertyOf<Name>]?: ProductEventPropertyValue[Property];
 };
 
 /** Any event's properties, as a validated event holds them. */
@@ -675,6 +770,19 @@ function launchReader(value: UnparsedWireValue): ProductLaunchSeconds | undefine
   return isProductLaunchSeconds(value) ? value : undefined;
 }
 
+const isProductDrawnMilliseconds = Schema.is(Schema.Literals(Object.values(PRODUCT_DRAWN_MS)));
+
+function drawnReader(value: UnparsedWireValue): ProductDrawnMilliseconds | undefined {
+  return isProductDrawnMilliseconds(value) ? value : undefined;
+}
+
+/** A build number as `CFBundleVersion` holds one: a whole number of up to six digits and nothing else, which has no room for a word. */
+const BUILD_NUMBER_PATTERN = /^[1-9][0-9]{0,5}$/;
+
+function buildNumberReader(value: UnparsedWireValue): string | undefined {
+  return isWireString(value) && BUILD_NUMBER_PATTERN.test(value) ? value : undefined;
+}
+
 function bucketReader(value: UnparsedWireValue): ProductSessionCountBucket | undefined {
   return isProductSessionCountBucket(value) ? value : undefined;
 }
@@ -719,8 +827,23 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: elapsedReader,
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: launchReader,
+  [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: drawnReader,
+  [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: launchReader,
+  [PRODUCT_EVENT_PROPERTY.APP_BUILD]: buildNumberReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
 };
+
+/** Whether `name` is an event `PRODUCT_EVENT_OPTIONAL_PROPERTIES` names properties it may leave off for. */
+function hasOptionalProperties(
+  name: ProductEventName,
+): name is keyof typeof PRODUCT_EVENT_OPTIONAL_PROPERTIES {
+  return Object.hasOwn(PRODUCT_EVENT_OPTIONAL_PROPERTIES, name);
+}
+
+/** The properties an event may leave off; none for an event the table doesn't name. */
+function optionalPropertiesOf(name: ProductEventName): readonly ProductEventProperty[] {
+  return hasOptionalProperties(name) ? PRODUCT_EVENT_OPTIONAL_PROPERTIES[name] : [];
+}
 
 const readsProductEventName = Schema.is(ProductEventNameSchema);
 
@@ -748,6 +871,17 @@ export function productEventFromWire(value: UnparsedWireValue): ProductEvent | u
 
   for (const property of allowed) {
     const read = PRODUCT_EVENT_PROPERTY_READER[property](source?.[property]);
+
+    if (read === undefined) return undefined;
+    properties[property] = read;
+  }
+
+  const optional = optionalPropertiesOf(value.name);
+
+  // Note that an optional property left off is skipped, while one sent unreadable still refuses the event, as a must's does.
+  for (const property of optional) {
+    if (source?.[property] === undefined) continue;
+    const read = PRODUCT_EVENT_PROPERTY_READER[property](source[property]);
 
     if (read === undefined) return undefined;
     properties[property] = read;

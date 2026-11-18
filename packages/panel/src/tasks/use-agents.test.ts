@@ -8,25 +8,19 @@ import {
   AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentSummary,
-  CHECK_SUMMARY,
   LOCAL_AGENT_REFUSAL,
-  PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import type { Failure } from "@repo/features/failure-remedy";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LIVE_READ } from "@repo/features/live-wire";
-import { PULL_REQUEST_CHAPTERS_CALL_FAILURE } from "@repo/features/pull-request-chapters-view";
-import { PULL_REQUEST_CHAPTERS_STATE } from "@repo/features/pull-request-chapters-wire";
 import { IDLE_TASKS_VIEW, type ListedTasksView, TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload } from "@repo/host/contract";
 import { taskListFollowing } from "@repo/host/task-list-following";
 import type { WireBoundaryInput } from "@repo/wire";
 import { MutationObserver } from "@tanstack/react-query";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import { type FakeActPort, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
@@ -103,7 +97,6 @@ const SENT_ON_MUTATIONS: readonly AnyKind[] = [
   ACT_KIND.AGENTS_RENAME,
   ACT_KIND.AGENTS_ARCHIVE,
   ACT_KIND.AGENTS_DELETE,
-  ACT_KIND.CHAPTERS_GENERATE,
   ACT_KIND.AGENTS_INBOX_ANSWER,
   ACT_KIND.AGENTS_INBOX_MESSAGE,
   ACT_KIND.AGENTS_INBOX_START,
@@ -111,7 +104,6 @@ const SENT_ON_MUTATIONS: readonly AnyKind[] = [
   ACT_KIND.TASKS_SKILLS,
   ACT_KIND.AGENTS_PAGE,
   ACT_KIND.AGENTS_MESSAGES,
-  ACT_KIND.AGENTS_CHANGES,
   ACT_KIND.AGENTS_INBOX_ATTACHMENT,
 ];
 
@@ -454,6 +446,45 @@ test("a draft asks nothing of the service, one per plan, until its first message
   assert.equal(tab.control().draft?.id, other, "another plan's draft stands");
 });
 
+test("Talk on a draft starts its agent blank under a key of its own on its chips, opening its tab and calling the agent it started, and calls nothing where it was refused", async () => {
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
+  tab.answer(
+    ACT_KIND.AGENTS_START,
+    { failure: AGENT_CALL_FAILURE.UNANSWERED },
+    { agent: { ...STARTED, brief: AGENT_BRIEF.BLANK } },
+  );
+  await tab.mount();
+
+  let draft = "";
+  act(() => {
+    draft = tab.control().onNewDraft();
+  });
+  const choice = { model: "openai/gpt-6.1-sol", effort: "xhigh" };
+  const disabledServers = [INTEGRATION_PROVIDER.LINEAR];
+  const called: unknown[] = [];
+
+  const talk = () =>
+    act(async () => {
+      await tab
+        .control()
+        .startBlank(draft, choice, disabledServers, undefined, undefined, (into) =>
+          called.push(into),
+        );
+    });
+
+  await talk();
+  assert.deepEqual(called, [undefined], "a refused start calls nothing");
+  assert.equal(tab.control().draft?.id, draft, "and keeps the draft");
+
+  await talk();
+  const { idempotencyKey, ...blank } = startPayloads(tab.asked).at(-1) ?? {};
+  assert.deepEqual(blank, { taskId: TASK, blank: true, disabledServers, ...choice });
+  assert.notEqual(idempotencyKey, draft, "the draft's key stays its words'");
+  assert.deepEqual(tab.started, [AGENT]);
+  assert.deepEqual(called, [undefined, { agentId: AGENT, taskId: TASK }]);
+  assert.equal(tab.control().draft, undefined, "the started draft is let go");
+});
+
 test("a plan's Start stands its agent's tab at once under the press's key, which gives way to the agent the list carries once made, or to nothing where it was refused", async () => {
   const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
   let land: (answer: WireBoundaryInput) => void = () => undefined;
@@ -626,91 +657,6 @@ test("a draft of files alone waits while another plan is open, but no relaunch b
   const after = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
   await after.mount();
   assert.equal(after.control().draft, undefined);
-});
-
-test("a pull request's chapters are generated for the agent's own pull request or the one a tab names by its number, and an ask the port refused is heard as unanswered", async () => {
-  const tab = mount({ taskId: TASK, repository: null });
-
-  const generating = {
-    pullRequest: {
-      number: 41,
-      generatable: true,
-      chapters: {
-        status: PULL_REQUEST_CHAPTERS_STATE.GENERATING,
-        headSha: "c0ffee1",
-        baseSha: "ba5e000",
-        startedAt: 1_800_000_000_000,
-      },
-    },
-  };
-
-  tab.answer(ACT_KIND.CHAPTERS_GENERATE, generating);
-  await tab.mount();
-
-  assert.deepEqual(await tab.control().generateChapters(AGENT, 41), generating);
-  // Nothing more is queued, so the port refuses this one.
-  assert.deepEqual(await tab.control().generateChapters(AGENT), {
-    failure: PULL_REQUEST_CHAPTERS_CALL_FAILURE.UNANSWERED,
-  });
-  assert.deepEqual(
-    tab.asked.filter(({ kind }) => kind === ACT_KIND.CHAPTERS_GENERATE),
-    [
-      { kind: ACT_KIND.CHAPTERS_GENERATE, payload: { agentId: AGENT, number: 41 } },
-      { kind: ACT_KIND.CHAPTERS_GENERATE, payload: { agentId: AGENT } },
-    ],
-  );
-});
-
-test("a pull request a tab names by its number is the one the host holds under that number, apart from the agent's own and from a read that failed or named none", async () => {
-  const { deliverParts } = handHostReads({});
-  const tab = mount({ taskId: TASK, repository: null });
-  await tab.mount();
-
-  const opened = (number: number, title: string, url: string) => ({
-    number,
-    title,
-    url,
-    state: PULL_REQUEST_STATE.OPEN,
-    checks: CHECK_SUMMARY.PASSING,
-    additions: 9,
-    deletions: 2,
-    changedFiles: 3,
-  });
-
-  const base = opened(41, "Lay the base", "https://github.com/acme/relay/pull/41");
-
-  act(() =>
-    deliverParts({
-      [LIVE_READ.PULL_REQUEST_PUBLISHED]: {
-        [AGENT]: {
-          [OWN_PULL_REQUEST]: {
-            rows: {
-              repository: "acme/relay",
-              branch: "luke/expiry-job",
-              pullRequest: opened(
-                42,
-                "Expire invitations",
-                "https://github.com/acme/relay/pull/42",
-              ),
-            },
-          },
-          41: { rows: { repository: "acme/relay", branch: "luke/base", pullRequest: base } },
-          43: { rows: { repository: "acme/relay", branch: null, pullRequest: null } },
-          44: { rows: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
-        },
-      },
-    }),
-  );
-  await settle();
-
-  await vi.waitFor(() =>
-    expect(
-      [...tab.control().numberedPullRequests].map(([agentId, numbered]) => [
-        agentId,
-        [...numbered],
-      ]),
-    ).toEqual([[AGENT, [[41, base]]]]),
-  );
 });
 
 test("a fork joins the task's draft under a key of its own, its words kept and its chips on the source's servers, holds while another task is open, and starts from the source at the message with the box's words and files as a note and its servers named even where none is off; an empty box forks alone", async () => {

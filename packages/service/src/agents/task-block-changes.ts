@@ -8,7 +8,7 @@ import { readTaskHeaders } from "@repo/database/models/task-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { describeWire } from "@repo/wire/effect";
 import { Data, Effect, Option, Result, Schema } from "effect";
-import { wireUuidSchema } from "../core.js";
+import { TASK_REF_INPUT, TASK_REF_WORDS, taskIdsOfInput } from "./task-ref.js";
 
 /**
  * task-block-changes.ts -- the blocks `update_task` adds and takes away, and the blocks `read_task` and its answer name.
@@ -38,18 +38,15 @@ export const TASK_BLOCK_REFUSAL = {
     "blocker, directly or through other tasks; take away the block that runs the other way first.",
 } as const;
 
-/** A list of tasks a call names, by the id `list_tasks` answered. */
-export const TASK_IDS = Schema.Array(wireUuidSchema).check(Schema.isMaxLength(MAX_TASKS_PER_LIST));
+/** A list of tasks a call names, each by the id `list_tasks` answered or its key. */
+export const TASK_IDS = Schema.Array(TASK_REF_INPUT).check(Schema.isMaxLength(MAX_TASKS_PER_LIST));
 
 /** One side of a task's blocks as a call changes it: the tasks to add, and the tasks to take away. */
 const blockChangesInput = (side: string) =>
   describeWire(
     Schema.Struct({
       add: Schema.optionalKey(
-        describeWire(
-          TASK_IDS,
-          `Tasks to add to its ${side}, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
-        ),
+        describeWire(TASK_IDS, `Tasks to add to its ${side}, each by ${TASK_REF_WORDS}.`),
       ),
       remove: Schema.optionalKey(
         describeWire(
@@ -102,6 +99,46 @@ export function blockChangesNamed(changes: TaskBlockChanges): boolean {
   return changes.blockedBy !== undefined || changes.blocks !== undefined;
 }
 
+/** A task's blocks as a call changes them, each task named by its id, filled in side by side. */
+interface BlockChangesById {
+  blockedBy?: BlockSideChanges;
+  blocks?: BlockSideChanges;
+}
+
+/** The sides of a task's blocks and the lists each names, as a call's fields name them. */
+const BLOCK_LISTS = [
+  ["blockedBy", "add"],
+  ["blockedBy", "remove"],
+  ["blocks", "add"],
+  ["blocks", "remove"],
+] as const;
+
+/** The blocks a call names, each task it names by id or key read as its id in the workspace; or the refusal naming the list. */
+const blockChangesByIdOf = (userId: string, workspaceId: string, changes: TaskBlockChanges) =>
+  Effect.gen(function* () {
+    const byId: BlockChangesById = {};
+
+    for (const [side, list] of BLOCK_LISTS) {
+      const written = changes[side]?.[list];
+
+      if (written === undefined) continue;
+
+      const field = `${side}.${list}`;
+
+      const ids = yield* taskIdsOfInput(
+        userId,
+        workspaceId,
+        { opening: "Not run", field },
+        written,
+      );
+
+      if (Result.isFailure(ids)) return Result.fail(ids.failure);
+      byId[side] = { ...byId[side], [list]: ids.success };
+    }
+
+    return Result.succeed(byId);
+  });
+
 /** The pairs one side names, the task changed standing as the blocked task for its blocked-by and as the blocker for its blocks. */
 function pairsOf(
   taskId: string,
@@ -117,7 +154,7 @@ function pairsOf(
 
 /**
  * The blocks a call asks for, read before anything is written: every other
- * task it names a task of the workspace, or the refusal's words.
+ * task it names, by id or key, a task of the workspace, or the refusal's words.
  */
 export const blockWritesAsked = (
   userId: string,
@@ -126,7 +163,10 @@ export const blockWritesAsked = (
   changes: TaskBlockChanges,
 ) =>
   Effect.gen(function* () {
-    const { blockedBy, blocks } = changes;
+    const named = yield* blockChangesByIdOf(userId, workspaceId, changes);
+
+    if (Result.isFailure(named)) return Result.fail(named.failure);
+    const { blockedBy, blocks } = named.success;
 
     const writes: TaskBlockWrites = {
       removes: [

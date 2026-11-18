@@ -6,6 +6,11 @@ import {
 } from "@repo/database/github-installation-vocabulary";
 import { listAgentsOnBranches } from "@repo/database/models/agent-store";
 import {
+  type MovedPullRequest,
+  noteHeadsMoved,
+  notePullRequestsMoved,
+} from "@repo/database/models/github-pull-request-moves";
+import {
   noteGitHubRepository,
   type RepositorySighting,
 } from "@repo/database/models/github-repositories";
@@ -53,6 +58,8 @@ import {
 } from "../http/http-effect.js";
 import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
+import { markMergedInSlack } from "../slack/slack-agent-starts.js";
+import type { SlackBot } from "../slack/slack-bot.js";
 import { agentWakeOf, checksCompletedWakeOf, wakeAgents } from "./agent-wakes.js";
 import { clearRevokedAuthorization, GitHubApp } from "./github-app.js";
 import { GITHUB_DELIVERY_READ } from "./github-delivery-read-bounds.js";
@@ -101,6 +108,19 @@ import { actOnGitHubMention, githubMentionOf, type MentionServices } from "./git
  * subscribes to the Repository event, is read for that alone, its
  * `renamed` and `transferred` actions naming the name it had before, so a
  * repository renamed before the service ever saw it is relabeled too.
+ *
+ * Every delivery about a pull request, its reviews, its comments, its
+ * review threads, or its checks also notes that pull request as moved now
+ * by the repository's GitHub id and its number, with the head branch and
+ * commit the delivery gives where it gives them
+ * (`@repo/database/models/github-pull-request-moves`), which every open
+ * Pull request tab follows live to read it again, whoever opened it. A
+ * commit status names no pull request, so it notes those whose head branch
+ * an earlier delivery recorded as one of the branches it names, and so does
+ * a fork's check suite, which names none either, by the branch it ran on. Of these
+ * deliveries only the numbers, the branches, and the commits are read for
+ * it, and none of them is logged.
+ * A check run's delivery notes nothing, as above: the suite covers it.
  *
  * An installation's own deliveries, which GitHub sends every App without
  * its subscribing, move the status of the workspace that stands for it
@@ -168,7 +188,23 @@ const WEBHOOK_EVENT = {
   APP_AUTHORIZATION: "github_app_authorization",
   /** A repository created, renamed, transferred, or otherwise changed. */
   REPOSITORY: "repository",
+  /** A review submitted, edited, or dismissed on a pull request. */
+  PULL_REQUEST_REVIEW: "pull_request_review",
+  /** A comment on a line of a pull request's diff written, edited, or deleted. */
+  PULL_REQUEST_REVIEW_COMMENT: "pull_request_review_comment",
+  /** A review thread on a pull request resolved or unresolved. */
+  PULL_REQUEST_REVIEW_THREAD: "pull_request_review_thread",
+  /** A comment on an issue or a pull request's conversation written, edited, or deleted. */
+  ISSUE_COMMENT: "issue_comment",
 } as const;
+
+/** The events whose delivery names one pull request and its head under `pull_request`, every action of which moves what its tab draws. */
+const PULL_REQUEST_EVENTS: ReadonlySet<string> = new Set([
+  WEBHOOK_EVENT.PULL_REQUEST,
+  WEBHOOK_EVENT.PULL_REQUEST_REVIEW,
+  WEBHOOK_EVENT.PULL_REQUEST_REVIEW_COMMENT,
+  WEBHOOK_EVENT.PULL_REQUEST_REVIEW_THREAD,
+]);
 
 /** The repository actions whose delivery names the name it had before. */
 const REPOSITORY_ACTION = {
@@ -239,6 +275,16 @@ const PullRequestDeliverySchema = Schema.Struct({
   pull_request: HeadSchema,
 });
 
+/** A pull request's delivery as far as a merge is read off it: closed, merged, and which. */
+const MergedDeliverySchema = Schema.Struct({
+  action: Schema.Literal("closed"),
+  repository: RepositorySchema,
+  pull_request: Schema.Struct({
+    number: Schema.Number,
+    merged: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+  }),
+});
+
 const CheckSuiteDeliverySchema = Schema.Struct({
   repository: RepositorySchema,
   check_suite: Schema.Struct({
@@ -249,6 +295,35 @@ const CheckSuiteDeliverySchema = Schema.Struct({
 
 const StatusDeliverySchema = Schema.Struct({
   repository: RepositorySchema,
+  branches: Schema.Array(Schema.Struct({ name: Schema.String })),
+});
+
+/** A pull request's head as a delivery names it: its branch and its commit. */
+const MovedHeadSchema = Schema.Struct({ ref: Schema.String, sha: Schema.String });
+
+/** A delivery about one pull request, as far as its move is read: its number and its head. */
+const PullRequestMovedSchema = Schema.Struct({
+  pull_request: Schema.Struct({ number: Schema.Int, head: MovedHeadSchema }),
+});
+
+/** A comment's delivery, as far as its move is read: the issue's number, and whether that issue is a pull request, which only a pull request's carries. */
+const IssueMovedSchema = Schema.Struct({
+  issue: Schema.Struct({
+    number: Schema.Int,
+    pull_request: Schema.optionalKey(Schema.Struct({})),
+  }),
+});
+
+/** A check suite's delivery, as far as its moves are read: the branch it ran on, and the pull requests it ran for and their heads, none for a fork's. */
+const CheckSuiteMovedSchema = Schema.Struct({
+  check_suite: Schema.Struct({
+    head_branch: Schema.NullOr(Schema.String),
+    pull_requests: Schema.Array(Schema.Struct({ number: Schema.Int, head: MovedHeadSchema })),
+  }),
+});
+
+/** A commit status's delivery, as far as its move is read: the branches whose head its commit is. */
+const StatusMovedSchema = Schema.Struct({
   branches: Schema.Array(Schema.Struct({ name: Schema.String })),
 });
 
@@ -394,6 +469,86 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
   }
 }
 
+/** What a delivery says moved of its repository's pull requests: those it names, each with its head where it gives one, or those whose head branches a status names. */
+type PullRequestsMoved =
+  | { readonly named: readonly MovedPullRequest[] }
+  | { readonly branches: readonly string[] };
+
+/** The pull requests a delivery says moved, where its event names any; nothing for any other delivery, or one off its shape. */
+function pullRequestsMoved(
+  event: string,
+  payload: UnparsedWireValue,
+): PullRequestsMoved | undefined {
+  if (PULL_REQUEST_EVENTS.has(event)) {
+    const read = readDelivery(PullRequestMovedSchema, payload);
+
+    if (Result.isFailure(read)) return undefined;
+    const { number, head } = read.success.pull_request;
+
+    return { named: [{ number, head }] };
+  }
+
+  switch (event) {
+    case WEBHOOK_EVENT.ISSUE_COMMENT: {
+      const read = readDelivery(IssueMovedSchema, payload);
+
+      if (Result.isFailure(read) || read.success.issue.pull_request === undefined) {
+        return undefined;
+      }
+
+      return { named: [{ number: read.success.issue.number }] };
+    }
+
+    case WEBHOOK_EVENT.CHECK_SUITE: {
+      const read = readDelivery(CheckSuiteMovedSchema, payload);
+
+      if (Result.isFailure(read)) return undefined;
+      const suite = read.success.check_suite;
+
+      // Note that a fork's suite names no pull request, so it finds them by the branch it ran on, as a status does.
+      if (suite.pull_requests.length === 0) {
+        return suite.head_branch === null ? undefined : { branches: [suite.head_branch] };
+      }
+
+      return { named: suite.pull_requests.map(({ number, head }) => ({ number, head })) };
+    }
+
+    case WEBHOOK_EVENT.STATUS: {
+      const read = readDelivery(StatusMovedSchema, payload);
+
+      return Result.isFailure(read)
+        ? undefined
+        : { branches: read.success.branches.map((branch) => branch.name) };
+    }
+
+    default:
+      return undefined;
+  }
+}
+
+/** Notes what a delivery says moved of the repository's pull requests as moved at `at`. */
+function noteMoved(repositoryId: number, moved: PullRequestsMoved, at: Date) {
+  return "branches" in moved
+    ? noteHeadsMoved(repositoryId, moved.branches, at)
+    : notePullRequestsMoved(repositoryId, moved.named, at);
+}
+
+/** The pull request a delivery says merged; nothing for any other event, or a pull request closed unmerged. */
+function mergedPullRequest(
+  event: string,
+  payload: UnparsedWireValue,
+): { readonly repository: string; readonly number: number } | undefined {
+  if (event !== WEBHOOK_EVENT.PULL_REQUEST) return undefined;
+  const read = readDelivery(MergedDeliverySchema, payload);
+
+  if (Result.isFailure(read) || read.success.pull_request.merged !== true) return undefined;
+
+  return {
+    repository: read.success.repository.full_name,
+    number: read.success.pull_request.number,
+  };
+}
+
 /** The `owner/name` a repository delivery says the repository had before, where its action is a rename or a transfer. */
 function formerName(payload: UnparsedWireValue): string | undefined {
   const read = readDelivery(RepositoryChangeDeliverySchema, payload);
@@ -513,6 +668,7 @@ type DeliveryReadServices =
   | HttpClient.HttpClient
   | GitHubApp
   | Sandbox
+  | SlackBot
   | MentionServices;
 
 const NOTHING_READ: DeliveryReadCounts = { read: 0, told: 0 };
@@ -536,6 +692,9 @@ const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(funct
   const taken = mention === undefined ? false : yield* actOnGitHubMention(mention);
   const target = deliveryTarget(event, payload);
   const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
+  const merged = mergedPullRequest(event, payload);
+
+  if (merged !== undefined) yield* markMergedInSlack(merged.repository, merged.number);
   const now = yield* Clock.currentTimeMillis;
 
   // Note that the checks finishing are read after the agents' pull requests were read again above,
@@ -704,6 +863,13 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
     const sighting = repositorySighting(event, payload);
 
     if (sighting !== undefined) yield* hostedStoreOrUnavailable(noteGitHubRepository(sighting));
+    const moved = pullRequestsMoved(event, payload);
+
+    // Note that a pull request's move is noted before the answer, one statement, so an open tab hears it however long the reads below take.
+    if (sighting !== undefined && moved !== undefined) {
+      const at = new Date(yield* Clock.currentTimeMillis);
+      yield* hostedStoreOrUnavailable(noteMoved(sighting.id, moved, at));
+    }
 
     if (event === WEBHOOK_EVENT.REPOSITORY) return hostedJsonResponse(200, { read: 0 });
     // A deployment with no App configured knows no bot of its own, so every bot is another's.

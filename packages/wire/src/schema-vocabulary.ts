@@ -31,13 +31,16 @@ export type JsonSchemaNode =
       readonly enum?: readonly string[];
       readonly minLength?: number;
       readonly maxLength?: number;
+      readonly pattern?: string;
     }
   | {
       readonly type: "number" | "integer";
       readonly description?: string;
       readonly enum?: readonly number[];
       readonly minimum?: number;
+      readonly exclusiveMinimum?: number;
       readonly maximum?: number;
+      readonly exclusiveMaximum?: number;
     }
   | { readonly type: "boolean"; readonly description?: string; readonly enum?: readonly boolean[] }
   | { readonly type: "null"; readonly description?: string }

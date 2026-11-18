@@ -25,7 +25,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -refuseWrites true` | Launch it on the Inbox fixture with a task's status and pin refused, as `maestro/failure-notice.yaml` does, to see the failure notice |
 | `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
-| `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
+| `scripts/simulator-screenshots.sh [--flows inbox,tasks] <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it, or only those `--flows` names (`notification` for the notification flow), in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
 | `pnpm export:ios` | Bundle the app with Metro, as CI's Linux job does; it catches a module Hermes cannot resolve |
 | `pnpm typecheck`, `pnpm test:vitest` | The TypeScript and the logic tests |
@@ -64,29 +64,36 @@ with it. Touch nothing of the developer's outside the checkout.
   image) runs only by hand, on any branch. It generates
   the native project, builds the Release simulator app, runs the Maestro flows
   on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad Pro 11-inch,
-  and uploads their screenshots as the `mobile-screenshots` artifact, kept
-  whether or not the flows passed.
+  each a job of its own on its own runner, in parallel, and uploads each
+  simulator's screenshots as an artifact of its own,
+  `mobile-screenshots-<simulator slug>`, kept whether or not the flows
+  passed.
 
 A pull request merges on the Linux checks alone, with no device check first;
 device problems show in the TestFlight builds. For screenshots, ask for a run
 on your branch: Vespin's GitHub App cannot dispatch a workflow, so it is
 started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
 <branch>`). Each simulator takes about an hour, every flow in the light
-appearance and the dark, after a 20-minute build, so name fewer for a quicker
-look (`-f simulators="iPhone 18 Pro"`).
+appearance and the dark, after a 20-minute build, so name fewer simulators or
+flows for a quicker look (`-f simulators="iPhone 18 Pro" -f flows=inbox,tasks`),
+each flow as its file under `maestro/` is named without `.yaml`, and the
+notification flow as `notification`.
 Then read its screenshots:
 
 ```
 gh run list --branch <your branch> --workflow "iOS simulators" --limit 1 --json databaseId --jq '.[0].databaseId'
-gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
+gh run download <run id> --pattern 'mobile-screenshots-*' --dir /tmp/mobile-screenshots
 ```
 
 Each simulator's pictures, in each appearance, are under
-`/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
+`/tmp/mobile-screenshots/mobile-screenshots-<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
-screenshot is under `debug/<flow>/screenshots/` beside them. A flow that
-failed runs once more, alone, its second run under `<light|dark>/retry/`
-laid out the same way. The notification flow, whose push Maestro cannot
+screenshot is under `debug/<flow>/screenshots/` beside them, with the screen's
+tree at that step under `debug/<flow>/screen-hierarchy/` and Maestro's log
+under `debug/<flow>/logs/`, beside the simulator's own logs for a flow that
+failed; a passed flow's are deleted, since they made the artifact too large
+to upload in time. A failed flow is not run again, so a pass is a
+pass. The notification flow, whose push Maestro cannot
 send, runs apart: the script installs the app afresh, lets it notify through
 the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
 notifications), runs `maestro/notification/background.yaml`, pushes
@@ -199,8 +206,9 @@ route a continued activity or a tapped item opens, is
 `@repo/features/ios-system-activity`; the app's native module, autolinked
 from `modules/system-activity/`, sets the activity, writes the index, and
 hands a continued activity or a tapped item to JavaScript, which opens it
-through the routing a link takes. `maestro/spotlight.yaml` finds a task from
-the Home Screen's search; Handoff shows only between real devices.
+through the routing a link takes. Spotlight is checked on a device, not by
+a flow, because searchd on the iOS 27 simulator answers no query; Handoff
+shows only between real devices.
 
 ## The native interactions module
 
@@ -274,12 +282,49 @@ Testing section says. Screens are not unit-tested: each is checked by a Maestro
 flow under `maestro/` that drives the simulator and takes a screenshot. A new screen adds its steps to a flow, or a flow of its own, and a
 pull request with UI shows its screenshots to the developer in a thread.
 
+A flow is written one way throughout:
+
+- **A control is found by its id** where it has one (`workspace-switcher`,
+  `composer-field`), and a row or a line by its words. A tab is opened
+  through `maestro/subflows/tab.yaml`, by its id (`inbox-tab`, `tasks-tab`,
+  `search-tab`), since a list's title and a back button share its name; an
+  iPad's floating bar carries no id, so `simulator-screenshots.sh` passes
+  `FLOATING_TABS=true` there and the tab is found by name. A flow chooses its
+  way by the device it runs on, never by what is on screen a moment.
+- **A repeated step is a subflow** under `maestro/subflows/`, run with
+  `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
+  row (`to-row.yaml`, which draws an iPad's list column itself), move it clear of the tab bar (`clear-of-tabs.yaml`), and let the list
+  settle before its tap or long press, `full-sheet.yaml` draws a half-height
+  sheet up to its full height, `lower-keyboard.yaml` lowers the keyboard by a
+  drag on a sheet's page, where Maestro's hideKeyboard fails, `scroll-to.yaml`
+  centers an element on a page, so neither a bar nor the reply box covers
+  it, or with `ABOVE` scrolls it above a control, for an element at a list's
+  end, which no scroll can center, or with `BELOW` scrolls up in short slow
+  steps until it stands clear under the bar, for a page whose floating
+  controls a centering swipe can leave it under, `tab.yaml` opens a tab,
+  going back from a pushed page first, `bar-act.yaml` reaches a page's
+  main act, such as a thread's Resolve or an agent's Pin, in a regular
+  window's bar or a compact window's ⋯, and `dismiss.yaml` closes a menu by a tap off it. Each launch
+  waits up to half a minute for its first words, since a loaded runner's
+  cold launch has drawn them after Maestro's own wait. Maestro reads a swipe's points as the flow is parsed, so a
+  swipe's points are never a subflow's `env`.
+- **A swipe is closed before the next press**, by pressing its action or a
+  tap on the row across from it, since a row left open takes the next press
+  on the list only to close itself; a tap off the list, on a bar, leaves it
+  open.
+- **No step waits or retries around a flake.** A step that fails now and
+  then has a cause to find; a wait stays only where the simulator itself is
+  slow, a cold launch or a system picker, with why beside it.
+- **A launch argument's value is quoted** (`refuseWrites: "true"`), since
+  Maestro hands a YAML boolean to the app without its dash, and iOS never
+  reads it.
+
 ## Conventions
 
 - **Native components only.** The tab bar is expo-router's `NativeTabs`, a
   screen stack is its native `Stack` with the system's headers, search, and
-  toolbars, glass is `expo-glass-effect` through `@repo/ui-native`'s
-  `GlassBar`, and everything else is `@expo/ui`.
+  toolbars, and everything else, glass included (`glassEffect` and the
+  `glass` button style, through `@repo/ui-native`), is `@expo/ui`.
   Never a tab bar or header drawn in JavaScript, never a hand-drawn copy of
   glass, and never a DOM component (`'use dom'`).
 - **SwiftUI first.** A screen is drawn by SwiftUI through `@expo/ui` (`Host`,
@@ -292,10 +337,9 @@ pull request with UI shows its screenshots to the developer in a thread.
   with no network and no navigation.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
-  screen composes its components and imports neither `@expo/ui` nor
-  `expo-glass-effect`, which lint refuses
-  (`vespin/no-raw-press-outside-ui-native`); the app still declares both,
-  since Expo links a native module from the app's own dependencies.
+  screen composes its components and never imports `@expo/ui`, which lint
+  refuses (`vespin/no-raw-press-outside-ui-native`); the app still declares
+  it, since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends
   in `.js`, as the packages' do (`scripts/repository-checks.sh` holds it), and
@@ -309,21 +353,12 @@ pull request with UI shows its screenshots to the developer in a thread.
   the compose button leading the detail's bar, as Mail stands compose over
   the message, rather than the tab bar's round +, which only a compact
   window keeps (Search's own two columns hold it in Search's bar).
-  Where the window is wide enough for three columns, an iPad's in
-  landscape, it hides the tab bar and stands the app sidebar first, as
-  Mail stands its mailboxes (`src/screens/app-sidebar.tsx`): the workspace
-  switcher heading the list, the Inbox with its count, Tasks, and Search,
-  then Pinned, Following, and each of the member's sections as one row with
-  its count, never a task's own row. A row fills the list column (Tasks
-  every group, a collection only its own tasks), the detail shows the
-  list's selection, and a task dragged onto Pinned or a section is put
-  there. The sidebar's bar holds only the system's toggle: Settings opens
-  from the switcher's menu and ⌘,. The last pick is kept
-  (`src/sidebar-pick.ts`), so a rotation and the next launch come back to
-  it. A portrait iPad and the open Duo keep the tab bar, and their Tasks
-  list draws Pinned, Following, and the sections as groups. Whether the
-  first column stands is one answer every tab shares
-  (`src/sidebar-shown.ts`).
+  The tab bar is `sidebarAdaptable`, so a regular window stands iPadOS's
+  own tab sidebar beside each tab's list and detail, as Apple's tab
+  guidance has it, and the Tasks list draws Pinned, Following, and the
+  member's sections as groups atop its list. Settings opens from the
+  switcher's menu and ⌘,. Whether the list stands beside its detail is one
+  answer every tab shares (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
 - **Every write goes through `useWrite`** (`src/use-write.ts`). What went

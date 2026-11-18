@@ -1,4 +1,5 @@
 import { AGENT_ATTACHMENT_TYPE, base64Bytes } from "./agent-wire.js";
+import { isAudioType } from "./conversation-picture-wire.js";
 import { formatBytes } from "./number-format.js";
 import { countWords } from "./words.js";
 
@@ -22,10 +23,11 @@ export interface FileChip {
   readonly alt?: string | undefined;
 }
 
-/** How the viewer shows a file: as a picture, played as a video, as a PDF's pages, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
+/** How the viewer shows a file: as a picture, played as a video or a sound clip, as a PDF's pages, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
 export const ATTACHMENT_VIEW = {
   IMAGE: "image",
   VIDEO: "video",
+  AUDIO: "audio",
   PDF: "pdf",
   DIAGRAM: "diagram",
   TEXT: "text",
@@ -57,6 +59,8 @@ export function attachmentView(file: FileChip): AttachmentView {
 
   if (PLAYED_VIDEO_TYPES.has(file.mediaType)) return ATTACHMENT_VIEW.VIDEO;
 
+  if (isAudioType(file.mediaType)) return ATTACHMENT_VIEW.AUDIO;
+
   if (file.mediaType === AGENT_ATTACHMENT_TYPE.PDF) return ATTACHMENT_VIEW.PDF;
 
   if (!file.mediaType.startsWith("text/")) return ATTACHMENT_VIEW.OTHER;
@@ -76,6 +80,17 @@ export function linesLabel(text: string): string {
   const breaks = text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 
   return countWords(Math.max(1, breaks), { one: "line", many: "lines" });
+}
+
+/** What a chip says of a file's size: a text file's count of lines and any other file's bytes, and the bytes too where a text file's are no base64 the system reads, so a damaged file still draws. */
+export function chipSize(file: FileChip, base64: string): string {
+  if (attachmentView(file) !== ATTACHMENT_VIEW.TEXT) return sizeLabel(base64);
+
+  try {
+    return linesLabel(attachmentText(base64));
+  } catch {
+    return sizeLabel(base64);
+  }
 }
 
 /** The head of a text file's words its chip's card peeks at. */

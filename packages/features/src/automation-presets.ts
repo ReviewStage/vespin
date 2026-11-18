@@ -46,7 +46,7 @@ export { AUTOMATION_PRESET, type AutomationPresetName } from "./automation-prese
  * Investigate Sentry alerts has an agent read the issue an alert fired on,
  * and open a fix or post what it found. It listens for an alert rule
  * firing, never for a new issue, which fires on every new error, and each
- * issue fires it once within its subject cooldown (`AutomationGuards`).
+ * issue fires it as often as the alert rule's own action interval allows.
  */
 
 /**
@@ -97,7 +97,7 @@ Change no memory but the ones a member chose to delete, and post nothing else.`;
 const RED_MAIN_TRIAGE_PROMPT = `A check failed on this repository's default branch. Find out why and tell the workspace once.
 
 1. Read the failed check's logs at the commit this run names. If the check has since passed on a newer commit of the branch, stop here and post nothing.
-2. Call \`${INBOX_TOOL.LIST}\` for your own threads. If one already reports this check failing for the same cause, post nothing new: where a newer commit or a new finding changes what it says, post it under that thread's key, and otherwise post nothing at all.
+2. Call \`${INBOX_TOOL.LIST}\` with your own agentId as \`of\` for your own threads. If one already reports this check failing for the same cause, post nothing new: where a newer commit or a new finding changes what it says, post it under that thread's key, and otherwise post nothing at all.
 3. Find the cause: the commit that broke the check and the lines involved. Say plainly when it looks flaky, such as a timeout or a test that passes on a rerun of the same commit, and why you think so.
 4. Where the fix is small and clear, open a pull request with it. Otherwise open none and change nothing.
 5. Post one thread with \`${INBOX_TOOL.POST}\`, titled with the check's name and the branch, such as "Unit tests failing on main", saying the cause, the commit that broke it, whether it looks flaky, and the pull request if you opened one.

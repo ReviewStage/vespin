@@ -15,8 +15,9 @@ import {
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { organization, user } from "@repo/database/schemas/auth";
+import { member, organization, user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
+import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   experimentInTestWorkspace,
@@ -28,8 +29,10 @@ import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { BROWSER_AGENT_ACTION } from "@repo/features/browser-agent-actions";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
+import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import {
@@ -56,6 +59,7 @@ import {
 import { INTEGRATION } from "../../integrations/integrations.js";
 import { PageLinks } from "../../pages/page-links.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
+import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
 import type { CommentToolName } from "../../tasks/comment-tools.js";
 import { PICTURE_LOOK_REFUSAL, pictureNotLooked } from "../../tasks/picture-look.js";
 import {
@@ -83,7 +87,7 @@ import {
   runAgentEditDescription,
   runAgentLookAtPicture,
   runAgentOpenPullRequest,
-  runAgentShowImage,
+  runAgentShowMedia,
   runAgentShowPage,
 } from "../coder-host/agent-doors.js";
 import { DESCRIPTION_EDIT_REFUSAL } from "../coder-host/description-edit.js";
@@ -182,6 +186,7 @@ const doorServices = Effect.gen(function* () {
     NO_INTEGRATIONS,
     Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
     Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+    Layer.succeed(SlackBot, slackBotOver(undefined)),
     NO_PAGE_SANDBOX,
   );
 });
@@ -192,6 +197,7 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
 
   const door: InboxSandboxDoor = () =>
     Promise.resolve({
+      checkout: "/workspace/repository",
       readFile: ({ path }: { path: string }) => {
         asked.push(path);
         const text = files[path];
@@ -293,6 +299,25 @@ const agentWithBearer = Effect.gen(function* () {
     bearer,
   };
 });
+
+/** A member of the agent's workspace its task is assigned to, by their id. */
+function assignedTo(agent: { readonly organizationId: string; readonly taskId: string }) {
+  return Effect.gen(function* () {
+    const db = yield* Database;
+    const assignee = `user-${randomUUID()}`;
+    yield* db.insert(user).values({ id: assignee, name: "Ada", email: `${assignee}@app.test` });
+    yield* db.insert(member).values({
+      id: randomUUID(),
+      organizationId: agent.organizationId,
+      userId: assignee,
+      role: "member",
+      createdAt: new Date(),
+    });
+    yield* db.update(taskTable).set({ assigneeId: assignee }).where(eq(taskTable.id, agent.taskId));
+
+    return assignee;
+  });
+}
 
 /** A Codex agent on a task in no repository, with a runner's bearer recorded for its conversation. */
 const agentInNoRepositoryWithBearer = Effect.gen(function* () {
@@ -414,16 +439,21 @@ const AGENT_TOOLS = [
   "stop_agent",
   "list_agents",
   "read_agent",
+  "read_agent_changes",
   "message_agent",
   "add_suggestion",
   "update_agent",
+  "archive_agent",
+  "unarchive_agent",
   "list_models",
+  "list_machines",
   "list_tasks",
   "read_task",
   "create_task",
   "update_task",
   "create_section",
   "delete_section",
+  "list_workspace_members",
   "list_automations",
   "create_automation",
   "update_automation",
@@ -433,6 +463,10 @@ const AGENT_TOOLS = [
   "search_memory",
   "list_memories",
   "forget_memory",
+  "list_slack_channels",
+  "send_slack_message",
+  "read_slack",
+  "react_slack",
   "schedule_wakeup",
   "end_turn",
 ] as const;
@@ -446,7 +480,7 @@ const SERVED_TOOLS = [
   "open_pull_request",
   "edit_description",
   "look_at_picture",
-  "show_image",
+  "show_media",
   "show_page",
   ...AGENT_TOOLS,
   "read_comments",
@@ -497,7 +531,7 @@ const DOOR_OF: Readonly<
   open_pull_request: (admitted, input) => runAgentOpenPullRequest(admitted, input),
   edit_description: (admitted, input) => runAgentEditDescription(admitted, input, 0, NO_SANDBOX),
   look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input, true, NO_SANDBOX),
-  show_image: (admitted, input) => runAgentShowImage(admitted, input, NO_SANDBOX),
+  show_media: (admitted, input) => runAgentShowMedia(admitted, input, NO_SANDBOX),
   show_page: (admitted, input) => runAgentShowPage(admitted, input, NO_SANDBOX),
   read_comments: commentTool("read_comments"),
   reply_to_comment: commentTool("reply_to_comment"),
@@ -549,6 +583,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           agent,
           {
             key: "invite-queue",
+            to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: agent.userId }, { workspace: "acme", repository: null })})`,
             title: "Which queue sends the invitation emails?",
             body: "Postgres or Redis?",
           },
@@ -559,7 +594,10 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const listed = yield* Effect.promise(() => client.listTools());
 
         const called = yield* Effect.promise(() =>
-          client.callTool({ name: INBOX_TOOL.LIST, arguments: {} }),
+          client.callTool({
+            name: INBOX_TOOL.LIST,
+            arguments: { of: { agentId: agent.agentId } },
+          }),
         );
 
         yield* Effect.promise(() => client.close());
@@ -606,7 +644,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         jsonrpc: "2.0",
         id: 2,
         method: "tools/call",
-        params: { name: INBOX_TOOL.LIST, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: { of: { agentId: agent.agentId } } },
       });
 
       yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
@@ -615,7 +653,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         jsonrpc: "2.0",
         id: 3,
         method: "tools/call",
-        params: { name: INBOX_TOOL.LIST, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: { of: { agentId: agent.agentId } } },
       });
 
       assert.equal(before.status, HOSTED_HTTP_STATUS.OK);
@@ -721,6 +759,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
             turnEndOn: true,
             replyButtonsOn: true,
             computerUseOn: true,
+            inboxOn: true,
           },
         };
 
@@ -756,7 +795,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["open_pull_request"],
     },
     {
-      why: "on a device, the browser, run_on_mac, and the sandbox's ports",
+      why: "on a device, the browser and the sandbox's ports",
       agent: Effect.gen(function* () {
         const agent = yield* agentWithBearer;
         yield* Database.use((db) =>
@@ -768,7 +807,39 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         return agent;
       }),
-      withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
+      withheld: ["browser", "list_ports", "share_port"],
+    },
+    {
+      why: "whose starter turned the Inbox off, the threads it posts",
+      agent: Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        yield* writeAccountPreferences(agent.userId, { inbox: false });
+
+        return agent;
+      }),
+      withheld: ["post_thread", "list_threads", "withdraw_ask"],
+    },
+    {
+      why: "whose task's assignee turned the Inbox off, though its starter keeps one, the threads it posts",
+      agent: Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        const assignee = yield* assignedTo(agent);
+        yield* writeAccountPreferences(assignee, { inbox: false });
+
+        return agent;
+      }),
+      withheld: ["post_thread", "list_threads", "withdraw_ask"],
+    },
+    {
+      why: "whose starter turned the Inbox off but whose task's assignee never chose, nothing more",
+      agent: Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        yield* assignedTo(agent);
+        yield* writeAccountPreferences(agent.userId, { inbox: false });
+
+        return agent;
+      }),
+      withheld: [],
     },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Done and follow-ups, Reply buttons, and Computer use off",
@@ -894,7 +965,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "a device agent's run_on_mac and browser are refused at the catalog in its sandbox gate's words, and neither door runs",
+    "a device agent's browser is refused at the catalog in its sandbox gate's words, and its door never runs, while its run_on_mac passes the catalog to its own door",
     () =>
       Effect.gen(function* () {
         // A browser that would answer and keep its tab, were the door run.
@@ -932,7 +1003,9 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         yield* Effect.promise(() => client.close());
 
         const refused = { status: "not-run", reason: GATES[TOOL_GATE.SANDBOX].refusal };
-        assert.deepEqual([mac.isError, firstJson(mac)], [true, refused]);
+        // Note that no machine of the agent's listens, so the door refuses run_on_mac in its own words.
+        assert.equal(firstJson(mac).status, "not-run");
+        assert.notDeepEqual(firstJson(mac), refused);
         assert.deepEqual([browser.isError, firstJson(browser)], [true, refused]);
         assert.deepEqual(yield* listAgentBrowserTabs(agent.conversationId), []);
       }),
@@ -983,10 +1056,19 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         const name = "Expire stale invitations";
 
-        const first = yield* create({ name, brief: "After a week.", repository: null });
-        const retried = yield* create({ repository: null, brief: "After a week.", name });
+        const asked = { name, brief: "After a week.", repository: null, status: TASK_STATUS.TODO };
+
+        const first = yield* create(asked);
+
+        const retried = yield* create({
+          status: asked.status,
+          repository: null,
+          brief: asked.brief,
+          name,
+        });
+
         yield* TestClock.adjust(NATIVE_CALL_KEY_WINDOW_MS);
-        const later = yield* create({ name, brief: "After a week.", repository: null });
+        const later = yield* create(asked);
         yield* Effect.promise(() => client.close());
 
         assert.equal(first.isError, false, JSON.stringify(first));

@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { INVITATION_ROLE } from "@repo/features/workspace-invitation-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_ACT_KIND, WORKSPACE_ACT_KIND } from "@repo/host/contract";
 import { appSettingsWire, settingsView } from "@repo/settings/testing";
@@ -179,6 +180,49 @@ test("Just me after a team's workspace was made lists the account's own workspac
   assert.deepEqual(chosen, [OWN.id]);
   // Note that the team's workspace stands until setup finishes as Just me, so With my team chosen again finds it as made.
   assert.deepEqual(deleted, []);
+});
+
+test("a move stands on the step it asked for while the account's place has yet to come back", async () => {
+  const place = JSON.stringify({ audience: "me", at: 1 });
+  writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
+  fakeActPort({ [SETTINGS_ACT_KIND.SETTING_UPDATE]: () => new Promise(() => undefined) });
+  const container = setupDrawn();
+  assert.ok(container.textContent?.includes("Tell us about yourself"));
+
+  act(() => buttonStarting(container, "Back").click());
+
+  await vi.waitFor(() =>
+    assert.ok(container.textContent?.includes("Welcome to"), container.textContent ?? ""),
+  );
+});
+
+test("the team step coming back to the workspace it made shows the invitations it sent as sent", async () => {
+  // Setup stands at the team step after a reload, Paperstar made and Grace invited to it before.
+  const place = JSON.stringify({ audience: "team", at: 2, team: PAPERSTAR.id });
+
+  const invitation = {
+    id: "invitation-grace",
+    email: GRACE_JOINED.email,
+    role: INVITATION_ROLE.MEMBER,
+    expiresAt: "2026-11-16T12:00:00.000Z",
+    acceptUrl: "https://app.test/accept/invitation-grace",
+  };
+
+  writeAppState(
+    stateWith(
+      {},
+      {
+        settings: appSettingsWire(settingsView({ setupPlace: place })),
+        [LIVE_READ.WORKSPACE_INVITATIONS]: { [PAPERSTAR.id]: { rows: [invitation] } },
+      },
+    ),
+  );
+  const container = setupDrawn();
+  await act(() => Promise.resolve());
+
+  assert.match(container.textContent ?? "", /grace@app\.test/u);
+  // Note that the address already invited is not sent again, so the press only goes on.
+  assert.ok(buttonStarting(container, "Continue"));
 });
 
 test("setup finished as Just me deletes the team's workspace it made while nobody joined it, once its members are read", async () => {

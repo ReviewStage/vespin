@@ -41,7 +41,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-test("a link's workspace is named in Settings' address, which the Workspace page shows while the sidebar lists another, and a page turned keeps it in the link's step", () => {
+test("a link's workspace is named in Settings' address, which the Workspace page shows while the sidebar lists another, and a page turned keeps it in a step of its own", () => {
   const held = windowRouter();
   let settings: SettingsRoute | undefined;
 
@@ -49,7 +49,6 @@ test("a link's workspace is named in Settings' address, which the Workspace page
     settings = useSettingsRoute({
       workspaces: [PERSONAL, ACME],
       listedId: PERSONAL.id,
-      narrow: false,
     });
 
     return null;
@@ -64,7 +63,11 @@ test("a link's workspace is named in Settings' address, which the Workspace page
   act(() => void settings?.open({ page: SETTINGS_VIEW.APPEARANCE }));
 
   assert.deepEqual(linked, ["/acme/settings/workspace", ACME.id, SETTINGS_VIEW.WORKSPACE]);
-  assert.deepEqual(held.addresses(), ["/app", "/acme/settings/appearance"]);
+  assert.deepEqual(held.addresses(), [
+    "/app",
+    "/acme/settings/workspace",
+    "/acme/settings/appearance",
+  ]);
   assert.equal(settings?.workspaceId, ACME.id);
 });
 

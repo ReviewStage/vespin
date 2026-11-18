@@ -165,11 +165,15 @@ function choiceRefused<Answer extends object>(answer: Answer): string | undefine
   return "failure" in answer ? PAGE_LINE.WRITE_FAILED : undefined;
 }
 
-/** A row's write of the default, as its mutation stands, resting on it until answered. */
+/** A row's write of the default, as its mutation stands; the host draws the choice at once, as a row write is. */
 function choiceWrite<Answer extends object>(
   mutation: UseMutationResult<Answer, Error, ModelChoice>,
 ): RowWrite<ModelChoice> {
-  return rowWrite(mutation, { ask: (choice: ModelChoice) => choice, refused: choiceRefused });
+  return rowWrite(mutation, {
+    ask: (choice: ModelChoice) => choice,
+    refused: choiceRefused,
+    drawn: (choice) => choice,
+  });
 }
 
 /** The page's rows, over the default as read: the model's picker and the effort's segments. */

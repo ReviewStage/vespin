@@ -22,8 +22,8 @@ import { taskHistoryRead } from "./task-history.js";
  * A task's newest page of description history as a live read answers it, over
  * the real migrations on PGlite: the statement run as raw SQL, its
  * rows decoded and ordered as the desktop does, beside `listRevisions`, the
- * held read the version history read it with. The two agree as the notetaker, a
- * coding agent, and the developer save, a revision is restored,
+ * held read the version history read it with. The two agree as the developer and a
+ * coding agent save, a revision is restored,
  * the history outgrows a page, and for an account that does not reach the
  * task.
  *
@@ -80,7 +80,7 @@ it.layer(getTestDB())("a task's history followed live", (it) => {
 
         const db = yield* Database;
         yield* saveNotes(binding, [added("Context", "A member cannot bring a teammate in.")], {
-          actor: DESCRIPTION_ACTOR.NOTETAKER,
+          actor: DESCRIPTION_ACTOR.DEVELOPER,
         });
 
         const started = yield* createAgent(owner, {

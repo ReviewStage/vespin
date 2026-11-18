@@ -40,7 +40,11 @@ function groupRows(title: string, capabilities = DESKTOP_CAPABILITIES): string[]
   roots.push(root);
   act(() =>
     root.render(
-      createElement(WindowShortcutSections, { experiments: NO_EXPERIMENTS, capabilities }),
+      createElement(WindowShortcutSections, {
+        experiments: NO_EXPERIMENTS,
+        capabilities,
+        inbox: true,
+      }),
     ),
   );
 
@@ -73,7 +77,7 @@ test("Writing lists each mark and block with the Markdown typed for it and its c
   assert.ok(rows.includes("Text ⌥ ⌘ 0"));
 });
 
-test("the window's Escape is one row, under General, however many layers it steps back from", () => {
+test("the window's Escape is one row, under General, however many layers it closes", () => {
   const general = groupRows("General");
 
   // Note that Files changed's own Escape, which lets go of the file stood on, is the view's to list, as its sheet does.
@@ -83,7 +87,7 @@ test("the window's Escape is one row, under General, however many layers it step
     .filter((chord) => chord.textContent === "Esc");
 
   assert.equal(escapes.length, 1);
-  assert.ok(general.includes("Close what's open, or step back Esc"), general.join("\n"));
+  assert.ok(general.includes("Close or cancel Esc"), general.join("\n"));
 });
 
 test("the keys that answer in place stand in the group of what they act on", () => {

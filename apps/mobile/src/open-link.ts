@@ -3,7 +3,6 @@
 import { iosAppRouteOfAddress, iosHostConnectCode } from "@repo/features/ios-app-links";
 import { openURL } from "expo-linking";
 import { useRouter } from "expo-router";
-import { useTaskListCollections } from "./host/host-provider.js";
 import { handHostConnect } from "./host-connect-link.js";
 import { useOnTab } from "./tab-route.js";
 
@@ -14,16 +13,16 @@ export function openInSafari(address: string): void {
 
 /**
  * Opens an address a link, a chip, or a row names: a vespin.dev place the
- * app draws, or a pull request one of the member's agents opened, on the
- * app's own screen (`@repo/features/ios-app-links`); anything else, a pull
- * request's diff among it, in Safari. A machine's pairing link opens
- * Settings › Machines on its code, which asks before anything is sent.
+ * app draws, or, where the link stands in a workspace, a pull request on
+ * GitHub, on the app's own screen by its repository and number, whoever
+ * opened it (`@repo/features/ios-app-links`); anything else, a pull
+ * request's diff and one named where no workspace is at hand among it, in
+ * Safari. A machine's pairing link opens Settings › Machines on its code,
+ * which asks before anything is sent.
  */
-export function useOpenLink(): (address: string) => void {
+export function useOpenLink(workspaceId?: string | undefined): (address: string) => void {
   const router = useRouter();
   const onTab = useOnTab();
-
-  const { agentPullRequests } = useTaskListCollections();
 
   return (address) => {
     const code = iosHostConnectCode(address);
@@ -34,8 +33,7 @@ export function useOpenLink(): (address: string) => void {
       return;
     }
 
-    // Note that the pull requests are read as the link opens, so no screen drawing a link is drawn again as they move.
-    const route = iosAppRouteOfAddress(address, agentPullRequests.toArray);
+    const route = iosAppRouteOfAddress(address, workspaceId);
 
     if (route === undefined) openInSafari(address);
     else router.push(onTab(route));

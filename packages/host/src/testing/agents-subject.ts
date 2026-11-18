@@ -17,6 +17,7 @@ import {
   type HostDoneAnswerView,
   type MemoriesAnswerView,
   type MemorySaveAnswerView,
+  type SoundStateView,
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import {
@@ -28,7 +29,6 @@ import {
   type AgentSummary,
   CHANGED_FILE_STATUS,
   CHECK_SUMMARY,
-  MERGE_STATE,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
@@ -60,8 +60,6 @@ import {
   type ProviderKeySummary,
 } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
-import { PULL_REQUEST_CHAPTERS_STATE } from "@repo/features/pull-request-chapters-wire";
-import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import {
   GATEWAY_CLIENT_ROLE,
   GATEWAY_EVENT,
@@ -75,8 +73,7 @@ import { Duration, Effect, Exit, Predicate, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
-import { type AgentClient, composeAgents } from "../compose-agents.js";
-import type { EntityStore } from "../entity-store.js";
+import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
 import { type PolledLive, polledLive } from "./polled-live.js";
@@ -130,17 +127,8 @@ const PUBLISHED = {
   },
 };
 
-/** The agent's changes, as the service answers them. */
-/** A pull request's chapters as the service answers them: none made yet for its head. */
-export const CHAPTERS = {
-  pullRequest: {
-    number: 11,
-    generatable: true,
-    chapters: { status: PULL_REQUEST_CHAPTERS_STATE.NONE },
-  },
-} as const;
-
-export const CHANGES = {
+/** The agent's pull request's changed files, as the service answers them, which a turn's changes are read from. */
+const CHANGES = {
   pullRequest: {
     url: "https://github.com/acme/relay/pull/123",
     files: [
@@ -162,34 +150,6 @@ export const CHANGES = {
 export const TURN_CHANGES = {
   files: CHANGES.pullRequest === null ? [] : CHANGES.pullRequest.files.slice(0, 1),
   truncated: false,
-} as const;
-
-/** That pull request itself, its checks, and its conversation, as its Pull request tab's overview reads them. */
-/** What the reviewer and label pickers offer, as the service answers it. */
-const REVIEW_OPTIONS = {
-  labels: [{ name: "bug", color: "d73a4a" }],
-  users: [{ login: "priyan", bot: false }],
-  teams: [{ slug: "reviewers", name: "Reviewers" }],
-};
-
-const OVERVIEW = {
-  pullRequest: {
-    pullRequest: {
-      number: 123,
-      title: "Send the invite once",
-      url: "https://github.com/acme/relay/pull/123",
-      state: PULL_REQUEST_STATE.OPEN,
-      html: "<p>Sends the invite once.</p>",
-      base: "main",
-      head: "agent/invite-once",
-      createdAt: 1_800_000_000_000,
-      mergedAt: null,
-      merge: MERGE_STATE.CLEAN,
-      requested: [],
-    },
-  },
-  checks: { pullRequest: { checks: [] } },
-  conversation: { pullRequest: { reviewers: [], conversation: [], earlier: 0 } },
 } as const;
 
 /** A synthetic key, as Settings carries it once; nothing below may answer it back. */
@@ -349,6 +309,10 @@ function fakeService() {
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
   let forgetGate: Effect.Effect<void> = Effect.void;
+  /** What a sound's rename answers, once its gate lets it; no such sound, from the start. */
+  let renameAnswer: SoundStateView = { sound: null };
+  /** What a sound's rename waits on before the service answers it; nothing from the start. */
+  let renameGate: Effect.Effect<void> = Effect.void;
   /** What a memory's save answers, once its gate lets it; unanswered from the start. */
   let saveAnswer: MemorySaveAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
   /** What a memory's save waits on before the service answers it; nothing from the start. */
@@ -720,64 +684,14 @@ function fakeService() {
 
         return PUBLISHED;
       }),
-    changes: (agentId, number) =>
-      Effect.sync(() => {
-        asked.push(`changes:${agentId}${number === undefined ? "" : `#${number}`}`);
-
-        return CHANGES;
-      }),
     turnChanges: (agentId, messageId) =>
       Effect.sync(() => {
         asked.push(`turn-changes:${agentId}:${messageId}`);
 
         return TURN_CHANGES;
       }),
-    generateChapters: (agentId, number) =>
-      Effect.sync(() => {
-        asked.push(`chapters-generate:${agentId}${number === undefined ? "" : `#${number}`}`);
-
-        return CHAPTERS;
-      }),
-    overviewPullRequest: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`overview-pull-request:${agentId}`);
-
-        return OVERVIEW.pullRequest;
-      }),
-    reviewOptions: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`review-options:${agentId}`);
-
-        return REVIEW_OPTIONS;
-      }),
     workspaceTools: () => Effect.die("no Vespin tools read in this suite"),
     setDefaultMachine: () => Effect.die("no default machine set in this suite"),
-    overviewChecks: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`overview-checks:${agentId}`);
-
-        return OVERVIEW.checks;
-      }),
-    overviewConversation: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`overview-conversation:${agentId}`);
-
-        return OVERVIEW.conversation;
-      }),
-    pullRequestAction: (agentId, request, number) =>
-      Effect.sync(() => {
-        asked.push(
-          `pull-request-action:${agentId}${number === undefined ? "" : `#${number}`}:${request.action}`,
-        );
-
-        return { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE };
-      }),
-    pullRequestViewed: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`pull-request-viewed:${agentId}`);
-
-        return { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE, files: [] };
-      }),
     githubImage: (agentId, src) =>
       Effect.sync(() => {
         asked.push(`github-image:${agentId}:${src}`);
@@ -809,6 +723,7 @@ function fakeService() {
         return { keys: [] };
       }),
     useResetCredit: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    refreshPlanUsage: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     renameSubscription: (rename) =>
       Effect.sync(() => {
         asked.push(`rename:${rename.subscriptionId}`);
@@ -875,7 +790,11 @@ function fakeService() {
       ),
     readSound: () => Effect.succeed({ clip: null }),
     addSound: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
-    renameSound: () => Effect.succeed({ sound: null }),
+    renameSound: () =>
+      Effect.andThen(
+        Effect.suspend(() => renameGate),
+        Effect.sync(() => renameAnswer),
+      ),
     removeSound: () => Effect.succeed({ sound: null }),
     chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
     markActive: () => Effect.sync(() => void asked.push("active")),
@@ -1125,6 +1044,11 @@ function fakeService() {
       forgetAnswer = answer;
       forgetGate = gate;
     },
+    /** What each sound's rename answers from now on, and what it waits on before it does. */
+    answerRenames: (answer: SoundStateView, gate: Effect.Effect<void> = Effect.void) => {
+      renameAnswer = answer;
+      renameGate = gate;
+    },
     /** What each memory's save answers from now on, and what it waits on before it does. */
     answerSaves: (answer: MemorySaveAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       saveAnswer = answer;
@@ -1299,6 +1223,22 @@ function bySyncId(
   };
 }
 
+const UNANSWERED_CALL = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+
+/** The service's side of a pull request named by its repository, which no test here asks, so it answers none. */
+const NO_PULL_REQUESTS: PullRequestClient = {
+  pullRequest: () => Effect.succeed(UNANSWERED_CALL),
+  changes: () => Effect.succeed(UNANSWERED_CALL),
+  overviewPullRequest: () => Effect.succeed(UNANSWERED_CALL),
+  overviewChecks: () => Effect.succeed(UNANSWERED_CALL),
+  overviewConversation: () => Effect.succeed(UNANSWERED_CALL),
+  reviewOptions: () => Effect.succeed(UNANSWERED_CALL),
+  viewed: () => Effect.succeed(UNANSWERED_CALL),
+  action: () => Effect.succeed(UNANSWERED_CALL),
+  generateChapters: () => Effect.succeed(UNANSWERED_CALL),
+  githubImage: () => Effect.succeed(UNANSWERED_CALL),
+};
+
 /** Every step a follow has to take, taken: it runs on a fiber of its own. */
 export const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
@@ -1336,7 +1276,6 @@ export function subject(
     agentListed?: (agentId: string) => AgentSummary | undefined;
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
-    entities?: EntityStore;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1365,6 +1304,7 @@ export function subject(
       kept: yield* keptContent(KEPT_CONTENT_CHARACTERS),
       focus,
       client: service.client,
+      pullRequests: NO_PULL_REQUESTS,
       // Note that no test here asks an agent's ports, so their service is a sandbox that is not running.
       ports: {
         list: () => Effect.succeed({ running: false, ports: [] }),
@@ -1374,7 +1314,6 @@ export function subject(
       },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
-      ...(options.entities === undefined ? undefined : { entities: () => options.entities }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 
@@ -1447,6 +1386,7 @@ export function subject(
       leaveStartsUnanswered: service.leaveStartsUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
+      answerRenames: service.answerRenames,
       answerSaves: service.answerSaves,
       answerPresence: service.answerPresence,
       holdCommandAdds: service.holdCommandAdds,

@@ -1,17 +1,23 @@
 {
   "type": "object",
   "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace the task stands in, by the slug list_workspaces answered: required with a key, and with an id the workspace that must hold the task; leave it out with an id for whichever workspace it stands in."
+    },
     "taskId": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 36,
-      "description": "The task whose relation to move, by the id list_tasks answered."
+      "maxLength": 64,
+      "description": "The task whose relation to move, by the id list_tasks answered, or by its key, such as ACME-42, with the workspace it stands in."
     },
     "otherTaskId": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 36,
-      "description": "The other task of the relation, in the same workspace, by the id list_tasks answered."
+      "maxLength": 64,
+      "description": "The other task of the relation, in the same workspace, by the id list_tasks answered or by its key."
     },
     "from": {
       "type": "string",

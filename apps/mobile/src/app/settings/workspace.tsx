@@ -30,7 +30,13 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
+  askForName,
+  askForWords,
+  BUZZ,
+  buzz,
   ConfirmAsk,
+  FOOTER_TONE,
+  footerToneOf,
   GLYPH,
   ListSection,
   LoadingRow,
@@ -41,14 +47,15 @@ import {
   Screen,
   SettingsForm,
   useAsyncAction,
-  WORDS_ASK_KIND,
-  WordsAsk,
+  WORDS_KIND,
   WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
+import { GitHubSection } from "../../github/github-connection.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
@@ -58,17 +65,17 @@ import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
-/** The rename's alert: its title, its field's placeholder, and its act, the panel's words. */
+/** What an invitation's menu calls copying its accept link, as the panel's row's button says it. */
+const INVITE_LINK_WORDS = { COPY: "Copy link" } as const;
+
+/** The rename's alert: its title and its act, the panel's words. */
 const RENAME_WORDS = {
   ROW: "Rename",
   TITLE: "Rename workspace",
-  PLACEHOLDER: "Workspace name",
 } as const;
 
 /** The page's questions, named once. */
 const ASKING = {
-  RENAME: "rename",
-  INVITE: "invite",
   REMOVE: "remove",
   CANCEL: "cancel",
   LEAVE: "leave",
@@ -78,8 +85,6 @@ const ASKING = {
 
 /** What the page asks first, by the act it asks about. */
 type Asking =
-  | { readonly kind: typeof ASKING.RENAME }
-  | { readonly kind: typeof ASKING.INVITE }
   | { readonly kind: typeof ASKING.REMOVE; readonly member: WorkspaceMember }
   | { readonly kind: typeof ASKING.CANCEL; readonly invitation: WorkspaceInvitation }
   | { readonly kind: typeof ASKING.LEAVE }
@@ -239,6 +244,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 .filter((refusal) => refusal !== undefined)
                 .join(" ") || undefined
             }
+            footerTone={FOOTER_TONE.FAILURE}
           >
             <WorkspaceRow
               workspace={switcherWorkspace(workspace, false, photos)}
@@ -248,7 +254,19 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               <ActionRow
                 label={RENAME_WORDS.ROW}
                 symbol={GLYPH.RENAME}
-                onPress={() => setAsking({ kind: ASKING.RENAME })}
+                onPress={() =>
+                  askForName({
+                    title: RENAME_WORDS.TITLE,
+                    act: RENAME_WORDS.ROW,
+                    name: workspace.name,
+                    onName: (name) =>
+                      void rename.run(() =>
+                        refusalOf(write, () =>
+                          acts[ACT_KIND.WORKSPACE_RENAME]({ workspaceId, name }),
+                        ),
+                      ),
+                  })
+                }
               />
             ) : null}
             {manages && !hasPhoto ? (
@@ -279,6 +297,8 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               />
             ) : null}
           </ListSection>
+          {/* Note that GitHub is the managers', as the panel's Settings › Workspace offers it to an owner or an admin alone. */}
+          {manages ? <GitHubSection workspaceId={workspaceId} /> : null}
           <ListSection
             title="Members"
             count={members?.length}
@@ -286,6 +306,11 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               held?.members?.failed === true
                 ? WORKSPACE_READ_FAILED.MEMBERS
                 : people.said.join(" ") || (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined)
+            }
+            footerTone={
+              held?.members?.failed === true || people.said.length > 0
+                ? FOOTER_TONE.FAILURE
+                : FOOTER_TONE.NOTE
             }
           >
             {members === undefined && held?.members?.failed !== true ? (
@@ -312,11 +337,29 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                   ? WORKSPACE_READ_FAILED.INVITATIONS
                   : invite.said.join(" ") || undefined
               }
+              footerTone={FOOTER_TONE.FAILURE}
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
                 symbol={GLYPH.ADD}
-                onPress={() => setAsking({ kind: ASKING.INVITE })}
+                onPress={() =>
+                  askForWords({
+                    title: INVITATION_WORDS.INVITE_TITLE(workspace.name),
+                    kind: WORDS_KIND.EMAIL,
+                    // Note that only the owner invites an admin, so an admin's alert offers the member's invite alone.
+                    acts: owner
+                      ? INVITATION_ROLES.map((role) => ({
+                          label: INVITATION_WORDS.INVITE_AS(WORKSPACE_ROLE_WORDS[role]),
+                          onWords: sendInvite(role),
+                        }))
+                      : [
+                          {
+                            label: INVITATION_WORDS.INVITE,
+                            onWords: sendInvite(INVITATION_ROLE.MEMBER),
+                          },
+                        ],
+                  })
+                }
               />
               {invitations === undefined && held?.invitations?.failed !== true ? (
                 <LoadingRow words={readingWords("the invitations")} />
@@ -326,7 +369,19 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                   key={invitation.id}
                   name={invitation.email}
                   email={invitationLine(invitation)}
+                  invited
                   acts={[
+                    // Note that the service mails the accept link where the deployment names a sender, so Copy link sends it by hand, as the panel's row offers it.
+                    {
+                      label: INVITE_LINK_WORDS.COPY,
+                      symbol: GLYPH.LINK,
+                      onPress: () =>
+                        void setStringAsync(invitation.acceptUrl)
+                          .then(() => buzz(BUZZ.SUCCESS))
+                          .catch((cause: unknown) =>
+                            console.error("The invite link was not copied.", cause),
+                          ),
+                    },
                     {
                       label: INVITATION_WORDS.CANCEL,
                       destructive: true,
@@ -338,7 +393,10 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             </ListSection>
           ) : null}
           {owner && !personal && heir !== undefined ? (
-            <ListSection footer={transfer.refusal ?? LEAVE_WORDS.OWNER}>
+            <ListSection
+              footer={transfer.refusal ?? LEAVE_WORDS.OWNER}
+              footerTone={footerToneOf(transfer.refusal)}
+            >
               <ActionRow
                 label={TRANSFER_WORDS.VERB}
                 onPress={() => setAsking({ kind: ASKING.TRANSFER, member: heir })}
@@ -346,7 +404,10 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             </ListSection>
           ) : null}
           {personal || owner ? null : (
-            <ListSection footer={leave.refusal ?? LEAVE_WORDS.LINE}>
+            <ListSection
+              footer={leave.refusal ?? LEAVE_WORDS.LINE}
+              footerTone={footerToneOf(leave.refusal)}
+            >
               <ActionRow
                 label={LEAVE_WORDS.VERB(workspace.name)}
                 destructive
@@ -357,43 +418,6 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           )}
         </SettingsForm>
       </Screen>
-      <WordsAsk
-        title={RENAME_WORDS.TITLE}
-        placeholder={RENAME_WORDS.PLACEHOLDER}
-        initial={workspace.name}
-        kind={WORDS_ASK_KIND.NAME}
-        presented={asking?.kind === ASKING.RENAME}
-        onDismiss={dismiss}
-        acts={[
-          {
-            label: RENAME_WORDS.ROW,
-            onAct: (name) => {
-              dismiss();
-
-              if (name === workspace.name) return;
-              void rename.run(() =>
-                refusalOf(write, () => acts[ACT_KIND.WORKSPACE_RENAME]({ workspaceId, name })),
-              );
-            },
-          },
-        ]}
-      />
-      <WordsAsk
-        title={INVITATION_WORDS.INVITE_TITLE(workspace.name)}
-        placeholder={INVITATION_WORDS.EMAIL_PLACEHOLDER}
-        kind={WORDS_ASK_KIND.EMAIL}
-        presented={asking?.kind === ASKING.INVITE}
-        onDismiss={dismiss}
-        // Note that only the owner invites an admin, so an admin's alert offers the member's invite alone.
-        acts={
-          owner
-            ? INVITATION_ROLES.map((role) => ({
-                label: INVITATION_WORDS.INVITE_AS(WORKSPACE_ROLE_WORDS[role]),
-                onAct: sendInvite(role),
-              }))
-            : [{ label: INVITATION_WORDS.INVITE, onAct: sendInvite(INVITATION_ROLE.MEMBER) }]
-        }
-      />
       {/* Note that a removal and a cancel ask in the accent rather than red, as the panel's do, since inviting again undoes either. */}
       <ConfirmAsk
         title={

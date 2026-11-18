@@ -91,14 +91,9 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { workspaceInvitations: ["cancel"] },
   [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { workspaces: ["setPhoto"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { tasks: ["list"], taskSections: ["list"] },
-  [MEMBER_MCP_TOOL.READ_TASK]: { tasks: ["open"] },
-  [MEMBER_MCP_TOOL.FIND_TASK]: { tasks: ["find", "open"] },
+  [MEMBER_MCP_TOOL.READ_TASK]: { tasks: ["open", "find"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
-  [MEMBER_MCP_TOOL.READ_AGENT]: {
-    agents: ["read"],
-    agentPullRequests: ["pullRequest"],
-    messages: ["agentNewest", "agent"],
-  },
+  [MEMBER_MCP_TOOL.READ_AGENT]: { agents: ["read"] },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: {
     messages: [
@@ -111,6 +106,7 @@ export const MEMBER_MCP_COVERAGE = {
     ],
   },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
+  [MEMBER_MCP_TOOL.LIST_MACHINES]: { hosts: ["list", "presence"] },
   [MEMBER_MCP_TOOL.UPDATE_PREFERENCES]: { account: ["writePreferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
   [MEMBER_MCP_TOOL.READ_TASK_FILE]: { taskFiles: ["file"] },
@@ -125,11 +121,13 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION]: { tasks: ["restoreDescription"] },
   [MEMBER_MCP_TOOL.CREATE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
-  [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"], tasks: ["create"] },
+  [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"] },
   [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send", "queue"] },
   [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { messages: ["queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.ARCHIVE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.UNARCHIVE_AGENT]: { agents: ["change"] },
   [MEMBER_MCP_TOOL.REWIND_AGENT]: { agents: ["rewind"] },
   [MEMBER_MCP_TOOL.DELETE_AGENT]: { agents: ["delete"] },
   [MEMBER_MCP_TOOL.WAKE_AGENT]: { agents: ["sandboxResume", "warm"] },
@@ -282,6 +280,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
     useResetCredit: SECRET,
+    refreshPlanUsage: SECRET,
     renameSubscription: SECRET,
     reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,
@@ -290,6 +289,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     cancelChatGptDeviceLogin: NEEDS_BROWSER,
   },
   admin: {
+    billing: INTERNAL,
     catalog: INTERNAL,
     cost: INTERNAL,
     day: INTERNAL,
@@ -335,8 +335,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   githubToken: { read: SECRET, save: SECRET, remove: SECRET },
   hosts: {
-    list: INTERNAL,
-    presence: INTERNAL,
     // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
     allowedApps: SCREEN_ONLY,
     remove: INTERNAL,
@@ -392,6 +390,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     installedSkills: SCREEN_ONLY,
     workspaceIntegrations: SCREEN_ONLY,
     pullRequestChapters: SCREEN_ONLY,
+    repositoryPullRequestChapters: SCREEN_ONLY,
+    repositoryPullRequestMoved: SCREEN_ONLY,
     integrationStatuses: SCREEN_ONLY,
     accountPreferences: SCREEN_ONLY,
   },
@@ -444,13 +444,18 @@ export const MEMBER_MCP_EXCLUSIONS = {
     // Note that a follower's card reads their machines; an agent's own calls are refused naming the machines they could reach.
     machines: SCREEN_ONLY,
   },
+  // Billing is an owner's or admin's, read on the Billing page and set up and managed on Stripe's own pages.
+  billing: { status: SCREEN_ONLY, setup: NEEDS_BROWSER, portal: NEEDS_BROWSER },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceMergeQueue: { read: NOT_YET_BUILT },
+  // Note that a size is a cost the workspace pays for every agent, so it is chosen in Settings until a member asks an agent to.
+  workspaceSandboxSize: { read: NOT_YET_BUILT, put: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
   // A call's session is the panel's own, which holds the microphone and the WebRTC peer.
   voice: { open: SCREEN_ONLY },
-  workspaceSlackBot: { connect: NEEDS_BROWSER },
+  workspaceSlackBot: { connect: NEEDS_BROWSER, install: NEEDS_BROWSER },
+  workspaceEnvironment: { save: NOT_YET_BUILT },
   workspaces: {
     // A workspace's machines stand in the @ list; an agent is handed a mentioned machine's id, and a refused call names the machines it could reach.
     machines: SCREEN_ONLY,

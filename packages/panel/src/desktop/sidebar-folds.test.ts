@@ -294,7 +294,7 @@ test("a finished sub-task the view hides hands its open child tasks to the neare
   assert.deepEqual(rowNames(sidebar, "My tasks"), ["Onboarding", "Delete", "Keep"]);
 });
 
-test("a canceled parent the view hides takes its child tasks to do out of the sidebar with it, at every depth", () => {
+test("a canceled parent the view hides leaves its child task to do at the top, its own child tasks still under it", () => {
   const sidebar = mountSidebar(
     tasksControl({
       tasks: [
@@ -306,5 +306,8 @@ test("a canceled parent the view hides takes its child tasks to do out of the si
     }),
   );
 
-  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Other"]);
+  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Import", "Other"]);
+
+  act(() => childFold(sidebar, "Import").click());
+  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Import", "Map", "Other"]);
 });

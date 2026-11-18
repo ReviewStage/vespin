@@ -482,11 +482,10 @@ test("a display kept reads over the view's own for whatever it holds, and as the
   });
 });
 
-test("Made by keeps the tasks a person made by hand, those a coding agent made, or those Vespin made on a call, a task from before origins as made by hand", () => {
+test("Made by keeps the tasks a person made by hand or those a coding agent made, a task from before origins as made by hand", () => {
   const tasks = [
     task("By hand"),
     { ...task("By an agent"), origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-1" } },
-    { ...task("On a call"), origin: { actor: DESCRIPTION_ACTOR.NOTETAKER } },
   ];
 
   const byAgents = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.MADE_BY, TASK_MAKER.AGENT);
@@ -500,7 +499,6 @@ test("Made by keeps the tasks a person made by hand, those a coding agent made, 
   expect([...valueCounts(tasks, TASKS_FILTER_FIELD.MADE_BY)]).toEqual([
     [TASK_MAKER.PERSON, 1],
     [TASK_MAKER.AGENT, 1],
-    [TASK_MAKER.APP, 1],
   ]);
 });
 

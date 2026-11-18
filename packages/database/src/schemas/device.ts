@@ -21,7 +21,7 @@ import { user } from "./auth.js";
  * an id another account registered first is never moved onto this one. While the host runs local agents it beats
  * the row, so `last_seen_at` is what the service reads as the device being
  * there to take a new agent. It registers again on every start, so `home`,
- * `claude_executable`, and `codex_executable` follow its home folder and
+ * `claude_executable`, `codex_executable`, and `cursor_sdk` follow its home folder and
  * the harnesses it keeps, which move with every update. A
  * local agent is pinned to one of these
  * (`agent.device_id`), and every line and request for it names the
@@ -83,6 +83,13 @@ export const device = pgTable(
      * device that has none checked yet, which runs no Codex agent.
      */
     codexExecutable: text("codex_executable"),
+    /**
+     * The entry of the Cursor SDK the host runs local agents' Cursor with,
+     * by its absolute path, once it checked that build against the pin;
+     * null for a device that keeps none (a Linux host, and a host from
+     * before it), which runs no Cursor agent.
+     */
+    cursorSdk: text("cursor_sdk"),
     /**
      * What the device's follower takes beyond the first lines, as it last
      * registered (`DEVICE_CAPABILITY`): a line that needs one is queued only

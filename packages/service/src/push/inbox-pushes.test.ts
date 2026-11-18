@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { createAgent } from "@repo/database/models/agent-store";
 import { stampPresence } from "@repo/database/models/presence-store";
 import { registerPushDevice, setPushDeviceNotify } from "@repo/database/models/push-device-store";
@@ -11,16 +12,19 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
 import { inboxPushOf, inboxPushResponseOf } from "@repo/features/inbox-push-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
+import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PUSH_ENVIRONMENT, PUSH_NOTIFY, type PushNotify } from "@repo/features/push-device-wire";
+import { RUN_STATUS } from "@repo/features/turn-run";
 import { TURN_ORIGIN, TURN_STATUS, unparsedWire } from "@repo/wire";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { postToInbox } from "../agents/coder-host/inbox.js";
 import { TURN_FAILURE } from "../core.js";
 import { answerInboxAsk, taskInboxItems } from "../inbox/inbox-store.js";
+import { endedAt } from "../testing/agent-turns.js";
 import { recordingApnsSender } from "../testing/apns-fake.js";
 import { APNS_PUSH_TYPE } from "./apns.js";
-import { pushFailedTurn, pushThreadSettled, releaseHeldPushes } from "./inbox-pushes.js";
+import { pushSettledTurn, pushThreadSettled, releaseHeldPushes } from "./inbox-pushes.js";
 
 /**
  * What reaches a member's phone, over a real store and the recording APNs
@@ -29,7 +33,8 @@ import { pushFailedTurn, pushThreadSettled, releaseHeldPushes } from "./inbox-pu
  * as buttons, the ids the app answers it by, and the member's Inbox count as
  * its badge; its answer sends that member a background push naming the
  * thread with the badge it leaves; and a failed turn pushes the agent's
- * starter once, where a stopped one pushes nothing. While the member is at
+ * starter once, where a stopped one pushes nothing, and a finished one
+ * pushes its reply's opening words only where the starter keeps no Inbox. While the member is at
  * an active desktop or web client, an alert goes only to their phones set to
  * always and is held for those set to away, never to those set to never;
  * once they have been idle two minutes the sweep sends what still waits,
@@ -93,6 +98,7 @@ const openWorkspaceAgent = Effect.gen(function* () {
 
   return {
     poster,
+    agent,
     conversationId: agent.conversationId,
     phoneOfA: yield* phoneOf(a),
     phoneOfB: yield* phoneOf(b),
@@ -100,9 +106,10 @@ const openWorkspaceAgent = Effect.gen(function* () {
 });
 
 /** A decide on the agent's task, as `postToInbox` takes it. */
-const decide = (key: string) =>
+const decide = (key: string, userId: string) =>
   unparsedWire({
     key,
+    to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: userId }, { workspace: "acme", repository: null })})`,
     title: "Which queue sends the invitation emails?",
     body: "Pick one.",
     ask: { type: INBOX_ASK.DECIDE, options: [{ label: "Postgres outbox" }, { label: "Redis" }] },
@@ -147,8 +154,9 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
           poster,
           unparsedWire({
             key: "invite-queue",
+            to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: poster.userId }, { workspace: "acme", repository: null })})`,
             title: "Which queue sends the invitation emails?",
-            body: "\n  The repo runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db.ts) already.  \nPick one.",
+            body: "\n  The repo runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db.ts) **already**.  \nPick `one`:\n\n- outbox\n- Redis",
             ask: {
               type: INBOX_ASK.DECIDE,
               options: [
@@ -178,7 +186,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
               aps: {
                 alert: {
                   title: "Which queue sends the invitation emails?",
-                  body: "The repo runs @Postgres already.",
+                  body: "The repo runs @Postgres already.\nPick one:\n• outbox\n• Redis",
                 },
                 "thread-id": poster.taskId,
                 category: "inbox-decide",
@@ -195,6 +203,8 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
               ask: "decide",
               options: ["Postgres outbox", "Redis"],
               recommended: ["Postgres outbox"],
+              markdown:
+                "The repo runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db.ts) **already**.  \nPick `one`:\n\n- outbox\n- Redis",
             },
           },
         ]);
@@ -229,6 +239,40 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
     },
   );
 
+  it.effect(
+    "a post past Apple's bound carries its Markdown's whole first paragraphs, within 4 KB",
+    () => {
+      const sender = recordingApnsSender();
+
+      // Note that each paragraph holds two-byte letters, so the bound is read in bytes, not characters.
+      const paragraphs = Array.from(
+        { length: 80 },
+        (_, at) => `**Step ${at + 1}:** déployer la file d'attente, puis vérifier.`,
+      );
+
+      return Effect.gen(function* () {
+        const { poster } = yield* openWorkspaceAgent;
+        yield* postToInbox(
+          poster,
+          unparsedWire({
+            key: "long-plan",
+            to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: poster.userId }, { workspace: "acme", repository: null })})`,
+            title: "The plan",
+            body: paragraphs.join("\n\n"),
+          }),
+          noSandbox,
+        );
+        const [sent] = sender.sent;
+        assert.ok(sent !== undefined);
+        assert.ok(new TextEncoder().encode(JSON.stringify(sent.payload)).length <= 4096);
+
+        const kept = String(sent.payload.markdown).split("\n\n");
+        assert.ok(kept.length > 1 && kept.length < paragraphs.length);
+        assert.deepEqual(kept, paragraphs.slice(0, kept.length));
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
   it.effect("a failed turn pushes the agent's starter once, and a stopped one nothing", () => {
     const sender = recordingApnsSender();
 
@@ -243,9 +287,8 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         ranMs: 1000,
       };
 
-      yield* pushFailedTurn({ ...turn, status: TURN_STATUS.CANCELED });
-      yield* pushFailedTurn({ ...turn, status: TURN_STATUS.SETTLED });
-      yield* pushFailedTurn({ ...turn, status: TURN_STATUS.FAILED, failure: "timed_out" });
+      yield* pushSettledTurn({ ...turn, status: TURN_STATUS.CANCELED });
+      yield* pushSettledTurn({ ...turn, status: TURN_STATUS.FAILED, failure: "timed_out" });
 
       assert.deepEqual(sender.sent, [
         {
@@ -270,7 +313,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
       ]);
 
       // A run its plan's usage limit stopped is told so, not that it failed.
-      yield* pushFailedTurn({
+      yield* pushSettledTurn({
         ...turn,
         status: TURN_STATUS.FAILED,
         failure: TURN_FAILURE.PLAN_LIMIT,
@@ -283,6 +326,67 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
   });
 
   it.effect(
+    "a finished turn pushes its starter the reply's opening words where they keep no Inbox, and nothing where they keep one",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const { poster, agent, phoneOfA } = yield* openWorkspaceAgent;
+
+        const finished = Effect.gen(function* () {
+          const at = yield* Clock.currentTimeMillis;
+
+          const turnId = yield* endedAt(
+            agent,
+            RUN_STATUS.SUCCEEDED,
+            at,
+            "Opened the PR; **checks are green**.",
+          );
+
+          yield* pushSettledTurn({
+            userId: poster.userId,
+            conversationId: agent.conversationId,
+            turnId,
+            status: TURN_STATUS.SETTLED,
+            failure: null,
+            ranMs: 1000,
+          });
+
+          return turnId;
+        });
+
+        yield* finished;
+        assert.deepEqual(sender.sent, []);
+
+        yield* writeAccountPreferences(poster.userId, { inbox: false });
+        const turnId = yield* finished;
+
+        assert.deepEqual(sender.sent, [
+          {
+            device: phoneOfA,
+            pushType: "alert",
+            collapseId: poster.agentId,
+            payload: {
+              aps: {
+                alert: { title: "Opus 5.5", body: "Opened the PR; checks are green." },
+                "thread-id": poster.taskId,
+                category: "agent-run-failed",
+                "mutable-content": 1,
+                sound: "default",
+                badge: 0,
+              },
+              kind: "run-failed",
+              agentId: poster.agentId,
+              taskId: poster.taskId,
+              turnId,
+            },
+          },
+        ]);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
     "at an active client an ask goes to a phone set to always alone, and once the member has been idle two minutes the sweep sends it to one set to away",
     () => {
       const sender = recordingApnsSender();
@@ -293,7 +397,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         yield* phoneSetTo(poster.userId, PUSH_NOTIFY.NEVER);
         yield* stampPresence(poster.userId);
 
-        yield* postToInbox(poster, decide("invite-queue"), noSandbox);
+        yield* postToInbox(poster, decide("invite-queue", poster.userId), noSandbox);
         assert.deepEqual(alertedTokens(sender), [always.token]);
 
         // Still present a minute later, so the sweep leaves the hold standing.
@@ -314,7 +418,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
     return Effect.gen(function* () {
       const { poster } = yield* openWorkspaceAgent;
       yield* stampPresence(poster.userId);
-      yield* postToInbox(poster, decide("invite-queue"), noSandbox);
+      yield* postToInbox(poster, decide("invite-queue", poster.userId), noSandbox);
       const [item] = yield* taskInboxItems(poster.userId, poster.taskId);
       const asking = item?.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
       assert.ok(item !== undefined && asking !== undefined);
@@ -367,7 +471,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
 
         yield* stampPresence(poster.userId);
 
-        yield* pushFailedTurn({
+        yield* pushSettledTurn({
           ...(yield* turnOf(TURN_STATUS.FAILED)),
           status: TURN_STATUS.FAILED,
         });
@@ -375,7 +479,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         assert.deepEqual(alertedTokens(sender), [phoneOfA.token]);
 
         yield* stampPresence(poster.userId);
-        yield* pushFailedTurn({
+        yield* pushSettledTurn({
           ...(yield* turnOf(TURN_STATUS.FAILED)),
           status: TURN_STATUS.FAILED,
         });

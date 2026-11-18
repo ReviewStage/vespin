@@ -44,6 +44,7 @@ const WEBM_URL = "data:video/webm;base64,GkXfow==";
 const SEEK_URL = "data:video/webm;base64,GkXfo0FA";
 const HELD_URL = "data:video/webm;base64,GkXfo0FB";
 const KEPT_URL = "data:video/webm;base64,GkXfo0KG";
+const PLAYING_URL = "data:video/webm;base64,GkXfo0KH";
 
 /**
  * A WebM header stating its frames a tenth of a second long: the EBML magic,
@@ -75,7 +76,9 @@ function standInMedia(video: HTMLVideoElement): () => number {
     },
     paused: { get: () => paused },
     duration: { get: () => LENGTH_S },
+    // Note that its time may be redefined, as a test moves a playing video on without telling it.
     currentTime: {
+      configurable: true,
       get: () => at,
       set: (next: number) => {
         at = next;
@@ -210,6 +213,22 @@ test("the arrows seek five seconds within the video's length, flashing how far, 
   for (const _ of [1, 2, 3, 4, 5]) press("ArrowRight", seek);
   expect(seekAt()).toBe(String(LENGTH_S));
   expect(reached).toEqual([]);
+});
+
+test("while the video plays its scrubber follows it on every frame the window draws, not only at each timeupdate", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+
+  try {
+    const { video, pressButton, seekAt } = mountPlayer(undefined, PLAYING_URL);
+    pressButton("Play");
+    // The video runs on to 3.5 seconds, as a playing one does between its timeupdates.
+    Object.defineProperty(video, "currentTime", { configurable: true, get: () => 3.5 });
+    expect(seekAt()).toBe("0");
+    act(() => vi.advanceTimersToNextFrame());
+    expect(seekAt()).toBe("3.5");
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test("Space on one of the bar's buttons is the button's, and other keys pass on to the place around the player", () => {

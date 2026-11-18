@@ -16,15 +16,15 @@ test("a link to the This Mac page shows it where the platform runs commands on t
   const without = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MACHINE_COMMANDS);
 
   assert.equal(
-    shownSettingsView(SETTINGS_VIEW.THIS_MAC, DESKTOP_CAPABILITIES, NO_EXPERIMENTS),
+    shownSettingsView(SETTINGS_VIEW.THIS_MAC, DESKTOP_CAPABILITIES, NO_EXPERIMENTS, false),
     SETTINGS_VIEW.THIS_MAC,
   );
   assert.equal(
-    shownSettingsView(SETTINGS_VIEW.THIS_MAC, without, NO_EXPERIMENTS),
+    shownSettingsView(SETTINGS_VIEW.THIS_MAC, without, NO_EXPERIMENTS, false),
     SETTINGS_VIEW.ACCOUNT,
   );
   assert.equal(
-    shownSettingsView(SETTINGS_VIEW.APPEARANCE, [], NO_EXPERIMENTS),
+    shownSettingsView(SETTINGS_VIEW.APPEARANCE, [], NO_EXPERIMENTS, false),
     SETTINGS_VIEW.APPEARANCE,
   );
 });
@@ -32,14 +32,28 @@ test("a link to the This Mac page shows it where the platform runs commands on t
 test.each([{ name: "Memory", view: SETTINGS_VIEW.MEMORY, experiment: EXPERIMENT.MEMORY }])(
   "a link to the $name page shows it only while the account has its experiment on, and Profile otherwise",
   ({ view, experiment }) => {
-    assert.equal(shownSettingsView(view, DESKTOP_CAPABILITIES, { [experiment]: true }), view);
     assert.equal(
-      shownSettingsView(view, DESKTOP_CAPABILITIES, NO_EXPERIMENTS),
+      shownSettingsView(view, DESKTOP_CAPABILITIES, { [experiment]: true }, false),
+      view,
+    );
+    assert.equal(
+      shownSettingsView(view, DESKTOP_CAPABILITIES, NO_EXPERIMENTS, false),
       SETTINGS_VIEW.ACCOUNT,
     );
     assert.equal(
-      shownSettingsView(view, DESKTOP_CAPABILITIES, { [experiment]: false }),
+      shownSettingsView(view, DESKTOP_CAPABILITIES, { [experiment]: false }, false),
       SETTINGS_VIEW.ACCOUNT,
     );
   },
 );
+
+test("a link to the Billing page shows it only where billing is on for a workspace the reader manages, and Profile otherwise", () => {
+  assert.equal(
+    shownSettingsView(SETTINGS_VIEW.BILLING, DESKTOP_CAPABILITIES, NO_EXPERIMENTS, true),
+    SETTINGS_VIEW.BILLING,
+  );
+  assert.equal(
+    shownSettingsView(SETTINGS_VIEW.BILLING, DESKTOP_CAPABILITIES, NO_EXPERIMENTS, false),
+    SETTINGS_VIEW.ACCOUNT,
+  );
+});

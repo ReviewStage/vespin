@@ -8,6 +8,7 @@ import {
 import { AGENT_PART, agentParts, endTurnOf, endTurnSummary } from "@repo/features/agent-parts";
 import {
   ACTION,
+  billingRequiredWords,
   credentialMissingWords,
   deviceAwayWords,
   HOST_REMOVED,
@@ -48,6 +49,7 @@ import {
   type NativeAgentRuntime,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { BILLING_REFUSAL } from "@repo/features/billing-refusal-wire";
 import type { DeviceLaunchStep, DeviceLaunchUnstarted } from "@repo/features/device-agent-wire";
 import {
   FAILURE_REASON,
@@ -72,6 +74,7 @@ import {
   type ModelProvider,
   type ModelSpeed,
   modelSpeedOf,
+  NO_EFFORT,
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { formatCompact, formatUsd } from "@repo/features/number-format";
@@ -107,7 +110,6 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
-import { USAGE_LIMIT_AGENT, type UsageLimitNotice } from "@repo/wire/ui-messages";
 import { Predicate } from "effect";
 
 /**
@@ -200,6 +202,7 @@ export function planNameOf(plan: SubscriptionKeySummary | undefined): string | u
 export const API_KEY_WORDS = {
   [MODEL_PROVIDER.ANTHROPIC]: "Anthropic API key",
   [MODEL_PROVIDER.OPENAI]: "OpenAI API key",
+  [MODEL_PROVIDER.CURSOR]: "Cursor API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /** A key whose provider the choice does not say. */
@@ -364,7 +367,7 @@ export function archivedByReading(
 
 /**
  * A subagent or a brain's worker as its card's tile draws it: the harness
- * its model runs in, or the muted robot where the model is not known, giving
+ * its model runs in, or the muted hard hat where the model is not known, giving
  * way to the working mark while it works, as an agent's tile does.
  */
 export function subagentActor(model: string | undefined, state: GlyphState, name: string): Actor {
@@ -554,11 +557,6 @@ export function endLineParts(
     case AGENT_STATUS.COMPLETED:
       return undefined;
   }
-}
-
-/** The harness a usage limit's notice names, by the provider of the agent's model: Codex for OpenAI's, Claude for any other. */
-export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLimitNotice["agent"] {
-  return provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE;
 }
 
 /** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
@@ -805,6 +803,7 @@ export interface ConnectFailure {
 const CONNECT_CREDENTIALS = {
   [MODEL_PROVIDER.ANTHROPIC]: "a Claude plan or an Anthropic API key",
   [MODEL_PROVIDER.OPENAI]: "a Codex plan or an OpenAI API key",
+  [MODEL_PROVIDER.CURSOR]: "a Cursor API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /**
@@ -903,11 +902,14 @@ function credentialMissingFailure(
   };
 }
 
-/**
- * The plan that pays for an agent on a provider's own harness, which only
- * its plan runs (`agent-runtime-choice.ts`); none for an agent on the
- * retired runtime, which a key paid for.
- */
+/** What pays for an agent on each runtime where nothing else says: its harness's plan, or for Cursor, which runs on its API key alone, that key, as the service records it (`agent-runtime-choice.ts`). */
+const PLAN_PAYER = {
+  [AGENT_RUNTIME.RETIRED]: undefined,
+  [AGENT_RUNTIME.CLAUDE_CODE]: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+  [AGENT_RUNTIME.CODEX]: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+  [AGENT_RUNTIME.CURSOR]: AGENT_PAYER.API_KEY,
+} as const satisfies Record<AgentRuntime, AgentPayer | undefined>;
+
 /** Who pays for the agent: the page's payer, then the settled turns', then the plan its harness runs on where neither names one. */
 export function paidByOf(
   payer: AgentPayer | undefined,
@@ -917,12 +919,13 @@ export function paidByOf(
   return payer ?? usage?.payer ?? planPayerOf(runtime);
 }
 
+/**
+ * The plan that pays for an agent on a provider's own harness, which only
+ * its plan runs, or a Cursor agent's API key (`agent-runtime-choice.ts`);
+ * none for an agent on the retired runtime, which a key paid for.
+ */
 export function planPayerOf(runtime: AgentRuntime | undefined): AgentPayer | undefined {
-  if (runtime === AGENT_RUNTIME.CLAUDE_CODE) return AGENT_PAYER.CLAUDE_SUBSCRIPTION;
-
-  if (runtime === AGENT_RUNTIME.CODEX) return AGENT_PAYER.CHATGPT_SUBSCRIPTION;
-
-  return undefined;
+  return runtime === undefined ? undefined : PLAN_PAYER[runtime];
 }
 
 /** What a message refused by the Claude plan that pays for its agent says. */
@@ -956,6 +959,26 @@ function planRefusalWords(refused: RefusedCall, payer: AgentPayer | undefined): 
   return undefined;
 }
 
+/**
+ * A cloud agent's Start billing refused: its sentence, and for an owner or
+ * admin of the task's workspace, the press that sets billing up, or manages
+ * it where an invoice was given up on.
+ */
+function billingFailure(refused: RefusedCall, taskId: string | null): Failure {
+  const text = billingRequiredWords(refused.billingRefusal, refused.billingManager);
+
+  if (refused.billingManager !== true || taskId === null) return callFailure(text);
+
+  return {
+    reason:
+      refused.billingRefusal === BILLING_REFUSAL.BLOCKED
+        ? FAILURE_REASON.MANAGE_BILLING
+        : FAILURE_REASON.SET_UP_BILLING,
+    text,
+    taskId,
+  };
+}
+
 /** What a Start that did not start says beside the button, and what mends it, naming the task's device where it refused and the panel knows it. */
 export function startFailureNote(
   refused: RefusedCall,
@@ -970,6 +993,10 @@ export function startFailureNote(
     return callFailure(
       localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice ?? device),
     );
+  }
+
+  if (refused.failure === AGENT_CALL_FAILURE.BILLING_REQUIRED) {
+    return billingFailure(refused, taskId);
   }
 
   return (
@@ -1249,7 +1276,7 @@ const PROVIDER_ORDER: readonly string[] = Object.values(MODEL_PROVIDER);
 
 /**
  * The model families the menus lead with, in the order they list them,
- * Anthropic's and then OpenAI's: the newest of each is listed before
+ * Anthropic's, then OpenAI's, then Cursor's: the newest of each is listed before
  * anything is searched, and every other version only once something is. A
  * new version needs nothing here; a new family is one word.
  */
@@ -1262,6 +1289,9 @@ const LEAD_FAMILIES: readonly string[] = [
   "sol",
   "luna",
   "terra",
+  "composer",
+  "auto",
+  "grok",
 ];
 
 /**
@@ -1361,26 +1391,35 @@ export function offeredModels(models: readonly CatalogModel[]): readonly Offered
 
 /**
  * The base models a menu lists before anything is searched: the newest of
- * each lead family the catalog offers, and the one chosen, which stays on
- * screen however old; every model where the catalog offers no lead family,
- * so the list is never empty for want of a search.
+ * each lead family the catalog offers, every Cursor model, and the one
+ * chosen, which stays on screen however old; every model where the catalog
+ * offers no lead family, so the list is never empty for want of a search.
+ * Note that Cursor's are listed whole, because they are the account's own
+ * list as its Cursor key reads it, families of every provider among them,
+ * which a lead family of Anthropic's or OpenAI's would otherwise hide.
  */
 export function unsearchedModels(
   models: readonly CatalogModel[],
   chosen: string | undefined,
 ): ReadonlySet<string> {
-  const offered = offeredModels(models).map((each) => each.model.id);
+  const offered = offeredModels(models).map((each) => each.model);
+  const cursor = offered.filter((model) => model.provider === MODEL_PROVIDER.CURSOR);
+  const others = offered.filter((model) => model.provider !== MODEL_PROVIDER.CURSOR);
   const leads = new Map<number, string>();
 
-  for (const id of offered) {
+  for (const { id } of others) {
     const family = familyRank(id);
 
     if (family < LEAD_FAMILIES.length && !leads.has(family)) leads.set(family, id);
   }
 
-  if (leads.size === 0) return new Set(offered);
+  const listed = leads.size === 0 ? others.map((model) => model.id) : [...leads.values()];
 
-  return new Set([...leads.values(), ...(chosen === undefined ? [] : [chosen])]);
+  return new Set([
+    ...listed,
+    ...cursor.map((model) => model.id),
+    ...(chosen === undefined ? [] : [chosen]),
+  ]);
 }
 
 /** Why the Fast row rests for the base model chosen, or nothing where its fast version is offered: withheld because the key's organization was never granted fast mode, or none listed. */
@@ -1447,7 +1486,8 @@ export function choiceModelId(offered: OfferedModel, speed: ModelSpeed): string 
  * says nothing.
  */
 function choiceDetail(effort: string, speed: ModelSpeed, standardTokens?: number): string {
-  const words = [effortLabel(effort)];
+  // A model with no effort of its own says none, so Composer 2.5 never reads "Default".
+  const words = effort === NO_EFFORT ? [] : [effortLabel(effort)];
 
   if (speed !== MODEL_SPEED.STANDARD) words.push(SPEED_WORD[speed]);
 

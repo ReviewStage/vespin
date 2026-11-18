@@ -23,6 +23,7 @@ export const ADMIN_PAGE_PATH = "/admin";
 export const ADMIN_ROUTE_PATH = {
   METRICS: "/api/admin/metrics",
   COST: "/api/admin/cost",
+  BILLING: "/api/admin/billing",
   USERS: "/api/admin/users",
   USER: "/api/admin/user",
   FAVORITE: "/api/admin/favorite",
@@ -47,6 +48,8 @@ export const ADMIN_ERROR = {
   INVALID_SEARCH: "invalid-search",
   /** A day read that named no real UTC calendar day. */
   INVALID_DAY: "invalid-day",
+  /** A billing read that named no real UTC calendar month. */
+  INVALID_MONTH: "invalid-month",
   /** The named account has no user row — deleted, or the id never existed. */
   USER_NOT_FOUND: "user-not-found",
   /** A workspace read that named no workspace, or named one past the id bound. */
@@ -73,6 +76,8 @@ export const ADMIN_QUERY = {
   KIND: "kind",
   /** The UTC day a day read opens. */
   DAY: "date",
+  /** The UTC calendar month a billing read covers, as `YYYY-MM`. */
+  MONTH: "month",
   /** The account a detail read or the star write names. */
   USER_ID: "id",
   /** The workspace a workspace read names. */
@@ -128,6 +133,11 @@ export interface AdminWorkspaceQuery {
 export interface AdminDayQuery {
   readonly date?: string;
   readonly scope?: string;
+}
+
+/** The Billing read's query: the UTC month, the current one where it names none. */
+export interface AdminBillingQuery {
+  readonly month?: string;
 }
 
 /** The Workspaces read's query: the scope, which workspaces, and the search. */
@@ -280,6 +290,31 @@ export function adminDayKey(value: string | undefined): string | undefined {
   return value !== undefined && isUtcDayKey(value) ? value : undefined;
 }
 
+export const ADMIN_MONTH_PARAM = ADMIN_QUERY.MONTH;
+
+const UTC_MONTH_KEY_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+/** Whether a value names a UTC calendar month as `YYYY-MM`, the key the Billing read and its picker speak. */
+export function isUtcMonthKey(value: string): boolean {
+  return UTC_MONTH_KEY_PATTERN.test(value);
+}
+
+/** The UTC calendar month an instant falls in, as its `YYYY-MM` key. */
+export function utcMonthKey(epochMs: number): string {
+  return new Date(epochMs).toISOString().slice(0, 7);
+}
+
+/**
+ * The month a billing read asked for: the current one when it asked for
+ * none, and nothing when it named no real month, which the read refuses
+ * rather than answering a month nobody asked for.
+ */
+export function adminMonthKey(value: string | undefined, now: number): string | undefined {
+  if (value === undefined) return utcMonthKey(now);
+
+  return isUtcMonthKey(value) ? value : undefined;
+}
+
 export const ADMIN_USER_ID_PARAM = ADMIN_QUERY.USER_ID;
 
 /**
@@ -308,6 +343,7 @@ export function adminWorkspaceId(value: string | undefined): string | undefined 
  * app's host carries to the service for it, and where each is served.
  */
 export const ADMIN_READ = {
+  BILLING: "billing",
   CATALOG: "catalog",
   COST: "cost",
   DAY: "day",
@@ -323,6 +359,7 @@ export type AdminReadProcedure = (typeof ADMIN_READ)[keyof typeof ADMIN_READ];
 
 /** Where each admin read is served. */
 export const ADMIN_READ_PATH = {
+  [ADMIN_READ.BILLING]: ADMIN_ROUTE_PATH.BILLING,
   [ADMIN_READ.CATALOG]: ADMIN_ROUTE_PATH.CATALOG,
   [ADMIN_READ.COST]: ADMIN_ROUTE_PATH.COST,
   [ADMIN_READ.DAY]: ADMIN_ROUTE_PATH.DAY,

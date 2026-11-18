@@ -7,6 +7,7 @@ import {
   type AutomationChanges,
   type AutomationRunInHistory,
   automationRunByKey,
+  automationRunsOn,
   createAutomationCommitted,
   deleteAutomationCommitted,
   listAutomationRuns,
@@ -15,7 +16,7 @@ import {
   updateAutomationCommitted,
 } from "@repo/database/models/automation-store";
 import { isWorkspaceMember, personalWorkspaceOf } from "@repo/database/models/workspace-store";
-import { AGENT_STATUS } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentRunsOnRequest } from "@repo/features/agent-wire";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_DEFAULT_GUARDS,
@@ -236,6 +237,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     archiveSuccessful: automation.archiveSuccessful,
     slackDelivery: automation.slackDelivery,
     preset: automation.preset,
+    runsOn: automationRunsOn(automation),
     mine: automation.userId === userId,
     creatorId: automation.userId,
   };
@@ -463,12 +465,15 @@ export interface AutomationWritten {
  * webhook secret; an id an automation the account does not read stands
  * under is refused as a workspace it is not in is, naming nothing of that
  * automation. Who made it, the member or one of their agents, is what its
- * count says, so an agent's automation is not counted as theirs.
+ * count says, so an agent's automation is not counted as theirs. Its runs
+ * start on the machine `runsOn` names, which the caller checked is the
+ * account's own, or are placed as a Start naming none is where it names none.
  */
 export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   made: typeof automationCreateRequestSchema.Type,
   source: (typeof SERVER_AUTOMATION_SOURCE)[keyof typeof SERVER_AUTOMATION_SOURCE],
+  runsOn: AgentRunsOnRequest | null,
 ): Effect.fn.Return<
   AutomationWritten,
   HostedRefusal,
@@ -509,6 +514,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
       archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
       preset: made.preset ?? null,
+      runsOn,
     }),
   );
 
@@ -552,13 +558,16 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * One automation the account reads changed as the request asks, answered as
  * it then stands; one it reads but may not change, or turn on or off where
- * the request names `enabled` alone, is refused as not permitted.
+ * the request names `enabled` alone, is refused as not permitted. A
+ * machine `runsOn` names, which the caller checked is the creator's own,
+ * replaces the one standing; left out, the standing one stays.
  */
 export const changeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   standing: Automation,
   asked: typeof automationChangeRequestSchema.Type,
   source: (typeof SERVER_AUTOMATION_SOURCE)[keyof typeof SERVER_AUTOMATION_SOURCE],
+  runsOn: AgentRunsOnRequest | undefined,
 ): Effect.fn.Return<
   AutomationWritten,
   HostedRefusal,
@@ -566,13 +575,19 @@ export const changeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
 > {
   const { changes, webhookSecret } = yield* changesOf(userId, standing, asked);
 
-  // Turning it on or off alone is the toggle, which more of the workspace may do than change it.
-  const access = Object.keys(asked).every((field) => field === "enabled")
-    ? AUTOMATION_ACCESS.TOGGLE
-    : AUTOMATION_ACCESS.CHANGE;
+  // Turning it on or off alone is the toggle, which more of the workspace may do than change it; a machine is a change.
+  const access =
+    runsOn === undefined && Object.keys(asked).every((field) => field === "enabled")
+      ? AUTOMATION_ACCESS.TOGGLE
+      : AUTOMATION_ACCESS.CHANGE;
 
   const written = yield* hostedStoreOrUnavailable(
-    updateAutomationCommitted(userId, standing.id, changes, access),
+    updateAutomationCommitted(
+      userId,
+      standing.id,
+      { ...changes, ...(runsOn === undefined ? undefined : { runsOn }) },
+      access,
+    ),
   );
 
   if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);

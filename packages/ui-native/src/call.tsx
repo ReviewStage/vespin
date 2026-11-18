@@ -1,4 +1,4 @@
-// call.tsx -- a voice call into an agent as the phone draws it: Talk in an agent's composer, the call's presses there while the call is into that agent, and the slim way back to the call's agent over the tab bar from every other screen.
+// call.tsx -- a voice call into an agent as the phone draws it: what an agent's composer offers of calls (Talk, which the composer draws in Send's place), the call's presses there while the call is into that agent, and the slim way back to the call's agent from every other screen, over the tab bar.
 
 import {
   Host,
@@ -21,7 +21,7 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ModelProvider } from "@repo/features/models-wire";
-import { CALL_CONTROL_LABEL, TALK_LABEL } from "@repo/features/voice-call-words";
+import { CALL_CONTROL_LABEL } from "@repo/features/voice-call-words";
 import { StyleSheet } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -30,7 +30,7 @@ import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** What a composer offers of calls: Talk at rest, or the call's presses while a call into its agent stands. */
+/** What a composer offers of calls: Talk at rest, in Send's place while its field is empty, or the call's presses before Send while a call into its agent stands. */
 export const COMPOSER_CALL = {
   TALK: "talk",
   ON_CALL: "on-call",
@@ -73,7 +73,12 @@ const styles = StyleSheet.create({
   accessory: { flex: 1 },
 });
 
-/** A press's frame in a row of glyph buttons: Apple's least target, its mark centered, the whole frame taking the press. */
+/**
+ * A press's frame in a row of glyph buttons: Apple's least target, its mark
+ * centered, the whole frame taking the press. Note that it stands on the
+ * glyph, the button's label, never on the button, since a borderless or
+ * plain button takes a press only where its label is hit.
+ */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
   SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
@@ -97,23 +102,16 @@ function CallGlyphPress({
   return (
     <SwiftUIButton
       onPress={onPress}
-      modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel(label)]}
+      modifiers={[buttonStyle("borderless"), accessibilityLabel(label)]}
     >
       <Image
         {...glyphImage(glyph)}
         size={size}
         color={danger ? colors.DANGER_TEXT : colors.TEXT_MUTED}
+        modifiers={PRESS_FRAME}
       />
     </SwiftUIButton>
   );
-}
-
-/**
- * Talk, the waveform a composer offers while its field is empty, which
- * calls the composer's agent, as the panel's box offers it beside Dictate.
- */
-function TalkPress({ onTalk }: { readonly onTalk: () => void }) {
-  return <CallGlyphPress glyph={GLYPH.TALK} label={TALK_LABEL.TALK} onPress={onTalk} />;
 }
 
 /**
@@ -162,11 +160,9 @@ function CallPressRow({
   );
 }
 
-/** What a composer draws of calls in its row, before Send: Talk, or the call's presses. */
-export function ComposerCallPresses({ call }: { readonly call: ComposerCall }) {
-  if (call.kind === COMPOSER_CALL.TALK) return <TalkPress onTalk={call.onTalk} />;
-
-  return <CallPressRow presses={call.presses} />;
+/** What a composer draws of a call into its agent in its row, before Send: the call's presses. */
+export function ComposerCallPresses({ presses }: { readonly presses: CallPresses }) {
+  return <CallPressRow presses={presses} />;
 }
 
 /**
@@ -202,12 +198,12 @@ export function CallCardRow({
           accessibilityHint(OPEN_HINT),
         ]}
       >
-        <HStack spacing={SPACE.TIGHT * 2}>
-          <AgentTile
-            name={call.agentName}
-            harness={call.harness}
-            size={inline ? TILE_SIZE.INLINE : TILE_SIZE.FULL}
-          />
+        {/* Note that the shape stands on the label's row, the Spacer's blank run included, since a plain button takes a press only where its label is hit. */}
+        <HStack
+          spacing={SPACE.TIGHT * 2}
+          modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+        >
+          <AgentTile harness={call.harness} size={inline ? TILE_SIZE.INLINE : TILE_SIZE.FULL} />
           <VStack alignment="leading" spacing={0}>
             <Text
               modifiers={[
@@ -252,8 +248,9 @@ export function CallAccessory({
   readonly inline: boolean;
   readonly onOpen: () => void;
 }) {
+  // Note that the host centers the row in the accessory's height, because a host places its SwiftUI at its top leading corner by default, so a row shorter than the accessory stood high, its tile and words above the glass's middle.
   return (
-    <Host style={styles.accessory}>
+    <Host style={styles.accessory} alignment="leading">
       <VStack modifiers={[padding({ leading: SPACE.ROW })]}>
         <CallCardRow call={call} inline={inline} onOpen={onOpen} />
       </VStack>

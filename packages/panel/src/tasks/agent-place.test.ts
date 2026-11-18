@@ -8,9 +8,11 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
+import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
+import { CALL_KIND } from "@repo/features/turn-rows";
 import { AGENT_ACT_KIND } from "@repo/host/contract";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
-import { act, createElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
@@ -18,8 +20,10 @@ import { OpenSettingsProvider } from "../open-settings.js";
 import { fakeActPort } from "../testing/app-bridge.js";
 import { handBeats, handHostReads, handState } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { useCallRoute } from "./agent-machines.js";
 import { AgentPlace } from "./agent-place.js";
 import type { PlaceMove } from "./move-agent.js";
+import { CallPlaceProvider, TranscriptTool } from "./transcript-blocks.js";
 
 /**
  * agent-place.test.ts -- the chip an agent's box wears says where it runs: a device named with its standing as the window's shared presence read says it, not as the agent's own read once did, or the cloud, which a reader hears with its sandbox's state and whose popover lists that state and the sandbox's size; and where a move is offered, it lists the places to move the agent to, or where to add a Mac where the member has none.
@@ -117,11 +121,11 @@ test("a device the account does not own, which the read does not name, shows its
   assert.equal(label, "Runs on: Charles's MacBook Air");
 });
 
-/** The Cloud chip, which a reader hears as its label says. */
-function cloudChip(): HTMLButtonElement {
+/** The chip whose press opens where the agent works, which a reader hears as its label says. */
+function placeChip(): HTMLButtonElement {
   return (
     document.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
-    assert.fail("the Cloud chip stands")
+    assert.fail("the place chip stands")
   );
 }
 
@@ -151,10 +155,10 @@ test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's sta
   };
 
   await placeOf({ sandbox: running, sandboxVcpus: 4 }, undefined);
-  assert.equal(cloudChip().textContent, "Cloud");
-  assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Running");
+  assert.equal(placeChip().textContent, "Cloud");
+  assert.equal(placeChip().getAttribute("aria-label"), "Runs on: Cloud, Running");
 
-  act(() => cloudChip().click());
+  act(() => placeChip().click());
   assert.deepEqual(factsShown(), [
     ["Status", "Running"],
     ["CPU", "4 vCPUs"],
@@ -163,7 +167,7 @@ test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's sta
   assert.deepEqual(optionsOf("Where this agent works"), ["Agent runs inCloud"]);
 
   await placeOf({}, undefined);
-  assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Off");
+  assert.equal(placeChip().getAttribute("aria-label"), "Runs on: Cloud, Off");
 });
 
 /** The cloud agent's chip drawn with the move given, opened on its Agent runs in row, and the places its submenu lists, the settings the window was asked to open kept. */
@@ -229,7 +233,7 @@ test("where a move is offered, Agent runs in opens the places, Cloud wearing its
   assert.equal(moved.length, 1);
 });
 
-test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it", async () => {
+test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it, named from the press while the service has yet to answer and no longer once a newer pick answered; a local agent's chip opens the same rows", async () => {
   const sent: unknown[] = [];
   const owner = { userId: "user-ada", name: "Ada Lovelace" };
 
@@ -237,7 +241,8 @@ test("the Default machine row names the agent's default with its dot, offline as
     [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: (payload) => {
       sent.push(payload);
 
-      return Promise.resolve({});
+      // Note that the service never answers a pick of the studio, so it is still out when the chip opens again, and answers a later pick of the laptop at once.
+      return payload.machineId === "studio" ? new Promise(() => undefined) : Promise.resolve({});
     },
   });
 
@@ -269,7 +274,7 @@ test("the Default machine row names the agent's default with its dot, offline as
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: { id: AGENT_ID } }))));
   await settle();
-  act(() => cloudChip().click());
+  act(() => placeChip().click());
   const rows = optionsOf("Where this agent works");
 
   const standing = document
@@ -294,4 +299,95 @@ test("the Default machine row names the agent's default with its dot, offline as
   assert.equal(standing, "Offline");
   assert.equal(machines.length, 2);
   assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "studio" }]);
+
+  const local = {
+    id: AGENT_ID,
+    machine: AGENT_MACHINE.DEVICE,
+    mac: { name: "Mini", seenAt: Date.now(), deviceId: DEVICE },
+  };
+
+  act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: local }))));
+  await settle();
+  act(() => placeChip().click());
+  assert.deepEqual(optionsOf("Where this agent works"), [
+    "Agent runs inMini",
+    "Terminal and computer useAStudio",
+  ]);
+
+  // Note that the laptop is picked back while the studio's pick is still out, and its answer comes first; the service's default stands then, never the older pick.
+  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());
+  act(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="listbox"][aria-label="Terminal commands and computer use go here"] [role="option"]',
+      ),
+    ][0]?.click(),
+  );
+  await settle();
+  assert.deepEqual(sent, [
+    { agentId: AGENT_ID, machineId: "studio" },
+    { agentId: AGENT_ID, machineId: "laptop" },
+  ]);
+  act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: local }))));
+  await settle();
+  act(() => placeChip().click());
+  assert.deepEqual(optionsOf("Where this agent works"), [
+    "Agent runs inMini",
+    "Terminal and computer useALaptop",
+  ]);
+});
+
+/** The machine a running action on an app, naming the machine of the id given or none, says it goes to, as its row's chip names it. */
+function RunningCall({ named }: { named: string | undefined }): ReactElement {
+  return createElement(CallPlaceProvider, {
+    owner: undefined,
+    route: useCallRoute(AGENT_ID),
+    children: createElement(TranscriptTool, {
+      state: TOOL_STATE.INPUT_AVAILABLE,
+      kind: CALL_KIND.COMPUTER,
+      namedMachine: named,
+      subject: "Arc",
+      input: { kind: TOOL_BLOCK.JSON, text: "{}" },
+      output: undefined,
+      errorText: undefined,
+    }),
+  });
+}
+
+test("a running action on an app names the machine it names, not the agent's default, and a call naming none names the default", async () => {
+  const owner = { userId: "user-ada", name: "Ada Lovelace" };
+  const teammate = { userId: "user-ben", name: "Ben Okafor" };
+
+  handState({});
+  handBeats({});
+
+  handHostReads({
+    workspaceTools: {
+      [AGENT_ID]: {
+        rows: {
+          runOnMac: { on: true, owner, machine: { id: "laptop", name: "Laptop" } },
+          machines: [
+            { id: "laptop", name: "Laptop", owner, online: true },
+            { id: "studio", name: "Studio", owner: teammate, online: true },
+          ],
+        },
+      },
+    },
+  });
+  writeAppState(await appBridge().requestAppState());
+
+  const placeOf = async (named: string | undefined) => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(withQueryClient(createElement(RunningCall, { named }))));
+    await settle();
+
+    return container.querySelector(".tool-place .ui-inline-ref-label")?.textContent ?? undefined;
+  };
+
+  assert.equal(await placeOf("studio"), "Studio");
+  assert.equal(await placeOf(undefined), "Laptop");
+  // Note that a machine the agent's tools do not list goes unnamed until the call answers, rather than named as the default.
+  assert.equal(await placeOf("elsewhere"), undefined);
 });

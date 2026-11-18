@@ -35,13 +35,14 @@ import type { PullRequestActionRequest } from "@repo/features/pull-request-write
 import { Effect, Option } from "effect";
 import {
   actionWrite,
+  countedWrite,
   type OverviewRead,
   viewedAnswerOf,
   viewedRead,
 } from "../agents/agent-pull-request-procedures.js";
-import { pullRequestChangesRead } from "../agents/agents-procedures.js";
 import { githubReadRefusal, type PullRequestSubject } from "../agents/asked-pull-request.js";
 import { pullRequestOfNumber } from "../agents/coder-host/published.js";
+import { pullRequestChangesRead } from "../agents/pull-request-changes.js";
 import {
   type MemberWrite,
   memberWriteOnReached,
@@ -69,6 +70,8 @@ interface ReachedRepository {
   readonly bearer: GitHubBearer;
   readonly access: GitHubTokenAccess;
   readonly subject: PullRequestSubject;
+  /** GitHub's id for the repository, where the read of it that minted the token named one. */
+  readonly repositoryId: number | undefined;
 }
 
 /** The pull request reached: the token it was read on, what its reads name it against, and it as GitHub holds it now. */
@@ -87,7 +90,7 @@ export interface ReachedPullRequest {
  */
 export const reachedRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
-  query: PullRequestQuery,
+  query: Omit<PullRequestQuery, "number">,
 ) {
   const place = yield* memberPlace(userId, query);
   const app = yield* GitHubApp;
@@ -105,7 +108,7 @@ export const reachedRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
     author: null,
   };
 
-  return { bearer, access, subject } satisfies ReachedRepository;
+  return { bearer, access, subject, repositoryId: repository.id } satisfies ReachedRepository;
 });
 
 /**
@@ -181,9 +184,12 @@ export const overviewOf = <A, R>(
 export const viewedOf = (userId: string, query: PullRequestQuery) =>
   Effect.map(writtenOn(userId, query, viewedRead), viewedAnswerOf);
 
-/** One change to the pull request, as the member on their own GitHub sign-in, and how GitHub took it. */
+/** One change to the pull request, as the member on their own GitHub sign-in, and how GitHub took it, counted in the query's workspace as a change through an agent is. */
 export const actionOn = (
   userId: string,
   query: PullRequestQuery,
   request: PullRequestActionRequest,
-) => Effect.map(writtenOn(userId, query, actionWrite(request)), writeAnswerOf);
+) =>
+  Effect.tap(writtenOn(userId, query, actionWrite(request)), (written) =>
+    countedWrite(userId, query.workspaceId, request, written),
+  ).pipe(Effect.map(writeAnswerOf));

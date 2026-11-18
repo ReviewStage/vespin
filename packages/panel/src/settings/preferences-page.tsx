@@ -14,6 +14,7 @@ import type { NotificationsControl } from "@repo/settings/settings-controls";
 import { SettingsSection } from "@repo/ui";
 import { ACTOR_KIND, type Actor, accountActor } from "@repo/ui/actor-model";
 import { ActorStack } from "../actor-ref.js";
+import { GitHubWakesRow } from "./github-wakes-row.js";
 import { SchemaSettingRows } from "./schema-rows.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SoundsSection } from "./sounds-section.js";
@@ -70,6 +71,7 @@ function AgentsSection({
         view={view}
         faces={faces}
       />
+      <GitHubWakesRow view={view} />
     </SettingsSection>
   );
 }

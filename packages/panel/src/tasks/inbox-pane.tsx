@@ -1,6 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { askHeadWords } from "@repo/features/inbox-ask-words";
 import {
   answerOf,
@@ -9,6 +10,7 @@ import {
   type InboxDraft,
 } from "@repo/features/inbox-draft";
 import {
+  INBOX_EVENT_WORDS,
   INBOX_THREAD_EVENT,
   type InboxCloser,
   type InboxHolder,
@@ -89,7 +91,7 @@ import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { isWireString } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { BotIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import {
@@ -108,6 +110,7 @@ import {
   THREAD_TASK_KEYS,
 } from "../desktop/crumb-menus.js";
 import { PhoneHead, phoneFindGroups } from "../desktop/phone-head.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown } from "../failure-report.js";
 import { type Directory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useShortcutTarget } from "../shortcut-target.js";
@@ -672,20 +675,6 @@ function Waiting({ on }: { on: InboxItem["startedBy"] }): React.JSX.Element | nu
 }
 
 /**
- * What the agent's line says it did to an ask of its own, after its name:
- * withdrew it, or replaced it by a newer question where the post that
- * replaced it asks one, by a newer message where it asks nothing, as a post
- * that asks nothing replaces the ask it posts over, or by one the thread
- * read no longer carries.
- */
-const AGENT_DID = {
-  WITHDREW: "withdrew this",
-  REPLACED_BY_QUESTION: "replaced this with a newer question",
-  REPLACED_BY_MESSAGE: "replaced this with a newer message",
-  REPLACED: "replaced this",
-} as const;
-
-/**
  * What ends an agent's message whose ask of words alone was answered, where
  * the thread read carries the reply: a small pill saying "Answered", with
  * no card, the reply's words being the answer.
@@ -826,9 +815,6 @@ function threadRows(
   return rows;
 }
 
-/** What a member resolving the item says after their name. */
-const RESOLVED_IT = "resolved this without an answer";
-
 /**
  * The closer as the wire names a member: by the name the read gives them,
  * else the directory's, else, for the reader, by their id alone, which the
@@ -885,7 +871,7 @@ function ThreadEvent({
         kind={COMMENT.CLOSED}
         author={commentAuthor(closer)}
         nameRef={<ActorRef actor={closer} nameOnly />}
-        said={RESOLVED_IT}
+        said={INBOX_EVENT_WORDS.RESOLVED}
         at={line.at}
         now={now}
         messageId={line.note?.id}
@@ -905,7 +891,7 @@ function ThreadEvent({
         place={place}
         kind={COMMENT.WITHDRAWN}
         {...agent}
-        said={AGENT_DID.WITHDREW}
+        said={INBOX_EVENT_WORDS.WITHDREW}
         at={line.at}
         now={now}
       >
@@ -916,10 +902,10 @@ function ThreadEvent({
 
   const said =
     line.by === undefined
-      ? AGENT_DID.REPLACED
+      ? INBOX_EVENT_WORDS.REPLACED
       : line.by.ask === undefined
-        ? AGENT_DID.REPLACED_BY_MESSAGE
-        : AGENT_DID.REPLACED_BY_QUESTION;
+        ? INBOX_EVENT_WORDS.REPLACED_BY_MESSAGE
+        : INBOX_EVENT_WORDS.REPLACED_BY_QUESTION;
 
   return (
     <InboxComment
@@ -1165,7 +1151,7 @@ function phoneItemGroups(
     label: OPEN_AGENT,
     detail: by.subject.name,
     replayMasked: true,
-    icon: <BotIcon />,
+    icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
     onSelect: by.onOpen,
   };
 
@@ -1603,7 +1589,7 @@ function PhoneHolder({
  * its end, the open ask's controls standing in it.
  * Where the item stands alone, the whole Inbox wide, the crumbs follow a
  * way back to the list (`inbox-columns.ts`), its tooltip naming Back's
- * chord, which goes back as Escape does, and the bar ends in the pager,
+ * chord, which goes back too, and the bar ends in the pager,
  * "2 of 8" and the arrows up and down the list (`inbox-pager.tsx`).
  */
 export function InboxPane({

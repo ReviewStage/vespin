@@ -692,6 +692,39 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
+    "a /goal line to an agent on Cursor, which keeps no goal, is refused, and nothing reaches its harness",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+
+        const { owner, agent, ask, target } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+
+        yield* Database.use((db) =>
+          db
+            .update(conversations)
+            .set({ runtime: CONVERSATION_RUNTIME.CURSOR })
+            .where(eq(conversations.id, target.conversationId)),
+        );
+        const sends = agentSessions.sent.length;
+
+        const refused = yield* ask(
+          messageAs(owner, agent.id, {
+            text: "/goal every billing test passes",
+            clientKey: randomUUID(),
+          }),
+        );
+
+        assert.deepEqual(
+          refused,
+          refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
+        );
+        assert.equal(agentSessions.sent.length, sends, "the harness is handed nothing");
+      }),
+  );
+
+  it.effect(
     "a task's archive naming an assignee who is no member is refused before any of its agents is stopped",
     () =>
       Effect.gen(function* () {
@@ -1396,7 +1429,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "an agent's run_on_mac standing names its starter's Mac for its starter, says nothing for an agent on a device, and reads as not found for a member who reaches the agent but not its task",
+    "an agent's run_on_mac standing names its starter's Mac for its starter, an agent on a device's alike with the machines its default may be set to, and reads as not found for a member who reaches the agent but not its task",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -1427,7 +1460,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           reason: RUN_ON_MAC_OFF.MAC_AWAY,
           owner: { userId: owner, name: "Test User" },
         });
-        // An agent on a device is offered no run_on_mac, so it is answered nothing.
+        // An agent on a device is offered run_on_mac too, so its panel draws its Default machine row.
         yield* Database.use((db) =>
           db
             .update(agentTable)
@@ -1440,7 +1473,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             HOSTED_HTTP_STATUS.OK,
             yield* ask(request(AGENT_WORKSPACE_TOOLS, owner, { id: agent.id })),
           ),
-          {},
+          { runOnMac: read.runOnMac, machines: [] },
         );
         assert.deepEqual(
           teammate,
@@ -1740,7 +1773,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             title: "Invites by week",
             html: "<h1>Invites by week</h1>",
           },
-          { kind: PAGE_SHOWER.APP },
+          { kind: PAGE_SHOWER.AGENT, agentId: other.agent.id },
         );
 
         assert.ok(Option.isSome(shown));

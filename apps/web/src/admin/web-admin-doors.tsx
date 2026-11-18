@@ -21,6 +21,7 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminBilling } from "@repo/features/admin-billing-wire";
 import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
 import { ADMIN_REFUSED, ADMIN_USER_ID_PARAM, adminRefusedOf } from "@repo/features/admin-wire";
@@ -42,6 +43,7 @@ import {
   searchHref,
   workspaceHref,
 } from "@repo/panel/admin/routing";
+import { useMemo } from "react";
 import { impersonate } from "../auth-client";
 import { ForbiddenCard, SignInCard } from "./chrome/gate-cards";
 
@@ -67,6 +69,7 @@ const WEB_ADMIN_READS: AdminReads = {
   catalog: (signal) => asked<AdminCatalog>(browserClient.admin.catalog({}, { signal })),
   metrics: (query, signal) => asked<AdminMetrics>(browserClient.admin.metrics(query, { signal })),
   cost: (query, signal) => asked<AdminCost>(browserClient.admin.cost(query, { signal })),
+  billing: (query, signal) => asked<AdminBilling>(browserClient.admin.billing(query, { signal })),
   reliability: (query, signal) =>
     asked<AdminReliability>(browserClient.admin.reliability(query, { signal })),
   users: (query, signal) => asked<AdminUserList>(browserClient.admin.users(query, { signal })),
@@ -112,7 +115,29 @@ const WEB_ADMIN_DOORS: AdminDoors = {
   impersonate,
 };
 
-/** The page's doors, handed to every admin screen under it. */
-export function WebAdminDoors({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <AdminDoorsProvider value={WEB_ADMIN_DOORS}>{children}</AdminDoorsProvider>;
+/**
+ * The page's doors, handed to every admin screen under it; under a
+ * development tab's fixture, its staged reads, with nothing held at the
+ * gate, since the fixture's admin stands signed in without a sign-in.
+ */
+export function WebAdminDoors({
+  fixtureReads,
+  children,
+}: {
+  fixtureReads?: AdminReads | undefined;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const doors = useMemo<AdminDoors>(
+    () =>
+      fixtureReads === undefined
+        ? WEB_ADMIN_DOORS
+        : {
+            ...WEB_ADMIN_DOORS,
+            reads: fixtureReads,
+            gate: { ...WEB_ADMIN_DOORS.gate, heldAtGate: () => false },
+          },
+    [fixtureReads],
+  );
+
+  return <AdminDoorsProvider value={doors}>{children}</AdminDoorsProvider>;
 }

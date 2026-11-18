@@ -22,6 +22,8 @@ export const AGENT_TOOL = {
   // The tools about the workspace's coding agents, named for any agent offered them.
   LIST_AGENTS: "list_agents",
   READ_AGENT: "read_agent",
+  // What one agent of the workspace published: its pull request and the files it changes.
+  READ_AGENT_CHANGES: "read_agent_changes",
   // One agent's message to another of its workspace, shown in the two agents' transcripts alone.
   MESSAGE_AGENT: AGENT_MESSAGE_TOOL,
   START_AGENT: "start_agent",
@@ -29,6 +31,9 @@ export const AGENT_TOOL = {
   ADD_SUGGESTION: "add_suggestion",
   STOP_AGENT: "stop_agent",
   UPDATE_AGENT: "update_agent",
+  // An agent put away, its turn stopped first, and one brought back.
+  ARCHIVE_AGENT: "archive_agent",
+  UNARCHIVE_AGENT: "unarchive_agent",
   LIST_TASKS: "list_tasks",
   READ_TASK: "read_task",
   CREATE_TASK: "create_task",
@@ -37,6 +42,8 @@ export const AGENT_TOOL = {
   DELETE_SECTION: "delete_section",
   // A task of the workspace renamed, given a repository, pinned, or archived, named for any agent offered `list_tasks`.
   UPDATE_TASK: "update_task",
+  // The members of the agent's workspace, by the mention link a call names a person by.
+  LIST_WORKSPACE_MEMBERS: "list_workspace_members",
   // The workspace's automations, listed, made, changed, and deleted for the member an agent acts for.
   LIST_AUTOMATIONS: "list_automations",
   CREATE_AUTOMATION: "create_automation",
@@ -45,6 +52,8 @@ export const AGENT_TOOL = {
   RUN_AUTOMATION: "run_automation",
   // The models an agent may be started on, named for any agent offered `start_agent`.
   LIST_MODELS: "list_models",
+  // The machines a start may run an agent on, and those the Mac tools may reach.
+  LIST_MACHINES: "list_machines",
   // The workspace's shared memory, which a coding agent keeps and searches.
   SAVE_MEMORY: "save_memory",
   SEARCH_MEMORY: "search_memory",
@@ -88,8 +97,16 @@ export const AGENT_TOOL = {
   REPLY_TO_COMMENT: DESCRIPTION_COMMENT_TOOL.REPLY,
   UPDATE_COMMENT: DESCRIPTION_COMMENT_TOOL.UPDATE,
   READ_PAGE: "read_page",
-  // Pictures from a coding agent's sandbox, shown in its transcript.
-  SHOW_IMAGE: "show_image",
+  // Pictures, recordings, and sound clips from a coding agent's sandbox, shown in its transcript.
+  SHOW_MEDIA: "show_media",
+  // One message a coding agent sends as the Slack bot in the Slack thread it answers in.
+  SEND_SLACK_MESSAGE: "send_slack_message",
+  // The Slack channels the bot is in, where a coding agent may post and read as the Slack bot.
+  LIST_SLACK_CHANNELS: "list_slack_channels",
+  // A Slack channel's latest messages or one thread's, which a coding agent reads as the Slack bot.
+  READ_SLACK: "read_slack",
+  // A reaction a coding agent adds to a Slack message, or takes off it, as the Slack bot.
+  REACT_SLACK: "react_slack",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
@@ -138,8 +155,9 @@ export const CONNECTION_TOOL = {
  * with the Code and Board tabs, a voice call's question queue and
  * hang-up, removed with GPT Live, the memory's two tools, since named for
  * the memory, the plan comments' resolve and reopen, folded into
- * `update_comment`, and the plan's edit, renamed for the description it
- * edits.
+ * `update_comment`, the plan's edit, renamed for the description it
+ * edits, and the show of pictures, renamed for the sound clips it shows
+ * beside them.
  */
 export const RETIRED_TOOL = {
   WEB_FETCH: "web_fetch",
@@ -149,9 +167,7 @@ export const RETIRED_TOOL = {
   READ_CODING_AGENT: "read_coding_agent",
   MESSAGE_CODING_AGENT: "message_coding_agent",
   START_CODING_AGENT: "start_coding_agent",
-  // Folded into `update_agent` (`archived`, `reason`) and `update_task` (`sectionId`).
-  ARCHIVE_AGENT: "archive_agent",
-  UNARCHIVE_AGENT: "unarchive_agent",
+  // Folded into `update_task` (`sectionId`).
   MOVE_TASK: "move_task",
   // Folded into `post_to_inbox` (a post that asks nothing) and `withdraw_ask`.
   CLOSE_INBOX_ITEM: "close_inbox_item",
@@ -191,6 +207,8 @@ export const RETIRED_TOOL = {
   REOPEN_THREAD: "reopen_thread",
   // Renamed `edit_description`, as the task's document is its description.
   EDIT_PLAN: "edit_plan",
+  // Renamed `show_media`, as it shows sound clips beside pictures and recordings.
+  SHOW_IMAGE: "show_image",
 } as const;
 
 /**
@@ -201,7 +219,18 @@ export const RETIRED_TOOL = {
  */
 export const RENAMED_TOOL: ReadonlyMap<string, AgentTool> = new Map([
   [RETIRED_TOOL.EDIT_PLAN, AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE, AGENT_TOOL.SHOW_MEDIA],
 ]);
+
+/**
+ * Whether a call is one that showed the developer media from a coding
+ * agent's sandbox, under either of the names it is stored by: `show_image`,
+ * as a transcript written while it was offered by that name stores it, or
+ * `show_media`.
+ */
+export function isShowMediaTool(tool: string): boolean {
+  return tool === AGENT_TOOL.SHOW_MEDIA || tool === RETIRED_TOOL.SHOW_IMAGE;
+}
 
 /**
  * Claude Code's own tools, by the names its CLI calls them, which a coding
@@ -317,4 +346,35 @@ export const CODEX_TOOL = {
   TODO_LIST: "todoList",
   SUBAGENT: "collabAgentToolCall",
   IMAGE_VIEW: "imageView",
+} as const;
+
+/**
+ * Cursor's own tools, by the names its transcript stores their calls under:
+ * the SDK's own tool name (`read`, `shell`, `task`) behind `cursor` and
+ * capitalized, since its bare names (`grep`, `glob`) are the names of tools
+ * of ours a stored call of another kind already holds. A coding agent
+ * running on Cursor does its shell, file, search, todo, and delegation work
+ * through these. A call to our own MCP server, which Cursor reaches as a
+ * custom tool named as Claude Code names it (`mcp__team__read_inbox`), is
+ * stored under our tool's name, one to an integration's server as that
+ * integration's call, and one to any other MCP server as `cursorMcp`
+ * (`cursor-moments.ts`).
+ */
+export const CURSOR_TOOL = {
+  SHELL: "cursorShell",
+  READ: "cursorRead",
+  WRITE: "cursorWrite",
+  EDIT: "cursorEdit",
+  DELETE: "cursorDelete",
+  LS: "cursorLs",
+  GLOB: "cursorGlob",
+  GREP: "cursorGrep",
+  SEM_SEARCH: "cursorSemSearch",
+  READ_LINTS: "cursorReadLints",
+  WEB_SEARCH: "cursorWebSearch",
+  WEB_FETCH: "cursorWebFetch",
+  UPDATE_TODOS: "cursorUpdateTodos",
+  CREATE_PLAN: "cursorCreatePlan",
+  TASK: "cursorTask",
+  MCP: "cursorMcp",
 } as const;

@@ -9,6 +9,7 @@ import {
   callAnswered,
   jsonOf,
 } from "./account-call.js";
+import type { BillingStatusAnswer } from "./billing-wire.js";
 import type { WorkspaceTokenRepository } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
@@ -39,8 +40,10 @@ import {
 } from "./workspace-call.js";
 import {
   type WorkspaceEnvironmentAnswer,
+  type WorkspaceVariablesSaveRequest,
   workspaceVariableDeleteRequestSchema,
   workspaceVariablePutRequestSchema,
+  workspaceVariablesSaveRequestSchema,
 } from "./workspace-environment-wire.js";
 import {
   type WorkspaceInvitation,
@@ -54,6 +57,10 @@ import {
   workspaceRepositorySetupPutRequestSchema,
   workspaceRunActionsPutRequestSchema,
 } from "./workspace-sandbox-setup-wire.js";
+import {
+  type WorkspaceSandboxSizeAnswer,
+  workspaceSandboxSizePutRequestSchema,
+} from "./workspace-sandbox-size-wire.js";
 import {
   type Workspace,
   type WorkspaceMachinesAnswer,
@@ -351,6 +358,22 @@ export class HostedWorkspaceClient {
     );
   }
 
+  /** Where the browser goes to Add to Slack for the workspace: Slack's authorize address for our Slack app, carrying a single-use intent. */
+  slackBotInstall(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<string>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceSlackBotRequestSchema)({ workspaceId }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSlackBot.install, admitted),
+      (answer) => answer.url,
+    );
+  }
+
   /** The workspace's Slack bot disconnected, answering the bot as it then stands. */
   slackBotDisconnect(
     workspaceId: string,
@@ -495,7 +518,7 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** The workspace's environment variables by name, never a value, as any member reads them. */
+  /** The workspace's environment variables, as any member reads them: never a secret's value. */
   environment(
     workspaceId: string,
   ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
@@ -505,7 +528,7 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** One environment variable set by an owner or admin, replacing a value of that name, answering the names as they then stand; a variable the service would refuse by shape never travels. */
+  /** One environment variable set by an owner or admin, replacing a value of that name, answering the variables as they then stand; a variable the service would refuse by shape never travels. */
   putVariable(
     workspaceId: string,
     name: string,
@@ -614,7 +637,77 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** One environment variable deleted by an owner or admin, answering the names that remain. */
+  /** The workspace's billing as its owners and admins read it: whether billing is on, whether it is set up or blocked, and this month's usage against the included allowance. */
+  billingStatus(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<BillingStatusAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(hostedCall(this.#hosted.billing.status, { workspaceId }), (answer) => answer);
+  }
+
+  /** The address of Stripe's Checkout page where the workspace's billing is set up. */
+  billingSetup(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<string>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.billing.setup, { workspaceId }),
+      (answer) => answer.url,
+    );
+  }
+
+  /** The address of Stripe's Customer Portal page where the workspace's card is changed and its invoices read. */
+  billingPortal(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<string>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.billing.portal, { workspaceId }),
+      (answer) => answer.url,
+    );
+  }
+
+  /** The workspace's cloud sandbox size, the vCPUs its agents' sandboxes open with, as any member reads it. */
+  sandboxSize(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSizeAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSize.read, { workspaceId }),
+      (answer) => answer,
+    );
+  }
+
+  /** The workspace's cloud sandbox size chosen by an owner or admin, answering the size as it then stands; a size the service would refuse by shape never travels. */
+  putSandboxSize(
+    workspaceId: string,
+    vcpus: number,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSizeAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceSandboxSizePutRequestSchema)({ workspaceId, vcpus }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSize.put, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** Several environment variables set at once by an owner or admin, all or none, answering the variables as they then stand; a save the service would refuse by shape never travels. */
+  saveVariables(
+    request: WorkspaceVariablesSaveRequest,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceVariablesSaveRequestSchema)(request),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceEnvironment.save, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** One environment variable deleted by an owner or admin, answering the variables that remain. */
   deleteVariable(
     workspaceId: string,
     name: string,

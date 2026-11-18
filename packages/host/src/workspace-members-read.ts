@@ -44,7 +44,7 @@ import {
 } from "@repo/sync";
 import { Effect, Equal, MutableHashMap, Option, type Scope } from "effect";
 import { type AppWorkspaceMembers, NO_KEYS_HELD } from "./app-state.js";
-import { type EntityStore, KEPT_READ } from "./entity-store.js";
+import { KEPT_LIST } from "./kept-lists.js";
 import {
   type CarriedWaits,
   carriedWaits,
@@ -101,8 +101,6 @@ export interface WorkspaceMembersDependencies {
   readonly tell: (held: AppWorkspaceMembers) => void;
   /** The sync engine's pool, which each held workspace's people stand in while it is followed. */
   readonly pool: EntityPool;
-  /** The signed-in account's lists kept on disk, which a workspace's people are drawn from before its read first answers, and each answer is kept in; none where nothing keeps them. */
-  readonly entities: () => EntityStore | undefined;
 }
 
 /** The workspaces' people the windows hold, and the member writes drawn over them. */
@@ -152,7 +150,7 @@ function movedPeople(moves: readonly MemberMoved[]): FieldChange<PeopleRow> {
 function followPeople(
   workspaceId: string,
   answers: HeldAnswers<WorkspaceMembersAnswer>,
-  dependencies: Pick<WorkspaceMembersDependencies, "seal" | "pool" | "entities"> & {
+  dependencies: Pick<WorkspaceMembersDependencies, "seal" | "pool"> & {
     readonly stand: (waits: CarriedWaits<PeopleRow>) => Effect.Effect<void, never, Scope.Scope>;
   },
 ): Effect.Effect<void> {
@@ -179,18 +177,14 @@ function followPeople(
         redraw: () => drawn,
         // Note that no member write answers a transaction, so the read hands no wait and each write waits on its rows (`carried`).
         confirmation: () => undefined,
+        kept: { ...KEPT_LIST.MEMBERS, workspace: workspaceId },
       });
 
       const waits = yield* carriedWaits(() => people.synced());
       yield* dependencies.stand(waits);
-      // Note that the people kept on disk are drawn as the service last answered them, until the read answers anew.
-      const kept = dependencies.entities()?.storedIn(KEPT_READ.MEMBERS, workspaceId);
-
-      if (kept !== undefined) {
-        yield* people.answer([{ workspaceId, ...kept }]);
-        answered = true;
-        yield* drawn;
-      }
+      // Note that the people the local database held are drawn as the service last answered them, until the read answers anew.
+      answered = people.loaded;
+      yield* drawn;
 
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
@@ -215,8 +209,6 @@ function followPeople(
           (rows) =>
             Effect.gen(function* () {
               yield* people.answer([{ workspaceId, ...rows }]);
-              yield* dependencies.entities()?.keepIn(KEPT_READ.MEMBERS, workspaceId, rows) ??
-                Effect.void;
               answered = true;
               yield* waits.answered;
               yield* drawn;
@@ -262,7 +254,6 @@ export function workspaceMembersReads(
         followPeople(workspaceId, answers, {
           seal: dependencies.seal,
           pool: dependencies.pool,
-          entities: dependencies.entities,
           stand: stand(workspaceId),
         }),
     });

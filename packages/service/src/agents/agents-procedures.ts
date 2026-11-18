@@ -35,6 +35,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { ContractedRouter } from "@orpc/server";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type Agent,
@@ -57,23 +58,18 @@ import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
   AGENT_LIST_ARCHIVED,
+  AGENT_MACHINE,
   type AgentPullRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { AGENT_START_STATUS } from "@repo/features/contract";
+import { AGENT_START_STATUS, type HostedContract } from "@repo/features/contract";
 import type { Sandbox } from "@repo/sandbox";
 import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_AGENT_TOOL, SERVER_EVENT } from "../events/server-events.js";
-import type { GitHubBearer } from "../github/github-app.js";
-import { changesPeople, namedReviewOptions } from "../github/github-people.js";
-import {
-  pullRequestByNumber,
-  pullRequestFiles,
-  pullRequestReviewOptions,
-  readCommits,
-} from "../github/pull-requests.js";
+import { namedReviewOptions } from "../github/github-people.js";
+import { pullRequestReviewOptions } from "../github/pull-requests.js";
 import { afterResponse } from "../http/after-response.js";
 import {
   HOSTED_REFUSAL,
@@ -82,7 +78,12 @@ import {
   pathUuid,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
+import {
+  accountMiddleware,
+  type HostedProcedureContext,
+  hosted,
+  writeReceiptMiddleware,
+} from "../orpc/base.js";
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import {
@@ -94,12 +95,7 @@ import {
 } from "./agent-lifecycle.js";
 import { admitsPlanWriter, controlsAgent, reachedAgentById } from "./agent-reach.js";
 import { agentSandboxName } from "./agent-sandbox-open.js";
-import {
-  askedPullRequest,
-  githubReadRefusal,
-  type PullRequestSubject,
-  pullRequestNumberOf,
-} from "./asked-pull-request.js";
+import { askedPullRequest, githubReadRefusal, pullRequestNumberOf } from "./asked-pull-request.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { answeredApproval } from "./coder-host/approval-answer.js";
 import { retryBoot } from "./coder-host/boot.js";
@@ -110,7 +106,7 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
-import { sandboxLetGo } from "./coder-host/runner-sessions.js";
+import { sandboxLetGo, workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
@@ -129,6 +125,7 @@ import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-hos
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
+import { pullRequestChangesRead } from "./pull-request-changes.js";
 import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
 import { ranRunAction, stoppedRunAction } from "./run-actions.js";
 import {
@@ -221,43 +218,6 @@ const reachedSession = (userId: string, id: string) =>
   Effect.map(reachedAgentSession(userId, id), ({ sessionId }) => sessionId);
 
 /**
- * A pull request's changes: its files, who it names (`github-people.ts`),
- * and the commits its changed files are read whole at (`readCommits`), read
- * from GitHub afresh on the token minted for its repository, with who its
- * subject says it writes as. Shared with the reads of a pull request by
- * its repository (`github/repository-pull-request.ts`).
- */
-export const pullRequestChangesRead = (
-  bearer: GitHubBearer,
-  subject: PullRequestSubject,
-  pullRequest: AgentPullRequest,
-) =>
-  Effect.gen(function* () {
-    // Note that the pull request itself is read beside its files for its head and base, which its changed files are read whole at; a read that does not land names neither.
-    const [files, people, whole] = yield* Effect.all(
-      [
-        pullRequestFiles(bearer, subject.repository, pullRequest),
-        changesPeople(bearer, subject, pullRequest.number),
-        Effect.orElseSucceed(
-          pullRequestByNumber(bearer, subject.repository, pullRequest.number),
-          () => Option.none(),
-        ),
-      ],
-      { concurrency: "unbounded" },
-    );
-
-    const commits = yield* readCommits(bearer, subject.repository, whole, files.files);
-
-    return {
-      url: pullRequest.url,
-      ...commits,
-      ...files,
-      ...people,
-      ...(subject.author === null ? undefined : { writtenAs: subject.author }),
-    };
-  });
-
-/**
  * The changes of the pull request asked about of an agent (`askedPullRequest`),
  * read on a token minted for the agent's repository on its task's workspace
  * installation (`pullRequestChangesRead`); none where it names no pull request
@@ -283,8 +243,14 @@ export const agentChangesOf = (
     return { pullRequest: changes };
   });
 
-/** The agents resource: every procedure to a signed-in caller, a body read under its own cap. */
-export function agentsProcedures(seams: AgentsProcedureSeams) {
+/**
+ * The agents resource: every procedure to a signed-in caller, a body read
+ * under its own cap. Note that it answers as the hosted router takes it,
+ * because its inferred type is past the length declarations will hold.
+ */
+export function agentsProcedures(
+  seams: AgentsProcedureSeams,
+): ContractedRouter<HostedContract["agents"], HostedProcedureContext> {
   const writer = storeWriter({ tools: CODER_TOOL_SET });
   // The kept published answers, shared with the pull request procedures where the router hands them, so a change there lets go of what `changes` read.
   const published = seams.published ?? instancePublishedCache();
@@ -744,7 +710,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     }),
     /** A shell started in the agent's sandbox, under an id the service mints, the sandbox resumed first where it stopped. */
     openTerminal: signedIn.openTerminal.effect(function* ({ input, context }) {
-      const sessionId = yield* reachedSession(context.userId, input.params.id);
+      const { sessionId, agent } = yield* reachedAgentSession(context.userId, input.params.id);
 
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
       const { title } = input.body;
@@ -755,12 +721,19 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       // Note that the tab holds the sandbox before its shell starts, so a stop as a turn ends never takes the sandbox from under it.
       yield* recordedTerminalOpened(sandboxName, terminalId);
 
+      // Note that the shell starts with the workspace's variables, as a run action and the agent's own commands do, and without them where they could not be read, as the relay's does, rather than not at all.
+      const environment = yield* workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL).pipe(
+        Effect.catch(() =>
+          Effect.as(Effect.logWarning("a terminal's variables were not read"), {}),
+        ),
+      );
+
       const opened = yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
 
           const started = yield* sandboxOrUpstream(
-            startedWaking(sessionId, sandbox.start(sessionId, terminalId, title)),
+            startedWaking(sessionId, sandbox.start(sessionId, terminalId, title, environment)),
           );
 
           // Note that a refused start started nothing, so it lets go; one the sandbox did not answer may have started, so a later list's prune decides.

@@ -18,23 +18,6 @@
  */
 
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
-import type { AdminMetrics, AdminRetentionCohort } from "@repo/features/admin-answer-wire";
-import {
-  ACTIVITY_FEATURE,
-  AGENT_ORIGIN,
-  FUNNEL_STEP,
-  REACH_FEATURE,
-} from "@repo/features/admin-overview-vocabulary";
-import {
-  ADMIN_METRICS_SCOPE,
-  ADMIN_METRICS_SCOPE_PARAM,
-  ADMIN_METRICS_WINDOW_DEFAULT,
-  ADMIN_METRICS_WINDOW_PARAM,
-  ADMIN_READ,
-  ADMIN_UNANSWERED,
-  adminMetricsScope,
-  adminMetricsWindow,
-} from "@repo/features/admin-wire";
 import type {
   AllowedCommandsWriteAnswerView,
   AllowedCommandWriteParams,
@@ -71,6 +54,7 @@ import {
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
+import type { WorkspaceSandboxSizeAnswer } from "@repo/features/workspace-sandbox-size-wire";
 import {
   WORKSPACE_ROLE,
   type WorkspaceMachine,
@@ -110,6 +94,7 @@ import {
 import { computerUseAppsStored, EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import { fixtureAdminRead } from "../admin/admin-fixture.js";
 import { appStateQuery } from "../use-app-state.js";
 import { fixtureClient } from "./tasks-fixture-loader.js";
 
@@ -176,6 +161,7 @@ const SETTINGS_LINKS: ReadonlyMap<string, SettingsLink> = new Map<string, Settin
   [RUN_PROFILE.SETTINGS_ACCOUNT, { page: SETTINGS_VIEW.ACCOUNT }],
   [RUN_PROFILE.SETTINGS_PREFERENCES, { page: SETTINGS_VIEW.PREFERENCES }],
   [RUN_PROFILE.SETTINGS_WORKSPACE, { page: SETTINGS_VIEW.WORKSPACE, workspaceId: WORKSPACE.ACME }],
+  [RUN_PROFILE.SETTINGS_BILLING, { page: SETTINGS_VIEW.BILLING, workspaceId: WORKSPACE.ACME }],
   [RUN_PROFILE.SETTINGS_AGENTS, { page: SETTINGS_VIEW.AGENTS }],
   [RUN_PROFILE.SETTINGS_HOSTS, { page: SETTINGS_VIEW.HOSTS }],
   [RUN_PROFILE.SETTINGS_THIS_MAC, { page: SETTINGS_VIEW.THIS_MAC }],
@@ -598,178 +584,6 @@ const MEMORIES: readonly MemorySummary[] = [
   ),
 ];
 
-/* ----- Admin ----- */
-
-/** The `days` UTC days up to the fixture's day, oldest first, as YYYY-MM-DD. */
-function trailingDays(days: number): readonly string[] {
-  return Array.from({ length: days }, (_, index) =>
-    new Date(NOW - (days - 1 - index) * DAY).toISOString().slice(0, 10),
-  );
-}
-
-/** A count that rises over the window and dips at weekends, so a chart of it reads as a real one. */
-function wave(index: number, base: number, step: number): number {
-  const weekend = index % 7 === 5 || index % 7 === 6;
-
-  return Math.round((base + index * step) * (weekend ? 0.4 : 1) + ((index * 7) % 5));
-}
-
-/** Six weekly cohorts, each retained a little less week on week, the newest still accruing. */
-function cohorts(): AdminRetentionCohort[] {
-  const weeks = 6;
-
-  return Array.from({ length: weeks }, (_, cohort) => {
-    const size = 18 + cohort * 4;
-    const reached = weeks - cohort;
-
-    return {
-      weekStart: new Date(NOW - (weeks - cohort) * 7 * DAY).toISOString().slice(0, 10),
-      size,
-      cells: Array.from({ length: reached }, (_, offset) => {
-        const activeAccounts = offset === 0 ? size : Math.round(size * (0.62 - offset * 0.07));
-
-        return {
-          offset,
-          activeAccounts,
-          share: activeAccounts / size,
-          inProgress: offset === reached - 1,
-        };
-      }),
-    };
-  });
-}
-
-/** One of the most active accounts, its numbers counted over the window. */
-function topAccount(id: string, name: string, activeDays: number, admin = false) {
-  return {
-    id,
-    name,
-    email: `${id.replace("user-", "")}@example.com`,
-    image: null,
-    admin,
-    activeDays,
-    tasks: activeDays * 2,
-    agents: activeDays * 3,
-    prsMerged: activeDays,
-    lastSeenAt: NOW - activeDays * HOUR,
-  };
-}
-
-/** How many of the fixture's accounts are admins, whom the Overview leaves out unless asked for everyone. */
-const ADMIN_ACCOUNTS = 3;
-
-/** Every other account, more than a quarter's signups add up to, so no window counts more new accounts than there are. */
-const NON_ADMIN_ACCOUNTS = 640;
-
-/**
- * The Overview's numbers over the window the read asks for, the last 30 days
- * where it names none, and over every account or every account but the
- * admins, as its Hide admins asks: a window's counts scaled to its length,
- * and the admins left out of the totals and the most active accounts.
- */
-function adminMetrics(query: Readonly<Record<string, string>>): AdminMetrics {
-  const windowDays =
-    adminMetricsWindow(query[ADMIN_METRICS_WINDOW_PARAM]) ?? ADMIN_METRICS_WINDOW_DEFAULT;
-
-  const adminsHidden =
-    adminMetricsScope(query[ADMIN_METRICS_SCOPE_PARAM]) !== ADMIN_METRICS_SCOPE.ALL;
-
-  // A month's active days scaled to the window, at least one and never more than the window holds.
-  const activeIn = (monthly: number) =>
-    Math.min(windowDays, Math.max(1, Math.round((monthly * windowDays) / 30)));
-
-  const days = trailingDays(windowDays);
-  const retention = { weeks: 6, cohorts: cohorts() };
-
-  const funnel = [
-    [FUNNEL_STEP.SIGNED_UP, 64],
-    [FUNNEL_STEP.GITHUB_CONNECTED, 51],
-    [FUNNEL_STEP.CREATED_TASK, 43],
-    [FUNNEL_STEP.STARTED_AGENT, 27],
-    [FUNNEL_STEP.OPENED_PR, 19],
-    [FUNNEL_STEP.MERGED_PR, 14],
-  ] as const;
-
-  // The signups are the daily series summed, as the service counts them, so the total and the funnel's base agree with the bars.
-  const dailySignups = days.map((day, index) => ({ day, count: wave(index, 1, 0.08) }));
-  const signedUp = dailySignups.reduce((sum, day) => sum + day.count, 0);
-
-  const reach = [
-    [REACH_FEATURE.TASKS, 38],
-    [REACH_FEATURE.AGENTS, 33],
-    [REACH_FEATURE.INBOX, 26],
-    [REACH_FEATURE.INTEGRATIONS, 29],
-    [REACH_FEATURE.AUTOMATIONS, 9],
-  ] as const;
-
-  const activeDevelopers = adminsHidden ? 42 : 42 + ADMIN_ACCOUNTS;
-
-  const topAccounts = [
-    topAccount("user-maya", "Maya Okafor", activeIn(27)),
-    topAccount(ACCOUNT_ID, "Ada Lovelace", activeIn(24), true),
-    topAccount("user-theo", "Theo Lindqvist", activeIn(19)),
-    topAccount("user-priya", "Priya Raman", activeIn(12)),
-  ];
-
-  return {
-    generatedAt: NOW,
-    windowDays,
-    users: {
-      total: adminsHidden ? NON_ADMIN_ACCOUNTS : NON_ADMIN_ACCOUNTS + ADMIN_ACCOUNTS,
-      newInWindow: signedUp,
-      signupTrend: { days: 7, recent: 18, prior: 14 },
-      dailySignups,
-    },
-    overview: {
-      headline: {
-        activeDevelopers: { days: 7, recent: activeDevelopers, prior: 37 },
-        tasksCreated: { days: 7, recent: 96, prior: 81 },
-        agentsStarted: { days: 7, recent: 214, prior: 188 },
-        prsMerged: { days: 7, recent: 71, prior: 66 },
-        prsOpened: { opened: 102, merged: 64 },
-      },
-      agentOrigins: {
-        agentsStarted: 214,
-        origins: (
-          [
-            [AGENT_ORIGIN.AUTOMATION, 37],
-            [AGENT_ORIGIN.SLACK, 18],
-            [AGENT_ORIGIN.AGENT, 63],
-            [AGENT_ORIGIN.HAND, 96],
-          ] as const
-        ).map(([origin, agents]) => ({ origin, agents, share: agents / 214 })),
-      },
-      activity: {
-        daily: days.map((day, index) => ({
-          day,
-          [ACTIVITY_FEATURE.AGENTS_STARTED]: wave(index, 20, 0.6),
-          [ACTIVITY_FEATURE.DESCRIPTION_REVISIONS]: wave(index, 34, 0.5),
-          [ACTIVITY_FEATURE.INBOX_ANSWERED]: wave(index, 15, 0.4),
-          [ACTIVITY_FEATURE.AUTOMATION_RUNS]: wave(index, 4, 0.2),
-        })),
-        trend: { days: 7, recent: 1840, prior: 1622 },
-      },
-      funnel: funnel.map(([step, monthly]) => {
-        // Each step keeps its month's share of the signups, so no step outnumbers the one before it.
-        const accounts = Math.round((signedUp * monthly) / 64);
-
-        return { step, accounts, share: signedUp === 0 ? null : accounts / signedUp };
-      }),
-      reach: {
-        activeDevelopers,
-        features: reach.map(([feature, developers]) => ({
-          feature,
-          developers,
-          share: developers / activeDevelopers,
-        })),
-      },
-      topAccounts: adminsHidden ? topAccounts.filter((account) => !account.admin) : topAccounts,
-      retention,
-    },
-    retention,
-  };
-}
-
 /* ----- Acme's Slack bot ----- */
 
 /** The repositories Acme's GitHub reaches, which the Slack bot's pickers list. */
@@ -799,11 +613,41 @@ let acmeSlackBot: WorkspaceSlackBot = {
 
 /* ----- Settings › Cloud environment's Variables ----- */
 
-/** Acme's environment variables by name, as an add, a replace, and a delete leave them. */
+/** Acme's environment variables, secrets and configs, as an add, an edit, and a delete leave them. */
 let acmeVariables: readonly WorkspaceVariable[] = [
-  { name: "DATABASE_URL", updatedAt: NOW - 3 * DAY },
-  { name: "OPENAI_API_KEY", updatedAt: NOW - DAY },
-  { name: "SENTRY_AUTH_TOKEN", updatedAt: NOW - 2 * HOUR },
+  {
+    name: "DATABASE_URL",
+    secret: true,
+    createdAt: NOW - 20 * DAY,
+    updatedAt: NOW - 3 * DAY,
+    createdBy: FIXTURE_PERSON.MAYA,
+    updatedBy: FIXTURE_PERSON.ADA,
+  },
+  {
+    name: "LOG_LEVEL",
+    secret: false,
+    value: "debug",
+    createdAt: NOW - 12 * DAY,
+    updatedAt: NOW - 5 * HOUR,
+    createdBy: FIXTURE_PERSON.THEO,
+    updatedBy: FIXTURE_PERSON.THEO,
+  },
+  {
+    name: "NODE_ENV",
+    secret: false,
+    value: "production",
+    createdAt: NOW - 30 * DAY,
+    updatedAt: NOW - 30 * DAY,
+    createdBy: FIXTURE_PERSON.ADA,
+  },
+  {
+    name: "OPENAI_API_KEY",
+    secret: true,
+    createdAt: NOW - DAY,
+    updatedAt: NOW - DAY,
+    createdBy: FIXTURE_PERSON.PRIYA,
+  },
+  { name: "SENTRY_AUTH_TOKEN", secret: true, createdAt: NOW - 9 * DAY, updatedAt: NOW - 2 * HOUR },
 ];
 
 /** The variables a write leaves, in name order as the service answers them. */
@@ -811,6 +655,35 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   acmeVariables = [...variables].sort((one, other) => one.name.localeCompare(other.name));
 
   return { variables: acmeVariables };
+}
+
+/** A variable as a write by the account leaves it: a new one added now, one that stood changed now; a config's value kept, a secret's never. */
+function writtenVariable(
+  name: string,
+  value: string,
+  secret: boolean | undefined,
+): WorkspaceVariable {
+  const was = acmeVariables.find((variable) => variable.name === name);
+
+  // Note that a new variable is what `secret` says, a secret by default, and one that stood stays a secret once it is one.
+  const isSecret = was === undefined ? (secret ?? true) : was.secret !== false || secret === true;
+
+  const kept = isSecret ? {} : { value };
+
+  if (was === undefined) {
+    return {
+      name,
+      secret: isSecret,
+      createdAt: NOW,
+      updatedAt: NOW,
+      createdBy: FIXTURE_PERSON.ADA,
+      ...kept,
+    };
+  }
+
+  const { value: _value, ...rest } = was;
+
+  return { ...rest, secret: isSecret, updatedAt: NOW, updatedBy: FIXTURE_PERSON.ADA, ...kept };
 }
 
 /* ----- Settings › Cloud environment's scripts ----- */
@@ -828,6 +701,9 @@ const SETUP_RUN_AGENT = {
     name: "Retry the relay's webhooks",
   },
 } as const;
+
+/** Acme's sandbox size, as a choice leaves it: four vCPUs. */
+let acmeSandboxSize: WorkspaceSandboxSizeAnswer = { vcpus: 4 };
 
 /**
  * Acme's sandbox setup, as a save leaves it: an install script, setup
@@ -1011,11 +887,20 @@ const ANSWERS: StagedAnswers = {
   },
   [ACT_KIND.ALLOWED_COMMANDS_WRITE]: (write) => allowedCommandWritten(write),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: () => ({ variables: acmeVariables }),
-  [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name }) =>
+  [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name, value }) =>
     variablesAnswer([
       ...acmeVariables.filter((variable) => variable.name !== name),
-      { name, updatedAt: NOW },
+      writtenVariable(name, value, undefined),
     ]),
+  [ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE]: ({ variables, secret }) => {
+    const written = variables.map(({ name, value }) => writtenVariable(name, value, secret));
+    const names = new Set(variables.map((variable) => variable.name));
+
+    return variablesAnswer([
+      ...acmeVariables.filter((variable) => !names.has(variable.name)),
+      ...written,
+    ]);
+  },
   [ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: ({ name }) =>
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
   // The workspace's members' machines, by name, or one member's: the account's own as Hosts stages them, and a teammate's Mac.
@@ -1025,6 +910,21 @@ const ANSWERS: StagedAnswers = {
     ),
   }),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
+  // Billing on, not set up, $12.40 of sandbox usage against the $10 included.
+  [ACT_KIND.WORKSPACE_BILLING_STATUS]: () => ({
+    live: true,
+    setUp: false,
+    blocked: false,
+    usage: [{ kind: "sandbox_session", amountMicroUsd: 12_400_000 }],
+    includedMicroUsd: 10_000_000,
+    owedMicroUsd: 2_400_000,
+  }),
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: () => acmeSandboxSize,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: ({ vcpus }) => {
+    acmeSandboxSize = { ...acmeSandboxSize, vcpus };
+
+    return acmeSandboxSize;
+  },
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
     sandboxSetupAnswer(repository, script),
@@ -1038,10 +938,7 @@ const ANSWERS: StagedAnswers = {
     version: "0.1.0",
     onPath: true,
   }),
-  [ACT_KIND.ADMIN_READ]: ({ procedure, query }) =>
-    procedure === ADMIN_READ.METRICS
-      ? { answer: adminMetrics(query) }
-      : { refused: ADMIN_UNANSWERED },
+  [ACT_KIND.ADMIN_READ]: fixtureAdminRead,
 };
 
 /**

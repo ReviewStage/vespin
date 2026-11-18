@@ -10,7 +10,7 @@ import {
   toolCallView,
   toolTarget,
 } from "./tool-call-model.js";
-import { CALL_KIND, callLine, callPlace } from "./turn-rows.js";
+import { CALL_KIND, CALL_MARK, callLine, callPlace } from "./turn-rows.js";
 
 const ESCAPE = String.fromCharCode(27);
 
@@ -125,7 +125,7 @@ test("a computer call says what it did to which app, by the name the Mac gave it
     code: false,
   });
   assert.equal(done.appIcon, "icon-1");
-  assert.equal(callPlace(done.kind), "On your Mac");
+  assert.equal(callPlace(done, CALL_MARK.LEADS), "On your Mac");
 
   const running = toolCallView({
     tool: "computer",
@@ -139,6 +139,31 @@ test("a computer call says what it did to which app, by the name the Mac gave it
     code: false,
   });
   assert.equal(running.appIcon, undefined);
+});
+
+test("an MCP call names where it ran only where its row's mark does not say it: the account among several, or a server of no integration's; a copy, with no mark, names the server", () => {
+  const remote = (account?: string) =>
+    toolCallView({
+      tool: "linear_remote",
+      input: {
+        remoteTool: "list_issues",
+        parentCallId: "wrapper",
+        input: {},
+        ...(account === undefined ? undefined : { account }),
+      },
+      output: undefined,
+    });
+
+  const several = remote("Acme");
+  const lone = remote();
+  const unknown = toolCallView({ tool: "mcp__docs__search", input: {}, output: undefined });
+
+  assert.equal(callPlace(several, CALL_MARK.LEADS), "Acme");
+  assert.equal(callPlace(several, CALL_MARK.NONE), "Linear · Acme");
+  assert.equal(callPlace(lone, CALL_MARK.LEADS), undefined);
+  assert.equal(callPlace(lone, CALL_MARK.NONE), "Linear");
+  assert.equal(callPlace(unknown, CALL_MARK.LEADS), "docs");
+  assert.equal(callPlace(unknown, CALL_MARK.NONE), "docs");
 });
 
 test("a command run on the Mac is the command it ran, described as a command is, and its answer says how it ended: its exit, its timeout, or why it was not run", () => {
@@ -1161,7 +1186,15 @@ test("a post from version 5 is a row naming its thread's title, or its key where
       body: "\nThe plan leaves this open.\n\nI set 7 days, its assumption.",
       ask: {
         type: "decide",
-        options: [{ label: "7 days", detail: "Matches password resets." }, { label: "14 days" }],
+        options: [
+          {
+            label: "7 days",
+            detail: "Matches password resets.",
+            // A page option from before its version was required still reads.
+            media: [{ page: "5f0c6f43-8a54-4c8e-9a43-6b7f3e2d1c0a" }],
+          },
+          { label: "14 days" },
+        ],
         recommended: "7 days",
       },
       waits: true,
@@ -1332,4 +1365,34 @@ test("withdraw_ask is a row naming the thread's key and saying why, opening the 
 
   assert.equal(closed.kind, CALL_KIND.INBOX_CLOSE);
   assert.deepEqual(closed.input, { kind: TOOL_BLOCK.TEXT, text: "Settled." });
+});
+
+test("a Slack message says it sent its words, and one refused says it sent none and shows why", () => {
+  const sent = toolCallView({
+    tool: "send_slack_message",
+    input: { text: "Yes, it counts." },
+    output: { status: "accepted", channelId: "C0001", threadTs: "1700000000.000001" },
+  });
+
+  const refused = toolCallView({
+    tool: "send_slack_message",
+    input: { text: "Yes, it counts." },
+    output: { status: "rejected", reason: "Not sent: no Slack thread speaks for you." },
+  });
+
+  assert.deepEqual(callLine(sent.kind, sent.subject, sent.description), {
+    verb: "Sent on Slack:",
+    subject: "Yes, it counts.",
+    code: false,
+  });
+  assert.deepEqual(callLine(refused.kind, refused.subject, refused.description), {
+    verb: "Didn't send on Slack:",
+    subject: "Yes, it counts.",
+    code: false,
+  });
+  assert.equal(refused.refused, true);
+  assert.deepEqual(refused.output, {
+    kind: TOOL_BLOCK.TEXT,
+    text: "Not sent: no Slack thread speaks for you.",
+  });
 });

@@ -5,8 +5,10 @@ import { Database } from "@repo/database/core/query";
 import { readAgent } from "@repo/database/models/agent-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
+import { task } from "@repo/database/schemas/task";
 import { getTestDB } from "@repo/database/testing";
-import { RUN_STATUS } from "@repo/features/turn-run";
+import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
+import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { LIVE_CLIENT_EVENT, LIVE_SERVER_EVENT } from "@repo/features/voice-delegation";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { asc, eq } from "drizzle-orm";
@@ -168,10 +170,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
 
         const run = Effect.gen(function* () {
           const holder = yield* Effect.forkChild(
-            holdVoiceCall(
-              { callId: call.id, callerId, epoch: 1, redelivered: false },
-              settingOut(ready),
-            ),
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, settingOut(ready)),
           );
 
           yield* Deferred.await(ready);
@@ -202,6 +201,128 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
   );
 
   it.effect(
+    "a call whose voice answers the caller names the untitled agent and its untitled task, with no turn of the agent's, though the voice greeted first",
+    () =>
+      Effect.gen(function* () {
+        const { call, callerId, agentId } = yield* openCall;
+        const db = yield* Database;
+        yield* db.update(agentTable).set({ title: null }).where(eq(agentTable.id, agentId));
+        const agent = Option.getOrThrow(yield* readAgent(callerId, agentId));
+        yield* db.update(task).set({ name: UNTITLED_TASK_NAME }).where(eq(task.id, agent.taskId));
+        const session = fakeLiveSession(undefined);
+        const sync = wakeableSync();
+        const ready = yield* Deferred.make<void>();
+
+        const named = Effect.gen(function* () {
+          const [row] = yield* db
+            .select({ title: agentTable.title, name: task.name })
+            .from(agentTable)
+            .innerJoin(task, eq(task.id, agentTable.taskId))
+            .where(eq(agentTable.id, agentId));
+
+          return row;
+        });
+
+        const run = Effect.gen(function* () {
+          const holder = yield* Effect.forkChild(
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, settingOut(ready)),
+          );
+
+          yield* Deferred.await(ready);
+          yield* session.say(
+            LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA,
+            fragment("Hi, what should we work on?", 0, 600),
+          );
+
+          // Note that the greeting is let settle, a title asked on it with it, before the caller says anything to name the agent by.
+          yield* storedLines(agentId, call.id).pipe(
+            Effect.tap(() => Effect.yieldNow),
+            Effect.repeat({ until: (lines) => lines.length === 1, times: 2_000 }),
+          );
+          yield* Effect.repeat(Effect.yieldNow, { times: 500 });
+          yield* session.say(
+            LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA,
+            fragment("Expire invitations after a week.", 700, 1100),
+          );
+          yield* session.say(
+            LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA,
+            fragment("Sure, what should happen to the old ones?", 1200, 1800),
+          );
+
+          // Note that the title is asked off the loop, so the case reads the rows until it lands.
+          const titled = yield* named.pipe(
+            Effect.tap(() => Effect.yieldNow),
+            Effect.repeat({ until: (row) => row?.title !== null, times: 2_000 }),
+          );
+
+          yield* Fiber.interrupt(holder);
+
+          return titled;
+        });
+
+        const titled = yield* run.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              sync.layer,
+              takingHarness(yield* Queue.unbounded<string>()),
+              session.layer,
+            ),
+          ),
+        );
+
+        // Note that the test's world holds no title key, so the caller's first words name it, with no model.
+        assert.deepEqual(titled, {
+          title: "Expire invitations after a week",
+          name: "Expire invitations after a week",
+        });
+      }).pipe(Effect.provide(world)),
+  );
+
+  it.effect("a turn that ends with `end_turn` is answered with its summary", () =>
+    Effect.gen(function* () {
+      const { call, callerId, agentId } = yield* openCall;
+      const told = yield* Queue.unbounded<{ readonly type: string }>();
+      const session = fakeLiveSession(undefined, told);
+      const sync = wakeableSync();
+      const ready = yield* Deferred.make<void>();
+      const agent = Option.getOrThrow(yield* readAgent(callerId, agentId));
+
+      const run = Effect.gen(function* () {
+        const holder = yield* Effect.forkChild(
+          holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, settingOut(ready)),
+        );
+
+        yield* Deferred.await(ready);
+
+        yield* endedAt(
+          agent,
+          RUN_STATUS.SUCCEEDED,
+          1_000,
+          "Writing the docs.",
+          TURN_FAILURE.MODEL,
+          "The docs are written.",
+        );
+
+        // Note that a later turn follows, so a reply left untold shows as the wrong reply rather than a wait.
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, 2_000, "Nothing else changed.");
+        yield* sync.wake;
+        assert.equal(yield* nextCommentary(told), "The docs are written.");
+        yield* Fiber.interrupt(holder);
+      });
+
+      yield* run.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            sync.layer,
+            takingHarness(yield* Queue.unbounded<string>()),
+            session.layer,
+          ),
+        ),
+      );
+    }).pipe(Effect.provide(world)),
+  );
+
+  it.effect(
     "a lease that takes the call over mid-line and between replies grows the line in place, tells each reply once, and starts one turn",
     () =>
       Effect.gen(function* () {
@@ -218,7 +339,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
         const run = Effect.gen(function* () {
           const first = yield* Effect.forkChild(
             holdVoiceCall(
-              { callId: call.id, callerId, epoch: 1, redelivered: false },
+              { callId: call.id, callerId, epoch: 1, delivery: 1 },
               settingOut(firstReady),
             ),
           );
@@ -234,7 +355,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
           // The next lease attaches, hearing the session's last events again, and claims the call.
           const next = yield* Effect.forkChild(
             holdVoiceCall(
-              { callId: call.id, callerId, epoch: 2, redelivered: false },
+              { callId: call.id, callerId, epoch: 2, delivery: 1 },
               settingOut(nextReady),
             ),
           );

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { imageDimensions, sniffImageType } from "./image-signature.js";
+import { base64PictureSize, imageDimensions, sniffImageType } from "./image-signature.js";
 import { INBOX_IMAGE_TYPE } from "./inbox-wire.js";
 
 /**
@@ -84,6 +84,7 @@ test("a browser's PNG, JPEG, and WebP read as the size they were drawn at", () =
     const bytes = bytesOf(base64);
     assert.equal(sniffImageType(bytes), type);
     assert.deepEqual(imageDimensions(bytes, type), { width: 37, height: 23 }, type);
+    assert.deepEqual(base64PictureSize(base64), { width: 37, height: 23 }, type);
   }
 });
 

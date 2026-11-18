@@ -1,17 +1,14 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { GlassEffectContainer, Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  background,
   frame,
   glassEffect,
   type ModifierConfig,
   onGeometryChange,
   padding,
-  strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
@@ -23,7 +20,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useReduceTransparency } from "./accessibility.js";
 import { KeyboardDockArea } from "./keyboard-dock.js";
 import { useColors } from "./tokens/colors.js";
 import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -40,8 +36,11 @@ const DockKeyboard = createContext(0);
 /** Whether the dock the bar stands in lifts it natively, clear of the bottom safe area it keeps standing over; none outside the native dock. */
 const DockLifted = createContext(false);
 
-/** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
+/** Tells the dock how tall the bar inside it stands, with its gap, and where its top stands in the window; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
+
+/** How far apart the controls of a row with no bar stand (`DockRow`), as the glass buttons over Notes' keyboard stand apart. */
+const DOCK_ROW_SPACING = SPACE.TIGHT * 2;
 
 /** How round the bar stands: a rounded field, as a composer's is. */
 export const BAR_RADIUS = 24;
@@ -54,6 +53,9 @@ export const BAR_RADIUS = 24;
  */
 export const BAR_EDGE = 2;
 
+/** How far the bar stands in from its column's edges, so what stands over its end, such as Jump to latest, can stand over its last press. */
+export const BAR_MARGIN = SPACE.ROW + 2;
+
 /** How far apart the row's pieces stand: not at all, since a press's frame holds the room around its mark that the row's spacing held before. */
 export const BAR_ROW_SPACING = 0;
 
@@ -64,7 +66,7 @@ export const BAR_HEAD_INSET = {
   top: SPACE.TIGHT + 2,
 } as const;
 
-/** The most of the window's height what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes. */
+/** The most of the window's height above the keyboard what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes and with the keyboard up. */
 const HEAD_SHARE = 0.35;
 
 const styles = StyleSheet.create({
@@ -77,11 +79,12 @@ const styles = StyleSheet.create({
   docked: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center" },
   // The bar's column, as wide as the dock and no wider than the reading width a wide window centers its content at.
   column: { width: "100%" },
-  bar: {
-    marginHorizontal: SPACE.ROW + 2,
-    padding: BAR_EDGE,
-    borderRadius: BAR_RADIUS,
-  },
+  // A row with no bar stands in from the screen's edges as far as a bar does.
+  row: { marginHorizontal: BAR_MARGIN },
+  // What stands over a bar in a glass of its own, as far in as the bar and apart from it.
+  above: { marginHorizontal: BAR_MARGIN, marginBottom: SPACE.TIGHT * 2 },
+  // The bar stands in from the screen's edges, its glass drawn by its SwiftUI.
+  bar: { marginHorizontal: BAR_MARGIN },
 });
 
 /**
@@ -97,50 +100,39 @@ function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
   });
 }
 
-/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
-function useKeyboardHeight(): number {
-  const [height, setHeight] = useState(0);
+/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. Where `moves` is given, the next layout moves with the keyboard on its own curve. Note that it starts from the keyboard standing as it mounts, so a piece drawn while the keyboard is up, such as a composer's head a refused send adds, reads it at once rather than at the keyboard's next move. */
+export function useKeyboardHeight(moves = true): number {
+  const [height, setHeight] = useState(() =>
+    Keyboard.isVisible() ? (Keyboard.metrics()?.height ?? 0) : 0,
+  );
+
   useEffect(() => {
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
-      moveWithKeyboard(event);
+      if (moves) moveWithKeyboard(event);
       setHeight(event.endCoordinates.height);
     });
 
     const falling = Keyboard.addListener("keyboardWillHide", (event) => {
-      moveWithKeyboard(event);
+      if (moves) moveWithKeyboard(event);
       setHeight(0);
     });
+
+    // Note that the height is read again once the keyboard has stood or gone, since a piece mounted while it moved read where it stood before, which React Native holds until the move ends.
+    const stood = Keyboard.addListener("keyboardDidShow", (event) =>
+      setHeight(event.endCoordinates.height),
+    );
+
+    const gone = Keyboard.addListener("keyboardDidHide", () => setHeight(0));
 
     return () => {
       rising.remove();
       falling.remove();
+      stood.remove();
+      gone.remove();
     };
-  }, []);
+  }, [moves]);
 
   return height;
-}
-
-/**
- * A bar's solid stand-in for glass: the surface's ground inside the strong
- * edge, which holds the field's bounds apart from the screen behind it.
- */
-function SolidBar({ children }: { readonly children: ReactNode }) {
-  const colors = useColors();
-
-  return (
-    <View
-      style={[
-        styles.bar,
-        {
-          backgroundColor: colors.SURFACE,
-          borderColor: colors.TEXT_MUTED,
-          borderWidth: StyleSheet.hairlineWidth,
-        },
-      ]}
-    >
-      {children}
-    </View>
-  );
 }
 
 /** The filled ground a field's row and what heads it stand on inside the glass, so their words read over a bright picture scrolling under the bar. */
@@ -157,46 +149,27 @@ function useFieldGround(radius: number): readonly ModifierConfig[] {
 
 /**
  * The glass a SwiftUI piece floating over the screen stands in, rounded as a
- * bar is, such as the failure notice and a split view's composer: the
- * system's glass, or, where Liquid Glass is unavailable or the reader turned
- * on Reduce Transparency, the same solid stand-in a `GlassBar` draws, the
- * surface's ground inside the quiet ink's hairline, rather than whatever the
- * system makes of glass the reader asked not to see through.
+ * bar is, such as a composer's bar, the failure notice and a split view's
+ * composer: the system's own glass, which iOS draws solid where the reader
+ * turned on Reduce Transparency.
  */
-export function useBarGlass(): readonly ModifierConfig[] {
-  const colors = useColors();
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-
-  return solid
-    ? [
-        background(
-          colors.SURFACE,
-          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: BAR_RADIUS }),
-        ),
-        strokeBorder({
-          content: colors.TEXT_MUTED,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: BAR_RADIUS,
-          style: { lineWidth: StyleSheet.hairlineWidth },
-        }),
-      ]
-    : [
-        glassEffect({
-          glass: { variant: "regular" },
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: BAR_RADIUS,
-        }),
-      ];
-}
+export const BAR_GLASS: readonly ModifierConfig[] = [
+  glassEffect({
+    glass: { variant: "regular" },
+    // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+    shape: "roundedRectangle",
+    cornerRadius: BAR_RADIUS,
+  }),
+];
 
 /**
  * What heads a bar inside its glass, such as a composer's held call and
  * queued messages, inset as the row's marks are. Note that it scrolls in
- * place once it would stand taller than a share of the window
- * (`HEAD_SHARE`), because at the largest text sizes a held call's words and
- * its Deny and Allow alone grew the bar over the whole screen it docks on.
+ * place once it would stand taller than a share of the window the keyboard
+ * leaves (`HEAD_SHARE`), because at the largest text sizes a held call's
+ * words and its Deny and Allow alone grew the bar over the whole screen it
+ * docks on, and with the keyboard up on the folded iPhone Duo a share of the
+ * whole window left the transcript a line or two.
  */
 export function BarHead({
   children,
@@ -207,8 +180,9 @@ export function BarHead({
   readonly filled?: boolean;
 }) {
   const { height: window } = useWindowDimensions();
+  const keyboard = useKeyboardHeight(false);
   const [tall, setTall] = useState(0);
-  const most = Math.round(window * HEAD_SHARE);
+  const most = Math.round(Math.max(0, window - keyboard) * HEAD_SHARE);
   const ground = useFieldGround(BAR_RADIUS - BAR_EDGE);
 
   // Note that a filled head spans the bar's width, as the field's pill under it does, rather than hugging its words.
@@ -240,74 +214,15 @@ export function BarHead({
 }
 
 /**
- * A bar of glass holding a composer's field and its buttons, floating over
- * the content it scrolls above, as the system's own bars do. Its children
- * are SwiftUI pieces, laid in a row on a host of its own, under its head
- * where it has one, along the row's foot, so a field grown past one line
- * keeps its buttons beside its last line, as Messages' do. It stands inside
- * the screen's bottom safe area, which the tab bar's height is part of, so
- * the bar sits above the tab bar rather than under it. Note that where
- * Liquid Glass is unavailable, before iOS 26, or the reader turned on Reduce
- * Transparency, the bar is drawn solid on the surface's ground inside the
- * quiet ink rather than a hand-drawn copy of glass, so nothing scrolls
- * through behind its words.
+ * What a dock pins at its foot, standing in the screen's bottom safe area,
+ * and telling its dock how tall it stands, its gap with it, as it grows and
+ * shrinks, so the content under it scrolls clear of all of it.
  */
-export function GlassBar({
-  children,
-  head,
-  modifiers = [],
-  field = false,
-}: {
-  readonly children: ReactNode;
-  /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
-  readonly field?: boolean;
-  /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
-  readonly head?: ReactNode;
-  /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
-  readonly modifiers?: readonly ModifierConfig[];
-}) {
+function DockedFoot({ children }: { readonly children: ReactNode }) {
   const keyboard = useKeyboardHeight() > 0;
   const lifted = useContext(DockLifted);
   const measure = useContext(DockMeasure);
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-  const ground = useFieldGround(PRESS_SIZE / 2);
 
-  // Note that a solid bar already stands on that fill, so only the glass takes the pill, and its head the same ground.
-  const filled = field && !solid;
-  const pill = filled ? ground : [];
-
-  const row = (
-    <HStack
-      alignment="bottom"
-      spacing={BAR_ROW_SPACING}
-      modifiers={head === undefined ? [...modifiers, ...pill] : [...pill]}
-    >
-      {children}
-    </HStack>
-  );
-
-  const content = (
-    <Host matchContents={{ vertical: true }} style={styles.content}>
-      {head === undefined ? (
-        row
-      ) : (
-        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers]}>
-          <BarHead filled={filled}>{head}</BarHead>
-          {row}
-        </VStack>
-      )}
-    </Host>
-  );
-
-  const bar = solid ? (
-    <SolidBar>{content}</SolidBar>
-  ) : (
-    <GlassView glassEffectStyle="regular" style={styles.bar}>
-      {content}
-    </GlassView>
-  );
-
-  // Note that a docked bar tells its dock how tall it stands, its gap with it, as its head grows and shrinks, so the content under it scrolls clear of all of it.
   const onLayout =
     measure === undefined
       ? undefined
@@ -319,13 +234,113 @@ export function GlassBar({
       edges={keyboard && !lifted ? ["left", "right"] : ["bottom", "left", "right"]}
       style={styles.gap}
     >
-      <View onLayout={onLayout}>{bar}</View>
+      <View onLayout={onLayout}>{children}</View>
     </SafeAreaView>
   );
 }
 
-/** Whether the dock follows the keyboard frame by frame, as the native dock does; a list over it may then lower the keyboard under the reader's finger rather than at the first drag. */
-export const DOCK_FOLLOWS_KEYBOARD = KeyboardDockArea !== undefined;
+/**
+ * A bar of glass holding a composer's field and its buttons, floating over
+ * the content it scrolls above, as the system's own bars do. Its children
+ * are SwiftUI pieces, laid in a row on a host of its own, under its head
+ * where it has one, along the row's foot, so a field grown past one line
+ * keeps its buttons beside its last line, as Messages' do. It stands inside
+ * the screen's bottom safe area, which the tab bar's height is part of, so
+ * the bar sits above the tab bar rather than under it. Its glass is the
+ * system's own (`BAR_GLASS`) on its SwiftUI, which iOS draws solid where
+ * the reader turned on Reduce Transparency.
+ */
+export function GlassBar({
+  children,
+  head,
+  above,
+  modifiers = [],
+  field = false,
+}: {
+  readonly children: ReactNode;
+  /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box; nothing where none is given. */
+  readonly above?: ReactNode;
+  /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
+  readonly field?: boolean;
+  /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
+  readonly head?: ReactNode;
+  /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
+  readonly modifiers?: readonly ModifierConfig[];
+}) {
+  const ground = useFieldGround(PRESS_SIZE / 2);
+  const pill = field ? ground : [];
+
+  // Note that the glass spans the bar's width whatever its row holds, as the bar always has.
+  const glass = [
+    frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+    padding({ all: BAR_EDGE }),
+    ...BAR_GLASS,
+  ];
+
+  const row = (
+    <HStack
+      alignment="bottom"
+      spacing={BAR_ROW_SPACING}
+      modifiers={head === undefined ? [...modifiers, ...pill, ...glass] : [...pill]}
+    >
+      {children}
+    </HStack>
+  );
+
+  const bar = (
+    <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
+      {head === undefined ? (
+        row
+      ) : (
+        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
+          <BarHead filled={field}>{head}</BarHead>
+          {row}
+        </VStack>
+      )}
+    </Host>
+  );
+
+  return (
+    <DockedFoot>
+      {above === undefined ? null : (
+        <Host matchContents={{ vertical: true }} style={[styles.content, styles.above]}>
+          {above}
+        </Host>
+      )}
+      {bar}
+    </DockedFoot>
+  );
+}
+
+/**
+ * A row of controls a dock pins at its foot with no bar around them, each
+ * control standing in the system's own glass, one layer, as the controls
+ * over the keyboard in Notes and Reminders stand: a compose sheet's + and
+ * its capsule menus. Its children are SwiftUI pieces drawn with a glass
+ * button style (`buttonStyle("glass")`), laid in a row inside the system's
+ * glass container, so neighbors draw as one family of glass rather than a
+ * glass inside a glass. Note that the system's glass styles stand solid on
+ * their own where the reader turned on Reduce Transparency, so the row needs
+ * no stand-in of its own.
+ */
+export function DockRow({
+  children,
+  modifiers = [],
+}: {
+  readonly children: ReactNode;
+  /** What the row's SwiftUI takes over its whole width, such as a drop of pictures. */
+  readonly modifiers?: readonly ModifierConfig[];
+}) {
+  return (
+    <DockedFoot>
+      <Host matchContents={{ vertical: true }} style={[styles.content, styles.row]}>
+        <GlassEffectContainer spacing={DOCK_ROW_SPACING} modifiers={[...modifiers]}>
+          <HStack spacing={DOCK_ROW_SPACING}>{children}</HStack>
+        </GlassEffectContainer>
+      </Host>
+    </DockedFoot>
+  );
+}
 
 /** What a dock holds: the screen's content, and the bar pinned over its foot. */
 interface DockProps {
@@ -352,55 +367,6 @@ function DockColumn({
 }
 
 /**
- * The dock where the app's native dock stands (`keyboard-dock.ts`): it lifts
- * the bar with the keyboard frame by frame, through a drag that pulls the
- * keyboard down, the suggestion strip's growth, and a form sheet's own lift,
- * and tells how far the keyboard stands over its foot, which the content
- * leaves room for. Note that the bar must stand last in it, since the native
- * dock lifts its last child.
- */
-function NativeDock({
-  area: Area,
-  children,
-  bar,
-}: DockProps & { readonly area: NonNullable<typeof KeyboardDockArea> }) {
-  const [overlap, setOverlap] = useState(0);
-  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
-
-  return (
-    <Area style={styles.dock} onOverlap={(event) => setOverlap(event.nativeEvent.overlap)}>
-      <DockKeyboard.Provider value={overlap}>
-        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      </DockKeyboard.Provider>
-      {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
-      <View style={styles.docked} collapsable={false}>
-        <DockLifted.Provider value={true}>
-          <DockColumn bar={bar} onRoom={setRoom} />
-        </DockLifted.Provider>
-      </View>
-    </Area>
-  );
-}
-
-/** The dock in a build without the native one: the bar lifted by the keyboard's height as the system announces it, rising and falling on the keyboard's own curve, but standing still through a drag that pulls the keyboard down. */
-function AnnouncedDock({ children, bar }: DockProps) {
-  // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
-  const keyboard = useKeyboardHeight();
-  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
-
-  return (
-    <View style={styles.dock}>
-      <DockKeyboard.Provider value={keyboard}>
-        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      </DockKeyboard.Provider>
-      <View style={[styles.docked, { bottom: keyboard }]}>
-        <DockColumn bar={bar} onRoom={setRoom} />
-      </View>
-    </View>
-  );
-}
-
-/**
  * A screen with a bar pinned at its foot, such as a thread's composer: the
  * screen's content fills it, the bar floating over its foot as the system's
  * bars do, and rising with the keyboard so the field stays above it. The
@@ -410,17 +376,31 @@ function AnnouncedDock({ children, bar }: DockProps) {
  * as it stands over the dock (`useDockKeyboard`). In a wide window the bar
  * stands in the content's own centered column, at the reading width, as
  * Messages' field stands under its conversation, rather than across the
- * whole window. Where the build carries the native dock, the bar follows the
- * keyboard frame by frame, so a list over it may lower the keyboard under the
- * reader's finger.
+ * whole window. The app's native dock (`keyboard-dock.ts`) lifts the bar
+ * with the keyboard frame by frame, through a drag that pulls the keyboard
+ * down, the suggestion strip's growth, and a form sheet's own lift, so a list
+ * over it may lower the keyboard under the reader's finger; the bar stands
+ * last in it, since the native dock lifts its last child.
  */
 export function GlassDock({ children, bar }: DockProps) {
-  return KeyboardDockArea === undefined ? (
-    <AnnouncedDock bar={bar}>{children}</AnnouncedDock>
-  ) : (
-    <NativeDock area={KeyboardDockArea} bar={bar}>
-      {children}
-    </NativeDock>
+  const [overlap, setOverlap] = useState(0);
+  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+
+  return (
+    <KeyboardDockArea
+      style={styles.dock}
+      onOverlap={(event) => setOverlap(event.nativeEvent.overlap)}
+    >
+      <DockKeyboard.Provider value={overlap}>
+        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      </DockKeyboard.Provider>
+      {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
+      <View style={styles.docked} collapsable={false}>
+        <DockLifted.Provider value={true}>
+          <DockColumn bar={bar} onRoom={setRoom} />
+        </DockLifted.Provider>
+      </View>
+    </KeyboardDockArea>
   );
 }
 

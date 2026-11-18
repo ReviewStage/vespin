@@ -4,10 +4,11 @@
  * The phone is named by the raw APNs token iOS hands the app
  * (`getDevicePushTokenAsync`, never an Expo push token, so a notification's
  * words go only to Apple) and the gateway the token belongs to, which the
- * build decides (`BUILD_ENVIRONMENT`). The token is read once a launch,
- * since iOS may hand a new one after a restore or a reinstall, and the phone
- * registered again on every launch while the permission stands, so the
- * service always holds the token iOS hands now; a register is idempotent.
+ * build decides (`BUILD_ENVIRONMENT`). The token is read once a launch and
+ * followed while the app runs (`addPushTokenListener`), as Expo's guide has
+ * it, since iOS may hand a new one after a restore, a reinstall, or at any
+ * time, and the phone is registered again under each, so the service always
+ * holds the token iOS hands now; a register is idempotent.
  * Note that iOS may never answer the read, as on an ad-hoc-signed simulator
  * or a phone that cannot reach APNs, so nothing a person waits on, a
  * sign-out above all, waits on it.
@@ -35,8 +36,12 @@ import type { ActPortClient } from "@repo/host/contract";
 import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import Constants from "expo-constants";
-import { getDevicePushTokenAsync } from "expo-notifications";
-import { useEffect, useRef, useState } from "react";
+import {
+  addPushTokenListener,
+  type DevicePushToken,
+  getDevicePushTokenAsync,
+} from "expo-notifications";
+import { useEffect, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 import {
@@ -69,21 +74,52 @@ export interface PushDeviceKey {
 /** This launch's read of the phone's token, made once and shared by every screen that asks. */
 let tokenRead: Promise<PushDeviceKey | undefined> | undefined;
 
-/** The key this launch's read of the phone's token answered; none until iOS answers one. */
+/** The key iOS handed last, by this launch's read or a change since; none until iOS answers one. */
 let keyRead: PushDeviceKey | undefined;
+
+/** Whether the phone's token is followed: begun with the first read and kept for the launch. */
+let tokenFollowed = false;
+
+/** The screens told of a token iOS hands while the app runs. */
+const keyHeard = new Set<(key: PushDeviceKey) => void>();
 
 /** The key a fixture run names the phone by. */
 const FIXTURE_KEY: PushDeviceKey = { token: FIXTURE_PUSH_TOKEN, environment: BUILD_ENVIRONMENT };
 
+/** The key a token names, or none for one iOS handed empty. */
+function keyOf(token: DevicePushToken): PushDeviceKey | undefined {
+  return Predicate.isString(token.data) && token.data !== ""
+    ? { token: token.data, environment: BUILD_ENVIRONMENT }
+    : undefined;
+}
+
+/**
+ * Follows the phone's token for the launch, so one iOS hands while the app
+ * runs replaces the key read and reaches every screen holding it. Note that
+ * the listener never reads the token itself, because Expo warns that a read
+ * inside it can loop.
+ */
+function followDeviceKey(): void {
+  if (tokenFollowed) return;
+  tokenFollowed = true;
+  addPushTokenListener((token) => {
+    const key = keyOf(token);
+
+    if (key === undefined || key.token === keyRead?.token) return;
+    keyRead = key;
+    tokenRead = Promise.resolve(key);
+
+    for (const heard of keyHeard) heard(key);
+  });
+}
+
 /** The phone's key, read once a launch: a fixture run's synthetic one, or iOS's own; none where iOS hands no token. */
 function readDeviceKey(fixture: boolean): Promise<PushDeviceKey | undefined> {
   if (fixture) return Promise.resolve(FIXTURE_KEY);
+  followDeviceKey();
   tokenRead ??= getDevicePushTokenAsync().then(
     (token) => {
-      keyRead =
-        Predicate.isString(token.data) && token.data !== ""
-          ? { token: token.data, environment: BUILD_ENVIRONMENT }
-          : undefined;
+      keyRead = keyOf(token) ?? keyRead;
 
       return keyRead;
     },
@@ -121,7 +157,7 @@ export function notificationsAllowed(
   return fixture || standing === NOTIFICATION_STANDING.ALLOWED;
 }
 
-/** The phone's key once iOS lets it notify, read once a launch; none until then, or where iOS hands no token. */
+/** The phone's key once iOS lets it notify, read once a launch and followed after; none until then, or where iOS hands no token. */
 export function usePushDeviceKey(): PushDeviceKey | undefined {
   const { standing } = useNotificationPermission();
   const fixture = useFixtureRun();
@@ -133,9 +169,11 @@ export function usePushDeviceKey(): PushDeviceKey | undefined {
     readDeviceKey(fixture).then((read) => {
       if (live) setKey(read);
     });
+    keyHeard.add(setKey);
 
     return () => {
       live = false;
+      keyHeard.delete(setKey);
     };
   }, [allowed, fixture]);
 
@@ -183,24 +221,14 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
 
 /**
  * The phone registered under the account signed in, once a launch while iOS
- * lets it notify; nothing while signed out. Note that iOS's own prompt is
- * asked once the account is signed in where it was never asked, as most apps
- * ask it, since the phone takes no notification and no Live Activity until
- * it is allowed; a refusal is left to Settings' step toward iOS's Settings.
- * A fixture run stands for a phone that allowed it, so it asks nothing.
+ * lets it notify; nothing while signed out. Note that nothing here asks iOS's
+ * prompt: the Inbox asks it in place, saying why first (`notification-ask.tsx`),
+ * since iOS raises it once an install and a prompt raised the moment an
+ * account signs in was refused before any ask had been seen.
  */
 export function usePushRegistration(signedIn: boolean): void {
   const acts = useHostActs();
-  const fixture = useFixtureRun();
-  const { standing, allow } = useNotificationPermission();
   const key = usePushDeviceKey();
-  // Whether this launch asked already, so the prompt is never asked twice while its answer is read.
-  const asked = useRef(false);
-  useEffect(() => {
-    if (!signedIn || fixture || standing !== NOTIFICATION_STANDING.UNASKED || asked.current) return;
-    asked.current = true;
-    allow();
-  }, [signedIn, fixture, standing, allow]);
   useEffect(() => {
     if (!signedIn) {
       // Note that a sign-out the app did not start, such as a refused renewal, runs no unregister, so the next account registers afresh.

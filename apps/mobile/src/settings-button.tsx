@@ -18,6 +18,8 @@ export const SETTINGS_ROUTE = {
   ACCOUNT: "/settings/account",
   AGENTS: "/settings/agents",
   INTEGRATIONS: "/settings/integrations",
+  /** One connection's own page, by the `connection` it is pushed with, as a connected row of Integrations opens it. */
+  INTEGRATION: "/settings/integration",
   MACHINES: "/settings/machines",
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
@@ -66,6 +68,7 @@ export function useSettingsAccount(): BarAccount | undefined {
   return {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
+    address: account.email,
     label: SETTINGS,
     onPress: () => open(),
   };
@@ -78,7 +81,7 @@ export function useSettingsAccount(): BarAccount | undefined {
  * opens Settings, as Notion's one workspace button does, on every tab, since
  * each acts on the chosen workspace; the account's photo, opening Settings,
  * only before the account's workspaces are read. A split view
- * stands the switcher in its own bar or the app sidebar's list instead
+ * stands the switcher in its list column's bar instead
  * (`screens/app-sidebar.tsx`).
  */
 export function SettingsBarButton({ switcher }: { readonly switcher?: SwitcherProps | undefined }) {

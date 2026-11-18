@@ -21,6 +21,7 @@ import {
   type Effect,
   Layer,
   Logger,
+  type Option,
   type Path,
   type Result,
   type Stream,
@@ -31,8 +32,9 @@ import type { HttpClient } from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
+import type { LaunchdJob } from "../daemon/launchd-job.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
-import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
+import type { SecretCipher as SecretCipherSeam, TokenVault } from "../settings-store.js";
 
 /** The app's own application-state root, given explicitly. */
 export class StateRoot extends Context.Service<StateRoot, string>()("@repo/host/StateRoot") {}
@@ -70,6 +72,16 @@ export class SecretCipher extends Context.Service<SecretCipher, SecretCipherSeam
   "@repo/host/SecretCipher",
 ) {}
 
+/**
+ * Where the platform keeps the account's tokens itself, as the iPhone's
+ * Keychain does through `expo-secure-store`, which the OAuth source hands the
+ * settings store in its cipher's place where the shell provides one. The
+ * desktop provides none, so its tokens stay sealed by `SecretCipher`.
+ */
+export class PlatformTokenVault extends Context.Service<PlatformTokenVault, TokenVault>()(
+  "@repo/host/PlatformTokenVault",
+) {}
+
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {
   readonly create: () => string;
@@ -102,19 +114,6 @@ export class SettingsChangedElsewhere extends Context.Service<
   SettingsChangedElsewhere,
   Stream.Stream<void>
 >()("@repo/host/SettingsChangedElsewhere") {}
-
-/**
- * Each moment the shell asks the account's kept lists written
- * (`entity-store.ts`): on the phone, the app going to the background. A host
- * handed it writes the lists that moved only then and as the store closes,
- * never on the store's own timer, because the phone seals the file in
- * JavaScript, about half a second a save for a large account, which a timer
- * firing while the member taps would stand in front of the tap. It is
- * optional: the desktop seals with the system's own cipher and provides none.
- */
-export class KeptListsDue extends Context.Service<KeptListsDue, Stream.Stream<void>>()(
-  "@repo/host/KeptListsDue",
-) {}
 
 /**
  * A terminal's relay WebSocket. It arrives rather than being built here,
@@ -224,7 +223,13 @@ export interface LocalAgentCommand {
  */
 export interface LocalAgentClis {
   /** Where each is kept under the device's state, named before it is fetched. */
-  readonly paths: { readonly claude: string; readonly codex: string; readonly gh: string };
+  readonly paths: {
+    readonly claude: string;
+    readonly codex: string;
+    readonly gh: string;
+    /** Cursor's SDK entry, where the device keeps one: a Mac's, and no Linux host's. */
+    readonly cursor?: string | undefined;
+  };
   /**
    * Each had now where it can be: the build kept where it still stands as
    * checked, and otherwise the pinned build fetched and checked. It runs
@@ -262,7 +267,13 @@ export interface LocalAgentPlatformSeam {
   /** The process a runner is started as, given what it runs and the environment made for it: straight on the box in the agent's folder (`local-agent-box.ts`'s `agentOnBox`). */
   readonly launch: (runner: LocalAgentRunner) => LocalAgentCommand;
   /** What every runner runs on, which the device registers: the host's own Node and the CLIs it keeps (`clis.paths`). */
-  readonly tools: { readonly node: string; readonly claude: string; readonly codex: string };
+  readonly tools: {
+    readonly node: string;
+    readonly claude: string;
+    readonly codex: string;
+    /** Cursor's SDK entry, which a Cursor agent's runner imports; none where the device keeps none. */
+    readonly cursorSdk?: string | undefined;
+  };
   readonly runnerBundle: string;
   readonly runnerEnv: Readonly<Record<string, string>>;
   /** The machine's own temp folder as the daemon's user sees it (`os.tmpdir()`), under which its agents' shared files stand (`deviceAgentTempFolder`). */
@@ -345,6 +356,12 @@ export interface ThisMacHostSeam {
   >;
   /** Where macOS stands on the agent now. */
   readonly status: Effect.Effect<ThisMacAgentStatus>;
+  /** launchd's count of the agent's runs and how its last run exited, as `launchctl print` states them; none where launchd holds no such job or could not be asked. */
+  readonly job: Effect.Effect<
+    Option.Option<LaunchdJob>,
+    never,
+    ChildProcessSpawner.ChildProcessSpawner
+  >;
   /** Whether this app's own version registered the agent; another's leaves it running the bundle an update replaced until it is registered again. */
   readonly registeredHere: Effect.Effect<boolean>;
   /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run; a failure says why in our own words, never a command's output. */

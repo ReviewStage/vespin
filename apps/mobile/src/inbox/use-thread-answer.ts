@@ -8,7 +8,7 @@
  * drawn over the thread the moment it is pressed (`inboxSendingDrawn`), so
  * the list and the thread read it settled at once, and stands until a read
  * carries it; a refused one is let go, its words and picks put back on the
- * box, the refusal said under it, and the phone buzzes as a refusal does.
+ * box, the refusal said in its head, and the phone buzzes as a refusal does.
  * The box's next send may start a new thread with the thread's agent
  * instead (`AGENTS_INBOX_START`), as the panel's "Send as a new thread to"
  * does: its words the thread's first message, the new thread opened once
@@ -30,6 +30,7 @@
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import { missingWords } from "@repo/features/inbox-ask-words";
 import {
   EMPTY_INBOX_DRAFT,
@@ -66,16 +67,26 @@ import {
   type InboxReader,
   type InboxSending,
   inboxSendingDrawn,
+  inboxSendingFile,
+  inboxSendingFiles,
 } from "@repo/features/inbox-writes";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
-import { BUZZ, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
+import {
+  BUZZ,
+  buzz,
+  heldValue,
+  NOTICE_KIND,
+  useFailureNotices,
+  useHeldValue,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { replyLetGo, replyPressed } from "../reply-drawn.js";
 import { useWrite } from "../use-write.js";
 
 /** What the app holds of one thread: the draft on its box, the sends not yet carried by a read, by key, what its last refused send said, and a notification's action not yet sent. */
@@ -86,8 +97,14 @@ interface ThreadHeld {
   readonly pressed?: InboxPushPress;
   /** Whether the box's next send starts a new thread with the thread's agent rather than replying. */
   readonly asNew?: boolean;
-  /** The key the last thread start went under and its words, which a start of the same words goes under again, so a retry starts one thread. */
-  readonly started?: { readonly key: string; readonly words: string };
+  /** The key the last thread start went under, its words and its pictures, which a start of the same words and pictures goes under again, so a retry starts one thread. */
+  readonly started?: {
+    readonly key: string;
+    readonly words: string;
+    readonly attachments: readonly AgentAttachment[];
+  };
+  /** The key of the Got it out, which takes Got it off the thread while it is out, as the host draws the thread settled once it goes, and sends nothing on a second press. */
+  readonly nodding?: string | undefined;
 }
 
 /** A thread the app holds nothing of. */
@@ -127,6 +144,14 @@ function unreadableWords(label: string): string {
   return `Write a number in ${label}.`;
 }
 
+/** Whether two starts carry the same pictures, each by its name and bytes, in the same order. */
+function samePictures(one: readonly AgentAttachment[], other: readonly AgentAttachment[]): boolean {
+  return (
+    one.length === other.length &&
+    one.every((each, at) => each.name === other[at]?.name && each.data === other[at]?.data)
+  );
+}
+
 /** The draft a notification's action sends on the thread: its option on the ask it answers, while that ask is still the open one, or its words; none otherwise. */
 function pressedDraft(
   thread: readonly InboxMessage[],
@@ -148,24 +173,25 @@ function pressedDraft(
 /* ----- The store ----- */
 
 /** Every thread the app holds something of, by its item's id. */
-let held: ReadonlyMap<string, ThreadHeld> = new Map();
-const listeners = new Set<() => void>();
+const threads = heldValue<ReadonlyMap<string, ThreadHeld>>(new Map());
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
+/** A file a reply sent from the phone on `itemId` carries, by its attachment, as the thread draws it from the reply's own bytes, before a read carries the reply and after, under the attachment `thread` names it by; none for any other. */
+export function pendingThreadFile(
+  itemId: string,
+  attachmentId: string,
+  thread: readonly InboxMessage[] | undefined,
+): { readonly contentType: string; readonly base64: string } | undefined {
+  const held = threads.read().get(itemId);
 
-  return () => listeners.delete(listener);
-}
-
-function heldNow(): ReadonlyMap<string, ThreadHeld> {
-  return held;
+  return held === undefined
+    ? undefined
+    : inboxSendingFile(held.sending.values(), attachmentId, thread);
 }
 
 /** The store with the thread's holding changed as `change` says. */
 function hold(itemId: string, change: (was: ThreadHeld) => ThreadHeld): void {
-  held = new Map(held).set(itemId, change(held.get(itemId) ?? NOTHING_HELD));
-
-  for (const listener of listeners) listener();
+  const held = threads.read();
+  threads.set(new Map(held).set(itemId, change(held.get(itemId) ?? NOTHING_HELD)));
 }
 
 /**
@@ -179,7 +205,7 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
   const carried = items.filter(
     (item) =>
       item.status !== INBOX_STATUS.OPEN &&
-      [...(held.get(item.id)?.sending.values() ?? [])].some(
+      [...(threads.read().get(item.id)?.sending.values() ?? [])].some(
         (sending) => sending.kind === INBOX_SENDING.CLOSE,
       ),
   );
@@ -196,7 +222,7 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
 
 /** The store with the thread's closes let go, as its Undo asks, so the thread is drawn as the host draws the take-back rather than closed by a send taken back. */
 function letGoCloses(itemId: string): void {
-  if (held.get(itemId)?.sending.size === undefined) return;
+  if (!threads.read().has(itemId)) return;
   hold(itemId, (was) => ({
     ...was,
     sending: new Map(
@@ -233,7 +259,7 @@ function useReader(): InboxReader | undefined {
 export function useSendsDrawn<Group extends { readonly items: readonly InboxItem[] }>(
   groups: readonly Group[],
 ): readonly Group[] {
-  const store = useSyncExternalStore(subscribe, heldNow);
+  const store = useHeldValue(threads);
   const reader = useReader();
   useEffect(() => letGoCarriedCloses(groups.flatMap((group) => group.items)), [groups]);
 
@@ -337,7 +363,8 @@ export function useSettleUndo(): (
 /** A thread's box as its screen draws and presses it. */
 export interface ThreadAnswer {
   readonly draft: InboxDraft;
-  readonly onDraft: (draft: InboxDraft) => void;
+  /** Sets the draft, or changes it from the one the box holds now, which a change that lands later, such as the photo picker's, reads rather than the draft it was opened on. */
+  readonly onDraft: (draft: InboxDraft | ((now: InboxDraft) => InboxDraft)) => void;
   /** What the box's last send said where it did not go: what the answer lacks, or the refusal. */
   readonly note: string | undefined;
   /** Whether Send stands lit with no words typed: the draft holds an answer to send, or a number whose words a press says read as none. */
@@ -346,7 +373,7 @@ export interface ThreadAnswer {
   readonly send: (pressed?: InboxDraft) => void;
   /** Resolves the thread without an answer, with Undo once it went. */
   readonly resolve: () => void;
-  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, and the box empty, the nod drawn by the host at once once pressed. */
+  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, the box empty, and no Got it out, so a press takes it away at once until the host draws the thread settled. */
   readonly nods: boolean;
   /** Settles the notice with Got it, messaging nobody, with Undo once it went. */
   readonly acknowledge: () => void;
@@ -356,9 +383,6 @@ export interface ThreadAnswer {
   /** Starts a new thread with the thread's agent, the box's words its first message, and opens it once the service took it. */
   readonly start: () => void;
 }
-
-/** The nods out, by the item's id, so a second press of Got it before the first lands sends nothing. */
-const nodding = new Set<string>();
 
 /** The new threads out, by the item's id, so a second start waits for the first's answer rather than racing it for the box's words. */
 const starting = new Set<string>();
@@ -377,21 +401,30 @@ export function useThreadAnswer(
   const settled = useSettleUndo();
   const { item } = listed;
   const itemId = item.id;
-  const store = useSyncExternalStore(subscribe, heldNow);
-  const { draft, note, asNew = false } = store.get(itemId) ?? NOTHING_HELD;
+  const store = useHeldValue(threads);
+  const { draft, note, asNew = false, nodding } = store.get(itemId) ?? NOTHING_HELD;
   const thread = item.thread ?? [];
 
   const onDraft = useCallback(
-    (next: InboxDraft) => hold(itemId, (was) => ({ ...was, draft: next, note: undefined })),
+    (next: InboxDraft | ((now: InboxDraft) => InboxDraft)) =>
+      hold(itemId, (was) => ({
+        ...was,
+        draft: Predicate.isFunction(next) ? next(was.draft) : next,
+        note: undefined,
+      })),
     [itemId],
   );
 
   // A send let go once refused: its words and picks back on the box, ahead of nothing typed since, and the refusal said.
   const refuse = (key: string, sent: InboxDraft, words: string) => {
+    replyLetGo(key);
     hold(itemId, (was) => {
       const sending = new Map(was.sending);
       sending.delete(key);
-      const typed = was.draft.note.trim() === "" ? sent : was.draft;
+
+      // Note that pictures attached since count as typed, so a refusal never takes them off.
+      const typed =
+        was.draft.note.trim() === "" && was.draft.attachments.length === 0 ? sent : was.draft;
 
       return { ...was, draft: typed, sending, note: words };
     });
@@ -422,6 +455,7 @@ export function useThreadAnswer(
     }
 
     const key = randomUUID();
+    replyPressed(key, sent.attachments.length > 0);
     const revision = awaitsNod(item) ? item.revision : undefined;
     hold(itemId, (was) => ({
       ...was,
@@ -432,6 +466,7 @@ export function useThreadAnswer(
         key,
         text: sent.text,
         answers: sent.answers,
+        files: inboxSendingFiles(key, sent.attachments),
         at: Date.now(),
       }),
     }));
@@ -485,11 +520,12 @@ export function useThreadAnswer(
 
   // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
   const acknowledge = () => {
-    if (nodding.has(itemId)) return;
-    nodding.add(itemId);
+    if (threads.read().get(itemId)?.nodding !== undefined) return;
     const key = randomUUID();
     let taken = false;
-    hold(itemId, (was) => ({ ...was, note: undefined }));
+    // Note that a Got it's refusal and its letting go touch the box only while the Got it out is still this one.
+    const ours = () => threads.read().get(itemId)?.nodding === key;
+    hold(itemId, (was) => ({ ...was, note: undefined, nodding: key }));
     void write(
       () =>
         acts[ACT_KIND.AGENTS_INBOX_ANSWER]({
@@ -510,11 +546,13 @@ export function useThreadAnswer(
               ? undefined
               : NOT_ACKNOWLEDGED,
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        inPlace: (words) => hold(itemId, (was) => ({ ...was, note: words })),
+        inPlace: (words) => {
+          if (ours()) hold(itemId, (was) => ({ ...was, note: words }));
+        },
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
-      nodding.delete(itemId);
+      if (ours()) hold(itemId, (was) => ({ ...was, nodding: undefined }));
 
       if (went && taken) settled([{ item, key }], SETTLE.ACKNOWLEDGE);
     });
@@ -525,38 +563,53 @@ export function useThreadAnswer(
     [itemId],
   );
 
-  // Note that the same words sent again go under the key they went under, so a retry starts one thread. The box lets go of its words at once, as a reply does, and a start refused puts them back ahead of nothing typed since. One start is out at a time, as one Got it is, so a refusal never puts back words a later start sent.
+  // Note that the same words and pictures sent again go under the key they went under, so a retry starts one thread, and a start whose pictures changed goes under a new key, which the service would refuse under the old one. The box lets go of its words at once, as a reply does, and a start refused puts them back ahead of nothing typed since. One start is out at a time, as one Got it is, so a refusal never puts back words a later start sent.
   const start = () => {
     const text = draft.note.trim();
 
     if (text === "" || starting.has(itemId)) return;
     starting.add(itemId);
-    const before = held.get(itemId)?.started;
-    const key = before?.words === text ? before.key : randomUUID();
+    // The pictures the box holds go as the new thread's first message's, as the panel's start carries its files.
+    const { attachments } = draft;
+    const before = threads.read().get(itemId)?.started;
+
+    const key =
+      before?.words === text && samePictures(before.attachments, attachments)
+        ? before.key
+        : randomUUID();
+
     let startedId: string | undefined;
     hold(itemId, (was) => ({
       ...was,
-      draft: { ...was.draft, note: "" },
+      draft: { ...was.draft, note: "", attachments: [] },
       note: undefined,
-      started: { key, words: text },
+      started: { key, words: text, attachments },
     }));
     void write(
       () =>
-        acts[ACT_KIND.AGENTS_INBOX_START]({ agentId: item.agentId, text, clientKey: key }).then(
-          (answer) => {
-            if (!("failure" in answer)) startedId = answer.item.id;
+        acts[ACT_KIND.AGENTS_INBOX_START]({
+          agentId: item.agentId,
+          text,
+          ...(attachments.length === 0 ? undefined : { attachments: [...attachments] }),
+          clientKey: key,
+        }).then((answer) => {
+          if (!("failure" in answer)) startedId = answer.item.id;
 
-            return answer;
-          },
-        ),
+          return answer;
+        }),
       {
         refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        // Note that the words go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
+        // Note that the words and pictures go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
         inPlace: (words) =>
           hold(itemId, (was) =>
-            was.draft.note.trim() === ""
-              ? { ...was, asNew: true, draft: { ...was.draft, note: draft.note }, note: words }
+            was.draft.note.trim() === "" && was.draft.attachments.length === 0
+              ? {
+                  ...was,
+                  asNew: true,
+                  draft: { ...was.draft, note: draft.note, attachments },
+                  note: words,
+                }
               : { ...was, note: words },
           ),
         went: BUZZ.SUCCESS,
@@ -564,7 +617,8 @@ export function useThreadAnswer(
     ).then((went) => {
       starting.delete(itemId);
 
-      if (!went || startedId === undefined || held.get(itemId)?.started?.key !== key) return;
+      if (!went || startedId === undefined || threads.read().get(itemId)?.started?.key !== key)
+        return;
       hold(itemId, ({ started: _sent, ...was }) => ({ ...was, asNew: false }));
       onStarted?.(startedId);
     });
@@ -589,7 +643,12 @@ export function useThreadAnswer(
       unreadableNumber(thread, draft) !== undefined || inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
-    nods: !asNew && awaitsNod(item) && draft.note.trim() === "" && draft.attachments.length === 0,
+    nods:
+      !asNew &&
+      nodding === undefined &&
+      awaitsNod(item) &&
+      draft.note.trim() === "" &&
+      draft.attachments.length === 0,
     acknowledge,
     asNew,
     setAsNew,

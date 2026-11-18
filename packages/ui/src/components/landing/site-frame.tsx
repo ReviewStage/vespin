@@ -2,14 +2,13 @@ import { type ReactNode, useEffect, useState } from "react";
 import { LandingWordmark } from "./landing-wordmark.js";
 
 /**
- * site-frame.tsx -- the frame every page of the public site stands in: the margin grid's rails, a bar that floats once the page scrolls, and the foot's links over the wordmark in dots.
+ * site-frame.tsx -- the frame every page of the public site stands in: a bar that stays at the top as the page scrolls, hairlines across the page between its parts, and the foot's links over the wordmark in dots.
  *
- * Two hairline rails run the page's length at the content's edges, and a
- * rule across them (`SiteRule`) wears a cross where it meets each. The bar
- * spans the page at its top and, once the reader scrolls, narrows into a
- * floating pill on the ground's surface over the rails; its header keeps
- * one height and the bar stands in it out of the page's flow, so floating
- * moves nothing under it. The foot holds the site's links over the
+ * A hairline (`SiteRule`) runs the page's whole width between its parts.
+ * The bar spans the page at its top over a hairline of its own and stays
+ * there as the reader scrolls, its ground turning to a blurred glass once
+ * the page moves under it; its header keeps one height and the bar stands
+ * in it out of the page's flow, so nothing under it moves. The foot holds the site's links over the
  * product's wordmark set in copper dots (`landing-wordmark.tsx`). The
  * landing (`LandingPage`) and every other public page (`PublicPage`) are
  * drawn in it, so the site reads as one. It is drawn in `landing.css`.
@@ -40,14 +39,9 @@ function useFloating(): boolean {
   return floating;
 }
 
-/** A rule across the page, a cross where it meets each rail. */
+/** A hairline across the page's whole width. */
 export function SiteRule(): React.JSX.Element {
-  return (
-    <div className="ui-landing-rule" aria-hidden="true">
-      <i />
-      <i />
-    </div>
-  );
+  return <div className="ui-landing-rule" aria-hidden="true" />;
 }
 
 /**
@@ -79,7 +73,6 @@ export function SiteFrame({
 
   return (
     <div className="ui-landing-page">
-      <div className="ui-landing-rails" aria-hidden="true" />
       {bar === undefined || bar === null ? null : (
         <header className="ui-landing-bar" data-floating={floating}>
           <div className="ui-landing-bar-in">

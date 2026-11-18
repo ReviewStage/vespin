@@ -38,6 +38,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { isComposingKey } from "../../composing-key.js";
 import { MOTION_TOKEN, milliseconds } from "../../motion-timing.js";
 import { trappedTab } from "../../trapped-tab.js";
 import { useWait } from "../../wait.js";
@@ -244,10 +245,12 @@ function usePressOutside(
 /**
  * Asks the owner to close a peek at Escape wherever the keyboard stands,
  * since a peek takes none and so hears no key of its own. Note that it is
- * heard at the window as the key bubbles, after what the keyboard stands in
- * has had it, so a terminal that takes Escape for its shell keeps it, and
- * that a key aimed into a menu or a dialog is left to that layer, and one
- * aimed into the pane to the pane's own handler.
+ * heard at the document as the key bubbles, after what the keyboard stands
+ * in has had it, so a terminal that takes Escape for its shell keeps it, and
+ * before the window's own Escape, which stands down for the key marked taken
+ * here, so the page under the peek stays where it is. A key aimed into a
+ * menu or a dialog is left to that layer, and one aimed into the pane to the
+ * pane's own handler.
  */
 function useEscapedPeek(peeking: boolean, onClose: () => void): void {
   const close = useRef(onClose);
@@ -256,7 +259,7 @@ function useEscapedPeek(peeking: boolean, onClose: () => void): void {
     if (!peeking) return undefined;
 
     const onEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      if (event.key !== "Escape" || event.defaultPrevented || isComposingKey(event)) return;
       const target = event.target instanceof Element ? event.target : null;
 
       if (target?.closest(`${KEY_LAYERS}, .ui-over-pane`) != null) return;
@@ -264,9 +267,9 @@ function useEscapedPeek(peeking: boolean, onClose: () => void): void {
       close.current();
     };
 
-    window.addEventListener("keydown", onEscape);
+    document.addEventListener("keydown", onEscape);
 
-    return () => window.removeEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
   }, [peeking]);
 }
 
@@ -316,7 +319,7 @@ export function OverPane({
       return;
     }
 
-    if (event.key !== "Escape" || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    if (event.key !== "Escape" || event.defaultPrevented || isComposingKey(event)) return;
 
     if (event.target instanceof Element && event.target.closest(KEY_LAYERS) !== null) return;
     // Note that the key goes no further, so a layer behind the tab keeps standing.

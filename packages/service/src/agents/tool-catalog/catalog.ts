@@ -67,6 +67,16 @@ import type { IntegrationConnect } from "../../integrations/integration-connect.
 import type { PageLinks } from "../../pages/page-links.js";
 import type { ModelCatalog } from "../../providers/model-catalog.js";
 import {
+  LIST_SLACK_CHANNELS_TOOL,
+  REACT_SLACK_TOOL,
+  READ_SLACK_TOOL,
+  runListSlackChannels,
+  runReactSlack,
+  runReadSlack,
+} from "../../slack/slack-agent-tools.js";
+import type { SlackBot } from "../../slack/slack-bot.js";
+import { runSendSlackMessage, SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
+import {
   type CommentToolName,
   commentToolOf,
   READ_COMMENTS_TOOL,
@@ -82,15 +92,18 @@ import {
   pictureNotLooked,
 } from "../../tasks/picture-look.js";
 import type { SentryApp } from "../../triggers/sentry/sentry-app-config.js";
+import { READ_AGENT_CHANGES_TOOL, runReadAgentChanges } from "../agent-changes-tool.js";
 import {
   AGENT_CALLER,
   type AgentCall,
+  ARCHIVE_AGENT_TOOL,
   agentToolRejected,
   CODER_READ_AGENT_TOOL,
   LIST_AGENTS_TOOL,
   LIST_MODELS_TOOL,
   LIST_TASKS_TOOL,
   READ_PAGE_TOOL,
+  runArchiveAgent,
   runListAgents,
   runListModels,
   runListTasks,
@@ -98,11 +111,13 @@ import {
   runReadPage,
   runStartAgent,
   runStopAgent,
+  runUnarchiveAgent,
   runUpdateAgent,
   runUpdateTask,
   START_AGENT_TOOL,
   STOP_AGENT_TOOL,
   startAgentToolOf,
+  UNARCHIVE_AGENT_TOOL,
   UPDATE_AGENT_TOOL,
   UPDATE_TASK_TOOL,
   updateTaskToolOf,
@@ -134,7 +149,7 @@ import {
   runAgentEditDescription,
   runAgentLookAtPicture,
   runAgentOpenPullRequest,
-  runAgentShowImage,
+  runAgentShowMedia,
   runAgentShowPage,
 } from "../coder-host/agent-doors.js";
 import { MESSAGE_AGENT_TOOL, runMessageAgent } from "../coder-host/agent-message.js";
@@ -151,7 +166,7 @@ import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
-import { SHOW_IMAGE_TOOL } from "../coder-host/show-image.js";
+import { SHOW_MEDIA_TOOL } from "../coder-host/show-media.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import {
   COMPUTER_TOOL,
@@ -161,6 +176,7 @@ import {
   storedComputerOutput,
 } from "../computer-tool.js";
 import { machineCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../machine-command.js";
+import { LIST_MACHINES_TOOL, runAgentListMachines } from "../machines-tool.js";
 import {
   FORGET_MEMORY_TOOL,
   LIST_MEMORIES_TOOL,
@@ -196,6 +212,7 @@ import {
 } from "../task-tools.js";
 import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import type { ExperimentsOn } from "../workspace-experiment-on.js";
+import { LIST_WORKSPACE_MEMBERS_TOOL, runListWorkspaceMembers } from "../workspace-member-tool.js";
 import { type AgentStanding, GATES, standingOf, TOOL_GATE, type ToolGate } from "./gates.js";
 
 /** What a door answers: the tool's own result, the value the model is handed. */
@@ -211,6 +228,7 @@ export type WorkspaceMcpServices =
   | IntegrationConnect
   | HostedEnvironment
   | SentryApp
+  | SlackBot
   | PageLinks;
 
 /** What a tool runs against: the doors' services, and the agent's browser and sandbox, which the server provides itself (`../workspace-mcp/app.ts`). */
@@ -256,13 +274,6 @@ export interface CatalogTool<Name extends string = string> {
    * the automations, the sections) stay deferred.
    */
   readonly alwaysLoad?: true;
-  /**
-   * Whether it only reads, which a Claude Code agent's worker may call too
-   * (`WORKER_DENIED_TOOLS`). Note that a tool not marked so is denied the
-   * worker, because a worker's call reaches us as its agent's own and its
-   * transcript is kept nowhere, so a write it made would be one no one sees.
-   */
-  readonly reads?: true;
   readonly run: Door;
   /** How a result is shown to the agent, where it is more than its JSON: a picture as an image. */
   readonly content?: (result: WorkspaceMcpToolResult) => readonly McpContent[];
@@ -284,7 +295,7 @@ interface ToolSpec<Name extends string> {
 /** What of a tool the catalog declares beside its spec and its door. */
 type Served = Pick<
   CatalogTool,
-  "gate" | "alwaysLoad" | "reads" | "content" | "watched" | "refused" | "variant"
+  "gate" | "alwaysLoad" | "content" | "watched" | "refused" | "variant"
 >;
 
 function served<const Name extends string>(
@@ -533,32 +544,30 @@ function portTool<const Name extends string>(
 /** Loaded from the first turn (`CatalogTool`'s `alwaysLoad`). */
 const LOADED: Served = { alwaysLoad: true };
 
-/** Only reads (`CatalogTool`'s `reads`). */
-const READS: Served = { reads: true };
+/** Loaded from the first turn, behind the starter's Inbox. */
+const INBOX_LOADED: Served = { ...LOADED, gate: TOOL_GATE.INBOX };
 
 /** Every tool served, in the order `tools/list` names them. */
 const CATALOG = [
-  // The threads, posted to the inbox.
+  // The threads, posted to the inbox, where the agent's starter keeps one; a thread is read by its id even where not, since a teammate's agent may still post one.
   served(
     INBOX_TOOLS.POST,
     (admitted, input, { sandbox }) =>
       runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox }),
-    LOADED,
+    INBOX_LOADED,
   ),
   served(
     INBOX_TOOLS.LIST,
     (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.LIST, input }),
-    { ...LOADED, ...READS },
+    INBOX_LOADED,
   ),
-  served(
-    INBOX_TOOLS.READ,
-    (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
-    READS,
+  served(INBOX_TOOLS.READ, (admitted, input) =>
+    runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
   ),
   served(
     INBOX_TOOLS.WITHDRAW,
     (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
-    LOADED,
+    INBOX_LOADED,
   ),
   // The pull request, the description, and pages and pictures.
   served(OPEN_PULL_REQUEST_TOOL, (admitted, input) => runAgentOpenPullRequest(admitted, input), {
@@ -576,7 +585,6 @@ const CATALOG = [
     (admitted, input, { standing, sandbox }) =>
       runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS), sandbox),
     {
-      reads: true,
       variant: lookAtPictureToolOf,
       content: lookedPictureContent,
       // Note that a look answers in its own shape, with the gate's words.
@@ -584,8 +592,8 @@ const CATALOG = [
     },
   ),
   served(
-    SHOW_IMAGE_TOOL,
-    (admitted, input, { sandbox }) => runAgentShowImage(admitted, input, sandbox),
+    SHOW_MEDIA_TOOL,
+    (admitted, input, { sandbox }) => runAgentShowMedia(admitted, input, sandbox),
     LOADED,
   ),
   served(
@@ -593,44 +601,53 @@ const CATALOG = [
     (admitted, input, { sandbox }) => runAgentShowPage(admitted, input, sandbox),
     LOADED,
   ),
-  agentTool(READ_PAGE_TOOL, runReadPage, READS),
+  agentTool(READ_PAGE_TOOL, runReadPage),
   // The workspace's agents.
   agentTool(START_AGENT_TOOL, runStartAgent, { ...LOADED, variant: startAgentToolOf }),
   agentTool(STOP_AGENT_TOOL, runStopAgent),
-  agentTool(LIST_AGENTS_TOOL, runListAgents, { ...LOADED, ...READS }),
-  agentTool(CODER_READ_AGENT_TOOL, runReadAgent, READS),
+  agentTool(LIST_AGENTS_TOOL, runListAgents, LOADED),
+  agentTool(CODER_READ_AGENT_TOOL, runReadAgent),
+  agentTool(READ_AGENT_CHANGES_TOOL, runReadAgentChanges),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
   agentTool(ADD_SUGGESTION_TOOL, runAddSuggestion, {
     gate: TOOL_GATE.REPLY_BUTTONS,
     alwaysLoad: true,
   }),
   agentTool(UPDATE_AGENT_TOOL, runUpdateAgent),
-  agentTool(LIST_MODELS_TOOL, runListModels, READS),
+  agentTool(ARCHIVE_AGENT_TOOL, runArchiveAgent),
+  agentTool(UNARCHIVE_AGENT_TOOL, runUnarchiveAgent),
+  agentTool(LIST_MODELS_TOOL, runListModels),
+  served(LIST_MACHINES_TOOL, (admitted, input, { standing }) =>
+    Option.isNone(standing.agent)
+      ? Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT))
+      : runAgentListMachines(standing.agent.value.userId, admitted.target, input),
+  ),
   // Tasks and sections.
-  agentTool(LIST_TASKS_TOOL, runListTasks, READS),
-  agentTool(READ_TASK_TOOL, runReadTask, { ...LOADED, ...READS, variant: readTaskToolOf }),
+  agentTool(LIST_TASKS_TOOL, runListTasks),
+  agentTool(READ_TASK_TOOL, runReadTask, { ...LOADED, variant: readTaskToolOf }),
   agentTool(CREATE_TASK_TOOL, runCreateTask, { variant: createTaskToolOf }),
   agentTool(UPDATE_TASK_TOOL, runUpdateTask, { ...LOADED, variant: updateTaskToolOf }),
   agentTool(CREATE_SECTION_TOOL, runCreateSection),
   agentTool(DELETE_SECTION_TOOL, runDeleteSection),
+  // The workspace's members, by the mention link a call names a person by.
+  agentTool(LIST_WORKSPACE_MEMBERS_TOOL, runListWorkspaceMembers),
   // Automations.
-  agentTool(LIST_AUTOMATIONS_TOOL, runListAutomations, READS),
+  agentTool(LIST_AUTOMATIONS_TOOL, runListAutomations),
   agentTool(CREATE_AUTOMATION_TOOL, runCreateAutomation),
   agentTool(UPDATE_AUTOMATION_TOOL, runUpdateAutomation),
   agentTool(DELETE_AUTOMATION_TOOL, runDeleteAutomation),
   agentTool(RUN_AUTOMATION_TOOL, runRunAutomation),
   // The workspace's shared memory.
   agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gate: TOOL_GATE.MEMORY }),
-  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, ...READS, gate: TOOL_GATE.MEMORY }),
-  agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gate: TOOL_GATE.MEMORY, ...READS }),
+  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, gate: TOOL_GATE.MEMORY }),
+  agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gate: TOOL_GATE.MEMORY }),
   agentTool(FORGET_MEMORY_TOOL, runAgentForget, { gate: TOOL_GATE.MEMORY }),
   // The description's comments.
-  commentTool(READ_COMMENTS_TOOL, READS),
+  commentTool(READ_COMMENTS_TOOL),
   commentTool(REPLY_TO_COMMENT_TOOL),
   commentTool(UPDATE_COMMENT_TOOL),
-  // The developer's Mac.
+  // The developer's Mac, offered wherever the agent runs, since a call may go to a machine other than the one a local agent runs on (`machine-routing.ts`).
   served(RUN_ON_MAC_TOOL, (admitted, input) => runOnMacTool(admitted.target, input), {
-    gate: TOOL_GATE.SANDBOX,
     refused: machineCommandNotRun,
   }),
   // One app on the developer's Mac, offered wherever the agent runs, since the Mac it reaches is the task's assignee's, where the workspace has Computer use on.
@@ -653,10 +670,15 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
+  // Slack as the bot: where the agent may act, a message, a read, and a reaction.
+  agentTool(LIST_SLACK_CHANNELS_TOOL, runListSlackChannels),
+  agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage),
+  agentTool(READ_SLACK_TOOL, runReadSlack),
+  agentTool(REACT_SLACK_TOOL, runReactSlack),
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
-  agentTool(END_TURN_TOOL, runEndTurn, { gate: TOOL_GATE.TURN_END }),
+  agentTool(END_TURN_TOOL, runEndTurn, { ...LOADED, gate: TOOL_GATE.TURN_END }),
 ] as const;
 
 /** The name of a tool the catalog serves. */
@@ -668,11 +690,6 @@ export const TOOL_CATALOG: ReadonlyMap<ServedTool, CatalogTool<ServedTool>> = ne
 );
 
 const SERVED_NAMES: ReadonlySet<string> = new Set(TOOL_CATALOG.keys());
-
-/** The tools a Claude Code agent's worker may not call: every one that does more than read (`CatalogTool`'s `reads`). */
-export const WORKER_DENIED_TOOLS: readonly ServedTool[] = CATALOG.flatMap(
-  (tool: CatalogTool<ServedTool>) => (tool.reads === true ? [] : [tool.name]),
-);
 
 /** Whether a name a harness called is one of the catalog's tools. */
 export function isServedTool(name: string): name is ServedTool {

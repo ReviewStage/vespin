@@ -27,7 +27,13 @@
    and, where it would stand over the last cell, the cells after the name
    step aside for it on transform alone, rather than that cell standing
    hidden for good. At rest the ⋯ takes no press, so a press at the row's
-   end opens the task. */
+   end opens the task.
+
+   A row folding the rows nested under it stands its
+   chevron over its status mark, as a sidebar row's stands over its glyph
+   (`list-row.css`): the mark gives way to it while the pointer rests on the
+   row or the keyboard is on the chevron, and on a screen with no hover the
+   chevron stands at rest. */
 
 @layer components {
   .ui-task-row:has(:focus-visible),
@@ -96,6 +102,33 @@
     .ui-task-row:has(.ui-task-row-more:not(:empty)):has(> .ui-task-row-cell[data-under-more="true"])
       > [data-cell="name"] {
       padding-inline-end: var(--ui-task-row-more-room);
+    }
+  }
+
+  .ui-task-row-fold-over {
+    opacity: 0;
+    transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
+  }
+
+  .ui-task-row-status {
+    transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
+  }
+
+  .ui-task-row:is(:hover, :has(.ui-task-row-fold-over:focus-visible)) .ui-task-row-fold-over {
+    opacity: 1;
+  }
+
+  .ui-task-row:is(:hover, :has(.ui-task-row-fold-over:focus-visible)) .ui-task-row-status {
+    opacity: 0;
+  }
+
+  @media (hover: none) {
+    .ui-task-row-fold-over {
+      opacity: 1;
+    }
+
+    .ui-task-row-status {
+      opacity: 0;
     }
   }
 

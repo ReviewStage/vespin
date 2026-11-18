@@ -1,6 +1,11 @@
 import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
-import { agentFailureSchema, agentStatusSchema, disabledServersSchema } from "./agent-wire.js";
+import {
+  agentFailureSchema,
+  agentRunsOnRequestSchema,
+  agentStatusSchema,
+  disabledServersSchema,
+} from "./agent-wire.js";
 import { AUTOMATION_PRESET } from "./automation-preset-name.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { modelChoiceSchema } from "./models-wire.js";
@@ -313,11 +318,11 @@ export type AutomationAction = typeof automationActionSchema.Type;
 export type AutomationActionJson = typeof automationActionSchema.Encoded;
 
 /**
- * How far one automation may go: how many of its agents may be at work at
- * once, past which a firing is skipped rather than queued, how many
- * runs it may start in a day, counted over the last twenty-four hours, and,
- * for an integration trigger, how many hours pass before the same subject
- * (one Sentry issue) may start another run, a day where absent.
+ * The limits an automation once ran under: agents at work at once, runs a
+ * day, and an integration subject's cooldown. Nothing enforces them since
+ * every firing starts its run; they stay on the wire, stored and sent,
+ * because released clients read and write them, until every client is
+ * released past that (AGENTS.md's "Breaking the hosted wire").
  */
 export const automationGuardsSchema = EffectSchema.Struct({
   maxConcurrentRuns: EffectSchema.Int.check(
@@ -343,9 +348,6 @@ export const AUTOMATION_DEFAULT_GUARDS: AutomationGuards = {
   maxConcurrentRuns: 1,
   dailyRunCap: 10,
 };
-
-/** How long an integration trigger waits before the same subject fires it again, where its guards name no cooldown: a day. */
-export const AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS = 24;
 
 /** Who an automation belongs to: its owner alone, or the workspace it was made in. */
 export const AUTOMATION_SCOPE = {
@@ -596,6 +598,12 @@ const automationSummarySchema = EffectSchema.Struct({
    * newer service added, or one since retired, never refuses the list.
    */
   preset: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  /**
+   * The machine its runs start on, the cloud or one of its creator's devices
+   * by id, as `create_automation` named it; null where none was named, which
+   * places a run as a Start naming none is, and absent from a service before it.
+   */
+  runsOn: EffectSchema.optionalKey(EffectSchema.NullOr(agentRunsOnRequestSchema)),
   /**
    * The address a webhook trigger's caller posts to, as the client that read
    * the automation reaches the service; the service sends none, since the

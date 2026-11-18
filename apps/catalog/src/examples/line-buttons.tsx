@@ -19,7 +19,7 @@ import { CatalogSection } from "../section";
  * whose every word is muted brightening under the pointer, a LineRow as the
  * same row where it opens nothing, a LineSummary
  * folding a call's body open under it, and a quote that shows its words,
- * cut short after two lines in a narrow column, and a band naming the lines
+ * whole however many lines they take in a narrow column, and a band naming the lines
  * a card is on across its top.
  */
 

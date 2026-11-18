@@ -57,6 +57,7 @@ import {
   baseDriveWorkspaceOfInstallation,
   workspaceDriveOwner,
 } from "@repo/database/models/base-drive-repositories";
+import { recordSandboxOwner } from "@repo/database/models/sandbox-owners";
 import {
   forgetWorkspaceDriveRepositories,
   recordWorkspaceDriveRepositories,
@@ -71,6 +72,7 @@ import {
   type ListedSandbox,
   SANDBOX_STATUS,
   Sandbox,
+  SandboxUnavailable,
   UP_STATUSES,
 } from "@repo/sandbox";
 import {
@@ -84,8 +86,10 @@ import {
   Layer,
   Option,
 } from "effect";
+import { bookSandboxUsageCheck } from "../billing/usage-queues.js";
 import { GitHubApp } from "../github/github-app.js";
 import { afterResponse } from "../http/after-response.js";
+import { ORGANIZATION_TAG } from "./agent-sandbox-open.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import {
   firewallSessionOf,
@@ -361,8 +365,30 @@ const lockedFill = <E, R, E2, R2>(
     const context = yield* Effect.context<DatabaseServices>();
     let cutOff = false;
 
+    // Note that the owner is recorded and the usage check booked before the fill's sandbox is created, so none stands unbilled or uncharged.
+    yield* recordSandboxOwner({
+      sandboxName: name,
+      organizationId: workspace.workspaceId,
+      agentId: null,
+      // A fill is the workspace's work, not a member's.
+      userId: null,
+      createdAt: yield* DateTime.nowAsDate,
+    });
+    yield* bookSandboxUsageCheck(name).pipe(
+      Effect.mapError(
+        () => new SandboxUnavailable({ retryable: true, detail: "its usage check was not booked" }),
+      ),
+    );
+
     const filled = yield* filledDrive(
-      { name, drive: name, at: WORKSPACE_DRIVE.MOUNT, image, vcpus: SANDBOX_SIZE.VCPUS },
+      {
+        name,
+        drive: name,
+        at: WORKSPACE_DRIVE.MOUNT,
+        image,
+        vcpus: SANDBOX_SIZE.VCPUS,
+        tags: { [ORGANIZATION_TAG]: workspace.workspaceId },
+      },
       (running) =>
         steps(
           repositorySandboxOver(

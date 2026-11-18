@@ -7,16 +7,21 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminBilling } from "@repo/features/admin-billing-wire";
 import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
-import type {
-  AdminDayQuery,
-  AdminRefused,
-  AdminUserQuery,
-  AdminUsersQuery,
-  AdminWindowedQuery,
-  AdminWorkspaceQuery,
-  AdminWorkspacesQuery,
+import {
+  ADMIN_UNANSWERED,
+  type AdminBillingQuery,
+  type AdminDayQuery,
+  type AdminReadAnswer,
+  type AdminReadParams,
+  type AdminRefused,
+  type AdminUserQuery,
+  type AdminUsersQuery,
+  type AdminWindowedQuery,
+  type AdminWorkspaceQuery,
+  type AdminWorkspacesQuery,
 } from "@repo/features/admin-wire";
 import { createContext, useContext } from "react";
 
@@ -49,6 +54,7 @@ export interface AdminReads {
   readonly catalog: (signal: AbortSignal) => Promise<AdminCatalog>;
   readonly metrics: (query: AdminWindowedQuery, signal: AbortSignal) => Promise<AdminMetrics>;
   readonly cost: (query: AdminWindowedQuery, signal: AbortSignal) => Promise<AdminCost>;
+  readonly billing: (query: AdminBillingQuery, signal: AbortSignal) => Promise<AdminBilling>;
   readonly reliability: (
     query: AdminWindowedQuery,
     signal: AbortSignal,
@@ -65,6 +71,53 @@ export interface AdminReads {
     signal: AbortSignal,
   ) => Promise<AdminWorkspaceDetail>;
   readonly favorite: (id: string, favorite: boolean) => Promise<boolean>;
+}
+
+/**
+ * One read asked through `ask`, which answers as the host's `admin.read`
+ * does: the service's answer, the shape the procedure answers, or a refusal
+ * by its word; one no screen tells apart rejects as the screen's own failure.
+ */
+async function readAnswered<T, Query extends object>(
+  ask: (params: AdminReadParams) => Promise<AdminReadAnswer>,
+  procedure: AdminReadParams["procedure"],
+  query: Query,
+): Promise<T> {
+  // SAFETY: every admin query is a set of optional string parameters (`admin-wire.ts`).
+  const answered = await ask({ procedure, query: query as Record<string, string> });
+
+  if ("refused" in answered) {
+    if (answered.refused === ADMIN_UNANSWERED) throw new Error("The admin read was not answered.");
+    throw new AdminReadRefused(answered.refused satisfies AdminRefused);
+  }
+
+  // SAFETY: the answer passes through as the service gave it, which is the shape `admin-answer-wire.ts` names for this procedure.
+  return answered.answer as T;
+}
+
+/**
+ * The reads asked of one door that answers each as the host's `admin.read`
+ * does, the app's host or a fixture's staged answers (`admin-fixture.ts`),
+ * beside the mount's star. Such a door carries no signal, so a read whose
+ * query was canceled runs to its end, and Query drops its answer.
+ */
+export function adminReadsAnswering(
+  ask: (params: AdminReadParams) => Promise<AdminReadAnswer>,
+  favorite: AdminReads["favorite"],
+): AdminReads {
+  return {
+    catalog: () => readAnswered(ask, "catalog", {}),
+    metrics: (query) => readAnswered(ask, "metrics", query),
+    cost: (query) => readAnswered(ask, "cost", query),
+    billing: (query) => readAnswered(ask, "billing", query),
+    reliability: (query) => readAnswered(ask, "reliability", query),
+    users: (query) => readAnswered(ask, "users", query),
+    user: (query) => readAnswered(ask, "user", query),
+    day: (query) => readAnswered(ask, "day", query),
+    workspaces: (query) => readAnswered(ask, "workspaces", query),
+    workspace: (query) => readAnswered(ask, "workspace", query),
+    favorite,
+  };
 }
 
 /** What a screen draws in its place where the gate refused it, in the mount's own words. */

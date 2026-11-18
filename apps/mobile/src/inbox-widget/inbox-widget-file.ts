@@ -24,7 +24,7 @@ import { liveActivityModule } from "../live-activity/live-activity-module.js";
 
 /** Has the widget draw the file as it now stands. */
 function redraw(): void {
-  liveActivityModule?.reloadInboxWidget();
+  liveActivityModule.reloadInboxWidget();
 }
 
 /** Keeps `snapshot` for the widget and has it drawn, unless the file holds it already. */

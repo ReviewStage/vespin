@@ -17,6 +17,14 @@
  *   refuses is logged, and never tried again.
  * - What the voice is told goes out over the sideband (`VoiceCallHolder`'s
  *   `send`).
+ * - An untitled agent is named, its untitled task with it, as the voice
+ *   answers the caller (`titleNativeAgent`), off the loop, because a call
+ *   whose voice answers by itself starts no turn, and a turn is otherwise
+ *   what names an agent: an agent Talk started blank stood "Untitled"
+ *   through a whole call (Dean, Nov 17). It is asked again at each answer to
+ *   a new line of the caller's while the agent stands untitled, as a turn's
+ *   end asks again, up to `CODER.TITLE_TURNS` times a lease, since a
+ *   greeting names nothing.
  *
  * Every act is fenced by the lease's epoch, read just before it, so a holder
  * whose lease another took acts no more and lets go.
@@ -76,8 +84,10 @@ import { Effect, Option, Queue, Result, Stream } from "effect";
 import { CODER } from "../agents/coder-host/bounds.js";
 import { changeAgentQueue } from "../agents/coder-host/queue-change.js";
 import { spokenLineMetadata } from "../agents/coder-host/spoken-line.js";
+import { endTurnSummary } from "../agents/coder-host/starter-report.js";
 import { steerMemberWords } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
+import { titleNativeAgent } from "../agents/native-events/native-title.js";
 import {
   MESSAGE_AUTHOR,
   MESSAGE_CHANNEL,
@@ -198,8 +208,11 @@ function toolCallsOf(record: StoredMessageRecord): readonly { id: string; step: 
   });
 }
 
-/** A finished journal's reply: the words of its last step, after every tool call, which are what the turn answered. */
+/** A finished journal's reply: the summary of its last `end_turn` where one took it (`endTurnSummary`), or else the words of its last step, after every tool call, which are what the turn answered. */
 function replyOf(record: StoredMessageRecord): string {
+  const summary = endTurnSummary(record.message);
+
+  if (summary !== undefined) return summary;
   const parts = record.message.parts.map((part) => partOf(part));
 
   const lastStep = parts.findLastIndex(
@@ -399,6 +412,25 @@ const refusedLogged = <A, E, R>(label: string, act: Effect.Effect<A, E, R>) =>
     ),
   );
 
+/** How this lease has asked for the agent's title: whether the caller spoke since it last asked, and how many times it asked. */
+interface CallNaming {
+  heard: boolean;
+  asks: number;
+}
+
+/** The agent's title asked for where it still stands untitled, read again since the lease's copy of it is as old as the lease. */
+const namedAgent = (target: AgentTarget, callerId: string, agentId: string) =>
+  Effect.gen(function* () {
+    const found = yield* readAgent(callerId, agentId);
+
+    if (Option.isNone(found)) return;
+    yield* titleNativeAgent(target, found.value);
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.logWarning(`a voice call's agent was not named: ${failureKind(failure)}`),
+    ),
+  );
+
 /**
  * One output carried out under the lease, fenced by its epoch: whether the
  * lease still held it, so a holder told no acts no more.
@@ -408,6 +440,7 @@ const carriedOut = Effect.fnUntraced(function* (
   agent: Agent,
   target: AgentTarget,
   output: VoiceOutput,
+  naming: CallNaming,
 ) {
   const { call } = holder;
 
@@ -432,6 +465,20 @@ const carriedOut = Effect.fnUntraced(function* (
 
       if (Result.isFailure(written)) {
         yield* Effect.logWarning(`a voice call's line was refused: ${written.failure.refusal}`);
+      }
+
+      if (output.speaker === VOICE_SPEAKER.CALLER) naming.heard = true;
+
+      // Note that the voice answering a line of the caller's is when there are words to name the agent by, and the title is asked off the loop, since its model call would hold the call's lines.
+      if (
+        output.speaker === VOICE_SPEAKER.VOICE &&
+        agent.title === null &&
+        naming.heard &&
+        naming.asks < CODER.TITLE_TURNS
+      ) {
+        naming.heard = false;
+        naming.asks += 1;
+        yield* Effect.forkDetach(namedAgent(target, call.callerId, call.agentId));
       }
 
       return true;
@@ -497,9 +544,11 @@ export const voiceCallDelegations: VoiceCallObserver<
     const inputs = yield* Queue.unbounded<VoiceInput>();
     const offer = (input: VoiceInput) => Effect.asVoid(Queue.offer(inputs, input));
 
+    const naming: CallNaming = { heard: false, asks: 0 };
+
     const carried = Stream.runForEachWhile(
       voiceDelegations(Stream.fromQueue(inputs), start),
-      (output) => carriedOut(holder, agent, target, output),
+      (output) => carriedOut(holder, agent, target, output, naming),
     );
 
     return {

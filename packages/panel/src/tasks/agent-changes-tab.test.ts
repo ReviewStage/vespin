@@ -5,7 +5,6 @@ import { ORPCError } from "@orpc/client";
 import { MOTION_DURATION_MS } from "@repo/brand";
 import {
   AGENT_CALL_FAILURE,
-  type AgentChangesAnswerView,
   type AgentPullRequestViewedAnswerView,
   PULL_REQUEST_PART,
 } from "@repo/features/agent-view";
@@ -17,6 +16,7 @@ import {
   DIFF_SIDE,
   PATCH_OMITTED,
 } from "@repo/features/agent-wire";
+import type { RepositoryChangesAnswerView } from "@repo/features/pull-request-view";
 import {
   FILE_VIEWED_STATE,
   PULL_REQUEST_ACTION,
@@ -62,7 +62,11 @@ import {
   refusedOnPort,
 } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform } from "../testing/app-platform.js";
-import { handHostReads, handSettings, holdPullRequestParts } from "../testing/app-state.js";
+import {
+  handHostReads,
+  handSettings,
+  holdRepositoryPullRequestParts,
+} from "../testing/app-state.js";
 import { layContainersAt } from "../testing/container-width.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { focusRestOn, restOn } from "../testing/hint-rest.js";
@@ -155,7 +159,7 @@ let viewedReads = 0;
 let viewedHeld: Promise<void> | undefined;
 
 /** The agent's changes as the service answers them: the pull request's files as the test set them. */
-const readChanges = (): Promise<AgentChangesAnswerView> =>
+const readChanges = (): Promise<RepositoryChangesAnswerView> =>
   Promise.resolve({
     pullRequest: {
       url: "https://github.com/acme/relay/pull/7",
@@ -253,7 +257,7 @@ beforeAll(async () => {
 
 /** The member's viewed marks held by the host over the window's settings, read as the test's service answers them. */
 function holdViewedReads(): void {
-  holdPullRequestParts(handHostReads({}).deliverParts, {
+  holdRepositoryPullRequestParts(handHostReads({}).deliverParts, {
     [PULL_REQUEST_PART.VIEWED]: () => {
       viewedReads += 1;
       const answer = viewedAnswer;
@@ -361,8 +365,8 @@ async function render(options: DrawOptions = {}): Promise<void> {
   const { ChangesTabReading } = await import("../testing/changes-tab.js");
 
   const tab = createElement(ChangesTabReading, {
-    agentId: AGENT.id,
-    control: options.control ?? control,
+    pullRequest: { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 },
+    taskId: (options.control ?? control).agents?.[0]?.taskId ?? null,
     shown: options.shown ?? true,
     repository: options.repository ?? "acme/relay",
     tree: options.tree ?? { open: options.treeOpen ?? false, onToggle: () => undefined },
@@ -1253,8 +1257,14 @@ test("a refused write flips the switch back and is said in a toast, and the swit
   held[0]?.("Could not save that setting.");
   await vi.waitFor(() => assert.equal(newestToastSays(), "Could not save that setting."));
 
+  // Note that the toast and the switch's rollback land on separate renders, so the switch is waited on as the toast is.
+  await vi.waitFor(() =>
+    assert.equal(
+      settingControl(popover, '[role="switch"]', "Ligatures").getAttribute("aria-checked"),
+      "false",
+    ),
+  );
   const ligatures = settingControl(popover, '[role="switch"]', "Ligatures");
-  assert.equal(ligatures.getAttribute("aria-checked"), "false");
   assert.equal(ligatures.disabled, false);
   assert.equal(lastDrawn().look.ligatures, false);
 });
@@ -1392,7 +1402,7 @@ function answerImages(refusing: Set<string> = new Set()): string[] {
   handSettings();
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.AGENTS_GITHUB_IMAGE]: ({ src }) => {
+    [ACT_KIND.PULL_REQUESTS_GITHUB_IMAGE]: ({ src }) => {
       asked.push(src);
 
       if (refusing.has(src)) return Promise.reject(refusedOnPort("Unreachable."));
@@ -1676,7 +1686,7 @@ function answerMarks(answer: () => PullRequestWriteAnswer): PullRequestActionReq
   holdViewedReads();
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
+    [ACT_KIND.PULL_REQUESTS_ACTION]: ({ request }) => {
       asked.push(request);
 
       return Promise.resolve(answer());
@@ -1891,7 +1901,7 @@ function holdMarks(): Array<{
   holdViewedReads();
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
+    [ACT_KIND.PULL_REQUESTS_ACTION]: ({ request }) => {
       const answered = Promise.withResolvers<PullRequestWriteAnswer>();
       held.push({ request, answer: answered.resolve });
 
@@ -2306,7 +2316,7 @@ function answerFileReads(answer: (path: string, ref?: string) => TasksFileAnswer
   fakeActs({
     act: (request: AnyAct) => {
       // Note that the changes are still the service's, as the test set them.
-      if (request.kind === ACT_KIND.AGENTS_CHANGES) {
+      if (request.kind === ACT_KIND.PULL_REQUESTS_CHANGES) {
         return answerChanges().then(
           (value): FakeActAnswer => ({ status: FAKE_ANSWER.DONE, value }),
         );
@@ -2574,7 +2584,7 @@ test("a whole file read for an earlier answer, landing after a refresh, leaves t
   fakeActs({
     act: (request: AnyAct) => {
       // Note that the changes are still the service's, as the test set them.
-      if (request.kind === ACT_KIND.AGENTS_CHANGES) {
+      if (request.kind === ACT_KIND.PULL_REQUESTS_CHANGES) {
         return answerChanges().then(
           (value): FakeActAnswer => ({ status: FAKE_ANSWER.DONE, value }),
         );

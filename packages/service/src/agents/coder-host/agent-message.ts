@@ -21,6 +21,7 @@ import {
   wireUuidSchema,
 } from "../../core.js";
 import type { HostedRefusal } from "../../http/http-effect.js";
+import { settledTaskRefusal } from "../../tasks/task-finish.js";
 import {
   type AgentCall,
   type AgentToolServices,
@@ -33,7 +34,7 @@ import {
 } from "../agent-tools.js";
 import { workspaceAgent } from "../workspace-agents.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
-import { agentLineSender, agentTakingMessage, steerAgent } from "./steer.js";
+import { agentLineSender, steerAgent } from "./steer.js";
 
 /**
  * agent-message.ts -- `message_agent`: one coding agent's message to another of its workspace, shown in the two agents' transcripts alone.
@@ -49,10 +50,10 @@ import { agentLineSender, agentTakingMessage, steerAgent } from "./steer.js";
  * both written here rather than by the model, so the receiving agent reads
  * them as a colleague's word, never the developer's or the app's. The message
  * stands in the two transcripts and nowhere else. It reaches any agent of the sender's
- * workspace, on any task, held to what a steer into it is held to, an
- * archived one brought back first as a member's words bring it back
- * (`agentTakingMessage`); one whose starter has left the workspace, or the
- * sender itself, takes none.
+ * workspace, on any task, held to what a steer into it is held to; one
+ * whose starter has left the workspace, one whose task stands done or
+ * canceled (`settledTaskRefusal`), an archived one, which only
+ * `unarchive_agent` brings back, or the sender itself, takes none.
  */
 
 /**
@@ -76,6 +77,8 @@ export const MESSAGE_AGENT_REFUSAL = {
     `Not sent: agentId is not an agent's id; pass the id ${AGENT_TOOL.LIST_AGENTS} answered, ` +
     "or the one a message from the agent closed with.",
   EMPTY: "Not sent: the text is empty; say what to tell the agent.",
+  /** Claude Code's own messaging tools name their words `message`, which its agents carry here from habit. */
+  MESSAGE_KEY: "Not sent: message_agent takes no message; pass what to tell the agent as text.",
   /** The message's own length, so the agent knows how much to cut. */
   TOO_LONG: (length: number) =>
     `Not sent: the text is ${length} characters, over the ${MAX_MESSAGE_WORDS_CHARS} one message ` +
@@ -85,7 +88,8 @@ export const MESSAGE_AGENT_REFUSAL = {
   NOT_AGENT: "Not sent: only a coding agent messages another agent.",
   NO_AGENT: `Not sent: no agent of your workspace has that id; ${AGENT_TOOL.LIST_AGENTS} names them.`,
   ARCHIVED:
-    "Not sent: that agent is archived, so it takes no message and is not woken until a member unarchives it.",
+    "Not sent: that agent is archived, so it takes no message and no message brings it back. " +
+    `Bring it back first with ${AGENT_TOOL.UNARCHIVE_AGENT} (its agentId), then call again.`,
   STARTER_LEFT:
     "Not sent: the member who started that agent has left your workspace, so nothing reaches it.",
   NOT_PERMITTED:
@@ -137,15 +141,15 @@ const readAgentId = Schema.decodeUnknownResult(wireUuidSchema);
 /**
  * The call's id and words, each read apart so the refusal names the one
  * that failed: a malformed id, empty words, or words over the bound, told
- * with their length. The words are read under `text`, or under `message`
- * where no `text` stands.
+ * with their length.
  */
 function readMessage(
   input: UnparsedWireValue,
 ): Result.Result<{ readonly agentId: string; readonly text: string }, string> {
   if (!isRecord(input)) return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
-  // Note that `message` is read too, because Claude Code's own messaging tools name their words so and its agents carry that name here.
-  const words = input.text ?? input.message;
+
+  if (input.message !== undefined) return Result.fail(MESSAGE_AGENT_REFUSAL.MESSAGE_KEY);
+  const words = input.text;
 
   if (!Predicate.isString(words)) return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
   const agentId = readAgentId(input.agentId);
@@ -168,9 +172,9 @@ export const MESSAGE_AGENT_TOOL = {
   description:
     "Send another agent of your workspace a message, by its id, on any task. It lands in that agent's " +
     "conversation under your name, opening with your mention link and closing with how to answer you, and " +
-    "only the two of you see it: a running agent reads it at its next step, and an idle one starts a turn on it. " +
-    "Answers `accepted` once that agent's session has taken it, without waiting for it to act or reply, or " +
-    "`rejected` and why nothing was sent; an archived agent is brought back and takes it.",
+    "only the two of you see it: a running agent reads it at its next step, and an idle one starts a turn on it; " +
+    `an archived agent is refused: bring it back with ${AGENT_TOOL.UNARCHIVE_AGENT} first. An agent whose task is done or canceled is refused, since a tool never ` +
+    `reopens a task: move the task with ${AGENT_TOOL.UPDATE_TASK} first. The call answers once its session took it, without waiting for a reply.`,
   inputSchema: MESSAGE_AGENT_INPUT,
 } as const;
 
@@ -223,13 +227,14 @@ export function runMessageAgent(
         return agentToolRejected(MESSAGE_AGENT_REFUSAL.STARTER_LEFT);
       }
 
-      // An archived agent is brought back first, as a member's words bring it back; one archived again meanwhile the steer refuses.
-      const taking = yield* agentTakingMessage(userId, agentId, (reader, id) =>
-        workspaceAgent(reader, workspace.value, id, sender.id),
-      );
+      // A turn on a done or canceled task would reopen it unasked, so the caller moves the task itself first.
+      const settled = yield* settledTaskRefusal(userId, found.value.taskId);
 
-      if (Option.isNone(taking)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
-      const target = taking.value;
+      if (Option.isSome(settled)) return agentToolRejected(settled.value);
+
+      // A tool never brings an archived agent back, so the caller unarchives it itself first; one archived meanwhile the steer refuses.
+      if (found.value.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
+      const target = found.value;
       // The line is minted for the receiving agent's starter, whose principal its turn runs under.
       const agentSessions = call.agentSessionsAs(target.userId);
       const step = yield* workspaceStepOf(userId, workspace.value);

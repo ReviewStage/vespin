@@ -23,13 +23,16 @@ import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { accountPreferencesWriteSchema } from "@repo/features/account-wire";
 import { contextWindowSchema } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL_DEFAULT, isChaptersModel } from "@repo/features/chapters-model-choice";
+import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { AGENT_DEFAULT_CHOICE } from "@repo/features/models-wire";
 import { failureKind } from "@repo/runtime/effect";
 import {
   accountPreferencesFromWire,
   accountPreferencesParts,
+  EXPERIMENT,
   experimentChoicesFrom,
+  experimentOn,
   introsSeenAnswered,
   introsSeenUnion,
   isOlderOnboardingSurveyJson,
@@ -50,11 +53,13 @@ import {
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
+import { CursorModelCatalog, offersCursor, withCursorModels } from "../providers/cursor-models.js";
 import {
   type AccountFastOffer,
-  acceptedModelChoice,
-  type ModelCatalog,
+  ModelCatalog,
+  offeredToAccount,
   providerModelOf,
+  validateModelChoice,
 } from "../providers/model-catalog.js";
 import { onboardingSurveyAnswered } from "./onboarding-survey-response.js";
 
@@ -151,8 +156,7 @@ const acceptedAgentChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (Result.isFailure(read)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const fastOffer = yield* hostedStoreOrUnavailable(seams.accountFastOffer(userId));
 
-  const accepted = yield* acceptedModelChoice(read.success, fastOffer).pipe(
-    Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)),
+  const catalog = yield* (yield* ModelCatalog).read.pipe(
     Effect.catchTag("ModelCatalogUnavailable", (unavailable) =>
       Effect.logWarning(
         `the model catalog could not be read: ${failureKind(unavailable.cause)}`,
@@ -161,6 +165,22 @@ const acceptedAgentChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
 
   const row = yield* hostedStoreOrUnavailable(seams.readPreferences(userId));
+
+  // Note that Cursor's models are offered as a Start offers them (`accountModelChoices`), so a default the model menu offers is one it takes.
+  const cursor = {
+    experimentOn: row !== undefined && experimentOn(row.experiments, EXPERIMENT.CURSOR),
+    apiVersion: HOSTED_API_VERSION,
+  };
+
+  const cursorModels = offersCursor(cursor)
+    ? yield* (yield* CursorModelCatalog).forAccount(userId)
+    : [];
+
+  const offered = withCursorModels(offeredToAccount(catalog, fastOffer), cursor, cursorModels);
+  const validated = validateModelChoice(offered, read.success);
+
+  if (Result.isFailure(validated)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  const accepted = validated.success;
   const standing = yield* snapshotAgent(userId, row);
 
   if (accepted.model === standing.model) return accepted;
@@ -221,6 +241,8 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.turnNotifications === undefined &&
     body.onboardingSurvey === undefined &&
     body.introsSeen === undefined &&
+    body.githubWakesOff === undefined &&
+    body.inbox === undefined &&
     body.agent === undefined &&
     body.chaptersModel === undefined &&
     body.experiments === undefined
@@ -355,6 +377,20 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
 
     if (introsSeen === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.introsSeen = introsSeen;
+  }
+
+  if (body.githubWakesOff !== undefined) {
+    const githubWakesOff = ownPreferenceFromWire("githubWakesOff", body.githubWakesOff);
+
+    if (githubWakesOff === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.githubWakesOff = githubWakesOff;
+  }
+
+  if (body.inbox !== undefined) {
+    const inbox = ownPreferenceFromWire("inbox", body.inbox);
+
+    if (inbox === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.inbox = inbox;
   }
 
   if (body.agent !== undefined) {

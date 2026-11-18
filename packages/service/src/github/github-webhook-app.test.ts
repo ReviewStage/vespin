@@ -15,13 +15,18 @@ import {
 } from "@repo/database/models/agent-store";
 import { createAutomation, listAutomationRuns } from "@repo/database/models/automation-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import {
+  linkSlackInstallation,
+  recordSlackAgentThread,
+} from "@repo/database/models/slack-installation-store";
 import { readTask } from "@repo/database/models/task-store";
 import { listWorkspaces } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { account, user } from "@repo/database/schemas/auth";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
+import { githubPullRequestMove } from "@repo/database/schemas/github-pull-request-move";
 import { turns } from "@repo/database/schemas/storage";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
 import { fakeWorkspaceSeams, getTestDB, leaveWorkspace, startTask } from "@repo/database/testing";
 import {
   AGENT_PAYER,
@@ -46,15 +51,17 @@ import { TASK_STATUS } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { and, eq } from "drizzle-orm";
-import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
+import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { keptAfterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { modelCatalogOf } from "../providers/model-catalog.js";
+import { SlackBot, type SlackWebApi, slackBotOver } from "../slack/slack-bot.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
@@ -219,6 +226,7 @@ const answer = (
   request: Request,
   held: Partial<HostedEnvironmentValues> = {},
   filling?: Filling,
+  slack?: SlackWebApi,
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
@@ -233,6 +241,7 @@ const answer = (
       github.layer,
       MODEL_CATALOG,
       HARNESS.layer,
+      Layer.succeed(SlackBot, slackBotOver(slack)),
     );
 
     const { handler, dispose } = HttpRouter.toWebHandler(
@@ -429,6 +438,49 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           yield* answer(github, SECRET, new Request(new URL(WEBHOOK, ORIGIN))),
           refusal(HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, HOSTED_API_ERROR.METHOD_NOT_ALLOWED),
         );
+      }),
+  );
+
+  it.effect(
+    "a merge marks the message in Slack that started the pull request's agent with ✅",
+    () =>
+      Effect.gen(function* () {
+        const pull = { state: "closed", merged: true, conclusion: "success" } as const;
+        const { github, ref, owner, agent, task } = yield* openAgent({ ...pull });
+        yield* linkSlackInstallation({
+          organizationId: task.workspaceId,
+          teamId: "T0001",
+          teamName: "Team",
+          userId: owner,
+        });
+        yield* recordSlackAgentThread({
+          organizationId: task.workspaceId,
+          channelId: "C0001",
+          threadTs: "1700000001.000100",
+          agentId: agent.id,
+          userId: owner,
+          origin: SLACK_THREAD_ORIGIN.START,
+          startTs: "1700000002.000200",
+        });
+
+        const reactions: Readonly<Record<string, string>>[] = [];
+
+        const slack: SlackWebApi = (method, args) => {
+          if (method === "reactions.add") reactions.push(args);
+
+          return Effect.succeed({ ok: true });
+        };
+
+        const merged = {
+          ...pullRequestDelivery("closed", ref),
+          pull_request: { number: 41, title: "Ignored", head: { ref }, merged: true },
+        };
+
+        yield* answer(github, SECRET, delivery("pull_request", merged), {}, undefined, slack);
+
+        assert.deepEqual(reactions, [
+          { channel: "C0001", timestamp: "1700000002.000200", name: "white_check_mark" },
+        ]);
       }),
   );
 
@@ -1691,6 +1743,83 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         );
 
         assert.deepEqual(started, []);
+      }),
+  );
+  it.effect(
+    "a review, a comment on a pull request, a status on its head branch, and a fork's check suite each note the pull request moved, and a comment on an issue notes nothing",
+    () =>
+      Effect.gen(function* () {
+        const sighted = {
+          id: 900_000_000 + Math.floor(Math.random() * 90_000_000),
+          full_name: RELAY_FULL_NAME,
+          updated_at: "2026-11-16T00:00:00Z",
+        };
+
+        /** When the row last moved, in epoch milliseconds; none before a delivery noted it. */
+        const movedAt = (rows: readonly { readonly at: Date }[]) => rows[0]?.at.getTime() ?? 0;
+
+        const moves = () =>
+          Database.use((db) =>
+            db
+              .select({ number: githubPullRequestMove.number, at: githubPullRequestMove.movedAt })
+              .from(githubPullRequestMove)
+              .where(eq(githubPullRequestMove.repositoryId, sighted.id)),
+          );
+
+        /** The instant each delivery below is read at, a minute after the one before. */
+        const deliver = (event: string, payload: WireBoundaryInput) =>
+          Effect.andThen(
+            TestClock.adjust(Duration.minutes(1)),
+            answer(githubReaching([]), SECRET, delivery(event, payload)),
+          );
+
+        const pullRequest = { number: 41, head: { ref: "agent/invite-once", sha: "c0ffee1" } };
+        yield* deliver("pull_request_review", {
+          action: "submitted",
+          repository: sighted,
+          pull_request: pullRequest,
+        });
+        const reviewed = yield* moves();
+        assert.deepEqual(
+          reviewed.map((row) => row.number),
+          [41],
+        );
+
+        yield* deliver("issue_comment", {
+          action: "created",
+          repository: sighted,
+          issue: { number: 9 },
+          comment: { id: 1, body: "Ignored" },
+        });
+        yield* deliver("issue_comment", {
+          action: "created",
+          repository: sighted,
+          issue: { number: 41, pull_request: { url: "ignored" } },
+          comment: { id: 2, body: "Ignored" },
+        });
+        const commented = yield* moves();
+        assert.deepEqual(
+          commented.map((row) => row.number),
+          [41],
+        );
+        assert.ok(movedAt(commented) > movedAt(reviewed));
+
+        yield* deliver("status", {
+          repository: sighted,
+          sha: "e4f5a6b",
+          state: "success",
+          branches: [{ name: "agent/invite-once", commit: { sha: "e4f5a6b" } }],
+        });
+        const checked = yield* moves();
+        assert.ok(movedAt(checked) > movedAt(commented));
+
+        // A fork's check suite names no pull request, and is heard by the branch it ran on.
+        yield* deliver("check_suite", {
+          action: "completed",
+          repository: sighted,
+          check_suite: { head_branch: "agent/invite-once", head_sha: "e4f5a6b", pull_requests: [] },
+        });
+        assert.ok(movedAt(yield* moves()) > movedAt(checked));
       }),
   );
 });

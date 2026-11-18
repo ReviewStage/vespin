@@ -45,7 +45,7 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 import { pressMutation } from "../act-mutations.js";
-import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
+import { ACTOR_SIZE, ActorMark, type ActorSize } from "../actor-ref.js";
 import { runAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { CallCardDock } from "../call/standing-call.js";
@@ -78,14 +78,21 @@ const ISSUES_URL = "https://github.com/ReviewStage/vespin/issues";
 const NOBODY_SIGNED_IN: Actor = { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED };
 
 /** The account's face: the signed-in person's (`actor-ref.tsx`), or someone's outline while no one is signed in. */
-export function AccountAvatar({ account }: { account: AccountSnapshot }): React.JSX.Element {
+export function AccountAvatar({
+  account,
+  size = ACTOR_SIZE.ACCOUNT,
+}: {
+  account: AccountSnapshot;
+  /** How large it is drawn: the account's own size, or the workspace tile's in the sidebar's foot, which stands on the head's lines. */
+  size?: ActorSize | undefined;
+}): React.JSX.Element {
   if (account.status !== ACCOUNT_STATUS.SIGNED_IN) {
-    return <ActorMark actor={NOBODY_SIGNED_IN} size={ACTOR_SIZE.ACCOUNT} />;
+    return <ActorMark actor={NOBODY_SIGNED_IN} size={size} />;
   }
 
   return (
     <ReplayMask>
-      <ActorMark actor={accountActor(account)} size={ACTOR_SIZE.ACCOUNT} />
+      <ActorMark actor={accountActor(account)} size={size} />
     </ReplayMask>
   );
 }
@@ -325,7 +332,7 @@ function AccountMenu({
     <>
       <NavItem
         variant={NAV_ITEM_VARIANT.IDENTITY}
-        icon={<AccountAvatar account={account} />}
+        icon={<AccountAvatar account={account} size={ACTOR_SIZE.ROW} />}
         menu={trigger(riseAbove)}
       >
         {signedIn ? <ReplayMask>{account.name ?? account.email}</ReplayMask> : "Not signed in"}
@@ -378,21 +385,24 @@ export function SidebarFoot({
         <AccountMenu account={account} shown={shown} onSignOut={onSignOut} />
         <OfflineMark />
         <SidebarUpdate updates={updates} />
-        <Tooltip label="Send feedback">
-          <IconButton
-            icon={<MessageSquareIcon />}
-            label="Send feedback"
-            onClick={() => runAppCommand(APP_COMMAND.SEND_FEEDBACK)}
-          />
-        </Tooltip>
-        <Tooltip label="Settings" command={APP_COMMAND.SETTINGS}>
-          <IconButton
-            icon={<GearIcon />}
-            label="Settings"
-            aria-current={settingsOpen ? "page" : undefined}
-            onClick={onSettings}
-          />
-        </Tooltip>
+        {/* Edge to edge, as Back meets Forward over them, so each stands under its partner at the column's head. */}
+        <span className="sidebar-foot-end flex flex-none">
+          <Tooltip label="Send feedback">
+            <IconButton
+              icon={<MessageSquareIcon />}
+              label="Send feedback"
+              onClick={() => runAppCommand(APP_COMMAND.SEND_FEEDBACK)}
+            />
+          </Tooltip>
+          <Tooltip label="Settings" command={APP_COMMAND.SETTINGS}>
+            <IconButton
+              icon={<GearIcon />}
+              label="Settings"
+              aria-current={settingsOpen ? "page" : undefined}
+              onClick={onSettings}
+            />
+          </Tooltip>
+        </span>
       </SidebarAccountRow>
     </SidebarFootBox>
   );

@@ -9,10 +9,19 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
+import plist, { type PlistValue } from "@expo/plist";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
-import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
-import { TASK_STATUS_SYMBOL_TEMPLATES } from "@repo/brand/task-status-symbols";
+import {
+  CLAWD_PATH,
+  CURSOR_PATH,
+  GITHUB_PATH,
+  GOOGLE_MARK_LAYERS,
+} from "@repo/brand/provider-marks";
+import {
+  TASK_PRIORITY_SYMBOL_TEMPLATES,
+  TASK_STATUS_SYMBOL_TEMPLATES,
+} from "@repo/brand/task-status-symbols";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -76,7 +85,8 @@ const PNG_COLOR_TYPE_RGB = 2;
 // marks from the brand's paths: GitHub's a template SwiftUI draws in the ink
 // of the words beside it, Google's in its own four colors; and the harness
 // marks `AgentTile` draws (`HARNESS_MARK_ASSET`), Claude Code's Clawd in its
-// own clay, centered on a square canvas so it never stretches.
+// own clay, centered on a square canvas so it never stretches, and Cursor's
+// cube a template in the ink of the row it leads.
 const IMAGE_SETS = [
   {
     NAME: "BrandMark",
@@ -106,6 +116,13 @@ const IMAGE_SETS = [
       SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -4.5 47 47"><path fill="#D97757" d="${CLAWD_PATH}"/></svg>`,
     },
     TEMPLATE: false,
+  },
+  {
+    NAME: "CursorMark",
+    LIGHT: {
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#000" d="${CURSOR_PATH}"/></svg>`,
+    },
+    TEMPLATE: true,
   },
 ] as const;
 
@@ -151,14 +168,6 @@ type ExtensionFile = { readonly FROM: string; readonly NAME: string; readonly AS
 // The name an extension's copy of a file is built under.
 const copiedName = ({ NAME, AS }: ExtensionFile) => AS ?? NAME;
 
-/** A value an extension's Info.plist or entitlements hold. */
-type PlistValue =
-  | string
-  | boolean
-  | number
-  | readonly string[]
-  | { readonly [key: string]: PlistValue };
-
 /**
  * An app extension the app embeds: its target, the bundle id automatic
  * signing registers beside the app's, its Swift (the app's native code),
@@ -179,6 +188,13 @@ type AppExtension = {
   readonly SYMBOLS?: readonly string[];
   readonly ENTITLEMENTS?: Readonly<Record<string, PlistValue>>;
   readonly INFO?: Readonly<Record<string, PlistValue>>;
+  /**
+   * System frameworks the target links by name. Note that Swift links an
+   * imported framework only once a symbol of its is used, and a conformance
+   * to an Objective-C protocol uses none, so an extension point whose context
+   * class lives in a framework the code merely conforms to names it here.
+   */
+  readonly FRAMEWORKS?: readonly string[];
 };
 
 const EXTENSION_SWIFT_VERSION = "5.0";
@@ -201,8 +217,8 @@ const INBOX_WIDGET_SNAPSHOT: ExtensionFile = {
   NAME: "InboxWidgetSnapshot.swift",
 };
 
-// The Notification Service Extension, which sets a decide push's buttons and
-// moves the Inbox widget's snapshot by each post that waits on the member.
+// The Notification Service Extension, which moves the Inbox widget's
+// snapshot by each post that waits on the member.
 const NOTIFICATION_SERVICE: AppExtension = {
   TARGET: "NotificationService",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.NotificationService`,
@@ -215,23 +231,59 @@ const NOTIFICATION_SERVICE: AppExtension = {
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
-// The Stop button's intent, which iOS runs in the app's process, so the app
-// builds it too, beside the widget that draws it.
+// The Notification Content Extension, which draws a thread post's Markdown
+// in the expanded notification a long press opens, and sets a decide's options
+// as its buttons; the system's own words for it stay hidden under its view.
+// Note that its categories are `PUSH_CATEGORY`'s decide and reply
+// (`@repo/features/inbox-push-wire`), spelled here since Expo's config loader
+// reads a package only through a TypeScript export, which that one is not.
+const NOTIFICATION_CONTENT: AppExtension = {
+  TARGET: "NotificationContent",
+  BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.NotificationContent`,
+  SOURCES: [{ FROM: "notification-content", NAME: "NotificationViewController.swift" }],
+  EXTENSION_POINT: "com.apple.usernotifications.content-extension",
+  PRINCIPAL_CLASS: "NotificationViewController",
+  // Note that the extension point's context class is UserNotificationsUI's, so an appex that doesn't link it traps as SpringBoard connects.
+  FRAMEWORKS: ["UserNotificationsUI"],
+  ATTRIBUTES: {
+    UNNotificationExtensionCategory: ["inbox-decide", "inbox-reply"],
+    UNNotificationExtensionInitialContentSizeRatio: 0.4,
+    UNNotificationExtensionDefaultContentHidden: true,
+  },
+  COLORS: {
+    Ground: "GROUND",
+    Text: "TEXT",
+    TextMuted: "TEXT_MUTED",
+    Edge: "CHIP_EDGE",
+    Well: "WELL",
+  },
+};
+
+// The Live Activities' button intents, Stop on an agent's row and a voice
+// call's presses, which iOS runs in the app's process, so the app builds
+// them too, beside the widget that draws them.
 const STOP_AGENT_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "StopAgentIntent.swift" };
+const CALL_PRESS_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "CallPressIntent.swift" };
+const LIVE_ACTIVITY_INTENTS = [STOP_AGENT_INTENT, CALL_PRESS_INTENT] as const;
 
 // The widget extension that draws the member's running agents as a Live
-// Activity, and the Inbox widget from the snapshot the app keeps in the App
-// Group. Its attributes are the app's module's own file, since ActivityKit
-// matches the app's activity to the widget's by the type's name. Its glyphs
-// are the panel's own Lucide ones, as the app's are: the Inbox's, and the
-// asks' Split, SquareCheck and PenLine, as the app's Inbox row leads them.
+// Activity, a voice call as one of its own, and the Inbox widget from the
+// snapshot the app keeps in the App Group. Each activity's attributes are
+// the app's module's own file, since ActivityKit matches the app's activity
+// to the widget's by the type's name. Its glyphs are the panel's own Lucide
+// ones, as the app's are: the Inbox's, the asks' Split, SquareCheck and
+// PenLine, as the app's Inbox row leads them, and a call's waveform, mutes,
+// and hang-up, as its card draws them, End call in the danger red; and the
+// agents' working and done marks are the panel's own status marks.
 const LIVE_ACTIVITY: AppExtension = {
   TARGET: "AgentsLiveActivity",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.AgentsLiveActivity`,
   SOURCES: [
     { FROM: "live-activity", NAME: "AgentsLiveActivity.swift" },
-    STOP_AGENT_INTENT,
+    { FROM: "live-activity", NAME: "CallLiveActivity.swift" },
+    ...LIVE_ACTIVITY_INTENTS,
     { FROM: "modules/live-activity/ios", NAME: "AgentsActivityAttributes.swift" },
+    { FROM: "modules/live-activity/ios", NAME: "CallActivityAttributes.swift" },
     { FROM: "live-activity", NAME: "InboxWidget.swift" },
     INBOX_WIDGET_SNAPSHOT,
   ],
@@ -243,8 +295,22 @@ const LIVE_ACTIVITY: AppExtension = {
     Ground: "GROUND",
     Text: "TEXT",
     TextMuted: "TEXT_MUTED",
+    Danger: "DANGER_FILL",
   },
-  SYMBOLS: ["Inbox", "Split", "SquareCheck", "PenLine"],
+  SYMBOLS: [
+    "Inbox",
+    "TaskStatusInProgress",
+    "TaskStatusDone",
+    "Split",
+    "SquareCheck",
+    "PenLine",
+    "AudioLines",
+    "Mic",
+    "MicOff",
+    "Volume2",
+    "VolumeOff",
+    "PhoneOff",
+  ],
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
@@ -275,7 +341,14 @@ const SHARE_EXTENSION: AppExtension = {
       NSExtensionActivationSupportsImageWithMaxCount: 4,
     },
   },
-  COLORS: { AccentColor: "ACCENT" },
+  COLORS: {
+    AccentColor: "ACCENT",
+    Text: "TEXT",
+    DangerText: "DANGER_TEXT",
+    ChipHover: "CHIP_HOVER",
+    Sidebar: "SIDEBAR",
+    Raised: "OVERLAY",
+  },
   SYMBOLS: ["CircleCheck", "X"],
   ENTITLEMENTS: {
     ...APP_GROUP_ENTITLEMENTS,
@@ -333,10 +406,8 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // starts the native half again on its own options, and off for a fixture run.
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
-// without a DSN, a local or simulator one, starts nothing natively: the empty
-// DSN is refused, and so is the start's `{}` fallback, which left the SDK
-// starting on no options at all and faulting at launch, so the patched
-// `RNSentrySDK` returns instead (`pnpm-workspace.yaml`'s patch for it).
+// without a DSN, a local or simulator one, gets no native start at all
+// (`useNativeInit` off), since the SDK's start faults on an empty DSN.
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
@@ -482,51 +553,12 @@ const writeSymbolSet = (catalog: string, name: string, svg: string) => {
   writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
 };
 
-// A string as plist XML's text.
-const plistText = (text: string) =>
-  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
-// A plist value as XML, indented by `depth` tabs.
-const plistXml = (value: PlistValue, depth: number): string => {
-  const indent = "\t".repeat(depth);
-
-  if (Predicate.isString(value)) return `${indent}<string>${plistText(value)}</string>`;
-
-  if (Predicate.isBoolean(value)) return `${indent}<${value}/>`;
-
-  if (Predicate.isNumber(value)) return `${indent}<integer>${value}</integer>`;
-
-  if (Array.isArray(value))
-    return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
-
-  // SAFETY: the branches above take every PlistValue but a dictionary.
-  return `${indent}<dict>\n${plistEntries(value as Record<string, PlistValue>, depth + 1)}\n${indent}</dict>`;
-};
-
-// A dictionary's keys and values as XML, each key at `depth` tabs.
-const plistEntries = (entries: Readonly<Record<string, PlistValue>>, depth: number): string =>
-  Object.entries(entries)
-    .map(
-      ([key, value]) =>
-        `${"\t".repeat(depth)}<key>${plistText(key)}</key>\n${plistXml(value, depth)}`,
-    )
-    .join("\n");
-
-// A whole plist document of one dictionary.
-const plistDocument = (entries: Readonly<Record<string, PlistValue>>) =>
-  `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
-<plist version="1.0">
-${plistXml(entries, 0)}
-</plist>
-`;
-
 // An extension's Info.plist: its extension point and, where it has them, its
 // principal class and attributes, the app's version and build, which App
 // Store Connect refuses an extension to differ from, the App Group where it
 // shares it, and its own keys over the rest.
 const extensionPlist = (extension: AppExtension, version: string, build: string) =>
-  plistDocument({
+  plist.build({
     CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
     CFBundleDisplayName: extension.TARGET,
     CFBundleExecutable: "$(EXECUTABLE_NAME)",
@@ -563,7 +595,7 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
 const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConfig => {
   const colors = Object.entries(extension.COLORS ?? {});
 
-  const symbols = LUCIDE_SYMBOL_TEMPLATES.filter(({ name }) =>
+  const symbols = [...LUCIDE_SYMBOL_TEMPLATES, ...TASK_STATUS_SYMBOL_TEMPLATES].filter(({ name }) =>
     (extension.SYMBOLS ?? []).includes(name),
   );
 
@@ -573,9 +605,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
   );
 
   if (missing.length > 0)
-    throw new Error(
-      `${extension.TARGET} names Lucide symbols with no template: ${missing.join(", ")}`,
-    );
+    throw new Error(`${extension.TARGET} names symbols with no template: ${missing.join(", ")}`);
 
   const catalogued = colors.length > 0 || symbols.length > 0;
 
@@ -596,7 +626,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       if (extension.ENTITLEMENTS !== undefined)
         writeFileSync(
           join(folder, extensionEntitlementsName(extension)),
-          plistDocument(extension.ENTITLEMENTS),
+          plist.build(extension.ENTITLEMENTS),
         );
 
       if (catalogued) {
@@ -683,6 +713,11 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         ...(entitlements.length === 0
           ? undefined
           : { CODE_SIGN_ENTITLEMENTS: `${extension.TARGET}/${entitlements[0]}` }),
+        ...(extension.FRAMEWORKS === undefined
+          ? undefined
+          : {
+              OTHER_LDFLAGS: `"${["$(inherited)", ...extension.FRAMEWORKS.map((name) => `-framework ${name}`)].join(" ")}"`,
+            }),
       });
     }
 
@@ -690,33 +725,39 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
   });
 };
 
-// The Stop button's intent built into the app's own target as well, since
-// iOS runs a Live Activity's intent in the app's process: copied beside the
-// app's sources and added to its target.
-const withStopAgentIntent = (config: ExpoConfig): ExpoConfig => {
+// The Live Activities' intents built into the app's own target as well,
+// since iOS runs a Live Activity's intent in the app's process: copied
+// beside the app's sources and added to its target.
+const withLiveActivityIntents = (config: ExpoConfig): ExpoConfig => {
   const written = withDangerousMod(config, [
     "ios",
     (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
-      copyFileSync(
-        join(projectRoot, STOP_AGENT_INTENT.FROM, STOP_AGENT_INTENT.NAME),
-        join(IOSConfig.Paths.getSourceRoot(projectRoot), STOP_AGENT_INTENT.NAME),
-      );
+
+      for (const intent of LIVE_ACTIVITY_INTENTS) {
+        copyFileSync(
+          join(projectRoot, intent.FROM, intent.NAME),
+          join(IOSConfig.Paths.getSourceRoot(projectRoot), intent.NAME),
+        );
+      }
 
       return modConfig;
     },
   ]);
 
   return withXcodeProject(written, (modConfig) => {
-    const project = modConfig.modResults;
     const projectName = IOSConfig.XcodeUtils.getProjectName(modConfig.modRequest.projectRoot);
-    const app = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName });
-    modConfig.modResults = IOSConfig.XcodeUtils.addBuildSourceFileToGroup({
-      filepath: `${projectName}/${STOP_AGENT_INTENT.NAME}`,
-      groupName: projectName,
-      project,
-      targetUuid: app.uuid,
-    });
+
+    for (const intent of LIVE_ACTIVITY_INTENTS) {
+      const project = modConfig.modResults;
+      const app = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName });
+      modConfig.modResults = IOSConfig.XcodeUtils.addBuildSourceFileToGroup({
+        filepath: `${projectName}/${intent.NAME}`,
+        groupName: projectName,
+        project,
+        targetUuid: app.uuid,
+      });
+    }
 
     return modConfig;
   });
@@ -840,7 +881,11 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
-      for (const { name, svg } of [...LUCIDE_SYMBOL_TEMPLATES, ...TASK_STATUS_SYMBOL_TEMPLATES])
+      for (const { name, svg } of [
+        ...LUCIDE_SYMBOL_TEMPLATES,
+        ...TASK_STATUS_SYMBOL_TEMPLATES,
+        ...TASK_PRIORITY_SYMBOL_TEMPLATES,
+      ])
         writeSymbolSet(catalog, name, svg);
 
       return modConfig;
@@ -877,13 +922,10 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         `webcredentials:${ASSOCIATED_DOMAIN}`,
         `activitycontinuation:${ASSOCIATED_DOMAIN}`,
       ],
-      // The TestFlight build takes its pushes from production APNs, which
-      // the distribution profile release-ios.yml exports it with allows; a
-      // simulator build is unsigned and carries no entitlement at all.
       // The App Group it shares files with its extensions through, and the
       // Keychain group it shares the share sheet's token through, after its own.
+      // Its APNs environment is expo-notifications' plugin's, below.
       entitlements: {
-        "aps-environment": "production",
         ...APP_GROUP_ENTITLEMENTS,
         [KEYCHAIN_GROUPS_ENTITLEMENT]: [
           `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}`,
@@ -894,8 +936,6 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
       // rest, and everything on the wire is the system's HTTPS.
-      // iOS wakes the app for a settled thread's background push, which
-      // clears its notification (`src/notification-task.ts`).
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
       // A call into an agent keeps on with the screen locked or another app
@@ -905,7 +945,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // app is kept running for a call alone.
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        UIBackgroundModes: ["remote-notification", "audio"],
+        UIBackgroundModes: ["audio"],
         NSSupportsLiveActivities: true,
         // A screen handed over from another of the member's devices arrives
         // as our own activity type, spelled again in Swift
@@ -924,6 +964,14 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     },
     plugins: [
       "expo-router",
+      // The TestFlight build takes its pushes from production APNs
+      // (`aps-environment`), which the distribution profile release-ios.yml
+      // exports it with allows; a simulator build is unsigned and carries no
+      // entitlement at all. iOS wakes the app for a settled thread's
+      // background push, which clears its notification
+      // (`src/notification-task.ts`), so the plugin adds the
+      // `remote-notification` background mode beside `audio`.
+      ["expo-notifications", { mode: "production", enableBackgroundRemoteNotifications: true }],
       // A message's photo is picked in the system's photo picker, which reads
       // only what the person picks, so the camera is never asked for. Both
       // purpose strings are still named here, since the picker's plugin
@@ -960,7 +1008,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           project: SENTRY.PROJECT,
           url: SENTRY.URL,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
-          useNativeInit: true,
+          useNativeInit: SENTRY.DSN !== "",
           options: SENTRY_LAUNCH_OPTIONS,
         },
       ],
@@ -972,13 +1020,14 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
   });
 
 // The images the screens draw and the flat app icon, written into the asset
-// catalog over the rest, and the Notification Service Extension, the Live
-// Activity's widget extension, and the share extension beside the app, with
+// catalog over the rest, and the Notification Service and Content
+// Extensions, the Live Activity's widget extension, and the share extension
+// beside the app, with
 // the Stop intent the widget draws built into the app as well.
 const config = (context?: ConfigContext): ExpoConfig =>
-  [NOTIFICATION_SERVICE, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
+  [NOTIFICATION_SERVICE, NOTIFICATION_CONTENT, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
     withAppExtension,
-    withStopAgentIntent(withMarketingIcon(withImageSets(baseConfig(context)))),
+    withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
   );
 
 export default config;

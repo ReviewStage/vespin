@@ -20,11 +20,12 @@ import {
   INBOX_BLOCK,
   INBOX_FIELD,
   INBOX_RESPONSE,
+  type InboxAskRead,
   type InboxPost,
   type InboxPostBlock,
-  type InboxThreadPostInput,
+  type InboxThreadPostRead,
   inboxPostInputSchema,
-  inboxThreadPostInputSchema,
+  inboxThreadPostReadSchema,
   recommendedLabels,
 } from "./inbox-wire.js";
 import {
@@ -107,6 +108,8 @@ export interface ToolCallView {
   readonly appIcon?: string;
   /** For a terminal command or an action on an app, the machine its answer says it went to, which its row names; absent while it has not answered, and where its answer names none, as one from before machines were named. */
   readonly machine?: CallMachine;
+  /** For a terminal command or an action on an app, the id of the machine its input names, where it names one rather than the agent's default, which a row still unanswered names it by. */
+  readonly namedMachine?: string;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
   /** For a call of an integration's own tool, the name of the account it ran on as its owner called it, where they held more than one at the provider, which every reader is shown; absent for the rest. */
@@ -115,6 +118,8 @@ export interface ToolCallView {
   readonly connection?: string;
   /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
   readonly notRun?: MachineNotRun;
+  /** Whether the service answered the call without doing it, as a pull request it refused or a browser call that ran nothing, which its row marks as failed though the call answered; absent for the rest. */
+  readonly refused?: true;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -411,7 +416,7 @@ function filesAt(input: WireValue | undefined): readonly string[] {
   return path === undefined || path === "" ? [] : [path];
 }
 
-/** The files a `show_image` call named, in order, as its row's subject. */
+/** The files a `show_media` or `show_image` call named, in order, as its row's subject. */
 function shownPaths(input: WireValue | undefined): string {
   const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
 
@@ -753,10 +758,10 @@ function postLines(post: InboxPost): string {
   return [...blocks, ...askLines(post.response)].filter((line) => line.trim() !== "").join("\n");
 }
 
-const readThreadPost = Schema.decodeUnknownOption(inboxThreadPostInputSchema);
+const readThreadPost = Schema.decodeUnknownOption(inboxThreadPostReadSchema);
 
 /** The message a post carries from version 5, or nothing where its input does not read as one: a post from before it, or one still streaming. */
-function threadPostView(input: WireValue | undefined): InboxThreadPostInput | undefined {
+function threadPostView(input: WireValue | undefined): InboxThreadPostRead | undefined {
   return Option.getOrUndefined(readThreadPost(input));
 }
 
@@ -766,7 +771,7 @@ function threadPostView(input: WireValue | undefined): InboxThreadPostInput | un
  * steps, or an `answer`'s fields with their types; none where the reply's
  * own words answer it.
  */
-function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly string[] {
+function threadAskLines(ask: InboxAskRead): readonly string[] {
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
       return ask.options.map((option) => {
@@ -790,7 +795,7 @@ function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly
 }
 
 /** A version 5 post as the row's body lists it: its message's first line, then what its ask asks, by its kind, and what it offers. */
-function threadPostLines(post: InboxThreadPostInput): string {
+function threadPostLines(post: InboxThreadPostRead): string {
   const first = post.body.split("\n").find((line) => line.trim() !== "") ?? "";
 
   const ask =
@@ -971,8 +976,8 @@ function subagentCallView(
 /** What a refused pull request's line says in place of its verb, since it opened none. */
 const PULL_REQUEST_REFUSED = "Could not open pull request";
 
-/** A pull request's answer as its body draws it: its JSON where it opened one, the words of its reason where it was refused. */
-function pullRequestAnswer(
+/** A call's answer as its body draws it: its JSON where it did what was asked, the words of its reason where it was refused. */
+function answerOrReason(
   output: WireValue | undefined,
   reason: string | undefined,
 ): ToolBlock | undefined {
@@ -999,9 +1004,28 @@ function openedPullRequestView(
   return {
     kind: CALL_KIND.OPEN_PULL_REQUEST,
     subject: number === undefined ? title : `#${number} ${title}`,
-    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED }),
+    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED, refused: true }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
-    output: pullRequestAnswer(output, reason),
+    output: answerOrReason(output, reason),
+  };
+}
+
+/** What a refused Slack message's line says in place of its verb, since it sent nothing. */
+const SLACK_MESSAGE_REFUSED = "Didn't send on Slack:";
+
+/** A `send_slack_message` call's row: the words it sent; a refused call says it sent none, its answer drawn as the text of its reason. */
+function slackMessageView(
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const reason = stringAt(output, "reason");
+
+  return {
+    kind: CALL_KIND.SLACK_MESSAGE,
+    subject: messageWords(input) ?? "",
+    ...(reason === undefined ? undefined : { description: SLACK_MESSAGE_REFUSED, refused: true }),
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: answerOrReason(output, reason),
   };
 }
 
@@ -1096,7 +1120,7 @@ function commentUpdateKind(input: WireValue | undefined): CallKind {
   return resolved === false ? CALL_KIND.REOPEN_THREAD : CALL_KIND.RESOLVE_THREAD;
 }
 
-/** How an agent's change is said on its row: archived or unarchived where it named its archive, and changed otherwise. */
+/** How an agent's change is said on its row: archived or unarchived where it named its archive, as an `update_agent` call written before `archive_agent` came back may, and changed otherwise. */
 function agentUpdateKind(input: WireValue | undefined): CallKind {
   const archived = isRecord(input) ? input.archived : undefined;
 
@@ -1327,6 +1351,14 @@ const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
 
 const READ_INBOX_CALL: ToolReader = ({ tool, input, output }) => inboxToolView(tool, input, output);
 
+/** A call that showed media from the agent's sandbox, under either name it is stored by, named by the files it showed. */
+const SHOWN_MEDIA_CALL: ToolReader = ({ input, output }) => ({
+  kind: CALL_KIND.SHOW_IMAGE,
+  subject: shownPaths(input),
+  input: input === undefined ? textBlock("") : jsonBlock(input),
+  output: output === undefined ? undefined : jsonBlock(output),
+});
+
 /** A memory tool's refusal, which answers `rejected` with its reason. */
 const MEMORY_REJECTED = "rejected";
 
@@ -1421,6 +1453,8 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>
     namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
+  [AGENT_TOOL.READ_AGENT_CHANGES]: ({ input, output }) =>
+    namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
   [AGENT_TOOL.MESSAGE_AGENT]: ({ input, output }) => ({
     ...namedCall(CALL_KIND.MESSAGE_AGENT, input, output, undefined),
     subject: messageWords(input) ?? "",
@@ -1439,6 +1473,10 @@ const AGENT_TOOL_VIEWS = {
     answeredAgentCall(CALL_KIND.STOP_AGENT, input, output),
   [AGENT_TOOL.UPDATE_AGENT]: ({ input, output }) =>
     answeredAgentCall(agentUpdateKind(input), input, output),
+  [AGENT_TOOL.ARCHIVE_AGENT]: ({ input, output }) =>
+    answeredAgentCall(CALL_KIND.ARCHIVE_AGENT, input, output),
+  [AGENT_TOOL.UNARCHIVE_AGENT]: ({ input, output }) =>
+    answeredAgentCall(CALL_KIND.UNARCHIVE_AGENT, input, output),
   [AGENT_TOOL.LIST_TASKS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_TASKS, input, output, undefined),
   [AGENT_TOOL.READ_TASK]: ({ input, output }) =>
@@ -1463,6 +1501,8 @@ const AGENT_TOOL_VIEWS = {
     answeredCall(CALL_KIND.RUN_AUTOMATION, input, output, "automation", "name"),
   [AGENT_TOOL.LIST_MODELS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_MODELS, input, output, undefined),
+  [AGENT_TOOL.LIST_MACHINES]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_MACHINES, input, output, undefined),
   [AGENT_TOOL.SAVE_MEMORY]: SAVE_MEMORY_CALL,
   [AGENT_TOOL.SEARCH_MEMORY]: SEARCH_MEMORY_CALL,
   [AGENT_TOOL.LIST_MEMORIES]: ({ input, output }) =>
@@ -1488,12 +1528,14 @@ const AGENT_TOOL_VIEWS = {
         : MACHINE_NOT_RUN_WORDS.COMMAND;
 
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : machineCommandOutput(output),
@@ -1511,12 +1553,14 @@ const AGENT_TOOL_VIEWS = {
 
     const icon = computerAppIcon(output);
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.COMPUTER,
       subject: computerAppName(input, output) ?? "",
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
@@ -1531,6 +1575,7 @@ const AGENT_TOOL_VIEWS = {
       kind: CALL_KIND.BROWSER,
       subject: words === undefined ? "" : (tab ?? ""),
       ...(words === undefined ? undefined : { description: words }),
+      ...(stringAt(output, "status") === BROWSER_NOT_RUN ? { refused: true } : undefined),
       input: input === undefined ? textBlock("") : jsonBlock(input),
       output: output === undefined ? undefined : browserOutput(output),
     };
@@ -1624,12 +1669,7 @@ const AGENT_TOOL_VIEWS = {
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   }),
-  [AGENT_TOOL.SHOW_IMAGE]: ({ input, output }) => ({
-    kind: CALL_KIND.SHOW_IMAGE,
-    subject: shownPaths(input),
-    input: input === undefined ? textBlock("") : jsonBlock(input),
-    output: output === undefined ? undefined : jsonBlock(output),
-  }),
+  [AGENT_TOOL.SHOW_MEDIA]: SHOWN_MEDIA_CALL,
   [AGENT_TOOL.SLEEP]: ({ input, output }) => {
     const seconds = isRecord(input) && isWireNumber(input.seconds) ? input.seconds : undefined;
 
@@ -1663,6 +1703,15 @@ const AGENT_TOOL_VIEWS = {
       output: output === undefined ? undefined : jsonBlock(output),
     };
   },
+  [AGENT_TOOL.SEND_SLACK_MESSAGE]: ({ input, output }) => slackMessageView(input, output),
+  [AGENT_TOOL.LIST_WORKSPACE_MEMBERS]: ({ input, output }) =>
+    namedCall(CALL_KIND.WORKSPACE_MEMBERS, input, output, undefined),
+  [AGENT_TOOL.LIST_SLACK_CHANNELS]: ({ input, output }) =>
+    namedCall(CALL_KIND.SLACK_CHANNELS, input, output, undefined),
+  [AGENT_TOOL.READ_SLACK]: ({ input, output }) =>
+    namedCall(CALL_KIND.SLACK_READ, input, output, undefined),
+  [AGENT_TOOL.REACT_SLACK]: ({ input, output }) =>
+    namedCall(CALL_KIND.SLACK_REACT, input, output, "emoji"),
   [AGENT_TOOL.END_TURN]: ({ input, output }) =>
     namedCall(CALL_KIND.END_TURN, input, output, undefined),
 } as const satisfies Record<AgentTool, ToolReader>;
@@ -1704,6 +1753,7 @@ const RETIRED_TOOL_VIEWS = {
   [RETIRED_TOOL.LIST_CODING_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [RETIRED_TOOL.EDIT_PLAN]: AGENT_TOOL_VIEWS[AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE]: SHOWN_MEDIA_CALL,
   [RETIRED_TOOL.READ_CODING_AGENT]: ({ input, output }) =>
     namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
   [RETIRED_TOOL.MESSAGE_CODING_AGENT]: ({ input, output }) =>
@@ -1715,10 +1765,6 @@ const RETIRED_TOOL_VIEWS = {
       output,
       stringAt(input, "prompt") === undefined ? "task" : "prompt",
     ),
-  [RETIRED_TOOL.ARCHIVE_AGENT]: ({ input, output }) =>
-    answeredAgentCall(CALL_KIND.ARCHIVE_AGENT, input, output),
-  [RETIRED_TOOL.UNARCHIVE_AGENT]: ({ input, output }) =>
-    answeredAgentCall(CALL_KIND.UNARCHIVE_AGENT, input, output),
   [RETIRED_TOOL.MOVE_TASK]: ({ input, output }) =>
     answeredCall(CALL_KIND.MOVE_TASK, input, output, "task", "name"),
   [RETIRED_TOOL.CLOSE_INBOX_ITEM]: READ_INBOX_CALL,
@@ -2031,7 +2077,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.READ_AGENT, namedAgent],
   [AGENT_TOOL.MESSAGE_AGENT, namedAgent],
   [AGENT_TOOL.START_AGENT, startedAgent],
-  [RETIRED_TOOL.UNARCHIVE_AGENT, namedAgent],
+  [AGENT_TOOL.UNARCHIVE_AGENT, namedAgent],
   [AGENT_TOOL.STOP_AGENT, namedAgent],
   [AGENT_TOOL.UPDATE_TASK, answeredTask],
   [AGENT_TOOL.CREATE_TASK, answeredTask],
@@ -2142,10 +2188,11 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 /** The tools whose call is about one coding agent, under every name one was made under, which a row names by the agent's chip. */
 const AGENT_CALL_TOOLS: ReadonlySet<string> = new Set([
   AGENT_TOOL.READ_AGENT,
+  AGENT_TOOL.READ_AGENT_CHANGES,
   AGENT_TOOL.MESSAGE_AGENT,
   AGENT_TOOL.START_AGENT,
-  RETIRED_TOOL.ARCHIVE_AGENT,
-  RETIRED_TOOL.UNARCHIVE_AGENT,
+  AGENT_TOOL.ARCHIVE_AGENT,
+  AGENT_TOOL.UNARCHIVE_AGENT,
   AGENT_TOOL.STOP_AGENT,
   AGENT_TOOL.UPDATE_AGENT,
   RETIRED_TOOL.READ_CODING_AGENT,

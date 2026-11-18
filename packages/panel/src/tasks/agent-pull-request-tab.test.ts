@@ -24,7 +24,7 @@ import {
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_FACT } from "@repo/features/failure-facts";
-import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   MERGE_METHOD,
@@ -73,6 +73,7 @@ import {
   PAGE,
   PIXEL,
   PULL_REQUEST,
+  PULL_REQUEST_KEY,
   pill,
   pillOf,
   pillPress,
@@ -904,7 +905,7 @@ test("a reaction is pressed to take the reader's own back, waits on its change w
   await vi.waitFor(() =>
     assert.deepEqual(world.changes, [
       [
-        AGENT.id,
+        PULL_REQUEST_KEY,
         { action: PULL_REQUEST_ACTION.REMOVE_REACTION, subject: "PR_42", content: REACTION.HEART },
       ],
     ]),
@@ -1025,7 +1026,7 @@ test("Add reaction opens one row of GitHub's eight, each named, the arrows movin
   assert.equal(entry.querySelector('[role="toolbar"]') === null, true, "a pick closes the row");
   await vi.waitFor(() =>
     assert.deepEqual(world.changes.at(-1), [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.ADD_REACTION, subject: "IC_2", content: REACTION.ROCKET },
     ]),
   );
@@ -1328,7 +1329,7 @@ test("opened on its files, as a link to its changes opens it, the header stands 
   assert.equal(shownPanel()[0]?.querySelectorAll(".pull-request-entry").length, 2);
 });
 
-test("an App's bot stands by the logo GitHub gives it at its App's address, in the header's Opened by and Reviewers and in the conversation, its robot only until the logo loads", async () => {
+test("an App's bot stands by the logo GitHub gives it at its App's address, in the header's Opened by and Reviewers and in the conversation, its hard hat only until the logo loads", async () => {
   const devin = {
     login: "devin-ai-integration[bot]",
     bot: true,
@@ -1377,14 +1378,14 @@ test("an App's bot stands by the logo GitHub gives it at its App's address, in t
     picture.getAttribute("src"),
     "https://avatars.githubusercontent.com/in/811515?v=4&s=36",
   );
-  assert.ok(face.querySelector(".lucide-bot"), "its robot stands while the logo loads");
+  assert.ok(face.querySelector(".lucide-hard-hat"), "its hard hat stands while the logo loads");
   act(() => {
     picture.dispatchEvent(new Event("load"));
   });
   assert.equal(
-    face.querySelector(".lucide-bot") === null,
+    face.querySelector(".lucide-hard-hat") === null,
     true,
-    "the logo stands in the robot's place",
+    "the logo stands in the hard hat's place",
   );
 
   const opener =
@@ -2025,7 +2026,9 @@ test("a draft's pill offers Ready for review, and Close pull request in red, whi
 
   await pressAction(tab, "Ready for review");
 
-  assert.deepEqual(world.changes, [[AGENT.id, { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW }]]);
+  assert.deepEqual(world.changes, [
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW }],
+  ]);
   assert.equal(pill(tab).textContent, "Open");
   assert.deepEqual(offered(tab), ["Convert to draft", "Close pull request"]);
   assert.equal(tab.querySelector(".pull-request-write-note") === null, true);
@@ -2093,6 +2096,7 @@ test("a change refused for a repository out of the workspace's reach says where 
         openWorkspaceGitHub: (taskId) => opened.push(taskId),
         openGitHub: () => undefined,
         chooseRepository: () => undefined,
+        openBilling: () => undefined,
         moveTask: () => Promise.resolve(false),
       },
       children: createElement(Switching, {
@@ -2359,7 +2363,7 @@ test("a pull request ready to merge offers the first method the repository allow
   );
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.MERGE, method: MERGE_METHOD.REBASE, headSha: "c0ffee1" },
     ],
   ]);
@@ -2446,7 +2450,7 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
       await answerQuestion(question.answer);
     }
 
-    assert.deepEqual(world.changes, [[AGENT.id, request]], label);
+    assert.deepEqual(world.changes, [[PULL_REQUEST_KEY, request]], label);
     act(() => world.root?.unmount());
     world.root = undefined;
   }
@@ -2621,7 +2625,7 @@ test("Review opens a panel whose choice and words are submitted for the agent as
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       {
         action: PULL_REQUEST_ACTION.SUBMIT_REVIEW,
         event: REVIEW_EVENT.APPROVE,
@@ -2678,7 +2682,7 @@ test("Enter submits the review from its words, while Shift+Enter only adds a lin
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       {
         action: PULL_REQUEST_ACTION.SUBMIT_REVIEW,
         event: REVIEW_EVENT.COMMENT,
@@ -2728,7 +2732,7 @@ test("a merged pull request still takes a review, sent for the agent as one on a
   writeReview(panel, "Late, but LGTM");
   await submitReview(panel, "Approve");
   assert.deepEqual(world.changes.at(-1), [
-    AGENT.id,
+    PULL_REQUEST_KEY,
     {
       action: PULL_REQUEST_ACTION.SUBMIT_REVIEW,
       event: REVIEW_EVENT.APPROVE,
@@ -2995,9 +2999,7 @@ test("its reviewers stand compactly, three faces and a count of the rest: where 
   );
 });
 
-test("the stack it stands in sits beside its branches; its menu lists it tip first, and opens an agent's Pull request tab on its task, this one or another, and one no agent owns on GitHub", async () => {
-  const elsewhere = "3c5e7a9b-1d2f-4a6b-8c0e-2f4a6b8c0e1d";
-
+test("the stack it stands in sits beside its branches; its menu lists it tip first, and opens each other one in a Pull request tab of the panel by its repository and number, whichever agent opened it", async () => {
   const entry = (number: number, agent?: { id: string; taskId: string }) => ({
     number,
     title: `Step ${number}`,
@@ -3006,10 +3008,13 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
     ...(agent === undefined ? undefined : { agent }),
   });
 
+  const away = {
+    id: "7c9e1b3d-5f7b-4d9f-8b3d-5f7b9d1f3b5d",
+    taskId: "3c5e7a9b-1d2f-4a6b-8c0e-2f4a6b8c0e1d",
+  };
+
   const sibling = { id: "5a7c9e1b-3d5f-4b7d-9f1b-3d5f7b9d1f3a", taskId: AGENT.taskId };
-  const away = { id: "7c9e1b3d-5f7b-4d9f-8b3d-5f7b9d1f3b5d", taskId: elsewhere };
-  const beside = { id: "9e1b3d5f-7b9d-4f1b-8d5f-7b9d1f3b5d7f", taskId: elsewhere };
-  const links: ReadLink[] = [];
+  const opened: NumberedAddress[] = [];
 
   const tab = await draw(
     controlAnswering({
@@ -3021,7 +3026,7 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
               entry(38, away),
               entry(40, sibling),
               entry(42, { id: AGENT.id, taskId: AGENT.taskId }),
-              entry(44, beside),
+              entry(44),
               entry(46),
             ],
           },
@@ -3029,7 +3034,7 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
     }),
     PULL_REQUEST_VIEW.CONVERSATION,
     undefined,
-    (link) => links.push(link),
+    (pullRequest) => opened.push(pullRequest),
   );
 
   const button = await vi.waitFor(
@@ -3071,22 +3076,12 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
   press(40);
   press(38);
   press(44);
-  press(46);
-  assert.deepEqual(links, [
-    {
-      workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, taskId: AGENT.taskId, agentId: sibling.id },
-    },
-    {
-      workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, taskId: elsewhere, agentId: away.id },
-    },
-    {
-      workspace: "",
-      place: { kind: LINK_DESTINATION.CHANGES, taskId: elsewhere, agentId: beside.id },
-    },
+  assert.deepEqual(opened, [
+    { repository: "acme/relay", number: 40 },
+    { repository: "acme/relay", number: 38 },
+    { repository: "acme/relay", number: 44 },
   ]);
-  await vi.waitFor(() => assert.deepEqual(world.opened, ["https://github.com/acme/relay/pull/46"]));
+  assert.deepEqual(world.opened, [], "none leaves for GitHub");
 });
 
 test("a pull request of the stack GitHub's merge queue holds says Queued in the stack's menu, and one it does not says nothing of it", async () => {
@@ -3245,7 +3240,7 @@ test("the reviewer picker lists the repository's teams then its people, the auth
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.REQUEST_REVIEW, reviewer: { kind: "user", name: "priyan" } },
     ],
   ]);
@@ -3274,7 +3269,7 @@ test("the reviewer picker lists the repository's teams then its people, the auth
   );
   await pickRow("Platform");
   assert.deepEqual(world.changes.at(-1), [
-    AGENT.id,
+    PULL_REQUEST_KEY,
     {
       action: PULL_REQUEST_ACTION.REMOVE_REVIEW_REQUEST,
       reviewer: { kind: "team", name: "platform" },
@@ -3387,8 +3382,8 @@ test("the label picker lists the repository's labels, those on the pull request 
   await pickRow("docs");
 
   assert.deepEqual(world.changes, [
-    [AGENT.id, { action: PULL_REQUEST_ACTION.REMOVE_LABEL, label: "bug" }],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.ADD_LABEL, label: "docs" }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.REMOVE_LABEL, label: "bug" }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.ADD_LABEL, label: "docs" }],
   ]);
 });
 

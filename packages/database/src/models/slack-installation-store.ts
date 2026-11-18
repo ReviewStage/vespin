@@ -1,7 +1,7 @@
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { DateTime, Effect, Option, Schema } from "effect";
+import { DateTime, Effect, Option, type Redacted, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
@@ -17,6 +17,11 @@ import {
   slackMember,
 } from "../schemas/slack-installation.js";
 import { SLACK_THREAD_ORIGIN, type SlackThreadOrigin } from "../storage-vocabulary.js";
+import {
+  type KeyRing,
+  openSlackBotToken as openSealedBotToken,
+  sealSlackBotToken,
+} from "./provider-key-seal.js";
 import type { TaskStoreEffect } from "./task-store.js";
 
 /**
@@ -51,6 +56,15 @@ import type { TaskStoreEffect } from "./task-store.js";
  * workspace and for each channel (`slackStartRepositories`); a channel's is
  * forgotten when the bot leaves it.
  *
+ * Once the bot runs on our own Slack app, each workspace's install grants
+ * its own bot token, which the installation keeps sealed beside what Bolt's
+ * installation keeps of the bot: its user id and id, the app, its scopes,
+ * and the Enterprise Grid org (`saveSlackBotToken`), opened for one call at
+ * a time (`openSlackBot`) and forgotten when Slack revokes it
+ * (`deleteSlackBotToken`) or the installation is deleted, as Slack's
+ * uninstall of the app from the team does (`deleteSlackTeamInstallations`). A token is only
+ * ever handed out `Redacted`, and nothing here logs it or its seal.
+ *
  * Settings holds the installation and the channels' repositories as a live
  * read (the service's `workspaceIntegrationsRead`), so each write Settings makes
  * answers the transaction it committed in, which a reader holding them
@@ -77,6 +91,43 @@ const SlackInstallationRowSchema = Schema.Struct({
 
 /** The Slack team a workspace's bot is connected to. */
 export type SlackInstallation = typeof SlackInstallationRowSchema.Type;
+
+/** What an install of our Slack app answered of its bot, as Bolt's installation keeps it, the team and the token aside. */
+const SlackBotFieldsSchema = Schema.Struct({
+  /** Slack's id for the bot's own user in the team (`U…`). */
+  botUserId: Schema.String,
+  /** Slack's id for the bot itself (`B…`). */
+  botId: Schema.String,
+  /** Slack's id for the app that granted the token (`A…`). */
+  appId: Schema.String,
+  /** The scopes Slack granted the bot token. */
+  scopes: Schema.Array(Schema.String),
+  /** The Enterprise Grid org the install was made in; null for a single-workspace install. */
+  enterpriseId: Schema.NullOr(Schema.String),
+  /** Whether the app was installed across an Enterprise Grid org. */
+  isEnterpriseInstall: Schema.Boolean,
+});
+
+/** What saving a bot token names: the workspace and the team its install granted it in, the token, and what the install answered of its bot. */
+export interface SlackBotToSave extends Schema.Schema.Type<typeof SlackBotFieldsSchema> {
+  readonly organizationId: string;
+  readonly teamId: string;
+  readonly token: Redacted.Redacted<string>;
+}
+
+/** A workspace's bot as its installation holds it, its token opened for one call. */
+export interface SlackBot extends Schema.Schema.Type<typeof SlackBotFieldsSchema> {
+  readonly teamId: string;
+  readonly token: Redacted.Redacted<string>;
+}
+
+const SlackBotRowSchema = Schema.Struct({
+  teamId: Schema.String,
+  keyVersion: Schema.Int,
+  sealedDataKey: Schema.String,
+  sealedToken: Schema.String,
+  ...SlackBotFieldsSchema.fields,
+});
 
 const SlackMemberRowSchema = Schema.Struct({
   slackUserId: Schema.NullOr(Schema.String),
@@ -153,9 +204,11 @@ const upsertInstallation = SqlSchema.findOne({
         })
         .onConflictDoUpdate({
           target: slackInstallation.organizationId,
+          // Note that a relink is a new connection, so a late uninstall of the one it replaced never deletes it.
           set: {
             teamName: sql`excluded.team_name`,
             linkedByUserId: sql`excluded.linked_by_user_id`,
+            createdAt: sql`excluded.created_at`,
             updatedAt: sql`excluded.updated_at`,
           },
         })
@@ -184,6 +237,115 @@ const deleteInstallation = SqlSchema.findAll({
         .delete(slackInstallation)
         .where(eq(slackInstallation.organizationId, organizationId))
         .returning(TXID_RETURNING),
+    ),
+});
+
+/** Every installation of the team created no later than the moment given, deleted, answering the workspaces it stood in. */
+const deleteTeamInstallations = SqlSchema.findAll({
+  Request: Schema.Struct({ teamId: Schema.String, before: Schema.Date }),
+  Result: Schema.Struct({ organizationId: Schema.String }),
+  execute: ({ teamId, before }) =>
+    Database.use((db) =>
+      db
+        .delete(slackInstallation)
+        .where(and(eq(slackInstallation.teamId, teamId), lte(slackInstallation.createdAt, before)))
+        .returning({ organizationId: slackInstallation.organizationId }),
+    ),
+});
+
+const writeBotToken = SqlSchema.findAll({
+  Request: Schema.Struct({
+    organizationId: Schema.String,
+    teamId: Schema.String,
+    keyVersion: Schema.Int,
+    sealedDataKey: Schema.String,
+    sealedToken: Schema.String,
+    ...SlackBotFieldsSchema.fields,
+    now: Schema.Date,
+  }),
+  Result: Schema.Struct({ organizationId: Schema.String }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(slackInstallation)
+        .set({
+          botKeyVersion: row.keyVersion,
+          botSealedDataKey: row.sealedDataKey,
+          botSealedToken: row.sealedToken,
+          botUserId: row.botUserId,
+          botScopes: [...row.scopes],
+          botId: row.botId,
+          appId: row.appId,
+          enterpriseId: row.enterpriseId,
+          isEnterpriseInstall: row.isEnterpriseInstall,
+          updatedAt: row.now,
+        })
+        .where(
+          and(
+            eq(slackInstallation.organizationId, row.organizationId),
+            eq(slackInstallation.teamId, row.teamId),
+          ),
+        )
+        .returning({ organizationId: slackInstallation.organizationId }),
+    ),
+});
+
+/** The workspace's bot as its row holds it, sealed; nothing where no token is held. */
+const findBot = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: SlackBotRowSchema,
+  execute: (organizationId) =>
+    Database.use((db) =>
+      db
+        .select({
+          teamId: slackInstallation.teamId,
+          keyVersion: sql<number>`${slackInstallation.botKeyVersion}`,
+          sealedDataKey: sql<string>`${slackInstallation.botSealedDataKey}`,
+          sealedToken: sql<string>`${slackInstallation.botSealedToken}`,
+          botUserId: sql<string>`${slackInstallation.botUserId}`,
+          scopes: sql<string[]>`${slackInstallation.botScopes}`,
+          botId: sql<string>`${slackInstallation.botId}`,
+          appId: sql<string>`${slackInstallation.appId}`,
+          enterpriseId: slackInstallation.enterpriseId,
+          isEnterpriseInstall: slackInstallation.isEnterpriseInstall,
+        })
+        .from(slackInstallation)
+        .where(
+          and(
+            eq(slackInstallation.organizationId, organizationId),
+            // The check keeps the five together, so one standing is all of them.
+            isNotNull(slackInstallation.botSealedToken),
+          ),
+        ),
+    ),
+});
+
+const clearBotToken = SqlSchema.findAll({
+  Request: Schema.Struct({ organizationId: Schema.String, now: Schema.Date }),
+  Result: Schema.Struct({ organizationId: Schema.String }),
+  execute: ({ organizationId, now }) =>
+    Database.use((db) =>
+      db
+        .update(slackInstallation)
+        .set({
+          botKeyVersion: null,
+          botSealedDataKey: null,
+          botSealedToken: null,
+          botUserId: null,
+          botScopes: null,
+          botId: null,
+          appId: null,
+          enterpriseId: null,
+          isEnterpriseInstall: false,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(slackInstallation.organizationId, organizationId),
+            isNotNull(slackInstallation.botSealedToken),
+          ),
+        )
+        .returning({ organizationId: slackInstallation.organizationId }),
     ),
 });
 
@@ -331,11 +493,16 @@ export type SlackAgentThread = SlackThread & {
   readonly userId: string;
 };
 
-/** A thread to keep for an agent: where it came from, and the turn its first message posted where it posted one. */
+/** A thread to keep for an agent: where it came from, the turn its first message posted where it posted one, and the member's message that started the agent and is being worked on where one did. */
 export type NewSlackAgentThread = SlackAgentThread & {
   readonly origin: SlackThreadOrigin;
   readonly postedTurnId?: string;
+  readonly startTs?: string;
+  readonly workingTs?: string;
 };
+
+/** A message in a Slack thread the bot marks: the thread it stands in, and its own timestamp. */
+export type SlackThreadMessageAt = SlackThread & { readonly ts: string };
 
 const insertAgentThread = SqlSchema.void({
   Request: Schema.Struct({
@@ -346,6 +513,8 @@ const insertAgentThread = SqlSchema.void({
     userId: Schema.String,
     postedTurnId: Schema.NullOr(Schema.String),
     origin: Schema.Literals(Object.values(SLACK_THREAD_ORIGIN)),
+    startTs: Schema.NullOr(Schema.String),
+    workingTs: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   execute: (row) =>
@@ -360,6 +529,8 @@ const insertAgentThread = SqlSchema.void({
           userId: row.userId,
           postedTurnId: row.postedTurnId,
           origin: row.origin,
+          startTs: row.startTs,
+          workingTs: row.workingTs,
           createdAt: row.now,
           activeAt: row.now,
         })
@@ -373,13 +544,20 @@ const updateAgentThread = SqlSchema.void({
     fromAgentId: Schema.String,
     agentId: Schema.String,
     userId: Schema.String,
+    workingTs: Schema.String,
     now: Schema.Date,
   }),
   execute: (row) =>
     Database.use((db) =>
       db
         .update(slackAgentThread)
-        .set({ agentId: row.agentId, userId: row.userId, postedTurnId: null, activeAt: row.now })
+        .set({
+          agentId: row.agentId,
+          userId: row.userId,
+          postedTurnId: null,
+          workingTs: row.workingTs,
+          activeAt: row.now,
+        })
         .where(
           and(
             eq(slackAgentThread.organizationId, row.organizationId),
@@ -471,6 +649,24 @@ const claimThreadTurn = SqlSchema.findOneOption({
     ),
 });
 
+const findCurrentThread = SqlSchema.findOneOption({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: SlackThreadSchema,
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: slackAgentThread.organizationId,
+          channelId: slackAgentThread.channelId,
+          threadTs: slackAgentThread.threadTs,
+        })
+        .from(slackAgentThread)
+        .where(eq(slackAgentThread.agentId, agentId))
+        .orderBy(desc(slackAgentThread.activeAt), desc(slackAgentThread.threadTs))
+        .limit(1),
+    ),
+});
+
 const findSlackStart = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String }),
   Result: Schema.Struct({ threadTs: Schema.String }),
@@ -486,6 +682,85 @@ const findSlackStart = SqlSchema.findOneOption({
           ),
         )
         .limit(1),
+    ),
+});
+
+/** The message that started the agent in the thread kept as its start, or the thread's first message where a thread kept before it was recorded names none. */
+const findStartMessage = SqlSchema.findOneOption({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: slackAgentThread.organizationId,
+          channelId: slackAgentThread.channelId,
+          threadTs: slackAgentThread.threadTs,
+          ts: sql<string>`coalesce(${slackAgentThread.startTs}, ${slackAgentThread.threadTs})`,
+        })
+        .from(slackAgentThread)
+        .where(
+          and(
+            eq(slackAgentThread.agentId, agentId),
+            eq(slackAgentThread.origin, SLACK_THREAD_ORIGIN.START),
+          ),
+        )
+        .limit(1),
+    ),
+});
+
+const markWorking = SqlSchema.void({
+  Request: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(slackAgentThread)
+        .set({ workingTs: row.ts })
+        .where(
+          and(
+            eq(slackAgentThread.organizationId, row.organizationId),
+            eq(slackAgentThread.channelId, row.channelId),
+            eq(slackAgentThread.threadTs, row.threadTs),
+          ),
+        ),
+    ),
+});
+
+const findWorking = SqlSchema.findAll({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: slackAgentThread.organizationId,
+          channelId: slackAgentThread.channelId,
+          threadTs: slackAgentThread.threadTs,
+          ts: sql<string>`${slackAgentThread.workingTs}`,
+        })
+        .from(slackAgentThread)
+        .where(and(eq(slackAgentThread.agentId, agentId), isNotNull(slackAgentThread.workingTs))),
+    ),
+});
+
+/** The thread's mark cleared only while it still names the message read, so a message marked since stands. */
+const clearWorking = SqlSchema.findAll({
+  Request: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  Result: Schema.Struct({ ts: Schema.String }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(slackAgentThread)
+        .set({ workingTs: null })
+        .where(
+          and(
+            eq(slackAgentThread.organizationId, row.organizationId),
+            eq(slackAgentThread.channelId, row.channelId),
+            eq(slackAgentThread.threadTs, row.threadTs),
+            eq(slackAgentThread.workingTs, row.ts),
+          ),
+        )
+        .returning({ ts: slackAgentThread.threadTs }),
     ),
 });
 
@@ -650,6 +925,97 @@ export function deleteSlackInstallation(
   return Effect.map(deleteInstallation(organizationId), txidOf);
 }
 
+/**
+ * Deletes the installation of every workspace connected to the team that
+ * stood when Slack said our app left it, each member's Slack id with it,
+ * answering the workspaces it was deleted in. One linked after that moment
+ * is the team's install again and stands, so a late or repeated uninstall
+ * never takes it.
+ */
+export function deleteSlackTeamInstallations(
+  teamId: string,
+  uninstalledAt: Date,
+): TaskStoreEffect<readonly string[]> {
+  return Effect.map(deleteTeamInstallations({ teamId, before: uninstalledAt }), (rows) =>
+    rows.map((row) => row.organizationId),
+  );
+}
+
+/**
+ * Keeps the bot token the workspace's install of our Slack app granted,
+ * sealed with the ring, beside what the install answered of its bot,
+ * replacing any it held; answers whether the workspace's installation is
+ * of that team, and writes nothing where it is not.
+ */
+export function saveSlackBotToken(ring: KeyRing, bot: SlackBotToSave): TaskStoreEffect<boolean> {
+  return Effect.gen(function* () {
+    const now = yield* DateTime.nowAsDate;
+    const owner = { organizationId: bot.organizationId, teamId: bot.teamId };
+    const sealed = sealSlackBotToken(ring, owner, bot.token);
+
+    const written = yield* writeBotToken({
+      ...owner,
+      ...sealed,
+      botUserId: bot.botUserId,
+      botId: bot.botId,
+      appId: bot.appId,
+      scopes: bot.scopes,
+      enterpriseId: bot.enterpriseId,
+      isEnterpriseInstall: bot.isEnterpriseInstall,
+      now,
+    });
+
+    return written.length > 0;
+  });
+}
+
+/**
+ * The workspace's bot with its token opened with the ring, for one call;
+ * nothing where no token is held or the ring cannot open it, which is
+ * logged by the workspace alone.
+ */
+export function openSlackBot(
+  ring: KeyRing,
+  organizationId: string,
+): TaskStoreEffect<Option.Option<SlackBot>> {
+  return Effect.gen(function* () {
+    const found = yield* findBot(organizationId);
+
+    if (Option.isNone(found)) return Option.none();
+    const row = found.value;
+    const token = openSealedBotToken(ring, { organizationId, teamId: row.teamId }, row);
+
+    if (Result.isFailure(token)) {
+      yield* Effect.logWarning(
+        `The Slack bot token of workspace ${organizationId} cannot be opened.`,
+      );
+
+      return Option.none();
+    }
+
+    return Option.some({
+      teamId: row.teamId,
+      botUserId: row.botUserId,
+      botId: row.botId,
+      appId: row.appId,
+      scopes: row.scopes,
+      enterpriseId: row.enterpriseId,
+      isEnterpriseInstall: row.isEnterpriseInstall,
+      token: token.success,
+    });
+  });
+}
+
+/** Forgets the workspace's bot token and what its install answered of the bot, the installation left standing; answers whether one was held. */
+export function deleteSlackBotToken(organizationId: string): TaskStoreEffect<boolean> {
+  return Effect.gen(function* () {
+    const now = yield* DateTime.nowAsDate;
+    const cleared = yield* clearBotToken({ organizationId, now });
+
+    return cleared.length > 0;
+  });
+}
+
 /** The member's Slack id as last looked up in the workspace's team, a miss included; nothing where it was never looked up. */
 export function slackMemberLookup(
   organizationId: string,
@@ -748,13 +1114,19 @@ export function slackStartRepository(
  */
 export function recordSlackAgentThread(thread: NewSlackAgentThread): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    insertAgentThread({ ...thread, postedTurnId: thread.postedTurnId ?? null, now }),
+    insertAgentThread({
+      ...thread,
+      postedTurnId: thread.postedTurnId ?? null,
+      startTs: thread.startTs ?? null,
+      workingTs: thread.workingTs ?? null,
+      now,
+    }),
   );
 }
 
-/** Moves the thread from the agent it was kept for to the one that continues it, started by the member named, as that agent's current thread, so its later messages and settled turns go there; a thread moved to another agent since stands. */
+/** Moves the thread from the agent it was kept for to the one that continues it, started by the member named, as that agent's current thread, so its later messages and settled turns go there, with the message that continued it marked as being worked on; a thread moved to another agent since stands. */
 export function moveSlackAgentThread(
-  thread: SlackAgentThread & { readonly fromAgentId: string },
+  thread: SlackAgentThread & { readonly fromAgentId: string; readonly workingTs: string },
 ): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => updateAgentThread({ ...thread, now }));
 }
@@ -779,6 +1151,35 @@ export function claimSlackThreadTurn(
   turnId: string,
 ): TaskStoreEffect<Option.Option<SlackThread>> {
   return claimThreadTurn({ agentId, turnId });
+}
+
+/** The agent's current thread, the one kept, moved, or written in latest, as a turn is posted in; nothing for an agent no thread speaks for. */
+export function currentSlackThread(agentId: string): TaskStoreEffect<Option.Option<SlackThread>> {
+  return findCurrentThread({ agentId });
+}
+
+/** The member's message the agent was started from, or that the agent it continues was; nothing for an agent no Slack message started. */
+export function slackStartMessage(
+  agentId: string,
+): TaskStoreEffect<Option.Option<SlackThreadMessageAt>> {
+  return findStartMessage({ agentId });
+}
+
+/** Marks the message as the one the thread's agent is working on, in place of any marked before. */
+export function markSlackThreadWorking(message: SlackThreadMessageAt): TaskStoreEffect<void> {
+  return markWorking(message);
+}
+
+/** The messages the agent's threads mark as being worked on; none where no thread marks one. */
+export function slackWorkingMessages(
+  agentId: string,
+): TaskStoreEffect<readonly SlackThreadMessageAt[]> {
+  return findWorking({ agentId });
+}
+
+/** Clears the thread's mark where it still names the message, answering whether it did; false where another message was marked since. */
+export function clearSlackThreadWorking(message: SlackThreadMessageAt): TaskStoreEffect<boolean> {
+  return Effect.map(clearWorking(message), (cleared) => cleared.length > 0);
 }
 
 /** Whether the agent was started from a Slack message, or continues one that was: a started thread is kept for it. */

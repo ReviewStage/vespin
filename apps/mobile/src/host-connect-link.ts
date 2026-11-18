@@ -1,36 +1,17 @@
 // host-connect-link.ts -- a machine's pairing link, `/connect/<code>`, handed to Settings › Machines, which reads the pairing and asks over it before anything is sent, as the panel's link opens Settings › Hosts over its Connect dialog.
 
 import { hostUserCodeOf } from "@repo/features/host-wire";
+import { heldValue, useHeldValue } from "@repo/ui-native";
 import { useRouter } from "expo-router";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect } from "react";
 import { launchHostConnect } from "./host/launch-arguments.js";
 import { SETTINGS_ROUTE } from "./settings-button.js";
 
 /** The code a link handed the app, waiting for Settings to open on it; none once it has. */
-let handed: string | undefined;
+const handed = heldValue<string | undefined>(undefined);
 
 /** Whether this launch's own code (`-connect <code>`) was handed, so a screen drawn again never hands it twice. */
 let launchHanded = false;
-
-/** Who hears that a code was handed. */
-const listeners = new Set<() => void>();
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-
-  return () => listeners.delete(listener);
-}
-
-function handedCode(): string | undefined {
-  return handed;
-}
-
-/** Holds a code, or lets it go, and tells whoever listens. */
-function hold(code: string | undefined): void {
-  handed = code;
-
-  for (const listener of listeners) listener();
-}
 
 /**
  * Hands the app a pairing's code, as a link that opened it or a link tapped
@@ -39,7 +20,7 @@ function hold(code: string | undefined): void {
  * link alone never connects a machine.
  */
 export function handHostConnect(code: string): void {
-  hold(code);
+  handed.set(code);
 }
 
 /**
@@ -50,7 +31,7 @@ export function handHostConnect(code: string): void {
  */
 export function useHostConnectLink(open: boolean): void {
   const router = useRouter();
-  const code = useSyncExternalStore(subscribe, handedCode);
+  const code = useHeldValue(handed);
   // Note that a launch naming a code (`-connect <code>`) hands it once, as the link it stands for would.
   useEffect(() => {
     if (launchHanded) return;
@@ -62,7 +43,7 @@ export function useHostConnectLink(open: boolean): void {
   useEffect(() => {
     if (!open || code === undefined) return;
     // Note that the code is let go aloud, so the same link opened again later is heard as new.
-    hold(undefined);
+    handed.set(undefined);
     router.push(
       { pathname: SETTINGS_ROUTE.MACHINE_CONNECT, params: { code } },
       { withAnchor: true },

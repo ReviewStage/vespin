@@ -21,6 +21,14 @@
  * the start, or drawn again, replays nothing. Outside an area the rows come
  * and go at once.
  *
+ * A fold is a reveal its reader presses (`useDisclosureFold`, a group's
+ * head or a disclosure), so an area moves what stands under one the same
+ * way: as it opens, every block under it in the area glides down on the
+ * spring its body unrolls on, and as it closes, they close over it on the
+ * exit's tokens it rolls up on. Only a fold's own press plays
+ * (`useListMotionReplay`), so the area's other changes still land at once,
+ * as a reveal's do.
+ *
  * Its rows stand in a box of their own, laid out as the rows around it are
  * (reveal.css): a column, its rows ruled one from the next as a card's are
  * (settings-section.css), the box itself ruled from the row above. The box
@@ -51,11 +59,15 @@ export function revealArea(): ReturnType<typeof motionRows> {
   return motionRows();
 }
 
+/** What the area's fold motion is told of every commit, so it plays only the commits a fold asks it to read. */
+const FOLDS_ONLY = Symbol("folds only");
+
 /**
  * Makes the box `root` names, which `children` draw wearing `revealArea()`,
- * the area every reveal under it moves: what stands in it glides as a
- * reveal's rows arrive and leave. An area inside another leaves its reveals
- * to the outer one, so a section on a page moves the sections under it too.
+ * the area every reveal and fold under it moves: what stands in it glides as
+ * a reveal's rows arrive and leave, and as a fold opens or closes. An area
+ * inside another leaves its reveals and folds to the outer one, so a section
+ * on a page moves the sections under it too.
  */
 export function RevealArea({
   root,
@@ -67,11 +79,16 @@ export function RevealArea({
   children: ReactNode;
 }): React.JSX.Element {
   const outer = useContext(RevealAreaContext);
+  const area = own ? root : (outer ?? root);
+  const scoped = <RevealAreaContext.Provider value={area}>{children}</RevealAreaContext.Provider>;
 
-  return (
-    <RevealAreaContext.Provider value={own ? root : (outer ?? root)}>
-      {children}
-    </RevealAreaContext.Provider>
+  // Note that the area that moves is the one motion its folds ask, so an area inside another adds none of its own.
+  return area === root ? (
+    <ListMotion root={root} change={FOLDS_ONLY}>
+      {scoped}
+    </ListMotion>
+  ) : (
+    scoped
   );
 }
 

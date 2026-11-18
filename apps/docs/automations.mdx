@@ -11,11 +11,11 @@ Open **Automations** (<kbd>⇧⌘U</kbd>) and click **New automation**. To descr
 
 ### Schedule
 
-Hourly, daily, weekdays, weekly, or a custom five-field cron, in a time zone you pick. It runs at most every 15 minutes. A run more than an hour late is skipped, and the schedule moves on to its next time.
+Hourly, daily, weekdays, weekly, once at a date and time, or a custom five-field cron, in a time zone you pick. It runs at most every 15 minutes. A run more than an hour late is skipped, and the schedule moves on to its next time.
 
 ### GitHub event
 
-Pull request opened or updated, opened, or labeled; issue opened or labeled; checks failed; or commits pushed. The repository must be one Vespin's GitHub App can reach.
+Pull request opened or updated, opened, labeled, or merged; issue opened or labeled; checks failed; commits pushed; or release published. The repository must be one Vespin's GitHub App can reach.
 
 By default, only events from people start a run. Turn on **From Vespin's agents** or **From other bots** to include those. A push by Vespin's own agents never starts a run.
 
@@ -33,7 +33,7 @@ The request body, up to 64 KB of text, is added to the agent's prompt. Don't put
 
 ### Sentry
 
-New issues or triggered alerts, filtered by project, environment, and level. An owner or admin first installs the Sentry integration from the trigger's settings. For alerts, set the Sentry alert rule's action to notify the Vespin integration. The same issue starts a run again only after a cooldown, 24 hours by default.
+New issues or triggered alerts, filtered by project, environment, and level. An owner or admin first installs the Sentry integration from the trigger's settings. For alerts, set the Sentry alert rule's action to notify the Vespin integration. The rule's action interval sets how often one issue can start a run.
 
 ## What the agent gets
 
@@ -41,18 +41,7 @@ The agent gets your prompt, then a note saying which automation started it and w
 
 Under **Runs land in**, choose **New agent each run**, or **Same agent** to send every run to one agent as a new message.
 
-## Limits
-
-A run that would go over a limit is skipped, not queued, and shows as **Skipped** on the **Runs** tab.
-
-| Limit | Default | Up to |
-| --- | --- | --- |
-| Agents working at once | 1 | 5 |
-| Runs per 24 hours | 10 | 50 |
-
-The editor keeps the defaults. To raise a limit, ask an agent to change the automation, through **Create with an agent** or [Vespin MCP](/vespin-mcp).
-
-**Run now** starts a run at any time, even when the automation is off, within the same limits.
+**Run now** starts a run at any time, even when the automation is off.
 
 ## Sharing
 

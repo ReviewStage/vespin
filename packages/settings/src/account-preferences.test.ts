@@ -113,6 +113,8 @@ test("the snapshot's preferences part carries only the keys v0.18.0 reads, whate
     turnNotifications: true,
     onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
     introsSeen: '["inbox"]',
+    githubWakesOff: '["comment"]',
+    inbox: false,
   } satisfies Required<AccountPreferences>;
 
   const shared = Object.keys(accountPreferencesParts(everything).preferences);

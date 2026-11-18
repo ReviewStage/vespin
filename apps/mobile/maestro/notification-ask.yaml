@@ -1,0 +1,39 @@
+# notification-ask.yaml -- the Inbox's notification ask allowed: its first row, says why, its Turn On Notifications raising iOS's prompt, and, once allowed, the row gone.
+#
+# Signed in against the stubbed account service (`-authServer stub`), since a
+# fixture run stands for a phone that allowed notifications and asks nothing.
+# The launch's clear reinstalls the app, which takes back any grant, so the
+# permission stands unasked. `sign-in.yaml` holds the refused path, whose
+# Don't Allow is the one answer an accessibility text size can reach; this
+# flow runs at the default size, where Allow stands in reach.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      authServer: stub
+- extendedWaitUntil:
+    visible: "Sign in to Vespin"
+    timeout: 30000
+- tapOn: "Continue with GitHub"
+- extendedWaitUntil:
+    visible: "Know when an agent needs you"
+    timeout: 30000
+- assertVisible: "Turn On Notifications"
+- waitForAnimationToEnd
+- takeScreenshot: notification-ask
+- tapOn: "Turn On Notifications"
+# Note that the prompt is answered only where it still stands, since a
+# simulator's Maestro may answer a system alert by itself; either way the row
+# must be gone once allowed, which is what the flow checks.
+- extendedWaitUntil:
+    visible: "Allow"
+    timeout: 10000
+    optional: true
+- tapOn:
+    text: "Allow"
+    optional: true
+- waitForAnimationToEnd
+- assertNotVisible: "Know when an agent needs you"
+- assertNotVisible: "Notifications are off"
+- takeScreenshot: notification-allowed

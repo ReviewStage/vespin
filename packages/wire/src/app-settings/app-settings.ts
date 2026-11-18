@@ -8,7 +8,7 @@ import { Schema } from "effect";
  * longer offers stay, so a count an older build still sends under one validates.
  */
 export const APP_SETTING_ID = {
-  /** The voice a call speaks with, chosen in Settings › Agents while the Voice experiment is on. */
+  /** The voice a call speaks with, chosen in Settings › Agents. */
   VOICE: "voice",
   /** Offered by no build: a call's captions, removed before calls were. */
   VOICE_CAPTIONS: "voice_captions",
@@ -68,6 +68,9 @@ export const APP_SETTING_ID = {
   ASK_SOUND: "ask_sound",
   TURN_NOTIFICATIONS: "turn_notifications",
   PULL_REQUEST_OPEN: "pull_request_open",
+  GITHUB_WAKES_OFF: "github_wakes_off",
+  // Note that it is no plain `inbox`, which the Inbox command already names in the settings search.
+  INBOX: "inbox_on",
 } as const;
 
 export type AppSettingId = (typeof APP_SETTING_ID)[keyof typeof APP_SETTING_ID];

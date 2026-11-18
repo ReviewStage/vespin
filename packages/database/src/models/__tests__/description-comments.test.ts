@@ -80,6 +80,22 @@ const openSharedTask = Effect.gen(function* () {
 /** How long the test that writes a thread up to its bound may take. */
 const BOUND_TIMEOUT = 60_000;
 
+/** A coding agent of the owner's, on the task. */
+const openAgent = (owner: string, taskId: string) =>
+  Effect.map(
+    createAgent(owner, {
+      taskId,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      descriptionSnapshot: DESCRIPTION_TEXT,
+      prompt: null,
+      repository: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    }),
+    (created) => Option.getOrThrow(created).agent.id,
+  );
+
 const member = (userId: string): DescriptionCommentWriterRef => ({
   actor: DESCRIPTION_COMMENT_ACTOR.MEMBER,
   userId,
@@ -560,18 +576,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
 
-        const agentId = Option.getOrThrow(
-          yield* createAgent(owner, {
-            taskId,
-            idempotencyKey: randomUUID(),
-            model: "anthropic/claude-opus-5.5",
-            effort: "high",
-            descriptionSnapshot: DESCRIPTION_TEXT,
-            prompt: null,
-            repository: null,
-            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-          }),
-        ).agent.id;
+        const agentId = yield* openAgent(owner, taskId);
 
         const deleteWhole = (writer: DescriptionCommentWriterRef, threadId: string) =>
           actOnDescriptionCommentThread(writer, taskId, threadId, {
@@ -627,7 +632,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
             owner,
             taskPageOwner(taskId),
             { title: "Invite funnel", html: "<h1>Invites</h1><p>12 sent</p>" },
-            { kind: PAGE_SHOWER.APP },
+            { kind: PAGE_SHOWER.AGENT, agentId: yield* openAgent(owner, taskId) },
           ),
         );
 

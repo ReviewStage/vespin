@@ -68,6 +68,7 @@ import {
   lineSendersOf,
   listAgentLines,
   listAgentsOnBranches,
+  listAgentsOnHead,
   listAgentsOnPullRequest,
   listPublishedAgents,
   listPublishedAgentsById,
@@ -990,15 +991,6 @@ it.layer(getTestDB())("the coding-agent store's agents of a workspace", (it) => 
           web.agentId,
         ]);
         assert.deepEqual(yield* listWorkspaceAgents(outsider, workspace, { limit: 10 }), []);
-        // Only the account's own, where asked, held to the limit after the narrowing.
-        assert.deepEqual(
-          ids(yield* listWorkspaceAgents(starter, workspace, { ownOnly: true, limit: 2 })),
-          [newest.agentId, oldest.agentId],
-        );
-        assert.deepEqual(
-          ids(yield* listWorkspaceAgents(teammate, workspace, { ownOnly: true, limit: 10 })),
-          [web.agentId],
-        );
 
         // An agent on a plan is listed with the rest, and alone where its plan is named.
         const invitations = yield* createTask(teammate, {
@@ -1375,6 +1367,20 @@ it.layer(getTestDB())("the coding-agent store's agents by their pull request", (
         // GitHub may spell the repository in another case than the agent's row does.
         assert.equal((yield* listAgentsOnPullRequest("Acme/API", 12, 10)).length, 2);
         assert.deepEqual(yield* listAgentsOnPullRequest("acme/api", 99, 10), []);
+
+        // A commit's checks find only the agent whose pull request has it as its head, before the limit:
+        // a newer agent whose pull request from a branch named is at another commit hides nothing.
+        const head = "0123abcd0123abcd0123abcd0123abcd0123abcd";
+        yield* openedPullRequest(dean, author.agentId, { ...pullRequest(12), headSha: head });
+        yield* openedPullRequest(charles, reviewer.agentId, {
+          ...pullRequest(14),
+          headSha: "4567cdef4567cdef4567cdef4567cdef4567cdef",
+        });
+        const onHead = yield* listAgentsOnHead("Acme/API", ["agent/12", "agent/14"], head, 1);
+        assert.deepEqual(
+          onHead.map(({ agent, on }) => [agent.id, on.branch]),
+          [[author.agentId, "agent/12"]],
+        );
       }),
   );
 });

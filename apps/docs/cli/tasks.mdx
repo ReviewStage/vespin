@@ -151,6 +151,48 @@ vespin task delete ACME-42
 vespin task delete ACME-42 --yes
 ```
 
+## vespin task follow
+
+Follow a task, or add members as its followers, with their machines off until they switch them on
+
+```sh
+vespin task follow [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `--member string` | A member to add as a follower, by email, name, or id; again for each |
+
+```sh
+# Follow a task yourself
+vespin task follow ACME-42
+
+# Add two teammates as followers
+vespin task follow ACME-42 --member ana@acme.dev --member Raj
+```
+
+## vespin task unfollow
+
+Stop following a task, or remove other followers; its assignee keeps following while assigned
+
+```sh
+vespin task unfollow [flags] <task>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `task string` | The task, by its id, its number, or its key such as ACME-42 |
+| `--member string` | A follower to remove, by email, name, or id; again for each |
+
+```sh
+# Stop following a task
+vespin task unfollow ACME-42
+
+# Remove a teammate as a follower
+vespin task unfollow ACME-42 --member ana@acme.dev
+```
+
 ## vespin task cat
 
 Print a file of a task's repository as GitHub holds it, at the default branch's head or a commit

@@ -1,5 +1,5 @@
 import { isRecord, isWireNumber, isWireString, type WireValue } from "@repo/wire";
-import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL } from "./agent-tools.js";
+import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL, CURSOR_TOOL } from "./agent-tools.js";
 import { AGENT_TODO_STATUS } from "./agent-wire.js";
 
 /**
@@ -19,8 +19,9 @@ import { AGENT_TODO_STATUS } from "./agent-wire.js";
  * which the tab draws as a delegation's row, as the retired runtime's `delegate` is drawn.
  *
  * Each harness has one table, keyed by the names its calls are stored under,
- * which no two harnesses share: Claude Code's and Codex's (`CODEX_TOOL`,
- * `codex-moments.ts`), joined in `NATIVE_TOOL_CALLS`. Nothing here draws.
+ * which no two harnesses share: Claude Code's, Codex's (`CODEX_TOOL`,
+ * `codex-moments.ts`), and Cursor's (`CURSOR_TOOL`, `cursor-moments.ts`), joined in
+ * `NATIVE_TOOL_CALLS`. Nothing here draws.
  */
 
 /** A call as the transcript reads it: the tool, its input, and its answer, none while it runs. */
@@ -409,10 +410,213 @@ const CODEX_CALLS: Record<(typeof CODEX_TOOL)[keyof typeof CODEX_TOOL], NativeCa
         },
 };
 
+/** The maker a Cursor subagent's model is named under, as the catalog's Cursor ids begin. */
+const CURSOR = "cursor";
+
+/** The record a Cursor call answered with, or none where it answered words or nothing. */
+function answerRecord(output: WireValue | undefined) {
+  return isRecord(output) ? output : undefined;
+}
+
+/** A Cursor command's answer, `{stdout, stderr, exitCode}`, as the retired runtime's shell answered one; an error's words as they are. */
+function cursorTerminalAnswer(output: WireValue | undefined): WireValue | undefined {
+  const value = answerRecord(output);
+
+  if (value === undefined) return output;
+
+  return {
+    stdout: inputString(value, "stdout") ?? "",
+    stderr: inputString(value, "stderr") ?? "",
+    exitCode: isWireNumber(value.exitCode) ? value.exitCode : 0,
+  };
+}
+
+/** A unified diff's lines past its file headers (`--- a/…`, `+++ b/…`), each already marked as `apply_patch` marks its lines. */
+function diffBody(diff: string | undefined): readonly string[] {
+  return patchLines("", diff).filter(
+    (line) => !line.startsWith("--- ") && !line.startsWith("+++ "),
+  );
+}
+
+/** One line of a Cursor grep's answer: the file, its line's number where it named one, and the line. */
+function grepLine(match: WireValue): string {
+  const file = inputString(match, "file") ?? "";
+  const line = inputString(match, "line");
+  const number = isRecord(match) && isWireNumber(match.lineNumber) ? `:${match.lineNumber}` : "";
+
+  return line === undefined ? file : `${file}${number}: ${line}`;
+}
+
+/** A Cursor grep's answer as the words a search answers: each workspace's matches, files, or counts, a line each. */
+function cursorGrepAnswer(output: WireValue | undefined): WireValue | undefined {
+  const results = answerRecord(answerRecord(output)?.workspaceResults);
+
+  if (results === undefined) return output;
+
+  const lines = Object.values(results).flatMap((result) => {
+    const found = answerRecord(answerRecord(result)?.output);
+    const listed = found?.matches ?? found?.files ?? found?.counts;
+
+    return Array.isArray(listed)
+      ? listed.map((each: WireValue) =>
+          isWireString(each)
+            ? each
+            : isRecord(each) && "count" in each
+              ? `${inputString(each, "file") ?? ""}: ${String(each.count)}`
+              : grepLine(each),
+        )
+      : [];
+  });
+
+  return { content: lines.join("\n") };
+}
+
+/** A Cursor glob's answer as the words a search answers: the files it found, a line each. */
+function cursorGlobAnswer(output: WireValue | undefined): WireValue | undefined {
+  const files = answerRecord(output)?.files;
+
+  if (!Array.isArray(files)) return output;
+
+  return { content: files.filter(isWireString).join("\n") };
+}
+
+/** A Cursor to-do's status as the wire spells one: its `inProgress` and `completed` are in progress and done. */
+function cursorTodoStatus(status: WireValue | undefined): WireValue | undefined {
+  if (status === "inProgress") return AGENT_TODO_STATUS.IN_PROGRESS;
+
+  if (status === "completed") return AGENT_TODO_STATUS.DONE;
+
+  return status;
+}
+
+/** Cursor's to-dos as `write_todos` takes a list: each item's words and status; an item that does not read is kept, so the list reads as JSON rather than as a shorter list. */
+function cursorTodosInput(input: WireValue | undefined): WireValue | undefined {
+  const todos = isRecord(input) ? input.todos : undefined;
+
+  if (!Array.isArray(todos)) return input;
+
+  return {
+    todos: todos.map((todo: WireValue) =>
+      isRecord(todo)
+        ? { content: todo.content ?? "", status: cursorTodoStatus(todo.status) ?? "" }
+        : todo,
+    ),
+  };
+}
+
+/** A Cursor subagent's task as Claude Code's `Agent` takes one: its task, its description, and the model it asked for, named as the catalog names Cursor's. */
+function cursorTaskInput(input: WireValue | undefined): WireValue | undefined {
+  const model = inputString(input, "model");
+
+  return withMaker(
+    {
+      prompt: inputString(input, "prompt") ?? "",
+      description: inputString(input, "description") ?? "",
+      ...(model === undefined ? undefined : { model }),
+    },
+    CURSOR,
+  );
+}
+
+/** A Cursor subagent's answer as its words: what it said last, where its answer carries it; its answer as it is otherwise. */
+function cursorTaskAnswer(output: WireValue | undefined): WireValue | undefined {
+  return inputString(output, "resultSuffix") ?? output;
+}
+
+/**
+ * Cursor's tools, each read as the call that does what it does: a command
+ * as `bash`, a read as `read_file`, a whole file written as `write_file`,
+ * an edit as an `apply_patch` of the diff its answer carries, a file
+ * deleted as an `apply_patch` deleting it, a search as `glob` or `grep`,
+ * its to-dos as `write_todos`, and a subagent's task as Claude Code's
+ * `Agent`, which the tab draws as a delegation's row. A call to an MCP server
+ * other than ours is named by its server and its tool, as Codex's is. Its
+ * other tools keep their names and draw as plain calls.
+ */
+const CURSOR_CALLS: Record<(typeof CURSOR_TOOL)[keyof typeof CURSOR_TOOL], NativeCallReading> = {
+  [CURSOR_TOOL.SHELL]: ({ input, output }) => ({
+    tool: AGENT_TOOL.BASH,
+    input: { command: inputString(input, "command") ?? "" },
+    output: cursorTerminalAnswer(output),
+  }),
+  [CURSOR_TOOL.READ]: ({ input, output }) => ({
+    tool: AGENT_TOOL.READ_FILE,
+    input: { filePath: inputString(input, "path") ?? "" },
+    output:
+      inputString(output, "content") === undefined
+        ? output
+        : { content: inputString(output, "content") ?? "" },
+  }),
+  [CURSOR_TOOL.WRITE]: ({ input, output }) => ({
+    tool: AGENT_TOOL.WRITE_FILE,
+    input: {
+      filePath: inputString(input, "path") ?? "",
+      content: inputString(input, "fileText") ?? "",
+    },
+    output,
+  }),
+  // Note that an edit's input names its file alone, and its answer carries the change as a unified diff.
+  [CURSOR_TOOL.EDIT]: ({ input, output }) => ({
+    tool: AGENT_TOOL.APPLY_PATCH,
+    input: {
+      patchText: [
+        `*** Update File: ${inputString(input, "path") ?? ""}`,
+        ...diffBody(inputString(output, "diffString")),
+      ].join("\n"),
+    },
+    output,
+  }),
+  [CURSOR_TOOL.DELETE]: ({ input, output }) => ({
+    tool: AGENT_TOOL.APPLY_PATCH,
+    input: { patchText: `*** Delete File: ${inputString(input, "path") ?? ""}` },
+    output,
+  }),
+  [CURSOR_TOOL.GLOB]: ({ input, output }) => {
+    const path = inputString(input, "targetDirectory");
+
+    return {
+      tool: AGENT_TOOL.GLOB,
+      input: {
+        pattern: inputString(input, "globPattern") ?? "",
+        ...(path === undefined ? undefined : { path }),
+      },
+      output: cursorGlobAnswer(output),
+    };
+  },
+  [CURSOR_TOOL.GREP]: ({ input, output }) => ({
+    tool: AGENT_TOOL.GREP,
+    input,
+    output: cursorGrepAnswer(output),
+  }),
+  [CURSOR_TOOL.UPDATE_TODOS]: ({ input, output }) => ({
+    tool: AGENT_TOOL.WRITE_TODOS,
+    input: cursorTodosInput(input),
+    output,
+  }),
+  [CURSOR_TOOL.TASK]: ({ input, output }) => ({
+    tool: CLAUDE_CODE_TOOL.AGENT,
+    input: cursorTaskInput(input),
+    output: cursorTaskAnswer(output),
+  }),
+  // Note that the server's name is joined to the tool's with a dot, as Codex's is, which no renderer of ours takes.
+  [CURSOR_TOOL.MCP]: ({ input, output }) => ({
+    tool: `${inputString(input, "providerIdentifier") ?? ""}.${inputString(input, "toolName") ?? ""}`,
+    input: isRecord(input) ? input.args : input,
+    output,
+  }),
+  [CURSOR_TOOL.LS]: (call) => call,
+  [CURSOR_TOOL.SEM_SEARCH]: (call) => call,
+  [CURSOR_TOOL.READ_LINTS]: (call) => call,
+  [CURSOR_TOOL.WEB_SEARCH]: (call) => call,
+  [CURSOR_TOOL.WEB_FETCH]: (call) => call,
+  [CURSOR_TOOL.CREATE_PLAN]: (call) => call,
+};
+
 /** Every native harness's calls, by the names they are stored under. */
 const NATIVE_TOOL_CALLS: ReadonlyMap<string, NativeCallReading> = new Map([
   ...Object.entries(CLAUDE_CODE_CALLS),
   ...Object.entries(CODEX_CALLS),
+  ...Object.entries(CURSOR_CALLS),
 ]);
 
 /** A stored call as the transcript draws it: a native harness's as the call of the same kind, and any other as it is. */

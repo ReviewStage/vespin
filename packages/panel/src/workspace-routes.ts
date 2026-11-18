@@ -18,15 +18,21 @@
  */
 
 import { machineOfFragment } from "@repo/features/link-grammar";
+import { workspaceOfSlug } from "@repo/features/workspace-wire";
+import { type SettingsView, settingsViewNamed } from "@repo/settings/settings-views";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
+import { useAdminView } from "./admin/admin-route.js";
+import type { AdminView } from "./admin/routing.js";
 import { useAutomationsPlace } from "./automations-route.js";
 import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
+import { automationsQuery } from "./live-reads.js";
 import { placeParamsOf } from "./places/place-params.js";
 import { type PersonLanding, useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import { useRouteAccess } from "./route-gates.js";
-import type { AutomationsPlace } from "./tasks/automations-place.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 
 /** A workspace's Home as the router stands it. */
 export interface HomeRoute {
@@ -35,15 +41,12 @@ export interface HomeRoute {
   readonly standingIn: string | undefined;
   /** Opens Home under the workspace listed, or at `/app` while none is; nothing where Home stands. */
   readonly onOpen: () => void;
-  /** Leaves Home for the task bound. */
-  readonly onClose: () => void;
   /** Stands Home of `workspace` in the step's place, as another workspace listed under Home does. */
   readonly onTurn: (workspace: string) => void;
 }
 
-/** Home as the router stands it, opened under the workspace `listed` names as it is pressed, and left by the window's routed exit. */
+/** Home as the router stands it, opened under the workspace `listed` names as it is pressed. */
 export function useHomeRoute(input: { listed: () => string | undefined }): HomeRoute {
-  const exits = useRoutedExits();
   const navigate = useNavigate();
   const here = useWindowPlace();
   const open = here.place === ROUTED_PLACE.HOME;
@@ -62,7 +65,7 @@ export function useHomeRoute(input: { listed: () => string | undefined }): HomeR
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
 
-  return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn };
+  return { open, standingIn, onOpen, onTurn };
 }
 
 /** A workspace's Board as the router stands it. */
@@ -72,7 +75,6 @@ export interface BoardRoute {
   readonly standingIn: string | undefined;
   /** Opens the Board of the workspace whose address step is `workspace`. */
   readonly onOpen: (workspace: string) => void;
-  readonly onClose: () => void;
   /** Stands the Board of `workspace` in the step's place, as another workspace listed under the Board does. */
   readonly onTurn: (workspace: string) => void;
   /** Reads the Board ahead of a press the pointer says is coming. */
@@ -96,12 +98,13 @@ export interface PersonRoute {
     workspace: string,
     machineId?: string,
   ) => void;
+  /** Leaves the page for the place the window's state says, as a page of a workspace no longer listed does. */
   readonly onClose: () => void;
   /** Reads the page ahead of a press the pointer says is coming. */
   readonly onPreload: (userId: string, workspace: string) => void;
 }
 
-/** The Board as the router stands it, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for the Board standing (`places/routed-exits.ts`). */
+/** The Board as the router stands it, kept standing by the window's routed stay where a leave was asked of it before a door asked for the Board standing (`places/routed-exits.ts`). */
 export function useBoardRoute(): BoardRoute {
   const exits = useRoutedExits();
   const router = useRouter();
@@ -130,10 +133,10 @@ export function useBoardRoute(): BoardRoute {
     void router.preloadRoute({ to: "/$workspace/tasks", params: { workspace } });
   };
 
-  return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn, onPreload };
+  return { open, standingIn, onOpen, onTurn, onPreload };
 }
 
-/** A person's page as the router stands it, left and kept standing by the window's routed exits as the Board is. */
+/** A person's page as the router stands it, left by the window's routed exit, and kept standing by its stay as the Board is. */
 export function usePersonRoute(): PersonRoute {
   const exits = useRoutedExits();
   const router = useRouter();
@@ -209,26 +212,52 @@ export interface RoutedViews {
   readonly person: Pick<PersonRoute, "userId" | "name" | "workspace">;
   /** The Automations page standing, none while none does. */
   readonly automations: AutomationsPlace | undefined;
+  /** The name of the automation whose page stands, once its workspace's automations are read; none on any other page. */
+  readonly automationName: string | undefined;
   /** Whether the Merge queue page stands. */
   readonly mergeQueue: boolean;
   /** Whether the Inbox stands, the item chosen in it as its address names it, of whichever workspace (`listedInboxChoice`), and the task its list is narrowed to. */
   readonly inbox: Pick<InboxRoute, "open" | "chosen" | "narrowed">;
+  /** The Admin view standing, none while Admin does not stand. */
+  readonly admin: AdminView | undefined;
+  /** The Settings page its address names, none while its page list stands or Settings does not. */
+  readonly settings: SettingsView | undefined;
 }
 
-/** The Board, a person's page, the Automations pages, and the Inbox as the router stands them. */
+/** The Board, a person's page, the Automations pages, the Inbox, Admin, and Settings as the router stands them. */
 export function useRoutedViews(): RoutedViews {
   const { open } = useBoardRoute();
   const { userId, name, workspace } = usePersonRoute();
   const automations = useAutomationsPlace();
-  const mergeQueue = useWindowPlace().place === ROUTED_PLACE.MERGE_QUEUE;
+  const here = useWindowPlace();
+  const access = useRouteAccess();
+  const mergeQueue = here.place === ROUTED_PLACE.MERGE_QUEUE;
   const inbox = useInboxRoute();
+  const admin = useAdminView();
+  const { place } = automations;
+  const editing = automations.open && place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined;
+
+  // Note that the automation's name is read from the list its page reads, under the workspace its address names, so it follows nothing more.
+  const automationsOf =
+    editing === undefined || automations.standingIn === undefined
+      ? undefined
+      : workspaceOfSlug(access.workspaces, automations.standingIn)?.id;
+
+  const automationName = useQuery({
+    ...automationsQuery(automationsOf),
+    select: (listed) => listed.find((each) => each.id === editing?.automationId)?.name,
+  }).data;
 
   return {
     board: open,
     person: { userId, name, workspace },
-    automations: automations.open ? automations.place : undefined,
+    automations: automations.open ? place : undefined,
+    automationName: editing === undefined ? undefined : automationName,
     mergeQueue,
     inbox: { open: inbox.open, chosen: inbox.chosen, narrowed: inbox.narrowed },
+    admin: here.place === ROUTED_PLACE.ADMIN ? admin : undefined,
+    settings:
+      here.place === ROUTED_PLACE.SETTINGS ? settingsViewNamed(here.params.page) : undefined,
   };
 }
 
@@ -238,10 +267,9 @@ export interface UnknownWorkspaceRoute {
   readonly workspace: string | undefined;
   /** Opens the address of the workspace whose address step is `workspace`, in the step's place. */
   readonly onOpen: (workspace: string) => void;
-  readonly onClose: () => void;
 }
 
-/** A workspace not there for the reader as the router stands it, left and kept standing by the window's routed exits as the Board is. */
+/** A workspace not there for the reader as the router stands it, kept standing by the window's routed stay as the Board is. */
 export function useUnknownWorkspaceRoute(): UnknownWorkspaceRoute {
   const exits = useRoutedExits();
   const router = useRouter();
@@ -267,5 +295,5 @@ export function useUnknownWorkspaceRoute(): UnknownWorkspaceRoute {
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
 
-  return { workspace: standingIn, onOpen, onClose: () => exits.leave() };
+  return { workspace: standingIn, onOpen };
 }

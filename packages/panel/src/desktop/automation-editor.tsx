@@ -8,8 +8,6 @@ import {
   type DraftProblems,
   draftNextRuns,
   draftProblems,
-  draftRepositories,
-  draftTrigger,
   filterAdmitted,
   filterValuesOf,
   type GitHubTriggerSettings,
@@ -28,7 +26,7 @@ import {
   withRepository,
   withScheduleKind,
 } from "@repo/features/automation-draft-model";
-import { automationTriggerText, parseAutomationClock } from "@repo/features/automation-list-model";
+import { parseAutomationClock } from "@repo/features/automation-list-model";
 import { type AutomationPresetName, automationPreset } from "@repo/features/automation-presets";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
@@ -39,7 +37,6 @@ import {
   type AutomationView,
 } from "@repo/features/automation-view";
 import {
-  AUTOMATION_BOUNDS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -140,9 +137,7 @@ import {
   Switch,
   TEXT_ELEMENT,
   TEXT_FIELD_FONT,
-  TEXT_FIELD_INPUT_MODE,
   TEXT_FIELD_SIZE,
-  TEXT_FIELD_TYPE,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
@@ -154,7 +149,7 @@ import {
   useMenu,
   useMinute,
 } from "@repo/ui";
-import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName } from "@repo/ui/actor-model";
+import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { confirmAsked, neverBusyAct } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { inputProblem, UNREPORTED } from "@repo/ui/reported-failure";
@@ -237,8 +232,7 @@ import { type RunChoices, useRunChoices } from "./use-run-choices.js";
  * said under it. What
  * stops a draft saving is said at its field once a save is pressed. A
  * Sentry trigger picks its event, keeps to the projects, environments, and
- * levels named, and waits so many hours before the same issue runs again;
- * where the workspace has no Sentry installed, an Install Sentry prompt
+ * levels named; where the workspace has no Sentry installed, an Install Sentry prompt
  * stands in its rows' place. A
  * save the service refuses says why in one line under the name. A save
  * sends only what moved (`automation-draft-model.ts`), so the model and the
@@ -595,12 +589,14 @@ function OwnerRow({
 }): React.JSX.Element {
   const parse = optionValue(owners);
 
-  // Note that a teammate's maker the members do not name yet is said as its creator, never as the reader.
-  const changers = mine
-    ? "You"
-    : maker.kind === ACTOR_KIND.SOMEONE
-      ? "Its creator"
-      : actorName(maker);
+  // Note that a teammate's maker the members do not name yet is said as its creator, never as the reader, and one they name is drawn as their chip.
+  const changers = mine ? (
+    "You"
+  ) : maker.kind === ACTOR_KIND.SOMEONE ? (
+    "Its creator"
+  ) : (
+    <ActorRef actor={maker} />
+  );
 
   return (
     <PickerRow
@@ -611,12 +607,11 @@ function OwnerRow({
         <ReplayUnmask>
           {owner === AUTOMATION_SCOPE.WORKSPACE ? (
             <>
-              Everyone in <ReplayMask>{workspace?.name ?? "the workspace"}</ReplayMask> sees it,
-              runs it, and turns it off. <ReplayMask>{changers}</ReplayMask>, owners, and admins
-              change it.
+              Everyone in <ReplayMask>{workspace?.name ?? "the workspace"}</ReplayMask> can see and
+              run it. <ReplayMask>{changers}</ReplayMask>, owners, and admins can change it.
             </>
           ) : (
-            "Only you see and change it. Owners and admins can see it and turn it off."
+            "Only you can change it. Owners and admins can see it."
           )}
         </ReplayUnmask>
       }
@@ -658,16 +653,15 @@ function MakerRow({ maker, at }: { maker: Actor; at: number }): React.JSX.Elemen
   const now = useMinute();
 
   if (maker.kind === ACTOR_KIND.SOMEONE) return null;
-  const name = actorName(maker, { sentence: true });
-  const theirs = actorName(maker, { sentence: true, possessive: true });
+  // Note that the row's value already draws their chip, so the words name them no second time.
+  const who = maker.kind === ACTOR_KIND.PERSON && maker.you ? "you" : "this member";
 
   return (
     <SettingsRow
       label={<ReplayUnmask>Created by</ReplayUnmask>}
       description={
         <ReplayUnmask>
-          Runs start as <ReplayMask>{name}</ReplayMask>, on <ReplayMask>{theirs}</ReplayMask> GitHub
-          access, model keys, and integrations. Created {dateOfText(at, now)}.
+          Runs as {who}. Created {dateOfText(at, now)}.
         </ReplayUnmask>
       }
     >
@@ -698,36 +692,50 @@ function switchedOffName(connection: string): string {
  * row's words naming those switched off. Every server is on until switched
  * off. Note that a run starts on its creator's connections, so only its
  * creator is shown them to switch; anyone else reads which the creator
- * switched off.
+ * switched off, and why they cannot switch them.
  */
 function ServersRow({
   mine,
+  maker,
   disabled,
   onSwitch,
 }: {
   /** Whether the reading account made it, so its connections are the ones a run is handed. */
   mine: boolean;
+  /** Who made it, whose connections a run is handed, named where another reads the row. */
+  maker: Actor;
   disabled: readonly string[];
   onSwitch: (disabled: readonly string[]) => void;
 }): React.JSX.Element {
   if (!mine) {
+    // Note that a maker the members do not name yet is said as its creator, as the Owner row says them, and one they name is drawn as their chip.
+    const named = maker.kind !== ACTOR_KIND.SOMEONE;
+    const name = named ? <ActorRef actor={maker} sentence /> : "its creator";
+    const theirs = named ? <ActorRef actor={maker} sentence possessive /> : "its creator's";
+
     return (
       <SettingsRow
         label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}
         description={
           <ReplayUnmask>
-            {disabled.length === 0 ? (
-              "All of its creator's connected MCP servers."
-            ) : (
-              <>
-                Its creator's connected MCP servers, but{" "}
-                <ReplayMask>{andList(disabled.map(switchedOffName))}</ReplayMask> switched off.
-              </>
-            )}
+            Runs use <ReplayMask>{theirs}</ReplayMask> connections, so only{" "}
+            <ReplayMask>{name}</ReplayMask> can change them.
           </ReplayUnmask>
         }
       >
-        {() => null}
+        {() => (
+          <SettingsRowValue>
+            <ReplayUnmask>
+              {disabled.length === 0 ? (
+                "All"
+              ) : (
+                <>
+                  All but <ReplayMask>{andList(disabled.map(switchedOffName))}</ReplayMask>
+                </>
+              )}
+            </ReplayUnmask>
+          </SettingsRowValue>
+        )}
       </SettingsRow>
     );
   }
@@ -743,12 +751,9 @@ function namesSaid(providers: readonly IntegrationProvider[]): string {
 /** The most marks the servers chip holds before it counts the rest, so it stays a picker's width. */
 const SERVERS_CHIP_MARKS = 4;
 
-/** How wide the servers row's words stand while the connections are read, as a share of their line. */
-const SERVERS_DETAIL_SKELETON = "40%";
-
 /**
  * The servers row while no read of the owner's connections has answered:
- * blocks where the words and the chip will stand, claiming nothing, or the
+ * a block where the chip will stand, claiming nothing, or the
  * failure and Retry where the read was refused.
  */
 function UnreadServersRow({
@@ -779,13 +784,10 @@ function UnreadServersRow({
   return <ServersRowSkeleton />;
 }
 
-/** The servers row while the connections are read: its name, and blocks where its words and its field chip will stand, claiming nothing. */
+/** The servers row while the connections are read: its name, and a block where its field chip will stand, claiming nothing. */
 function ServersRowSkeleton(): React.JSX.Element {
   return (
-    <SettingsRow
-      label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}
-      description={<Skeleton width={SERVERS_DETAIL_SKELETON} />}
-    >
+    <SettingsRow label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}>
       {() => (
         <SkeletonRegion label="Reading your connected MCP servers…">
           <SettingsControlSkeleton control={SETTINGS_SKELETON_CONTROL.SELECT} />
@@ -820,18 +822,18 @@ function OwnServersRow({
   const off = connected.filter((provider) => disabled.includes(provider));
   const shown = on.slice(0, SERVERS_CHIP_MARKS);
 
+  // Note that the chip's marks already say which are on, so the words name only what they cannot.
+  const note =
+    connected.length === 0
+      ? "None connected yet."
+      : off.length === 0
+        ? undefined
+        : `${namesSaid(off)} off.`;
+
   return (
     <SettingsRow
       label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}
-      description={
-        <ReplayUnmask>
-          {connected.length === 0
-            ? "None connected yet."
-            : off.length === 0
-              ? "Every connected MCP server is on."
-              : `${namesSaid(off)} off.`}
-        </ReplayUnmask>
-      }
+      description={note === undefined ? undefined : <ReplayUnmask>{note}</ReplayUnmask>}
     >
       {() => (
         <AgentServersButton
@@ -870,14 +872,11 @@ function optionValue<Value extends string>(
   return (raw) => options.find((option) => option.value === raw)?.value;
 }
 
-/** When the draft runs next, its next two runs; nothing for one we cannot read. */
+/** When the draft runs next; nothing for one we cannot read. */
 function nextRunsText(draft: AutomationDraft): string | undefined {
-  const [first, second] = draftNextRuns(draft, new Date(), 2);
+  const [next] = draftNextRuns(draft, new Date(), 1);
 
-  if (first === undefined) return undefined;
-  const then = second === undefined ? "" : `, then ${dayAndTimeText(second)}`;
-
-  return `Next: ${dayAndTimeText(first)}${then}`;
+  return next === undefined ? undefined : `Next: ${dayAndTimeText(next)}`;
 }
 
 /** The parse the schedule's picker reads its kind back with. */
@@ -1091,7 +1090,7 @@ const SCHEDULED_ROWS = {
     { described: true, controls: [SETTINGS_SKELETON_CONTROL.VALUE] },
   ],
   [EDITOR_SECTION.TRIGGER]: [
-    { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
+    { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     // The time's field stands at a picker's width beside the pickers (`.automation-field`).
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
@@ -1100,9 +1099,9 @@ const SCHEDULED_ROWS = {
   [EDITOR_SECTION.WHERE_IT_RUNS]: [
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
     { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
-    { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
-    { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
-    { described: true, controls: [SETTINGS_SKELETON_CONTROL.SWITCH] },
+    { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
+    { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
+    { described: false, controls: [SETTINGS_SKELETON_CONTROL.SWITCH] },
   ],
 } as const satisfies Record<string, readonly SettingsRowSkeletonLayout[]>;
 
@@ -1302,16 +1301,9 @@ interface RunsControl {
 /** Where a phone's way back from an automation's page leads, as its hint names it. */
 const AUTOMATIONS_PLACE_NAME = "automations";
 
-/** A phone's way back from an automation's page to the list, the glyph alone in its corner, with the key that leaves Automations. */
+/** A phone's way back from an automation's page to the list, the glyph alone in its corner, which is the window's Back. */
 function AutomationsBack({ onBack }: { onBack: () => void }): React.JSX.Element {
-  return (
-    <BackButton
-      label={AUTOMATIONS_PLACE}
-      place={AUTOMATIONS_PLACE_NAME}
-      command={APP_COMMAND.EXIT_AUTOMATIONS}
-      onBack={onBack}
-    />
-  );
+  return <BackButton label={AUTOMATIONS_PLACE} place={AUTOMATIONS_PLACE_NAME} onBack={onBack} />;
 }
 
 /** What the toolbar's way to a narrow room's runs says. */
@@ -1473,16 +1465,8 @@ function EditorToolbar({
 /** Whose events a GitHub trigger may hear, as its switches name them. */
 const SENDER_CHOICES: readonly { value: GitHubSender; label: string; detail?: string }[] = [
   { value: GITHUB_SENDER.PEOPLE, label: "From people" },
-  {
-    value: GITHUB_SENDER.APP_AGENTS,
-    label: `From ${PRODUCT_NAME}'s agents`,
-    detail: `What ${PRODUCT_NAME}'s agents open, as you or as the workspace's GitHub App.`,
-  },
-  {
-    value: GITHUB_SENDER.OTHER_BOTS,
-    label: "From other bots",
-    detail: "Dependabot, Renovate, and every other app.",
-  },
+  { value: GITHUB_SENDER.APP_AGENTS, label: `From ${PRODUCT_NAME}'s agents` },
+  { value: GITHUB_SENDER.OTHER_BOTS, label: "From other bots" },
 ];
 
 /** The moments of a pull request an update may fire on, as its switches name them. */
@@ -1492,7 +1476,7 @@ const MOMENT_CHOICES: readonly { value: PullRequestMoment; label: string; detail
   {
     value: PULL_REQUEST_MOMENT.PUSHED,
     label: "When pushed to",
-    detail: `A push by ${PRODUCT_NAME}'s own agents never starts a run.`,
+    detail: `Never for a push by ${PRODUCT_NAME}'s agents.`,
   },
 ];
 
@@ -1565,7 +1549,6 @@ function GitHubSettingsRows({
           <SwitchRow
             label="Skip drafts"
             labelReplayUnmasked
-            detail={<ReplayUnmask>A draft starts a run once it is marked ready.</ReplayUnmask>}
             checked={!settings.drafts}
             onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
           />
@@ -1575,8 +1558,7 @@ function GitHubSettingsRows({
           labelReplayUnmasked
           detail={
             <ReplayUnmask>
-              A fork's pull request is code from outside the repository, read by an agent that can
-              push to it.
+              Its code comes from outside the repository, and the agent can push to it.
             </ReplayUnmask>
           }
           checked={settings.forks}
@@ -1652,8 +1634,7 @@ const sentryEventOf = optionValue(SENTRY_EVENTS);
 
 /**
  * A Sentry trigger's rows, in the Trigger card: its event, the projects,
- * environments, and levels it keeps to, and the hours before the same
- * issue may start another run. Where the workspace has no Sentry installed
+ * environments, and levels it keeps to. Where the workspace has no Sentry installed
  * a row saying so stands in their place, its button going to where it is
  * installed.
  */
@@ -1673,9 +1654,6 @@ function SentryRows({
   problems: DraftProblems;
   onDraft: (patch: Partial<AutomationDraft>) => void;
 }): React.JSX.Element {
-  // The cooldown's Escape lets go of the caret and keeps the press, as every field's here does.
-  const hours = useRef<HTMLInputElement>(null);
-
   if (withheld) {
     return (
       <SettingsRow
@@ -1787,29 +1765,6 @@ function SentryRows({
           </ReplayUnmask>
         )}
       />
-      <SettingsRow
-        label={<ReplayUnmask>Same issue again after</ReplayUnmask>}
-        description={
-          <ReplayUnmask>{`Hours, from 1 to ${AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS}.`}</ReplayUnmask>
-        }
-        error={inputProblem(problems[DRAFT_FIELD.COOLDOWN])}
-      >
-        {(control) => (
-          <span className={AUTOMATION_FIELD}>
-            <TextField
-              ref={hours}
-              type={TEXT_FIELD_TYPE.NUMBER}
-              inputMode={TEXT_FIELD_INPUT_MODE.NUMERIC}
-              label="Hours before the same issue runs again"
-              describedBy={control["aria-describedby"]}
-              invalid={control["aria-invalid"]}
-              value={draft.subjectCooldownHours}
-              onEscape={() => hours.current?.blur()}
-              onChange={(subjectCooldownHours) => onDraft({ subjectCooldownHours })}
-            />
-          </span>
-        )}
-      </SettingsRow>
     </>
   );
 }
@@ -1900,11 +1855,7 @@ function WebhookRows({
     return (
       <SettingsRow
         label={<ReplayUnmask>Address</ReplayUnmask>}
-        description={
-          <ReplayUnmask>
-            Save it as a webhook to get its address and a secret to call it with.
-          </ReplayUnmask>
-        }
+        description={<ReplayUnmask>Save to get its address and secret.</ReplayUnmask>}
       >
         {() => null}
       </SettingsRow>
@@ -1917,9 +1868,8 @@ function WebhookRows({
         label={<ReplayUnmask>Address</ReplayUnmask>}
         description={
           <ReplayUnmask>
-            POST to the address with the secret as <code>Authorization: Bearer</code>. Don't send
-            secrets in the body: {PRODUCT_NAME} hands the body to the run's agent, and it shows in
-            the run's transcript.
+            POST with the secret as <code>Authorization: Bearer</code>. The body shows in the run's
+            transcript, so keep secrets out of it.
           </ReplayUnmask>
         }
       >
@@ -2052,9 +2002,7 @@ function ModelRow({
   // model it may not be, and a model can still be chosen, which the chip then names.
   const note =
     shown !== undefined
-      ? draft.choice === null
-        ? "Your default, until you choose one."
-        : undefined
+      ? undefined
       : choices.defaultFailed
         ? "It runs on your default model, which could not be read."
         : "Your default model.";
@@ -2097,15 +2045,13 @@ const AGENTS_UNREAD = readFailedWords("the workspace's agents");
 const AGENT_SEARCH_FAILED = readFailedWords("the search for agents");
 
 /** What the agent row says under its name. */
-const AGENT_DETAIL =
-  "Each run is sent to that agent as a message, even mid-turn. It keeps its own model and effort.";
+const AGENT_DETAIL = "Each run is sent to it as a message, on its own model.";
 
 /** What the agent row names and says where no agent is chosen, so the first run starts one, and the menu's row that chooses none. */
 const FIRST_RUN_LABEL = "Started by its first run";
 const FIRST_RUN_ROW = "first-run";
 
-const FIRST_RUN_DETAIL =
-  "Every later run is sent to it. If it is archived or deleted, the next run starts another.";
+const FIRST_RUN_DETAIL = "Later runs are sent to it.";
 
 /**
  * The agent each run goes to, chosen from the workspace's agents on the
@@ -2278,6 +2224,7 @@ const targetOf = optionValue(TARGETS);
 function RunsGroup({
   draft,
   mine,
+  maker,
   savedAgentId,
   workspace,
   problems,
@@ -2289,6 +2236,8 @@ function RunsGroup({
   draft: AutomationDraft;
   /** Whether the reading account made it, whose connections its runs are handed. */
   mine: boolean;
+  /** Who made it, whose connections its runs are handed. */
+  maker: Actor;
   /** The agent its runs go to as saved, or none. */
   savedAgentId: string | null;
   workspace: Workspace | undefined;
@@ -2321,7 +2270,7 @@ function RunsGroup({
             (draft.repository === null &&
               draft.triggerKind !== AUTOMATION_TRIGGER.GITHUB) ? undefined : (
             <ReplayUnmask>
-              Runs start here, and also work in <ReplayMask>{andList(also)}</ReplayMask>.
+              Also works in <ReplayMask>{andList(also)}</ReplayMask>.
             </ReplayUnmask>
           )
         }
@@ -2371,13 +2320,13 @@ function RunsGroup({
               <ModelRow draft={draft} mine={mine} choices={choices} onDraft={onDraft} />
               <ServersRow
                 mine={mine}
+                maker={maker}
                 disabled={draft.disabledServers}
                 onSwitch={(disabledServers) => onDraft({ disabledServers })}
               />
               <SwitchRow
-                label="Archive finished runs"
+                label="Mark finished runs Done"
                 labelReplayUnmasked
-                detail={<ReplayUnmask>Its transcript and pull request are kept.</ReplayUnmask>}
                 checked={draft.archiveSuccessful}
                 onChange={(archiveSuccessful) => onDraft({ archiveSuccessful })}
               />
@@ -2389,9 +2338,6 @@ function RunsGroup({
         <SwitchRow
           label="Send the result to me on Slack"
           labelReplayUnmasked
-          detail={
-            <ReplayUnmask>The workspace's Slack bot sends each run's final message.</ReplayUnmask>
-          }
           checked={draft.slackDelivery}
           onChange={(slackDelivery) => onDraft({ slackDelivery })}
         />
@@ -2498,7 +2444,6 @@ function EditorForm({
             width={CHIP_WIDTH.MIN_FIELD}
             label="Type"
             labelReplayUnmasked
-            detail={automationTriggerText(draftTrigger(draft), draftRepositories(draft))}
             value={draft.triggerKind}
             options={triggers}
             parse={triggerKindOf}
@@ -2579,7 +2524,8 @@ function EditorForm({
         </SettingsSection>
         <RunsGroup
           draft={draft}
-          mine={automation === undefined || automation.mine === true}
+          mine={mine}
+          maker={maker}
           savedAgentId={savedAgentId}
           workspace={workspace}
           problems={problems}
@@ -2932,7 +2878,7 @@ export function AutomationEditor({
   const savedAgentId =
     saved !== undefined && saved.repository === draft.repository ? saved.agentId : null;
 
-  // Note that a new draft nothing was changed in is no work to lose, so Escape may leave it.
+  // Note that a new draft nothing was changed in is no work to lose, so a way out leaves it unasked.
   const written =
     automation === undefined ? unreadable !== undefined || !sameDraft(draft, start) : dirty;
 
@@ -2944,9 +2890,6 @@ export function AutomationEditor({
   const hidden = hiddenColumns(split.columns, !runsAlone);
   const screen = useScreenRef(useNarrowFocus(split.columns, !runsAlone, EDITOR_SCREENS), split.ref);
   const runsScreen = useId();
-  // Escape goes back to the list, asking first, as every way out does, where something written would be lost;
-  // from the runs standing alone, it goes back to the setup first.
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, runsAlone ? () => onRuns(false) : onBack);
   const runsPanel = useRunsPanel();
   const toggleRuns = single ? () => onRuns(!runsShown) : runsPanel.onToggle;
   // The form glides to its new middle as the Runs panel comes and goes (pane-motion.tsx).
@@ -3028,7 +2971,7 @@ export function AutomationEditor({
     );
   };
 
-  // Note that any way out of the page, a crumb, Escape, a run's agent, the sidebar, ⌘K, history,
+  // Note that any way out of the page, a crumb, a run's agent, the sidebar, ⌘K, history,
   // or Settings, asks first while something written would be lost, and goes once Leave is pressed.
   // Note that the dialog's stage alone says whether a leave is asked; the move it holds is kept beside it only for its answer to reach.
   const leavingBy = useRef<{ readonly leave: () => void; readonly stay: () => void } | undefined>(

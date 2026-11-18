@@ -64,6 +64,29 @@
  * past them a write unanswered is taken back. They are handed out to be
  * kept (`queued`) and laid back over the rows (`requeue`) in a form of the
  * declaration's own, which names nothing of how they are kept.
+ *
+ * A pool handed a store (`PoolOptions.store`) reports its outbox to it as
+ * Linear's sync engine keeps `__transactions`: a write that may wait is
+ * added (`OutboxStore.added`) before it is first sent, and removed
+ * (`OutboxStore.removed`) in the same step it stands down from waiting,
+ * once the service took it, refused it, it was let go, it was taken back
+ * unanswered past `QUEUE_BOUND`, or its caller gave up on its first send, so
+ * the store holds what the pool holds. One laid back (`requeue`) came from the
+ * store, so it is not added again. A write still waiting as the pool's scope
+ * closes is never removed, so a quit leaves it to be laid back.
+ *
+ * A read may be kept (`PoolRead.kept`), where the pool has a store
+ * (`PoolOptions.store`): each time it answers, the store is handed, in one
+ * call, the synced rows of it that moved since its last answer, the keys it
+ * holds, and its cursor (`KeptAnswer`), cut to its bound where it names one.
+ * Only the service's rows reach the store, never a write drawn over them,
+ * and a kept read's scope closing tells it nothing, so quitting never empties
+ * it. As a kept read first stands, it answers from what the store holds of
+ * it (`RowsStore.loaded`), before the service answers, as Linear's local
+ * bootstrap draws from its database before it catches up: those rows count
+ * as synced, writes standing drawn over them, but are never handed back to
+ * the store, and a stored row never replaces one the pool already holds. Its
+ * stored cursor (`HeldRows.stored`) is what its follow reads past.
  */
 
 import {
@@ -80,7 +103,7 @@ import {
   Semaphore,
   Stream,
 } from "effect";
-import { rowOf, type SyncedCollection, syncedCollection } from "./synced-collection.js";
+import { rowChanges, rowOf, type SyncedCollection, syncedCollection } from "./synced-collection.js";
 
 /** What a change leaves of a row it takes out of every read, as a deleted automation is. */
 export const ROW_GONE: unique symbol = Symbol("the row is gone");
@@ -142,6 +165,70 @@ export function fieldKind<Row extends object>(
 /** A read's wait for a write's transaction: it settles once the read carries it, or once the read stops waiting, and never fails. */
 export type Confirmation = (txid: string) => Effect.Effect<void>;
 
+/**
+ * How a read whose rows are kept on disk is named and cut: the read's stable
+ * name, the kind's stable name its rows are kept under, the workspace it
+ * reads where it reads one, and, where only its first rows are kept, the
+ * bound they fit within.
+ */
+export interface KeptRead<Row> {
+  readonly name: string;
+  readonly kind: string;
+  readonly workspace?: string | undefined;
+  /** Keeps only the first rows, in the read's order, whose `size`s sum within `within`; none keeps every row. */
+  readonly bound?: {
+    readonly size: (row: Row) => number;
+    readonly within: number;
+  };
+}
+
+/** A synced row as the store is handed it, by its key. */
+export interface KeptRow {
+  readonly key: string;
+  readonly row: unknown;
+}
+
+/**
+ * One answer of a kept read, as the store is handed it: the synced rows that
+ * moved since the read last answered, upserted and deleted by key, the keys
+ * the read now holds, and its cursor with the answer's other fields, whole
+ * even where its bound left rows out; none where the read answered none.
+ */
+export interface KeptAnswer {
+  readonly read: string;
+  readonly kind: string;
+  readonly workspace: string | undefined;
+  readonly upserted: readonly KeptRow[];
+  readonly deleted: readonly string[];
+  readonly held: readonly string[];
+  readonly cursor: unknown;
+}
+
+/** A kept read as the store names it: the read, the kind its rows are kept under, and its workspace. */
+export interface KeptName {
+  readonly read: string;
+  readonly kind: string;
+  readonly workspace: string | undefined;
+}
+
+/** What the store holds of a kept read: its rows, in the order it held them, and the cursor it last kept; none where it kept none. */
+export interface KeptLoad {
+  /** Each the kind's row as the store was handed it (`KeptRow.row`). */
+  readonly rows: readonly unknown[];
+  readonly cursor: unknown;
+}
+
+/**
+ * The rows half of a store: told each kept read's answer, in one call, and
+ * asked what it holds of a read as the read first stands; never failing,
+ * since it keeps its own failures, and answering none for a read it cannot
+ * load.
+ */
+export interface RowsStore {
+  readonly answered: (answer: KeptAnswer) => Effect.Effect<void>;
+  readonly loaded: (read: KeptName) => Effect.Effect<KeptLoad | undefined>;
+}
+
 /** A read as it stands on a kind. */
 export interface PoolRead<Row, Change = unknown> {
   /** Draws the read again as it now stands, as rows it shows move: the keys that moved, which may name some it does not show. */
@@ -164,6 +251,12 @@ export interface PoolRead<Row, Change = unknown> {
     readonly shows: (key: string) => boolean;
     readonly take: (change: Change) => void;
   };
+  /**
+   * That the read's answers are kept on disk, where the pool has a store:
+   * only the service's rows, never a write drawn over them, and nothing as
+   * its scope closes, so quitting never empties the store.
+   */
+  readonly kept?: KeptRead<Row>;
 }
 
 /** The rows one read holds of a kind, for as long as it stands on it. */
@@ -196,6 +289,10 @@ export interface HeldRows<Row extends object, Change = unknown> {
   readonly synced: () => readonly Row[];
   /** Every change standing over the kind, oldest first, which a read beside the pool draws over its own rows. */
   readonly standing: () => readonly Change[];
+  /** The cursor the store held for a kept read as it stood, which its follow reads past; none where it held none. */
+  readonly stored: unknown;
+  /** Whether the store held the kept read as it stood, rows or none, so the read draws what it held before the service answers. */
+  readonly loaded: boolean;
 }
 
 /**
@@ -203,7 +300,11 @@ export interface HeldRows<Row extends object, Change = unknown> {
  * read holds now (`held`), or the keys it let go (`gone`), every other it
  * held standing; and the sync id it was read at, where it names one.
  */
-export type Answered = { readonly at?: bigint } & (
+export type Answered = {
+  readonly at?: bigint;
+  /** The read's cursor with the answer's other fields, as a kept read's store keeps them; opaque to the pool. */
+  readonly cursor?: unknown;
+} & (
   | { readonly held?: readonly string[]; readonly gone?: undefined }
   | { readonly gone: readonly string[]; readonly held?: undefined }
 );
@@ -296,6 +397,27 @@ export function anyWrite<Row extends object, Change, Input, Answer>(
   return (use) => use(declaration);
 }
 
+/**
+ * Where a pool's waiting writes are kept as they move, oldest added first.
+ * Each call is an Effect the write path waits on in the asking fiber, so a
+ * write is kept before it is sent and the calls arrive in the order asked;
+ * a store keeps its own failures, since the pool runs on without it.
+ */
+export interface OutboxStore {
+  /** A write that may wait, before its first send. */
+  readonly added: (entry: QueuedEntry) => Effect.Effect<void>;
+  /** A write added before, as it stands down from waiting. */
+  readonly removed: (entry: QueuedEntry) => Effect.Effect<void>;
+}
+
+/** What a pool reports of what it keeps, each half its own; none where it keeps nothing past memory. */
+export interface PoolStore {
+  /** The writes that may wait, as they are added and removed. */
+  readonly outbox?: OutboxStore | undefined;
+  /** Each kept read's synced rows, held keys, and cursor, as it answers. */
+  readonly rows?: RowsStore | undefined;
+}
+
 /** What a pool that keeps writes waiting is handed. */
 export interface PoolOptions {
   /** Mints a write's idempotency key. */
@@ -308,6 +430,8 @@ export interface PoolOptions {
    * none where every write is sent under one account.
    */
   readonly holder?: (() => string | undefined) | undefined;
+  /** Where what the pool keeps is reported; none keeps it in memory alone. */
+  readonly store?: PoolStore | undefined;
 }
 
 /** Every row the reads hold, and the writes drawn over them. */
@@ -357,12 +481,16 @@ interface Holding<Row, Change = unknown> {
   readonly read: PoolRead<Row, Change>;
   held: Set<string>;
   adopted: ReadonlySet<string>;
+  /** The synced rows last handed the store for a kept read, by key. */
+  reported: ReadonlyMap<string, Row>;
 }
 
 /** One write standing: the keys it changes and its change, the service's word in its place once it answered one. */
 interface Standing<Change> {
   readonly keys: readonly string[];
   change: Change;
+  /** That the write was laid back from the store (`requeue`), so a read that stands after it adopts what it made. */
+  readonly laidBack: boolean;
 }
 
 /** Where one write stands: answered once the service answered it, and dropped once nothing of it stands drawn. */
@@ -619,10 +747,133 @@ function movedOnly<Row extends object, Change>(
   ]);
 }
 
+/**
+ * An answer naming every key `holding` holds now taken by it, committed at
+ * once: `taken` upserted, `keys` held, and any key it let go that no read
+ * holds any longer gone; answering the keys whose row moved or that it took
+ * up or let go, and every other read showing a row that moved drawn again.
+ */
+function answeredWhole<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  holding: Holding<Row, Change>,
+  taken: ReadonlyMap<string, Row>,
+  keys: Set<string>,
+): Effect.Effect<readonly string[]> {
+  const was = holding.held;
+  holding.held = keys;
+  const next = new Map(rows.synced.held());
+
+  for (const [key, row] of taken) next.set(key, row);
+
+  for (const key of was) {
+    if (heldByAny(rows.reads, key)) continue;
+    next.delete(key);
+    rows.takenAt.delete(key);
+  }
+
+  const placed = [
+    ...[...keys].filter((key) => !was.has(key)),
+    ...[...was].filter((key) => !keys.has(key)),
+  ];
+
+  const written = rows.synced.take(next);
+
+  return Effect.as(redrawn(holdersOf(rows.reads, written, holding), written), [
+    ...new Set([...written, ...placed]),
+  ]);
+}
+
+/**
+ * What `store` holds of `holding`'s kept read taken as its answer, before the
+ * service's first: each row held and counted as already reported, but taken
+ * only where the pool holds none of its key, since one another read answered
+ * is newer; answering what it held, none where it held nothing.
+ */
+function loadedFrom<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  holding: Holding<Row, Change>,
+  store: RowsStore,
+): Effect.Effect<KeptLoad | undefined> {
+  const kept = holding.read.kept;
+
+  if (kept === undefined) return Effect.undefined;
+
+  return Effect.flatMap(
+    store.loaded({ read: kept.name, kind: kept.kind, workspace: kept.workspace }),
+    (load) => {
+      if (load === undefined) return Effect.undefined;
+      // SAFETY: the store hands back only rows it was handed as this kind's (`KeptAnswer`), under the kind it names.
+      const keyed = new Map(load.rows.map((row) => [rows.kind.key(row as Row), row as Row]));
+      const synced = rows.synced.held();
+      holding.reported = keyed;
+
+      return Effect.as(
+        answeredWhole(
+          rows,
+          holding,
+          new Map([...keyed].filter(([key]) => !synced.has(key))),
+          new Set(keyed.keys()),
+        ),
+        load,
+      );
+    },
+  );
+}
+
+/** The first of `rows`, in order, whose sizes sum within the bound; every row where `kept` names none. */
+function cut<Row>(kept: KeptRead<Row>, rows: readonly Row[]): readonly Row[] {
+  const { bound } = kept;
+
+  if (bound === undefined) return rows;
+  let used = 0;
+
+  for (const [at, row] of rows.entries()) {
+    used += bound.size(row);
+
+    if (used > bound.within) return rows.slice(0, at);
+  }
+
+  return rows;
+}
+
+/**
+ * A kept read's answer as the store is handed it, read the moment the answer
+ * is taken: the synced rows of its cut that moved since it last answered, the
+ * keys the cut holds, and its cursor, which the read keeps whole even where
+ * the cut leaves rows out, since the read alone knows whether it can follow
+ * on past it from what was kept.
+ */
+function reported<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  holding: Holding<Row, Change>,
+  kept: KeptRead<Row>,
+  { cursor }: Answered,
+): KeptAnswer {
+  const synced = rows.synced.held();
+  const all = [...holding.held].flatMap((key) => synced.get(key) ?? []);
+  const keptRows = cut(kept, all);
+  const next = new Map(keptRows.map((row) => [rows.kind.key(row), row]));
+  const changes = rowChanges(holding.reported, next);
+  holding.reported = next;
+
+  return {
+    read: kept.name,
+    kind: kept.kind,
+    workspace: kept.workspace,
+    upserted: changes.flatMap((change) =>
+      change.type === "delete" ? [] : [{ key: rows.kind.key(change.value), row: change.value }],
+    ),
+    deleted: changes.flatMap((change) => (change.type === "delete" ? [change.key] : [])),
+    held: [...next.keys()],
+    cursor,
+  };
+}
+
 /** `read` stood on `rows` for the caller's scope, its keys let go as the scope closes and any row no other read holds with them. */
 function stood<Row extends object, Change>(
   rows: KindRows<Row, Change>,
   read: PoolRead<Row, Change>,
+  store: RowsStore | undefined,
 ): Effect.Effect<HeldRows<Row, Change>, never, Scope.Scope> {
   const release = (holding: Holding<Row, Change>) =>
     Effect.sync(() => {
@@ -638,49 +889,63 @@ function stood<Row extends object, Change>(
       rows.synced.take(next);
     });
 
+  const acquired = Effect.acquireRelease(
+    Effect.sync(() => {
+      const holding: Holding<Row, Change> = {
+        read,
+        held: new Set(),
+        adopted: new Set(),
+        reported: new Map(),
+      };
+
+      rows.reads.add(holding);
+      // Note that a read standing after a write laid back from the store adopts the row it made, as one stood before it would have, so a read stood again on the store at launch shows it; a write asked in this session is adopted only by the reads standing as it is asked, so one a sign-out cut off reaches no read of the next account.
+      adopted(
+        rows,
+        rows.standing.flatMap((write) => (write.laidBack ? write.keys : [])),
+      );
+
+      return holding;
+    }),
+    release,
+  );
+
   return Effect.map(
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const holding: Holding<Row, Change> = {
-          read,
-          held: new Set(),
-          adopted: new Set(),
-        };
-
-        rows.reads.add(holding);
-
-        return holding;
-      }),
-      release,
+    Effect.flatMap(acquired, (holding) =>
+      Effect.map(
+        store === undefined ? Effect.undefined : loadedFrom(rows, holding, store),
+        (load) => ({ holding, load }),
+      ),
     ),
-    (holding): HeldRows<Row, Change> => ({
-      answer: (answered, { held, gone, at } = {}) =>
-        Effect.suspend(() => {
+    ({ holding, load }): HeldRows<Row, Change> => ({
+      answer: (answered, how = {}) => {
+        const { held, gone, at } = how;
+
+        // Note that each branch commits at once and answers the draws it owes, so a kept answer is read before any other read is drawn and another answer can land.
+        const committed = (): Effect.Effect<readonly string[]> => {
           const keyed = new Map(answered.map((row) => [rows.kind.key(row), row]));
 
           if (gone !== undefined) return movedOnly(rows, holding, keyed, gone, at);
-          const keys = new Set(held ?? keyed.keys());
-          const was = holding.held;
-          holding.held = keys;
-          const next = new Map(rows.synced.held());
 
-          for (const [key, row] of newer(rows, keyed, at)) next.set(key, row);
+          return answeredWhole(
+            rows,
+            holding,
+            newer(rows, keyed, at),
+            new Set(held ?? keyed.keys()),
+          );
+        };
 
-          for (const key of was) {
-            if (heldByAny(rows.reads, key)) continue;
-            next.delete(key);
-            rows.takenAt.delete(key);
-          }
+        return Effect.suspend(() => {
+          const drawn = committed();
+          const { kept } = read;
 
-          const placed = [
-            ...[...keys].filter((key) => !was.has(key)),
-            ...[...was].filter((key) => !keys.has(key)),
-          ];
+          if (store === undefined || kept === undefined) return drawn;
+          const answer = reported(rows, holding, kept, how);
 
-          return Effect.map(takenAndDrawn(rows, next, holding), (written) => [
-            ...new Set([...written, ...placed]),
-          ]);
-        }),
+          // Note that the store is told before any read is drawn, so it hears answers in the order they were taken, and uninterruptibly with the draws, so neither its baseline nor the reads fall behind the commit.
+          return Effect.uninterruptible(Effect.andThen(store.answered(answer), drawn));
+        });
+      },
       holds: (key) => shows(holding, key),
       rows: () => shown(holding).flatMap((key) => drawnRow(rows, key) ?? []),
       row: (key) =>
@@ -692,6 +957,8 @@ function stood<Row extends object, Change>(
         return [...holding.held].flatMap((key) => synced.get(key) ?? []);
       },
       standing: () => rows.standing.map((write) => write.change),
+      stored: load?.cursor,
+      loaded: load !== undefined,
     }),
   );
 }
@@ -800,7 +1067,57 @@ function written<Row extends object, Change, Input, Answer>(
 ): Effect.Effect<Answer> {
   return Effect.gen(function* () {
     const keys = [...new Set(declaration.keys(input))];
-    const write: Standing<Change> = { keys, change: declaration.change(input) };
+
+    const write: Standing<Change> = {
+      keys,
+      change: declaration.change(input),
+      laidBack: restored !== undefined,
+    };
+
+    const plan = declaration.queue;
+    // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.
+    const askedAs = queue.options?.holder?.();
+    const mintKey = queue.options?.mintKey;
+    const key = plan === undefined || mintKey === undefined ? undefined : (restored ?? mintKey());
+
+    // Note that the input is kept as its declaration keeps it as it is asked, so one that will not keep never waits.
+    const entry =
+      plan === undefined || key === undefined
+        ? undefined
+        : Result.getOrUndefined(
+            Result.map(Schema.encodeResult(plan.input)(input), (kept) => ({
+              name: plan.name,
+              key,
+              input: kept,
+            })),
+          );
+
+    const outbox = queue.options?.store?.outbox;
+    const out = { kept: false };
+
+    /** The write kept in the outbox before it takes its turn, unless it was laid back from there. */
+    const keep = Effect.suspend(() => {
+      if (outbox === undefined || entry === undefined) return Effect.void;
+      out.kept = true;
+
+      return restored === undefined ? outbox.added(entry) : Effect.void;
+    });
+
+    /** The write out of the outbox, once, as it stands down from waiting. */
+    const unkeep = Effect.suspend(() => {
+      if (outbox === undefined || entry === undefined || !out.kept) return Effect.void;
+
+      // Note that the write is told kept until its removal is done, so one interrupted is removed on its next step down.
+      return Effect.andThen(
+        outbox.removed(entry),
+        Effect.sync(() => {
+          out.kept = false;
+        }),
+      );
+    });
+
+    // Note that the write is kept before it takes its turn on its keys, so a store that waits never lets a later write take the turn ahead of it.
+    yield* keep;
 
     const turn: Turn = {
       answered: yield* Deferred.make<void>(),
@@ -824,24 +1141,6 @@ function written<Row extends object, Change, Input, Answer>(
         unadopted(rows, keys);
       });
     }).pipe(Effect.ensuring(Deferred.succeed(turn.dropped, undefined)));
-
-    const plan = declaration.queue;
-    // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.
-    const askedAs = queue.options?.holder?.();
-    const mintKey = queue.options?.mintKey;
-    const key = plan === undefined || mintKey === undefined ? undefined : (restored ?? mintKey());
-
-    // Note that the input is kept as its declaration keeps it as it is asked, so one that will not keep never waits.
-    const entry =
-      plan === undefined || key === undefined
-        ? undefined
-        : Result.getOrUndefined(
-            Result.map(Schema.encodeResult(plan.input)(input), (kept) => ({
-              name: plan.name,
-              key,
-              input: kept,
-            })),
-          );
 
     // Note that each attempt asks the declaration anew, so one sent again reads the host as it stands then.
     const attempt = (waited: boolean) =>
@@ -901,7 +1200,10 @@ function written<Row extends object, Change, Input, Answer>(
     /** The write laid behind those waiting, still standing, sent again as they are; let go, its caller hears `meanwhile`. */
     const waits = (kept: QueuedEntry, meanwhile: Answer) =>
       Effect.suspend(() => {
-        const letGo = Effect.andThen(drop, Deferred.succeed(heard, meanwhile));
+        const letGo = Effect.andThen(
+          Effect.andThen(drop, unkeep),
+          Deferred.succeed(heard, meanwhile),
+        );
 
         const waiting: Waiting = {
           entry: kept,
@@ -918,11 +1220,13 @@ function written<Row extends object, Change, Input, Answer>(
             if ("refused" in answered) {
               if (answered.unanswered === true) return RETRIED.UNANSWERED;
               yield* takenBack(answered);
+              yield* unkeep;
               yield* Deferred.succeed(heard, answered.refused);
 
               return RETRIED.REFUSED;
             }
 
+            yield* unkeep;
             yield* FiberSet.run(queue.confirming, settled(answered));
             yield* Deferred.succeed(heard, answered.answer);
 
@@ -958,7 +1262,7 @@ function written<Row extends object, Change, Input, Answer>(
         }
 
         const answered = yield* Effect.onExit(restore(sent), (exit) =>
-          Exit.isSuccess(exit) ? Effect.void : drop,
+          Exit.isSuccess(exit) ? Effect.void : Effect.andThen(drop, unkeep),
         );
 
         if ("refused" in answered) {
@@ -969,10 +1273,12 @@ function written<Row extends object, Change, Input, Answer>(
           }
 
           yield* takenBack(answered);
+          yield* unkeep;
 
           return answered.refused;
         }
 
+        yield* unkeep;
         yield* FiberSet.run(queue.confirming, settled(answered));
 
         return answered.answer;
@@ -1072,7 +1378,8 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
       });
 
     return {
-      stand: (kind, read) => Effect.flatMap(rowsOf(kind), (rows) => stood(rows, read)),
+      stand: (kind, read) =>
+        Effect.flatMap(rowsOf(kind), (rows) => stood(rows, read, options?.store?.rows)),
       write: (declaration, input) =>
         Effect.flatMap(rowsOf(declaration.kind), (rows) =>
           written(rows, queue, declaration, input),

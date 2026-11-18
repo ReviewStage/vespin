@@ -22,12 +22,14 @@ import {
   getTestDB,
   joinWorkspace,
   leaveWorkspace,
+  openTaskAgent,
   startTask,
 } from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { BROWSER_CURSOR_KIND } from "@repo/features/browser-agent-actions";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
+import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { Clock, Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { taskBrowserTabsRead } from "../live/reads/browser-tabs.js";
@@ -96,21 +98,25 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
         // A save is stamped at the clock's instant, which has moved on since the task was made.
         yield* TestClock.adjust(Duration.seconds(1));
         yield* wakes(
-          saveNotes({ userId: owner, taskId: task.id }, [
-            added("Context", "A member cannot bring a teammate in."),
-          ]),
+          saveNotes(
+            { userId: owner, taskId: task.id },
+            [added("Context", "A member cannot bring a teammate in.")],
+            { actor: DESCRIPTION_ACTOR.DEVELOPER },
+          ),
           [...onTask, [TOPIC.WORKSPACE, task.workspaceId]],
           [taskRecordRead.topics(params), taskHistoryRead.topics(params)],
         );
+
+        const agentId = yield* openTaskAgent(owner, task.workspaceId, task.id);
 
         const shown = yield* wakes(
           writePage(
             owner,
             taskPageOwner(task.id),
             { title: "Invite funnel", html: "<p>One</p>" },
-            { kind: PAGE_SHOWER.APP },
+            { kind: PAGE_SHOWER.AGENT, agentId },
           ),
-          onTask,
+          [...onTask, [TOPIC.AGENT, agentId]],
           [taskRecordRead.topics(params), taskPagesRead.topics(params)],
         );
 

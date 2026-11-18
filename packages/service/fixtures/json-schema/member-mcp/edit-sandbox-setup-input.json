@@ -5,12 +5,49 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace whose setup it is, by the slug list_workspaces answered."
     },
-    "repository": {
-      "type": "string",
-      "maxLength": 140,
-      "description": "The repository whose setup script to save, as owner/name; leave it out to save the workspace's install script."
+    "target": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "workspace"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "repository"
+              ]
+            },
+            "repository": {
+              "type": "string",
+              "maxLength": 140,
+              "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$",
+              "description": "The repository whose setup script to save, as owner/name."
+            }
+          },
+          "required": [
+            "kind",
+            "repository"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "The script to save: kind workspace for the workspace's install script, which runs once in each build of a repository's base snapshot; or kind repository with repository, as owner/name, for that repository's setup script, which runs once in each new agent sandbox of it."
     },
     "script": {
       "type": "string",
@@ -19,6 +56,8 @@
     }
   },
   "required": [
+    "workspace",
+    "target",
     "script"
   ],
   "additionalProperties": false

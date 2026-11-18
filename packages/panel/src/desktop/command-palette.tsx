@@ -88,6 +88,7 @@ import {
   TASK_RELATION_KIND,
   TASK_TREE_BOUNDS,
   TASK_TREE_ENTRY,
+  type TaskPullRequestLine,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
@@ -155,7 +156,7 @@ import {
   type CommandItem,
 } from "@repo/ui/command";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
-import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
+import { changesTab, fileTab, inTaskOrder, tabKey } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import {
@@ -184,6 +185,7 @@ import {
   useAppCommand,
   useOverlayHold,
 } from "../app-commands.js";
+import { useBillingShown } from "../billing.js";
 import {
   COMMAND_PLACE,
   commandWords,
@@ -192,6 +194,7 @@ import {
   panelCommandOf,
 } from "../command-items.js";
 import { unreadShown } from "../failure-report.js";
+import { useInboxOn } from "../inbox-on.js";
 import { type InboxView, useInboxView } from "../inbox-route.js";
 import { type CopyLink, inSidePanel, type LinkAtHand } from "../links-at-hand.js";
 import { workspaceMembersQuery, workspaceMembersRetryMutation } from "../live-reads.js";
@@ -245,6 +248,7 @@ import {
   type TaskRelationWrites,
   useTaskRelationWrites,
 } from "../tasks/use-task-relation-writes.js";
+import { useTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
@@ -254,7 +258,13 @@ import { actingCommand } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
 import { inboxEntries } from "./main-tabs.js";
-import { ADD_SECTION, offeredPanelKinds, panelOffers, SIDE_PANEL_HOLDER } from "./side-panel.js";
+import {
+  ADD_SECTION,
+  changesOffers,
+  offeredPanelKinds,
+  panelOffers,
+  SIDE_PANEL_HOLDER,
+} from "./side-panel.js";
 import type { AddEntry } from "./strip-tabs.js";
 import { taskOf } from "./task-actions.js";
 import { homeTaskCardOf, TaskRowStatus } from "./task-card.js";
@@ -1015,9 +1025,15 @@ function agentRows(
   rows: TaskListRows,
   inboxWaiting: readonly AppInboxTask[],
   inboxStanding: InboxStanding,
+  inboxOn: boolean,
   doors: PanelOfferDoors,
   show: (pick: () => void) => void,
-  people: ReadonlyMap<string, HeldPeople>,
+  changes: {
+    /** Who each pull request names, as its tab last read them, by its tab's key. */
+    readonly people: ReadonlyMap<string, HeldPeople>;
+    /** The open task's pull requests as its lines name them. */
+    readonly pullRequests: readonly TaskPullRequestLine[];
+  },
   directory: EditReader,
 ): readonly PaletteRow[] {
   const taskId = tasks.activeTaskId;
@@ -1026,7 +1042,11 @@ function agentRows(
   const taskName = rows.task(taskId)?.name;
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
   const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
-  const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
+
+  // Note that an account keeping no Inbox is offered no task's Inbox to open.
+  const inbox = inboxOn
+    ? inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }))
+    : [];
 
   const agents = agentEntries(tasks.mainTabs, tasks.agents, directory).map((entry) => ({
     ...entry,
@@ -1054,6 +1074,7 @@ function agentRows(
         onNewTerminal: doors.onNewTerminal,
         onNewLocal: doors.onNewLocal,
         viewedAgent: undefined,
+        pullRequests: changes.pullRequests,
         plan: openPlanStanding(tasks, rows),
         cards: {
           agents: tasks.agents,
@@ -1061,7 +1082,7 @@ function agentRows(
           pagePlace: { taskId },
           shownAgent: undefined,
           onOpenAgent: (agentId) => show(() => tasks.onShowAgent(taskId, agentId)),
-          people,
+          people: changes.people,
         },
       })
         .filter((entry) => entry.row.section !== undefined)
@@ -1680,10 +1701,11 @@ function useOpenThingKeys(
 function settingsPageRows(
   capabilities: readonly HostCapability[],
   experiments: ExperimentChoices,
+  billing: boolean,
   open: (page: SettingsView) => void,
 ): readonly PaletteRow[] {
   return SETTINGS_PAGE_LIST.filter((page) =>
-    settingsPageShown(page, capabilities, experiments),
+    settingsPageShown(page, capabilities, experiments, billing),
   ).map((page) => {
     const { title, icon } = settingsPageOf(page);
 
@@ -2007,6 +2029,7 @@ export function CommandPalette({
   const [open, setOpen] = useState(false);
   // The experiments on in the workspace the window lists, the account's own beside them.
   const experiments = useExperimentsIn(tasks.workspace?.id);
+  const billing = useBillingShown(tasks.workspace);
   const inboxWaiting = useInboxWaitingTasks();
   // Note that the palette stands outside a task page, so it reads the open task's workspace's members itself, the reader among them, which a starter's face is told from.
   const directory = useWorkspaceDirectory(tasks.workspace);
@@ -2014,7 +2037,10 @@ export function CommandPalette({
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // Note that This task is offered only while a task is open, as its rows are (`agentRows`), since it would list nothing otherwise.
-  const filters = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
+  const offered = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
+  // Note that an account that turned its Inbox off is offered no Inbox filter, nor its items under All.
+  const inboxOn = useInboxOn();
+  const filters = inboxOn ? offered : offered.filter((each) => each !== PALETTE_FILTER.INBOX);
 
   // Note that a filter gone with its task, as This task is when the task closes under the palette, gives way to All.
   if (!filters.includes(filter)) setFilter(PALETTE_FILTER.ALL);
@@ -2142,8 +2168,8 @@ export function CommandPalette({
   }, [open, sought, query]);
 
   // Note that no key pressed in the palette goes on to the window, which the
-  // dialog sees to, because the window's Escape would stop an agent mid-reply and
-  // a window chord would change what stands behind the palette. Escape itself
+  // dialog sees to, because the window's Escape would step back from the page
+  // behind the palette and a window chord would change it. Escape itself
   // is the dialog's, which closes the palette alone.
   const keyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -2229,12 +2255,21 @@ export function CommandPalette({
   // The task's terminals and Browser tabs are offered as the panel's "+" offers them, through its own doors.
   const openTerminal = useOpenTerminal(tasks.sidePanel, noFocusMove);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, tasks.sidePanel, noFocusMove);
-  // Note that the task's Changes rows hang their pull request's people, as their Changes tabs read them.
-  const offeredChanges = tasks.sidePanel.changes;
+  // Note that the task's Pull request rows hang their pull request's people, as their tabs read them.
+  const taskPullRequests = useTaskPullRequests(tasks.activeTaskId ?? "");
+  const { agents: taskAgents } = tasks;
 
   const changesPeople = useChangesPeopleOf(
-    useMemo(() => offeredChanges.map((tab) => tab.changes), [offeredChanges]),
+    useMemo(
+      () =>
+        changesOffers(taskPullRequests, taskAgents).map(
+          ({ address }) => [tabKey(changesTab(address)), address] as const,
+        ),
+      [taskPullRequests, taskAgents],
+    ),
   );
+
+  const changes = { people: changesPeople, pullRequests: taskPullRequests };
 
   // The run actions of the agent the open task's column shows, each a row of its own, Run or Stop as it stands (`run-actions-button.tsx`).
   const showShell = useShowShellTab(tasks.sidePanel, noFocusMove);
@@ -2362,9 +2397,10 @@ export function CommandPalette({
           rows,
           inboxWaiting,
           inboxStanding,
+          inboxOn,
           offerDoors,
           onTasks,
-          changesPeople,
+          changes,
           directory,
         ),
         ...runRows(runOffer, tasks, rows, onTasks),
@@ -2410,7 +2446,7 @@ export function CommandPalette({
       ].map((row) => ({ ...row, loose: true })),
     ],
     [PALETTE_FILTER.SETTINGS]: () => [
-      settingsPageRows(settings.capabilities, experiments, openPage),
+      settingsPageRows(settings.capabilities, experiments, billing, openPage),
       settingRows(settings.rows, land),
     ],
   } as const satisfies Record<

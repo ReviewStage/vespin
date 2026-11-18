@@ -101,7 +101,7 @@ function writingRow(action: (typeof WRITING_ACTIONS_LISTED)[number]): Row {
 }
 
 function pageSource(): string {
-  const groups = shownShortcutGroups(NO_EXPERIMENTS, DESKTOP).map((group) =>
+  const groups = shownShortcutGroups(NO_EXPERIMENTS, DESKTOP, true).map((group) =>
     section(group.title, [
       ...group.commands.map(
         (command): Row => [

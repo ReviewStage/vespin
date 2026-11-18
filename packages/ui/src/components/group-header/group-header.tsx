@@ -6,6 +6,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useRef,
+  useState,
 } from "react";
 import { isComposingKey } from "../../composing-key.js";
 import { said } from "../../said.js";
@@ -41,7 +42,8 @@ import { Tooltip } from "../tooltip/hint.js";
  * A group that folds (`fold`) is pressed on its head, which says whether the
  * group stands open in `aria-expanded`. The fold is a Disclosure's
  * (`useDisclosureFold`): a press that opens unrolls the rows as they fade in,
- * a press that closes fades them out before they leave the layout, and the
+ * a press that closes rolls them up as they fade, the rows it last drew held
+ * through that exit though its holder hands none once folded, and the
  * chevron is the Disclosure's own, turning on the one turn every fold makes
  * (disclosure.css), all timed on the motion tokens reduced motion zeroes. The
  * glyph gives way to the chevron while the head is hovered or has the
@@ -76,7 +78,8 @@ import { Tooltip } from "../tooltip/hint.js";
  * out of the way while the rows it was keeping come back.
  *
  * A head may stick to the top of its scroller while its rows scroll beneath
- * it (`head`), and a group standing in a grid whose columns its rows share,
+ * it (`head`), or stand nowhere, its rows alone and folding nothing, as an
+ * Inbox's one run stands once nothing pinned heads it, and a group standing in a grid whose columns its rows share,
  * the Tasks list's, hands them on through its fold's body (`rows`).
  *
  * A group's actions (a repository's ⋯ and +) stand at the head's end beside
@@ -160,10 +163,17 @@ export const GROUP_SURFACE = {
 
 export type GroupSurface = (typeof GROUP_SURFACE)[keyof typeof GROUP_SURFACE];
 
-/** Whether a head scrolls away with its rows or sticks to the top of its scroller while they scroll beneath it. */
+/**
+ * Whether a head scrolls away with its rows, sticks to the top of its
+ * scroller while they scroll beneath it, or is not drawn at all: the rows
+ * standing alone, as a list's one run does where a head would name the whole
+ * list, kept in the group so a head coming or going leaves them drawn where
+ * they stand.
+ */
 export const GROUP_HEAD = {
   SCROLLS: "scrolls",
   STICKS: "sticks",
+  NONE: "none",
 } as const;
 
 export type GroupHead = (typeof GROUP_HEAD)[keyof typeof GROUP_HEAD];
@@ -509,7 +519,7 @@ export function GroupHeader({
   card?: ReactNode;
   /** How wide the surface is, which says where the count stands; wide, always. */
   surface?: GroupSurface;
-  /** Whether the head sticks to the top of its scroller; it scrolls away unless it says so. */
+  /** Whether the head sticks to the top of its scroller or is not drawn; it scrolls away unless it says so. */
   head?: GroupHead;
   /** How the rows stand, which a group in a grid hands on as a subgrid. */
   rows?: GroupRows;
@@ -524,15 +534,24 @@ export function GroupHeader({
   children?: ReactNode;
 }): React.JSX.Element {
   const rowsId = useId();
-  const folds = fold !== undefined;
+  const headed = head !== GROUP_HEAD.NONE;
+  // Note that a group with no head has nothing to press, so it folds nothing.
+  const folds = fold !== undefined && headed;
 
+  // Note that a group leaving rows standing once folded fades its rows where they stand, so what stands under it moves once, by what the standing rows leave.
   const { state, details } = useDisclosureFold(
     fold !== undefined && "defaultOpen" in fold ? fold.defaultOpen : true,
     fold !== undefined && "open" in fold ? fold : undefined,
+    !said(standing),
   );
 
+  // Note that the rows a fold last drew are held through its exit, because a holder that hands none the moment it folds would take them out before they fade.
+  const [drewn, setDrewn] = useState(children);
+
+  if (folds && state.open && drewn !== children) setDrewn(children);
+  const body = folds && !state.open ? drewn : children;
   // Note that a group with no rows draws no body, so its fold names none.
-  const rows = (!folds || state.drawn) && said(children);
+  const rows = (!folds || state.drawn) && said(body);
   const Heading = heading;
 
   // Note that a narrow column counts an open group only under the pointer, because its head has no room to spare for a figure at rest.
@@ -594,7 +613,8 @@ export function GroupHeader({
         data-rows={subgrid ? rowsStand : undefined}
         data-disclosure={folds ? details["data-disclosure"] : undefined}
       >
-        {said(editing) ? (
+        {/* Note that the head is the root's first child whether or not it stands, so its rows stay the same element as it comes and goes. */}
+        {!headed ? null : said(editing) ? (
           editing
         ) : (
           <div
@@ -624,7 +644,7 @@ export function GroupHeader({
             data-inset="none"
             inert={folds && state.leaving}
           >
-            {children}
+            {body}
           </div>
         ) : null}
         {folds && !state.drawn && said(standing) ? standing : null}

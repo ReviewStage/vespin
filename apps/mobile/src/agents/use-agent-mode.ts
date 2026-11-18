@@ -2,8 +2,10 @@
  * use-agent-mode.ts -- an agent's permission mode as its page changes it: the mode it runs on, the modes it may move to with what each does, and why the last change did not take.
  *
  * The panel's mode control (`@repo/panel`'s `agent-approvals.tsx`) on the
- * phone: offered only for an agent whose harness asks, Claude Code or Codex,
- * a pick is sent as the panel sends it (`AGENTS_PERMISSION_MODE`), and the
+ * phone: offered only for an agent whose harness takes a mode beside Full
+ * access, Claude Code, Codex, or Cursor, with the modes its harness takes
+ * (`@repo/features`'s `modesOf`), Cursor's never asking for approval; a
+ * pick is sent as the panel sends it (`AGENTS_PERMISSION_MODE`), and the
  * host draws the mode on the agent's row the moment it is asked, so the
  * control reads it off the agent and a refusal the host takes back reads
  * back too, its words said until the next change. A change reaches the
@@ -14,14 +16,9 @@ import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
-import { AGENT_RUNTIME } from "@repo/features/agent-wire";
+import { modesOf } from "@repo/features/agent-runtime-modes";
 import { ACT_KIND } from "@repo/host/acts";
-import {
-  PERMISSION_MODE_HINT,
-  PERMISSION_MODE_LABEL,
-  PERMISSION_MODE_LIST,
-  PERMISSION_MODE_WORDS,
-} from "@repo/settings";
+import { PERMISSION_MODE_HINT, PERMISSION_MODE_LABEL, PERMISSION_MODE_WORDS } from "@repo/settings";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
@@ -35,12 +32,14 @@ interface ModeOption {
   readonly hint: string;
 }
 
-/** The modes in the order the panel offers them, the most asking first. */
-const MODE_OPTIONS: readonly ModeOption[] = PERMISSION_MODE_LIST.map((mode) => ({
-  id: mode,
-  label: PERMISSION_MODE_LABEL[mode],
-  hint: PERMISSION_MODE_HINT[mode],
-}));
+/** The modes given as the control offers them, in the order the panel does, the most asking first. */
+function modeOptions(modes: readonly AgentPermissionMode[]): readonly ModeOption[] {
+  return modes.map((mode) => ({
+    id: mode,
+    label: PERMISSION_MODE_LABEL[mode],
+    hint: PERMISSION_MODE_HINT[mode],
+  }));
+}
 
 /** The agent's permission mode, the modes offered, and the change. */
 export interface AgentMode {
@@ -60,18 +59,15 @@ export function useAgentMode(agentId: string): AgentMode | undefined {
   /** How many changes have been sent, so an answer to an earlier one is told apart from the latest. */
   const writes = useRef(0);
 
-  if (
-    agent === undefined ||
-    (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
-  ) {
-    return undefined;
-  }
+  const modes = modesOf(agent?.runtime);
+
+  if (agent === undefined || modes.length < 2) return undefined;
 
   const mode = agent.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS;
 
   return {
     mode,
-    modes: MODE_OPTIONS,
+    modes: modeOptions(modes),
     note,
     choose: (picked) => {
       if (picked === mode) return;

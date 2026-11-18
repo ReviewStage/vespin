@@ -65,6 +65,7 @@ import {
   chatGptDeviceStartRequestSchema,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_QUERY,
+  planUsageRefreshRequestSchema,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeyResetCreditRequestSchema,
@@ -143,6 +144,11 @@ export const accountContract = {
   useResetCredit: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_RESET_CREDIT }))
     .input(exactInput(providerKeyResetCreditRequestSchema))
+    .output(EffectSchema.flip(providerKeysAnswerSchema)),
+  /** A plan's usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's read from the rate-limit headers of a one-token quota check on its token. Answers the keys as they then stand; a plan the account does not hold, or one whose provider answered nothing, keeps what it held. */
+  refreshPlanUsage: declaredProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_PLAN_USAGE }))
+    .input(exactInput(planUsageRefreshRequestSchema))
     .output(EffectSchema.flip(providerKeysAnswerSchema)),
   renameSubscription: declaredProcedure
     .meta(bodyCap(PROVIDER_KEY_BODY_BYTES))

@@ -7,12 +7,7 @@ import {
   type BrowserTabsPlaceKind,
 } from "@repo/features/agent-browser-tab-wire";
 import {
-  type AgentOverviewChecksAnswerView,
-  type AgentOverviewConversationAnswerView,
-  type AgentOverviewPullRequestAnswerView,
   type AgentPullRequestAnswerView,
-  type AgentPullRequestViewedAnswerView,
-  type AgentReviewOptionsAnswerView,
   type AgentTranscriptPage,
   INBOX_SCOPE_KIND,
   type InboxScopeKind,
@@ -55,6 +50,14 @@ import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import type { PortForwarding } from "@repo/features/port-forward-acts";
 import type { ProviderKeysAnswer } from "@repo/features/provider-key-wire";
 import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
+import type {
+  RepositoryOverviewChecksAnswerView,
+  RepositoryOverviewConversationAnswerView,
+  RepositoryOverviewPullRequestAnswerView,
+  RepositoryPullRequestAnswerView,
+  RepositoryPullRequestViewedAnswerView,
+  RepositoryReviewOptionsAnswerView,
+} from "@repo/features/pull-request-view";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
 import type { DescriptionRevisionsAnswer } from "@repo/features/task-wire";
 import {
@@ -118,9 +121,9 @@ export const RUN_PROFILE = {
   AGENT_TRANSCRIPT: "agent-transcript",
   /** The same agent as an orchestrator days into its run, its transcript thousands of entries long and written to while it is open. */
   AGENT_LONG_RUN: "agent-long-run",
-  /** The same agent after two calls into it, the Voice experiment on: the member's, which handed it work, and a teammate's. */
+  /** The same agent after two calls into it: the member's, which handed it work, and a teammate's. */
   AGENT_VOICE: "agent-voice",
-  /** The same agent mid-turn on a call, the Voice experiment on: a spoken ask awaiting the turn, and the caller's line growing as they speak. */
+  /** The same agent mid-turn on a call: a spoken ask awaiting the turn, and the caller's line growing as they speak. */
   AGENT_VOICE_LIVE: "agent-voice-live",
   /** The same agent, its Pull request tab on the checks. */
   AGENT_CHECKS: "agent-checks",
@@ -158,6 +161,8 @@ export const RUN_PROFILE = {
   SETTINGS_MCP: "settings-mcp",
   /** The same account, Settings on Skills: its team's and its own. */
   SETTINGS_SKILLS: "settings-skills",
+  /** The same account, an owner, Settings on its team's Billing with billing on: $12.40 of usage, $10 included, $2.40 owed. */
+  SETTINGS_BILLING: "settings-billing",
   /** The same account, Settings on its team's memory. */
   SETTINGS_MEMORY: "settings-memory",
   /** The same account, an admin, opened at launch on Admin's Overview. */
@@ -282,6 +287,8 @@ export interface AppInboxSlice {
 export interface AppHostRead<Rows> {
   rows?: Rows;
   failed?: true;
+  /** Whether the rows are the ones the phone kept on disk, drawn before the service's first answer took their place; only the account's Inbox sets it (`account-items-follow.ts`). */
+  kept?: true;
 }
 
 /** A read that has not answered yet, as every read stands as a session opens. */
@@ -432,44 +439,26 @@ export const NO_BROWSER_TABS: AppBrowserTabs = {
   [BROWSER_TABS_PLACE.AGENT]: {},
 };
 
-/** One agent's pull request's newest chapters, as the host's read of them stands: with whether the reader can generate them, once it answered. */
-type AppPullRequestChapters = AppHostRead<PullRequestChaptersAnswer>;
-
 /**
- * Each agent's pull request's chapters the host holds for the windows
- * (`compose-agents.ts`): those a window's Pull request tab chose, and the
- * few let go lately, by the agent's id and then the pull request's number,
- * each as its own read stands. One absent is held by nobody.
+ * One read the host holds for the windows of each pull request named by its
+ * repository rather than an agent: by the workspace whose installation
+ * reaches the repository, then the repository's full name, then the pull
+ * request's number, each as the host's read of it stands. Note that the
+ * levels nest rather than join, so no key is built from two identifiers.
+ * One absent is held by nobody.
  */
-export type AppChapters = Readonly<
-  Record<string, Readonly<Record<string, AppPullRequestChapters>>>
+export type AppRepositoryPullRequestHeld<Read> = Readonly<
+  Record<string, Readonly<Record<string, Readonly<Record<string, AppHostRead<Read>>>>>>
 >;
 
-/** No chapters held, as the host stands before any window shows a pull request's and after the session ends. */
-export const NO_CHAPTERS: AppChapters = {};
-
-/**
- * One part of each agent's pull request the windows hold for their Pull
- * request tabs (`pull-request-parts.ts`), by the agent's id and then the
- * pull request's number, or `OWN_PULL_REQUEST` for the agent's own, each as
- * the host's read of it stands: the part, or why there is none. One absent
- * is held by nobody.
- */
-export type AppPullRequestPart<Part> = Readonly<
-  Record<string, Readonly<Record<string, AppHostRead<Part>>>>
->;
-
-/** The key the agent's own pull request's parts stand under, beside those of the pull requests its tabs name by number; no number's. */
-export const OWN_PULL_REQUEST = "own";
-
-/** The read each part of a Pull request tab's pull request is held as, by the part. */
-export const PULL_REQUEST_PART_READ = {
-  [PULL_REQUEST_PART.PULL_REQUEST]: LIVE_READ.PULL_REQUEST,
-  [PULL_REQUEST_PART.CHECKS]: LIVE_READ.PULL_REQUEST_CHECKS,
-  [PULL_REQUEST_PART.CONVERSATION]: LIVE_READ.PULL_REQUEST_CONVERSATION,
-  [PULL_REQUEST_PART.PUBLISHED]: LIVE_READ.PULL_REQUEST_PUBLISHED,
-  [PULL_REQUEST_PART.REVIEW_OPTIONS]: LIVE_READ.REVIEW_OPTIONS,
-  [PULL_REQUEST_PART.VIEWED]: LIVE_READ.PULL_REQUEST_VIEWED,
+/** The read each part of a pull request named by its repository and number is held as, by the part. */
+export const REPOSITORY_PULL_REQUEST_PART_READ = {
+  [PULL_REQUEST_PART.PULL_REQUEST]: LIVE_READ.REPOSITORY_PULL_REQUEST,
+  [PULL_REQUEST_PART.CHECKS]: LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS,
+  [PULL_REQUEST_PART.CONVERSATION]: LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION,
+  [PULL_REQUEST_PART.PUBLISHED]: LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED,
+  [PULL_REQUEST_PART.REVIEW_OPTIONS]: LIVE_READ.REPOSITORY_REVIEW_OPTIONS,
+  [PULL_REQUEST_PART.VIEWED]: LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED,
 } as const satisfies Record<PullRequestPart, LiveRead>;
 
 /** One of the account's own devices' last beat, at the host's instant: its age as the service answered it, taken from the host's clock as the answer landed. */
@@ -540,6 +529,8 @@ export interface AppThisMacHost {
   needsApproval?: boolean;
   /** Whether the app could not start its host as asked, and is trying again; absent reads as not. */
   setupFailed?: boolean;
+  /** Whether its host dies each time launchd starts it, as a bundle that cannot load does; absent reads as not. */
+  wontStart?: boolean;
 }
 
 /** This Mac as the host last read it, by the account signed in: the one key the host holds, none while nobody is signed in. */
@@ -690,10 +681,10 @@ export type AppAutomationReads = Pick<
   | typeof LIVE_READ.AUTOMATION_RUNS
 >;
 
-/** Every part of the Pull request tabs' pull requests the windows hold, by the part's read. */
-export type AppPullRequestParts = Pick<
+/** Every part of the pull requests the windows hold by their repository and number, by the part's read. */
+export type AppRepositoryPullRequestParts = Pick<
   AppState,
-  (typeof PULL_REQUEST_PART_READ)[keyof typeof PULL_REQUEST_PART_READ]
+  (typeof REPOSITORY_PULL_REQUEST_PART_READ)[keyof typeof REPOSITORY_PULL_REQUEST_PART_READ]
 >;
 
 /** What a task's comment threads stand on: its description, or one of its pages. */
@@ -733,17 +724,18 @@ export interface AppHostReads {
   [LIVE_READ.MODELS]: ModelsAnswer;
   [LIVE_READ.PAGES]: readonly PageLine[];
   [LIVE_READ.PROVIDER_KEYS]: AppProviderKeyList;
-  [LIVE_READ.PULL_REQUEST]: AgentOverviewPullRequestAnswerView;
   [LIVE_READ.REPOSITORY_LISTS]: GitHubRepositoriesAnswer;
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubToken;
   [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommandList;
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: PullRequestChaptersAnswer;
   [LIVE_READ.BROWSER_TABS]: readonly AgentBrowserTab[];
-  [LIVE_READ.PULL_REQUEST_CHECKS]: AgentOverviewChecksAnswerView;
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: AgentOverviewConversationAnswerView;
   [LIVE_READ.PULL_REQUEST_PUBLISHED]: AgentPullRequestAnswerView;
-  [LIVE_READ.PULL_REQUEST_VIEWED]: AgentPullRequestViewedAnswerView;
-  [LIVE_READ.REVIEW_OPTIONS]: AgentReviewOptionsAnswerView;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: RepositoryOverviewPullRequestAnswerView;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: RepositoryOverviewChecksAnswerView;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: RepositoryOverviewConversationAnswerView;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: RepositoryPullRequestAnswerView;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: RepositoryPullRequestViewedAnswerView;
+  [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: RepositoryReviewOptionsAnswerView;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: PullRequestChaptersAnswer;
   [LIVE_READ.DEVICE_PRESENCE]: AppDevicePresence;
   [LIVE_READ.HOSTS]: AppHostsHeld;
   [LIVE_READ.MACHINES]: readonly MachineLine[];
@@ -901,22 +893,24 @@ export interface AppState {
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubTokens;
   /** The account's always-allowed commands, held while a window draws them and a while after: what Settings › Agents' Always allowed reads. */
   [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommands;
-  /** Each agent's pull request's chapters the windows chose, held while a Pull request tab holds them and a while after: what its Chapters tab draws. */
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: AppChapters;
   /** Each task's or agent's cloud Browser tabs the windows' side panels list, held while one lists them and a while after: what the side panel's Browser tabs draw. Never written to disk. */
   [LIVE_READ.BROWSER_TABS]: AppBrowserTabs;
-  /** Each agent's pull request the windows' Pull request tabs chose, held while a tab shows it and a while after: its description, branches, mergeability, and people. */
-  [LIVE_READ.PULL_REQUEST]: AppPullRequestPart<AgentOverviewPullRequestAnswerView>;
+  /** What each agent the windows' cards chose published, its pull request as the service last read it from GitHub, by the agent, held while a card shows it and a while after: what the agent's pull request card and a replay's foot draw (`pull-request-parts.ts`). */
+  [LIVE_READ.PULL_REQUEST_PUBLISHED]: AppHeldById<AgentPullRequestAnswerView>;
+  /** Each pull request the windows' Pull request tabs chose by its repository and number, held while a tab shows it and a while after: its description, branches, mergeability, and people. */
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: AppRepositoryPullRequestHeld<RepositoryOverviewPullRequestAnswerView>;
   /** The checks on each of those pull requests' heads, held as they are. */
-  [LIVE_READ.PULL_REQUEST_CHECKS]: AppPullRequestPart<AgentOverviewChecksAnswerView>;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: AppRepositoryPullRequestHeld<RepositoryOverviewChecksAnswerView>;
   /** Each of those pull requests' conversation and where its reviewers stand, held as they are. */
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: AppPullRequestPart<AgentOverviewConversationAnswerView>;
-  /** What each of those agents published, its pull request as the service last read it from GitHub, held as they are. */
-  [LIVE_READ.PULL_REQUEST_PUBLISHED]: AppPullRequestPart<AgentPullRequestAnswerView>;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: AppRepositoryPullRequestHeld<RepositoryOverviewConversationAnswerView>;
+  /** Each of those pull requests as GitHub holds it now, with its head's checks and the branch it is from, held as they are. */
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: AppRepositoryPullRequestHeld<RepositoryPullRequestAnswerView>;
   /** Which of each of those pull requests' files the member marked viewed, held as they are, read on the member's own GitHub sign-in. */
-  [LIVE_READ.PULL_REQUEST_VIEWED]: AppPullRequestPart<AgentPullRequestViewedAnswerView>;
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: AppRepositoryPullRequestHeld<RepositoryPullRequestViewedAnswerView>;
   /** What each of those tabs' reviewer and label pickers offer, held as they are once a picker asks. */
-  [LIVE_READ.REVIEW_OPTIONS]: AppPullRequestPart<AgentReviewOptionsAnswerView>;
+  [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: AppRepositoryPullRequestHeld<RepositoryReviewOptionsAnswerView>;
+  /** Each of those pull requests' chapters the windows chose, held while a Pull request tab holds them and a while after: what its Chapters tab draws. */
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: AppRepositoryPullRequestHeld<PullRequestChaptersAnswer>;
   /** The account's own devices' beats, held while a window draws a device's standing and a while after: what Settings › Hosts, an agent's place, and Runs on judge a device by. */
   [LIVE_READ.DEVICE_PRESENCE]: AppDevicePresences;
   /** The account's hosts, held while Settings › Hosts draws them and a while after: what that page lists. */
@@ -1020,15 +1014,26 @@ export function isAppStateSnapshot(value: UnparsedWireValue): boolean {
 type AppStateEntry = Exclude<keyof AppStateSnapshot, "version">;
 
 /**
- * How a slice of the document is keyed: a held read's by one id, or by a
- * kind and then an id; or by part, as the task list's view is, each part
- * crossing whole, or as the rows that moved where it is a list of rows.
+ * How a slice of the document is keyed: a held read's by one id, by a kind
+ * and then an id, or by three ids each nested in the one before, as a pull
+ * request is held by its workspace, its repository, and its number; or by
+ * part, as the task list's view is, each part crossing whole, or as the
+ * rows that moved where it is a list of rows.
  */
 export const READ_KEYS = {
   ONE: "one",
   TWO: "two",
+  THREE: "three",
   PARTS: "parts",
 } as const;
+
+/** How many levels of ids a slice keyed by ids nests, by how it is keyed; one for a slice keyed by part, whose parts are its one level. */
+export const READ_KEY_DEPTH = {
+  [READ_KEYS.ONE]: 1,
+  [READ_KEYS.TWO]: 2,
+  [READ_KEYS.THREE]: 3,
+  [READ_KEYS.PARTS]: 1,
+} as const satisfies Record<(typeof READ_KEYS)[keyof typeof READ_KEYS], number>;
 
 /** Where a slice's keys stand: in the slice itself, or in the rows its read answered, as the account's feed holds its holders. */
 export const KEYS_ON = {
@@ -1102,13 +1107,14 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.REPOSITORY_LISTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.GITHUB_TOKEN]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.ALLOWED_COMMANDS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_CHECKS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_PUBLISHED]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_VIEWED]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.REVIEW_OPTIONS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
+  [LIVE_READ.PULL_REQUEST_PUBLISHED]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
+  [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
   [LIVE_READ.DESCRIPTION_COMMENTS]: {
     keys: READ_KEYS.TWO,
     on: KEYS_ON.SLICE,
@@ -1164,11 +1170,13 @@ export const HOST_READ_SLICE = {
 /** A slice `HOST_READ_SLICE` declares. */
 export type HostReadSlice = keyof typeof HOST_READ_SLICE;
 
-/** Where one key of a held read stands in its slice: its id, or its kind and then its id, as `HOST_READ_SLICE` declares. */
+/** Where one key of a held read stands in its slice: its id, its kind and then its id, or its three ids, outermost first, as `HOST_READ_SLICE` declares. */
 export type HostReadKeyPath<Slice extends HostReadSlice> =
-  (typeof HOST_READ_SLICE)[Slice]["keys"] extends typeof READ_KEYS.TWO
-    ? readonly [kind: string, id: string]
-    : readonly [id: string];
+  (typeof HOST_READ_SLICE)[Slice]["keys"] extends typeof READ_KEYS.THREE
+    ? readonly [outer: string, middle: string, id: string]
+    : (typeof HOST_READ_SLICE)[Slice]["keys"] extends typeof READ_KEYS.TWO
+      ? readonly [kind: string, id: string]
+      : readonly [id: string];
 
 // SAFETY: `Object.keys` of the table names its own entries.
 const HOST_READ_SLICES = Object.keys(HOST_READ_SLICE) as HostReadSlice[];
@@ -1389,22 +1397,46 @@ function idsMoved(
   ];
 }
 
-/**
- * Each key of a slice that moved from `before` to `after`. Note that a key
- * is compared by reference alone, because the document keeps the identity
- * of every key and row a patch did not move (`client/app-state-store.ts`),
- * so one that is not the very value sent is one that moved, and a kind no
- * key of moved is passed at its first comparison.
- */
-function keysMoved(entry: HostReadSliceEntry, before: Keyed, after: Keyed): KeyMoved[] {
-  if (entry.keys !== READ_KEYS.TWO) return idsMoved(entry, [], before, after);
-  const kinds = new Set([...Object.keys(before), ...Object.keys(after)]);
-  // SAFETY: each kind of a slice keyed by two holds a record of its ids.
-  const ofKind = (keyed: Keyed, kind: string) => (ownValue(keyed, kind) ?? {}) as Keyed;
+/** The level of ids `keyed` holds under `segment`, or none where it holds none. */
+function levelOf(keyed: Keyed, segment: string): Keyed {
+  // SAFETY: each level above a slice's last holds a record of the ids below it.
+  return (ownValue(keyed, segment) ?? {}) as Keyed;
+}
 
-  return [...kinds].flatMap((kind) =>
-    idsMoved(entry, [kind], ofKind(before, kind), ofKind(after, kind)),
+/**
+ * Each key under `path` that moved from `before` to `after`, `depth` levels
+ * of ids deep. Note that a level is compared by reference alone, because the
+ * document keeps the identity of every key and row a patch did not move
+ * (`client/app-state-store.ts`), so one that is not the very value sent is
+ * one that moved, and a level no key under moved is passed at its first
+ * comparison.
+ */
+function levelsMoved(
+  entry: HostReadSliceEntry,
+  depth: number,
+  path: readonly string[],
+  before: Keyed,
+  after: Keyed,
+): KeyMoved[] {
+  if (depth <= 1) return idsMoved(entry, path, before, after);
+
+  if (before === after) return [];
+  const segments = new Set([...Object.keys(before), ...Object.keys(after)]);
+
+  return [...segments].flatMap((segment) =>
+    levelsMoved(
+      entry,
+      depth - 1,
+      [...path, segment],
+      levelOf(before, segment),
+      levelOf(after, segment),
+    ),
   );
+}
+
+/** Each key of a slice that moved from `before` to `after`, at every level its keys nest (`READ_KEY_DEPTH`). */
+function keysMoved(entry: HostReadSliceEntry, before: Keyed, after: Keyed): KeyMoved[] {
+  return levelsMoved(entry, READ_KEY_DEPTH[entry.keys], [], before, after);
 }
 
 /** The value `held` stood at once `move` lands on it: laid in, keeping what of it did not move, or none where it is gone. */
@@ -1503,21 +1535,31 @@ function withIdsMoved(
   return next;
 }
 
-/** Each kind's keys once `moves` land on them, every kind they do not name the very record held. */
-function withKindsMoved(
+/**
+ * The level of keys `held` stands at once `moves` land on it, `depth`
+ * levels of ids deep from the move's segment at `at`: the last level laid
+ * by id, and each level above it by the segment its moves name, every
+ * segment they do not name the very record held.
+ */
+function withLevelsMoved(
   entry: HostReadSliceEntry,
+  depth: number,
+  at: number,
   held: Keyed | undefined,
   moves: readonly KeyMoved[],
 ) {
+  if (depth <= 1) return withIdsMoved(entry, held, moves);
   const next = { ...held };
 
-  for (const kind of new Set(moves.map((move) => move.key[0] ?? ""))) {
-    // SAFETY: each kind of a slice keyed by two holds a record of its ids.
-    const ofKind = (held === undefined ? undefined : ownValue(held, kind)) as Keyed | undefined;
-    next[kind] = withIdsMoved(
+  for (const segment of new Set(moves.map((move) => move.key[at] ?? ""))) {
+    // SAFETY: each level above a slice's last holds a record of the ids below it.
+    const below = (held === undefined ? undefined : ownValue(held, segment)) as Keyed | undefined;
+    next[segment] = withLevelsMoved(
       entry,
-      ofKind,
-      moves.filter((move) => move.key[0] === kind),
+      depth - 1,
+      at + 1,
+      below,
+      moves.filter((move) => move.key[at] === segment),
     );
   }
 
@@ -1532,10 +1574,7 @@ function withSliceMoved<Slice extends object>(
 ): object {
   const keyed = keyedOf(entry, held);
 
-  const laid =
-    entry.keys === READ_KEYS.TWO
-      ? withKindsMoved(entry, keyed, moves)
-      : withIdsMoved(entry, keyed, moves);
+  const laid = withLevelsMoved(entry, READ_KEY_DEPTH[entry.keys], 0, keyed, moves);
 
   return entry.on === KEYS_ON.SLICE ? laid : { ...held, rows: laid };
 }

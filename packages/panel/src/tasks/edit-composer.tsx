@@ -57,16 +57,9 @@ import type { AgentComposerControl } from "./use-agent-composer.js";
  * does, since the send drops them and what it drops is gone.
  */
 
-/** What the foot's Cancel says. */
 const CANCEL_WORDS = "Cancel";
 
-/**
- * What Send asks before it drops the messages after the line, or puts the
- * files back. Where `takes` names another member's messages among those
- * dropped, the body says so; where `restoring` the files go back too, it
- * says that in place of their staying, and where nothing follows the line
- * (`cuts` false), that alone.
- */
+/** What Send asks before it drops the messages after the line, or puts the files back. */
 function sendQuestion(
   takes: string | undefined,
   restoring: boolean,
@@ -160,8 +153,7 @@ export function EditComposer({
   const place: EditPlace = { kind: DRAFT_PLACE.EDIT, agentId: edit.agentId, messageId: message.id };
   const kept = useDraft(place).draft;
   const writer = useDraftWriter();
-  // Note that a draft kept from an earlier Edit is what the box opens on, and the line's files
-  // join it but for those it took off, since a relaunch keeps a draft's words and not its files.
+  // A draft kept from an earlier Edit is what the box opens on.
   const [resumed] = useState(() => kept !== EMPTY_DRAFT);
   const [draft, setDraft] = useState(() => (resumed ? kept.text : words));
 

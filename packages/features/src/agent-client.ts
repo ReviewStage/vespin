@@ -5,7 +5,6 @@ import type * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountCallEffects,
   accountCall,
-  type CallAnswer,
   callAnswered,
   type HostedServiceOptions,
   jsonOf,
@@ -29,7 +28,6 @@ import {
   type AgentAgentAnswer,
   type AgentApprovalAnswerView,
   type AgentCallFailure,
-  type AgentChangesAnswerView,
   type AgentDefaultAnswer,
   type AgentDefaultMachineAnswerView,
   type AgentDeleteAnswerView,
@@ -45,16 +43,10 @@ import {
   type AgentMessageAnswerView,
   type AgentMessagesAnswerView,
   type AgentModelsAnswer,
-  type AgentOverviewChecksAnswerView,
-  type AgentOverviewConversationAnswerView,
-  type AgentOverviewPullRequestAnswerView,
   type AgentPageAnswerView,
   type AgentPartView,
   type AgentPullRequestAnswerView,
-  type AgentPullRequestViewedAnswerView,
-  type AgentPullRequestWriteAnswerView,
   type AgentQueueAnswerView,
-  type AgentReviewOptionsAnswerView,
   type AgentRunActionAnswerView,
   type AgentRunActionStopAnswerView,
   type AgentTurnChangesAnswerView,
@@ -73,7 +65,6 @@ import {
   type DictationTranscribeParams,
   type GitHubTokenAnswerView,
   type GitHubTokenSaveParams,
-  githubImageTypeSchema,
   type HostDoneAnswerView,
   type HostsAnswerView,
   type LiveActivityEndedAnswerView,
@@ -87,6 +78,7 @@ import {
   type MemoryForgetParams,
   type MemorySaveAnswerView,
   type MemorySaveParams,
+  type PlanUsageRefreshParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
   type ProviderKeyResetCreditParams,
@@ -143,6 +135,7 @@ import {
   allowedCommandAddRequestSchema,
   allowedCommandEditRequestSchema,
 } from "./allowed-command-wire.js";
+import type { BillingRefusal } from "./billing-refusal-wire.js";
 import {
   CHAPTERS_MODEL,
   CHAPTERS_PICK_LIST,
@@ -166,16 +159,9 @@ import {
   HOSTED_DEADLINE,
   type HostedClient,
   type HostedDeadline,
-  HostedUnanswered,
   hostedClient,
-  hostedFailureFacts,
 } from "./hosted-link.js";
-import {
-  type ImageBody,
-  type ImageBodyUnread,
-  imageBodyOf,
-  imageBodyUnread,
-} from "./image-body.js";
+import { imageBodyOf } from "./image-body.js";
 import {
   INBOX_FILE_TYPE,
   type InboxAcknowledgeRequest,
@@ -207,7 +193,9 @@ import {
 } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
+  type ModelApiProvider,
   PROVIDER_KEY_QUERY,
+  planUsageRefreshRequestSchema,
   providerKeyForAgentsRequestSchema,
   providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
@@ -215,20 +203,13 @@ import {
   subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import {
-  PULL_REQUEST_CHAPTERS_RENAMES,
-  type PullRequestChaptersAnswerView,
-} from "./pull-request-chapters-view.js";
-import {
-  type PullRequestActionRequest,
-  pullRequestActionRequestSchema,
-} from "./pull-request-write-wire.js";
-import {
   pushDeviceNotifyRequestSchema,
   pushDeviceRegisterRequestSchema,
   pushDeviceStatusRequestSchema,
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
+import { imageAnswerOf, servedGitHubImage, servedRefusal, unansweredCall } from "./served-bytes.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
 import {
   HOSTED_API_ERROR,
@@ -271,16 +252,9 @@ type Failed = {
   readonly provider?: ModelProvider;
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
+  readonly billingRefusal?: BillingRefusal;
+  readonly billingManager?: boolean;
 };
-
-/** A served file's refusal: not found where the service said so; unanswered for anything else. */
-function servedRefusal(payload: UnparsedWireValue): Failed {
-  const refusal = Result.getOrUndefined(readServiceAnswer(hostedErrorSchema)(payload));
-
-  return refusal === HOSTED_API_ERROR.NOT_FOUND
-    ? { failure: AGENT_CALL_FAILURE.NOT_FOUND }
-    : UNANSWERED;
-}
 
 /** The refusals a Start's contract declares, which are the ones a refusal beside a task it made may be read as. */
 const START_DECLARED: ReadonlySet<string> = new Set(
@@ -333,31 +307,6 @@ function unansweredBare<Answer extends object>(answer: Answer): Answer {
   return bare as Answer;
 }
 
-/**
- * A call that never reached the service, unanswered with where it ended,
- * the network or its deadline among them, which the window reports and
- * never draws, so a read the network failed is not reported as the app's.
- */
-function unansweredCall(answer: Exclude<CallAnswer, { readonly response: Response }>): Failed {
-  const { fault, errorName } = answer;
-
-  const unanswered = new HostedUnanswered({
-    fault,
-    ...(errorName === undefined ? undefined : { errorName }),
-  });
-
-  return { ...UNANSWERED, cause: hostedFailureFacts(unanswered) };
-}
-
-/** An image's read as the window hears it: its bytes, a body the network cut as a call that never reached the service, or else unanswered. */
-function imageAnswerOf<Type extends string>(
-  read: ImageBody<Type> | ImageBodyUnread | undefined,
-): ImageBody<Type> | Failed {
-  if (read === undefined) return UNANSWERED;
-
-  return imageBodyUnread(read) ? unansweredCall(read) : read;
-}
-
 /** The idempotency key a write taken once under it is asked under, where one is given. */
 function keyed(key: string | undefined) {
   return key === undefined ? undefined : { idempotencyKey: key };
@@ -402,14 +351,6 @@ function writtenAlreadyKept<Answer extends object>(
  */
 function rowWritten<Answer extends object>(answer: Answer) {
   return unansweredBare(writtenAlreadyKept(answer));
-}
-
-/** A Generate's failure without why its repository is out of reach, which the tab has never been handed, so it draws that it is and not why. */
-function reachUnsaid(answer: PullRequestChaptersAnswerView): PullRequestChaptersAnswerView {
-  if (!("failure" in answer)) return answer;
-  const { unreached: _why, ...failed } = answer;
-
-  return failed;
 }
 
 /** The types an inbox item's attachment is served under: a block's picture's or recording's, a recording's MP4 copy to a reader that plays MP4, or any a file an answer carried traveled as. */
@@ -599,7 +540,7 @@ export class HostedAgentClient {
 
   /** Whose API key the account's chapters run on where it saved both, written on its own as the account's chapters model, its provider's model of Haiku's tier, answering it as kept with the transaction it committed in. */
   writeChaptersProvider(
-    provider: ModelProvider,
+    provider: ModelApiProvider,
   ): Effect.Effect<ChaptersProviderAnswer, never, HttpClient.HttpClient> {
     return Effect.map(
       hostedCall(
@@ -788,6 +729,17 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.account.useResetCredit, admitted);
+  }
+
+  /** A plan's usage checked again now, from its ⋯'s Refresh usage, answering the keys as they then stand. */
+  refreshPlanUsage(
+    params: PlanUsageRefreshParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(planUsageRefreshRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.account.refreshPlanUsage, admitted);
   }
 
   /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */
@@ -1431,21 +1383,6 @@ export class HostedAgentClient {
     );
   }
 
-  /** One agent's changes: the files of its pull request as GitHub holds them now. */
-  changes(
-    agentId: string,
-    number?: number,
-  ): Effect.Effect<AgentChangesAnswerView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agents.changes,
-        { id: agentId, ...(number === undefined ? undefined : { number: String(number) }) },
-        { as: AGENT_NOT_FOUND_RENAMES },
-      ),
-      unansweredBare,
-    );
-  }
-
   /** The files one of the agent's turns changed, the turn the developer's line named opened, as git tells them apart on the agent's machine. */
   turnChanges(
     agentId: string,
@@ -1456,21 +1393,6 @@ export class HostedAgentClient {
       this.#hosted.agents.turnChanges,
       { id: agentId, messageId },
       { deadline: HOSTED_DEADLINE.TURN_CHANGES },
-    );
-  }
-
-  /** One agent's pull request itself as its overview draws it: its description, branches, mergeability, and people as GitHub holds them now. */
-  overviewPullRequest(
-    agentId: string,
-    number?: number,
-  ): Effect.Effect<AgentOverviewPullRequestAnswerView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agentPullRequests.overviewPullRequest,
-        pullRequestRead(agentId, number),
-        { as: AGENT_NOT_FOUND_RENAMES },
-      ),
-      unansweredBare,
     );
   }
 
@@ -1490,66 +1412,6 @@ export class HostedAgentClient {
       params: { id: agentId },
       body: { machineId },
     });
-  }
-
-  /** What the reviewer and label pickers of one agent's Pull request tab offer: its repository's labels, assignable users, and teams as GitHub holds them now. */
-  reviewOptions(
-    agentId: string,
-  ): Effect.Effect<AgentReviewOptionsAnswerView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agents.reviewOptions,
-        { id: agentId },
-        { as: AGENT_NOT_FOUND_RENAMES },
-      ),
-      unansweredBare,
-    );
-  }
-
-  /** One agent's pull request's chapters generated for its head now, or the generation already under way, answered as a read of them is; held for as long as a generation may take. */
-  generateChapters(
-    agentId: string,
-    number?: number,
-  ): Effect.Effect<PullRequestChaptersAnswerView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(
-        this.#hosted.pullRequestChapters.generate,
-        {
-          params: { id: agentId },
-          ...(number === undefined ? undefined : { query: { number: String(number) } }),
-        },
-        { as: PULL_REQUEST_CHAPTERS_RENAMES, deadline: HOSTED_DEADLINE.CHAPTERS },
-      ),
-      reachUnsaid,
-    );
-  }
-
-  /** The checks on one agent's pull request's head as GitHub holds them now. */
-  overviewChecks(
-    agentId: string,
-    number?: number,
-  ): Effect.Effect<AgentOverviewChecksAnswerView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(this.#hosted.agentPullRequests.overviewChecks, pullRequestRead(agentId, number), {
-        as: AGENT_NOT_FOUND_RENAMES,
-      }),
-      unansweredBare,
-    );
-  }
-
-  /** One agent's pull request's conversation and where its reviewers stand, as GitHub holds them now. */
-  overviewConversation(
-    agentId: string,
-    number?: number,
-  ): Effect.Effect<AgentOverviewConversationAnswerView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agentPullRequests.overviewConversation,
-        pullRequestRead(agentId, number),
-        { as: AGENT_NOT_FOUND_RENAMES },
-      ),
-      unansweredBare,
-    );
   }
 
   /**
@@ -1585,48 +1447,6 @@ export class HostedAgentClient {
   }
 
   /**
-   * One change to an agent's pull request, made on GitHub by the service as
-   * the account, on its own GitHub sign-in: how GitHub took it; a change the
-   * service would refuse by shape is refused here without traveling.
-   */
-  pullRequestAction(
-    agentId: string,
-    request: PullRequestActionRequest,
-    number?: number,
-  ): Effect.Effect<AgentPullRequestWriteAnswerView, never, HttpClient.HttpClient> {
-    const admitted = Result.getOrUndefined(readEither(pullRequestActionRequestSchema)(request));
-
-    if (admitted === undefined) return Effect.succeed(UNANSWERED);
-    const read = pullRequestRead(agentId, number);
-
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agentPullRequests.action,
-        {
-          params: { id: read.id },
-          ...(read.number === undefined ? undefined : { query: { number: read.number } }),
-          body: admitted,
-        },
-        { as: AGENT_NOT_FOUND_RENAMES },
-      ),
-      unansweredBare,
-    );
-  }
-
-  /** Which of the agent's pull request's files the member marked viewed on GitHub, read on their own sign-in. */
-  pullRequestViewed(
-    agentId: string,
-    number?: number,
-  ): Effect.Effect<AgentPullRequestViewedAnswerView, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(this.#hosted.agentPullRequests.viewed, pullRequestRead(agentId, number), {
-        as: AGENT_NOT_FOUND_RENAMES,
-      }),
-      unansweredBare,
-    );
-  }
-
-  /**
    * One image an agent's pull request's overview names, by the address
    * GitHub's rendering spelled, fetched under the account: its bytes in
    * base64 under the type GitHub served; not found where GitHub answers no
@@ -1636,18 +1456,7 @@ export class HostedAgentClient {
     agentId: string,
     src: string,
   ): Effect.Effect<AgentGitHubImageView, never, HttpClient.HttpClient> {
-    return Effect.flatMap(
-      this.#call.send({ method: HTTP_METHOD.GET, path: agentGitHubImagePath(agentId, src) }),
-      (answer): Effect.Effect<AgentGitHubImageView> => {
-        if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
-
-        if (!answer.response.ok) {
-          return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
-        }
-
-        return Effect.map(imageBodyOf(answer.response, githubImageTypeSchema), imageAnswerOf);
-      },
-    );
+    return servedGitHubImage(this.#call, agentGitHubImagePath(agentId, src));
   }
 
   /**

@@ -34,7 +34,6 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { openInSafari } from "../open-link.js";
-import { useInFront } from "../place-columns.js";
 import { useOnTab } from "../tab-route.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 import { systemActivityModule } from "./system-activity-module.js";
@@ -51,10 +50,9 @@ function refused(what: string): (cause: unknown) => void {
  * Advertises the activity `of` builds over the account's workspaces for
  * Handoff while its screen is the one in front, and takes it back as the
  * screen goes or another stands over it; nothing while `of` builds none, as
- * before the screen has read what it shows. Note that a column of the wide
- * window's one split view stands in front only while its place is shown and
- * no pushed page covers it (`useInFront`), since the route it stands under
- * never loses focus, so it advertises again as a pushed page goes back.
+ * before the screen has read what it shows. Note that a split view's detail
+ * stands under its tab's root route, which loses focus as a page is pushed
+ * on the tab's stack, so it advertises again as that page goes back.
  */
 export function useScreenActivity(
   of: (workspaces: readonly Workspace[]) => IosActivity | undefined,
@@ -64,13 +62,11 @@ export function useScreenActivity(
   const title = activity?.title;
   const webpageUrl = activity?.webpageUrl;
   const pullRequest = activity?.pullRequest;
-  const inFront = useInFront();
   useFocusEffect(
     useCallback(() => {
       const module = systemActivityModule;
 
-      if (!inFront || module === null || title === undefined || webpageUrl === undefined)
-        return undefined;
+      if (title === undefined || webpageUrl === undefined) return undefined;
       module
         .setCurrent({ title, webpageUrl, ...(pullRequest !== undefined && { pullRequest }) })
         .catch(refused("The screen's activity"));
@@ -79,7 +75,7 @@ export function useScreenActivity(
       return () => {
         module.clearCurrent(webpageUrl).catch(refused("The screen's activity"));
       };
-    }, [inFront, title, webpageUrl, pullRequest]),
+    }, [title, webpageUrl, pullRequest]),
   );
 }
 
@@ -111,11 +107,8 @@ function spotlightItemsOf(read: SpotlightReads): readonly SpotlightItem[] {
   return spotlightItems({ workspace, tasks, threads, readerId });
 }
 
-/** The keeper of the app's Spotlight index for this launch, or none in a build without the module. */
-const spotlightIndex =
-  systemActivityModule === null
-    ? null
-    : spotlightIndexKeeper(systemActivityModule, refused("The Spotlight index"));
+/** The keeper of the app's Spotlight index for this launch. */
+const spotlightIndex = spotlightIndexKeeper(systemActivityModule, refused("The Spotlight index"));
 
 /**
  * Holds the app's Spotlight index to the chosen workspace's lists while an
@@ -137,7 +130,7 @@ function useSpotlightIndex(signedIn: boolean): void {
     if (!signedIn) {
       clearTimeout(settling.current);
       settling.current = undefined;
-      spotlightIndex?.(false, NONE);
+      spotlightIndex(false, NONE);
 
       return;
     }
@@ -148,7 +141,7 @@ function useSpotlightIndex(signedIn: boolean): void {
       settling.current = undefined;
       const read = latest.current;
 
-      if (read !== undefined) spotlightIndex?.(true, spotlightItemsOf(read));
+      if (read !== undefined) spotlightIndex(true, spotlightItemsOf(read));
     }, SPOTLIGHT_SETTLE_MS);
   }, [signedIn, workspace, tasks, groups, readerId]);
   useEffect(() => () => clearTimeout(settling.current), []);
@@ -160,8 +153,6 @@ function useContinuedActivities(signedIn: boolean): void {
   const onTab = useOnTab();
   const [waiting, setWaiting] = useState<readonly ContinuedActivity[]>(NONE);
   useEffect(() => {
-    if (systemActivityModule === null) return undefined;
-
     const subscription = systemActivityModule.addListener("onContinue", (continued) =>
       setWaiting((held) => [...held, continued]),
     );

@@ -56,6 +56,7 @@ import {
   type AutomationsProcedureSeams,
   automationsProcedures,
 } from "../automations/automations-procedures.js";
+import { billingProcedures } from "../billing/billing-procedures.js";
 import {
   type PullRequestChaptersProcedureSeams,
   pullRequestChaptersProcedures,
@@ -139,6 +140,10 @@ import {
   type WorkspaceSandboxSetupProcedureSeams,
   workspaceSandboxSetupProcedures,
 } from "../workspace-sandbox-setup/workspace-sandbox-setup-procedures.js";
+import {
+  type WorkspaceSandboxSizeProcedureSeams,
+  workspaceSandboxSizeProcedures,
+} from "../workspace-sandbox-size/workspace-sandbox-size-procedures.js";
 import { hosted } from "./base.js";
 import type { HostedRouter } from "./handler.js";
 
@@ -181,6 +186,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   TasksProcedureSeams &
   WorkspaceEnvironmentProcedureSeams &
   WorkspaceSandboxSetupProcedureSeams &
+  WorkspaceSandboxSizeProcedureSeams &
   WorkspaceGithubProcedureSeams &
   WorkspaceInvitationsProcedureSeams &
   SentryInstallProcedureSeams &
@@ -201,6 +207,7 @@ export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
     agentPullRequests: agentPullRequestProcedures(published),
     agents: agentsProcedures(published),
     automations: automationsProcedures(seams),
+    billing: billingProcedures(seams),
     dictation: dictationProcedures(seams),
     events: eventsProcedures(seams),
     github: githubProcedures(seams),
@@ -230,6 +237,7 @@ export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
     voice: voiceProcedures(seams),
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
+    workspaceSandboxSize: workspaceSandboxSizeProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),
     workspaceInvitations: workspaceInvitationsProcedures(seams),
     workspaceMergeQueue: mergeQueueProcedures(seams),

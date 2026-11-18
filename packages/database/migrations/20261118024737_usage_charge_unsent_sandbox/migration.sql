@@ -1,0 +1,1 @@
+CREATE INDEX "usage_charge_unsent_sandbox" ON "usage_charge" (("figures" ->> 'sandboxName')) WHERE "sent_at" is null;

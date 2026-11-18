@@ -80,13 +80,13 @@ import type { HeldTranscript } from "./transcript-follow.js";
  * only while that account is signed in, because a host one member signs out
  * of may next be signed in to by another, who may reach the same agent but
  * never another member's words that did not go. The signed-in account's are
- * also kept on disk, sealed, beside the writes waiting for the service
- * (`entity-store.ts`), so a relaunch draws them where they went: all of each
+ * also kept on disk, in its local database beside the writes waiting for
+ * the service (`local-queues.ts`), so a relaunch draws them where they went: all of each
  * but its files' bytes, which stay with the window that attached them, and
  * the facts of its failure, which no window draws. A message read back so
  * whose row the transcript holds went after all, so it is let go; one refused
  * since the host started is not, because its row may still be on its way out.
- * A sign-out lets every refusal go with the file.
+ * A sign-out lets every refusal go with the database.
  */
 
 /** Where an agent's messages on their way stand: its queue and the messages sending. */
@@ -464,13 +464,13 @@ export interface AgentQueues {
   ) => WriteDeclaration<OutboxRow, OutboxChange, MessageWrite, AgentAgentAnswer>;
   /** A message the service refused let go, its line drawn no more. */
   readonly unsend: (params: AgentUnsendParams) => Effect.Effect<void>;
-  /** The messages the service refused that the account signed in now sent, as the sealed store keeps them (`entity-store.ts`). */
+  /** The messages the service refused that the account signed in now sent, as the local database keeps them (`local-copy.ts`). */
   readonly refusedKept: () => readonly unknown[];
-  /** Each moving of the messages refused, which has the store keep them again. */
+  /** Each moving of the messages refused, which has the database keep them again. */
   readonly refusedMoves: Stream.Stream<void>;
-  /** The messages refused that `account` sent, as the store kept them, laid back as a launch opens it, beside any refused since. */
+  /** The messages refused that `account` sent, as the database kept them, laid back as a sign-in opens it, beside any refused since. */
   readonly refusedRestored: (account: string, kept: readonly unknown[]) => Effect.Effect<void>;
-  /** Every message refused let go, as a sign-out lets the store's file go. */
+  /** Every message refused let go, as a sign-out lets the database go. */
   readonly refusedForgotten: Effect.Effect<void>;
   /** A write of the agent's that draws nothing but goes after every write asked of it before, as a suggestion sent to it from a reply does. */
   readonly inTurn: <Input extends { readonly agentId: string }, Answer extends object>(
@@ -482,7 +482,7 @@ export interface AgentQueues {
   ) => WriteDeclaration<OutboxRow, OutboxChange, AgentRewindParams, AgentAgentAnswer>;
 }
 
-/** A refused message as the sealed store keeps it: all of it but its files' bytes and its sender, who is the store's account, and the facts of its failure. */
+/** A refused message as the local database keeps it: all of it but its files' bytes and its sender, who is the store's account, and the facts of its failure. */
 const keptRefusedSchema = Schema.Struct({
   agentId: Schema.String,
   id: Schema.String,

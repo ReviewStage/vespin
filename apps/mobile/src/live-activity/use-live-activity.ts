@@ -88,8 +88,6 @@ function useActivityTokens(): UseActivityTokensResult {
   const [activity, setActivity] = useState<string | undefined>(undefined);
   const [ends, setEnds] = useState<readonly EndedActivity[]>([]);
   useEffect(() => {
-    if (liveActivityModule === null) return undefined;
-
     const subscriptions = [
       liveActivityModule.addListener("onStartToken", ({ token }) => setStart(token)),
       liveActivityModule.addListener("onActivityToken", ({ token }) => setActivity(token)),
@@ -136,7 +134,7 @@ export function useLiveActivity(signedIn: boolean): void {
       );
   }, [acts, phone, start]);
   useEffect(() => {
-    if (liveActivityModule === null || phone === undefined || fixture) return undefined;
+    if (phone === undefined || fixture) return undefined;
     const module = liveActivityModule;
 
     const kept: KeptPhone = {
@@ -226,16 +224,16 @@ export function useLiveActivity(signedIn: boolean): void {
   useEffect(() => {
     // Note that a sign-out ends the activity on the phone, so none of the account's agents stay on the Lock Screen with a Stop nothing answers, and forgets the phone, so Swift sends no token for the account signed out of.
     if (wasSignedIn.current && !signedIn) {
-      liveActivityModule?.keepPhone(null);
+      liveActivityModule.keepPhone(null);
       liveActivityModule
-        ?.endAll()
+        .endAll()
         .catch((cause: unknown) => console.error("The Live Activity was not ended.", cause));
     }
 
     wasSignedIn.current = signedIn;
   }, [signedIn]);
   useEffect(() => {
-    if (liveActivityModule === null || !signedIn) return undefined;
+    if (!signedIn) return undefined;
     const module = liveActivityModule;
 
     const subscription = module.addListener("onStop", ({ request, agentId }) => {
@@ -253,7 +251,7 @@ export function useLiveActivity(signedIn: boolean): void {
     return () => subscription.remove();
   }, [acts, write, signedIn]);
   useEffect(() => {
-    if (liveActivityModule === null || !fixture) return;
+    if (!fixture) return;
 
     // Note that the state is encoded through the service's own Schema, so the widget decodes the bytes a push would carry.
     const started = launchLiveActivity()

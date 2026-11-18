@@ -5,6 +5,7 @@ import {
   HStack,
   Image,
   Picker,
+  SecureField,
   Text,
   TextField,
   type TextFieldRef,
@@ -25,6 +26,7 @@ import {
   textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { longPasteIn } from "@repo/features/long-paste";
 import { useEffect, useRef } from "react";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
 import { forgetField, noteFieldFocus } from "./field-focus.js";
@@ -38,10 +40,11 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
 const WORDS_LINES = { min: 4, max: 12 } as const;
 
-/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, or the sheet's own page, growing with no bound as Mail's message body does. */
+/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, a row holding one line kept from sight such as a key or a token, as a password field keeps it, or the sheet's own page, growing with no bound as Mail's message body does. */
 export const WORDS_LOOK = {
   ROW: "row",
   LINE: "line",
+  SECRET: "secret",
   PAGE: "page",
 } as const;
 
@@ -68,6 +71,10 @@ type WordsFieldProps = {
   readonly verbatim?: boolean | undefined;
   /** Where the words stand: a Form's row, a row of one line, or the sheet's own page. */
   readonly look?: WordsLook | undefined;
+  /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
+  readonly onLongPaste?: ((words: string) => boolean) | undefined;
+  /** The most characters it holds, such as the words beside a survey's Other; no bound where none is given. */
+  readonly maxLength?: number | undefined;
 };
 
 /**
@@ -89,6 +96,8 @@ export function WordsField({
   disabled = false,
   verbatim = false,
   look = WORDS_LOOK.ROW,
+  onLongPaste,
+  maxLength,
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(words ?? initialWords);
@@ -111,10 +120,38 @@ export function WordsField({
     text.set(words);
   }, [words, text]);
 
+  // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
-    shown.current = next;
-    onWords(next);
+    const pasted = onLongPaste === undefined ? undefined : longPasteIn(shown.current, next);
+    const taken = pasted !== undefined && onLongPaste?.(pasted.words) === true;
+    const kept = taken ? pasted.kept : next;
+    // Note that words past the most the field holds are cut back as they are typed or pasted, so the field stands still at its bound.
+    const words = maxLength === undefined ? kept : kept.slice(0, maxLength);
+    shown.current = words;
+
+    if (words !== next) text.set(words);
+    onWords(words);
   };
+
+  const marks = [
+    font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+    SwiftModifiers.disabled(disabled),
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+    ...(label === undefined ? [] : [accessibilityLabel(label)]),
+  ];
+
+  // Note that a secret stands in the system's secure field, which keeps its words from sight and from the screen's recording, as a password field does; it takes no long paste and no correction.
+  if (look === WORDS_LOOK.SECRET) {
+    return (
+      <SecureField
+        text={text}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        onTextChange={type}
+        modifiers={[...marks, listRowBackground(colors.RAISED)]}
+      />
+    );
+  }
 
   // Note that a row of one line, such as a name, stands as one line, as Settings' name fields do, rather than in a box a few lines tall.
   const bounds = {
@@ -138,11 +175,8 @@ export function WordsField({
       autoFocus={autoFocus}
       onTextChange={type}
       modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+        ...marks,
         ...bounds,
-        SwiftModifiers.disabled(disabled),
-        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
-        ...(label === undefined ? [] : [accessibilityLabel(label)]),
         // Note that turning correction off turns iOS's smart dashes and quotes off with it, so `--skill` stays two hyphens.
         ...(verbatim ? [autocorrectionDisabled(), textInputAutocapitalization("never")] : []),
       ]}

@@ -134,9 +134,8 @@ import {
  * section keeping its place while its heading stands, so a save redraws the
  * sections it changed and leaves the scroll where it was. Under the title
  * one muted line says who created the task and how long ago, and, for a description
- * anyone has written, who last did: a member, the app (the notetaker), or a
- * coding agent, each on their own face hanging their card (`edit-ref.tsx`),
- * whose call it was on where the app wrote it on one, and how long ago, moved
+ * anyone has written, who last did: a member or a coding agent, each on
+ * their own face hanging their card (`edit-ref.tsx`), and how long ago, moved
  * on once a minute, as a GitHub issue's page says it under its title. The edit's
  * time opens the description's version history, where each earlier version is. Each section says the
  * same of the save that last changed it in fewer letters, quietly, while the

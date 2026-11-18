@@ -39,7 +39,6 @@ import {
   picked,
   picker,
   pickerDescription,
-  pickerDetail,
   promptEditor,
   render,
   rowOf,
@@ -678,12 +677,12 @@ function leaveAsked(): string | undefined {
     .find((words) => words.includes("Leave with unsaved changes?"));
 }
 
-test("Escape leaves a page with nothing unsaved for the list, and asks first where its draft would be lost", async () => {
+test("the way back leaves a page with nothing unsaved for the list, and asks first where its draft would be lost", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
 
   type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
-  act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  act(() => button("Automations").click());
   // Note that the way out is the router's move, which asks a turn later, once its blocker holds it.
   await settle();
   assert.equal(world.places.length, 1, "the unsaved draft stands");
@@ -693,7 +692,7 @@ test("Escape leaves a page with nothing unsaved for the list, and asks first whe
   assert.equal(leaveAsked(), undefined);
 
   type(page.querySelector("input[aria-label='Automation name']"), SWEEP.name);
-  act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  act(() => button("Automations").click());
   assert.deepEqual(world.places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
 });
 
@@ -819,7 +818,6 @@ test("a new agent's MCP servers are a field chip of the owner's connected ones u
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
   const chip = serversChip() ?? assert.fail("the servers chip stands");
-  assert.match(page.textContent ?? "", /Every connected MCP server is on\./u);
   assert.equal(chip.querySelectorAll(".ui-provider-mark").length, 2, "Linear's and Sentry's marks");
 
   act(() => chip.click());
@@ -861,7 +859,7 @@ test("a new agent's MCP servers row claims nothing while the owner's connections
 
   const reading = [...page.querySelectorAll("[role=status]")].map((each) => each.textContent);
   assert.ok(reading.includes("Reading your connected MCP servers…"), "the row says it is reading");
-  assert.doesNotMatch(page.textContent ?? "", /None connected yet\.|Every connected MCP server/u);
+  assert.doesNotMatch(page.textContent ?? "", /None connected yet\./u);
   assert.equal(serversChip(page) === undefined, true, "no chip claims None while the read is out");
 });
 
@@ -881,9 +879,7 @@ test("a new agent's MCP servers row says a refused read of the owner's connectio
 
   act(() => button("Retry").click());
   await settle();
-  await vi.waitFor(() =>
-    assert.match(page.textContent ?? "", /Every connected MCP server is on\./u),
-  );
+  await vi.waitFor(() => assert.ok(serversChip(), "the servers chip stands"));
   assert.equal(
     (serversChip() ?? assert.fail("the servers chip stands")).querySelectorAll(".ui-provider-mark")
       .length,
@@ -891,7 +887,7 @@ test("a new agent's MCP servers row says a refused read of the owner's connectio
   );
 });
 
-test("another member's automation says which servers its creator switched off, offering no switch of the reader's own", async () => {
+test("another member's automation says which servers its creator switched off and why the reader cannot switch them, offering no switch of the reader's own", async () => {
   world.standing = [
     {
       ...SWEEP,
@@ -902,9 +898,10 @@ test("another member's automation says which servers its creator switched off, o
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
 
+  assert.match(page.textContent ?? "", /All but Sentry and Notion \(account 2\)/u);
   assert.match(
     page.textContent ?? "",
-    /Its creator's connected MCP servers, but Sentry and Notion \(account 2\) switched off\./u,
+    /Runs use its creator's connections, so only its creator can change them\./u,
   );
   assert.equal(serversChip(page) === undefined, true);
 });
@@ -1098,17 +1095,6 @@ test("an automation's page opened before the list is read stands its toolbar's w
   assert.deepEqual(world.places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
 });
 
-test("Escape leaves an automation's page still waiting on the list for the list", async () => {
-  world.listHeld = true;
-  mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
-  await settle();
-
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS), "its way out is offered");
-  });
-  assert.deepEqual(world.places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
-});
-
 test("what is typed while a save is out stands, unsaved, once the save lands", async () => {
   world.heldChanges = [];
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
@@ -1152,6 +1138,11 @@ test("with no workspace listed because the workspaces could not be read, the lis
   act(() => button("Retry").click());
   await settle();
   assert.equal(world.tasksRefreshes, 2);
+
+  // Nothing stands behind the link, so its way back opens the list under the workspace its address names.
+  act(() => button("Automations").click());
+  await settle();
+  assert.equal(world.pageRouter?.history.location.pathname, `/${WORKSPACE.id}/automations`);
 });
 
 test("an automation's page whose list could not be read says so with Retry, rather than calling it gone", async () => {
@@ -1191,7 +1182,7 @@ test("a new automation's page moved to another workspace starts afresh in that w
   );
 });
 
-test("an automation fired by an event says its trigger in one sentence, and a save of its task leaves the trigger so", async () => {
+test("an automation fired by an event shows its event, and a save of its task leaves the trigger so", async () => {
   const onEvent = automation(7, {
     name: "Triage new bugs",
     trigger: { kind: AUTOMATION_TRIGGER.GITHUB, event: "issue-opened", labels: ["bug"] },
@@ -1201,10 +1192,6 @@ test("an automation fired by an event says its trigger in one sentence, and a sa
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: onEvent.id });
   await settle();
 
-  assert.equal(
-    pickerDetail(page, "Type"),
-    "When an issue by people is opened in acme/ledger labeled bug",
-  );
   assert.equal(picked(page, "Event"), "Issue opened");
   assert.equal(page.querySelector("button[aria-label^='Time zone: ']") === null, true);
   writePrompt(page, "Reproduce the bug first.");
@@ -1221,14 +1208,16 @@ test("an automation fired by an event says its trigger in one sentence, and a sa
   ]);
 });
 
-test("Escape keeps a new page whose schedule was changed, though nothing was typed", async () => {
+test("the way back asks before it leaves a new page whose schedule was changed, though nothing was typed", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
 
   pick(page, "Runs", "Daily");
-  act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  act(() => button("Automations").click());
+  await settle();
 
   assert.equal(world.places.length, 1);
+  assert.ok(leaveAsked(), "the leave question stands");
 });
 
 /** A new automation's page, named and given its prompt, ready to have its schedule picked. */
@@ -1486,14 +1475,13 @@ test("a weekly schedule's day picked is saved, with its time and zone as they st
   });
 });
 
-test("a schedule's time is written as its summary says it, and a time that cannot be read is marked and changes nothing", async () => {
+test("a schedule's time is written in its field, and a time that cannot be read is marked and changes nothing", async () => {
   const page = await mountWeeklySweep();
 
   const field = () =>
     page.querySelector<HTMLInputElement>("input[aria-label='Time']") ?? assert.fail("no time");
 
   assert.equal(field().value, "7:30 AM");
-  assert.match(page.textContent ?? "", /Wednesdays? at 7:30 AM/u);
 
   assert.equal(button("Save").disabled, true, "nothing is written yet");
   type(field(), "soon");
@@ -1597,7 +1585,7 @@ test("Escape while writing the prompt lets go of the caret and reaches the windo
   pressEscape({});
   window.removeEventListener("keydown", listen);
 
-  // Note that both reach the window, whose live call Escape stops first, marked taken, so neither leaves the page.
+  // Note that both reach the window marked taken, so neither leaves the page.
   assert.deepEqual(reached, [true, true]);
   assert.equal(document.activeElement === prompt, false);
   assert.equal(prompt.textContent, "Triage the issues opened overnight.");
@@ -1651,7 +1639,7 @@ test("the repository chosen first is not said again among the others its runs wo
   world.standing = [several];
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: several.id });
   await settle();
-  assert.match(page.textContent ?? "", /also work in acme\/web\./u);
+  assert.match(page.textContent ?? "", /Also works in acme\/web\./u);
 
   act(() => page.querySelector<HTMLButtonElement>(".repository-chip .ui-chip")?.click());
   await settle();
@@ -1659,15 +1647,14 @@ test("the repository chosen first is not said again among the others its runs wo
   act(() => optionWords("webacme").click());
   await settle();
 
-  assert.doesNotMatch(page.textContent ?? "", /also work in/u);
+  assert.doesNotMatch(page.textContent ?? "", /Also works in/u);
 });
 
-test("runs land in a new agent on the account's default until a model is chosen, and archiving successful runs is saved", async () => {
-  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+test("archiving successful runs is saved", async () => {
+  mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
 
-  assert.match(page.textContent ?? "", /Your default, until you choose one\./u);
-  act(() => button("Archive finished runs").click());
+  act(() => button("Mark finished runs Done").click());
   act(() => button("Save").click());
   await settle();
 
@@ -1762,9 +1749,7 @@ test("Same agent saves with none chosen, its first run starting one, or with one
   pick(page, "Runs land in", "Same agent");
   await settle();
   assert.ok(
-    pickerDescription(page, "Agent").some((words) =>
-      words?.includes("Every later run is sent to it"),
-    ),
+    pickerDescription(page, "Agent").some((words) => words?.includes("Later runs are sent to it")),
     "the Agent picker says later runs go to the first run's agent",
   );
   act(() => button("Save").click());

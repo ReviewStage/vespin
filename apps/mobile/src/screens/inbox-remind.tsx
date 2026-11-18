@@ -16,7 +16,7 @@ import {
   type RowAction,
   type RowSubmenu,
 } from "@repo/ui-native";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useCallback, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 
 /** What Remind me is called and drawn with, wherever it stands: a row's swipe and long press, a thread's ⋯ menu, and Select mode's bar. */
@@ -28,6 +28,8 @@ type RemindMenu = RowSubmenu & BarMenu & { readonly actions: readonly RowAction[
 type UseRemindResult = {
   /** Remind me's menu on the threads given, calling `after` once a time is sent, such as Select mode letting go. */
   readonly menu: (items: readonly InboxItem[], after?: () => void) => RemindMenu;
+  /** Remind me's menu on one thread, as a row offers it; the same function from draw to draw. */
+  readonly itemMenu: (item: InboxItem) => RemindMenu;
   /** The picker sheet "Pick a date and time…" opens, which a screen draws beside its rows. */
   readonly sheet: ReactNode;
 };
@@ -53,48 +55,57 @@ export function useRemind(): UseRemindResult {
   const { remind, remindMany } = useInboxActs();
   const [held, setHeld] = useState<Held>();
 
-  const send = (items: readonly InboxItem[], until: number | null, after?: () => void) => {
-    const [only] = items;
+  const send = useCallback(
+    (items: readonly InboxItem[], until: number | null, after?: () => void) => {
+      const [only] = items;
 
-    if (items.length === 1 && only !== undefined) remind(only.id, until);
-    else
-      remindMany(
-        items.map((item) => item.id),
-        until,
-      );
-    after?.();
-  };
+      if (items.length === 1 && only !== undefined) remind(only.id, until);
+      else
+        remindMany(
+          items.map((item) => item.id),
+          until,
+        );
+      after?.();
+    },
+    [remind, remindMany],
+  );
 
-  const menu = (items: readonly InboxItem[], after?: () => void): RemindMenu => {
-    const now = Date.now();
+  const menu = useCallback(
+    (items: readonly InboxItem[], after?: () => void): RemindMenu => {
+      const now = Date.now();
 
-    const times: RowAction[] = REMIND_TIMES.map((time) => ({
-      label: time.label,
-      detail: remindWords(time.at(now), now),
-      tone: ROW_ACTION_TONE.NEUTRAL,
-      onPress: () => send(items, time.at(Date.now()), after),
-    }));
+      // Note that only a time that holds through the day says when, since a row's menu is built once a day, as Mail's "In 1 hour" says no time.
+      const times: RowAction[] = REMIND_TIMES.map((time) => ({
+        label: time.label,
+        detail: time.steady ? remindWords(time.at(now), now) : undefined,
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => send(items, time.at(Date.now()), after),
+      }));
 
-    const pick: RowAction = {
-      label: REMIND_WORDS.PICK,
-      symbol: GLYPH.TIME,
-      tone: ROW_ACTION_TONE.NEUTRAL,
-      onPress: () => setHeld({ items, at: Date.now(), after }),
-    };
+      const pick: RowAction = {
+        label: REMIND_WORDS.PICK,
+        symbol: GLYPH.TIME,
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => setHeld({ items, at: Date.now(), after }),
+      };
 
-    const clear: RowAction[] = items.some(hasReminder)
-      ? [
-          {
-            label: items.length === 1 ? REMIND_WORDS.CLEAR : REMIND_WORDS.CLEAR_ALL,
-            symbol: GLYPH.INBOX,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => send(items, null, after),
-          },
-        ]
-      : [];
+      const clear: RowAction[] = items.some(hasReminder)
+        ? [
+            {
+              label: items.length === 1 ? REMIND_WORDS.CLEAR : REMIND_WORDS.CLEAR_ALL,
+              symbol: GLYPH.INBOX,
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => send(items, null, after),
+            },
+          ]
+        : [];
 
-    return { ...REMIND_ME, choices: [], actions: [...times, pick, ...clear] };
-  };
+      return { ...REMIND_ME, choices: [], actions: [...times, pick, ...clear] };
+    },
+    [send],
+  );
+
+  const itemMenu = useCallback((item: InboxItem) => menu([item]), [menu]);
 
   const openedAt = held?.at ?? Date.now();
 
@@ -110,5 +121,5 @@ export function useRemind(): UseRemindResult {
     />
   );
 
-  return { menu, sheet };
+  return { menu, itemMenu, sheet };
 }

@@ -23,6 +23,7 @@ import {
   Tooltip,
   useResizeEdge,
 } from "@repo/ui";
+import { isComposingKey } from "@repo/ui/composing-key";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   type ComponentProps,
@@ -400,7 +401,7 @@ export function usePaneRoom(
       "data-pane-beside": String(beside.drawn),
       "data-pane-over": over,
       onKeyDown: (event) => {
-        if (!floating || event.key !== "Escape" || event.nativeEvent.isComposing) return;
+        if (!floating || event.key !== "Escape" || isComposingKey(event)) return;
         // Note that the Escape is stopped here, because the window's own would leave the view.
         event.stopPropagation();
         closeOver();

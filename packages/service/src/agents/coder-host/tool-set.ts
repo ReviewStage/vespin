@@ -2,6 +2,7 @@ import {
   AGENT_TOOL,
   CLAUDE_CODE_TOOL,
   CODEX_TOOL,
+  CURSOR_TOOL,
   EVE_TOOL,
   RETIRED_TOOL,
   UNKNOWN_TOOL,
@@ -32,8 +33,8 @@ import { connectionToolEntries } from "../../integrations/connection-tools.js";
  * The tools a coding agent's transcript may name that no agent is offered
  * now: the retired runtime's provider-run page fetch, which coding agents ran before they had
  * the hosted page read, our own hosted search on our key, since
- * replaced by the retired runtime's provider-run `web_search` on the agent's own key, the archive, unarchive, and move of a task into a
- * section since folded into `update_agent` and `update_task`, and the close
+ * replaced by the retired runtime's provider-run `web_search` on the agent's own key, the move of a task into a
+ * section since folded into `update_task`, and the close
  * of and reply on an inbox item since folded into `withdraw_ask` and
  * `post_to_inbox`, that post and its read, since named `post_thread` and
  * `read_threads`, that read, since split into `list_threads` and
@@ -50,8 +51,6 @@ import { connectionToolEntries } from "../../integrations/connection-tools.js";
 export const RETIRED_CODER_TOOL = {
   WEB_FETCH: "web_fetch",
   SEARCH_WEB: RETIRED_TOOL.SEARCH_WEB,
-  ARCHIVE_AGENT: RETIRED_TOOL.ARCHIVE_AGENT,
-  UNARCHIVE_AGENT: RETIRED_TOOL.UNARCHIVE_AGENT,
   MOVE_TASK: RETIRED_TOOL.MOVE_TASK,
   CLOSE_INBOX_ITEM: RETIRED_TOOL.CLOSE_INBOX_ITEM,
   REPLY_INBOX: RETIRED_TOOL.REPLY_INBOX,
@@ -88,7 +87,8 @@ const TOOL_INPUT = verbatimJsonSchema(WireValueSchema, {
  * names, the two task controls (`EVE_TOOL`) a turn of the retired
  * runtime named where it waited on its worker or stopped one, Claude Code's own tools, which an agent running on Claude Code
  * calls under their CLI names, Codex's own work, which an agent running on
- * Codex does under its items' names (`../native-events/`), the call a native
+ * Codex does under its items' names, and Cursor's own tools, which an agent
+ * running on Cursor calls under `CURSOR_TOOL`'s names (`../native-events/`), the call a native
  * harness made to a tool none of these name (`UNKNOWN_TOOL`), and each
  * connection's calls beside them (`../../integrations/connection-tools.ts`),
  * which the agent and its workers alike make.
@@ -102,6 +102,7 @@ export const CODER_TOOL_SET: ToolSet = Object.fromEntries([
       ...Object.values(RETIRED_CODER_TOOL),
       ...Object.values(CLAUDE_CODE_TOOL),
       ...Object.values(CODEX_TOOL),
+      ...Object.values(CURSOR_TOOL),
       UNKNOWN_TOOL,
     ]),
   ].map((name) => [name, wireValidatedTool(`the stored ${name} tool`, TOOL_INPUT)]),

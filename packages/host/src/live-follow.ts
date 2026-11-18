@@ -38,13 +38,16 @@ import {
  *
  * Each part of an answer carries the snapshot it was read at, and a held
  * poll Sync woke carries the txids of the writes that woke it too. From the
- * first answer carrying either on, the read hands the caller a wait for a
- * write's transaction (`onTxWait`), which a writer confirms its write on
- * (`confirmWrite`) once an answer every part of which was read at a
- * snapshot that shows it, or one carrying its txid, is handed on, whatever
- * woke the poll. After an answer carrying txids it asks again after the
- * service's coalesce window rather than the floor, since a write that
- * lands meanwhile is answered at once.
+ * first answer carrying either on, a read whose rows the caller takes
+ * (`followTakingRows`) hands it a wait for a write's transaction
+ * (`onTxWait`), which a writer confirms its write on (`confirmWrite`) once
+ * an answer every part of which was read at a snapshot that shows it, or
+ * one carrying its txid, is taken, whatever woke the poll. A read handed on
+ * as a stream (`liveRows`, `decodedLiveRows`) hands no wait, since its
+ * reader may not have taken an answer's rows yet when the answer's
+ * transactions are carried on. After an answer carrying txids it asks again
+ * after the service's coalesce window rather than the floor, since a write
+ * that lands meanwhile is answered at once.
  *
  * A read whose parts the caller follows by cursor (the transcript's newest
  * messages) is answered those parts only past the cursor it was last
@@ -270,6 +273,18 @@ export interface LiveFollowDependencies<Part extends string> {
 }
 
 /**
+ * A read handed on as a stream, which takes no wait for a write's
+ * transaction: the stream carries an answer's transactions on once the
+ * answer is queued, before its reader takes the rows, so a write confirmed
+ * on it could stand down a step before the rows that show it are drawn.
+ * A read a write confirms on is followed by `followTakingRows`.
+ */
+type StreamedFollowDependencies<Part extends string> = Omit<
+  LiveFollowDependencies<Part>,
+  "onTxWait"
+> & { readonly onTxWait?: never };
+
+/**
  * Confirms a write once its transaction reaches the read that shows it: at
  * once where the write changed no row (no txid) or no wait is handed, as
  * before the read's first answer, or for one of a service before snapshots
@@ -423,9 +438,11 @@ interface LiveAnswer<Part extends string> {
 /**
  * Every answer's rows, undecoded, each time they change, for as long as the
  * caller reads: the first answer's, then each poll's that moved (see the
- * module's note). A write's wait settles once the rows of the answer
- * carrying its txid, or read at snapshots that all show it, are handed on.
- * It fails only where the read is gone.
+ * module's note). A write's wait settles once the answer carrying its
+ * txid, or read at snapshots that all show it, is queued for the reader,
+ * which may not have taken its rows yet, so a read a write confirms on
+ * takes them in its poll (`followTakingRows`). It fails only where the read
+ * is gone.
  */
 function liveAnswers<Part extends string>(
   dependencies: LiveFollowDependencies<Part>,
@@ -541,7 +558,7 @@ function liveAnswers<Part extends string>(
  * long as the caller reads (`liveAnswers`), for a read with no cursor parts.
  */
 export function liveRows<Part extends string>(
-  dependencies: LiveFollowDependencies<Part>,
+  dependencies: StreamedFollowDependencies<Part>,
   first: SealedRead<Part>,
 ): Stream.Stream<Readonly<Record<Part, readonly unknown[]>>, LiveBroken> {
   return Stream.map(liveAnswers(dependencies, first), (answer) => answer.rows);
@@ -556,20 +573,14 @@ export function liveRows<Part extends string>(
  * sealing it again.
  */
 export function decodedLiveRows<Part extends string, Rows>(
-  dependencies: Omit<LiveFollowDependencies<Part>, "onTxWait"> & {
-    readonly onTxWait?: LiveFollowDependencies<Part>["onTxWait"] | undefined;
-  },
+  dependencies: StreamedFollowDependencies<Part>,
   first: SealedRead<Part>,
   schema: Schema.Decoder<Rows>,
   joined?: (held: Rows, past: Rows) => Rows,
 ): Stream.Stream<Rows, LiveBroken> {
   const decode = Schema.decodeUnknownOption(schema);
-  const { onTxWait, ...rest } = dependencies;
 
-  return liveAnswers(
-    { ...rest, ...(onTxWait === undefined ? undefined : { onTxWait }) },
-    first,
-  ).pipe(
+  return liveAnswers(dependencies, first).pipe(
     Stream.mapEffect((answer) =>
       Option.match(decode(answer.rows), {
         onNone: () => Effect.fail(new LiveBroken({ reason: "a row did not decode" })),
@@ -593,7 +604,8 @@ export function decodedLiveRows<Part extends string, Rows>(
 /**
  * A read followed until it is gone, each answer's rows, every part's,
  * decoded under `schema` and handed to `take` the moment its poll answers,
- * with where it stands by sync id for a read followed by one, before the
+ * with where it stands by sync id for a read followed by one and the answer
+ * itself, for what it says beside its rows, before the
  * follow carries the answer's snapshots and txids on to a write waiting for
  * them. So a write confirmed on the read finds its rows already
  * taken, where a reader of `decodedLiveRows` may not have taken them yet. An
@@ -601,24 +613,34 @@ export function decodedLiveRows<Part extends string, Rows>(
  * is a failed poll, asked again, and a first one fails the follow, which
  * the caller seals again.
  */
-export function followTakingRows<Part extends string, Rows>(
-  dependencies: LiveFollowDependencies<Part>,
-  first: SealedRead<Part>,
+export function followTakingRows<
+  Part extends string,
+  Rows,
+  Read extends SealedRead<Part> = SealedRead<Part>,
+>(
+  dependencies: Omit<LiveFollowDependencies<Part>, "poll"> & {
+    readonly poll: (
+      after: string | undefined,
+      cursor?: string,
+      sync?: string,
+    ) => Effect.Effect<Read | LiveFailure>;
+  },
+  first: Read,
   schema: Schema.Decoder<Rows>,
-  take: (rows: Rows, standing?: SyncStanding) => Effect.Effect<void>,
+  take: (rows: Rows, standing: SyncStanding | undefined, read: Read) => Effect.Effect<void>,
 ): Effect.Effect<void, LiveBroken> {
   const decode = Schema.decodeUnknownOption(schema);
   const parts = Object.keys(first.queries).filter((part): part is Part => part in first.queries);
 
   /** Takes the answer's rows where it carries them, answering whether they decoded. */
-  const taken = (read: SealedRead<Part>) => {
+  const taken = (read: Read) => {
     const carried = rowsOf(parts, read);
 
     if (carried === undefined) return Effect.succeed(true);
 
     return Option.match(decode(carried), {
       onNone: () => Effect.succeed(false),
-      onSome: (rows) => Effect.as(take(rows, syncStandingOf(read)), true),
+      onSome: (rows) => Effect.as(take(rows, syncStandingOf(read), read), true),
     });
   };
 
@@ -634,7 +656,7 @@ export function followTakingRows<Part extends string, Rows>(
             ),
       );
 
-    yield* Stream.runDrain(liveRows({ ...dependencies, poll }, first));
+    yield* Stream.runDrain(liveAnswers({ ...dependencies, poll }, first));
   });
 }
 

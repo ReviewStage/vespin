@@ -11,11 +11,13 @@ import { PROGRESS_TONE, type UsageMeterRow } from "@repo/ui";
  * model alone names the model after it, "Weekly (Opus)", as Claude Code's `/usage` does. Each
  * row carries when its window resets, which the meters say as every time is
  * said (`TIME_LOOK.UNTIL`). The rows keep the
- * order the service answers, the shortest window first. A reading older than
- * `STALE_MS` says when it was heard, as Codex's `/status` warns that its
- * limits may be stale, because a plan's usage is heard only from the turns
- * that ran on it, and a Codex plan's from ChatGPT besides as its keys are
- * read.
+ * order the service answers, the shortest window first. Every reading says
+ * when it was heard (`updated`), "Updated just now" inside a minute, which
+ * Settings draws under each plan's meters so a refresh shows it landed; a
+ * place that says it only where it may be stale reads `heard`, set past
+ * `STALE_MS`, as Codex's `/status` warns that its limits may be stale,
+ * because a plan's usage is heard only from the turns that ran on it, and a
+ * Codex plan's from ChatGPT besides as its keys are read.
  */
 
 /** Minutes in an hour, a day, and a week. */
@@ -23,6 +25,9 @@ const MINUTES = { HOUR: 60, DAY: 24 * 60, WEEK: 7 * 24 * 60 } as const;
 
 /** How old a reading may be before its meters say when it was heard. */
 const STALE_MS = 15 * 60 * 1000;
+
+/** Inside this long a reading is said to be heard just now. */
+const JUST_NOW_MS = 60 * 1000;
 
 /** The share at which a window is at its limit. */
 const FULL_PERCENT = 100;
@@ -68,10 +73,18 @@ function windowRow(window: PlanUsage): UsageMeterRow {
   };
 }
 
-/** A plan's usage as its meters draw it: a row a window, and when it was heard where that is not fresh. */
+/** A plan's usage as its meters draw it: a row a window, when it was heard, and that again where it is not fresh. */
 export interface PlanUsageMeters {
   readonly rows: readonly UsageMeterRow[];
+  /** When it was heard, however fresh: "Updated just now", "Updated 4h ago". */
+  readonly updated?: string;
+  /** When it was heard, where that is not fresh. */
   readonly heard?: string;
+}
+
+/** When a reading was heard, as its meters say it. */
+function updatedWords(heardAt: number, now: number): string {
+  return now - heardAt < JUST_NOW_MS ? "Updated just now" : `Updated ${agoText(heardAt, now)}`;
 }
 
 /** A plan's usage as its meters draw it, in the order the service answers its windows; none before any is heard. */
@@ -85,7 +98,8 @@ export function planUsageMeters(
   const rows = windows.map(windowRow);
   const heardAt = plan.usageHeardAt;
 
-  return heardAt !== undefined && now - heardAt > STALE_MS
-    ? { rows, heard: `Updated ${agoText(heardAt, now)}` }
-    : { rows };
+  if (heardAt === undefined) return { rows };
+  const updated = updatedWords(heardAt, now);
+
+  return now - heardAt > STALE_MS ? { rows, updated, heard: updated } : { rows, updated };
 }

@@ -1,4 +1,4 @@
-import type { RunnerMessage } from "@repo/agent-runner/protocol";
+import type { ClaudeCodeMessage } from "@repo/agent-runner/protocol";
 import { CLAUDE_CODE_TOOL, claudeCodeWorkspaceTool } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
@@ -246,12 +246,16 @@ const readTaskNotification = Schema.decodeUnknownOption(
   Schema.Struct({
     tool_use_id: Schema.optionalKey(Schema.String),
     status: Schema.String,
+    reason: Schema.optionalKey(Schema.String),
     summary: Schema.optionalKey(Schema.String),
   }),
 );
 
-/** The status a task's notification says it ran to its end with, as `SDKTaskNotificationMessage` spells it; `failed` and `stopped` did not. */
-const TASK_COMPLETED = "completed";
+/** The status a task's notification says it failed with, as `SDKTaskNotificationMessage` spells it; `completed` and `stopped` did not. */
+const TASK_FAILED = "failed";
+
+/** The cause a task's notification names where no one stopped it but the CLI's worker restarted under it, which leaves it orphaned (`stopped`, but not by a hand). */
+const TASK_ORPHANED = "worker_restart";
 
 /**
  * What Claude Code says where the session its launch was told to resume is
@@ -305,7 +309,7 @@ const SDK_MESSAGE = {
 } as const;
 
 /** Every `system` subtype of the pinned SDK, as its message union spells them. */
-type SdkSystemSubtype = Extract<RunnerMessage, { type: "system" }>["subtype"];
+type SdkSystemSubtype = Extract<ClaudeCodeMessage, { type: "system" }>["subtype"];
 
 /** The `system` subtypes read here. */
 const SYSTEM_SUBTYPE = {
@@ -414,7 +418,7 @@ const BILLING_REFUSED = "billing_error";
  * are the CLI's, never the model's.
  */
 const RATE_LIMITED = "rate_limit" satisfies NonNullable<
-  Extract<RunnerMessage, { type: "assistant" }>["error"]
+  Extract<ClaudeCodeMessage, { type: "assistant" }>["error"]
 >;
 
 /** What Claude Code puts before any MCP server's tool, the server's name and `__` following it (`mcp__linear__list_issues`). */
@@ -873,16 +877,20 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
 /**
  * A background task's end, which settles the subagent call it ran under
  * where it was one (the projection passes over any other task's): its
- * summary is the answer, and a task that failed or was stopped a refusal,
- * but one that failed while the plan's limit stands, which failed for it.
+ * summary is the answer, and a task that failed, or was orphaned by its
+ * worker's restart, a refusal, but one that failed while the plan's limit
+ * stands, which failed for it. Note that a task the agent or the member
+ * stopped is answered, not refused, as a canceled worker is, because a
+ * stop asked for is no failure, and its summary only repeats the task's
+ * description.
  */
 function taskNotificationMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const read = readTaskNotification(message);
 
   if (Option.isNone(read) || read.value.tool_use_id === undefined) return [];
-  const { tool_use_id, status, summary } = read.value;
+  const { tool_use_id, status, reason, summary } = read.value;
   const text = summary === undefined || summary.trim() === "" ? status : summary;
-  const failed = status !== TASK_COMPLETED;
+  const failed = status === TASK_FAILED || reason === TASK_ORPHANED;
 
   return [
     {

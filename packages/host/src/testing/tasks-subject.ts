@@ -119,7 +119,6 @@ import {
   type TASKS_FOLLOWS,
   WORKSPACE_ACTS,
 } from "../contract/index.js";
-import type { EntityStore } from "../entity-store.js";
 import { type ActHandler, ActRefused, type HostActTable } from "../host-acts.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
@@ -858,6 +857,7 @@ export function fakeService(tasks: Task[]): FakeService {
       setTokenRepository: () => Effect.succeed(service.tokenRepositorySet ?? UNANSWERED_WORKSPACE),
       environment: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      saveVariables: () => Effect.succeed(UNANSWERED_WORKSPACE),
       deleteVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       mergeQueue: () => Effect.succeed(UNANSWERED_WORKSPACE),
@@ -865,6 +865,11 @@ export function fakeService(tasks: Task[]): FakeService {
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      sandboxSize: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      putSandboxSize: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      billingStatus: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      billingSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      billingPortal: () => Effect.succeed(UNANSWERED_WORKSPACE),
       // Each workspace read as the service answers it; a poll is not counted among the reads.
       // SAFETY: each declared read answers its own script's rows, as its declaration's answer.
       liveRead: ((
@@ -1038,6 +1043,7 @@ export function fakeService(tasks: Task[]): FakeService {
           return service.slackBotAnswer;
         }),
       slackBotConnect: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      slackBotInstall: () => Effect.succeed(UNANSWERED_WORKSPACE),
       slackBotDisconnect: (workspaceId) =>
         Effect.suspend(() => {
           service.reads.push(`slack-bot-disconnect:${workspaceId}`);
@@ -1654,8 +1660,6 @@ export function subject(
     sendsNetwork?: boolean;
     /** The account signed in now, Dana's where none is named. */
     accountId?: () => string;
-    /** The account's lists kept on disk, none where none is named. */
-    entities?: EntityStore;
     /** The pool the composer's rows stand in, a fresh one that keeps no write waiting where none is named. */
     pool?: EntityPool;
   } = {},
@@ -1722,7 +1726,6 @@ export function subject(
       kept,
       focus,
       pool,
-      entities: () => options.entities,
       offlineRefused: { clear: () => undefined },
     }).pipe(Effect.provide(noNetwork));
 
@@ -1736,7 +1739,6 @@ export function subject(
       kept,
       focus,
       pool,
-      entities: () => options.entities,
       githubMoved: Effect.void,
       recordProductEvent: () => undefined,
       tasks: tasks.workspaces,

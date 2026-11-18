@@ -24,6 +24,7 @@ import {
   DESCRIPTION_ACTOR,
   TASK_TREE_ENTRY,
   type Task,
+  type TaskPullRequestLine,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
@@ -35,7 +36,7 @@ import { EXPERIMENT, HOST_CAPABILITY, type HostCapability } from "@repo/settings
 import { SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views";
 import { APP_COMMAND, type AppCommand } from "@repo/settings/shortcuts";
 import { experimentsOn, settingsView } from "@repo/settings/testing";
-import { agentTab, changesTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
+import { agentTab, fileTab, pageTab, subagentTab } from "@repo/ui/tab-strip-model";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
 import { flushSync } from "react-dom";
@@ -1044,19 +1045,26 @@ test("an agent's Pull request row is named as its tab is, by its pull request's 
     turnId: null,
   };
 
+  const plan = {
+    id: "plan-1",
+    workspaceId: "workspace-personal",
+    name: "Billing usage alerts",
+    createdAt: 1,
+    updatedAt: 2,
+    repository: null,
+  };
+
+  // The plan and its line for the agent's pull request, which its row is offered from, as the list followed live holds them.
+  listed = standingTaskList({
+    tasks: [plan],
+    taskPullRequests: [
+      { taskId: "plan-1", pullRequests: [taskLineOf(42, "acme/billing", agent.id)] },
+    ],
+  });
   openPalette(
     tasksControl({
       activeTaskId: "plan-1",
-      tasks: [
-        {
-          id: "plan-1",
-          workspaceId: "workspace-personal",
-          name: "Billing usage alerts",
-          createdAt: 1,
-          updatedAt: 2,
-          repository: null,
-        },
-      ],
+      tasks: [plan],
       agents: agentsControl({
         agents: [agent],
         agentIds: [agent.id],
@@ -1173,18 +1181,26 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
   const opened: string[] = [];
   const base = tasksControl();
 
+  const plan = {
+    id: DOCUMENT_TASK.id,
+    workspaceId: DOCUMENT_TASK.workspaceId,
+    name: DOCUMENT_TASK.name,
+    createdAt: 1,
+    updatedAt: 2,
+    repository: "acme/relay",
+  };
+
+  // The plan and its line for the agent's pull request, which its row is offered from, as the list followed live holds them.
+  listed = standingTaskList({
+    tasks: [plan],
+    taskPullRequests: [
+      { taskId: DOCUMENT_TASK.id, pullRequests: [taskLineOf(42, "acme/billing", agent.id)] },
+    ],
+  });
+
   const tasks = tasksControl({
     activeTaskId: DOCUMENT_TASK.id,
-    tasks: [
-      {
-        id: DOCUMENT_TASK.id,
-        workspaceId: DOCUMENT_TASK.workspaceId,
-        name: DOCUMENT_TASK.name,
-        createdAt: 1,
-        updatedAt: 2,
-        repository: "acme/relay",
-      },
-    ],
+    tasks: [plan],
     region: { kind: TASK_REGION.READY, task: { ...DOCUMENT_TASK, repository: "acme/relay" } },
     sidePanel: { ...base.sidePanel, onOpenFile: (ref) => opened.push(ref.path) },
     agents: agentsControl({
@@ -1240,6 +1256,20 @@ async function paletteOverPanel(inbox: { chosen: InboxChoice | undefined } | und
   if (rows().includes("accept.ts")) press("accept.ts");
 
   return { opened, pulls };
+}
+
+/** The plan's line for a pull request its agent opened, as the task list carries it. */
+function taskLineOf(number: number, repository: string, agentId: string): TaskPullRequestLine {
+  return {
+    number,
+    title: "Export invoices as CSV",
+    state: PULL_REQUEST_STATE.OPEN,
+    checks: CHECK_SUMMARY.PASSING,
+    additions: 120,
+    deletions: 8,
+    url: `https://github.com/${repository}/pull/${number}`,
+    agentId,
+  };
 }
 
 /** The Pull request row of the plan's agent, as `paletteOverPanel` finds it by its number. */
@@ -1717,7 +1747,7 @@ test("Search lists the pinned tasks first, the newest pinned first whenever each
   ]);
 });
 
-test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
+test("a task a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
   const dean = { userId: "user-dean", name: "Dean Stratakos" };
 
   // Note that each is started after the next, as the list the host hands lists them newest started first.
@@ -1739,7 +1769,6 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
       me: dean.userId,
       tasks: [
         task("Invite emails", 3, { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
-        task("Audit log export", 2, { actor: DESCRIPTION_ACTOR.NOTETAKER }),
         task("Rate limits", 1),
       ],
     }),
@@ -1753,12 +1782,8 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
         null,
     );
 
-  assert.deepEqual(rows(), [
-    "Invite emails · relay · by Agent",
-    "Audit log export · relay · by Vespin",
-    "Rate limits · relay",
-  ]);
-  assert.deepEqual(marks(), [null, null, null]);
+  assert.deepEqual(rows(), ["Invite emails · relay · by Agent", "Rate limits · relay"]);
+  assert.deepEqual(marks(), [null, null]);
   type("agent");
   assert.deepEqual(rows(), ["Invite emails · relay · by Agent"]);
 });
@@ -1786,10 +1811,10 @@ test("a command ⌘K alone offers, the sidebar's Show my tasks, is listed by its
   assert.deepEqual(ran, ["show my tasks"]);
 });
 
-/** Offers two commands whose only key is Esc, as Settings and the Inbox's item do while they stand, and records each run. */
+/** Offers two commands whose only key is Esc, as Settings and an agent's threads do while they stand, and records each run. */
 function OffersEscapes({ ran }: { ran: string[] }): null {
   useAppCommand(APP_COMMAND.EXIT_SETTINGS, () => ran.push("exit settings"));
-  useAppCommand(APP_COMMAND.INBOX_LIST, () => ran.push("back to inbox list"));
+  useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, () => ran.push("back to transcript"));
 
   return null;
 }
@@ -1803,8 +1828,8 @@ test("a command whose only key is Esc is no row in ⌘K, though it is still offe
   chooseFilter("Commands");
   type("exit settings");
   assert.equal(rows().includes("Exit settings"), false);
-  type("back to inbox list");
-  assert.equal(rows().includes("Back to inbox list"), false);
+  type("back to transcript");
+  assert.equal(rows().includes("Back to transcript"), false);
   assert.ok(appCommandOffered(APP_COMMAND.EXIT_SETTINGS), "Exit settings is still offered");
 });
 
@@ -1946,6 +1971,9 @@ function drawToasts(): void {
 
 const LINKED_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
+/** One of its workers' tab in the side panel, which a link names under the agent. */
+const LINKED_WORKER = subagentTab("call-1", { agent: LINKED_AGENT, task: "Read the logs" });
+
 /** A task drawn in Acme, its agent's tab chosen in the work column and the agent named. */
 const ON_AGENT_TAB: TasksControl = tasksControl({
   page: TASKS_PAGE.TASK,
@@ -2067,7 +2095,7 @@ test("with the side panel filling the window over an agent's tab, ⇧⌘C copies
         ...ON_AGENT_TAB.sidePanel,
         open: true,
         fullScreen: true,
-        tab: changesTab(LINKED_AGENT),
+        tab: LINKED_WORKER,
       },
     }),
   );
@@ -2077,7 +2105,9 @@ test("with the side panel filling the window over an agent's tab, ⇧⌘C copies
   });
   await act(async () => undefined);
 
-  assert.deepEqual(copied, [`https://vespin.dev/acme/agent/${LINKED_AGENT}/changes`]);
+  assert.deepEqual(copied, [
+    `https://vespin.dev/acme/agent/${LINKED_AGENT}/worker/${LINKED_WORKER.subagent}`,
+  ]);
 });
 
 test("⌘K pressed with the keyboard in the side panel offers its tab's link first, wearing ⇧⌘C, as ⇧⌘C there copies", () => {
@@ -2088,7 +2118,7 @@ test("⌘K pressed with the keyboard in the side panel offers its tab's link fir
   openPalette(
     tasksControl({
       ...ON_AGENT_TAB,
-      sidePanel: { ...ON_AGENT_TAB.sidePanel, open: true, tab: changesTab(LINKED_AGENT) },
+      sidePanel: { ...ON_AGENT_TAB.sidePanel, open: true, tab: LINKED_WORKER },
     }),
   );
   type("copy link");
@@ -2097,7 +2127,7 @@ test("⌘K pressed with the keyboard in the side panel offers its tab's link fir
   assert.deepEqual(
     rows().filter((row) => row.startsWith("Copy link to ")),
     [
-      "Copy link to pull request",
+      "Copy link to worker",
       "Copy link to agent · Expire old invites",
       `Copy link to task · ${DOCUMENT_TASK.name}`,
     ],

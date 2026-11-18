@@ -155,7 +155,6 @@ import { type TASKS_ACTS, TASKS_FOLLOWS } from "./contract/index.js";
 import { commentSubjectOf, descriptionCommentReads } from "./description-comment-reads.js";
 import { descriptionCommentWrites } from "./description-comment-writes.js";
 import { lateService } from "./effect/kernel.js";
-import { type EntityStore, KEPT_READ } from "./entity-store.js";
 import { fixturePage } from "./fixture-stage.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { heldFetch } from "./held-fetch.js";
@@ -171,7 +170,13 @@ import {
 } from "./kept-content.js";
 import { drawnAs } from "./list-moves.js";
 import { type HeldAnswers, heldSlice, rowWriteOn } from "./live-collection.js";
-import { confirmWrite, FOLLOW_BACKOFF, type TxWait } from "./live-follow.js";
+import {
+  confirmWrite,
+  FOLLOW_BACKOFF,
+  followTakingRows,
+  restarting,
+  type TxWait,
+} from "./live-follow.js";
 import { pushLive } from "./live-push.js";
 import {
   type ListDrawing,
@@ -430,8 +435,6 @@ export interface TasksDependencies {
   focus: WindowFocus;
   /** The sync engine's pool, which the task list's tasks and agents, and the comments' threads, stand in. */
   pool: EntityPool;
-  /** The signed-in account's lists kept on disk, which the gate opening draws before the service answers and each answer keeps; none where nothing keeps them. */
-  entities: () => EntityStore | undefined;
   /** The count of changes made offline the service refused as they were sent again, which a window clears once it has said so. */
   offlineRefused: Pick<OfflineRefused, "clear">;
   /** The member signed in, by id and name, whose comment a write draws before the service answers; none where nobody is. */
@@ -936,14 +939,18 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     };
   }
 
-  const decodeHistory = Schema.decodeUnknownOption(TASK_HISTORY_READ.rows);
   /** How to wait for a write's transaction on each task's held history, while its follow stands. */
   const historyTxWaits = new Map<string, TxWait>();
 
   /**
    * Follows `taskId`'s newest page of history live until let go, each page
    * laid over the older ones held (`withNewestPage`) and told through
-   * `answers`, and its wait for a write's transaction kept while it stands.
+   * `answers` before its transactions are carried on to a write waiting for
+   * them (`followTakingRows`), so a restore confirmed on the history finds
+   * its version already told, and its wait for a write's transaction kept
+   * while it stands. A follow that stops is followed again (`restarting`),
+   * and a task the service refuses for good is followed no longer, until
+   * every window lets it go and one holds it anew.
    */
   function followHistory(taskId: string, answers: HeldAnswers<DescriptionRevisionsAnswer>) {
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
@@ -951,26 +958,43 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     /** The wait this follow handed last, so letting it go takes back its own alone. */
     let handed: TxWait | undefined;
 
-    return pushLive({
-      seal: (poll, after) =>
-        gate() && userId !== undefined
-          ? sealedLive(TASK_HISTORY_READ, { id: taskId, userId }, poll, after)
-          : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true }),
-      decode: (rows) => Option.map(decodeHistory(rows), revisionsOfLiveRows),
-      publish: (page) =>
-        Effect.sync(() =>
-          page === undefined
-            ? answers.unanswered()
-            : answers.answered(withNewestPage(answers.rows(), page)),
-        ),
-      // Note that a follow let go takes back only the wait it handed, since a retry's follow may have handed its own first.
-      onTxWait: (wait) => {
-        if (wait !== undefined) {
-          handed = wait;
-          historyTxWaits.set(taskId, wait);
-        } else if (historyTxWaits.get(taskId) === handed) historyTxWaits.delete(taskId);
-      },
+    const seal = (poll: boolean, after?: string) =>
+      gate() && userId !== undefined
+        ? sealedLive(TASK_HISTORY_READ, { id: taskId, userId }, poll, after)
+        : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true });
+
+    const attempt = Effect.gen(function* () {
+      const first = yield* seal(false);
+
+      if ("failure" in first) {
+        answers.unanswered();
+
+        return first.gone !== true;
+      }
+
+      yield* followTakingRows(
+        {
+          poll: (after) => seal(true, after),
+          // Note that a follow let go takes back only the wait it handed, since a retry's follow may have handed its own first.
+          onTxWait: (wait) => {
+            if (wait !== undefined) {
+              handed = wait;
+              historyTxWaits.set(taskId, wait);
+            } else if (historyTxWaits.get(taskId) === handed) historyTxWaits.delete(taskId);
+          },
+        },
+        first,
+        TASK_HISTORY_READ.rows,
+        (rows) =>
+          Effect.sync(() =>
+            answers.answered(withNewestPage(answers.rows(), revisionsOfLiveRows(rows))),
+          ),
+      ).pipe(Effect.ignore);
+
+      return true;
     });
+
+    return restarting(attempt);
   }
 
   /**
@@ -1558,9 +1582,20 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             live: HOST_LIVE.LIVE,
             ...(taskWorkspaces === undefined ? undefined : { taskWorkspaces }),
           };
-          const entities = dependencies.entities();
           const { collections } = taskList;
-          const moved = yield* collections.answer(rows, standing, liveSince);
+
+          // Note that only an answer read at a sync id keeps where it stands, since the follow reads past it at the next launch.
+          const kept =
+            standing === undefined
+              ? undefined
+              : {
+                  at: standing.next,
+                  ...(view.taskWorkspaces === undefined
+                    ? undefined
+                    : { taskWorkspaces: view.taskWorkspaces }),
+                };
+
+          yield* collections.answer(rows, standing, liveSince, kept);
           const waiting = [...coldWaiting];
           coldWaiting.clear();
           yield* Effect.forEach(waiting, openedOutside, { discard: true });
@@ -1573,21 +1608,6 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           if (inboxWaiting) yield* FiberHandle.run(inboxReads, readInboxTasks);
           // Note that an answer the list did not draw tells its standing here, as after a poll that failed, and one it drew told it already.
           publish();
-
-          // Note that only an answer read at a sync id is kept, since the follow reads past it at the next launch, and one that moved no row is written only beside the next that did, or as the store closes.
-          if (entities !== undefined && standing !== undefined) {
-            const kept = {
-              rows: collections.synced(),
-              at: standing.next,
-              ...(view.taskWorkspaces === undefined
-                ? undefined
-                : { taskWorkspaces: view.taskWorkspaces }),
-            };
-
-            yield* moved
-              ? entities.keep(KEPT_READ.TASK_LIST, kept)
-              : entities.keepUnmoved(KEPT_READ.TASK_LIST, kept);
-          }
 
           yield* resendQueued;
         }),
@@ -1641,7 +1661,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
   let sidebar = yield* openSidebar;
   yield* Effect.addFinalizer(() => Scope.close(sidebar.scope, Exit.void));
-  /** Whether the sidebar's follow has answered since its collections opened, after which nothing kept on disk is drawn over it. */
+  /** Whether the sidebar's follow has answered since its collections opened, after which they stand on the local database already. */
   let sidebarAnswered = false;
 
   /**
@@ -1689,10 +1709,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         (rows) =>
           Effect.andThen(
             sidebar.collections.answer(rows),
-            Effect.suspend(() => {
+            Effect.sync(() => {
               sidebarAnswered = true;
-
-              return dependencies.entities()?.keep(KEPT_READ.SIDEBAR, rows) ?? Effect.void;
             }),
           ),
       ).pipe(Effect.ignore);
@@ -1712,34 +1730,35 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   });
 
   /**
-   * The account's lists as the entity store kept them, drawn as the service
-   * last answered them before any follow does, each only where nothing has
-   * answered it since: the task list, which its next follow reads past the
-   * sync id it was kept at, and the sidebar.
+   * The account's task list and sidebar stood again on the local database
+   * the gate just opened, since they first stood before it was, each only
+   * where nothing has answered it since, and drawn as the service last
+   * answered them before any follow does, as Linear's local bootstrap draws
+   * before it catches up. The list's next follow reads past the sync id it
+   * was kept at.
    */
-  const drawnFromDisk = Effect.gen(function* () {
-    const entities = dependencies.entities();
+  const standOnLocal = Effect.gen(function* () {
+    if (view.listStatus !== TASKS_READ.READY) {
+      yield* Scope.close(taskList.scope, Exit.void);
+      taskList = yield* openTaskList;
+      const stored = taskList.collections.stored();
 
-    if (entities === undefined) return;
-    const list = entities.stored(KEPT_READ.TASK_LIST);
-
-    if (list !== undefined && view.listStatus !== TASKS_READ.READY) {
-      listKeptAt = list.at;
-      // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands.
-      view = {
-        ...view,
-        listStatus: TASKS_READ.READY,
-        ...(list.taskWorkspaces === undefined
-          ? undefined
-          : { taskWorkspaces: list.taskWorkspaces }),
-      };
-      yield* taskList.collections.answer(list.rows, { past: undefined, next: list.at, gone: [] });
+      if (stored !== undefined) {
+        const { kept } = stored;
+        listKeptAt = kept?.at;
+        // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands.
+        write({
+          listStatus: TASKS_READ.READY,
+          ...(kept?.taskWorkspaces === undefined
+            ? undefined
+            : { taskWorkspaces: kept.taskWorkspaces }),
+        });
+      }
     }
 
-    const sidebarRows = entities.stored(KEPT_READ.SIDEBAR);
-
-    if (sidebarRows !== undefined && !sidebarAnswered) {
-      yield* sidebar.collections.answer(sidebarRows);
+    if (!sidebarAnswered) {
+      yield* Scope.close(sidebar.scope, Exit.void);
+      sidebar = yield* openSidebar;
     }
   });
 
@@ -3029,7 +3048,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         })),
     }),
     // The task the service answered is drawn in place, so the edit stands on
-    // its description at once and the notetaker's drafts drawn before it drop. It
+    // its description at once and the agents' drafts drawn before it drop. It
     // stands until the task's record and the list carry its transaction,
     // which is waited for behind the answer.
     TASKS_EDIT: ({ taskId, edit }) =>
@@ -3164,7 +3183,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* documents.open;
 
       if (!gate()) return;
-      yield* drawnFromDisk;
+      yield* standOnLocal;
       yield* followAccount;
     }),
     listed,

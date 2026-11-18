@@ -170,9 +170,8 @@ or to `MAX_VIDEO_BYTES` for a WebM an agent recorded
 (`packages/database/src/models/description-attachments.ts`), gated by the same
 `taskReachableBy`. `POST /api/tasks/<id>/attachments { picture }` keeps one, a
 `data:` URL of a PNG, JPEG, WebP, or WebM whose bytes sniff as its label, on a task
-that is not archived and whose description holds fewer than `MAX_PER_DESCRIPTION`, and, for a WebM,
-fewer than `MAX_VIDEOS_PER_DESCRIPTION` videos, answering `{ id }`
-or `{ refused: "too-many" }` or `{ refused: "too-many-videos" }`; `GET /api/tasks/<id>/attachments/<picture>`
+that is not archived and whose description holds fewer than `MAX_PER_DESCRIPTION`, answering `{ id }`
+or `{ refused: "too-many" }`; `GET /api/tasks/<id>/attachments/<picture>`
 serves the bytes under their sniffed type, `nosniff` and `private, no-store`,
 to a member alone, anyone else reading `not-found`. The description's text names a
 picture by its address (`@repo/features/description-attachment-link`); a picture
@@ -352,8 +351,10 @@ bundle as `index.mjs` beside a `.vc-config.json` that names it as `handler`
 under the Node launcher with `shouldAddHelpers`, the fields Vercel's own Node
 builder writes (`packages/node/src/build.ts`), and the plan's `maxDuration`.
 A queue's consumer, the automation-runs consumer
-(`routes/automations/runs.ts`) or the agent-turns consumer
-(`routes/agents/turns.ts`), is a function of its own whose
+(`routes/automations/runs.ts`), the agent-turns consumer
+(`routes/agents/turns.ts`), or the usage queues' sandbox-usage-checks and
+usage-sends consumers (`routes/billing/sandbox-usage-checks.ts`,
+`routes/billing/usage-sends.ts`), is a function of its own whose
 `.vc-config.json` also carries the `queue/v2beta` trigger Vercel's builder
 writes for one (its topic, and its consumer group named from its path as
 the builder names one), since a tree deployed as it stands

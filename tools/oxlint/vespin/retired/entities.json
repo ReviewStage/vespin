@@ -12,8 +12,7 @@
       "baseline": {
         "packages/panel/src/settings/mcp-clients-section.tsx": 1,
         "packages/panel/src/settings/pages.tsx": 1,
-        "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1,
-        "packages/ui/src/components/landing/landing-scenes.tsx": 1
+        "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1
       }
     },
     {
@@ -51,7 +50,6 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/tasks/inbox-item-chip.tsx": 1,
         "packages/panel/src/tasks/inbox-item-parts.tsx": 1
       }
     },
@@ -109,8 +107,8 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/settings/memory-page.tsx": 1,
-        "packages/panel/src/settings/pages.tsx": 1
+        "packages/panel/src/settings/pages.tsx": 1,
+        "packages/panel/src/settings/people-filter.tsx": 1
       }
     },
     {
@@ -136,20 +134,13 @@
       }
     },
     {
-      "glyph": "Bot",
+      "glyph": "HardHat",
       "allow": [
         "packages/panel/src/entities/",
         "packages/ui/src/icons/",
         "apps/catalog/",
         "packages/ui/src/marks/"
-      ],
-      "baseline": {
-        "packages/panel/src/actor-ref.tsx": 1,
-        "packages/panel/src/desktop/automations-page.tsx": 1,
-        "packages/panel/src/desktop/tasks-page-options.tsx": 1,
-        "packages/panel/src/tasks/agent-tab.tsx": 1,
-        "packages/panel/src/tasks/inbox-pane.tsx": 1
-      }
+      ]
     },
     {
       "glyph": "Zap",

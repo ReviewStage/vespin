@@ -5,12 +5,15 @@ import {
   LANDING_SCENE,
   LandingBackedBy,
   LandingFacts,
+  LandingMore,
   LandingPage,
   LandingSection,
   LostPage,
   ScrollArea,
   SiteBarPages,
   SiteFootLinks,
+  TerminalIcon,
+  WaveformIcon,
 } from "@repo/ui";
 import codexOneX from "../../../../packages/panel/marks/codex-16.png";
 import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
@@ -64,8 +67,8 @@ function Landing(): React.JSX.Element {
     <LandingPage
       bar={<Bar />}
       badge={<LandingBackedBy href="https://www.ycombinator.com/companies" />}
-      title="An inbox for all your coding agents."
-      lead="Agents work in cloud sandboxes, open pull requests, and post to your Inbox when they need you."
+      title="The unified workspace for teams and agents."
+      lead="Designed to keep every task moving, day and night."
       actions={<Button variant={BUTTON_VARIANT.PRIMARY}>Download for macOS</Button>}
       close={{
         title: "Free and open source.",
@@ -80,7 +83,7 @@ function Landing(): React.JSX.Element {
         scene={LANDING_SCENE.INBOX}
       />
       <LandingSection
-        title="Bring your own keys."
+        title="Bring your own subscriptions and keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         scene={LANDING_SCENE.KEYS}
         codexArt={{ oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX }}
@@ -98,6 +101,23 @@ function Landing(): React.JSX.Element {
             ]}
           />
         }
+      />
+      <LandingMore
+        title="And much more."
+        items={[
+          {
+            id: "voice",
+            icon: <WaveformIcon />,
+            title: "Voice mode",
+            words: "Call an agent and talk a task through out loud.",
+          },
+          {
+            id: "cli",
+            icon: <TerminalIcon />,
+            title: "MCP and CLI",
+            words: "Work from Claude Code, Codex, Cursor, or your terminal.",
+          },
+        ]}
       />
     </LandingPage>
   );

@@ -18,9 +18,14 @@
  * the one row it hides only costs a click.
  * A message that reached a turn while it ran, a steer from whoever sent
  * it, stands where it arrived: it ends the group before it.
+ * A finished turn a call's delegation opened is the one exception: its
+ * words fold with its work, under a line that says a written reply is
+ * there, since the reader of a settled call wants what was said aloud
+ * (Dean, Nov 17).
  */
 
 import { Predicate } from "effect";
+import type { IntegrationProvider } from "./integration-wire.js";
 import { COMPUTER_ACTION, type ComputerAction } from "./machine-command-wire.js";
 import { countWords } from "./words.js";
 
@@ -72,6 +77,8 @@ export const CALL_KIND = {
   UNARCHIVE_AGENT: "unarchive-agent",
   /** A list of the models a coding agent may be started on (`list_models`). */
   LIST_MODELS: "list-models",
+  /** A list of the machines an agent may run on and reach (`list_machines`). */
+  LIST_MACHINES: "list-machines",
   STOP_AGENT: "stop-agent",
   /** The ports a server listens on in a coding agent's own sandbox listed (`list_ports`). */
   LIST_PORTS: "list-ports",
@@ -111,12 +118,22 @@ export const CALL_KIND = {
   CREATE_TASK: "create-task",
   SHOW_PAGE: "show-page",
   READ_PAGE: "read-page",
-  /** Pictures a coding agent showed from its sandbox (`show_image`), drawn as a row only where the call was refused; a shown set draws as its pictures. */
+  /** Pictures a coding agent showed from its sandbox (`show_media`), drawn as a row only where the call was refused; a shown set draws as its pictures. */
   SHOW_IMAGE: "show-image",
   /** A pull request a coding agent opened (`open_pull_request`), its row naming it by its number and title, which opens its Pull request tab; a refusal folds open its reason instead. */
   OPEN_PULL_REQUEST: "open-pull-request",
   /** A pause a coding agent took (`sleep`) before it checked again on what takes time, its row naming how long. */
   SLEEP: "sleep",
+  /** One message a coding agent sent in its Slack thread (`send_slack_message`), its row saying the words. */
+  SLACK_MESSAGE: "slack-message",
+  /** The Slack channels the bot is in, which a coding agent listed (`list_slack_channels`). */
+  SLACK_CHANNELS: "slack-channels",
+  /** The members of the workspace a coding agent listed (`list_workspace_members`). */
+  WORKSPACE_MEMBERS: "workspace-members",
+  /** A Slack channel's or thread's messages a coding agent read (`read_slack`). */
+  SLACK_READ: "slack-read",
+  /** A reaction a coding agent added to a Slack message or took off it (`react_slack`), its row naming the emoji. */
+  SLACK_REACT: "slack-react",
   /** A wakeup a coding agent booked for later (`schedule_wakeup`), its row naming how long until it fires. */
   SCHEDULE_WAKEUP: "schedule-wakeup",
   /** The wakeup a coding agent booked canceled (`schedule_wakeup` with `stop`). */
@@ -182,11 +199,17 @@ export const CALL_WORDS = {
   [CALL_KIND.LIST_AGENTS]: { verb: "Listed the agents", code: false },
   [CALL_KIND.READ_AGENT]: { verb: "Read the agent", code: false },
   [CALL_KIND.MESSAGE_AGENT]: { verb: "Messaged the agent", code: false },
+  [CALL_KIND.SLACK_MESSAGE]: { verb: "Sent on Slack:", code: false },
+  [CALL_KIND.SLACK_CHANNELS]: { verb: "Listed the Slack channels", code: false },
+  [CALL_KIND.WORKSPACE_MEMBERS]: { verb: "Listed the members", code: false },
+  [CALL_KIND.SLACK_READ]: { verb: "Read Slack", code: false },
+  [CALL_KIND.SLACK_REACT]: { verb: "Reacted on Slack:", code: false },
   [CALL_KIND.START_AGENT]: { verb: "Started an agent", code: false },
   [CALL_KIND.ADD_SUGGESTION]: { verb: "Suggested:", code: false },
   [CALL_KIND.ARCHIVE_AGENT]: { verb: "Archived the agent", code: false },
   [CALL_KIND.UNARCHIVE_AGENT]: { verb: "Unarchived the agent", code: false },
   [CALL_KIND.LIST_MODELS]: { verb: "Listed the models", code: false },
+  [CALL_KIND.LIST_MACHINES]: { verb: "Listed the machines", code: false },
   [CALL_KIND.STOP_AGENT]: { verb: "Stopped the agent", code: false },
   [CALL_KIND.LIST_PORTS]: { verb: "Listed the ports", code: false },
   [CALL_KIND.SHARE_PORT]: { verb: "Shared port", code: true },
@@ -401,20 +424,62 @@ export function madeCallLine(kind: MadeCallKind): CallLine {
   return { verb: MADE_CALL_WORDS[kind], subject: undefined, code: false };
 }
 
+/**
+ * How the line of a search of a server's tools reads where the server's chip
+ * follows its verb: "Searched", then "tools for" and the query in quotes,
+ * so the row reads "Searched" then the server's chip then "tools for “send
+ * message”"; "tools" alone for a search that named no query.
+ */
+export function searchToolsLine(query: string | undefined): CallLine {
+  const subject = query === undefined || query === "" ? "tools" : `tools for “${query}”`;
+
+  return { verb: "Searched", subject, code: false };
+}
+
 /** Whether a call is a shell command, wherever it ran: its line may say its description, and its body draws it behind a prompt. */
 export function isCommandKind(kind: CallKind): boolean {
   return kind === CALL_KIND.COMMAND || kind === CALL_KIND.MACHINE_COMMAND;
 }
 
 /**
+ * Whether a call's reader leads its row with the mark of the integration it
+ * ran on: the panel and the iPhone do, so the mark already says the
+ * provider; a copy carries no mark, so its words must say it.
+ */
+export const CALL_MARK = {
+  LEADS: "leads",
+  NONE: "none",
+} as const;
+
+export type CallMark = (typeof CALL_MARK)[keyof typeof CALL_MARK];
+
+/** What says where a call ran: its kind, and for a call of an MCP server's tool, the server, the integration it is, and the account among several it ran on (`ToolCallView`). */
+export interface PlacedCall {
+  readonly kind: CallKind;
+  readonly server?: string | undefined;
+  readonly provider?: IntegrationProvider | undefined;
+  readonly account?: string | undefined;
+}
+
+/**
  * Where a call ran, as its row says beside its line, or nothing for a call
  * that ran where its tab says. A command on a Mac ran on the Mac of the
- * agent's starter, whom a row that knows them draws in these words' place;
- * a call of an MCP server's tool ran on the server it names. A browser call
+ * agent's starter, whom a row that knows them draws in these words' place.
+ * A call of an MCP server's tool, or a search of its tools, says only what
+ * its row's mark does not: under the mark, the account among its owner's
+ * several ("Acme"), a server of no integration's by its name, and nothing
+ * for an integration's lone account; with no mark, the server as its card
+ * names it, which says the account too ("Linear · Acme"). A browser call
  * says none, since its icon and its words already say the browser.
  */
-export function callPlace(kind: CallKind, server?: string): string | undefined {
-  if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
+export function callPlace(call: PlacedCall, mark: CallMark): string | undefined {
+  const { kind, server, provider, account } = call;
+
+  if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) {
+    if (mark === CALL_MARK.NONE || provider === undefined) return server;
+
+    return account;
+  }
 
   return kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER
     ? ON_YOUR_MAC
@@ -434,8 +499,8 @@ export interface CallLine {
  * place, as Claude Code and Cursor name a command, and the command's first
  * line after them as its preview, the whole of it in the row's body; or,
  * for a browser call, what it did (`browserCallWords`) before the tab's
- * title, which is words; or, for a pull request that was refused, that it
- * opened none, before the title it asked for.
+ * title, which is words; or, for a pull request or a Slack message that
+ * was refused, that it opened or sent none, before what it asked for.
  */
 export function callLine(
   kind: CallKind,
@@ -449,7 +514,8 @@ export function callLine(
   if (
     kind === CALL_KIND.BROWSER ||
     kind === CALL_KIND.COMPUTER ||
-    kind === CALL_KIND.OPEN_PULL_REQUEST
+    kind === CALL_KIND.OPEN_PULL_REQUEST ||
+    kind === CALL_KIND.SLACK_MESSAGE
   ) {
     return { verb: description, subject, code: false };
   }
@@ -524,7 +590,7 @@ export const ROW_PART = {
   WORDS: "words",
   /** A call, which runs together with the calls beside it, and which a group counts. */
   CALL: "call",
-  /** A call that stands on a row of its own, as an agent's to-do list does. */
+  /** A call that stands on a row of its own, as a set of pictures an agent showed does. */
   LONE_CALL: "lone-call",
   /** A subagent, which runs together with the calls beside it, and which a group counts apart from the calls. */
   SUBAGENT: "subagent",
@@ -636,18 +702,24 @@ interface Held {
   readonly calls: number;
   readonly subagents: number;
   readonly startedAgents: number;
+  /** The model's words folded with the work, which only a delegated turn's run holds. */
+  readonly words: number;
 }
 
-/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished. */
-function groupSummary({ calls, subagents, startedAgents }: Held): string {
+/** What a group's line says of the words it folds: the reply written beside the voice's. */
+const WRITTEN_REPLY = "written reply";
+
+/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished, and last a delegated turn's written reply. */
+function groupSummary({ calls, subagents, startedAgents, words }: Held): string {
   const tools = calls + startedAgents;
 
   const said = [
     ...(tools > 0 ? [countWords(tools, { one: "tool call", many: "tool calls" })] : []),
     ...(subagents > 0 ? [countWords(subagents, { one: "subagent", many: "subagents" })] : []),
-  ];
+    ...(words > 0 ? [WRITTEN_REPLY] : []),
+  ].join(", ");
 
-  return said.join(", ");
+  return `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
 }
 
 /** Whether a block is work a group gathers: a call, a subagent, or a start of an agent. */
@@ -673,7 +745,9 @@ interface Keyed<B> {
  * latest work on a turn that moves. A run of thoughts with no work in it
  * stands as its rows. A run of one call or subagent is its own row, unless
  * it is that latest work, which is drawn as a group so the work after it
- * joins it rather than redraw it.
+ * joins it rather than redraw it. A finished turn a call's delegation opened
+ * folds its words with its work too, a run holding words always a group, so only
+ * what stands on rows of its own is left open beside the voice's lines.
  */
 export function turnRows<B>(
   blocks: readonly B[],
@@ -681,10 +755,13 @@ export function turnRows<B>(
   turn: {
     /** Whether the turn still moves, which keeps its latest group open. */
     readonly moving: boolean;
+    /** Whether a call's delegation opened it (`voice-call-lines.ts`'s `delegatedTurnsOf`), which folds its words once it has finished. */
+    readonly delegated?: boolean;
   },
 ): readonly TurnRow<B>[] {
   const rows: TurnRow<B>[] = [];
   let group: Keyed<B>[] = [];
+  const foldsWords = turn.delegated === true && !turn.moving;
 
   const flush = (trailing: boolean) => {
     const held = counted(group, read);
@@ -694,7 +771,7 @@ export function turnRows<B>(
     if (first === undefined) return;
     const open = trailing && turn.moving;
 
-    if (work > 0 && (group.length > 1 || open)) {
+    if (held.words > 0 || (work > 0 && (group.length > 1 || open))) {
       rows.push({
         kind: TURN_ROW.GROUP,
         key: first.key,
@@ -715,7 +792,9 @@ export function turnRows<B>(
   for (const [index, block] of blocks.entries()) {
     const each = { key: read.key(block, index), block };
 
-    if (runsWithCalls(read.part(block))) {
+    const part = read.part(block);
+
+    if (runsWithCalls(part) || (foldsWords && part === ROW_PART.WORDS)) {
       group.push(each);
       continue;
     }
@@ -734,6 +813,7 @@ function counted<B>(blocks: readonly Keyed<B>[], read: RowReading<B>): Held {
   let calls = 0;
   let subagents = 0;
   let startedAgents = 0;
+  let words = 0;
 
   for (const { block } of blocks) {
     const part = read.part(block);
@@ -743,7 +823,9 @@ function counted<B>(blocks: readonly Keyed<B>[], read: RowReading<B>): Held {
     if (part === ROW_PART.SUBAGENT) subagents += 1;
 
     if (part === ROW_PART.AGENT) startedAgents += 1;
+
+    if (part === ROW_PART.WORDS) words += 1;
   }
 
-  return { calls, subagents, startedAgents };
+  return { calls, subagents, startedAgents, words };
 }

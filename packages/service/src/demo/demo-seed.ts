@@ -557,6 +557,7 @@ function toolCallOf(call: DemoCall, seeded: SeedWritten): DemoToolCall {
       name: AGENT_TOOL.CREATE_TASK,
       input: {
         name: task.name,
+        status: task.settledAgo === undefined ? task.status : TASK_STATUS.TODO,
         priority: task.priority,
         ...(task.parent === undefined ? undefined : { parentTaskId: task.parent.id }),
       },

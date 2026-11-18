@@ -27,6 +27,10 @@ export const FAILURE_REASON = {
   CONNECT_AGENTS: "connect-agents",
   /** The agent's own machine is offline: the agent continued in the cloud carries the message on. */
   CONTINUE_IN_CLOUD: "continue-in-cloud",
+  /** The task's workspace is past the month's included cloud usage with no billing: Stripe's Checkout sets it up, for an owner or admin. */
+  SET_UP_BILLING: "set-up-billing",
+  /** The task's workspace is blocked by an invoice given up on: Stripe's Customer Portal updates its card, for an owner or admin. */
+  MANAGE_BILLING: "manage-billing",
   OTHER: "other",
 } as const;
 
@@ -35,11 +39,13 @@ export type FailureReason = (typeof FAILURE_REASON)[keyof typeof FAILURE_REASON]
 /** What a press that continues an agent in the cloud, off its machine gone offline, says. */
 export const CONTINUE_IN_CLOUD_LABEL = "Continue in the cloud";
 
-/** The remedies that mend a task's repository in the task's own place, and so name the task. */
+/** The remedies that mend a task's repository, or its workspace's billing, in the task's own place, and so name the task. */
 type TaskRemedyReason =
   | typeof FAILURE_REASON.CONNECT_GITHUB
   | typeof FAILURE_REASON.RECONNECT_GITHUB
-  | typeof FAILURE_REASON.CHOOSE_REPOSITORY;
+  | typeof FAILURE_REASON.CHOOSE_REPOSITORY
+  | typeof FAILURE_REASON.SET_UP_BILLING
+  | typeof FAILURE_REASON.MANAGE_BILLING;
 
 export type Failure =
   | { readonly reason: TaskRemedyReason; readonly text: string; readonly taskId: string }
@@ -116,6 +122,10 @@ export function remedyLabel(failure: Failure): string | undefined {
       return connectLabel(failure.provider);
     case FAILURE_REASON.CONTINUE_IN_CLOUD:
       return CONTINUE_IN_CLOUD_LABEL;
+    case FAILURE_REASON.SET_UP_BILLING:
+      return "Set up billing";
+    case FAILURE_REASON.MANAGE_BILLING:
+      return "Manage billing";
     case FAILURE_REASON.OTHER:
       return undefined;
   }
@@ -123,8 +133,8 @@ export function remedyLabel(failure: Failure): string | undefined {
 
 /**
  * Whether Retry stands beside the remedy: a remedy finished somewhere we
- * cannot watch, on GitHub or in Settings, leaves the same send to be made
- * again once it is done.
+ * cannot watch, on GitHub, in Settings, or on Stripe's pages, leaves the
+ * same send to be made again once it is done.
  */
 export function retriesBesideRemedy(failure: Failure): boolean {
   return (
@@ -134,6 +144,8 @@ export function retriesBesideRemedy(failure: Failure): boolean {
     failure.reason === FAILURE_REASON.GITHUB_TOKEN ||
     failure.reason === FAILURE_REASON.AUTHORIZE_TOKEN ||
     failure.reason === FAILURE_REASON.CONNECT_AGENTS ||
-    failure.reason === FAILURE_REASON.CONTINUE_IN_CLOUD
+    failure.reason === FAILURE_REASON.CONTINUE_IN_CLOUD ||
+    failure.reason === FAILURE_REASON.SET_UP_BILLING ||
+    failure.reason === FAILURE_REASON.MANAGE_BILLING
   );
 }

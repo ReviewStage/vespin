@@ -1,5 +1,5 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { NO_REPOSITORY, repositoryLabel, repositoryParts } from "@repo/features/task-list-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -31,10 +31,7 @@ import {
   useMenu,
 } from "@repo/ui";
 import {
-  ACTOR_KIND,
-  ACTOR_STATE,
   type Actor,
-  APP_ACTOR,
   actorName,
   creatorActor,
   DELETED_ACCOUNT_ACTOR,
@@ -43,7 +40,6 @@ import {
 } from "@repo/ui/actor-model";
 import {
   ArrowDownAZIcon,
-  BotIcon,
   CalendarPlusIcon,
   CircleCheckIcon,
   ClockIcon,
@@ -56,6 +52,7 @@ import {
   SlidersHorizontalIcon,
   UserCheckIcon,
   UserIcon,
+  UserPenIcon,
 } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import {
@@ -89,6 +86,7 @@ import type { Store } from "@tanstack/react-store";
 import { Fragment, type ReactNode, type RefObject, useMemo, useRef } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { memberReadNote, memberRows } from "../member-rows.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
@@ -161,7 +159,7 @@ const FIELD_ICON = {
   [TASKS_FILTER_FIELD.PRIORITY]: <SignalHighIcon />,
   [TASKS_FILTER_FIELD.ASSIGNEE]: <UserCheckIcon />,
   [TASKS_FILTER_FIELD.CREATOR]: <UserIcon />,
-  [TASKS_FILTER_FIELD.MADE_BY]: <BotIcon />,
+  [TASKS_FILTER_FIELD.MADE_BY]: <UserPenIcon />,
   [TASKS_FILTER_FIELD.REPOSITORY]: <GLYPH.REPOSITORY />,
 } as const satisfies Record<TasksFilterField, React.JSX.Element>;
 
@@ -174,26 +172,20 @@ const COMPLETED_WORDS = {
 } as const satisfies Record<CompletedWindow, string>;
 
 /**
- * What each maker is called in Made by, and the mark it wears there: a
- * person's glyph, a coding agent's square on no harness, and the app's face.
- * Note that an agent an automation's run started makes its tasks as an
- * agent, which the task names by the automation, so Agents says both.
+ * What each maker is called in Made by. Note that an agent an automation's
+ * run started makes its tasks as an agent, which the task names by the
+ * automation, so Agents says both.
  */
 const MAKER_WORDS = {
   [TASK_MAKER.PERSON]: "People",
   [TASK_MAKER.AGENT]: "Agents and automations",
-  [TASK_MAKER.APP]: PRODUCT_NAME,
 } as const satisfies Record<TaskMaker, string>;
 
-const MAKER_ACTOR = {
-  [TASK_MAKER.AGENT]: {
-    kind: ACTOR_KIND.AGENT,
-    name: MAKER_WORDS[TASK_MAKER.AGENT],
-    provider: undefined,
-    state: ACTOR_STATE.REST,
-  },
-  [TASK_MAKER.APP]: APP_ACTOR,
-} as const satisfies Record<Exclude<TaskMaker, typeof TASK_MAKER.PERSON>, Actor>;
+/** The glyph each maker wears in Made by, drawn at the size of every other row's glyph in the menu. */
+const MAKER_ICON = {
+  [TASK_MAKER.PERSON]: <UserIcon />,
+  [TASK_MAKER.AGENT]: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
+} as const satisfies Record<TaskMaker, React.JSX.Element>;
 
 /** What a grouping is called. */
 const GROUPING_WORDS = {
@@ -419,12 +411,7 @@ function fieldValues(
       return TASK_MAKER_ORDER.map((maker) => ({
         value: maker,
         words: MAKER_WORDS[maker],
-        icon:
-          maker === TASK_MAKER.PERSON ? (
-            <UserIcon />
-          ) : (
-            <ActorMark actor={MAKER_ACTOR[maker]} size={ACTOR_SIZE.INLINE} />
-          ),
+        icon: MAKER_ICON[maker],
       }));
     case TASKS_FILTER_FIELD.REPOSITORY:
       return [

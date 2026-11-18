@@ -2,6 +2,7 @@ import { searchAnchorProps } from "@repo/settings/settings-anchors";
 import { type ReactNode, useId, useRef } from "react";
 import { said } from "../../said.js";
 import { CARD_CORNER, CARD_PADDING, Card } from "../card/card.js";
+import { motionFrame } from "../list-motion/list-motion.js";
 import { RevealArea, revealArea } from "../reveal/reveal.js";
 import { SettingsRow, SettingsRowValue } from "../settings-row/settings-row.js";
 import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
@@ -335,6 +336,7 @@ function SectionFrame({
             padding={CARD_PADDING.NONE}
             className="ui-settings-section-card flex min-w-0 flex-col"
             {...revealArea()}
+            {...motionFrame()}
           >
             {children}
           </Card>

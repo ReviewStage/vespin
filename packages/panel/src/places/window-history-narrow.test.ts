@@ -28,7 +28,8 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { deliveryOf, handState, stateWith, withExperiments } from "../testing/app-state.js";
+import { deliveryOf, handState, stateWith, writeExperiments } from "../testing/app-state.js";
+import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { standingTaskList } from "../testing/history-rows.js";
 import { tasksControl } from "../testing/tasks-control.js";
@@ -148,18 +149,11 @@ function tasksTab(
       strip: at.panel.tab === undefined ? [] : [at.panel.tab],
       onClose: () => panel({ open: false, tab: undefined }),
     },
-    // As the real one does, a panel filling the window is the nearer layer than the task.
-    back: () => {
-      if (at.panel.open) shut();
-
-      return true;
-    },
-    // As the real one does, an agent's page opens and leaves by the router.
+    // As the real one does, an agent's page opens by the router.
     agentView: {
       ...base.agentView,
       agentId: agent.agentId,
       onOpen: (agentId) => agent.onOpen(agentId, ACME.slug),
-      onClose: agent.onClose,
     },
     // As the real doors do, the Inbox opens by the router, narrowed to the task named or to none.
     onShowInbox: ({ taskId }) => inbox.onOpen(inboxAt(taskId)),
@@ -193,9 +187,20 @@ interface WaysBack {
 
 const roots: Root[] = [];
 
+/** What the document a window is mounted on lays over its slices, beside its experiments; nothing but in a case that turns a setting. */
+let documentPatch: Parameters<typeof stateWith>[1] = {};
+
+/** `element` on the test's Query client, its document holding Task descriptions on and `documentPatch` from the first frame. */
+function documented(element: React.ReactNode): React.ReactElement {
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), documentPatch);
+
+  return withQueryClient(element);
+}
+
 beforeEach(() => {
   fakeAppPlatform(QUIET_PANEL);
   handState({}, { access: { admin: true } });
+  documentPatch = {};
 });
 
 /** Takes down every window mounted so far, since a window's history is the one its root installed last. */
@@ -242,7 +247,6 @@ function mount(
     settings = useSettingsRoute({
       workspaces: [ACME],
       listedId: ACME.id,
-      narrow: room === SHELL_ROOM.NARROW,
     });
     admin = useAdminRoute({ listedSlug: () => ACME.slug });
     automations = useAutomationsRoute({
@@ -350,8 +354,7 @@ function mount(
   act(() =>
     root.render(
       held.provide(
-        withExperiments(
-          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+        documented(
           standingTaskList({ tasks: LISTED_TASKS, taskAgents: undefined }).provide(
             createElement(Probe),
           ),
@@ -396,12 +399,8 @@ function mount(
           inbox.onClose();
         restand?.(to);
       }),
-    /** Presses through the shell, as a press of the pointer lands before the door it opens. */
-    press: (press: () => void) =>
-      act(() => {
-        window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-        press();
-      }),
+    /** Presses through the shell, as a door's press does. */
+    press: (press: () => void) => act(press),
     /** The address of every entry the router's history holds, oldest first, and the one standing. */
     addresses: () => held.addresses(),
     standingAddress: () => held.history.location.href,
@@ -453,6 +452,19 @@ test("on a narrow stage the window has no Home: standing there, it stands on the
 
   const wide = mount(SHELL_ROOM.WIDE, { ...ON_TASK, home: true });
   assert.equal(wide.at().inbox.open, false, "Home stands");
+});
+
+test("on a narrow stage an account that turned its Inbox off stands on Home, since the Inbox's route would only send it back", () => {
+  const settings = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS), {}).settings;
+  const held = settings ?? assert.fail("the document holds settings");
+  const off = { settings: { ...held, stored: { ...held.stored, inbox: false } } };
+
+  handState({}, { access: { admin: true }, ...off });
+  documentPatch = off;
+
+  const phone = mount(SHELL_ROOM.NARROW, { ...ON_TASK, home: true });
+  assert.equal(phone.at().inbox.open, false, "Home stands");
+  assert.deepEqual(phone.addresses(), ["/app"]);
 });
 
 test("on a narrow stage the side panel opened over the plan is a step: Back shuts it, Forward opens it on its tab, and each step's address is its link", () => {
@@ -663,20 +675,31 @@ test("on a narrow stage a version chosen from the list is a step, which Back and
   assert.equal(window.history().canGoForward, true, "the way back stepped back to the list");
 });
 
-test("on a narrow stage a Settings page a link opened has no list behind it, so the way back stands the list in the page's step and Back leaves Settings", () => {
+test("on a narrow stage the way back from a Settings page a link opened, with no list behind it, is the window's Back, which leaves Settings for the step behind", () => {
   const window = mount(SHELL_ROOM.NARROW, ON_TASK);
   // A link turns to Settings on its page in one navigation.
   window.openSettings({ page: SETTINGS_VIEW.APPEARANCE });
   assert.deepEqual(window.addresses(), [TASK_PATH, "/acme/settings/appearance"]);
 
   window.press(() => window.back().settings());
-  assert.equal(window.settings().listed, true);
-  assert.deepEqual(window.addresses(), [TASK_PATH, "/acme/settings"]);
-  assert.equal(window.history().canGoForward, false);
+  assert.equal(window.settings().standing, false, "the way back leaves Settings for the task");
+  assert.equal(window.standingAddress(), TASK_PATH);
+  assert.equal(window.history().canGoForward, true, "as Back does, the page standing ahead");
+});
+
+test("each Settings page turned is a step of its own, which Back returns to, and Settings' way out goes back past all of its pages to where it was opened from", () => {
+  const window = mount(SHELL_ROOM.WIDE, ON_TASK);
+  window.openSettings({ page: SETTINGS_VIEW.ACCOUNT });
+  window.openSettings({ page: SETTINGS_VIEW.APPEARANCE });
 
   act(() => window.history().onBack());
-  assert.equal(window.settings().standing, false, "Back leaves Settings for the task");
-  assert.equal(window.standingAddress(), TASK_PATH);
+  assert.equal(window.settings().view, SETTINGS_VIEW.ACCOUNT, "Back turns to the page before");
+  act(() => window.history().onForward());
+  assert.equal(window.settings().view, SETTINGS_VIEW.APPEARANCE);
+
+  act(() => window.history().onLeave());
+  assert.equal(window.settings().standing, false, "the way out leaves Settings");
+  assert.equal(window.standingAddress(), TASK_PATH, "for the task it was opened from");
 });
 
 test("a pairing's link loaded at its own address opens Settings in that entry's place, so Back leaves the tab rather than landing on the link again", () => {
@@ -694,18 +717,11 @@ test("a pairing's link loaded at its own address opens Settings in that entry's 
   assert.equal(window.history().canGoBack, false);
 });
 
-test("on the desktop's width none of a narrow room's panes is a step: the side panel opened by its toggle, a Settings page, and a version", () => {
+test("on the desktop's width none of a narrow room's panes is a step: the side panel opened by its toggle, and a version", () => {
   const moves: readonly [Standing, (window: Window) => void][] = [
     [
       { ...ON_TASK, panel: { open: false, tab: PAGE_TAB } },
       (window) => window.press(() => window.tab().sidePanel.onToggle()),
-    ],
-    [
-      ON_TASK,
-      (window) => {
-        window.openSettings({ page: SETTINGS_VIEW.ACCOUNT, listed: true });
-        window.openSettings({ page: SETTINGS_VIEW.APPEARANCE });
-      },
     ],
     [
       ON_TASK,
@@ -719,13 +735,10 @@ test("on the desktop's width none of a narrow room's panes is a step: the side p
   for (const [start, open] of moves) {
     const window = mount(SHELL_ROOM.WIDE, start);
     open(window);
-    // Each screen's way back to its list, which a wide room draws no button for, stands nothing new either.
-    window.press(() => {
-      window.back().settings();
-      window.back().versions();
-    });
-    // Note that Settings and a version history, entered, are a step of their own after the task, however their pages turn.
-    const entered = window.settings().standing || window.versions().open ? 1 : 0;
+    // The versions' way back to their list, which a wide room draws no button for, stands nothing new either.
+    window.press(() => window.back().versions());
+    // Note that a version history, entered, is a step of its own after the task, however its versions turn.
+    const entered = window.versions().open ? 1 : 0;
     assert.equal(window.addresses().length, 1 + entered, "one step, however the panes turn");
     assert.equal(window.history().canGoBack, entered === 1);
     unmountAll();
@@ -846,21 +859,24 @@ test("on a narrow stage an automation's runs chosen from its setup are a step, w
   assert.equal(window.history().canGoForward, true, "the way back was a step back");
 });
 
-test("on a narrow stage an automation opened on its runs, as a run's link opens it, has no setup behind it, so the way back stands the setup in the runs' step", async () => {
-  const window = mount(SHELL_ROOM.NARROW, ON_TASK);
-  window.openAutomation(LINKED_RUN);
+test("on a narrow stage an automation's runs a link loaded, with nothing behind them, take the way back as the setup standing in the runs' step", async () => {
+  const runs = `/acme/automation/${AUTOMATION}/run/run-1`;
+
+  const window = mount(
+    SHELL_ROOM.NARROW,
+    ON_TASK,
+    windowRouter(createMemoryHistory({ initialEntries: [runs] })),
+  );
+
   await settle();
   assert.equal(window.automations().runs, true);
-  assert.equal(window.addresses().length, 2);
+  assert.deepEqual(window.addresses(), [runs]);
 
   window.press(() => window.back().runs());
   await settle();
   assert.equal(window.automations().runs, false);
-  assert.deepEqual(window.addresses(), [
-    `/acme/task/${DOCUMENT_TASK.id}`,
-    `/acme/automation/${AUTOMATION}`,
-  ]);
-  assert.equal(window.history().canGoForward, false);
+  assert.deepEqual(window.addresses(), [`/acme/automation/${AUTOMATION}`]);
+  assert.equal(window.history().canGoBack, false);
 });
 
 test("on a narrow stage Back and Forward between an automation's setup and a run a link opened move the window there without asking to leave its unsaved work", async () => {
@@ -900,39 +916,4 @@ test("on a narrow stage another thing a link opens in the side panel standing ov
 
   act(() => window.history().onBack());
   assert.deepEqual(window.at().panel, { open: true, tab: PAGE_TAB });
-});
-
-test("on a narrow stage a task's way out steps back past its own panes to the page it was opened from, pushing nothing, and Forward opens the task again", () => {
-  const window = mount(SHELL_ROOM.NARROW, {
-    ...ON_TASK,
-    inbox: { open: true, chosen: undefined },
-  });
-
-  assert.equal(window.history().away, undefined, "the Inbox's list has nothing behind it");
-  window.move((held) => ({
-    ...held,
-    inbox: { ...held.inbox, open: false },
-    panel: { open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
-  }));
-  // The task's own panes, each a step of its own: the agents' column, then a page's tab.
-  window.press(() => window.back().pane());
-  window.press(() => window.tab().sidePanel.onShow(DOCUMENT_TASK.id, PAGE_TAB));
-  const steps = window.addresses();
-  assert.equal(steps.length, 3);
-  assert.ok(window.history().away, "the Inbox stands behind the task");
-
-  act(() => window.history().onLeave());
-  assert.equal(window.at().inbox.open, true, "the way out lands on the Inbox at once");
-  assert.deepEqual(window.addresses(), steps, "and pushes nothing");
-  assert.equal(window.held.at(), 0);
-
-  act(() => window.history().onForward());
-  assert.equal(window.at().inbox.open, false, "Forward opens the task again");
-});
-
-test("on a narrow stage a task with no page behind it, as one a link opened, names none for its way out", () => {
-  const window = mount(SHELL_ROOM.NARROW, { ...ON_TASK, panel: { open: true, tab: PAGE_TAB } });
-  window.press(() => window.tab().sidePanel.onShow(DOCUMENT_TASK.id, SIDE_PANEL_TAB.DESCRIPTION));
-  assert.equal(window.history().canGoBack, true, "Back has the task's own pane behind it");
-  assert.equal(window.history().away, undefined, "but the way out has no page to go back to");
 });

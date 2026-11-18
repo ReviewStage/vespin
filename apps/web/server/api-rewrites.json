@@ -135,6 +135,14 @@
     "dest": "/api/default.js?route=agents/runner-transcripts"
   },
   {
+    "src": "/api/billing/metronome-webhook",
+    "dest": "/api/default.js?route=billing/metronome-webhook"
+  },
+  {
+    "src": "/api/billing/stripe-webhook",
+    "dest": "/api/default.js?route=billing/stripe-webhook"
+  },
+  {
     "src": "/api/envelopes/forward",
     "dest": "/api/default.js?route=envelopes/forward"
   },
@@ -175,8 +183,16 @@
     "dest": "/api/default.js?route=previews/sign-in"
   },
   {
+    "src": "/api/pull-requests/github-image",
+    "dest": "/api/default.js?route=pull-requests/github-image"
+  },
+  {
     "src": "/api/slack/events",
     "dest": "/api/default.js?route=slack/events"
+  },
+  {
+    "src": "/api/slack/oauth/callback",
+    "dest": "/api/default.js?route=slack/oauth/callback"
   },
   {
     "src": "/api/triggers/sentry",

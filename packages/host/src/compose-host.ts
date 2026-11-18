@@ -9,6 +9,7 @@ import {
   HostedIntegrationsClient,
   HostedMachineCommandClient,
   HostedMcpClientsClient,
+  HostedPullRequestClient,
   HostedTaskClient,
   HostedTerminalClient,
   HostedWorkspaceClient,
@@ -18,6 +19,7 @@ import { type ClientIdentity, clientNamedOnService } from "@repo/features/client
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
 import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
+import { agentName } from "@repo/features/model-label";
 import {
   carried,
   GATEWAY_EVENT,
@@ -37,10 +39,10 @@ import {
 } from "@repo/settings";
 import type { SettingsUpdateResult } from "@repo/settings/wire";
 import { entityPool } from "@repo/sync";
-import { Effect, Exit, Layer, Option, Scope, Stream } from "effect";
-import type * as FileSystem from "effect/FileSystem";
+import { Effect, Layer, Option, Stream } from "effect";
+import * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
-import type * as Path from "effect/Path";
+import * as Path from "effect/Path";
 import type { ChildProcessSpawner } from "effect/process";
 import { composeAccount } from "./compose-account.js";
 import { composeAccountAsks } from "./compose-account-asks.js";
@@ -66,11 +68,10 @@ import { mergedActs, mergedMethods } from "./effect/composer.js";
 import { type HostAssembly, HostAssemblyTag, hostDrain } from "./effect/host.js";
 import { HostKernelTag, HostService } from "./effect/kernel.js";
 import {
-  AccountSource,
+  type AccountSource,
   AppIdentity,
   ComputerUseHelper,
   type Environment,
-  KeptListsDue,
   LoopbackListener,
   MirrorPlatform,
   Reporter,
@@ -79,7 +80,6 @@ import {
   ThisMacHost,
   type ThisMacHostSeam,
 } from "./effect/seams.js";
-import { type EntityStore, forgetEntityStore, openEntityStore } from "./entity-store.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
 import {
   HOST_CONCERN,
@@ -93,6 +93,8 @@ import {
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "./kept-content.js";
 import { shutdownStepsFlushingEvents } from "./lifecycle.js";
 import { liveSocketClient } from "./live-socket.js";
+import { localCopy } from "./local-copy.js";
+import { LocalDatabaseDriver } from "./local-database.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
 import { createGatewayService } from "./service.js";
@@ -254,6 +256,24 @@ interface PlatformConcernRequirements {
     | MirrorPlatform;
 }
 
+/** The file an older build kept the account's lists and queues in, beside the settings file. */
+const RETIRED_ENTITY_FILE = "entities.sealed";
+
+/**
+ * Deletes the file an older build kept the account's lists and queues in,
+ * and a temporary file a cut-off write left beside it, unread: a release
+ * before this one imported its queues into the local database.
+ */
+const forgetRetiredEntityFile = Effect.fn("host/forgetRetiredEntityFile")(function* (
+  directory: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const file = path.join(directory, RETIRED_ENTITY_FILE);
+  yield* Effect.ignore(fileSystem.remove(file, { force: true }));
+  yield* Effect.ignore(fileSystem.remove(`${file}.tmp`, { force: true }));
+});
+
 /**
  * Every concern constructed, linked, and merged, with nothing yet begun: the
  * composers in the launch's order, the arming that follows the last of them,
@@ -279,9 +299,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const hostService = yield* HostService;
     const shutdownSignal = yield* ShutdownSignal;
     const { report } = yield* Reporter;
-    const { tokenCipher } = yield* AccountSource;
-    const listsDue = yield* Effect.serviceOption(KeptListsDue);
+    const localDriver = yield* Effect.serviceOption(LocalDatabaseDriver);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
+    yield* Effect.provideContext(forgetRetiredEntityFile(kernel.stateRoot), fileSystemContext);
 
     const settings = yield* composeSettings();
     const account = yield* composeAccount({ settings });
@@ -331,6 +351,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       credential: account.credential,
     });
 
+    const pullRequestClient = new HostedPullRequestClient({
+      serviceBaseUrl: kernel.hostedServiceBaseUrl,
+      credential: account.credential,
+    });
+
     /** The account signed in now, by its id, which every live read names. */
     const accountId = () => {
       const signedIn = account.session.snapshot();
@@ -358,11 +383,27 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     /**
+     * The signed-in account's local database (`local-copy.ts`), the only
+     * place the pool's waiting writes and the messages refused are kept, and
+     * which every kept list draws from at the gate opening and writes as it
+     * answers: only where the platform has a driver,
+     * the Mac and the iPhone, and the run needs an account, so neither a
+     * browser tab nor a fixture run keeps one.
+     */
+    const local =
+      Option.isSome(localDriver) && kernel.runMode.requiresAccount
+        ? yield* localCopy(kernel.stateRoot).pipe(
+            Effect.provideService(LocalDatabaseDriver, localDriver.value),
+            Effect.provideContext(fileSystemContext),
+          )
+        : undefined;
+
+    /**
      * Every row the composers' reads hold, once, and the writes drawn over
      * them (`@repo/sync`). Where the run needs an account, a row write
      * that may wait for the service is sent under a key of the host's own
      * minting and waits while the service does not answer: kept on disk
-     * beside the lists where they are kept (`openEntities`), and in a
+     * in the local database where the host has one (`openLocal`), and in a
      * browser tab for the tab's life alone, and sent again only as the
      * account that asked it. A fixture run keeps none waiting.
      */
@@ -372,14 +413,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             mintKey: kernel.createId,
             replayRefused: Effect.sync(() => offlineRefused.raise()),
             holder: accountId,
+            store: local?.store,
           }
         : undefined,
-    );
-
-    /** The signed-in account's lists kept on disk (`entity-store.ts`), from the account gate opening until it closes; none where nothing seals them. */
-    let entities: { readonly store: EntityStore; readonly scope: Scope.Closeable } | undefined;
-    yield* Effect.addFinalizer(() =>
-      entities === undefined ? Effect.void : Scope.close(entities.scope, Exit.void),
     );
 
     // Note that the integrations stand before the tasks, which ask GitHub's standing of them again once a GitHub connect or disconnect answers.
@@ -419,7 +455,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         kept,
         focus,
         pool,
-        entities: () => entities?.store,
         offlineRefused,
         client: new HostedTaskClient({
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
@@ -437,7 +472,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         kept,
         focus,
         pool,
-        entities: () => entities?.store,
         githubMoved: integrations.githubMoved,
         recordProductEvent: settings.recordProductEvent,
         tasks: tasks.workspaces,
@@ -512,6 +546,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             : undefined;
         },
         client: agentClient,
+        pullRequests: pullRequestClient,
         ports: agentPortsClient,
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
@@ -519,7 +554,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         inboxNamed: tasks.inboxNamed,
         pool,
         agentListed,
-        entities: () => entities?.store,
       }),
     );
 
@@ -542,7 +576,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         account,
         accountId,
         pool,
-        entities: () => entities?.store,
         client: new HostedAutomationClient({
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
           credential: account.credential,
@@ -614,6 +647,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               credential: account.credential,
             }),
             turnEnded,
+            agentName: (agentId) => {
+              const agent = agentListed(agentId);
+
+              return agent === undefined ? undefined : agentName(agent);
+            },
             ...Option.match(computerHelper, {
               onNone: () => ({}),
               onSome: (helper) => ({ computer: macComputerUse(settings, helper) }),
@@ -722,53 +760,27 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         };
 
     /**
-     * The signed-in account's store opened where none stands: only where the
-     * account source seals with a cipher the system can use, and the run
-     * needs an account, so neither a browser tab nor a fixture run keeps one,
-     * and only once the account is signed in, so the Keychain is never read
-     * before the tokens' own read.
+     * The signed-in account's local database opened where the host has one,
+     * with its refused messages and its waiting writes laid back before any
+     * read draws, so the first answer draws under them. A host with no
+     * database keeps them in memory alone.
      */
-    const openEntities = Effect.gen(function* () {
+    const openLocal = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
 
-      if (entities !== undefined || signedInId === undefined) return;
-
-      if (tokenCipher === undefined || !tokenCipher.isAvailable()) return;
-
-      if (!kernel.runMode.requiresAccount) return;
-      const scope = yield* Scope.make();
-
-      const store = yield* openEntityStore({
-        directory: kernel.stateRoot,
-        cipher: tokenCipher,
-        accountId: signedInId,
-        queued: pool.queued,
-        queueMoves: pool.queueMoves,
-        refused: agents.refused.kept,
-        refusedMoves: agents.refused.moves,
-        ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
-      }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
-
-      entities = { store, scope };
-      // Note that the writes kept waiting, and the messages refused, are laid back before any read draws, so the first answer draws under them.
-      yield* pool.requeue(store.queue, [...tasks.queueable, ...agents.queueable]);
-      yield* agents.refused.restored(signedInId, store.refused);
+      if (signedInId === undefined || local === undefined) return;
+      const waiting = yield* local.open(signedInId, agents.refused);
+      yield* pool.requeue(waiting, [...tasks.queueable, ...agents.queueable]);
     });
 
-    /** The store forgotten, its file deleted, as a sign-out does; a file no store stands over is deleted too. */
+    /** The account's queues let go and its local database and any file an older build kept deleted, as a sign-out does. */
     const forgetEntities = Effect.gen(function* () {
-      const standing = entities;
-      entities = undefined;
       yield* pool.letGoQueued;
       yield* agents.refused.forgotten;
       offlineRefused.clear();
+      yield* Effect.provideContext(forgetRetiredEntityFile(kernel.stateRoot), fileSystemContext);
 
-      if (standing !== undefined) {
-        yield* standing.store.forget;
-        yield* Scope.close(standing.scope, Exit.void);
-      }
-
-      yield* Effect.provideContext(forgetEntityStore(kernel.stateRoot), fileSystemContext);
+      if (local !== undefined) yield* local.forget;
     });
 
     /**
@@ -780,7 +792,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       if (account.signedIn()) {
         yield* settings.reconcileAccountPreferences();
         yield* account.refreshAccess;
-        yield* openEntities;
+        yield* openLocal;
         yield* tasks.open;
         yield* workspaces.open;
         yield* agents.open;

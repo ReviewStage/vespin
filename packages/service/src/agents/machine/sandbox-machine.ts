@@ -86,6 +86,7 @@
 import {
   AGENT_USER,
   CODEX_PIN,
+  CURSOR_SDK_ENTRY,
   RUNNER_DIRECTORY,
   RUNNER_UNIT,
   SANDBOX_TOOLS_DIRECTORY,
@@ -101,9 +102,11 @@ import {
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
 import { type Agent, hasRepository, type WithRepository } from "@repo/database/models/agent-store";
+import { recordSandboxOwner } from "@repo/database/models/sandbox-owners";
+import { readWorkspaceSandboxVcpus } from "@repo/database/models/workspace-sandbox-size-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
-import { sandboxVcpus } from "@repo/features/sandbox-size";
+import type { SandboxVcpus } from "@repo/features/sandbox-size";
 import {
   CLOUD_SETUP_SCRIPT,
   type CloudSetupScript,
@@ -134,6 +137,7 @@ import {
   Result,
   Tracer,
 } from "effect";
+import { bookSandboxUsageCheck } from "../../billing/usage-queues.js";
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import {
   AGENT_OWN_DRIVE,
@@ -218,7 +222,7 @@ import {
   type RunnerRecord,
   type SandboxSetup,
 } from "./agent-machine.js";
-import { phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
+import { phoneAudioAsk, phoneAudioOf, phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
 
 /** Our state folder on the agent's own drive, beside the checkout, which a sandbox made again mounts as it stood. */
 const DRIVE_STATE_FOLDER = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}`;
@@ -259,6 +263,7 @@ const SANDBOX_LAYOUT: MachineLayout = {
   sharedFiles: SHARED_FILES_DIRECTORY,
   claudeExecutable: undefined,
   codexExecutable: CODEX_PIN.LINK,
+  cursorSdk: CURSOR_SDK_ENTRY,
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
   diskSessions: false,
@@ -459,8 +464,29 @@ function setupExits(
   );
 }
 
+/**
+ * The vCPUs an agent's sandbox opens with: its workspace's size. Note that a
+ * size that could not be read is none, logged, so the open asks for no
+ * size: a create opens at Vercel's default and a standing sandbox resumes
+ * at its own, never resized on a read that failed.
+ */
+const workspaceVcpusOf = (
+  agent: Agent,
+): Effect.Effect<SandboxVcpus | undefined, never, DatabaseServices> =>
+  readWorkspaceSandboxVcpus(agent.organizationId).pipe(
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`an agent's sandbox size was not read: ${failure._tag}`),
+        undefined,
+      ),
+    ),
+  );
+
 /** Why the sandbox could not be readied for the agent's runner. */
 const NOT_READIED = "the sandbox could not be readied for the agent's runner";
+
+/** Why the sandbox was not opened where the workspace it is billed to could not be recorded, or its usage check booked, first. */
+const OWNER_NOT_RECORDED = "the sandbox's workspace could not be recorded";
 
 /** How the read exits where the path is no regular file the sandbox's user may read. */
 const READ_EXIT = { NO_FILE: 3 } as const;
@@ -873,6 +899,8 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         ),
       ),
 
+    checkoutPath: () => Effect.succeed(CODER.CHECKOUT_PATH),
+
     // Note that the API writes as the sandbox's default user, so the file's mode is what lets `agent` read it.
     writeFile: (session, file) =>
       Effect.gen(function* () {
@@ -892,6 +920,11 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
     phoneVideo: (session, path) =>
       Effect.flatMap(runningSession(session), (running) =>
         Effect.map(api.run(running, phoneVideoAsk(path)), phoneVideoOf),
+      ),
+
+    phoneAudio: (session, path) =>
+      Effect.flatMap(runningSession(session), (running) =>
+        Effect.map(api.run(running, phoneAudioAsk(path)), phoneAudioOf),
       ),
   };
 }
@@ -1096,8 +1129,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
 
   /**
    * The session's sandbox opened through `getOrCreate`
-   * (`../agent-sandbox-open.ts`) at the size the agent's repository asks
-   * for, created as the attempt says where none stands, with whether it was
+   * (`../agent-sandbox-open.ts`) at its workspace's size
+   * (`workspaceVcpusOf`), a stopped one resized to it before it resumes,
+   * created as the attempt says where none stands, with whether it was
    * created, its checkout made in its `onCreate` where the agent has a
    * repository and the sandbox was created (`checkedOutIn`), and the open
    * recorded as its use (`../sandbox-use.ts`), on a fresh disk where it was
@@ -1119,12 +1153,27 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       // Note that the create's own setup runs on the edge's runner, so what waits past the answer is handed to it from here.
       const later = yield* Effect.serviceOption(AfterResponse);
       let refused: CheckoutRefused | undefined;
+      const vcpus = yield* workspaceVcpusOf(agent);
+
+      // Note that the owner is recorded and the usage check booked before the open, so no sandbox we create stands unbilled or uncharged.
+      yield* recordSandboxOwner({
+        sandboxName: agentSandboxName(sessionId),
+        organizationId: agent.organizationId,
+        agentId: agent.id,
+        userId: agent.userId,
+        createdAt: yield* DateTime.nowAsDate,
+      }).pipe(
+        Effect.andThen(bookSandboxUsageCheck(agentSandboxName(sessionId))),
+        Effect.mapError(
+          () => new SandboxUnavailable({ retryable: true, detail: OWNER_NOT_RECORDED }),
+        ),
+      );
 
       const { sandbox, created, driveKept } = yield* openAgentSandbox(
         {
           sessionId,
-          tags: agentSandboxTags(sessionId, agent.id),
-          vcpus: sandboxVcpus(agent.repository),
+          tags: agentSandboxTags(sessionId, agent),
+          vcpus,
           ...(attempt.snapshot === undefined ? undefined : { snapshot: attempt.snapshot }),
           ...(attempt.drive === undefined ? undefined : { drive: attempt.drive }),
         },

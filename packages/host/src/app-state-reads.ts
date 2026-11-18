@@ -236,9 +236,6 @@ export const selectInboxWaiting = (state: AppStateSnapshot) => state.inbox.waiti
 export const selectInboxTasks = (state: AppStateSnapshot) => state.inbox.tasks;
 export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
 
-export const selectPullRequestPublished = (state: AppStateSnapshot) =>
-  state[LIVE_READ.PULL_REQUEST_PUBLISHED];
-
 export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
 
 /** The device this Mac claims commands as for the account signed in; none before it joined for it, or where the platform runs no commands. */
@@ -308,6 +305,10 @@ export const selectSettingsHeld = (state: AppStateSnapshot): boolean =>
 /** The settings as the panel draws them. */
 export const selectAppSettingsView = (state: AppStateSnapshot): AppSettingsView | undefined =>
   state.settings === undefined ? undefined : appSettingsView(state.settings);
+
+/** Whether the account keeps an Inbox (`@repo/settings`'s `inbox`): every window draws it but the account's that turned it off; signed out, or before the settings are read, it stands. */
+export const selectInboxOn = (state: AppStateSnapshot): boolean =>
+  state.settings?.stored.inbox !== false;
 
 /** Every experiment the account chose as its store holds them, a workspace experiment's old choice among them; signed out, every one is off. Read only to combine with a workspace's (`workspace-experiments.ts`). */
 export const selectStoredExperimentChoices = (state: AppStateSnapshot): ExperimentChoices =>

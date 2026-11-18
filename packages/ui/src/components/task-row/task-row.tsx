@@ -93,12 +93,17 @@ import {
  * (`hint`), the task's card beside the row while the pointer rests on it,
  * as Home's Recent hangs it.
  *
- * A row may stand nested under another (`depth`), its name in by a nest
- * for each level, its other columns still lined up with every row's; and a
- * row with rows nested under it folds them (`fold`), by a chevron before
- * its name, a control of its own beside the press, and by → and ← on the
- * press, as a `ListRow`'s fold does; a reader hears its level and its place
- * among its siblings (`nest`), as a `ListRow`'s reader does.
+ * A row may stand nested under another (`depth`), as a sidebar's nested
+ * row stands: its status mark and its name in by a nest for each level, so
+ * its mark stands under the name of the row it is nested under, its other
+ * columns still lined up with every row's. A row with rows nested under it
+ * folds them (`fold`), by a chevron that is a control of its own beside the
+ * press, and by → and ← on the press, as a `ListRow`'s fold does: the
+ * chevron stands over the status mark, which gives way to it while the
+ * pointer rests on the row or the keyboard is on the chevron, and stands at
+ * rest on a screen with no hover; a list drawing no status stands it before
+ * the name. A reader hears its level and its place among its siblings
+ * (`nest`), as a `ListRow`'s reader does.
  *
  * A group's quick add draws its draft as a row of the same cells, raised
  * as a card off the list (`TaskRowDraft`), so it reads as the row it is
@@ -215,15 +220,31 @@ const RELATION_CHIP_MARKS =
  * by the most it says. The trailing run needs none: it stands against the
  * time on every row, however wide it is.
  */
+const KEY_FIT: CSSProperties = {
+  fontFamily: "var(--ui-font-mono)",
+  minWidth: "calc(var(--ui-task-row-key-chars, 0) * 1ch)",
+};
+
+const RELATION_FIT: CSSProperties = {
+  minWidth: `calc(var(--ui-task-row-relation-chars, 0) * 1ch + ${RELATION_CHIP_MARKS})`,
+};
+
 const CELL_FIT: Partial<Record<TaskRowCell, CSSProperties>> = {
-  [TASK_ROW_CELL.KEY]: {
-    fontFamily: "var(--ui-font-mono)",
-    minWidth: "calc(var(--ui-task-row-key-chars, 0) * 1ch)",
-  },
-  [TASK_ROW_CELL.RELATION]: {
-    minWidth: `calc(var(--ui-task-row-relation-chars, 0) * 1ch + ${RELATION_CHIP_MARKS})`,
-  },
+  [TASK_ROW_CELL.KEY]: KEY_FIT,
+  [TASK_ROW_CELL.RELATION]: RELATION_FIT,
   [TASK_ROW_CELL.UPDATED]: { minWidth: `${UPDATED_CHARS}ch` },
+};
+
+/**
+ * How wide the columns stand at least on a row in its list's grid, where
+ * lists beside each other line their columns up (`TaskRows`'s `fit`): the
+ * key and the relation, as `CELL_FIT` says, and the time by the most it
+ * says, each none where no list sets its width.
+ */
+const LISTED_FIT: Partial<Record<TaskRowCell, CSSProperties>> = {
+  [TASK_ROW_CELL.KEY]: KEY_FIT,
+  [TASK_ROW_CELL.RELATION]: RELATION_FIT,
+  [TASK_ROW_CELL.UPDATED]: { minWidth: "calc(var(--ui-task-row-updated-chars, 0) * 1ch)" },
 };
 
 /** A cell over the row's press where it holds anything, and the press's own where it stands empty. */
@@ -239,6 +260,13 @@ const OVER_ITS_CONTROLS =
   "pointer-events-none relative z-1 [&_a]:pointer-events-auto [&_button]:pointer-events-auto";
 
 /**
+ * A nested row's status mark, in by the nest its name stands in, moved
+ * rather than laid out, so the status column stays as wide as every row's
+ * and the names of the rows at the top stay where they stand.
+ */
+const STATUS_NEST = "start-task-row-nest";
+
+/**
  * Whether each cell stands over the row's press: the chips take their own
  * presses, and a cell left empty, a nested row's relation among them,
  * leaves the press its own.
@@ -247,7 +275,7 @@ const CELL_PRESS = {
   [TASK_ROW_CELL.RELATION]: OVER_WHERE_FILLED,
   [TASK_ROW_CELL.PRIORITY]: "pointer-events-auto relative z-1",
   [TASK_ROW_CELL.KEY]: "pointer-events-none",
-  [TASK_ROW_CELL.STATUS]: "pointer-events-auto relative z-1",
+  [TASK_ROW_CELL.STATUS]: `pointer-events-auto relative z-1 ${STATUS_NEST}`,
   [TASK_ROW_CELL.REPOSITORY]: "pointer-events-none",
   [TASK_ROW_CELL.WAITING]: "pointer-events-none",
   [TASK_ROW_CELL.SUB_TASKS]: "pointer-events-none",
@@ -290,11 +318,13 @@ const MORE = "ui-task-row-more z-1 flex items-center";
 /**
  * A row: a subgrid of the list's columns a little taller than a control,
  * filled under the pointer and while its menu is open, a draft's as a task's,
+ * and in the current fill, as a `ListRow`'s, where it is the one its page
+ * stands open on,
  * keeping a gutter at its start for its box (`SELECT_BOX_PLACE.GUTTER`), as
  * Linear's list does, so every row's name lines up whether or not it shows one.
  */
 const ROW_BOX =
-  "ui-task-row relative col-span-full grid min-h-tasks-list-row items-center rounded-control py-ui-2 text-foreground [transition:transform_var(--ui-duration-fast)_var(--ui-spring-fast),background-color_var(--ui-duration-hover)_var(--ui-motion-exit),opacity_var(--ui-duration-quick)_var(--ui-motion-exit)] data-[menu-open=true]:bg-muted data-[menu-open=true]:shadow-menu-open-edge hover:bg-muted";
+  "ui-task-row relative col-span-full grid min-h-tasks-list-row items-center rounded-control py-ui-2 text-foreground [transition:transform_var(--ui-duration-fast)_var(--ui-spring-fast),background-color_var(--ui-duration-hover)_var(--ui-motion-exit),opacity_var(--ui-duration-quick)_var(--ui-motion-exit)] data-[menu-open=true]:bg-muted data-[menu-open=true]:shadow-menu-open-edge hover:not-data-[current=true]:bg-muted data-[current=true]:bg-fill-current";
 
 /** A row standing in its list's grid: a subgrid of the list's columns. */
 const ROW_FRAME = `${ROW_BOX} grid-cols-subgrid`;
@@ -335,8 +365,8 @@ const NAME_CELL =
 /** The name's ink: the text's, or the muted ink for a row whose task is settled. */
 const NAME_INK = { REST: "text-foreground", SETTLED: "text-muted-foreground" } as const;
 
-/** A nested row's name, in by a nest for each level it stands at. */
-const NESTED = "ps-list-row-nest";
+/** A nested row's name, in by a nest for each level it stands at, as its status mark is (`task-row.css`). */
+const NESTED = "ps-task-row-nest";
 
 /** What a row's press shows: its name on one line. */
 const PRESS = "ui-task-row-press flex min-w-0 items-center";
@@ -353,9 +383,18 @@ const NOTE = "ui-task-row-note text-caption text-danger";
 /** A row folding the rows nested under it: its chevron, then its press. */
 const FOLDS = "ui-task-row-folds flex min-w-0 items-center";
 
-/** The fold's chevron, a control of its own beside the press, standing over it, a glyph's size. */
-const FOLD =
-  "ui-task-row-fold relative z-1 me-icon-gap grid min-h-control-icon min-w-control-icon flex-none cursor-press place-items-center rounded-control border-0 bg-transparent p-0 text-muted-foreground";
+/** The fold's chevron, a control of its own beside the press, in the muted ink. */
+const FOLD_BASE =
+  "ui-task-row-fold z-1 grid cursor-press place-items-center rounded-control border-0 bg-transparent p-0 text-muted-foreground";
+
+/** The chevron before the name, a glyph's size, where the list draws no status. */
+const FOLD = `${FOLD_BASE} relative me-icon-gap min-h-control-icon min-w-control-icon flex-none`;
+
+/** The chevron standing over the status mark's cell, which gives way to it (`task-row.css`). */
+const FOLD_OVER_STATUS = `${FOLD_BASE} ui-task-row-fold-over absolute inset-0`;
+
+/** The status mark's own box in its cell, which gives way to the fold's chevron standing over it. */
+const STATUS_MARK = "ui-task-row-status inline-flex items-center";
 
 /** A list of its own: one grid of the cells its rows draw, its rows edge to edge. */
 const ROWS =
@@ -429,7 +468,7 @@ function RowCell({
   children: ReactNode;
 }): React.JSX.Element {
   const leading = column !== TRAIL && leads(column);
-  const fit = placed && column !== TRAIL ? CELL_FIT[column] : undefined;
+  const fit = column === TRAIL ? undefined : (placed ? CELL_FIT : LISTED_FIT)[column];
 
   return (
     <span
@@ -455,12 +494,15 @@ function RowCells({
   flag,
   underMore,
   placed = false,
+  statusFold,
 }: {
   cells: readonly TaskRowCell[];
   content: Partial<Record<TaskRowCell, ReactNode>>;
   flag?: ReactNode;
   underMore: AfterColumn | undefined;
   placed?: boolean;
+  /** The fold's chevron, standing over the status mark; none where the row folds nothing. */
+  statusFold?: ReactNode;
 }): React.JSX.Element {
   const drawn = inOrder(cells);
 
@@ -474,7 +516,14 @@ function RowCells({
           underMore={underMore}
           placed={placed}
         >
-          {content[cell]}
+          {cell === TASK_ROW_CELL.STATUS && statusFold !== undefined ? (
+            <>
+              <span className={STATUS_MARK}>{content[cell]}</span>
+              {statusFold}
+            </>
+          ) : (
+            content[cell]
+          )}
         </RowCell>
       ))}
       {afterColumns(cells).map((column) =>
@@ -529,6 +578,13 @@ function RowItem({
   return <li {...item} className={placed ? PLACED_ROW[edges] : ROW[edges]} />;
 }
 
+/** A row's style: where its run places it, and how deep it stands, which its status mark and its name stand in by. */
+function rowStyle(depth: number, place: VirtualRowPlace | undefined): CSSProperties | undefined {
+  if (depth === 0) return place?.style;
+
+  return { ...place?.style, ...cssCustomProperties({ "--ui-list-row-depth": depth }) };
+}
+
 /** The name's cell, the one the row's press stands in, in by a nest for each level the row stands at. */
 function NameCell({
   settled = false,
@@ -545,7 +601,6 @@ function NameCell({
         .join(" ")
         .trim()}
       data-cell="name"
-      style={depth === 0 ? undefined : cssCustomProperties({ "--ui-list-row-depth": depth })}
     >
       {children}
     </span>
@@ -577,11 +632,15 @@ function mostChars(words: Iterable<string | undefined>): number {
  * differ stands as wide as the widest the list's tasks say there
  * (`CELL_FIT`), read from every task it lists rather than from the rows
  * drawn, so the names line up down the list and stand still as it scrolls.
+ * Lists standing one under another in their grids, a page's sections, take
+ * one fit read from all of their rows (`TaskRows`'s `fit`), so their keys,
+ * names, and times line up from list to list as well.
  */
 export function taskRowFit(rows: readonly TaskRowWords[]): CSSProperties {
   return cssCustomProperties({
     "--ui-task-row-key-chars": mostChars(rows.map((row) => row.key)),
     "--ui-task-row-relation-chars": mostChars(rows.map((row) => row.relation)),
+    "--ui-task-row-updated-chars": UPDATED_CHARS,
   });
 }
 
@@ -640,6 +699,7 @@ export function TaskRow({
   nest,
   fold,
   settled = false,
+  current = false,
   unread = false,
   hint,
   place,
@@ -684,6 +744,8 @@ export function TaskRow({
   fold?: ListRowFold | undefined;
   /** Whether it stands settled beside the rows still open, its name in the muted ink: a task done or canceled. */
   settled?: boolean | undefined;
+  /** Whether it is the one its page stands open on, as a `ListRow`'s current item, in the current fill and said current to a reader. */
+  current?: boolean | undefined;
   /** Whether its list counts it unread, its name standing in the heavier weight until it is read. */
   unread?: boolean | undefined;
   /** The owner's hint hung from the row's press and the words it raises, as a `ListRow`'s: its card, beside the row. */
@@ -723,6 +785,25 @@ export function TaskRow({
     event.preventDefault();
     fold.onOpenChange(asked);
   };
+
+  // Note that the chevron stands over the status mark, as a sidebar row's over its glyph, where the list draws a status to stand it over.
+  const overStatus = fold !== undefined && cells.includes(TASK_ROW_CELL.STATUS);
+
+  const chevron =
+    fold === undefined ? null : (
+      <button
+        type="button"
+        className={overStatus ? FOLD_OVER_STATUS : FOLD}
+        aria-label={fold.label}
+        aria-expanded={fold.open}
+        onClick={() => fold.onOpenChange(!fold.open)}
+      >
+        {/* Note that the chevron turns on the one turn every fold makes (`disclosure.css`). */}
+        <span className="ui-disclosure-turn" data-open={fold.open}>
+          <FoldChevronIcon />
+        </span>
+      </button>
+    );
 
   const pressed = (
     <CardPress
@@ -777,27 +858,19 @@ export function TaskRow({
       {...rowMenu.props}
       data-editing={editor === undefined ? undefined : "true"}
       data-depth={depth === 0 ? undefined : depth}
+      style={rowStyle(depth, place)}
       {...nestedItem(depth, nest)}
       data-settled={settled ? "true" : undefined}
       data-unread={unread ? "true" : undefined}
+      data-current={current ? "true" : undefined}
+      aria-current={current ? "true" : undefined}
     >
       <NameCell settled={settled} depth={depth}>
-        {fold === undefined ? (
+        {fold === undefined || overStatus ? (
           named
         ) : (
           <span className={FOLDS}>
-            <button
-              type="button"
-              className={FOLD}
-              aria-label={fold.label}
-              aria-expanded={fold.open}
-              onClick={() => fold.onOpenChange(!fold.open)}
-            >
-              {/* Note that the chevron turns on the one turn every fold makes (`disclosure.css`). */}
-              <span className="ui-disclosure-turn" data-open={fold.open}>
-                <FoldChevronIcon />
-              </span>
-            </button>
+            {chevron}
             <span className="flex min-w-0 flex-1 flex-col items-stretch">{named}</span>
           </span>
         )}
@@ -808,6 +881,7 @@ export function TaskRow({
         flag={flag}
         underMore={underMore}
         placed={place !== undefined}
+        statusFold={overStatus ? chevron : undefined}
       />
       <span className={MORE} data-cell="more">
         {rowMenu.more({ size: BUTTON_SIZE.COMPACT, describedBy: nameId })}
@@ -878,7 +952,7 @@ export function TaskRowDraft({
   drafting: boolean;
   /** Whether an add is still out. */
   pending: boolean;
-  /** Whether it stands after a run drawing only the rows near the view (`VirtualTaskRows`' `after`), holding each column as wide as the run's placed rows hold it. */
+  /** Whether it stands beside a run drawing only the rows near the view, after it (`VirtualTaskRows`' `after`) or over it (the Tasks page's group), holding each column as wide as the run's placed rows hold it. */
   placed?: boolean | undefined;
   /** What room the rows it stands under keep at their edges, whose first cell it starts at: a list's gutter for their box, or their inset. */
   edges?: TaskRowEdges | undefined;
@@ -931,6 +1005,7 @@ export function TaskRows({
   selection,
   joinsWalk = false,
   moves = false,
+  fit,
   children,
 }: {
   /** The id a `SelectionBar` over it names; one is made where none is given. */
@@ -948,6 +1023,8 @@ export function TaskRows({
   joinsWalk?: boolean | undefined;
   /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion`. */
   moves?: boolean | undefined;
+  /** How wide its columns before the name stand (`taskRowFit`), where lists beside it must line their names up with its; each as wide as its own widest, unless said. */
+  fit?: CSSProperties | undefined;
   /** Its `TaskRow`s. */
   children: ReactNode;
 }): React.JSX.Element {
@@ -959,9 +1036,12 @@ export function TaskRows({
       {...(joinsWalk ? {} : roving)}
       className={ROWS}
       aria-label={label}
-      style={cssCustomProperties({
-        "--tasks-list-columns": taskRowColumns(cells, more && edges !== TASK_ROW_EDGES.BARE),
-      })}
+      style={{
+        ...fit,
+        ...cssCustomProperties({
+          "--tasks-list-columns": taskRowColumns(cells, more && edges !== TASK_ROW_EDGES.BARE),
+        }),
+      }}
       {...(moves ? motionRows() : {})}
     >
       {children}
