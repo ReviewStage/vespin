@@ -1,0 +1,21 @@
+Auto-merging packages/ui-native/src/row-list.tsx
+Auto-merging pnpm-lock.yaml
+Auto-merging pnpm-workspace.yaml
+built main 471e3858d1 + #9802 46e63953dd as db5a408515
+install 0
+curve 08:14:43 44524 MB
+curve 08:15:13 45281 MB
+curve 08:15:43 45289 MB
+curve 08:16:14 44777 MB
+curve 08:16:44 44601 MB
+curve 08:17:14 44420 MB
+curve 08:17:45 44132 MB
+curve 08:18:16 43390 MB
+curve 08:18:46 43259 MB
+curve 08:19:16 42997 MB
+curve 08:19:47 42844 MB
+BUILD EXIT 0 08:20:17
+/Users/deanstratakos/vespin-ipad-agent/Vjnat3a.app: replacing existing signature
+p9802-iphone-wide: fails 0 shots 3 
+p9802-ipad26-wide: fails 0 shots 3 
+p9802-ipad27-wide: fails 0 shots 3 
