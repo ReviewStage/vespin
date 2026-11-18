@@ -43,7 +43,7 @@
     "lint-staged": "17.6.1",
     "oxlint": "1.94.0",
     "tsx": "catalog:",
-    "turbo": "2.11.11",
+    "turbo": "2.11.12",
     "vitest": "catalog:"
   }
 }

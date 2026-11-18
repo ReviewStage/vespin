@@ -68,7 +68,7 @@
     "shiki": "4.6.0"
   },
   "devDependencies": {
-    "@cursor/sdk": "1.4.0",
+    "@cursor/sdk": "1.4.1",
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
