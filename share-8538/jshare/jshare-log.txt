@@ -1,0 +1,22 @@
+8538-iphone-light share-photo: fails 1 shots 3 Assert that "Vespin" is visible... FAILED | extension log lines 0 | crash reports 0
+8538-iphone-light app group drafts:  (group missing)
+8538-iphone-light share-draft-app: fails 0 shots 1 (rig 1)
+  RIG ERROR: Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})...java.lang.IllegalStateException: An error was encountered processing the command (domain=FBSOpenApplicationServiceErrorDomain, code=4):  | extension log lines 0 | crash reports 0
+8538-iphone-dark share-photo: fails 1 shots 3 Assert that "Vespin" is visible... FAILED | extension log lines 0 | crash reports 0
+8538-iphone-dark app group drafts:  (group missing)
+8538-iphone-dark share-draft-app: fails 0 shots 1 (rig 1)
+  RIG ERROR: Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})...java.lang.IllegalStateException: An error was encountered processing the command (domain=FBSOpenApplicationServiceErrorDomain, code=4):  | extension log lines 0 | crash reports 0
+8538-iphone-light share-two: fails 1 shots 2 Tap on "Vespin"... FAILED | extension log lines 0 | crash reports 0
+8538-iphone-light-two app group drafts:  (group missing)
+8538-iphone-light share-notes: fails 1 shots 2 Assert that "Cancel" is visible... FAILED | extension log lines 0 | crash reports 0
+8538-ipad26-light share-photo: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB  | extension log lines 0 | crash reports 0
+8538-ipad26-light app group drafts:  (group missing)
+8538-ipad26-light share-draft-app: fails 0 shots 1 (rig 1)
+  RIG ERROR: Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})...java.lang.IllegalStateException: An error was encountered processing the command (domain=FBSOpenApplicationServiceErrorDomain, code=4):  | extension log lines 0 | crash reports 0
+8538-ipad26-dark share-photo: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB  | extension log lines 0 | crash reports 0
+8538-ipad26-dark app group drafts:  (group missing)
+8538-ipad26-dark share-draft-app: fails 0 shots 1 (rig 1)
+  RIG ERROR: Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})...java.lang.IllegalStateException: An error was encountered processing the command (domain=FBSOpenApplicationServiceErrorDomain, code=4):  | extension log lines 0 | crash reports 0
+8538-ipad26-light share-two: fails 1 shots 1 Tap on "Select"... FAILED | extension log lines 0 | crash reports 0
+8538-ipad26-light-two app group drafts:  (group missing)
+9241-ipad26-light share9241p: fails 1 shots 3 Assert that "Vespin" is visible... FAILED | extension log lines 0 | crash reports 0
