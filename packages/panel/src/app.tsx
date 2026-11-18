@@ -571,7 +571,10 @@ function AppWindow(): React.JSX.Element {
 
   // A page chosen from outside Settings, as ⌘K chooses one, is a move the router's blocker holds while a page holds unsaved
   // work, as entering Settings is; one turned within Settings leaves no page, so it asks nothing.
-  const chooseSettingsView = useSteadyDoor((view: SettingsView) => goSettings({ page: view }));
+  const chooseSettingsView = useSteadyDoor((view: SettingsView, sub?: SettingsSubPage) =>
+    goSettings(sub === undefined ? { page: view } : { page: view, sub }),
+  );
+
   // Note that a page of the page's own stands only while its page is the one shown, never over the Profile a fallback shows.
   const shownSub = shownView === settingsPlace.view ? settingsPlace.sub : undefined;
 

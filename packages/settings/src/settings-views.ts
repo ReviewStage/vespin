@@ -1,4 +1,8 @@
-import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
+import {
+  INTEGRATION_PROVIDER,
+  INTEGRATION_PROVIDER_LIST,
+  type IntegrationProvider,
+} from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SETTINGS_PAGE as SETTINGS_VIEW, type SettingsPage as SettingsView } from "@repo/settings";
@@ -97,8 +101,9 @@ export function settingsViewNamed(page: string | undefined): SettingsView | unde
 
 /**
  * A page of a Settings page's own, which a row on it opens, as Workspace's
- * GitHub, Slack, and Sentry rows open theirs: an integration, named in an
- * address after its page (`/settings/workspace/github`).
+ * GitHub, Slack, and Sentry rows open theirs, and each of Integrations'
+ * providers its accounts': an integration, named in an address after its
+ * page (`/settings/workspace/github`, `/settings/integrations/notion`).
  */
 export type SettingsSubPage = IntegrationProvider;
 
@@ -109,6 +114,7 @@ const SETTINGS_SUB_PAGES: Partial<Record<SettingsView, readonly SettingsSubPage[
     INTEGRATION_PROVIDER.SLACK,
     INTEGRATION_PROVIDER.SENTRY,
   ],
+  [SETTINGS_VIEW.INTEGRATIONS]: INTEGRATION_PROVIDER_LIST,
 };
 
 /** The page of `page`'s own a value names, or none where `page` holds no page by that name. */
