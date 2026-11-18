@@ -38,7 +38,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useNavigation, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
@@ -164,26 +164,20 @@ function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => voi
 export function TaskRelationScreen({
   taskId,
   kind,
-  pushed = false,
 }: {
   readonly taskId: string;
   readonly kind?: TaskRelationKind | undefined;
-  /** Whether the kind was picked in the sheet, its page pushed over the kinds with the system's own back. */
-  readonly pushed?: boolean | undefined;
 }) {
   const router = useRouter();
-  const navigation = useNavigation();
   const colors = useColors();
   const overview = useTaskOverview(taskId);
   const writes = useTaskRelationWrites();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const [search, setSearch] = useState("");
-  // Note that the sheet is closed by the stack it was presented on, so a kind's page pushed inside the sheet closes the whole sheet rather than stepping back to the kinds.
-  const closeSheet = () => navigation.getParent()?.goBack();
+  const closeSheet = () => router.back();
 
-  // Note that a kind picked here opens as its own page pushed inside the sheet's stack, so the system's back chevron and an edge swipe return to the kinds.
-  const openKind = (picked: TaskRelationKind) =>
-    router.push({ pathname: "/task-relation/pick", params: { task: taskId, kind: picked } });
+  // Note that every menu opens the sheet on its kind, so the four kinds stand only for a link that names none, and a pick there names the kind in the route itself.
+  const openKind = (picked: TaskRelationKind) => router.setParams({ kind: picked });
 
   const bar = (
     <>
@@ -209,8 +203,7 @@ export function TaskRelationScreen({
           />
         )}
       </Stack.Screen>
-      {/* Note that a pushed kind's page leaves its leading end to the system's back chevron, so Cancel stands at the other end. */}
-      <Stack.Toolbar placement={pushed ? "right" : "left"}>
+      <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button onPress={closeSheet}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
