@@ -161,6 +161,8 @@ export const SECTION = {
   YOUR_SOUNDS: "your-sounds",
   APPEARANCE_GROUP: "appearance-group",
   INTEGRATIONS_GROUP: "integrations-group",
+  /** An integration's page's accounts, headed by its provider's name. */
+  INTEGRATION_ACCOUNTS: "integration-accounts",
   SHORTCUTS_GROUP: "shortcuts-group",
   SHORTCUTS_WRITING: "shortcuts-writing",
   SHORTCUTS_FILES_CHANGED: "shortcuts-files-changed",
@@ -299,6 +301,10 @@ const SETTINGS_SECTIONS = {
     drawn: accountDrawn,
   },
   [SECTION.INTEGRATIONS_GROUP]: {
+    found: SECTION_FOUND.ROWS,
+    rows: SECTION_ROWS.INTEGRATIONS,
+  },
+  [SECTION.INTEGRATION_ACCOUNTS]: {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.INTEGRATIONS,
   },

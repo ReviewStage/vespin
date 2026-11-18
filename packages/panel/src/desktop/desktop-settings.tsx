@@ -11,6 +11,7 @@ import {
   SETTINGS_VIEW,
   type SettingsPageGroup,
   type SettingsView,
+  settingsSubNamed,
 } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -451,7 +452,8 @@ export function DesktopSettings({
       setIntegrationsQuery(integrationNamed(provider, query) ? query : "");
     }
 
-    settings.onViewChange(entry.page);
+    // Note that an integration's result opens the integration's own page, where its accounts stand.
+    settings.onViewChange(entry.page, settingsSubNamed(entry.page, entry.id));
     landing.current = landOnSettingsRow(entry.id, keyboard);
   };
 

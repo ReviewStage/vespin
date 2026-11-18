@@ -82,5 +82,6 @@ test("the Inbox stands under the reader's workspace only while the account keeps
 test("a page of a Settings page's own stands only under the page that holds it", () => {
   assert.equal(settingsSubRouteStands(SETTINGS_VIEW.WORKSPACE, "github"), true);
   assert.equal(settingsSubRouteStands(SETTINGS_VIEW.WORKSPACE, "linear"), false);
+  assert.equal(settingsSubRouteStands(SETTINGS_VIEW.INTEGRATIONS, "linear"), true);
   assert.equal(settingsSubRouteStands(SETTINGS_VIEW.AGENTS, "github"), false);
 });

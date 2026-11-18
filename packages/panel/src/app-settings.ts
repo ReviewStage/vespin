@@ -34,7 +34,8 @@ import {
 export interface SettingsDoors {
   /** Which settings page is showing, held by the window because a shortcut or a link elsewhere turns it. */
   view: SettingsView;
-  onViewChange: (view: SettingsView) => void;
+  /** Turns to a page, or to a page of its own where `sub` names one. */
+  onViewChange: (view: SettingsView, sub?: SettingsSubPage) => void;
   /** The page of the shown page's own that stands, as Workspace's GitHub, held by the window as `view` is. */
   sub: SettingsSubPage | undefined;
   /** Opens a page of the shown page's own, or the page itself again for none. */

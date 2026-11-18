@@ -285,6 +285,46 @@ export function serverGroups(rows: readonly ServerRow[]): readonly ServerGroup[]
   });
 }
 
+/** One provider's rows under one heading, as Settings › Integrations lists each provider once. */
+export interface ProviderGroup {
+  readonly heading: ServerSection | undefined;
+  /** Each provider's rows, its accounts together, in the order the rows came in. */
+  readonly providers: readonly (readonly ServerRow[])[];
+}
+
+/**
+ * The rows gathered by provider, each provider under one heading, the
+ * headings in `serverGroups`' order: a provider stands under Connected
+ * where any of its accounts is connected, an account still signing in
+ * beside it included, else under the heading of its first row.
+ */
+export function providerGroups(rows: readonly ServerRow[]): readonly ProviderGroup[] {
+  const byProvider = new Map<IntegrationProvider, ServerRow[]>();
+
+  for (const row of rows) {
+    const own = byProvider.get(row.provider);
+
+    if (own === undefined) byProvider.set(row.provider, [row]);
+    else own.push(row);
+  }
+
+  const headingOf = (own: readonly ServerRow[]) =>
+    own.some((row) => sectionOf(row) === SERVER_SECTION.CONNECTED)
+      ? SERVER_SECTION.CONNECTED
+      : own[0] === undefined
+        ? undefined
+        : sectionOf(own[0]);
+
+  const order = [undefined, SERVER_SECTION.CONNECTED, SERVER_SECTION.NOT_CONNECTED] as const;
+  const providers = [...byProvider.values()];
+
+  return order.flatMap((heading) => {
+    const grouped = providers.filter((own) => headingOf(own) === heading);
+
+    return grouped.length === 0 ? [] : [{ heading, providers: grouped }];
+  });
+}
+
 /** What the Connected heading counts: how many of its servers this agent has on, of how many ("2 of 3 on"). */
 export function serversOnWords(rows: readonly ServerRow[]): string {
   return `${rows.filter((row) => row.on).length} of ${rows.length} on`;

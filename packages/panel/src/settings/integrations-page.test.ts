@@ -102,6 +102,9 @@ let sent: (AnyAct | PortCall)[] = [];
 /** Every Settings link the page's presses followed. */
 let links: SettingsLink[] = [];
 
+/** Every provider's page the list's rows opened, in order. */
+let opened: (IntegrationProvider | undefined)[] = [];
+
 /** How many times the account's GitHub connect was begun. */
 let githubConnects = 0;
 
@@ -187,6 +190,7 @@ beforeEach(() => {
   toolReads.clear();
   sent = [];
   links = [];
+  opened = [];
   githubConnects = 0;
   githubDisconnects = 0;
   touched.clear();
@@ -282,13 +286,20 @@ async function settle(): Promise<void> {
 /**
  * The signed-in page once where every provider stands has been read, on the
  * test's Query client as the window's root provides its own, and under its
- * title in a settings page's frame where `framed`.
+ * title in a settings page's frame where `framed`: the list, or the page of
+ * the provider `sub` names.
  */
-async function mount(framed = false): Promise<HTMLElement> {
+async function mount(framed = false, sub?: IntegrationProvider): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
+  const section = createElement(IntegrationsSection, {
+    signedIn: true,
+    sub,
+    onSubChange: (provider: IntegrationProvider | undefined) => opened.push(provider),
+  });
 
   const page = createElement(
     OpenSettingsProvider,
@@ -314,12 +325,7 @@ async function mount(framed = false): Promise<HTMLElement> {
           },
         },
       },
-      framed
-        ? createElement(SettingsPage, {
-            title: "Integrations",
-            children: createElement(IntegrationsSection, { signedIn: true }),
-          })
-        : createElement(IntegrationsSection, { signedIn: true }),
+      framed ? createElement(SettingsPage, { title: "Integrations", children: section }) : section,
     ),
   );
 
@@ -406,11 +412,40 @@ function rowNames(page: HTMLElement): (string | undefined)[] {
   return [...page.querySelectorAll('[id$="label"]')].map(nameOf);
 }
 
-/** The words of the buttons standing on a row, its ⋯ aside. */
+/** The words of the buttons standing on a row, its ⋯ and the press of a row that opens a page aside. */
 function rowButtons(row: Element): (string | null)[] {
   return [...row.querySelectorAll("button")].flatMap((button) =>
-    button.hasAttribute("aria-expanded") ? [] : [button.textContent],
+    button.hasAttribute("aria-expanded") || button.textContent === "" ? [] : [button.textContent],
   );
+}
+
+/** Presses the button on a row that says `words`, and lets what it asked settle. */
+async function press(row: Element, words: string): Promise<void> {
+  act(() =>
+    (
+      [...row.querySelectorAll("button")].find((button) => button.textContent === words) ??
+      assert.fail(`no ${words} on the row`)
+    ).click(),
+  );
+  await settle();
+}
+
+/** Presses Add account at the head of a provider's accounts, and lets what it asked settle. */
+async function addAccount(page: HTMLElement): Promise<void> {
+  act(() => addAccountButton(page)?.click());
+  await settle();
+}
+
+/** The Add account at the head of a provider's accounts, where it stands. */
+function addAccountButton(page: HTMLElement): HTMLButtonElement | undefined {
+  return [...page.querySelectorAll("button")].find(
+    (button) => button.textContent === "Add account",
+  );
+}
+
+/** What a row says under its name: its description's words, state lines and all. */
+function lineOf(row: Element): string | undefined {
+  return row.querySelector(`[id$="description"]`)?.textContent ?? undefined;
 }
 
 /** What a row's ⋯ offers, and the line it stands under. */
@@ -464,9 +499,13 @@ async function confirm(verb: string): Promise<string | null> {
   return dialog.textContent;
 }
 
-test("a provider the deployment does not offer the account has no row, and every one it offers has its Connect", async () => {
+test("a provider the deployment does not offer the account has no row, and its page says it isn't available here, while every one it offers has its Connect", async () => {
   withheld = [INTEGRATION_PROVIDER.SLACK];
   const page = await mount();
+  const slack = await mount(false, INTEGRATION_PROVIDER.SLACK);
+
+  assert.equal(lineOf(rowNamed(slack, "Slack")), "Slack isn't available here.");
+  assert.deepEqual(rowButtons(rowNamed(slack, "Slack")), []);
 
   assert.deepEqual(rowNames(page), [
     "Executor",
@@ -550,20 +589,28 @@ test("GitHub, granted by the account's own GitHub, offers Connect, which connect
   assert.ok(buttonNamed("Connect"), "Connect is offered again");
 });
 
-test("GitHub connected stands quiet with the same ⋯ as every row, under a line saying it uses the GitHub sign-in", async () => {
+test("GitHub connected is a row that opens its page, where its account keeps Reconnect in its ⋯ under a line saying it uses the GitHub sign-in, and its Disconnect stands last", async () => {
   withheld = INTEGRATION_PROVIDER_LIST.filter(
     (provider) => provider !== INTEGRATION_PROVIDER.GITHUB,
   );
   githubConnected = true;
   listed.set(INTEGRATION_PROVIDER.GITHUB, [{ name: "get_me", description: "Reads the account." }]);
-  const page = await mount();
-  const row = rowNamed(page, "GitHub");
+  const list = await mount();
+  const row = rowNamed(list, "GitHub");
 
   assert.deepEqual(rowButtons(row), []);
-  assert.deepEqual(menuOf(row), {
-    items: ["Reconnect", "Disconnect"],
+  assert.deepEqual(menuOf(row).items, []);
+  assert.equal(lineOf(row), "Issues, pull requests, and code, as you");
+  act(() => row.querySelector<HTMLButtonElement>("button")?.click());
+  assert.deepEqual(opened, [INTEGRATION_PROVIDER.GITHUB]);
+
+  const page = await mount(false, INTEGRATION_PROVIDER.GITHUB);
+  assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), []);
+  assert.deepEqual(menuOf(rowNamed(page, "GitHub")), {
+    items: ["Reconnect"],
     heading: "Uses your GitHub sign-in",
   });
+  assert.deepEqual(rowButtons(rowNamed(page, "Disconnect GitHub")), ["Disconnect"]);
 });
 
 test("GitHub's Disconnect is the account's GitHub disconnect, which asks first and leaves Connect, and a refusal closes the dialog with GitHub still connected", async () => {
@@ -573,14 +620,14 @@ test("GitHub's Disconnect is the account's GitHub disconnect, which asks first a
   githubConnected = true;
   listed.set(INTEGRATION_PROVIDER.GITHUB, [{ name: "get_me", description: "Reads the account." }]);
   refuseGitHubDisconnect = true;
-  const refusedPage = await mount();
-  await choose(rowNamed(refusedPage, "GitHub"), "Disconnect");
+  const refusedPage = await mount(false, INTEGRATION_PROVIDER.GITHUB);
+  await press(rowNamed(refusedPage, "Disconnect GitHub"), "Disconnect");
   await confirm("Disconnect GitHub");
   const refusedDialog = document.querySelector('[role="alertdialog"]');
   const refusedButtons = rowButtons(rowNamed(refusedPage, "GitHub"));
   refuseGitHubDisconnect = false;
-  const page = await mount();
-  await choose(rowNamed(page, "GitHub"), "Disconnect");
+  const page = await mount(false, INTEGRATION_PROVIDER.GITHUB);
+  await press(rowNamed(page, "Disconnect GitHub"), "Disconnect");
   const askedBeforeConfirm = githubDisconnects;
   await confirm("Disconnect GitHub");
 
@@ -591,7 +638,7 @@ test("GitHub's Disconnect is the account's GitHub disconnect, which asks first a
   await vi.waitFor(() => assert.deepEqual(rowButtons(rowNamed(page, "GitHub")), ["Connect"]));
 });
 
-test("GitHub connected but refused by its server shows Reconnect on the row, and keeps the rest of its ⋯", async () => {
+test("GitHub connected but refused by its server shows Reconnect on its row and on its page, which keeps no ⋯ beside it", async () => {
   withheld = INTEGRATION_PROVIDER_LIST.filter(
     (provider) => provider !== INTEGRATION_PROVIDER.GITHUB,
   );
@@ -599,30 +646,35 @@ test("GitHub connected but refused by its server shows Reconnect on the row, and
   toolReads.set(INTEGRATION_PROVIDER.GITHUB, {
     problem: { reason: INTEGRATION_TOOLS_PROBLEM.REFUSED },
   });
-  const page = await mount();
+  const list = await mount();
+  const page = await mount(false, INTEGRATION_PROVIDER.GITHUB);
   const row = rowNamed(page, "GitHub");
 
+  assert.deepEqual(rowButtons(rowNamed(list, "GitHub")), ["Reconnect"]);
   assert.deepEqual(rowButtons(row), ["Reconnect"]);
-  assert.deepEqual(menuOf(row).items, ["Disconnect"]);
+  assert.deepEqual(menuOf(row).items, []);
 });
 
-test("a connection that works stands quiet, with Reconnect in its ⋯ beside Disconnect, and Reconnect signs in again", async () => {
+test("a connection that works says what it gives agents on the list, and on its page stands quiet with Reconnect in its ⋯, which signs in again", async () => {
   withheld = INTEGRATION_PROVIDER_LIST.filter(
     (provider) => provider !== INTEGRATION_PROVIDER.LINEAR,
   );
   standing.set(INTEGRATION_PROVIDER.LINEAR, INTEGRATION_STATUS.CONNECTED);
   listed.set(INTEGRATION_PROVIDER.LINEAR, [{ name: "list_issues", description: "Lists issues." }]);
-  const page = await mount();
+  const list = await mount();
+  const listLine = lineOf(rowNamed(list, "Linear"));
+  const page = await mount(false, INTEGRATION_PROVIDER.LINEAR);
   const row = rowNamed(page, "Linear");
-  const line = row.querySelector(".ui-settings-row-state")?.textContent;
+  const line = lineOf(row);
   const buttons = rowButtons(row);
   const menu = menuOf(row);
 
   await choose(row, "Reconnect");
 
-  assert.equal(line, "Connected");
+  assert.equal(listLine, "Issues, projects, and cycles");
+  assert.equal(line, undefined);
   assert.deepEqual(buttons, []);
-  assert.deepEqual(menu, { items: ["Reconnect", "Disconnect"], heading: undefined });
+  assert.deepEqual(menu, { items: ["Reconnect"], heading: undefined });
   assert.deepEqual(
     sent
       .filter((request) => request.kind === ACT_KIND.INTEGRATIONS_CONNECT)
@@ -636,8 +688,8 @@ test("Disconnect on a lone account says what goes before it disconnects", async 
     (provider) => provider !== INTEGRATION_PROVIDER.LINEAR,
   );
   standing.set(INTEGRATION_PROVIDER.LINEAR, INTEGRATION_STATUS.CONNECTED);
-  const page = await mount();
-  await choose(rowNamed(page, "Linear"), "Disconnect");
+  const page = await mount(false, INTEGRATION_PROVIDER.LINEAR);
+  await press(rowNamed(page, "Disconnect Linear"), "Disconnect");
 
   assert.match(
     document.querySelector('[role="alertdialog"]')?.textContent ?? "",
@@ -645,7 +697,7 @@ test("Disconnect on a lone account says what goes before it disconnects", async 
   );
 });
 
-test("a sign-in that expired, and a connection its server refused, each show Reconnect on the row and keep Disconnect in its ⋯", async () => {
+test("a sign-in that expired, and a connection its server refused, each show Reconnect on the row, and the expired one's page keeps it beside no ⋯", async () => {
   withheld = INTEGRATION_PROVIDER_LIST.filter(
     (provider) =>
       provider !== INTEGRATION_PROVIDER.NOTION && provider !== INTEGRATION_PROVIDER.SLACK,
@@ -655,19 +707,23 @@ test("a sign-in that expired, and a connection its server refused, each show Rec
   toolReads.set(INTEGRATION_PROVIDER.SLACK, {
     problem: { reason: INTEGRATION_TOOLS_PROBLEM.REFUSED },
   });
-  const page = await mount();
-  const expired = rowNamed(page, "Notion");
-  const refused = rowNamed(page, "Slack");
+  const list = await mount();
+  const expired = rowNamed(list, "Notion");
+  const refused = rowNamed(list, "Slack");
+  const page = await mount(false, INTEGRATION_PROVIDER.NOTION);
+  const account = rowNamed(page, "Notion");
 
   assert.equal(expired.querySelector(".ui-settings-row-state")?.textContent, "Sign-in expired");
   assert.deepEqual(rowButtons(expired), ["Reconnect"]);
-  assert.deepEqual(menuOf(expired), { items: ["Disconnect"], heading: undefined });
   assert.equal(
     refused.querySelector(".ui-settings-row-state")?.textContent,
     "Slack refused the sign-in.",
   );
   assert.deepEqual(rowButtons(refused), ["Reconnect"]);
-  assert.deepEqual(menuOf(refused), { items: ["Disconnect"], heading: undefined });
+  assert.equal(account.querySelector(".ui-settings-row-state")?.textContent, "Sign-in expired");
+  assert.deepEqual(rowButtons(account), ["Reconnect"]);
+  assert.deepEqual(menuOf(account).items, []);
+  assert.deepEqual(rowButtons(rowNamed(page, "Disconnect Notion")), ["Disconnect"]);
 });
 
 test("a server's own error stands quoted on a plain line under our sentence, never inside it", async () => {
@@ -693,7 +749,7 @@ test("a server's own error stands quoted on a plain line under our sentence, nev
   ]);
 });
 
-test("a connection whose tools could not be read says so in the attention tint, never Connected, and Retry reads them again", async () => {
+test("a connection whose tools could not be read says so in the attention tint, and Retry reads them again", async () => {
   withheld = INTEGRATION_PROVIDER_LIST.filter(
     (provider) => provider !== INTEGRATION_PROVIDER.LINEAR,
   );
@@ -713,10 +769,7 @@ test("a connection whose tools could not be read says so in the attention tint, 
   await settle();
 
   await vi.waitFor(() =>
-    assert.equal(
-      rowNamed(page, "Linear").querySelector(".ui-settings-row-state")?.textContent,
-      "Connected",
-    ),
+    assert.equal(lineOf(rowNamed(page, "Linear")), "Issues, projects, and cycles"),
   );
   const mended = rowNamed(page, "Linear");
   assert.deepEqual(rowButtons(mended), []);
@@ -790,7 +843,7 @@ test("a Cancel that lands after the sign-in finished leaves the provider connect
   touched.set(GRANOLA, INTEGRATION_STATUS.CONNECTED);
 
   await pressOnGranola(page, "Cancel");
-  await vi.waitFor(() => assert.equal(granolaRow(page).line, "Connected"));
+  await vi.waitFor(() => assert.equal(lineOf(granolaRowOf(page)), "Meeting notes and transcripts"));
 });
 
 test("a sign-in canceled on Vercel Connect's own page says so plainly, with Retry", async () => {
@@ -876,7 +929,7 @@ it.effect(
       touched.set(GRANOLA, INTEGRATION_STATUS.CONNECTED);
       yield* Effect.promise(readMoves);
       yield* Effect.promise(() =>
-        vi.waitFor(() => assert.equal(granolaRow(page).line, "Connected")),
+        vi.waitFor(() => assert.equal(lineOf(granolaRowOf(page)), "Meeting notes and transcripts")),
       );
     }),
 );
@@ -1099,54 +1152,47 @@ test("Command-F lands in the page's search, and Escape clears it, then lets go o
   assert.deepEqual(reachedWindow, []);
 });
 
-test("two accounts at a provider stand as two rows named by their labels, each offering Rename and Add another account", async () => {
+test("two accounts at a provider stand as one row naming both, whose page offers each Rename, Reconnect, and Disconnect in its ⋯, and Add account at their head", async () => {
   const notion = INTEGRATION_PROVIDER.NOTION;
   standing.set(notion, INTEGRATION_STATUS.CONNECTED);
   addable = [notion];
   accounts = [
-    {
-      provider: notion,
-      connection: "notion",
-      label: "Acme",
-
-      status: INTEGRATION_STATUS.CONNECTED,
-    },
+    { provider: notion, connection: "notion", label: "Acme", status: INTEGRATION_STATUS.CONNECTED },
     {
       provider: notion,
       connection: "notion-2",
       label: "Personal",
-
       status: INTEGRATION_STATUS.CONNECTED,
     },
   ];
-  const page = await mount();
+  listed.set(notion, [{ name: "search", description: "Searches pages." }]);
+  const list = await mount();
+  const row = rowNamed(list, "Notion · Acme and Personal");
+  const page = await mount(false, notion);
 
-  const rowOf = (label: string) =>
-    [...page.querySelectorAll(".ui-settings-row")].find((row) =>
-      nameOf(row.querySelector('[id$="label"]'))?.startsWith(`Notion · ${label}`),
-    ) ?? assert.fail(`Notion · ${label} has a row`);
+  assert.equal(lineOf(row), "Pages, databases, and comments");
+  assert.deepEqual(rowButtons(row), []);
 
   for (const label of ["Acme", "Personal"]) {
-    assert.deepEqual(menuOf(rowOf(label)).items, [
-      "Rename",
-      "Add another account",
-      "Reconnect",
-      "Disconnect",
-    ]);
+    assert.deepEqual(menuOf(rowNamed(page, label)).items, ["Rename", "Reconnect", "Disconnect"]);
   }
 
-  await choose(rowOf("Acme"), "Add another account");
+  // Two accounts are two rows, each keeping its Disconnect in its ⋯ rather than a row of its own.
+  assert.deepEqual(rowNames(page), ["Acme", "Personal"]);
+  await choose(rowNamed(page, "Personal"), "Disconnect");
+  assert.match(
+    document.querySelector('[role="alertdialog"]')?.textContent ?? "",
+    /Agents lose this account\. Your other Notion accounts stay connected\./u,
+  );
+
+  await addAccount(page);
   const connects = sent.filter((request) => request.kind === ACT_KIND.INTEGRATIONS_CONNECT);
   assert.deepEqual(
     connects.map((request) => request.payload),
     [{ provider: notion, add: true }],
   );
   // The new account stands pending under the name the service gave it, as a row of its own.
-  assert.ok(
-    [...page.querySelectorAll('[id$="label"]')].some(
-      (name) => nameOf(name) === "Notion · Account 3",
-    ),
-  );
+  assert.deepEqual(rowButtons(rowNamed(page, "Account 3")), ["Reopen", "Cancel"]);
 });
 
 test("an account alone at its provider is named by its label where it carries one, and by its provider alone where it carries none", async () => {
@@ -1183,12 +1229,8 @@ test("an account renamed from its row's ⋯ is named in place: Escape keeps its 
       status: INTEGRATION_STATUS.CONNECTED,
     },
   ];
-  const page = await mount();
-
-  const rowOf = (label: string) =>
-    [...page.querySelectorAll(".ui-settings-row")].find((row) =>
-      nameOf(row.querySelector('[id$="label"]'))?.startsWith(`Notion · ${label}`),
-    ) ?? assert.fail(`Notion · ${label} has a row`);
+  const page = await mount(false, notion);
+  const rowOf = (label: string) => rowNamed(page, label);
 
   const field = () =>
     page.querySelector<HTMLInputElement>('input[aria-label="Notion · Acme account name"]');
@@ -1240,12 +1282,8 @@ test("a refused rename says the account could not be renamed and what to do, in 
     },
   ];
   refuseRename = true;
-  const page = await mount();
-
-  const row =
-    [...page.querySelectorAll(".ui-settings-row")].find((each) =>
-      nameOf(each.querySelector('[id$="label"]'))?.startsWith("Notion · Acme"),
-    ) ?? assert.fail("Notion has a row");
+  const page = await mount(false, notion);
+  const row = rowNamed(page, "Acme");
 
   await choose(row, "Rename");
 
@@ -1278,14 +1316,8 @@ test("an added account whose first sign-in Connect refused keeps its row with th
       status: INTEGRATION_STATUS.CONNECTED,
     },
   ];
-  const page = await mount();
-
-  const acme =
-    [...page.querySelectorAll(".ui-settings-row")].find(
-      (row) => nameOf(row.querySelector('[id$="label"]')) === "Notion · Acme",
-    ) ?? assert.fail("Notion has a row");
-
-  await choose(acme, "Add another account");
+  const page = await mount(false, notion);
+  await addAccount(page);
 
   // The service ended the refused sign-in and deleted its row, naming the failure once.
   signInFailures = [
@@ -1300,7 +1332,7 @@ test("an added account whose first sign-in Connect refused keeps its row with th
 
   const addedRow = () =>
     [...page.querySelectorAll(".ui-settings-row")].find(
-      (row) => nameOf(row.querySelector('[id$="label"]')) === "Notion · Account 3",
+      (row) => nameOf(row.querySelector('[id$="label"]')) === "Account 3",
     ) ?? assert.fail("the refused account keeps its row");
 
   await vi.waitFor(() => assert.match(stateLines(addedRow()) ?? "", /access_denied/u));
@@ -1335,19 +1367,9 @@ test("an account added under the provider's own name, beside one that stands, wa
       status: INTEGRATION_STATUS.CONNECTED,
     },
   ];
-  const page = await mount();
-
-  const personal =
-    [...page.querySelectorAll(".ui-settings-row")].find(
-      (row) => nameOf(row.querySelector('[id$="label"]')) === "Notion · Personal",
-    ) ?? assert.fail("Notion has a row");
-
-  await choose(personal, "Add another account");
-
-  const added =
-    [...page.querySelectorAll(".ui-settings-row")].find(
-      (row) => nameOf(row.querySelector('[id$="label"]')) === "Notion · Account 1",
-    ) ?? assert.fail("the account added has a row of its own");
+  const page = await mount(false, notion);
+  await addAccount(page);
+  const added = rowNamed(page, "Account 1");
 
   assert.deepEqual(
     [...added.querySelectorAll("button")].flatMap(({ textContent: text }) =>
@@ -1375,12 +1397,8 @@ test("an added account whose first sign-in is canceled leaves its row, so the ne
       status: INTEGRATION_STATUS.PENDING,
     },
   ];
-  const page = await mount();
-
-  const pending =
-    [...page.querySelectorAll(".ui-settings-row")].find(
-      (row) => nameOf(row.querySelector('[id$="label"]')) === "Notion · Account 2",
-    ) ?? assert.fail("the pending account has a row");
+  const page = await mount(false, notion);
+  const pending = rowNamed(page, "Account 2");
 
   // The service deletes the canceled first sign-in's account, so its next read lists Acme alone.
   accounts = accounts.slice(0, 1);
@@ -1394,15 +1412,13 @@ test("an added account whose first sign-in is canceled leaves its row, so the ne
 
   await vi.waitFor(() =>
     assert.equal(
-      [...page.querySelectorAll('[id$="label"]')].some(
-        (name) => nameOf(name) === "Notion · Account 2",
-      ),
+      [...page.querySelectorAll('[id$="label"]')].some((name) => nameOf(name) === "Account 2"),
       false,
     ),
   );
 });
 
-test("a canceled sign-in that held a provider's last place frees it at once, offering Add another account again", async () => {
+test("a canceled sign-in that held a provider's last place frees it at once, offering Add account again", async () => {
   const notion = INTEGRATION_PROVIDER.NOTION;
   standing.set(notion, INTEGRATION_STATUS.CONNECTED);
   canceled.set("notion-5", INTEGRATION_STATUS.DISCONNECTED);
@@ -1412,30 +1428,22 @@ test("a canceled sign-in that held a provider's last place frees it at once, off
     label: `Workspace ${place}`,
     status: place === 5 ? INTEGRATION_STATUS.PENDING : INTEGRATION_STATUS.CONNECTED,
   }));
-  const page = await mount();
-
-  const rowOf = (label: string) =>
-    [...page.querySelectorAll(".ui-settings-row")].find((row) =>
-      nameOf(row.querySelector('[id$="label"]'))?.startsWith(`Notion · ${label}`),
-    ) ?? assert.fail(`Notion · ${label} has a row`);
-
-  assert.ok(!menuOf(rowOf("Workspace 1")).items.includes("Add another account"));
+  const page = await mount(false, notion);
+  assert.equal(addAccountButton(page), undefined);
 
   // The service's next read counts four accounts, so the provider is addable again.
   accounts = accounts.slice(0, 4);
   addable = [notion];
   act(() =>
     (
-      [...rowOf("Workspace 5").querySelectorAll("button")].find(
+      [...rowNamed(page, "Workspace 5").querySelectorAll("button")].find(
         (button) => button.textContent === "Cancel",
       ) ?? assert.fail("no Cancel")
     ).click(),
   );
   await settle();
 
-  await vi.waitFor(() =>
-    assert.ok(menuOf(rowOf("Workspace 1")).items.includes("Add another account")),
-  );
+  await vi.waitFor(() => assert.notEqual(addAccountButton(page), undefined));
 });
 
 test("Reopen on an added account still waiting on its first sign-in reopens that account, never adds another", async () => {
@@ -1450,18 +1458,12 @@ test("Reopen on an added account still waiting on its first sign-in reopens that
       status: INTEGRATION_STATUS.CONNECTED,
     },
   ];
-  const page = await mount();
-
-  const acme =
-    [...page.querySelectorAll(".ui-settings-row")].find(
-      (row) => nameOf(row.querySelector('[id$="label"]')) === "Notion · Acme",
-    ) ?? assert.fail("Notion has a row");
-
-  await choose(acme, "Add another account");
+  const page = await mount(false, notion);
+  await addAccount(page);
 
   const added =
     [...page.querySelectorAll(".ui-settings-row")].find(
-      (row) => nameOf(row.querySelector('[id$="label"]')) === "Notion · Account 3",
+      (row) => nameOf(row.querySelector('[id$="label"]')) === "Account 3",
     ) ?? assert.fail("the account added has a row");
 
   sent = [];

@@ -59,7 +59,8 @@ export interface SettingsPanelProps {
    * a shortcut or a button elsewhere in the window turns it.
    */
   view: SettingsView;
-  onViewChange: (view: SettingsView) => void;
+  /** Turns to a page, or to a page of its own where `sub` names one, as a search result for an integration opens its page. */
+  onViewChange: (view: SettingsView, sub?: SettingsSubPage) => void;
   /** The page of the shown page's own that stands in its place, as Workspace's GitHub; none for the page itself. */
   sub?: SettingsSubPage | undefined;
   /** Opens a page of the shown page's own, or the page itself again for none. */
@@ -183,7 +184,12 @@ export function SettingsPanel({
       {view === SETTINGS_VIEW.HOSTS ? <HostsSection signedIn={signedIn} /> : null}
 
       {view === SETTINGS_VIEW.INTEGRATIONS ? (
-        <IntegrationsSection signedIn={signedIn} filter={integrationsFilter} />
+        <IntegrationsSection
+          signedIn={signedIn}
+          filter={integrationsFilter}
+          sub={sub}
+          onSubChange={onSubChange}
+        />
       ) : null}
 
       {view !== SETTINGS_VIEW.MCP ? null : signedIn ? (
