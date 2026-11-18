@@ -347,10 +347,13 @@ function InboxRowView({
     workspaceStep,
   );
 
+  const __rowStart = performance.now();
+  let __preview = 0;
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
-    () =>
-      previewMessages(
+    () => {
+      const __p0 = performance.now();
+      const made = previewMessages(
         inboxThreadMessages(
           item.thread === undefined ? item : { ...item, thread: item.thread.slice(-PREVIEW_TAIL) },
           agentName,
@@ -358,9 +361,18 @@ function InboxRowView({
         ),
         pictureOf,
         harness,
-      ),
+      );
+      __preview = performance.now() - __p0;
+      return made;
+    },
     [item, agentName, readerId, pictureOf, harness],
   );
+  const __r0 = performance.now();
+  const __remindMenu = remindMenu(item);
+  const __remind = performance.now() - __r0;
+  const __l0 = performance.now();
+  const __summary = inboxPreview(item, (member) => inboxMemberName(member, readerId));
+  const __line = performance.now() - __l0;
 
   const resolve =
     item.status === INBOX_STATUS.OPEN
@@ -374,6 +386,14 @@ function InboxRowView({
         ]
       : [];
 
+  // @ts-expect-error: measurement only.
+  globalThis.__perfEach?.("row", {
+    preview: Math.round(__preview * 10) / 10,
+    remind: Math.round(__remind * 10) / 10,
+    line: Math.round(__line * 10) / 10,
+    body: Math.round((performance.now() - __rowStart) * 10) / 10,
+  });
+
   return (
     <ListRow
       id={item.id}
@@ -383,7 +403,7 @@ function InboxRowView({
         status: taskStatus,
       }}
       line={inboxLineKind(item)}
-      summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
+      summary={__summary}
       unread={unread}
       done={isDone(item)}
       face={
@@ -393,7 +413,7 @@ function InboxRowView({
       }
       at={item.updatedAt}
       due={item.remindAt}
-      trailingActions={[...resolve, remindMenu(item)]}
+      trailingActions={[...resolve, __remindMenu]}
       leadingActions={[
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
