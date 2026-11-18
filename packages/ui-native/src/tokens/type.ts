@@ -8,6 +8,8 @@
  * semibold, and a page's heading at 20 semibold, the style nearest 21.
  */
 export const TYPE_ROLE = {
+  /** An Inbox thread's first line, its task's name: the row's largest words, as the panel's lead line stands over its title and Mail names a message's sender over its subject. */
+  ROW_LEAD: "headline",
   /** A row's title, and a message's words. */
   ROW_TITLE: "subheadline",
   /** The muted line under a row's title, a card's detail, and a chip's words. */

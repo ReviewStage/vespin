@@ -84,6 +84,8 @@ export const ROW_INSET = {
   THREAD_VERTICAL: 11,
   /** Between an Inbox thread's title and the line under it, as Mail's subject sits under its sender. */
   THREAD_LINE_GAP: 3,
+  /** Between an Inbox thread's title and its preview where its task leads it, as the panel's description stands 2 px under its title, the task's line and the title standing flush. */
+  THREAD_PREVIEW_GAP: 2,
   /**
    * Between the column's edge and a selected row's rounded fill, so the fill
    * stands set in, as Mail's selected message does. Note that it stays under
