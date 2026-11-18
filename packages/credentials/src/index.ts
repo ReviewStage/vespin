@@ -11,6 +11,7 @@ export {
 export {
   type AccountRenewalWindow,
   AccountSessionManager,
+  type AccountWrite,
   DeletionUnconfirmed,
   RENEWAL_REFUSED,
   SignInFailed,

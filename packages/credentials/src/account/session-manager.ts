@@ -124,9 +124,18 @@ type SessionLifecycle = AccountLifecycle<{
 
 const IDLE: SessionLifecycle = { kind: ACCOUNT_LIFECYCLE.IDLE };
 
+/** What a write of the account is: a renewal's, whose tokens the service already rotated, or any other. */
+export interface AccountWrite {
+  /** A renewal's: where it can't be written, the store keeps it for the run rather than lose a pair the service no longer takes back. */
+  readonly renewal: boolean;
+}
+
+/** The write a renewal's grant and its identity read keep their answer with. */
+const RENEWAL_WRITE: AccountWrite = { renewal: true };
+
 interface AccountSessionStore {
   readAccount(): Effect.Effect<StoredAccount | undefined>;
-  setAccount(account: StoredAccount): Effect.Effect<AccountSnapshot>;
+  setAccount(account: StoredAccount, write?: AccountWrite): Effect.Effect<AccountSnapshot>;
   clearAccount(): Effect.Effect<AccountSnapshot>;
 }
 
@@ -495,6 +504,10 @@ export class AccountSessionManager {
 
       if (Result.isSuccess(identity)) {
         if (sameIdentity(stored, identity.success)) return;
+        const current = yield* this.#options.store.readAccount();
+
+        // Note that an identity read a renewal overtook writes nothing, since its pair is the one the renewal rotated away; the renewal's own identity read keeps the identity.
+        if (current?.refreshToken !== stored.refreshToken) return;
 
         if (!(yield* this.#storeCurrent(generation, mergedIdentity(stored, identity.success))))
           return;
@@ -548,7 +561,7 @@ export class AccountSessionManager {
           if (Result.isFailure(renewed)) return { failure: renewed.failure };
           const account = { ...stored, ...renewed.success };
 
-          return { account, kept: yield* this.#storeCurrent(generation, account) };
+          return { account, kept: yield* this.#storeCurrent(generation, account, RENEWAL_WRITE) };
         }),
       );
 
@@ -573,6 +586,9 @@ export class AccountSessionManager {
       );
 
       if (Result.isSuccess(next)) {
+        // Note that an unchanged identity writes nothing more, so a renewal whose pair the store holds for the run never fails on a second write.
+        if (sameIdentity(renewedAccount, next.success)) return;
+
         if (!(yield* this.#storeCurrent(generation, mergedIdentity(renewedAccount, next.success))))
           return;
         yield* this.#publishChange();
@@ -1011,10 +1027,14 @@ export class AccountSessionManager {
     );
   }
 
-  #storeCurrent(generation: number, stored: StoredAccount): Effect.Effect<boolean> {
+  #storeCurrent(
+    generation: number,
+    stored: StoredAccount,
+    write?: AccountWrite,
+  ): Effect.Effect<boolean> {
     return Effect.gen({ self: this }, function* () {
       if (!this.#isCurrent(generation)) return false;
-      const next = yield* this.#options.store.setAccount(stored);
+      const next = yield* this.#options.store.setAccount(stored, write);
 
       if (!this.#isCurrent(generation)) return false;
       this.#account = next;

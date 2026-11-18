@@ -25,7 +25,7 @@ import { readSettingsFileText, writeSettingsFileAtomic } from "./effect/settings
 
 export type { StoredAccount } from "@repo/credentials";
 
-import type { StoredAccount } from "@repo/credentials";
+import type { AccountWrite, StoredAccount } from "@repo/credentials";
 import {
   ACCOUNT_PREFERENCE_FIELDS,
   type AccountPreferenceField,
@@ -632,6 +632,13 @@ export class SettingsStore {
   /** Whether this run has cleared the vault of tokens no record names; see `#clearStrayTokens`. */
   #strayCleared = false;
   /**
+   * The account's renewed tokens where a renewal's write failed, kept for this
+   * run and written again on each read until one lands. Note that the pair it
+   * replaced is already rotated away on the service, which deletes every
+   * token of the account's client when one is presented again.
+   */
+  #unwritten: StoredAccount | undefined;
+  /**
    * The account whose preferences the service has answered, or failed to,
    * since it signed in to this host: until then the preferences this store
    * holds for it may be none of its own, as on a device it never used.
@@ -874,6 +881,13 @@ export class SettingsStore {
   /** Returns account credentials only to the main process. */
   readAccount(): Effect.Effect<StoredAccount | undefined, PlatformError> {
     return Effect.gen({ self: this }, function* () {
+      // Note that the held tokens are taken inside the gate, so a read answers the newest renewal's, and none a sign-out dropped while it waited.
+      if (this.#unwritten !== undefined) {
+        const held = yield* this.#keepRenewed();
+
+        if (held !== undefined) return held;
+      }
+
       const { account } = yield* this.#load();
 
       if (!account) {
@@ -994,6 +1008,7 @@ export class SettingsStore {
   /** Stores both OAuth tokens, and the session when there is one, under one Keychain-backed ciphertext. */
   setAccount(
     account: StoredAccount,
+    write?: AccountWrite,
   ): Effect.Effect<AccountSnapshot, PlatformError | EncryptedStorageUnavailable> {
     return Effect.gen({ self: this }, function* () {
       const cipher = this.#cipher;
@@ -1009,58 +1024,119 @@ export class SettingsStore {
         return yield* new EncryptedStorageUnavailable();
       }
 
-      yield* this.#commitAccount(account, held);
+      yield* this.#accounts.withPermits(1)(this.#keepAccount(account, held, write));
 
       return yield* this.accountSnapshot();
     });
   }
 
   /**
-   * Keeps `account` with its tokens `held`, inside the account gate: the
+   * Writes `account`, run inside the account gate. A renewal's write that
+   * fails, for the account the record still names, keeps the tokens for the
+   * run (`#unwritten`) rather than lose the one pair the service still takes;
+   * any other failed write, a sign-in again for the same account among them,
+   * fails, so its caller's cleanup runs.
+   */
+  #keepAccount(
+    account: StoredAccount,
+    held: AccountTokens,
+    write: AccountWrite | undefined,
+  ): Effect.Effect<void, PlatformError | EncryptedStorageUnavailable> {
+    return Effect.gen({ self: this }, function* () {
+      const committed = yield* Effect.result(this.#writeAccount(account, held));
+
+      if (Result.isSuccess(committed)) {
+        this.#unwritten = undefined;
+
+        return;
+      }
+
+      if (write?.renewal !== true || (yield* this.#load()).account?.email !== account.email) {
+        return yield* Effect.fail(committed.failure);
+      }
+
+      this.#unwritten = account;
+    });
+  }
+
+  /** Writes the renewed tokens a failed write left held, letting them go once the write lands, and answers them; answers none where none are held, as after a sign-out. */
+  #keepRenewed(): Effect.Effect<StoredAccount | undefined> {
+    return this.#accounts.withPermits(1)(
+      Effect.suspend(() => {
+        const account = this.#unwritten;
+
+        if (account === undefined) return Effect.succeed(undefined);
+        const { accessToken, refreshToken, sessionToken } = account;
+
+        const held: AccountTokens = {
+          accessToken,
+          refreshToken,
+          ...(sessionToken ? { sessionToken } : undefined),
+        };
+
+        return Effect.as(
+          Effect.ignore(
+            Effect.tap(this.#writeAccount(account, held), () =>
+              Effect.sync(() => {
+                if (this.#unwritten === account) this.#unwritten = undefined;
+              }),
+            ),
+          ),
+          account,
+        );
+      }),
+    );
+  }
+
+  /**
+   * Keeps `account` with its tokens `held`, which its callers run inside the account gate: the
    * vault keeps the tokens before the record names it, so a record never
    * names tokens nobody keeps, and a record a failed write left naming the
    * account before reads none of them (`vaultTokensFor`). Another account's
    * preferences, sync baseline and experiments go with it.
    */
-  #commitAccount(
+  #writeAccount(
     account: StoredAccount,
     held: AccountTokens,
   ): Effect.Effect<void, PlatformError | EncryptedStorageUnavailable> {
     const cipher = this.#cipher;
     const vault = this.#vault;
 
-    const tokenCipher =
+    // Note that a cipher that throws fails the write here rather than escape it, as the desktop's `safeStorage` can.
+    const sealed =
       vault !== undefined || cipher === undefined
-        ? TOKENS_IN_VAULT
-        : Base64.encode(cipher.encrypt(JSON.stringify(held)));
+        ? Effect.succeed(TOKENS_IN_VAULT)
+        : Effect.try({
+            try: () => Base64.encode(cipher.encrypt(JSON.stringify(held))),
+            catch: () => new EncryptedStorageUnavailable(),
+          });
 
-    const kept = this.#mutate((persisted) => {
-      const next: PersistedSettings = {
-        ...persisted,
-        account: {
-          tokenCipher,
-          ...(account.id ? { id: account.id } : undefined),
-          email: account.email,
-          ...(account.name ? { name: account.name } : undefined),
-          ...(account.pictureUrl ? { pictureUrl: account.pictureUrl } : undefined),
-          provider: account.provider,
-        },
-      };
+    const kept = (tokenCipher: string) =>
+      this.#mutate((persisted) => {
+        const next: PersistedSettings = {
+          ...persisted,
+          account: {
+            tokenCipher,
+            ...(account.id ? { id: account.id } : undefined),
+            email: account.email,
+            ...(account.name ? { name: account.name } : undefined),
+            ...(account.pictureUrl ? { pictureUrl: account.pictureUrl } : undefined),
+            provider: account.provider,
+          },
+        };
 
-      if (persisted.account?.email && persisted.account.email !== account.email) {
-        for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
-        delete next.accountPreferencesSync;
-        delete next.experiments;
-      }
+        if (persisted.account?.email && persisted.account.email !== account.email) {
+          for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
+          delete next.accountPreferencesSync;
+          delete next.experiments;
+        }
 
-      return next;
-    });
+        return next;
+      });
 
-    return this.#accounts.withPermits(1)(
-      vault === undefined
-        ? kept
-        : Effect.andThen(vault.write(vaultText(held, account.email)), kept),
-    );
+    return vault === undefined
+      ? Effect.flatMap(sealed, kept)
+      : Effect.andThen(vault.write(vaultText(held, account.email)), Effect.flatMap(sealed, kept));
   }
 
   /**
@@ -1074,7 +1150,12 @@ export class SettingsStore {
     return Effect.as(
       this.#accounts.withPermits(1)(
         Effect.andThen(
-          this.#vault?.clear ?? Effect.void,
+          Effect.andThen(
+            Effect.sync(() => {
+              this.#unwritten = undefined;
+            }),
+            this.#vault?.clear ?? Effect.void,
+          ),
           this.#mutate((persisted) => {
             // Note that the account's preferences go below, so a sign-in again reads them again before they stand.
             this.forgetAccountRead();
