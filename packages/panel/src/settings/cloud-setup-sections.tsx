@@ -1,3 +1,4 @@
+import { CLOUD_SCRIPT_WORDS, scriptLastRunWords } from "@repo/features/cloud-environment-words";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { knownTaskSectionIcon, type TaskSectionIcon } from "@repo/features/task-section-wire";
@@ -343,11 +344,11 @@ function LastRun({
 }): React.JSX.Element {
   const openPlace = useOpenPlace();
 
-  if (run.ranAt < savedAt) return <OneLine>Hasn't run since it was saved.</OneLine>;
+  if (run.ranAt < savedAt) return <OneLine>{CLOUD_SCRIPT_WORDS.NOT_RUN_SINCE}</OneLine>;
   const { agent } = run;
 
   return (
-    <OneLine words={`Last ran ${momentText(run.ranAt)} in ${agent.name}, exited ${run.exitCode}`}>
+    <OneLine words={scriptLastRunWords(run, savedAt, momentText(run.ranAt))}>
       <Text
         as={TEXT_ELEMENT.SPAN}
         variant={TEXT_VARIANT.INHERIT}
@@ -650,7 +651,7 @@ function RepositoryScriptsSection({
   return (
     <SettingsSection
       {...settingsSectionHead(SECTION.ENVIRONMENT_SETUP)}
-      caption="Run in each new cloud sandbox after its repository is checked out."
+      caption={CLOUD_SCRIPT_WORDS.SETUP_CAPTION}
       action={
         manages ? (
           <AddRepositoryButton
@@ -664,7 +665,7 @@ function RepositoryScriptsSection({
     >
       {read ?? (
         <>
-          {rows.length === 0 ? <SettingsLine>No setup scripts yet.</SettingsLine> : null}
+          {rows.length === 0 ? <SettingsLine>{CLOUD_SCRIPT_WORDS.SETUP_NONE}</SettingsLine> : null}
           {rows.map((each) => (
             <ScriptRow
               key={each.repository.toLowerCase()}
@@ -1478,7 +1479,7 @@ export function CloudSetupSections({
 
   const read = setup.isError ? (
     <ReadFailed
-      line="The scripts could not be read."
+      line={CLOUD_SCRIPT_WORDS.READ_FAILED}
       surface={FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_READ}
       onRetry={() => void setup.refetch()}
     />
@@ -1490,15 +1491,15 @@ export function CloudSetupSections({
     <>
       <SettingsSection
         {...settingsSectionHead(SECTION.ENVIRONMENT_INSTALL)}
-        caption="Installs tools in every new cloud sandbox. Runs with sudo."
+        caption={CLOUD_SCRIPT_WORDS.INSTALL_CAPTION}
       >
         {read ??
           (answer?.install == null && !manages ? (
-            <SettingsLine>No install script yet.</SettingsLine>
+            <SettingsLine>{CLOUD_SCRIPT_WORDS.INSTALL_NONE}</SettingsLine>
           ) : (
             <ScriptRow
               workspaceId={workspace.id}
-              name="Install script"
+              name={CLOUD_SCRIPT_WORDS.INSTALL_NAME}
               target={{}}
               script={answer?.install?.script ?? ""}
               manages={manages}

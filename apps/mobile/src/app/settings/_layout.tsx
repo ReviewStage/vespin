@@ -68,6 +68,10 @@ export default function SettingsLayout() {
         <Stack.Screen name="skill-add" />
         <Stack.Screen name="mcp" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MCP] }} />
         <Stack.Screen
+          name="cloud-environment"
+          options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.ENVIRONMENT] }}
+        />
+        <Stack.Screen
           name="memory"
           options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }}
         />

@@ -1,10 +1,9 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands it, its groups untitled and each row led by the panel's glyph for its page, in the panel's sidebar order: the account at its head pushing to Account; the workspace the app works in pushing to its page, then its Cloud environment opening on vespin.dev and its Memory; Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and the build, What's new, Help, Send feedback, and Email us.
+// index.tsx -- Settings' main list, as iOS's own Settings stands it, its groups untitled and each row led by the panel's glyph for its page, in the panel's sidebar order: the account at its head pushing to Account; the workspace the app works in pushing to its page, then its Cloud environment and its Memory; Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and the build, What's new, Help, Send feedback, and Email us.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { LINK_ORIGIN, LINK_PAGE } from "@repo/features/link-home";
+import { LINK_PAGE } from "@repo/features/link-home";
 import {
   PUSH_NOTIFICATIONS_STATE,
   PUSH_NOTIFICATIONS_TITLE,
@@ -86,17 +85,6 @@ export default function SettingsScreen() {
       ? PUSH_NOTIFICATIONS_STATE.ON
       : pushNotifyLabel(push.standing.notify);
 
-  // Cloud environment stays on the web, its scripts and secrets no work for a phone, and opens in Safari under the chosen workspace, where the member is signed in.
-  const openCloudEnvironment = () =>
-    openInSafari(
-      chosen === undefined
-        ? LINK_ORIGIN
-        : linkOf(
-            { kind: LINK_DESTINATION.SETTINGS, page: SETTINGS_VIEW.ENVIRONMENT },
-            chosen.slug ?? chosen.id,
-          ),
-    );
-
   return (
     <>
       <Stack.Toolbar placement="right">
@@ -130,8 +118,9 @@ export default function SettingsScreen() {
               <PushRow
                 symbol={GLYPH.ENVIRONMENT}
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.ENVIRONMENT]}
-                goes={PUSH_ROW_GOES.OUT}
-                onPress={openCloudEnvironment}
+                goes={PUSH_ROW_GOES.PAGE}
+                onPress={() => router.push(SETTINGS_ROUTE.CLOUD_ENVIRONMENT)}
+                testId="settings-cloud-environment"
               />
               <PushRow
                 symbol={GLYPH.MEMORY}
