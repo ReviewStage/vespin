@@ -1,4 +1,9 @@
-import { AccountClient, AccountSessionManager, type StoredAccount } from "@repo/credentials";
+import {
+  AccountClient,
+  type AccountRenewalWindow,
+  AccountSessionManager,
+  type StoredAccount,
+} from "@repo/credentials";
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import {
   AccountRefreshFailed,
@@ -11,6 +16,7 @@ import { Effect, Layer, Option } from "effect";
 import type { AccountSession, AccountSourceHost } from "./account-source.js";
 import {
   AccountSource,
+  PlatformRenewalWindow,
   PlatformTokenVault,
   SecretCipher,
   SignInConsent,
@@ -51,11 +57,14 @@ export const oauthAccountSourceLayerFor = (
       const cipher = yield* SecretCipher;
       const consent = yield* SignInConsent;
       const vault = yield* Effect.serviceOption(PlatformTokenVault);
+      const window = yield* Effect.serviceOption(PlatformRenewalWindow);
+      const renewalWindow = Option.getOrUndefined(window);
 
       return {
         tokenCipher: cipher,
         ...(Option.isSome(vault) ? { tokenVault: vault.value } : undefined),
-        open: (host: AccountSourceHost) => openOAuthSession(host, consent.open, client),
+        open: (host: AccountSourceHost) =>
+          openOAuthSession(host, consent.open, client, renewalWindow),
       };
     }),
   );
@@ -71,6 +80,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   host: AccountSourceHost,
   openConsent: SignInConsentSeam["open"],
   oauthClient: OAuthAccountClient,
+  renewalWindow: AccountRenewalWindow | undefined,
 ): Effect.fn.Return<AccountSession> {
   const { store, runMode } = host;
 
@@ -97,6 +107,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     report: host.report,
     startCapabilities: host.startCapabilities,
     stopCapabilities: host.stopCapabilities,
+    ...(renewalWindow === undefined ? undefined : { renewalWindow }),
   });
 
   /**

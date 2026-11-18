@@ -9,8 +9,10 @@ export {
 } from "./account/lifecycle.js";
 
 export {
+  type AccountRenewalWindow,
   AccountSessionManager,
   DeletionUnconfirmed,
+  RENEWAL_REFUSED,
   SignInFailed,
 } from "./account/session-manager.js";
 

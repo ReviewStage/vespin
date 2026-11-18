@@ -10,7 +10,7 @@ import {
 import { Deferred, Effect, Exit, Fiber, type Scope, Stream } from "effect";
 import { loopbackConsent } from "../loopback-consent.js";
 import { AccountClient, type StoredAccount } from "./client.js";
-import { AccountSessionManager } from "./session-manager.js";
+import { type AccountRenewalWindow, AccountSessionManager } from "./session-manager.js";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "./snapshot.js";
 
 const STORED: StoredAccount = {
@@ -48,6 +48,8 @@ function manager(options: {
   deleteUser?: AccountClient["deleteUser"];
   /** How the service answers an identity read; the identity above unless given. */
   userInfo?: AccountClient["userInfo"];
+  /** When a renewal may run; none unless given. */
+  renewalWindow?: AccountRenewalWindow;
 }): Effect.Effect<
   {
     instance: AccountSessionManager;
@@ -151,6 +153,9 @@ function manager(options: {
         Effect.sync(() => {
           events.push("stop");
         }),
+      ...(options.renewalWindow === undefined
+        ? undefined
+        : { renewalWindow: options.renewalWindow }),
     });
 
     // The subscriber every test is: a fiber forked into the test's own scope,
@@ -224,6 +229,48 @@ function refreshingClient(
     httpClient: fakeHttpClientLayer(fetchStub),
   });
 }
+
+it.effect(
+  "a refused token renews only while the platform's window stands open, and keeps the account signed in on what it holds meanwhile",
+  () =>
+    Effect.gen(function* () {
+      let open = false;
+      let grants = 0;
+
+      const subject = yield* manager({
+        stored: STORED,
+        client: refreshingClient(
+          () => {
+            grants += 1;
+
+            return Promise.resolve(
+              jsonResponse({ access_token: "renewed-access", refresh_token: "renewed-refresh" }),
+            );
+          },
+          // The stored token is refused; the renewed one names the stored account.
+          (request) =>
+            request.headers.get("authorization") === "Bearer renewed-access"
+              ? jsonResponse({ sub: STORED.id, email: STORED.email })
+              : jsonResponse({ error: "invalid_token" }, HTTP_STATUS.UNAUTHORIZED),
+        ),
+        renewalWindow: { open: () => open, whileFinishing: (effect) => effect },
+      });
+
+      subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+
+      // An app in the background: the refused token is not traded, and nothing is signed out.
+      yield* subject.instance.refresh();
+      assert.equal(grants, 0);
+      assert.equal(subject.stored()?.refreshToken, STORED.refreshToken);
+      assert.equal(subject.instance.snapshot.status, ACCOUNT_STATUS.SIGNED_IN);
+
+      // Back in the foreground, the same refusal renews and keeps the rotated token.
+      open = true;
+      yield* subject.instance.refresh();
+      assert.equal(grants, 1);
+      assert.equal(subject.stored()?.refreshToken, "renewed-refresh");
+    }),
+);
 
 it.effect("a refresh records the service's id for an account stored without one", () =>
   Effect.gen(function* () {
