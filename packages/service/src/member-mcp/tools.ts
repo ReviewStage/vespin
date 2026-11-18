@@ -4656,18 +4656,24 @@ const LIST_INTEGRATIONS_TOOL = memberMcpTool({
 
 const ConnectIntegrationInputSchema = Schema.Struct({
   provider: describeWire(integrationProviderSchema, "The provider to sign in to."),
-  connection: Schema.optionalKey(
-    describeWire(
-      integrationConnectionNameSchema,
-      `An account the member holds, by the connection name ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS} ` +
-        "answered, to sign it in again; leave it out for the provider's first account.",
-    ),
-  ),
-  add: Schema.optionalKey(
-    describeWire(
-      Schema.Boolean,
-      "true to sign in another account at the provider, where it takes more than one.",
-    ),
+  account: describeWire(
+    Schema.Union([
+      Schema.Struct({
+        connection: describeWire(
+          integrationConnectionNameSchema,
+          `The account to sign in, by the connection name ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS} ` +
+            "answered to sign it in again, or the provider's own name, such as notion, for its " +
+            "first account.",
+        ),
+      }),
+      Schema.Struct({
+        add: describeWire(
+          Schema.Literal(true),
+          "true to sign in another account at the provider, where it takes more than one.",
+        ),
+      }),
+    ]),
+    "Which account: {connection} to sign one in by its name, or {add: true} for a new one.",
   ),
 });
 
