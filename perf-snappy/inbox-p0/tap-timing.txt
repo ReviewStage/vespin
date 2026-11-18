@@ -1,0 +1,39 @@
+probe rows 1615, commands 97, frames 4108
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -20 | None | None | -15
+scope-all | 6 | topTouchEnd | 719 | 0 | 0 | 0 | 0 | None | 61 | 0 | 120 | None | None | 1418
+scope-questions | 5 | topTouchEnd | 715 | 0 | 0 | 0 | 0 | None | 99 | 0 | 122 | 424 | 1155 | 1509
+scope-open | 5 | topTouchEnd | 791 | 0 | 0 | 0 | 0 | None | 172 | 0 | 120 | 558 | 1349 | 1322
+settings-open | 6 | topButtonPress | 915 | 0 | 0 | 0 | 0 | None | 74 | 0 | -20 | 149 | 1066 | 1180
+settings-close | 5 | topTouchStart | 236 | 0 | 0 | 0 | 0 | None | 40 | 0 | 186 | 186 | 421 | 1988
+workspace-settings-open | 2 | None | 704 | 0 | 0 | 0 | 0 | None | 0 | 0 | -10 | 144 | 848 | 1325
+
+most rendered components per path (summed over its taps):
+cold-launch: 
+scope-all: 
+scope-questions: 
+scope-open: 
+settings-open: 
+settings-close: 
+workspace-settings-open: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch: 
+scope-all: 
+scope-questions: 
+scope-open: 
+settings-open: 
+settings-close: 
+workspace-settings-open: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch: markdown 0.0, rest 0.0
+scope-all: markdown 0.0, rest 0.0
+scope-questions: markdown 0.0, rest 0.0
+scope-open: markdown 0.0, rest 0.0
+settings-open: markdown 0.0, rest 0.0
+settings-close: markdown 0.0, rest 0.0
+workspace-settings-open: markdown 0.0, rest 0.0
+
+whole run: 129s, 0 commits, 0 components rendered, 8470 ms of stalls over 35 stalls
+events: topTransitionProgress×844, topHeaderHeightChange×305, topLoadStart×47, topLoad×45, topLoadEnd×45, topFinishTransitioning×39, topTouchStart×26, topWillAppear×25, topAppear×22, topTouchEnd×21, topWindowChange×18, topSelectionChange×15, topGlobalEvent×14, topWillDisappear×13, topDisappear×13
