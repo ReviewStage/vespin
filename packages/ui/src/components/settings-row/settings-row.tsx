@@ -102,6 +102,10 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * stays beside the words at any width rather than dropping under them. The
  * control wears the id the row hands it (`controlId`).
  *
+ * A row pressed anywhere to open what it names, a page of its own, draws
+ * that press first (`press`, `settings-link-row.tsx`): a press reaching
+ * every edge of the row, under its controls, which stand over it.
+ *
  * A row that just arrived, a skill just installed, says so (`landed`): it
  * is lit as every place landed on is (`../landed/landed.ts`), its wash a
  * step inside the card it stands flush in, so the eye finds it among the
@@ -264,6 +268,7 @@ export function SettingsRow({
   children,
   end,
   below,
+  press,
 }: {
   label: ReactNode;
   description?: ReactNode;
@@ -295,6 +300,8 @@ export function SettingsRow({
   end?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** What the row grows under its words and owns alone, handed the same ids; never a page's layout. */
   below?: ((control: SettingsRowControl) => ReactNode) | undefined;
+  /** The one press the whole row is, handed its ids, drawn before its words so Tab reaches it before its controls (`SettingsLinkRow`). */
+  press?: ((control: SettingsRowControl) => ReactNode) | undefined;
 }): React.JSX.Element {
   const id = useId();
   const labelId = `${id}label`;
@@ -361,8 +368,10 @@ export function SettingsRow({
       data-labels-control={labelsControl}
       data-controls={controls}
       data-led={led}
+      data-pressed-whole={press === undefined ? undefined : "true"}
       {...landedMark(landed, LANDED.WITHIN)}
     >
+      {press?.(control)}
       <Item size={density} className={indent === SETTINGS_ROW_INDENT.NONE ? undefined : "ps-0"}>
         {end === undefined ? (
           <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
