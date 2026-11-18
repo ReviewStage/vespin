@@ -12,7 +12,7 @@
 import { Schema as EffectSchema } from "effect";
 import { AGENT_BOUNDS, agentRunsOnRequestSchema } from "./agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./link-grammar.js";
-import { wireUuidSchema } from "./service-wire.js";
+import { workspaceIdSchema } from "./task-wire.js";
 import { trimmedText } from "./text-schema.js";
 
 /** How much a Manager is made with: the repositories it works in, at most. */
@@ -27,7 +27,7 @@ const MANAGER_BOUNDS = {
  */
 export const managerCreateRequestSchema = EffectSchema.Struct({
   idempotencyKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
-  workspaceId: wireUuidSchema,
+  workspaceId: workspaceIdSchema,
   name: trimmedText(AGENT_BOUNDS.MAX_TITLE_CHARS),
   repositories: EffectSchema.NonEmptyArray(githubRepositoryFullNameSchema).check(
     EffectSchema.isMaxLength(MANAGER_BOUNDS.MAX_REPOSITORIES),
