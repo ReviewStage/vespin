@@ -133,6 +133,10 @@ const LINKS: readonly (readonly [LinkDestination, string])[] = [
   ],
   [{ kind: LINK_DESTINATION.SETTINGS }, `${HOME}/settings`],
   [{ kind: LINK_DESTINATION.SETTINGS, page: "agents" }, `${HOME}/settings/agents`],
+  [
+    { kind: LINK_DESTINATION.SETTINGS, page: "workspace", sub: "github" },
+    `${HOME}/settings/workspace/github`,
+  ],
   [{ kind: LINK_DESTINATION.PERSON, userId: "user_9Fq2-x" }, `${HOME}/person/user_9Fq2-x`],
   [
     { kind: LINK_DESTINATION.PERSON, userId: "user_9Fq2-x", machineId: OTHER },

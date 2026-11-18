@@ -130,6 +130,10 @@ function accountDrawn(input: SettingsSearchInput): boolean {
 export const SECTION = {
   MEMBERS: SETTINGS_SECTION.MEMBERS,
   WORKSPACE_CONNECTIONS: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+  /** Workspace › GitHub's accounts, the App's and its members' tokens', each with its repositories. */
+  GITHUB_ACCOUNTS: "workspace-github-accounts",
+  /** Workspace › Slack's channels, the bot's default repository and each channel's. */
+  SLACK_CHANNELS: "workspace-slack-channels",
   BILLING_USAGE: SETTINGS_SEARCH_ROW.BILLING_USAGE,
   BILLING_STATUS: SETTINGS_SEARCH_ROW.BILLING_STATUS,
   ENVIRONMENT_SANDBOX: SETTINGS_SEARCH_ROW.ENVIRONMENT_SANDBOX,
@@ -204,6 +208,14 @@ const SETTINGS_SECTIONS = {
     head: WORKSPACE_CONNECTIONS,
     words: "integrations GitHub repositories connect choose manage disconnect organization",
     drawn: workspaceShown,
+  },
+  [SECTION.GITHUB_ACCOUNTS]: {
+    found: SECTION_FOUND.PAGE,
+    head: "Accounts and repositories",
+  },
+  [SECTION.SLACK_CHANNELS]: {
+    found: SECTION_FOUND.PAGE,
+    head: "Channels",
   },
   [SECTION.BILLING_USAGE]: {
     found: SECTION_FOUND.HEAD,

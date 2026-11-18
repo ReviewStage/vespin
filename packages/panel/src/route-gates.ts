@@ -20,7 +20,7 @@ import {
   experimentsIn,
   NO_EXPERIMENTS,
 } from "@repo/settings";
-import { settingsViewNamed } from "@repo/settings/settings-views";
+import { settingsSubNamed, settingsViewNamed } from "@repo/settings/settings-views";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useKeptChoice } from "./desktop/chosen-workspace.js";
@@ -181,6 +181,13 @@ export function settingsPageRouteStands(
   if (access.workspaces.length === 0 && settingsPageWaitsOnWorkspaces(view)) return true;
 
   return settingsPageExperimentStands(view, experimentsAt(workspace, access));
+}
+
+/** Whether a page of a Settings page's own stands: one its page holds by that name, a page no value names holding none. */
+export function settingsSubRouteStands(page: string, sub: string): boolean {
+  const view = settingsViewNamed(page);
+
+  return view !== undefined && settingsSubNamed(view, sub) !== undefined;
 }
 
 /** Whether a task's version history stands: it is the description's, so only while the workspace its address names has Descriptions on, which waits on the reader's workspaces while they are unread. */

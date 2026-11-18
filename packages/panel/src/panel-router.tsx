@@ -69,6 +69,7 @@ import {
   pathUnder,
   type RouteAccess,
   settingsPageRouteStands,
+  settingsSubRouteStands,
   UNREAD_ROUTE_ACCESS,
   useRouteAccess,
   versionHistoryRouteStands,
@@ -526,6 +527,33 @@ const settingsPageRoute = createRoute({
 });
 
 /**
+ * A page of a Settings page's own, as Workspace's GitHub, at
+ * `/<workspace>/settings/<page>/<sub>`, which gives way to its page where
+ * that page holds none by its name, and to Profile where the page itself
+ * does not stand.
+ */
+const settingsSubPageRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "$page/$sub",
+  beforeLoad: ({ context, params }) => {
+    if (!settingsPageRouteStands(params.page, context.access, params.workspace)) {
+      throw redirect({
+        to: "/$workspace/settings/$page",
+        params: { workspace: params.workspace, page: SETTINGS_VIEW.ACCOUNT },
+        replace: true,
+      });
+    }
+
+    if (settingsSubRouteStands(params.page, params.sub)) return;
+    throw redirect({
+      to: "/$workspace/settings/$page",
+      params: { workspace: params.workspace, page: params.page },
+      replace: true,
+    });
+  },
+});
+
+/**
  * A task's version history, over the whole window as Settings is, its
  * versions listed where the sidebar stood: following the newest at
  * `/<workspace>/task/<id>/versions`, which a narrow room stands as the list
@@ -609,6 +637,24 @@ const appSettingsPageRoute = createRoute({
   },
 });
 
+/** A page of a Settings page's own while the window lists no workspace. */
+const appSettingsSubPageRoute = createRoute({
+  getParentRoute: () => appSettingsRoute,
+  path: "$page/$sub",
+  beforeLoad: ({ context, params }) => {
+    if (!settingsPageRouteStands(params.page, context.access)) {
+      throw redirect({
+        to: "/app/settings/$page",
+        params: { page: SETTINGS_VIEW.ACCOUNT },
+        replace: true,
+      });
+    }
+
+    if (settingsSubRouteStands(params.page, params.sub)) return;
+    throw redirect({ to: "/app/settings/$page", params: { page: params.page }, replace: true });
+  },
+});
+
 /**
  * An address naming no place of the panel's, as a tab opened at the site's
  * root, opens Home in its place, as a window resting nowhere always has.
@@ -679,8 +725,12 @@ const routeTree = rootRoute.addChildren([
       taskVersionSectionRoute,
     ]),
   ]),
-  settingsRoute.addChildren([settingsIndexRoute, settingsPageRoute]),
-  appSettingsRoute.addChildren([appSettingsIndexRoute, appSettingsPageRoute]),
+  settingsRoute.addChildren([settingsIndexRoute, settingsPageRoute, settingsSubPageRoute]),
+  appSettingsRoute.addChildren([
+    appSettingsIndexRoute,
+    appSettingsPageRoute,
+    appSettingsSubPageRoute,
+  ]),
   nowhereRoute,
 ]);
 

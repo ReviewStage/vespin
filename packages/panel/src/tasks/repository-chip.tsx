@@ -1,5 +1,6 @@
 import type { GitHubRepository } from "@repo/features";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { CHOOSE_REPOSITORY, NO_REPOSITORY } from "@repo/features/task-list-model";
 import { repositoryFailureNote } from "@repo/features/tasks-model";
@@ -7,7 +8,7 @@ import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { countWords, orList, readingWords } from "@repo/features/words";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { EVERY_WORKSPACE } from "@repo/host/app-state";
-import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import {
   AVATAR_SIZE,
   CHIP_LOOK,
@@ -436,10 +437,10 @@ function useRepositoryListing(
     if (listed !== undefined) onListed?.(listed.repositories.map((each) => each.fullName));
   }, [listed, onListed]);
 
-  // A GitHub not connected, or reaching nothing, is mended at the workspace's GitHub row.
+  // A GitHub not connected, or reaching nothing, is mended on the workspace's GitHub page.
   const workspaceGitHub: SettingsLink = {
     page: SETTINGS_VIEW.WORKSPACE,
-    section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+    sub: INTEGRATION_PROVIDER.GITHUB,
     ...(chooser.scope === undefined ? undefined : { workspaceId: chooser.scope }),
   };
 

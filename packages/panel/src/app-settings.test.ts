@@ -33,6 +33,8 @@ afterEach(() => {
 const DOORS: SettingsDoors = {
   view: SETTINGS_VIEW.ACCOUNT,
   onViewChange: () => undefined,
+  sub: undefined,
+  onSubChange: () => undefined,
   onSignOut: () => Promise.resolve(),
   onRequestMicrophone: () => undefined,
   // SAFETY: the doors under test never reach the workspace's own control.

@@ -14,7 +14,7 @@ import type {
   NotificationsControl,
   UpdateControl,
 } from "@repo/settings/settings-controls";
-import type { SettingsView } from "@repo/settings/settings-views";
+import type { SettingsSubPage, SettingsView } from "@repo/settings/settings-views";
 import { fixtureUpdate } from "@repo/settings/update-row";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -35,6 +35,10 @@ export interface SettingsDoors {
   /** Which settings page is showing, held by the window because a shortcut or a link elsewhere turns it. */
   view: SettingsView;
   onViewChange: (view: SettingsView) => void;
+  /** The page of the shown page's own that stands, as Workspace's GitHub, held by the window as `view` is. */
+  sub: SettingsSubPage | undefined;
+  /** Opens a page of the shown page's own, or the page itself again for none. */
+  onSubChange: (sub: SettingsSubPage | undefined) => void;
   onSignOut: () => Promise<void>;
   onRequestMicrophone: () => void | Promise<void>;
   workspace: WorkspaceSettingsControl;
@@ -127,6 +131,8 @@ export function useSettingsPanel(doors: SettingsDoors): SettingsPanelProps | und
       onSignOut: doors.onSignOut,
       view: doors.view,
       onViewChange: doors.onViewChange,
+      sub: doors.sub,
+      onSubChange: doors.onSubChange,
       microphone,
       notifications,
       updates,

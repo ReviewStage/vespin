@@ -1,3 +1,4 @@
+import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SETTINGS_PAGE as SETTINGS_VIEW, type SettingsPage as SettingsView } from "@repo/settings";
@@ -95,6 +96,32 @@ export function settingsViewNamed(page: string | undefined): SettingsView | unde
 }
 
 /**
+ * A page of a Settings page's own, which a row on it opens, as Workspace's
+ * GitHub, Slack, and Sentry rows open theirs: an integration, named in an
+ * address after its page (`/settings/workspace/github`).
+ */
+export type SettingsSubPage = IntegrationProvider;
+
+/** The pages that hold pages of their own, each with the ones it holds, in the order its rows list them. */
+const SETTINGS_SUB_PAGES: Partial<Record<SettingsView, readonly SettingsSubPage[]>> = {
+  [SETTINGS_VIEW.WORKSPACE]: [
+    INTEGRATION_PROVIDER.GITHUB,
+    INTEGRATION_PROVIDER.SLACK,
+    INTEGRATION_PROVIDER.SENTRY,
+  ],
+};
+
+/** The page of `page`'s own a value names, or none where `page` holds no page by that name. */
+export function settingsSubNamed(
+  page: SettingsView,
+  sub: string | undefined,
+): SettingsSubPage | undefined {
+  if (sub === undefined) return undefined;
+
+  return SETTINGS_SUB_PAGES[page]?.find((each) => each === sub);
+}
+
+/**
  * The groups the Settings sidebar draws its pages in, in the order it draws
  * them, as Linear and Notion group theirs: the workspace the sidebar lists,
  * what is the account's whichever workspace is listed, what is this Mac's
@@ -187,6 +214,8 @@ type SettingsSection = (typeof SETTINGS_SECTION)[keyof typeof SETTINGS_SECTION];
  */
 export interface SettingsLink {
   readonly page: SettingsView;
+  /** A page of the page's own it lands on, as Workspace's GitHub. */
+  readonly sub?: SettingsSubPage;
   readonly section?: SettingsSection;
   readonly workspaceId?: string;
   /** The machine Machines lands on, by its device id: its row unfolded, scrolled to, and lit. */

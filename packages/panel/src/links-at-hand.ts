@@ -9,7 +9,7 @@ import {
 import type { PagePlace } from "@repo/features/page-wire";
 import { TASK_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
-import type { SettingsView } from "@repo/settings/settings-views";
+import type { SettingsSubPage, SettingsView } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { Predicate } from "effect";
@@ -100,6 +100,8 @@ export interface WindowAt {
   readonly settings:
     | {
         readonly view: SettingsView;
+        /** The page of the page's own that stands, as Workspace's GitHub. */
+        readonly sub?: SettingsSubPage | undefined;
         readonly workspace: Workspace | undefined;
         /** Whether its page list stands rather than the page, which only a narrow room draws apart. */
         readonly listed?: boolean;

@@ -8,13 +8,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { githubAccountPictureUrl } from "@repo/features/tasks-model";
 import { countWords, readFailedWords, readingWords, TERM } from "@repo/features/words";
 import type { WorkspaceGithubInstallation } from "@repo/features/workspace-wire";
-import {
-  ANNOUNCE,
-  type RepositoryLineEntry,
-  RepositoryLines,
-  SETTINGS_ROW_INDENT,
-  SettingsRowMark,
-} from "@repo/ui";
+import { ANNOUNCE, type RepositoryLineEntry, RepositoryLines, SettingsRowMark } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { MenuAction } from "../desktop/action-menu.js";
@@ -30,11 +24,10 @@ import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 
 /**
- * workspace-github-accounts.tsx -- every GitHub account under GitHub's row on Settings › Workspace, each with the repositories agents reach on it.
+ * workspace-github-accounts.tsx -- every GitHub account on Settings › Workspace › GitHub, each with the repositories agents reach on it.
  *
- * Every account stands as the same row (`GitHubOwnerRow`), inset under
- * GitHub's so it reads as one of GitHub's accounts rather than an
- * integration of its own. A row's ⋯, where it holds acts at all, is the
+ * Every account stands as the same row (`GitHubOwnerRow`) in the page's
+ * Accounts and repositories. A row's ⋯, where it holds acts at all, is the
  * only way one row differs from another (`workspace-token-repositories.tsx`).
  *
  * The accounts here are those whose installation of our GitHub App is
@@ -101,6 +94,39 @@ function listedOf(answer: GitHubRepositoriesAnswer, connection: ShownConnection)
   return answer.installations?.find((one) => one.installationId === connection.installationId);
 }
 
+/** One connected account as the listing reads it: its login GitHub holds now, its repositories, and whether it was given every one. */
+export interface ListedAccount {
+  readonly key: string | number;
+  readonly login: string;
+  readonly repositories: readonly GitHubRepository[];
+  readonly all: boolean;
+}
+
+/**
+ * Each active connection as the workspace's listing reads it, in order.
+ * Note that the login GitHub answers now names it and finds its
+ * repositories, because the store keeps an account's old one after a
+ * rename on GitHub.
+ */
+export function listedAccounts(
+  answer: GitHubRepositoriesAnswer,
+  connections: readonly ShownConnection[],
+): readonly ListedAccount[] {
+  const byOwner = repositoriesByOwner(answer.repositories);
+
+  return connections.map((connection) => {
+    const listed = listedOf(answer, connection);
+    const login = listed?.login ?? connection.login;
+
+    return {
+      key: connection.installationId ?? connection.login,
+      login,
+      repositories: byOwner.get(login.toLowerCase()) ?? NONE,
+      all: listed?.repositorySelection === GITHUB_REPOSITORY_SELECTION.ALL,
+    };
+  });
+}
+
 /** The account's picture on GitHub, a workspace's tile keyed by its login, so its letter stands until the picture loads and wherever it fails to. */
 function AccountMark({ login }: { login: string }): React.JSX.Element {
   return (
@@ -143,7 +169,6 @@ export function GitHubOwnerRow({
       thing={login}
       actions={actions}
       row={{
-        indent: SETTINGS_ROW_INDENT.MARK,
         leading: <AccountMark login={login} />,
         label: login,
         description: line,
@@ -194,41 +219,26 @@ function ListedAccountRows({
   const failed = answer === undefined && list.isError;
   const reading = answer === undefined && !failed;
   useAnnounceShown(ANNOUNCE.POLITE, reading ? WORDS.READING : "");
-  const byOwner = answer === undefined ? undefined : repositoriesByOwner(answer.repositories);
 
   return (
     <>
-      {connections.map((connection) => {
-        const key = connection.installationId ?? connection.login;
-
-        if (answer === undefined || byOwner === undefined) {
-          return (
+      {answer === undefined
+        ? connections.map((connection) => (
             <GitHubOwnerRow
-              key={key}
+              key={connection.installationId ?? connection.login}
               login={connection.login}
               line={reading ? WORDS.READING : undefined}
               repositories={NO_LINES}
             />
-          );
-        }
-
-        // Note that the login GitHub answers now names the row and finds its repositories, because the store keeps an account's old one after a rename on GitHub.
-        const listed = listedOf(answer, connection);
-        const login = listed?.login ?? connection.login;
-        const repositories = byOwner.get(login.toLowerCase()) ?? NONE;
-
-        return (
-          <GitHubOwnerRow
-            key={key}
-            login={login}
-            line={repositoryCount(
-              repositories.length,
-              listed?.repositorySelection === GITHUB_REPOSITORY_SELECTION.ALL,
-            )}
-            repositories={repositories.map(({ fullName }) => ({ repository: fullName }))}
-          />
-        );
-      })}
+          ))
+        : listedAccounts(answer, connections).map((account) => (
+            <GitHubOwnerRow
+              key={account.key}
+              login={account.login}
+              line={repositoryCount(account.repositories.length, account.all)}
+              repositories={account.repositories.map(({ fullName }) => ({ repository: fullName }))}
+            />
+          ))}
       {failed ? (
         <ReadFailed
           line={WORDS.NOT_READ}

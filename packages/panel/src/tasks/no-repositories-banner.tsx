@@ -1,4 +1,5 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { orListParts } from "@repo/features/words";
 import { EVERY_WORKSPACE } from "@repo/host/app-state";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
@@ -158,7 +159,7 @@ export function useRepositoryMend(chooser: RepositoryChooser): RepositoryMend | 
     chooser.manages || (token !== undefined && token !== null)
       ? {
           page: SETTINGS_VIEW.WORKSPACE,
-          section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+          sub: INTEGRATION_PROVIDER.GITHUB,
           workspaceId: scope,
         }
       : { page: SETTINGS_VIEW.ACCOUNT, section: SETTINGS_SECTION.GITHUB_TOKEN };

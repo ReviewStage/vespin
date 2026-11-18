@@ -59,6 +59,7 @@ import {
   mergeQueueRouteStands,
   type RouteAccess,
   settingsPageRouteStands,
+  settingsSubRouteStands,
   useRouteAccess,
   versionHistoryRouteStands,
   workspaceRouteStands,
@@ -319,7 +320,9 @@ export const ROUTED_PLACE = {
     routes: ["/$workspace/settings", "/app/settings"],
     claims: everyAddress,
     gate: (params, access) =>
-      params.page === undefined || settingsPageRouteStands(params.page, access, params.workspace),
+      params.page === undefined ||
+      (settingsPageRouteStands(params.page, access, params.workspace) &&
+        (params.sub === undefined || settingsSubRouteStands(params.page, params.sub))),
     stillThere: () => true,
     binding: PLACE_BINDING.KEPT,
     overThePlan: false,
@@ -333,14 +336,16 @@ export const ROUTED_PLACE = {
     named: () => undefined,
     links: ({ tasks, at, listed, under }) => {
       if (at.settings === undefined) return under();
-      const { view, workspace } = at.settings;
+      const { view, sub, workspace } = at.settings;
       const slug = workspace === undefined ? listed : slugOf(tasks.workspaces, workspace.id);
 
       // A narrow room's page list stands alone, so its link names no page.
       const place: LinkDestination =
         at.narrow === true && at.settings.listed === true
           ? { kind: LINK_DESTINATION.SETTINGS }
-          : { kind: LINK_DESTINATION.SETTINGS, page: view };
+          : sub === undefined
+            ? { kind: LINK_DESTINATION.SETTINGS, page: view }
+            : { kind: LINK_DESTINATION.SETTINGS, page: view, sub };
 
       return [stepLink(place, LINK_THING.SETTINGS, slug)];
     },
