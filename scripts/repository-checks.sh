@@ -462,6 +462,33 @@ node --input-type=module -e '
   }
 ' "$APP_REPO_ROOT"
 
+# A root tsconfig sits in no workspace, so turbo hashes it into no task of
+# its own accord; every one is a base a workspace's tsconfig extends, so each
+# must be a `globalDependencies` entry, or a change to it alone leaves every
+# typecheck's hash as it was and `--affected` finds no workspace to run. This
+# asks turbo's dry run for the files its global hash covers.
+node --input-type=module -e '
+  import { execFileSync } from "node:child_process";
+  const root = process.argv[1];
+  const tracked = execFileSync("git", ["ls-files", "--", "tsconfig*.json"], { cwd: root, encoding: "utf8" })
+    .split("\n")
+    .filter(Boolean);
+  const { TURBO_TOKEN, ...env } = process.env;
+  const dry = execFileSync("pnpm", ["exec", "turbo", "run", "typecheck", "--filter=@repo/wire", "--dry=json"], {
+    cwd: root,
+    env: { ...env, TURBO_TELEMETRY_DISABLED: "1" },
+    encoding: "utf8",
+  });
+  const hashed = Object.keys(JSON.parse(dry).globalCacheInputs.files);
+  const unhashed = tracked.filter((file) => !hashed.includes(file));
+  if (unhashed.length > 0) {
+    process.stderr.write(
+      `error: turbo.json leaves root tsconfigs out of globalDependencies, so a change to one runs no workspace check:\n${unhashed.map((file) => `  ${file}`).join("\n")}\n`,
+    );
+    process.exit(1);
+  }
+' "$APP_REPO_ROOT"
+
 # `@effect/platform-node` and `effect/sql` reach `node:` modules, so an import
 # of either compiles and bundles happily and then fails where there is no Node:
 # the sandboxed renderer. The renderer's `node:` grep above catches the direct
