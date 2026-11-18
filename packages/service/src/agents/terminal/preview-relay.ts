@@ -54,6 +54,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
 const net = require("node:net");
+const { pipeline } = require("node:stream");
 const { spawn } = require("node:child_process");
 const [, mode, recordPath, asked] = process.argv.slice(1);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "fish"]);
@@ -122,9 +123,10 @@ const host = "localhost:" + port;
 const server = http.createServer((req, res) => {
   const upstream = http.request(
     { host: "127.0.0.1", port, method: req.method, path: req.url, headers: { ...req.headers, host } },
-    (answer) => { res.writeHead(answer.statusCode, answer.rawHeaders); answer.pipe(res); },
+    (answer) => { res.writeHead(answer.statusCode, answer.rawHeaders); pipeline(answer, res, () => {}); },
   );
   upstream.on("error", (error) => {
+    if (res.destroyed) return;
     // Note that only a server this relay started again is coming up; one that stopped under a running share is not.
     const down = error.code === "ECONNREFUSED";
     if (!res.headersSent) res.writeHead(down && restoring ? 503 : 502, down ? { [restoring ? "${STARTING_HEADER}" : "${NOT_RUNNING_HEADER}"]: "1" } : {});
