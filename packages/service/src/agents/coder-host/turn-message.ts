@@ -12,6 +12,7 @@
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { accountExperimentOn } from "@repo/database/models/account-store";
+import { readAccountTimeZone } from "@repo/database/models/account-time-zone";
 import {
   type Agent,
   readNativeHanded,
@@ -101,6 +102,23 @@ const previousTurnStart = (target: ConversationTarget, turnId: string | undefine
  * the line's words, the brief, and the description where it is handed. A read
  * that fails is logged and hands nothing.
  */
+/**
+ * The zone the developer's day is read in on this turn: the one its own
+ * request named, else the one the account's device last named
+ * (`account-time-zone.ts`), so a turn a thread's answer, a wakeup, or an
+ * automation opens reads their day as a typed line does; none where neither
+ * stands, which reads UTC. A read that fails is logged and reads none, so
+ * the turn still opens.
+ */
+const developerZone = (admitted: AdmittedConversation) =>
+  admitted.timeZone === undefined
+    ? readAccountTimeZone(admitted.caller).pipe(
+        Effect.map(Option.getOrUndefined),
+        Effect.tapError(logStoreFailure),
+        Effect.orElseSucceed(() => undefined),
+      )
+    : Effect.succeed(admitted.timeZone);
+
 const taskOf = (
   admitted: AdmittedConversation,
   agent: Agent,
@@ -213,7 +231,7 @@ const memoriesOf = (agent: Agent, words: string) =>
  * read aloud, and after one, the line saying they no longer hold
  * (`turnKindWords`); once, the size its sandbox was stopped for since its
  * last turn (`resizedWords`); the developer's time on
- * every turn; the task where `taskOf` hands it; and on the agent's first
+ * every turn, in their zone (`developerZone`); the task where `taskOf` hands it; and on the agent's first
  * turn alone, the memories its task's name, brief, and description and the
  * line's words find (`memoriesOf`). Note that a later turn is handed none,
  * because the first turn's still stand in its history, a follow-up on the
@@ -229,9 +247,10 @@ export function coderTurnMessage(
   now: number,
 ): Effect.Effect<CoderTurnMessage, never, DatabaseServices> {
   return Effect.gen(function* () {
-    const task = yield* taskOf(admitted, agent, turn, handed, now);
+    const zoned = { ...admitted, timeZone: yield* developerZone(admitted) };
+    const task = yield* taskOf(zoned, agent, turn, handed, now);
     const memories = task?.opening === true ? yield* memoriesOf(agent, task.words) : undefined;
-    const clock = { now, timeZone: admitted.timeZone };
+    const clock = { now, timeZone: zoned.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
 
     // Note that only a spoken turn reads whether the agent ends its turns with `end_turn`, the one turn its words change on.

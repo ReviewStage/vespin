@@ -5,6 +5,7 @@ import type { LoopbackConsentOptions } from "@repo/credentials";
 import { loopbackConsent } from "@repo/credentials/node";
 import type { ServiceReach } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { readerZone } from "@repo/features/date-mention";
 import { listenOnLoopbackOverNet, openTerminalSocketOverWs } from "@repo/features/node";
 import type { SecretCipher as SecretCipherSeam } from "@repo/host";
 import { serviceReachLayer } from "@repo/host/client";
@@ -63,6 +64,7 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
       appVersion: config.appVersion,
       packaged: config.packaged,
       platform: PRODUCT_PLATFORM.DESKTOP,
+      deviceZone: readerZone,
     }),
     Layer.succeed(Environment, ConfigProvider.fromEnvRecord(config.environment)),
     Layer.succeed(IdSource, { create: () => randomUUID() }),

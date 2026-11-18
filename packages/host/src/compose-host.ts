@@ -103,6 +103,7 @@ import {
   openThisMachineDevice,
   type ThisMachineDevice,
 } from "./this-machine-device.js";
+import { keepTimeZone } from "./time-zone-keeper.js";
 import { windowFocus } from "./window-focus.js";
 
 /**
@@ -936,11 +937,26 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       startOrder: HOST_START_ORDER.flatMap((name) => (running(name) ? [concerns[name]] : [])),
       /**
        * The launch's own arming: where the account's capabilities already
-       * stand open, the launch opens the gate exactly as a sign-in does.
+       * stand open, the launch opens the gate exactly as a sign-in does; and
+       * the device's zone, where the launch names one and may reach the
+       * service, named to it from now on (`time-zone-keeper.ts`).
        */
       armed: Effect.gen(function* () {
         if (account.capabilitiesActive()) yield* openCapabilities;
         yield* Effect.forkScoped(account.session.refreshOnce());
+
+        const { deviceZone } = identity;
+
+        if (deviceZone !== undefined && kernel.runMode.sendsNetwork) {
+          yield* Effect.forkScoped(
+            keepTimeZone({
+              zone: deviceZone,
+              account: accountId,
+              write: (zone) => served(agentClient.writeTimeZone(zone)),
+              focused: focus.heard,
+            }),
+          );
+        }
       }),
       drain,
       taskListMoves: tasks.taskListMoves,

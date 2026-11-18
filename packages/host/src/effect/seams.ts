@@ -47,6 +47,13 @@ export interface AppIdentityFacts {
   readonly appVersion: string;
   readonly packaged: boolean;
   readonly platform: ProductClientPlatform;
+  /**
+   * The IANA zone the member's own device reads its clock in now, which the
+   * host names to the service for their agents' turns
+   * (`time-zone-keeper.ts`); none on a machine whose zone is not the
+   * member's, which names none.
+   */
+  readonly deviceZone?: () => string;
 }
 
 export class AppIdentity extends Context.Service<AppIdentity, AppIdentityFacts>()(

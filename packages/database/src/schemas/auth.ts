@@ -28,7 +28,10 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true });
  * (`@repo/service`'s `auth/support-access.ts`), the moment the member's grant
  * of support access runs out, null while none stands. Those five are as
  * Better Auth's CLI generates them for 1.7.7 with instants through
- * `timestamptz()`, and `role` keeps the default it shipped with.
+ * `timestamptz()`, and `role` keeps the default it shipped with. Its
+ * `time_zone` is ours: the IANA zone the member's own device last named
+ * (`models/account-time-zone.ts`), which an agent's turn reads their day in
+ * where the turn's own request names none; null until a client names one.
  */
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -47,6 +50,7 @@ export const user = pgTable("user", {
   banReason: text("ban_reason"),
   banExpires: timestamptz("ban_expires"),
   supportAccessUntil: timestamptz("support_access_until"),
+  timeZone: text("time_zone"),
 });
 
 export const session = pgTable(
