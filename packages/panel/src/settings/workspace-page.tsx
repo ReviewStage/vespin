@@ -54,6 +54,7 @@ import {
   MENU_DETAIL,
   OneLine,
   PhotoPick,
+  PlusIcon,
   ProviderMark,
   RenamableName,
   SETTINGS_ROW_MARK_WIDTH,
@@ -952,7 +953,7 @@ function InviteButton({ workspace }: { workspace: Workspace }): React.JSX.Elemen
 
   return (
     <div {...searchAnchorProps(SETTINGS_SECTION.INVITATIONS)}>
-      <Button variant={BUTTON_VARIANT.OUTLINE} onClick={invite.ask}>
+      <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={invite.ask}>
         Invite
       </Button>
       {invite.dialog}
