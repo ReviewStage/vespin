@@ -8,6 +8,7 @@
  */
 
 import type { AgentAttachment } from "./agent-wire.js";
+import { base64PictureSize, type ImageDimensions } from "./image-signature.js";
 import {
   INBOX_ASK_STATUS,
   INBOX_MESSAGE_AUTHOR,
@@ -16,6 +17,9 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "./inbox-wire.js";
+
+/** How a picture's media type starts, which a file's header is read for its size by. */
+const PICTURE_TYPE = "image/";
 
 /** The member signed in, as an answer or a close names who gave it; none where the account names no id. */
 export interface InboxReader {
@@ -201,12 +205,20 @@ export const INBOX_SENDING = {
   CLOSE: "close",
 } as const;
 
-/** A file a reply carries as it is drawn until a read carries it: the attachment it is drawn under, named as a read names one, and its bytes, which the window draws it from rather than reading it back. */
+/** A file a reply carries as it is drawn until a read carries it: the attachment it is drawn under, named as a read names one, its bytes, which the window draws it from rather than reading it back, and, for a picture, the size its header states, read once as it is sent. */
 export interface InboxSendingFile {
   readonly attachmentId: string;
   readonly name: string;
   readonly mediaType: string;
   readonly base64: string;
+  readonly pictureSize?: ImageDimensions | undefined;
+}
+
+/** A file a reply sent from this window carries, as the thread draws it from the send: its type, its bytes, and, for a picture, the size read as it was sent. */
+export interface InboxHeldFile {
+  readonly contentType: string;
+  readonly base64: string;
+  readonly pictureSize?: ImageDimensions | undefined;
 }
 
 /** One thing the reader sent on a thread, as it is drawn until a read carries it: a reply under its own key, with the files it carries, written at `at`, or a close of the revision the reader was shown. */
@@ -269,7 +281,14 @@ function sendingDrawn(
   return { ...item, thread: [...thread, reply], unread: false };
 }
 
-/** The files a reply sent under `key` carries as its send draws them: each under an attachment of its own, the key with its place in the last group, so no two of a reply share one. */
+/**
+ * The files a reply sent under `key` carries as its send draws them: each
+ * under an attachment of its own, the key with its place in the last group,
+ * so no two of a reply share one, and a picture with the size its header
+ * states. Note that the size is read here, once a send, since each draw of
+ * the thread until a read carries the reply would otherwise decode the
+ * picture's head again.
+ */
 export function inboxSendingFiles(
   key: string,
   attachments: readonly AgentAttachment[],
@@ -279,6 +298,9 @@ export function inboxSendingFiles(
     name: attachment.name,
     mediaType: attachment.mediaType,
     base64: attachment.data,
+    pictureSize: attachment.mediaType.startsWith(PICTURE_TYPE)
+      ? base64PictureSize(attachment.data)
+      : undefined,
   }));
 }
 
@@ -320,7 +342,7 @@ export function inboxSendingFile(
   sending: Iterable<InboxSending>,
   attachmentId: string,
   thread: readonly InboxMessage[] = [],
-): { readonly contentType: string; readonly base64: string } | undefined {
+): InboxHeldFile | undefined {
   const replies = [...sending];
 
   const drawn = replies
@@ -329,7 +351,9 @@ export function inboxSendingFile(
 
   const file = drawn ?? carriedFile(replies, thread, attachmentId);
 
-  return file === undefined ? undefined : { contentType: file.mediaType, base64: file.base64 };
+  return file === undefined
+    ? undefined
+    : { contentType: file.mediaType, base64: file.base64, pictureSize: file.pictureSize };
 }
 
 /**
