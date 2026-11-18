@@ -48,9 +48,6 @@ const WORDS = {
   MANAGING: "Opening",
   NOT_SET_UP: "Not set up",
   NOT_SET_UP_LINE: "Add a card to pay for usage past the included amount.",
-  SET_UP_STATE: "Set up",
-  SET_UP_LINE:
-    "Usage past the included amount is charged to the card. Change the card and read invoices from Manage billing.",
   BLOCKED: "Blocked by a failed payment",
   BLOCKED_LINE:
     "An invoice could not be collected, so new cloud agents are held until it is paid. Update the card from Manage billing.",
@@ -137,10 +134,11 @@ function StatusSection({
   const opening = useAsyncAction(rejectionWords);
   const workspaceId = workspace.id;
 
+  // Note that billing set up and in good standing says nothing beside its Manage billing button.
   const state = status.blocked
     ? { tone: SETTINGS_ROW_STATE.ATTENTION, name: WORDS.BLOCKED, line: WORDS.BLOCKED_LINE }
     : status.setUp
-      ? { tone: SETTINGS_ROW_STATE.CONNECTED, name: WORDS.SET_UP_STATE, line: WORDS.SET_UP_LINE }
+      ? undefined
       : { tone: SETTINGS_ROW_STATE.PLAIN, name: WORDS.NOT_SET_UP, line: WORDS.NOT_SET_UP_LINE };
 
   const press = () =>
@@ -159,9 +157,11 @@ function StatusSection({
       <SettingsRow
         label={WORDS.STATUS}
         description={
-          <SettingsRowStateLine state={state.tone}>
-            {state.name}. {state.line}
-          </SettingsRowStateLine>
+          state === undefined ? undefined : (
+            <SettingsRowStateLine state={state.tone}>
+              {state.name}. {state.line}
+            </SettingsRowStateLine>
+          )
         }
         error={replayMaskedError(refusedShown(opening.refusal, FAILURE_SURFACE.WORKSPACE_BILLING))}
       >
