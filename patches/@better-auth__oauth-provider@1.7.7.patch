@@ -1,12 +1,21 @@
 diff --git a/dist/introspect-CNR06Oy3.mjs b/dist/introspect-CNR06Oy3.mjs
-index e633e0e33a23a0c41537d099585ddb4138a6b5fa..755588bbad3a37b02295ac79be32e5b338151337 100644
+index e633e0e33a23a0c41537d099585ddb4138a6b5fa..ed2bf382f4f911b35d72bcc4e85e215f0cc25e44 100644
 --- a/dist/introspect-CNR06Oy3.mjs
 +++ b/dist/introspect-CNR06Oy3.mjs
+@@ -1514,7 +1514,7 @@ async function invalidateRefreshFamily(ctx, clientId, userId) {
+ 			value: refreshTokens.map((r) => r.id)
+ 		}]
+ 	});
+-	await ctx.context.adapter.deleteMany({
++	const deletedRefreshTokens = await ctx.context.adapter.deleteMany({
+ 		model: "oauthRefreshToken",
+ 		where: [{
+ 			field: "clientId",
 @@ -1524,6 +1524,7 @@ async function invalidateRefreshFamily(ctx, clientId, userId) {
  			value: userId
  		}]
  	});
-+	ctx.context.logger.warn(`oauth-provider: a refresh token was presented again, so every token of client ${clientId} for user ${userId} was revoked (${refreshTokens.length} refresh tokens).`);
++	ctx.context.logger.warn(`oauth-provider: invalidated the refresh-token family of client ${clientId} for user ${userId}, deleting ${deletedRefreshTokens} refresh tokens and their stored access tokens.`);
  }
  async function revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId) {
  	const deleteIssuedTokens = async (model) => {
