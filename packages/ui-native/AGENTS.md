@@ -81,7 +81,9 @@ builds a control of its own.
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
   the picture viewer's share button holding the same, and Copy message on a
   message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
-  Native list (a lazy `FlatList`, drawn newest last and anchored there, with
+  Native list (FlashList's chat list, drawn newest last, opening at its
+  newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
+  rather than timers of ours, with
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they
   land); a call the agent holds for an answer says so under its line with
