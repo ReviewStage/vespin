@@ -2308,7 +2308,10 @@ it.effect(
         yield* Effect.promise(() =>
           client.callTool({
             name: MEMBER_MCP_TOOL.CONNECT_INTEGRATION,
-            arguments: { provider: INTEGRATION_PROVIDER.NOTION },
+            arguments: {
+              provider: INTEGRATION_PROVIDER.NOTION,
+              account: { connection: INTEGRATION_PROVIDER.NOTION },
+            },
           }),
         ),
       );

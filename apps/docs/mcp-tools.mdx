@@ -848,8 +848,7 @@ Answers a link that connects an integration, for you to open in your browser.
 | Input | Type | Description |
 | --- | --- | --- |
 | `provider` | `executor` \| `github` \| `gmail` \| `google-calendar` \| `google-drive` \| `granola` \| `linear` \| `mercury` \| `neon` \| `notion` \| `posthog` \| `resend` \| `sentry` \| `slack` \| `stripe` \| `supabase` \| `vercel` \| `ycombinator`, required | The provider to sign in to. |
-| `connection` | string | An account the member holds, by the connection name list_integrations answered, to sign it in again; leave it out for the provider's first account. |
-| `add` | boolean | true to sign in another account at the provider, where it takes more than one. |
+| `account` | object, required | Which account: &#123;"connection":"&lt;name&gt;"&#125; to sign one in by the connection name list_integrations answered, or the provider's own name, such as notion, for its first account; or &#123;"add":true&#125; to sign in another account at the provider, where it takes more than one. |
 
 ### list_integration_tools
 
