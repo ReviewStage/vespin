@@ -44,9 +44,17 @@
       mounted = 0,
       hosts = 0,
       total = 0;
+    // Each fiber carries the context menu slot it stands under (Trigger, Items, Preview), so a row's cost is split by slot.
+    var SLOTS = { Trigger: true, Items: true, Preview: true };
+    var slotted = {};
     var stack = [root.current];
+    var slotOf = new Map();
+    slotOf.set(root.current, "none");
     while (stack.length > 0) {
       var fiber = stack.pop();
+      var here = slotOf.get(fiber) || "none";
+      var ownName = nameOf(fiber);
+      if (ownName !== undefined && SLOTS[ownName]) here = ownName;
       total += 1;
       var old = fiber.alternate;
       var did =
@@ -58,6 +66,10 @@
         did = false;
       if (did) {
         if (old === null) mounted += 1;
+        if (here !== "none") {
+          var key = (old === null ? "mounted:" : "rendered:") + here;
+          slotted[key] = (slotted[key] || 0) + 1;
+        }
         var name = nameOf(fiber);
         if (name !== undefined) {
           rendered += 1;
@@ -66,9 +78,14 @@
           if (EXPLAIN[name] && old !== null) why(fiber, old, whys);
         } else if (typeof fiber.type === "string") hosts += 1;
       }
-      if (fiber.sibling) stack.push(fiber.sibling);
-      if (fiber.child && !(old !== null && old.child === fiber.child && !did))
+      if (fiber.sibling) {
+        slotOf.set(fiber.sibling, slotOf.get(fiber) || "none");
+        stack.push(fiber.sibling);
+      }
+      if (fiber.child && !(old !== null && old.child === fiber.child && !did)) {
+        slotOf.set(fiber.child, here);
         stack.push(fiber.child);
+      }
     }
     var top = Object.keys(counts).map((k) => [k, counts[k]]);
     top.sort((a, b) => b[1] - a[1]);
@@ -80,6 +97,7 @@
       hostRendered: hosts,
       total: total,
       why: whys,
+      slots: slotted,
       top: top.slice(0, 25),
       slow: slow.slice(0, 25),
       renderMs: Math.round((root.current.actualDuration || 0) * 10) / 10,
