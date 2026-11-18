@@ -374,6 +374,18 @@ const ORIGIN = MEMBER_MCP_TEST.ORIGIN;
 /** The server over its seeded rows and a GitHub nobody reaches, as most tests here stand it up. */
 const standing = memberMcpStanding();
 
+/** The server as most tests stand it, its catalog offering Claude Opus 5.5, for a tool that names a model. */
+const offering = memberMcpStanding({
+  catalog: [
+    {
+      id: "anthropic/claude-opus-5.5",
+      name: "Claude Opus 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["high"],
+    },
+  ],
+});
+
 /** The metadata document's address a challenge must name for the resource (RFC 9728). */
 const METADATA_URL = `${ORIGIN}/.well-known/oauth-protected-resource${MEMBER_MCP_PATH}`;
 
@@ -953,7 +965,15 @@ it.effect(
           [MEMBER_MCP_TOOL.LIST_AUTOMATIONS, { automationId }],
           [
             MEMBER_MCP_TOOL.CREATE_AUTOMATION,
-            { workspace, name: "Planted", prompt: "Go.", trigger: WEEKLY },
+            {
+              workspace,
+              name: "Planted",
+              prompt: "Go.",
+              trigger: WEEKLY,
+              repositories: [],
+              model: "anthropic/claude-opus-5.5",
+              effort: "high",
+            },
           ],
           [MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId }],
@@ -1126,7 +1146,7 @@ it.effect(
   "a task a member makes, its description's notes, an agent they archive, and an automation they make, change, run, and delete are the member's own, as the desktop shows them",
   () =>
     Effect.gen(function* () {
-      const { auth, fetch, services } = yield* standing;
+      const { auth, fetch, services } = yield* offering;
       const member = yield* Effect.promise(() => signUp(auth));
 
       const { agentId, own } = yield* Effect.gen(function* () {
@@ -1234,6 +1254,9 @@ it.effect(
           name: "Weekly sweep",
           prompt: "Sweep.",
           trigger: WEEKLY,
+          repositories: [],
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
         }),
       ).automation.id;
 

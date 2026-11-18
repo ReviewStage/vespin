@@ -67,7 +67,6 @@ import {
   callerWorkspace,
   choiceRefusal,
   orStoreRefusal,
-  workedRepository,
 } from "./agent-tools.js";
 import { calledId } from "./called-id.js";
 import { acceptedAgentChoice } from "./coder-host/start.js";
@@ -109,8 +108,14 @@ export const AUTOMATION_TOOL_REFUSAL = {
     '{"kind":"schedule","cron":"<five-field cron>","timezone":"<IANA zone>"} or once as ' +
     '{"kind":"schedule","at":"<YYYY-MM-DDTHH:mm>","timezone":"<IANA zone>"}, a GitHub event ' +
     'as {"kind":"github","event":"<event>"}, or a Sentry event as ' +
-    '{"kind":"integration","provider":"sentry","event":"alert-triggered"}; and a model with its ' +
-    "effort, both or neither.",
+    '{"kind":"integration","provider":"sentry","event":"alert-triggered"}; repositories as ' +
+    `owner/name, [] for none; and a model with one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them.`,
+  MISSING_CREATE:
+    "Not made: every automation names its repositories, model, and effort; none is taken from " +
+    "where you work or from the developer's defaults. repositories is an array of owner/name the " +
+    "workspace's GitHub installation reaches, the one you work in among them where the run " +
+    "should work there, or [] for none; model is a catalog id and effort one of its efforts, as " +
+    `${AGENT_TOOL.LIST_MODELS} answers them. Missing:`,
   UNREADABLE_UPDATE:
     `Not run: name the automation by the id ${AGENT_TOOL.LIST_AUTOMATIONS} answered, and at ` +
     "least one change, a model with its effort, both or neither.",
@@ -193,12 +198,12 @@ const TRIGGER = describeWire(
 const REPOSITORIES = describeWire(
   automationCreateRequestSchema.fields.repositories.schema,
   "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] " +
-    "for none, which a GitHub trigger cannot take. Create defaults to the one you work in, if any.",
+    "for none, which a GitHub trigger cannot take.",
 );
 
 const MODEL = describeWire(
   modelChoiceSchema.fields.model,
-  `Catalog id from ${AGENT_TOOL.LIST_MODELS}, given with effort; neither for the creator's default.`,
+  `Catalog id from ${AGENT_TOOL.LIST_MODELS}, given with effort.`,
 );
 
 const SERVERS = describeWire(
@@ -239,7 +244,7 @@ const LIST_AUTOMATIONS_INPUT = Schema.Struct({
   ),
 });
 
-/** An automation as both tools take it: create needs its name, prompt, and trigger, and update takes any of them. */
+/** An automation as both tools take it: create needs its name, prompt, trigger, repositories, model, and effort, and update takes any of them. */
 const AUTOMATION_FIELDS = {
   name: automationCreateRequestSchema.fields.name,
   prompt: PROMPT,
@@ -255,7 +260,11 @@ const AUTOMATION_FIELDS = {
 };
 
 const CREATE_AUTOMATION_INPUT = Schema.Struct(
-  Struct.mapOmit(AUTOMATION_FIELDS, ["name", "prompt", "trigger"], Schema.optionalKey),
+  Struct.mapOmit(
+    AUTOMATION_FIELDS,
+    ["name", "prompt", "trigger", "repositories", "model", "effort"],
+    Schema.optionalKey,
+  ),
 );
 
 const UPDATE_AUTOMATION_INPUT = Schema.Struct({
@@ -272,6 +281,9 @@ const UPDATE_AUTOMATION_INPUT = Schema.Struct({
 const DELETE_AUTOMATION_INPUT = Schema.Struct({ automationId: AUTOMATION_ID });
 
 const RUN_AUTOMATION_INPUT = Schema.Struct({ automationId: AUTOMATION_ID });
+
+/** What create_automation takes from the caller alone, never from where it works or its starter's defaults. */
+const CREATE_REQUIRED = ["repositories", "model", "effort"] as const;
 
 const readListAsked = Schema.decodeUnknownResult(LIST_AUTOMATIONS_INPUT);
 const readCreateAsked = Schema.decodeUnknownResult(CREATE_AUTOMATION_INPUT);
@@ -301,6 +313,8 @@ export const CREATE_AUTOMATION_TOOL = {
     `page would: each time its trigger fires, ${PRODUCT_NAME} starts an agent on its prompt, in its ` +
     "repositories or in none, on its creator's keys and connections, on a task of its own with no one watching, or " +
     "hands the run to the one agent named. It is on as it is made, and runs as the developer. " +
+    "Name its repositories, model, and effort: none is taken from where you work or the " +
+    `developer's defaults, and ${AGENT_TOOL.LIST_MODELS} answers the models and efforts. ` +
     `One fired by Sentry needs ${PRODUCT_NAME}'s Sentry integration installed on the workspace first. ` +
     "Make one when the developer asks for it, never otherwise on your own, and read " +
     `${AGENT_TOOL.LIST_AUTOMATIONS} first so you make none they already have.`,
@@ -378,6 +392,13 @@ function unknownServers(input: UnparsedWireValue): readonly string[] {
     (name): name is string =>
       Predicate.isString(name) && integrationConnectionOf(name) === undefined,
   );
+}
+
+/** The fields a make must name that the input as sent leaves out, in the schema's order. */
+function missingCreateFields(input: UnparsedWireValue): readonly string[] {
+  const named = isRecord(input) ? input : {};
+
+  return CREATE_REQUIRED.filter((field) => named[field] === undefined);
 }
 
 /** A refusal of the servers named that are no connection's, or nothing where every one is. */
@@ -640,14 +661,22 @@ export function runCreateAutomation(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AutomationToolServices> {
-  const asked = readCreateAsked(input);
-  const choice = Result.isSuccess(asked) ? namedChoice(asked.success) : null;
+  const missing = missingCreateFields(input);
 
-  if (Result.isFailure(asked) || choice === null) {
+  if (missing.length > 0) {
+    return Effect.succeed(
+      agentToolRejected(`${AUTOMATION_TOOL_REFUSAL.MISSING_CREATE} ${missing.join(", ")}.`),
+    );
+  }
+
+  const asked = readCreateAsked(input);
+
+  if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_CREATE));
   }
 
   const made = asked.success;
+  const choice: ModelChoice = { model: made.model, effort: made.effort };
   const servers = serversRefused(input);
 
   if (servers !== undefined) return Effect.succeed(servers);
@@ -694,13 +723,11 @@ export function runCreateAutomation(
       );
 
       if (Result.isFailure(landing)) return agentToolRejected(landing.failure);
-      const worked = yield* workedRepository(call.caller);
-      const repositories = made.repositories ?? (worked === null ? [] : [worked]);
 
       const action: AutomationAction = {
         kind: AUTOMATION_ACTION.AGENT,
         prompt: made.prompt,
-        ...(choice === undefined ? undefined : { choice }),
+        choice,
         ...(made.disabledServers === undefined
           ? undefined
           : { disabledServers: made.disabledServers }),
@@ -711,7 +738,7 @@ export function runCreateAutomation(
         {
           id,
           workspaceId: workspace.value,
-          repositories,
+          repositories: made.repositories,
           name: made.name,
           trigger: made.trigger,
           action,

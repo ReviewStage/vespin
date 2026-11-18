@@ -776,9 +776,9 @@ Creates an automation on a schedule, a GitHub event, or a Sentry event. Webhook 
 | `name` | string, required | (1–80 characters) |
 | `prompt` | string, required | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
 | `trigger` | object, required | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
-| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
-| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
-| `effort` | string | (1–200 characters) |
+| `repositories` | array of string, required | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. (up to 10 items) |
+| `model` | string, required | Catalog id from list_models, given with effort. (1–200 characters) |
+| `effort` | string, required | (1–200 characters) |
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
 | `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
@@ -796,8 +796,8 @@ Changes an automation. A new trigger replaces the old one whole.
 | `name` | string | (1–80 characters) |
 | `prompt` | string | Each run's first message; make it stand alone, since no one watches a run. (1–12000 characters) |
 | `trigger` | object | cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is "Send a notification via Vespin"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page. |
-| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none. (up to 10 items) |
-| `model` | string | Catalog id from list_models, given with effort; neither for the creator's default. (1–200 characters) |
+| `repositories` | array of string | owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. (up to 10 items) |
+| `model` | string | Catalog id from list_models, given with effort. (1–200 characters) |
 | `effort` | string | (1–200 characters) |
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
