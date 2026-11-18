@@ -509,6 +509,8 @@ const linkDestinationSchema = EffectSchema.Union([
     page: EffectSchema.optionalKey(
       EffectSchema.String.check(EffectSchema.isPattern(SETTINGS_PAGE)),
     ),
+    // A page of its page's own, as Workspace's GitHub, named the same way.
+    sub: EffectSchema.optionalKey(EffectSchema.String.check(EffectSchema.isPattern(SETTINGS_PAGE))),
   }),
   // One struct with every view optional, as Settings' is, so a
   // section the schema does not know is refused rather than read as the
@@ -711,16 +713,21 @@ function placeFields(steps: readonly string[]) {
         ? undefined
         : { kind: LINK_DESTINATION.PERSON, userId: id };
     case STEP.SETTINGS:
-      if (rest.length > 0) return undefined;
-
-      return id === undefined
-        ? { kind: LINK_DESTINATION.SETTINGS }
-        : { kind: LINK_DESTINATION.SETTINGS, page: id };
+      return settingsFields(id, rest);
     case STEP.ADMIN:
       return adminFields(id, rest);
     default:
       return undefined;
   }
+}
+
+/** Settings' fields past its step: its page list, a page, or a page of that page's own, `<page>/<sub>`. */
+function settingsFields(page: string | undefined, rest: readonly string[]) {
+  if (page === undefined) return { kind: LINK_DESTINATION.SETTINGS };
+
+  if (rest.length === 0) return { kind: LINK_DESTINATION.SETTINGS, page };
+
+  return rest.length === 1 ? { kind: LINK_DESTINATION.SETTINGS, page, sub: rest[0] } : undefined;
 }
 
 /** The Inbox's fields past its step: the Inbox itself, the Inbox narrowed to one task, `task/<taskId>`, or an item by its id alone, a picture in its words opening the item. */
@@ -842,7 +849,11 @@ function placePath(place: LinkDestination): readonly string[] {
     case LINK_DESTINATION.PERSON:
       return [STEP.PERSON, place.userId];
     case LINK_DESTINATION.SETTINGS:
-      return place.page === undefined ? [STEP.SETTINGS] : [STEP.SETTINGS, place.page];
+      if (place.page === undefined) return [STEP.SETTINGS];
+
+      return place.sub === undefined
+        ? [STEP.SETTINGS, place.page]
+        : [STEP.SETTINGS, place.page, place.sub];
     case LINK_DESTINATION.ADMIN:
       if (place.userId !== undefined) return [STEP.ADMIN, STEP.USER, place.userId];
 

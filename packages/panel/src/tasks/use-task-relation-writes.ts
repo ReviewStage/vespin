@@ -6,6 +6,7 @@
  * fixture run's tasks are read from nowhere, so none of its writes go out.
  */
 
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
 import { relationRefusedNote } from "@repo/features/task-relation-model";
@@ -24,7 +25,7 @@ import {
   type TasksSetParentAnswer,
 } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
@@ -284,7 +285,7 @@ export function useOpenWorkspaceGitHub(
 
       onOpenSettings({
         page: SETTINGS_VIEW.WORKSPACE,
-        section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+        sub: INTEGRATION_PROVIDER.GITHUB,
         ...(workspaceId === undefined ? undefined : { workspaceId }),
       });
     },

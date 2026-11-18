@@ -1,6 +1,11 @@
 import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
-import { SETTINGS_VIEW, type SettingsLink, settingsViewNamed } from "@repo/settings/settings-views";
+import {
+  SETTINGS_VIEW,
+  type SettingsLink,
+  settingsSubNamed,
+  settingsViewNamed,
+} from "@repo/settings/settings-views";
 
 /**
  * link-route.ts -- where in the window an app link opens: Settings, the Plans tab, or nowhere for a place the reader may not open.
@@ -46,10 +51,14 @@ export function linkRoute(
       const known = settingsViewNamed(place.page);
 
       // Note that a link naming no page this window knows names the page list, which stands on its first page.
+      const sub = known === undefined ? undefined : settingsSubNamed(known, place.sub);
+
       const page =
         known === undefined
           ? { page: SETTINGS_VIEW.ACCOUNT, listed: true as const }
-          : { page: known };
+          : sub === undefined
+            ? { page: known }
+            : { page: known, sub };
 
       return {
         kind: LINK_ROUTE.SETTINGS,

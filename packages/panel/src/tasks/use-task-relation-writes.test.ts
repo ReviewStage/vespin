@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { Task } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
@@ -83,7 +84,7 @@ test("Connect GitHub under a task opens Settings on its workspace's GitHub, read
   assert.deepEqual(links, [
     {
       page: SETTINGS_VIEW.WORKSPACE,
-      section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+      sub: INTEGRATION_PROVIDER.GITHUB,
       workspaceId: ACME.id,
     },
   ]);

@@ -11,7 +11,6 @@ import {
   type MenuRow as MenuRowChoice,
   RepositoryPicture,
   repositoryMenuRow,
-  SETTINGS_ROW_INDENT,
   SettingsRow,
   SettingsRowMark,
   useConfirmDialog,
@@ -37,9 +36,9 @@ import { Picker, PickerRow } from "./picker-row.js";
 /**
  * slack-bot-channels.tsx -- where an owner or admin sends the workspace's Slack starts: the channels the bot is in, each with its repository, and the repository every other start works in.
  *
- * Drawn as GitHub's rows are on the same card: the bot's row holds Add
- * channel (`AddSlackChannel`) beside its ⋯, as GitHub's holds Add
- * repository, and under it the Default repository picker, then one row per
+ * Drawn on Settings › Workspace › Slack's Channels, whose head holds Add
+ * channel (`AddSlackChannel`), as GitHub's page's Accounts and repositories
+ * holds Add repository: the Default repository picker, then one row per
  * channel the bot is in. A Slack start works in the repository its message
  * names, else its channel's, else the default. Remove from channel asks
  * first, since the bot leaves the channel for everyone in it.
@@ -107,9 +106,10 @@ function useRepositoryRows(workspaceId: string) {
 }
 
 /**
- * Add channel and its menu, on the bot's row: the public channels the bot
- * is not in, one picked putting the bot in it, and where none is left, how
- * a private one is joined. A refusal is handed to the row to say.
+ * Add channel and its menu, at the head of the bot's channels: the public
+ * channels the bot is not in, one picked putting the bot in it, and where
+ * none is left, how a private one is joined. A refusal is handed to the
+ * page to say.
  */
 export function AddSlackChannel({
   workspaceId,
@@ -149,7 +149,7 @@ export function AddSlackChannel({
   );
 }
 
-/** The workspace's default repository for Slack starts, inset under the bot's row, named or cleared from its picker. */
+/** The workspace's default repository for Slack starts, named or cleared from its picker. */
 function DefaultRepositoryRow({
   workspaceId,
   chosen,
@@ -176,7 +176,6 @@ function DefaultRepositoryRow({
 
   return (
     <PickerRow
-      indent={SETTINGS_ROW_INDENT.MARK}
       label={WORDS.DEFAULT_LABEL}
       labelReplayUnmasked
       value={chosen ?? NONE_ROW}
@@ -260,7 +259,6 @@ function ChannelRow({
           ],
         ]}
         row={{
-          indent: SETTINGS_ROW_INDENT.MARK,
           leading: (
             <SettingsRowMark>
               <ChannelMark channel={channel} />
@@ -317,8 +315,8 @@ function ChannelRow({
 }
 
 /**
- * The rows under a connected bot's row, to an owner or admin, each a row of
- * the card: the default repository, then each channel the bot is in, or
+ * A connected bot's channels, to an owner or admin, each a row of the
+ * card: the default repository, then each channel the bot is in, or
  * one row saying it is in none; where Slack's channels have not been
  * listed, the default alone.
  */
@@ -347,7 +345,6 @@ export function SlackBotChannelRows({
       ))}
       {joined?.length === 0 ? (
         <SettingsRow
-          indent={SETTINGS_ROW_INDENT.MARK}
           leading={
             <SettingsRowMark>
               <GLYPH.CHANNEL />

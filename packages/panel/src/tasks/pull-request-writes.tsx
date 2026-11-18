@@ -11,6 +11,7 @@ import {
   type PullRequestState,
 } from "@repo/features/agent-wire";
 import { saidWords } from "@repo/features/integration-health";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   PULL_REQUEST_STATE_LABEL,
@@ -28,7 +29,7 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
   CHIP_LOOK,
   Chip,
@@ -630,7 +631,7 @@ function useOpenRepositoryAccess(): () => void {
     place?.taskId === null || place?.taskId === undefined
       ? openSettings({
           page: SETTINGS_VIEW.WORKSPACE,
-          section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+          sub: INTEGRATION_PROVIDER.GITHUB,
         })
       : openWorkspaceGitHub(place.taskId);
 }
