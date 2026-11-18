@@ -70,7 +70,7 @@ function briefText(stored: StoredTask): readonly string[] {
   return [BRIEF_MARKER, JSON.stringify(stored.brief)];
 }
 
-/** The zone a turn reads the day in where the developer's window named none. */
+/** The zone a turn reads the day in where neither the developer's request nor their account named one. */
 const UTC_ZONE = "UTC";
 
 /** The language the developer's time is said in, as the description's dates are (`date-mention.ts`). */
@@ -101,7 +101,7 @@ function staleText(
   ];
 }
 
-/** The day an instant falls on in the developer's zone, or UTC where their window named none, as the date mention the description writes it. */
+/** The day an instant falls on in the developer's zone, or UTC where none is known, as the date mention the description writes it. */
 function dayMention(at: number, timeZone: string | undefined): string {
   const zoned = timeZone === undefined ? Option.none() : DateTime.makeZoned(at, { timeZone });
 
@@ -117,7 +117,7 @@ function dayMention(at: number, timeZone: string | undefined): string {
   );
 }
 
-/** When a turn opens, and the zone the developer's window named for it, where it named one. */
+/** When a turn opens, and the developer's zone: the one their request named, else the one their account keeps (`turn-message.ts`), where either stands. */
 export interface TurnClock {
   readonly now: number;
   readonly timeZone: string | undefined;
@@ -128,8 +128,8 @@ export interface TurnClock {
  * time in their zone, the zone's name and offset, and the time in UTC beside
  * them, then today as the date mention the description writes it, so the agent counts
  * "Friday" from their today rather than UTC's and spells a time at their
- * offset. A turn whose window named no zone, a desktop released before it
- * sent one, reads UTC and says so.
+ * offset. A turn with no zone, from a member no client of whose has named
+ * one yet, reads UTC and says so.
  */
 function developerTimeText({ now, timeZone }: TurnClock): string {
   const named =

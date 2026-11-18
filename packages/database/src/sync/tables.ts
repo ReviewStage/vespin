@@ -263,7 +263,8 @@ export const memberSync = defineSyncTable(member, {
  * An account, on its own topic and, through its memberships, every
  * workspace it is in, so a teammate's new name or picture reaches the
  * workspace's reads. Note that when it last moved and how it last signed in
- * are ignored, because every sign-in rewrites both and no view reads them.
+ * are ignored, because every sign-in rewrites both and no view reads them,
+ * and so is its time zone, which only an agent's turn reads.
  * The admin plugin's ban columns stay watched, since nothing of ours writes
  * them, so watching them costs nothing.
  */
@@ -277,7 +278,7 @@ export const userSync = defineSyncTable(user, {
       topics: [{ kind: TOPIC.WORKSPACE, column: member.organizationId }],
     },
   ],
-  ignore: [user.updatedAt, user.lastLoginMethod],
+  ignore: [user.updatedAt, user.lastLoginMethod, user.timeZone],
   log: LOG.EVERY,
 });
 

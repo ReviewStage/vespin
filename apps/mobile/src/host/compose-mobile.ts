@@ -29,6 +29,7 @@ import { createORPCClient } from "@orpc/client";
 import { type AccountRenewalWindow, type AuthSession, authSessionConsent } from "@repo/credentials";
 import { GITHUB_INSTALL_LANDING } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { readerZone } from "@repo/features/date-mention";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import type { OpenTerminalSocket } from "@repo/features/relay-socket";
@@ -229,7 +230,12 @@ function seamLayers(options: MobileHostOptions) {
   return Layer.mergeAll(
     Layer.succeed(StateRoot, stateRoot),
     Layer.succeed(RunMode, runModeFor({ capture: false, fixture: fixture !== undefined })),
-    Layer.succeed(AppIdentity, { appVersion, packaged: true, platform: PRODUCT_PLATFORM.IOS }),
+    Layer.succeed(AppIdentity, {
+      appVersion,
+      packaged: true,
+      platform: PRODUCT_PLATFORM.IOS,
+      deviceZone: readerZone,
+    }),
     // The app has no environment to read an override from.
     Layer.succeed(Environment, ConfigProvider.fromEnv({ env: {} })),
     Layer.succeed(IdSource, { create: device.createId }),

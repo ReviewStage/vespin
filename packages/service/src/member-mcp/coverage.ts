@@ -266,6 +266,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
     active: INTERNAL,
+    writeTimeZone: INTERNAL,
     sound: SCREEN_ONLY,
     addSound: SCREEN_ONLY,
     renameSound: SCREEN_ONLY,

@@ -26,6 +26,10 @@
  * build's experiment and refusing it would refuse the build's every other
  * choice too.
  *
+ * The time zone is the one the caller's own device names, kept on their
+ * own account alone, which an agent's turn reads their day in where the
+ * turn's own request names none.
+ *
  * The access is whether the caller is an admin, read off its own role, so a
  * client can offer the admin dashboard to the account that may open it. It
  * says nothing of any other account and authorizes nothing: the dashboard's
@@ -37,8 +41,10 @@
  */
 
 import type { AccountAccessRow, AccountSeamEffect } from "@repo/database/models/account-store";
+import { writeAccountTimeZone } from "@repo/database/models/account-time-zone";
 import { stampPresence } from "@repo/database/models/presence-store";
 import type { PresenceDoneAnswer } from "@repo/features/presence-wire";
+import type { TimeZoneDoneAnswer } from "@repo/features/time-zone-wire";
 import { Clock } from "effect";
 import { isAdminRole } from "../admin/admin-access.js";
 import { standingSupportAccess } from "../auth/auth-policy.js";
@@ -62,6 +68,9 @@ export interface AccountProcedureSeams extends AccountPreferenceSeams {
 
 /** What a beat answers once the stamp is kept. */
 const PRESENCE_DONE: PresenceDoneAnswer = { done: true };
+
+/** What a zone's write answers once it is kept. */
+const TIME_ZONE_DONE: TimeZoneDoneAnswer = { done: true };
 
 /** The account resource: every procedure but the provider keys' own, which are `provider-keys-procedures.ts`'s. */
 export function accountProcedures(seams: AccountProcedureSeams) {
@@ -93,6 +102,13 @@ export function accountProcedures(seams: AccountProcedureSeams) {
       yield* hostedStoreOrUnavailable(stampPresence(context.userId));
 
       return PRESENCE_DONE;
+    }),
+
+    /** The zone the caller's device reads its clock in, kept on their own account for an agent's turn to read their day in (`../agents/coder-host/turn-message.ts`). */
+    writeTimeZone: signedIn.writeTimeZone.effect(function* ({ context, input }) {
+      yield* hostedStoreOrUnavailable(writeAccountTimeZone(context.userId, input.timeZone));
+
+      return TIME_ZONE_DONE;
     }),
 
     /** Writes each part the body carries and answers the snapshot as it then stands (`writeOwnPreferences`). */
