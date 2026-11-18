@@ -55,6 +55,7 @@ const INPUT = {
   title: "Expire teammate invitations",
   body: "Invitations now expire after a week.",
   repository: RELAY_FULL_NAME,
+  base: RELAY.defaultBranch,
 };
 
 /** How GitHub answers an opening, by the bearer it came on. */
@@ -239,7 +240,7 @@ const openAgentBesideDocs = (installationId: number) =>
 
 it.layer(getTestDB())("a coding agent's pull request", (it) => {
   it.effect(
-    "an agent in several repositories names the one to open in, refused with their names where it names none or another, and its pull request in an extra one opens there against the branch it was cloned at, its head written on that repository's row alone",
+    "an agent in several repositories names the one to open in, refused with their names where it names none or another, and its pull request in an extra one opens there against the base it names, its head written on that repository's row alone",
     () =>
       Effect.gen(function* () {
         const besideDocs = yield* openAgentBesideDocs(41);
@@ -268,7 +269,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
           {
             status: ACTION_RESULT_STATUS.REJECTED,
             reason:
-              "Not opened: the call needs head, title, body, and repository, the title at most 256 characters and repository one you work in: `Acme/Relay`, `Acme/Docs`.",
+              "Not opened: the call needs head, title, body, repository, and base, the title at most 256 characters, repository one you work in: `Acme/Relay`, `Acme/Docs`, and base the branch it merges into: the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request.",
           },
           {
             status: ACTION_RESULT_STATUS.REJECTED,
@@ -278,7 +279,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
         ]);
         assert.equal(openings.length, 0, "GitHub hears of no refused call");
 
-        const inDocs = yield* call({ ...INPUT, repository: "acme/docs" });
+        const inDocs = yield* call({ ...INPUT, repository: "acme/docs", base: "next" });
         assert.ok(inDocs.status === ACTION_RESULT_STATUS.ACCEPTED);
         assert.equal(inDocs.number, 7);
         assert.deepEqual(
@@ -322,7 +323,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
   );
 
   it.effect(
-    "an agent writing as its developer has its pull request opened on their token, once, against the default branch, its description as the agent wrote it, its branch recorded on the agent as it opens",
+    "an agent writing as its developer has its pull request opened on their token, once, against the base it names, its description as the agent wrote it, its branch recorded on the agent as it opens",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent(21, AGENT_AUTHOR.DEVELOPER);
@@ -446,7 +447,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
   );
 
   it.effect(
-    "a base the agent names is the branch GitHub is asked to merge into, and a base GitHub does not know opens nothing and answers why",
+    "a base the agent names is the branch GitHub is asked to merge into, a call naming none is refused naming base before GitHub hears of it, and a base GitHub does not know opens nothing and answers why",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent(31, AGENT_AUTHOR.DEVELOPER);
@@ -463,6 +464,8 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
           );
 
         const accepted = yield* open(agent, agent.target, opened, stacked);
+        const { base: _base, ...unbased } = INPUT;
+        const baseless = yield* open(agent, agent.target, opened, unbased);
 
         const refused = yield* open(agent, agent.target, unknownBase, {
           ...INPUT,
@@ -471,6 +474,9 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
 
         assert.equal(accepted.result.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.equal(JSON.parse(accepted.openings[0]?.body ?? "{}").base, stacked.base);
+        assert.ok(baseless.result.status === ACTION_RESULT_STATUS.REJECTED);
+        assert.match(baseless.result.reason, /needs head, title, body, repository, and base/u);
+        assert.deepEqual(baseless.openings, []);
         assert.deepEqual(refused.result, {
           status: ACTION_RESULT_STATUS.REJECTED,
           reason: "Not opened: GitHub said: Validation Failed base invalid",

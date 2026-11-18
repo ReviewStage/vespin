@@ -62,10 +62,10 @@ import { agentPublished } from "./published.js";
  * to read and opens nothing. The description is the agent's own, with no
  * line of ours added: where its author is a person, the trailer on its
  * commits (`checkout.ts`) names our bot as co-author, which GitHub shows
- * on the pull request, as it does for Claude Code. It merges into the
- * repository's default branch unless the agent names another base, such as
- * the branch of the pull request it stacks on; a base GitHub does not know
- * is refused like any other. Once GitHub opens it, its branch and the pull
+ * on the pull request, as it does for Claude Code. It merges into the base
+ * the agent names, which every call states: its start branch, the
+ * repository's default branch, or the branch of the pull request it stacks
+ * on; a base GitHub does not know is refused like any other. Once GitHub opens it, its branch and the pull
  * request are written on the agent's row at once rather than only as the
  * turn ends, so a comment on it finds the agent (`github/agent-wakes.ts`);
  * a refused call moves nothing.
@@ -75,8 +75,7 @@ import { agentPublished } from "./published.js";
  * names none or one it does not work in, so no call opens in a repository
  * the agent did not mean. A pull
  * request in an extra repository opens on the one token minted for the
- * agent's set, against the branch that repository's checkout was cloned at
- * unless it names another base, and its head is written on that
+ * agent's set, against the base it names, and its head is written on that
  * repository's row rather than the agent's (`recordAgentRepositoryHead`),
  * so GitHub's deliveries about it find the agent as they find its own.
  */
@@ -101,11 +100,9 @@ const openPullRequestInputSchema = Schema.Struct({
   ),
   body: Schema.String.check(Schema.isMaxLength(PULL_REQUEST_BOUNDS.MAX_BODY_CHARS)),
   draft: Schema.optionalKey(Schema.Boolean),
-  base: Schema.optionalKey(
-    Schema.Trim.check(
-      Schema.isNonEmpty(),
-      Schema.isMaxLength(PULL_REQUEST_BOUNDS.MAX_BRANCH_CHARS),
-    ),
+  base: Schema.Trim.check(
+    Schema.isNonEmpty(),
+    Schema.isMaxLength(PULL_REQUEST_BOUNDS.MAX_BRANCH_CHARS),
   ),
   repository: describeWire(
     githubRepositoryFullNameSchema,
@@ -129,7 +126,7 @@ export const OPEN_PULL_REQUEST_TOOL = {
   name: AGENT_TOOL.OPEN_PULL_REQUEST,
   description:
     "Open the pull request for a branch you pushed: head is the branch, body its description in Markdown, and base the branch it " +
-    "merges into, the default branch where left out, or another on GitHub, such as the parent's branch for a stacked pull request. " +
+    "merges into: the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request. " +
     `Use this rather than \`gh pr create\`: it opens as the developer who started you where you write as them, and as ${PRODUCT_NAME}'s GitHub ` +
     "App otherwise, and adds nothing to the description. Where GitHub refuses the developer's own access, it opens as the App " +
     "and the answer says so; tell the developer, who can sign in with GitHub again.",
@@ -153,8 +150,9 @@ function listedRepositories(repositories: readonly AgentRepositoryEntry[]): stri
 /** Why a call missing a field, or naming one out of bounds, opened nothing, listing the repositories it may name. */
 function unreadableRefusal(repositories: readonly AgentRepositoryEntry[]): string {
   return (
-    `Not opened: the call needs head, title, body, and repository, the title at most ${PULL_REQUEST_BOUNDS.MAX_TITLE_CHARS} characters ` +
-    `and repository one you work in: ${listedRepositories(repositories)}.`
+    `Not opened: the call needs head, title, body, repository, and base, the title at most ${PULL_REQUEST_BOUNDS.MAX_TITLE_CHARS} characters, ` +
+    `repository one you work in: ${listedRepositories(repositories)}, and base the branch it merges into: ` +
+    "the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request."
   );
 }
 
@@ -317,11 +315,11 @@ const attemptAsDeveloper = /* @__PURE__ */ Effect.fn("web/openPullRequestAsDevel
   );
 });
 
-/** The pull request GitHub is asked to open: the agent's branch against the base it named, else the branch given, its description as the agent wrote it. */
-function pullRequestOf(input: OpenPullRequestInput, base: string): PullRequestAsked {
+/** The pull request GitHub is asked to open: the agent's branch against the base it named, its description as the agent wrote it. */
+function pullRequestOf(input: OpenPullRequestInput): PullRequestAsked {
   return {
     head: input.head,
-    base: input.base ?? base,
+    base: input.base,
     title: input.title,
     body: input.body.trimEnd(),
     draft: input.draft ?? false,
@@ -358,9 +356,8 @@ const attemptOpening = /* @__PURE__ */ Effect.fn("web/attemptPullRequestOpening"
   const minted = yield* Effect.result(agentRepositoryToken(target, agent, extra?.repository));
 
   if (Result.isFailure(minted)) return pullRequestRejected(`Not opened: ${minted.failure.reason}`);
-  const { bearer, fullName, defaultBranch, access } = minted.success;
-  // Note that an extra's pull request opens against the branch its checkout was cloned at, as it was named at the Start.
-  const pullRequest = pullRequestOf(input, extra?.baseBranch ?? defaultBranch);
+  const { bearer, fullName, access } = minted.success;
+  const pullRequest = pullRequestOf(input);
 
   // Note that an agent on its starter's own token opens on it alone, since no installation reaches the repository.
   if (access.kind === GITHUB_ACCESS.TOKEN) {
