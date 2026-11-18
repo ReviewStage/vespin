@@ -99,7 +99,10 @@ const openPullRequestInputSchema = Schema.Struct({
     Schema.isMaxLength(PULL_REQUEST_BOUNDS.MAX_TITLE_CHARS),
   ),
   body: Schema.String.check(Schema.isMaxLength(PULL_REQUEST_BOUNDS.MAX_BODY_CHARS)),
-  draft: Schema.optionalKey(Schema.Boolean),
+  draft: describeWire(
+    Schema.Boolean,
+    "false to open it ready for review, as is usual so checks and review start at once; true to open it as a draft.",
+  ),
   base: Schema.Trim.check(
     Schema.isNonEmpty(),
     Schema.isMaxLength(PULL_REQUEST_BOUNDS.MAX_BRANCH_CHARS),
@@ -126,7 +129,8 @@ export const OPEN_PULL_REQUEST_TOOL = {
   name: AGENT_TOOL.OPEN_PULL_REQUEST,
   description:
     "Open the pull request for a branch you pushed: head is the branch, body its description in Markdown, and base the branch it " +
-    "merges into: the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request. " +
+    "merges into: the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request; " +
+    "draft false opens it ready for review, true as a draft. " +
     `Use this rather than \`gh pr create\`: it opens as the developer who started you where you write as them, and as ${PRODUCT_NAME}'s GitHub ` +
     "App otherwise, and adds nothing to the description. Where GitHub refuses the developer's own access, it opens as the App " +
     "and the answer says so; tell the developer, who can sign in with GitHub again.",
@@ -150,9 +154,10 @@ function listedRepositories(repositories: readonly AgentRepositoryEntry[]): stri
 /** Why a call missing a field, or naming one out of bounds, opened nothing, listing the repositories it may name. */
 function unreadableRefusal(repositories: readonly AgentRepositoryEntry[]): string {
   return (
-    `Not opened: the call needs head, title, body, repository, and base, the title at most ${PULL_REQUEST_BOUNDS.MAX_TITLE_CHARS} characters, ` +
+    `Not opened: the call needs head, title, body, repository, base, and draft, the title at most ${PULL_REQUEST_BOUNDS.MAX_TITLE_CHARS} characters, ` +
     `repository one you work in: ${listedRepositories(repositories)}, and base the branch it merges into: ` +
-    "the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request."
+    "the branch your own values name, else the repository's default branch, or the parent's branch for a stacked pull request, " +
+    "and draft false to open it ready for review or true to open it as a draft."
   );
 }
 
@@ -322,7 +327,7 @@ function pullRequestOf(input: OpenPullRequestInput): PullRequestAsked {
     base: input.base,
     title: input.title,
     body: input.body.trimEnd(),
-    draft: input.draft ?? false,
+    draft: input.draft,
   };
 }
 
@@ -481,7 +486,7 @@ export const openPullRequest = /* @__PURE__ */ Effect.fn("web/openPullRequest")(
           result.openedAs === OPENED_AS.DEVELOPER
             ? SERVER_PULL_REQUEST_OPENER.DEVELOPER
             : SERVER_PULL_REQUEST_OPENER.APP,
-        is_draft: read.success.draft ?? false,
+        is_draft: read.success.draft,
       },
     );
   }

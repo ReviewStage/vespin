@@ -211,8 +211,8 @@ function publishLines(
 
   const base =
     startBranch === null
-      ? " with `base` naming the default branch, which `gh api repos/{owner}/{repo} --jq .default_branch` answers"
-      : ` with \`base: "${startBranch}"\``;
+      ? " with `base` naming the default branch, which `gh api repos/{owner}/{repo} --jq .default_branch` answers, and `draft: false`"
+      : ` with \`base: "${startBranch}"\` and \`draft: false\``;
 
   return [
     `Work on a branch named \`${CODER.BRANCH_PREFIX}<slug>\` cut from ${from}, never on ${from} itself, unless your first message names an open pull request's branch to push to.`,
