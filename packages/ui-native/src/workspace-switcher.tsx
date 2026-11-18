@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the system's menu of every workspace by its photo or tile, then New workspace and Workspace settings, and the account by its photo opening Settings.
+// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the system's menu of every workspace by its photo or tile, then New workspace, the chosen workspace's Manage under its name, and the account by its photo opening Settings, each on one line.
 
 import {
   Host,
@@ -63,13 +63,14 @@ export type SwitcherAccount = {
   readonly picture?: string | undefined;
   /** That picture as a file on this device, which its row in the menu leads with; the gear while it has none. */
   readonly menuPhoto?: string | undefined;
-  /** The account's email address, which its row says under Settings where it has one, as Mail and Notes name an account, so it never reads as a personal workspace of the same name and face. */
-  readonly address?: string | undefined;
   readonly onPress: () => void;
 };
 
-/** What the account's row is named: where it goes, ahead of whose it is, so it never reads as a third workspace. */
+/** What the account's row is named: where it goes, ahead of whose it is, so it never reads as a third workspace; one line, with no address under it. */
 const SETTINGS = "Settings";
+
+/** What the chosen workspace's settings row is named under the section the workspace's name heads, so it fits one line and never stands as a second Settings beside the account's. */
+const MANAGE = "Manage";
 
 /** An act under the list's workspaces, such as New workspace. */
 export type SwitcherAction = {
@@ -88,7 +89,7 @@ type WorkspaceSwitcherProps = {
   readonly account?: SwitcherAccount | undefined;
   /** The acts after the workspaces, such as New workspace. */
   readonly actions: readonly SwitcherAction[];
-  /** Opens the chosen workspace's settings, Workspace settings standing after the acts, as the panel's menu has it; none where it has no settings page. */
+  /** Opens the chosen workspace's settings, Manage standing after the acts in a section the workspace's name heads; none where it has no settings page. */
   readonly onWorkspaceSettings?: (() => void) | undefined;
   /** How its button stands; the tile and the name where none is given. */
   readonly look?: SwitcherLook | undefined;
@@ -168,10 +169,12 @@ function SwitcherFace({
  * column bar: the chosen workspace's tile and name and a chevron, or its tile
  * alone, opening the system's menu, as Notion's one workspace button does:
  * every workspace by its photo or tile, its name and who shares it, the
- * chosen one checked; then the acts, such as New workspace, and Workspace
- * settings, in the panel's groups and words (`workspaceMenuGroups`); and
- * last, where a caller hands one, the row into Settings, led by the
- * account's photo with its address, or its name, under it. A menu runs a
+ * chosen one checked; then the acts, such as New workspace; then the chosen
+ * workspace's settings as Manage in a section its name heads, so the row
+ * fits one line and never reads as a second Settings; and last, where a
+ * caller hands one, the row into Settings, led by the account's photo, with
+ * no line under it, so every row stands on one line at the default text
+ * size. A menu runs a
  * row's act once it has closed, so a screen it opens is never presented
  * over it as it leaves.
  */
@@ -212,7 +215,7 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
           />
         ))}
       </Section>
-      {actions.length === 0 && onWorkspaceSettings === undefined ? null : (
+      {actions.length === 0 ? null : (
         <Section>
           {actions.map((action) => (
             <SwiftUIButton
@@ -221,24 +224,17 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
               onPress={action.onPress}
             />
           ))}
-          {onWorkspaceSettings === undefined ? null : (
-            <SwiftUIButton
-              {...actContent(WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, GLYPH.SETTINGS)}
-              onPress={onWorkspaceSettings}
-            />
-          )}
+        </Section>
+      )}
+      {onWorkspaceSettings === undefined ? null : (
+        <Section title={chosen.name}>
+          <SwiftUIButton {...actContent(MANAGE, GLYPH.SETTINGS)} onPress={onWorkspaceSettings} />
         </Section>
       )}
       {account === undefined ? null : (
         <Section>
           <SwiftUIButton
-            {...menuActContent(
-              SETTINGS,
-              GLYPH.SETTINGS,
-              account.address || account.name,
-              undefined,
-              account.menuPhoto,
-            )}
+            {...menuActContent(SETTINGS, GLYPH.SETTINGS, undefined, undefined, account.menuPhoto)}
             onPress={account.onPress}
           />
         </Section>

@@ -7,7 +7,6 @@ import {
   MEMORY_PAGE_WORDS,
   MEMORY_RECALLS_WORDS,
   memoriesByUse,
-  recallsText,
 } from "@repo/features/memory-settings-words";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
@@ -55,11 +54,9 @@ function keeperOf(memory: MemorySummary): string {
   return memory.keptBy?.name ?? FORMER_KEEPER;
 }
 
-/** The line under a memory's words: whose they are, when they were last kept, and how often agents recalled them. */
+/** The line under a memory's words, one plain phrase: who kept it and when. Note that how often agents recalled it orders the list rather than standing in the line, as iOS Settings keeps a row's line to one fact. */
 function memoryLine(memory: MemorySummary, now: number): string {
-  return [keeperOf(memory), agoText(memory.updatedAt, now), recallsText(memory.recalls30d)].join(
-    " · ",
-  );
+  return `Kept by ${keeperOf(memory)} ${agoText(memory.updatedAt, now)}`;
 }
 
 export default function MemoryScreen() {

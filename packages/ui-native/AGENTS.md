@@ -220,9 +220,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   screen's title keeps its place beside it, as the App Store's photo does), whose menu, the
   system's own (`Menu` in `Section`s, as Notion's), holds each workspace by
   its photo, read from a file (`MenuPhoto`), or its letter tile in its hue,
-  the chosen one checked as a `Toggle`, then New workspace and Workspace
-  settings, in the panel's groups and words (`workspaceMenuGroups`), and last
-  the account by its photo and name opening Settings, in every window; the account's
+  the chosen one checked as a `Toggle`, then New workspace, then the chosen
+  workspace's Manage in a section its name heads, and last the account by its
+  photo as Settings, every row one line at the default size, in every window; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. Settings opens from the switcher's menu and

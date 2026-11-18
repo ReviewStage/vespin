@@ -30,6 +30,10 @@ export const SETTINGS_ROUTE = {
   MCP: "/settings/mcp",
   /** One app the account let in over MCP, by the `client` it is pushed with, as a row of MCP & CLI opens it. */
   MCP_APP: "/settings/mcp-app",
+  /** A member of the workspace the app works in, by the `userId` it is pushed with, as a row of Workspace's Members opens it. */
+  MEMBER: "/settings/member",
+  /** A pending invitation of the workspace the app works in, by the `invitation` id it is pushed with, as a row of Workspace's Invitations opens it. */
+  INVITATION: "/settings/invitation",
   /** Notifications: how this phone's pushes fare, when it takes them, and iOS's own notification settings. */
   NOTIFICATIONS: "/settings/notifications",
   MEMORY: "/settings/memory",
@@ -42,7 +46,7 @@ export const SETTINGS_ROUTE = {
   SKILL: "/settings/skill",
   /** Add skill's paste. */
   SKILL_ADD: "/settings/skill-add",
-  /** The workspace the app works in, as the workspace switcher's Workspace settings opens it. */
+  /** The workspace the app works in, as the workspace switcher's Manage opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;
 
@@ -74,7 +78,6 @@ export function useSettingsAccount(): BarAccount | undefined {
   return {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
-    address: account.email,
     label: SETTINGS,
     onPress: () => open(),
   };

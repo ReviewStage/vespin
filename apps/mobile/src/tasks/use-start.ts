@@ -8,8 +8,7 @@
  * one `TASKS_START`, which makes the task and starts its agent together, as
  * Home's composer does, the pictures attached going with its words as the
  * panel's attachments do, and in the relation picked, as New task's rows
- * start one. File for later is the same act with no agent, the task filed
- * in the Backlog under its words. A start names a model only
+ * start one. A start names a model only
  * where one was picked, so an untouched sheet starts on the account's
  * default at the moment it goes, as the panel's does. A read that could not
  * be read before it listed anything says so, in the panel's words, with Try
@@ -38,13 +37,8 @@ import {
   modelSpeedOf,
 } from "@repo/features/models-wire";
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
+import { TASK_CREATE_RELATION_KIND, type TaskCreateRelation } from "@repo/features/task-wire";
 import {
-  TASK_CREATE_RELATION_KIND,
-  TASK_STATUS,
-  type TaskCreateRelation,
-} from "@repo/features/task-wire";
-import {
-  type FiledTask,
   recentRepositories,
   repositoryFailureNote,
   startFailureNote,
@@ -450,34 +444,5 @@ export function useStartTask(
     }
 
     return { agentId: started.agent.id, taskId: answer.taskId };
-  };
-}
-
-/**
- * File for later: the same start with no agent (`TASKS_START` without
- * `agent`), the task filed in the Backlog, named by the words' first line
- * and handed them whole as its brief (`filedTaskOf`, which the sheet reads
- * so it offers the act only on words), in the workspace,
- * repository, and relation picked, for an agent to be started on later.
- */
-export function useFileTask(
-  workspaceId: string | undefined,
-): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
-  const acts = useHostActs();
-  // Note that the task's id is minted once per sheet, so a filing sent again files no second task.
-  const [id] = useState(randomUUID);
-
-  return async ({ filed, ...place }) => {
-    const answer = await acts[ACT_KIND.TASKS_START]({
-      id,
-      ...placeOf(workspaceId, place),
-      ...filed,
-      status: TASK_STATUS.BACKLOG,
-      planning: false,
-    }).catch(unanswered("The task's filing"));
-
-    if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
-
-    return { taskId: answer.taskId };
   };
 }
