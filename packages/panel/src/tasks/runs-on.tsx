@@ -14,6 +14,7 @@ import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import {
   CHIP_LOOK,
   CHIP_WIDTH,
+  type ChipWidth,
   GAP,
   GlyphSlot,
   Inline,
@@ -309,11 +310,17 @@ export function NewTaskRunsOnChip({
   device,
   disabled,
   narrow,
+  look = CHIP_LOOK.TOOLBAR,
+  width = CHIP_WIDTH.AUTO,
   onChoose,
 }: {
   devices: readonly MacOffer[];
   device: MacOffer | undefined;
   disabled: boolean;
+  /** The chip's look: a composer's toolbar chip, or a form row's field. */
+  look?: typeof CHIP_LOOK.FIELD | typeof CHIP_LOOK.TOOLBAR;
+  /** How wide the chip stands; its words' own width where none is named. */
+  width?: ChipWidth;
   /** Whether the card is too narrow for its words, so it draws its glyph alone. */
   narrow: boolean;
   onChoose: (deviceId: string | undefined) => void;
@@ -338,8 +345,8 @@ export function NewTaskRunsOnChip({
       rows={runsOnRows(devices, book, thisMac)}
       noMatch={RUNS_ON_WORDS.NO_MATCH}
       align={POPOVER_ALIGN.START}
-      width={CHIP_WIDTH.AUTO}
-      look={CHIP_LOOK.TOOLBAR}
+      width={width}
+      look={look}
       chevron
       menuWidth={POPOVER_WIDTH.REGULAR}
       disabled={disabled}

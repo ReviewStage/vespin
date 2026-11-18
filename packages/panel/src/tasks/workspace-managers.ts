@@ -32,8 +32,8 @@ interface WorkspaceManagers {
   readonly agents: AgentsControl;
 }
 
-/** The key the workspace's Managers are read under, which a write from a row reads again. */
-function workspaceManagersQueryKey(workspaceId: string | undefined) {
+/** The key the workspace's Managers are read under, which a write from a row, or a Manager made, reads again. */
+export function workspaceManagersQueryKey(workspaceId: string | undefined) {
   return [QUERY_ROOT.WORKSPACE_MANAGERS, workspaceId] as const;
 }
 

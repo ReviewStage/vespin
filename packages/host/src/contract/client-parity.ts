@@ -143,6 +143,7 @@ const IOS = {
   MENTION_MACHINES: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no machine is offered to mention",
   ),
+  MANAGERS: notYet("iOS lists no Managers yet, so it makes none"),
   MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   BILLING: byDesign("iOS v1 leaves billing to the desktop and the web"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
@@ -281,6 +282,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_LIST]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATIONS),
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_CREATE_MANAGER]: panel(IOS.MANAGERS),
   [PORT_ACT_KIND.AGENTS_MESSAGES]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: EVERYWHERE,

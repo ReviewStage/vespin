@@ -232,6 +232,7 @@ export type AgentClient = Pick<
   | "listWorkspace"
   | "start"
   | "startFrom"
+  | "createManager"
   | "messagesNow"
   | "agentPart"
   | "messagesNewest"
@@ -1213,6 +1214,7 @@ function composed(
 
         return answer;
       }),
+    AGENTS_CREATE_MANAGER: (request) => asked(client.createManager(request)),
     // Note that the page is read at once, since Copy transcript waits on no hold.
     AGENTS_MESSAGES: ({ agentId, after, callId }) =>
       Effect.map(asked(client.messagesNow(agentId, after, callId)), windowsPage),

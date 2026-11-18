@@ -6,8 +6,10 @@
  * (`workspace-managers.ts`), its archived ones left out. Each is an agent's
  * row as every list of agents draws it (`AgentListRow`), its menu the
  * agent's own, its press opening its page (`/<workspace>/agent/<id>`), saying
- * nothing of where it runs (`runsOn`), chosen with no other (`choosable`), and the row of the page standing open marked as the sidebar marks its open
- * task. Its head folds it as Pinned's does, kept across launches. It stands
+ * nothing of where it runs (`runsOn`), chosen with no other (`choosable`),
+ * and the row of the page standing open marked as the sidebar marks its open
+ * task. Its head folds it as Pinned's does, kept across launches, and its +
+ * opens New Manager (`new-manager-dialog.tsx`). It stands
  * only where the workspace has the Managers experiment on, and says so
  * where it holds none or could not be read; until the first answer lands
  * it stands as its head alone.
@@ -18,14 +20,18 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import { EXPERIMENT } from "@repo/settings";
 import {
+  BUTTON_SIZE,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   GroupHeader,
+  IconButton,
   motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
+  PlusIcon,
   TASK_ROW_EDGES,
   TaskRows,
+  Tooltip,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -36,6 +42,7 @@ import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
+import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
 import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
 
 /** What the section is called, on its head and its list alike. */
@@ -74,6 +81,7 @@ export function SidebarManagers({
   );
 
   const more = !useCoarsePointer();
+  const newManager = useNewManagerDialog({ tasks, onOpen });
 
   if (!listed) return null;
 
@@ -92,6 +100,16 @@ export function SidebarManagers({
           noun: MANAGER_NOUN,
         })}
         label={MANAGERS_HEAD}
+        actions={
+          <Tooltip label={NEW_MANAGER}>
+            <IconButton
+              icon={<PlusIcon />}
+              label={NEW_MANAGER}
+              size={BUTTON_SIZE.COMPACT}
+              onClick={newManager.ask}
+            />
+          </Tooltip>
+        }
       >
         {failed ? (
           <ErrorState
@@ -148,6 +166,7 @@ export function SidebarManagers({
           </ReplayMask>
         )}
       </GroupHeader>
+      {newManager.dialog}
     </nav>
   );
 }
