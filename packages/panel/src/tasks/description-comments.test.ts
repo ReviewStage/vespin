@@ -1328,8 +1328,8 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started turns into the thread where it stands once the thread is drawn, under the id its first comment's key names, and words refused stand as not sent where its words are commented on again", async () => {
-  const { container, started, rethread } = wide(() => drawn("page", []));
+test("a thread being started gives its card's place to the thread as its words are sent, under the id its first comment's key names, and words refused stand as not sent where its words are commented on again", async () => {
+  const { container, started } = wide(() => drawn("page", []));
 
   const paragraph = [...container.querySelectorAll("p")].find((p) =>
     p.textContent?.startsWith("Admins can withdraw"),
@@ -1346,31 +1346,16 @@ test("a thread being started turns into the thread where it stands once the thre
   comment();
   const field = pending()?.querySelector<HTMLElement>(".composer-editor");
   assert.ok(field);
-  const place = pending()?.closest(".comment-slot");
   typeInto(field, "Ask Vespin about retries");
 
   act(() => {
     field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
-  assert.ok(pending() !== null, "the card stands until its thread is drawn");
+  assert.equal(pending(), null, "the card gives way as its words are sent");
   const [start] = started;
   assert.ok(start);
   assert.equal(start.id, start.clientKey);
 
-  // The host draws the thread at once, and takes it away again as the service refuses it.
-  rethread([
-    threadOn(start.clientKey, "Admins can withdraw", "Ask Vespin about retries", {
-      scope: start.scope,
-      quote: start.quote,
-      anchor: start.anchor,
-      section: "Approach",
-    }),
-  ]);
-  const thread = container.querySelector(`.comment-card[data-thread="${start.clientKey}"]`);
-  assert.equal(pending(), null, "the card gives way to its thread");
-  assert.ok(thread?.closest(".comment-slot") === place, "in the place the card stood in");
-
-  rethread([]);
   await act(async () => undefined);
   comment();
   assert.equal(
