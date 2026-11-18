@@ -992,8 +992,8 @@ const MEMBER_LIST_MODELS_TOOL = memberMcpTool({
     "the standard and the long with each one's size in tokens and what the long one costs as a " +
     "multiple of the standard price, or none where it runs on one window, and its payers, the " +
     "kinds of credential the member keeps that pay for it (subscription, api_key, both, or none " +
-    "where nothing does), which a start never picks between, since each turn takes the first " +
-    "with room; the member's default model, effort, and the window it runs on, which " +
+    "where nothing does), which a start never picks between, since each turn of a cloud agent " +
+    "takes the first with room; the member's default model, effort, and the window it runs on, which " +
     `the app's own Starts run on and a ${MEMBER_MCP_TOOL.START_AGENT} call never does, and ` +
     "whether it is still offered; and chaptersProviders, " +
     "the providers whose API key the member saved, which " +
