@@ -17,7 +17,8 @@ import Foundation
 
 #if !APP_EXTENSION
   import UIKit
-  import VespinLiveActivity
+  // Note that the import is internal, as Expo's generated module list in the same target imports it, since Swift 6 refuses a plain import beside an `internal import` of the same module.
+  internal import VespinLiveActivity
 #endif
 
 struct StopAgentIntent: LiveActivityIntent {
