@@ -9,10 +9,13 @@
     },
     "query": {
       "type": "string",
+      "minLength": 1,
       "maxLength": 300,
-      "description": "A few words naming what to look for, such as the area, tool, or convention at hand; leave it out for the memories kept most recently."
+      "description": "A few words naming what to look for, such as the area, tool, or convention at hand."
     }
   },
-  "required": [],
+  "required": [
+    "query"
+  ],
   "additionalProperties": false
 }

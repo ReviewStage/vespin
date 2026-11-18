@@ -5001,7 +5001,10 @@ test("a coding agent remembers for its workspace, as its starter's words: a team
     recalledWords(await asTeammate(AGENT_TOOL.SEARCH_MEMORY, { query: "hosted routes" })),
     [fact],
   );
-  assert.deepEqual(recalledWords(await asOtherWorkspace(AGENT_TOOL.SEARCH_MEMORY, {})), []);
+  assert.deepEqual(
+    recalledWords(await asOtherWorkspace(AGENT_TOOL.SEARCH_MEMORY, { query: "hosted routes" })),
+    [],
+  );
   assert.deepEqual(
     (await database.run(listMemories(workspaceId))).map((memory) => [memory.text, memory.userId]),
     [[fact, agents.caller.userId]],
@@ -5050,7 +5053,7 @@ test("while its workspace has Memory off, a coding agent's remember and recall a
     text: "Every route is an oRPC procedure.",
   });
 
-  const recalled = await asCaller(AGENT_TOOL.SEARCH_MEMORY, {});
+  const recalled = await asCaller(AGENT_TOOL.SEARCH_MEMORY, { query: "deploys" });
 
   const refused = { status: ACTION_RESULT_STATUS.REJECTED, reason: EXPERIMENT_OFF_REFUSAL };
   assert.deepEqual(kept, refused);
