@@ -16,6 +16,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import type { SkillFile } from "@repo/features/installed-skill-check";
 import {
   INSTALLED_SKILL_MAIN_FILE,
   INSTALLED_SKILL_REFUSAL,
@@ -47,12 +48,6 @@ export interface SkillRepository {
   readonly defaultBranch: string;
   readonly bearer: GitHubBearer | null;
   readonly public: boolean;
-}
-
-/** One file of a skill, by its path from the skill's folder. */
-export interface SkillFile {
-  readonly path: string;
-  readonly bytes: Uint8Array;
 }
 
 /** One folder holding a `SKILL.md`: its path from the repository's root, empty for the root, and every file under it. */

@@ -1,5 +1,5 @@
 /**
- * installed-skills.ts -- the skills members install into the app, as the one operation each door runs: list the ones a workspace offers the account, read one, preview a paste, install from it, and remove one.
+ * installed-skills.ts -- the skills members install into the app, as the one operation each door runs: list the ones a workspace offers the account, read one, preview a paste, install from it, bring one in from a Mac, and remove one.
  *
  * The hosted procedures (`installed-skills-procedures.ts`) and the member
  * MCP tools (`../member-mcp/tools.ts`) are doors over these: each resolves
@@ -19,7 +19,9 @@
  * its GitHub source through the workspace named, which is the
  * installation that reads it. Every skill an install makes is written in
  * one transaction, so a name already taken among several installs none.
- * Each write answers the transaction it committed in, which a desktop
+ * A skill's folder the desktop read from the member's Mac is made a skill
+ * from the files it sends (`skill-import.ts`) and written as an install's
+ * are. Each write answers the transaction it committed in, which a desktop
  * holding the skills live waits for (`installedSkillsRead`).
  */
 
@@ -39,6 +41,7 @@ import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import { listWorkspaces, personalWorkspaceOf } from "@repo/database/models/workspace-store";
 import type {
   InstalledSkillContent,
+  InstalledSkillImportRequest,
   InstalledSkillSummary,
 } from "@repo/features/installed-skill-route-wire";
 import {
@@ -61,8 +64,14 @@ import {
   installedSkillRefused,
   pathUuid,
 } from "../http/http-effect.js";
+import { madeFromMac } from "./skill-import.js";
 import { parseSkillPaste } from "./skill-paste.js";
-import { type InstallAsked, madeFromPaste, previewOfPaste } from "./skill-paste-install.js";
+import {
+  type InstallAsked,
+  type MadeSkill,
+  madeFromPaste,
+  previewOfPaste,
+} from "./skill-paste-install.js";
 
 /** The roles that manage a workspace's skills. */
 const MANAGING_ROLES: ReadonlySet<WorkspaceRole> = new Set([
@@ -257,17 +266,19 @@ export const previewSkillPaste = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* previewOfPaste(userId, workspace.id, parseSkillPaste(asked.text));
 });
 
-/** The skills a paste makes, installed in the scope asked, all or none. */
-export const installSkills = /* @__PURE__ */ Effect.fnUntraced(function* (
+/**
+ * The skills made written in the scope asked, all or none, the change
+ * counted; answered as the account manages them, with the transaction they
+ * were written in.
+ */
+const installMade = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
-  asked: SkillInstallAsked,
+  workspace: MemberWorkspace,
+  scope: InstalledSkillScope,
+  made: readonly MadeSkill[],
 ) {
-  const workspace = yield* memberWorkspace(userId, asked.workspaceId);
-  yield* checkedScope(workspace, asked.scope);
-  const made = yield* madeFromPaste(userId, workspace.id, parseSkillPaste(asked.text), asked);
-
   const owner =
-    asked.scope === INSTALLED_SKILL_SCOPE.PERSONAL
+    scope === INSTALLED_SKILL_SCOPE.PERSONAL
       ? { scope: INSTALLED_SKILL_SCOPE.PERSONAL }
       : { scope: INSTALLED_SKILL_SCOPE.WORKSPACE, organizationId: workspace.id };
 
@@ -294,6 +305,30 @@ export const installSkills = /* @__PURE__ */ Effect.fnUntraced(function* (
     skills: installed.map((skill) => summaryOf(skill, true)),
     ...txidOf(installed[0]),
   };
+});
+
+/** The skills a paste makes, installed in the scope asked, all or none. */
+export const installSkills = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  asked: SkillInstallAsked,
+) {
+  const workspace = yield* memberWorkspace(userId, asked.workspaceId);
+  yield* checkedScope(workspace, asked.scope);
+  const made = yield* madeFromPaste(userId, workspace.id, parseSkillPaste(asked.text), asked);
+
+  return yield* installMade(userId, workspace, asked.scope, made);
+});
+
+/** One skill's folder read from the member's Mac, installed in the scope asked under the name asked, else its own. */
+export const importSkill = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  asked: InstalledSkillImportRequest,
+) {
+  const workspace = yield* memberWorkspace(userId, asked.workspaceId);
+  yield* checkedScope(workspace, asked.scope);
+  const made = yield* madeFromMac(asked);
+
+  return yield* installMade(userId, workspace, asked.scope, [made]);
 });
 
 /** One skill removed with its files. */
