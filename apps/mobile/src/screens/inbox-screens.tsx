@@ -84,7 +84,6 @@ import {
   ThreadPage,
   ThreadPreview,
   useColors,
-  useToday,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
@@ -332,8 +331,7 @@ function InboxRowView({
   remindMenu,
   onResolve,
 }: InboxRowActs & InboxRowThread) {
-  // Note that the row is drawn again as the day turns, so Remind me's Tomorrow and Next week say their days rightly; its time moves on with the minute inside `ListRow`, so the minute draws no Inbox row again.
-  useToday();
+  // Note that the row reads neither the minute nor the day: its time moves on inside `ListRow`, and Remind me's menu, handed in, moves on as the day turns (`useRemind`).
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
   const { name: agentName, harness } = useAgentLabel(item.agentId);

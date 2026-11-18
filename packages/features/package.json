@@ -372,7 +372,7 @@
     "@orpc/experimental-effect": "catalog:",
     "@orpc/openapi": "catalog:",
     "ai": "catalog:",
-    "diff": "9.0.0",
+    "diff": "catalog:",
     "effect": "catalog:",
     "fractional-indexing": "3.2.0",
     "ignore": "7.0.16",
@@ -384,9 +384,9 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@sentry/core": "11.7.0",
-    "@types/mdast": "4.0.4",
+    "@types/mdast": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "8.18.2",
+    "@types/ws": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

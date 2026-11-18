@@ -2753,7 +2753,7 @@ function transcriptPlacing(
           !undelivered.has(message.id),
       );
 
-  // An agent started from another opens on the brief as its source's did, then the replay's card, then the note.
+  // An agent started from another opens on the replay's card, holding the brief as its source's drew it where it is a line, then the note.
   const opening = !replayed || first === undefined ? undefined : replayOpening(first);
   // A line that reached a turn while it ran is drawn inside that turn, where it arrived.
   const placed = placedMessages(messages, (id) => undelivered.has(id) || unsent.has(id));
@@ -2883,7 +2883,7 @@ function AgentTranscriptView({
   taskId?: string | undefined;
   /** What a failed turn's report names, where it is not the agent and task above, as a worker's names its agent's. */
   failureAbout?: FailureAbout | undefined;
-  /** Where a replay its first message holds is drawn as its own card, between the brief and the note (`replay-card.tsx`); none where no replay is read, as on a worker's tab. */
+  /** Where a replay its first message holds is drawn as its own card, holding the brief where it is a line, before the note (`replay-card.tsx`); none where no replay is read, as on a worker's tab. */
   replay?: ReplayPlace | undefined;
   /** What the end line's row ends on, after its words: Continue in new agent (`continue-agent.tsx`); nothing where it has no end line. */
   endPress?: ReactNode;
@@ -3029,7 +3029,7 @@ function AgentTranscriptView({
     bringIn.current = bringMessage;
   });
 
-  // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief, then its note, and the task the agent was handed, as the note is, under whoever handed it.
+  // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
   const railLines = useMemo(() => {
     const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
 
@@ -3051,8 +3051,9 @@ function AgentTranscriptView({
       if (message !== firstLine || replayOpened === undefined) return read(message, message);
       const note = replayOpened.note;
 
+      // Note that a brief drawn as a line stands inside the replay's card as the source's history, never a line sent to this agent.
       return [
-        ...read(replayOpened.brief, message),
+        ...(message === description ? read(replayOpened.brief, message) : []),
         ...(note === undefined
           ? []
           : read(note, note).map((line) => ({ ...line, sender: briefSender }))),
@@ -3201,50 +3202,54 @@ function AgentTranscriptView({
                     const tails = piece === undefined || piece.last;
                     const heads = piece === undefined || piece.first;
 
+                    const sender =
+                      message === task
+                        ? briefSender
+                        : messageSender(message, readerId, members, former);
+
+                    // Note that a brief drawn as a line is the source's history, so it stands inside the replay's card rather than as a line sent again over it; a brief drawn as a card of its own still opens the transcript.
+                    const opened = message === first ? opening : undefined;
+                    const folded = opened !== undefined && message !== description;
+
                     return (
                       <>
                         {heads ? (
                           <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
                         ) : null}
-                        <SteadyAgentMessage
-                          message={
-                            message === first && opening !== undefined ? opening.brief : message
-                          }
-                          description={message === description}
-                          taskId={message === description ? taskId : undefined}
-                          lead={lead}
-                          moving={message.id === writing}
-                          delegation={delegation}
-                          todos={todos}
-                          briefTitle={briefTitle}
-                          origin={message === description ? drawnOrigin : undefined}
-                          sender={
-                            message === task
-                              ? briefSender
-                              : messageSender(message, readerId, members, former)
-                          }
-                          wakeupDelay={
-                            isWakeupLine(message)
-                              ? wakeupDelayOf(placed[index - 1]?.message)
-                              : undefined
-                          }
-                          arrived={arrivals.get(message.id) ?? NO_ARRIVED}
-                          delegated={delegated.has(message.id)}
-                          piece={piece}
-                        />
-                        {!tails ? null : message === first &&
-                          opening !== undefined &&
-                          replay !== undefined ? (
+                        {folded ? null : (
+                          <SteadyAgentMessage
+                            message={opened === undefined ? message : opened.brief}
+                            description={message === description}
+                            taskId={message === description ? taskId : undefined}
+                            lead={lead}
+                            moving={message.id === writing}
+                            delegation={delegation}
+                            todos={todos}
+                            briefTitle={briefTitle}
+                            origin={message === description ? drawnOrigin : undefined}
+                            sender={sender}
+                            wakeupDelay={
+                              isWakeupLine(message)
+                                ? wakeupDelayOf(placed[index - 1]?.message)
+                                : undefined
+                            }
+                            arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                            delegated={delegated.has(message.id)}
+                            piece={piece}
+                          />
+                        )}
+                        {!tails ? null : opened !== undefined && replay !== undefined ? (
                           <>
                             <ReplayCard
-                              replay={opening.replay}
-                              sentAt={first.sentAt}
+                              replay={opened.replay}
+                              brief={folded ? { message: opened.brief, sender } : undefined}
+                              sentAt={message.sentAt}
                               place={replay}
                               taskId={taskId}
                             />
-                            {opening.note === undefined ? null : (
+                            {opened.note === undefined ? null : (
                               <SteadyAgentMessage
-                                message={opening.note}
+                                message={opened.note}
                                 description={false}
                                 lead={lead}
                                 moving={false}

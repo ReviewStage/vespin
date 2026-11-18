@@ -88,10 +88,13 @@ if ! gh release view "$TAG" > /dev/null 2>&1; then
         --verify-tag \
         --title "Vespin $VERSION" \
         --generate-notes
-elif [[ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]]; then
-    printf 'error: release %s is already published; refusing to replace live assets.\n' "$TAG" >&2
-    printf 'Bump the version and cut a new tag, or delete the release by hand before retrying.\n' >&2
-    exit 1
+else
+    is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft)
+    if [[ "$is_draft" != "true" ]]; then
+        printf 'error: release %s is already published; refusing to replace live assets.\n' "$TAG" >&2
+        printf 'Bump the version and cut a new tag, or delete the release by hand before retrying.\n' >&2
+        exit 1
+    fi
 fi
 gh release upload "$TAG" \
     "$staging_directory/$DMG_ASSET_NAME" \
@@ -101,7 +104,8 @@ gh release upload "$TAG" \
     "$staging_directory/$ZIP_ASSET_NAME.sha256" \
     "$staging_directory/$UPDATE_FEED_ASSET_NAME" \
     --clobber
-if [[ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" == "true" ]]; then
+is_draft=$(gh release view "$TAG" --json isDraft --jq .isDraft)
+if [[ "$is_draft" == "true" ]]; then
     gh release edit "$TAG" --draft=false --latest
 fi
 
