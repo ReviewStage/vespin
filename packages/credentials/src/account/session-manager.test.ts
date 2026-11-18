@@ -50,6 +50,8 @@ function manager(options: {
   userInfo?: AccountClient["userInfo"];
   /** When a renewal may run; none unless given. */
   renewalWindow?: AccountRenewalWindow;
+  /** Every write not marked a renewal dies, as the iPhone's does while its Keychain refuses and a renewal's own write is held. */
+  refusesPlainWrites?: boolean;
 }): Effect.Effect<
   {
     instance: AccountSessionManager;
@@ -122,12 +124,14 @@ function manager(options: {
       client: options.client ?? fixtureClient,
       store: {
         readAccount: () => Effect.sync(() => stored),
-        setAccount: (next) =>
-          Effect.sync(() => {
-            stored = next;
+        setAccount: (next, write) =>
+          options.refusesPlainWrites === true && write?.renewal !== true
+            ? Effect.die(new Error("The Keychain refused the write."))
+            : Effect.sync(() => {
+                stored = next;
 
-            return { status: ACCOUNT_STATUS.SIGNED_IN, ...next };
-          }),
+                return { status: ACCOUNT_STATUS.SIGNED_IN, ...next };
+              }),
         clearAccount: () =>
           Effect.gen(function* () {
             if (options.beforeClear) yield* options.beforeClear;
@@ -269,6 +273,33 @@ it.effect(
       yield* subject.instance.refresh();
       assert.equal(grants, 1);
       assert.equal(subject.stored()?.refreshToken, "renewed-refresh");
+    }),
+);
+
+it.effect(
+  "a renewal whose identity comes back unchanged writes nothing more, so a held renewal never fails its caller",
+  () =>
+    Effect.gen(function* () {
+      const subject = yield* manager({
+        stored: STORED,
+        refusesPlainWrites: true,
+        client: refreshingClient(
+          () =>
+            Promise.resolve(
+              jsonResponse({ access_token: "renewed-access", refresh_token: "renewed-refresh" }),
+            ),
+          (request) =>
+            request.headers.get("authorization") === "Bearer renewed-access"
+              ? jsonResponse({ sub: STORED.id, email: STORED.email })
+              : jsonResponse({ error: "invalid_token" }, HTTP_STATUS.UNAUTHORIZED),
+        ),
+      });
+
+      subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+      yield* subject.instance.refresh();
+
+      assert.equal(subject.stored()?.refreshToken, "renewed-refresh");
+      assert.equal(subject.instance.snapshot.status, ACCOUNT_STATUS.SIGNED_IN);
     }),
 );
 

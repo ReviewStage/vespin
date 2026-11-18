@@ -504,6 +504,10 @@ export class AccountSessionManager {
 
       if (Result.isSuccess(identity)) {
         if (sameIdentity(stored, identity.success)) return;
+        const current = yield* this.#options.store.readAccount();
+
+        // Note that an identity read a renewal overtook writes nothing, since its pair is the one the renewal rotated away; the renewal's own identity read keeps the identity.
+        if (current?.refreshToken !== stored.refreshToken) return;
 
         if (!(yield* this.#storeCurrent(generation, mergedIdentity(stored, identity.success))))
           return;
@@ -582,6 +586,9 @@ export class AccountSessionManager {
       );
 
       if (Result.isSuccess(next)) {
+        // Note that an unchanged identity writes nothing more, so a renewal whose pair the store holds for the run never fails on a second write.
+        if (sameIdentity(renewedAccount, next.success)) return;
+
         if (!(yield* this.#storeCurrent(generation, mergedIdentity(renewedAccount, next.success))))
           return;
         yield* this.#publishChange();
