@@ -1,8 +1,15 @@
+import { messageWords } from "@repo/features/agent-parts";
 import { REPLAY_STEP_KIND, type Replay, type ReplayStep } from "@repo/features/agent-replay";
-import type { AgentPullRequest, AgentSummary, AgentTodos } from "@repo/features/agent-wire";
+import type {
+  AgentPullRequest,
+  AgentSummary,
+  AgentTodos,
+  AgentTranscriptMessage,
+} from "@repo/features/agent-wire";
 import { AGENT_SENDER } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
+  briefOrigin,
   earlierStepsLine,
   leftOutLine,
   REPLAY_PAGE,
@@ -50,9 +57,11 @@ import { useFindOpen } from "../find-in-tab.js";
 import { pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { lineSender, providerOf } from "./agent-model.js";
+import { MessageFileChips, MessageFiles } from "./agent-pictures.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, ORIGIN_CHIP } from "./mention-chip.js";
+import { SentWords } from "./skill-chip.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { TranscriptTool, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
@@ -60,7 +69,7 @@ import { useOpenPlace } from "./use-open-link.js";
 import { useListedAgent } from "./use-workspace-agents.js";
 
 /**
- * replay-card.tsx -- the card an agent started from another opens on after its brief: "Continued from" or "Forked from" the source agent, folded over the steps of the source's work it was handed.
+ * replay-card.tsx -- the card an agent started from another opens on: "Continued from" or "Forked from" the source agent, folded over the brief and the steps of the source's work it was handed.
  *
  * The card stands as the description's card does, at a sent message's measure over
  * the line naming who started the agent and when, as any line sent to the
@@ -68,7 +77,11 @@ import { useListedAgent } from "./use-workspace-agents.js";
  * the time alone, and its Copy, which copies the replay as it was handed. Its summary row names the source by the chip its tab
  * wears, which opens that tab and hangs its card, and how many of the
  * source's steps were replayed, of how many where the earliest were left
- * out. Opened, it says what it holds, our summary of the oldest steps
+ * out. Opened, it draws first the line the source's work opened on, where
+ * the agent's brief is a line rather than a card of its own, at the time
+ * the source's chain began, as a branched chat draws the history it was
+ * branched from above the marker rather than as a line sent again; then
+ * what it holds, our summary of the oldest steps
  * and how many steps were left out where either applies, then the newest
  * steps, each drawn as the live transcript draws it, a line over who sent
  * it, when, and Copy, and a call as a call of its tool, opening onto its
@@ -301,6 +314,48 @@ function CallStep({
 }
 
 /**
+ * The line the source's work opened on, drawn as a replayed line is but with
+ * its files, as the transcript drew it: under whoever sent it, else as the
+ * reader's own, when, where known, and its Copy. It offers no Edit nor link,
+ * since it is the source's history rather than a line of this transcript.
+ */
+function BriefStep({
+  message,
+  sender,
+  at,
+}: {
+  message: AgentTranscriptMessage;
+  sender: Actor | undefined;
+  at: number | undefined;
+}): React.JSX.Element {
+  const words = messageWords(message);
+  const received = sender !== undefined;
+
+  return (
+    <MessageFiles message={message} words={words}>
+      <Message
+        from={received ? MESSAGE_ROLE.ASSISTANT : MESSAGE_ROLE.USER}
+        className={received ? RECEIVED_MESSAGE_CLASS : undefined}
+        data-replay-step={REPLAY_STEP_KIND.LINE}
+      >
+        {received ? <MessageHead sender={<ActorRef actor={sender} />} /> : null}
+        <MessageFileChips message={message} />
+        {words === "" ? null : (
+          <MessageContent>
+            <SentWords text={words} />
+          </MessageContent>
+        )}
+        <MessageLine
+          align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+          at={at}
+          actions={<CopyMessageAction words={words} copyable={words !== ""} />}
+        />
+      </Message>
+    </MessageFiles>
+  );
+}
+
+/**
  * One step, drawn as a transcript draws the same: a line as a sent
  * message, its sender under it unless it is the reader's own; the agent's
  * words as its words; and a call as a call's row, folded onto its input
@@ -458,19 +513,28 @@ function ReplayFoot({
   );
 }
 
+/** The line the source's work opened on, which the card draws ahead of its steps, and who the tab names as having sent it, which the card names where it cannot name the source chain's starter. */
+export interface ReplayBrief {
+  readonly message: AgentTranscriptMessage;
+  readonly sender: Actor | undefined;
+}
+
 /**
  * The card: the source's chip and how many steps on its summary row, and,
- * opened, our summary and the steps left out, the newest steps
- * a page at a time, and the foot; the line naming who started the agent and
- * when under it.
+ * opened, the brief where it is a line, our summary and the steps left out,
+ * the newest steps a page at a time, and the foot; the line naming who
+ * started the agent and when under it.
  */
 export function ReplayCard({
   replay,
+  brief,
   sentAt,
   place,
   taskId,
 }: {
   replay: Replay;
+  /** The line the source's work opened on, drawn first inside the card; none where the brief is drawn as a card of its own over it. */
+  brief?: ReplayBrief | undefined;
   /** When the agent's first message was sent, named after who started it; none where the transcript does not know. */
   sentAt?: number | undefined;
   place: ReplayPlace;
@@ -509,6 +573,21 @@ export function ReplayCard({
                 ? { kind: LINK_DESTINATION.AGENT, agentId }
                 : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId },
             );
+
+  // The brief is the first line of the agent the source's chain began at, sent by whoever started it, when it was started.
+  const origin = briefOrigin(source, place.agents);
+
+  const briefSender =
+    origin === undefined
+      ? brief?.sender
+      : origin.startedBy === undefined
+        ? undefined
+        : lineSender(
+            { kind: AGENT_SENDER.MEMBER, ...origin.startedBy },
+            place.readerId,
+            members,
+            former,
+          );
 
   const left = leftOutLine(replay);
   const summary = summaryLine(replay);
@@ -549,6 +628,9 @@ export function ReplayCard({
           </OneLine>
         </PlanHeader>
         <PlanContent layout={PLAN_BODY_LAYOUT.STACK}>
+          {brief === undefined ? null : (
+            <BriefStep message={brief.message} sender={briefSender} at={origin?.createdAt} />
+          )}
           {summary === undefined || replay.summary === undefined ? null : (
             <SummaryRow line={summary} text={replay.summary.text} />
           )}
