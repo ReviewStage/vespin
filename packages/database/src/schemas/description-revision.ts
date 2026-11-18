@@ -1,5 +1,5 @@
 import type { DescriptionActor } from "@repo/features/task-wire";
-import { integer, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 import { user } from "./auth.js";
@@ -48,5 +48,9 @@ export const descriptionRevision = pgTable(
     /** The revision of the same plan the developer restored, where this revision is that restore; null for any other. */
     restoredFrom: integer("restored_from"),
   },
-  (table) => [primaryKey({ columns: [table.taskId, table.seq] })],
+  (table) => [
+    primaryKey({ columns: [table.taskId, table.seq] }),
+    index("description_revision_user_id").on(table.userId),
+    index("description_revision_agent_id").on(table.agentId),
+  ],
 );

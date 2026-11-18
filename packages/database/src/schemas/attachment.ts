@@ -182,6 +182,8 @@ export const attachment = pgTable(
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
+    index("attachment_organization_id").on(table.organizationId),
+    index("attachment_user_id").on(table.userId),
     // An item's files are read and deleted by the item, and a message's by the message.
     index("attachment_inbox_item")
       .on(table.inboxItemId)

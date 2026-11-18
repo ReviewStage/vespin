@@ -290,6 +290,8 @@ export const messages = pgTable(
   },
   (table) => [
     unique("messages_conversation_client").on(table.conversationId, table.clientId),
+    index("messages_user_id").on(table.userId),
+    index("messages_sender_user_id").on(table.senderUserId),
     unique("messages_conversation_seq").on(table.conversationId, table.seq),
     // The amendment read walks one conversation's amended rows in revision order.
     index("messages_conversation_revision")

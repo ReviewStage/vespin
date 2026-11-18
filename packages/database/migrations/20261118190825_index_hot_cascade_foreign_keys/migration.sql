@@ -1,0 +1,19 @@
+CREATE INDEX "attachment_organization_id" ON "attachment" ("organization_id");--> statement-breakpoint
+CREATE INDEX "attachment_user_id" ON "attachment" ("user_id");--> statement-breakpoint
+CREATE INDEX "automation_run_user_id" ON "automation_run" ("user_id");--> statement-breakpoint
+CREATE INDEX "automation_run_agent_id" ON "automation_run" ("agent_id");--> statement-breakpoint
+CREATE INDEX "automation_run_claimed_agent_id" ON "automation_run" ("claimed_agent_id");--> statement-breakpoint
+CREATE INDEX "description_comment_user_id" ON "description_comment" ("user_id");--> statement-breakpoint
+CREATE INDEX "description_comment_agent_id" ON "description_comment" ("agent_id");--> statement-breakpoint
+CREATE INDEX "description_comment_asked_agent_id" ON "description_comment" ("asked_agent_id");--> statement-breakpoint
+CREATE INDEX "description_revision_user_id" ON "description_revision" ("user_id");--> statement-breakpoint
+CREATE INDEX "description_revision_agent_id" ON "description_revision" ("agent_id");--> statement-breakpoint
+CREATE INDEX "inbox_item_read_user_id" ON "inbox_item_read" ("user_id");--> statement-breakpoint
+CREATE INDEX "inbox_message_user_id" ON "inbox_message" ("user_id");--> statement-breakpoint
+CREATE INDEX "inbox_message_addressee_id" ON "inbox_message" ("addressee_id");--> statement-breakpoint
+CREATE INDEX "native_call_key_conversation_id" ON "native_call_key" ("conversation_id");--> statement-breakpoint
+CREATE INDEX "runner_line_user_id" ON "runner_line" ("user_id");--> statement-breakpoint
+CREATE INDEX "messages_user_id" ON "messages" ("user_id");--> statement-breakpoint
+CREATE INDEX "messages_sender_user_id" ON "messages" ("sender_user_id");--> statement-breakpoint
+CREATE INDEX "task_creator_agent_id" ON "task" ("creator_agent_id");--> statement-breakpoint
+CREATE INDEX "task_assignee_id" ON "task" ("assignee_id");
