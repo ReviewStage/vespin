@@ -134,7 +134,7 @@ pnpmfileChecksum: sha256-5zr6kRyJg2o93o3vk5Q2kSNgqpI4ylynD9Hmzi2Ddnc=
 
 patchedDependencies:
   '@better-auth/oauth-provider@1.7.7':
-    hash: b4b560cbadacfe5a94972c9a6c390e724b8fc4d34b6328f41345f642cd1ec060
+    hash: 4c097257299b415ddff140683df7b251c6302cdf5c074cacf292a8aabf23e754
     path: patches/@better-auth__oauth-provider@1.7.7.patch
   '@expo/ui@58.0.27':
     hash: 1e3d880648037b3cbbe1307eba1bacd3851222c109b113d3d24b2501a9981357
@@ -632,7 +632,7 @@ importers:
     dependencies:
       '@better-auth/oauth-provider':
         specifier: 1.7.7
-        version: 1.7.7(patch_hash=b4b560cbadacfe5a94972c9a6c390e724b8fc4d34b6328f41345f642cd1ec060)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)
+        version: 1.7.7(patch_hash=4c097257299b415ddff140683df7b251c6302cdf5c074cacf292a8aabf23e754)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)
       '@effect/sql-pg':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)
@@ -1405,7 +1405,7 @@ importers:
         version: 1.7.7(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)(electron@43.8.9)
       '@better-auth/oauth-provider':
         specifier: 1.7.7
-        version: 1.7.7(patch_hash=b4b560cbadacfe5a94972c9a6c390e724b8fc4d34b6328f41345f642cd1ec060)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)
+        version: 1.7.7(patch_hash=4c097257299b415ddff140683df7b251c6302cdf5c074cacf292a8aabf23e754)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)
       '@effect/sql-pg':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)
@@ -11489,7 +11489,7 @@ snapshots:
   '@better-auth/cimd@1.7.7(@better-auth/core@1.7.7)(@better-auth/oauth-provider@1.7.7)(better-auth@1.7.7)(better-call@1.4.0)':
     dependencies:
       '@better-auth/core': 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.0)(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.0)
-      '@better-auth/oauth-provider': 1.7.7(patch_hash=b4b560cbadacfe5a94972c9a6c390e724b8fc4d34b6328f41345f642cd1ec060)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)
+      '@better-auth/oauth-provider': 1.7.7(patch_hash=4c097257299b415ddff140683df7b251c6302cdf5c074cacf292a8aabf23e754)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)
       better-auth: 1.7.7(@opentelemetry/api@1.9.1)(drizzle-kit@1.0.0-rc.4)(drizzle-orm@1.0.0-rc.4)(pg@8.23.1)(react-dom@19.2.8)(react@19.2.8)(vitest@5.1.0)
       better-call: 1.4.0(zod@4.6.7)
 
@@ -11542,7 +11542,7 @@ snapshots:
       '@better-auth/core': 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.0)(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.0)
       '@better-auth/utils': 0.4.2
 
-  '@better-auth/oauth-provider@1.7.7(patch_hash=b4b560cbadacfe5a94972c9a6c390e724b8fc4d34b6328f41345f642cd1ec060)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)':
+  '@better-auth/oauth-provider@1.7.7(patch_hash=4c097257299b415ddff140683df7b251c6302cdf5c074cacf292a8aabf23e754)(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7)(better-call@1.4.0)':
     dependencies:
       '@better-auth/core': 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.0)(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.0)
       '@better-auth/utils': 0.4.2

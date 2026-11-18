@@ -1,3 +1,15 @@
+diff --git a/dist/introspect-CNR06Oy3.mjs b/dist/introspect-CNR06Oy3.mjs
+index e633e0e33a23a0c41537d099585ddb4138a6b5fa..755588bbad3a37b02295ac79be32e5b338151337 100644
+--- a/dist/introspect-CNR06Oy3.mjs
++++ b/dist/introspect-CNR06Oy3.mjs
+@@ -1524,6 +1524,7 @@ async function invalidateRefreshFamily(ctx, clientId, userId) {
+ 			value: userId
+ 		}]
+ 	});
++	ctx.context.logger.warn(`oauth-provider: a refresh token was presented again, so every token of client ${clientId} for user ${userId} was revoked (${refreshTokens.length} refresh tokens).`);
+ }
+ async function revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId) {
+ 	const deleteIssuedTokens = async (model) => {
 diff --git a/dist/oauth-Dtt-caL2.d.mts b/dist/oauth-Dtt-caL2.d.mts
 index 7dc7a3b92fe1a7df8a8561992059ba37f9668d50..885f1cad7490283de66f4f35cf9ef4bf723a48a9 100644
 --- a/dist/oauth-Dtt-caL2.d.mts
