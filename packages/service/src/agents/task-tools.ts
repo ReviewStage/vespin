@@ -15,6 +15,7 @@ import {
   TASK_STATUS,
   type TaskCreateRelation,
   type TaskOrigin,
+  type TaskSummary,
   taskPrioritySchema,
   taskStatusSchema,
 } from "@repo/features/task-wire";
@@ -562,6 +563,25 @@ const madeRefusal =
     );
   };
 
+/** A made task as `create_task` answers it. */
+function createdAnswer(
+  made: Pick<
+    TaskSummary,
+    "id" | "name" | "repository" | "number" | "status" | "priority" | "assignee"
+  >,
+  naming: { readonly step: string; readonly name: string },
+) {
+  return {
+    status: ACTION_RESULT_STATUS.ACCEPTED,
+    task: {
+      id: made.id,
+      ...taskStandingOf(made, naming),
+      name: made.name,
+      repository: made.repository ?? null,
+    },
+  };
+}
+
 /** One call of `create_task`: a task made in the caller's workspace for its member, once under the call's key. */
 export function runCreateTask(
   call: AgentCall,
@@ -613,57 +633,50 @@ export function runCreateTask(
       }
 
       const userId = callerUserId(call.caller);
+      const id = calledId(userId, call.clientKey);
+      const naming = yield* workspaceNamingOf(userId, workspace.value);
+
+      // The call run again finds the task it made, and makes no second, before the keys it names are read again.
+      const before = yield* readTask(userId, id);
+
+      if (Option.isSome(before)) return createdAnswer(before.value.task, naming);
+
       // The tasks it names, each by its id or a key read in the caller's workspace alone.
       const named = yield* createdTasksById(userId, workspace.value, asked.success);
 
       if (Result.isFailure(named)) return agentToolRejected(named.failure);
       const { parentTaskId } = named.success;
       const relations = relationsOf(named.success);
-      const id = calledId(userId, call.clientKey);
-      const naming = yield* workspaceNamingOf(userId, workspace.value);
-
-      // The call run again finds the task it made, and makes no second.
-      const before = yield* readTask(userId, id);
       // Note that a description is written only for a caller with Task descriptions on; the schema takes one alike, so the tool's words stay the same.
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
 
-      const made = Option.isSome(before)
-        ? before.value.task
-        : yield* createTaskAsked(
-            userId,
-            {
-              id,
-              organizationId: workspace.value,
-              name,
-              ...(repository === undefined ? undefined : { repository }),
-              ...(brief === undefined ? undefined : { brief }),
-              status,
-              ...(priority === undefined ? undefined : { priority }),
-              // Note that a child left without one is no one's, since an agent names who works a task, never the parent.
-              assigneeId: assigneeId ?? null,
-              ...(parentTaskId === undefined ? undefined : { parentTaskId }),
-              ...originOf(call),
-              text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
-              writer: revisionWriterOf(call),
-              relations,
-            },
-            SERVER_TASK_SOURCE.AGENT,
-          ).pipe(
-            Effect.map((created) => created.task.task),
-            Effect.catch(madeRefusal(parentTaskId !== undefined)),
-          );
+      const made = yield* createTaskAsked(
+        userId,
+        {
+          id,
+          organizationId: workspace.value,
+          name,
+          ...(repository === undefined ? undefined : { repository }),
+          ...(brief === undefined ? undefined : { brief }),
+          status,
+          ...(priority === undefined ? undefined : { priority }),
+          // Note that a child left without one is no one's, since an agent names who works a task, never the parent.
+          assigneeId: assigneeId ?? null,
+          ...(parentTaskId === undefined ? undefined : { parentTaskId }),
+          ...originOf(call),
+          text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
+          writer: revisionWriterOf(call),
+          relations,
+        },
+        SERVER_TASK_SOURCE.AGENT,
+      ).pipe(
+        Effect.map((created) => created.task.task),
+        Effect.catch(madeRefusal(parentTaskId !== undefined)),
+      );
 
       if (Predicate.isString(made)) return agentToolRejected(made);
 
-      return {
-        status: ACTION_RESULT_STATUS.ACCEPTED,
-        task: {
-          id: made.id,
-          ...taskStandingOf(made, naming),
-          name: made.name,
-          repository: made.repository ?? null,
-        },
-      };
+      return createdAnswer(made, naming);
     }),
   );
 }

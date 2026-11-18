@@ -2485,23 +2485,24 @@ export function runStartAgent(
 
   return orStoreRefusal(
     Effect.gen(function* () {
-      // A task named by its key is read in the caller's workspace alone.
-      const named = yield* startTaskNamed(caller, taskRef);
-
-      if (Result.isFailure(named)) return agentToolRejected(named.failure);
-      const taskId = named.success;
-
       // Another task, or another agent's, is started on only where it is of the caller's
       // own workspace; a call run again after its start landed answers what it made
-      // (`startedBefore`), before a source is read, which its own continue has since stopped,
-      // or the pictures it named, which may be gone since.
-      const elsewhere = from !== undefined || taskId !== ownTask;
+      // (`startedBefore`), before its task's key is read again, which a renamed workspace no
+      // longer reads, before a source is read, which its own continue has since stopped,
+      // or the pictures it named, which may be gone since. A key is never the caller's own id.
+      const elsewhere = from !== undefined || taskRef !== ownTask;
 
       if (elsewhere || asked.success.images !== undefined) {
         const before = yield* startedBefore(call);
 
         if (Option.isSome(before)) return before.value;
       }
+
+      // A task named by its key is read in the caller's workspace alone.
+      const named = yield* startTaskNamed(caller, taskRef);
+
+      if (Result.isFailure(named)) return agentToolRejected(named.failure);
+      const taskId = named.success;
 
       if (from === undefined && taskId !== ownTask) {
         const reached = yield* taskOfCallerWorkspace(caller, taskId);
