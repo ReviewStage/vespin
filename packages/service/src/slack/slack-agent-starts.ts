@@ -302,7 +302,7 @@ const SLACK_REPLY = {
  */
 const SLACK_REPLY_GUIDE = [
   "That thread sees only what you send there with `send_slack_message`; your final message is not posted.",
-  "Reply as `send_slack_message`'s description says: only where you add something, in a few short messages, one call each.",
+  "Reply as `send_slack_message`'s description says: like a coworker, briefly, and only where you add something, one call per message.",
   "Where the work opens a pull request, close with one message that holds a bold title, the repository, the root cause, and the pull request's link, and names the owner of the changed code from the repository's CODEOWNERS for review: as `<@USER_ID>` where the thread shows their Slack user id, and otherwise by name in plain words.",
   "Where the change is something a person can see, record it or take a screenshot and show it with `show_image`, which the thread gets after your closing message, rather than describing how you got there.",
 ].join(" ");

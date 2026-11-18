@@ -62,11 +62,14 @@ const SLACK_MESSAGE_REFUSAL = {
 
 /** How an agent behaves in Slack, which every Slack tool's description carries, so every agent sees it. */
 export const SLACK_MANNERS =
-  "Speak in Slack only when you add something its readers don't already have: silence is fine, " +
-  'and a wrong or needless message costs more than a skipped one. Send no "on it" or progress ' +
-  "messages, and don't nudge a thread that has gone quiet. Where people are talking to each " +
-  "other, stay out unless a message is aimed at you. Write as a teammate would: a few short " +
-  "messages of a sentence or two each, one call per message, in the order they should read.";
+  "Talk in Slack like a coworker, not a report: casual, plain words, the answer first. Most " +
+  "replies are one or two short messages of a sentence or two each, one call per message, and " +
+  "rarely more than three. Leave out how you found it, file paths, numbers, and caveats unless " +
+  "they change the answer, and offer more if they want it. No headings, bold labels, or long " +
+  "lists. Speak only when you add something its readers don't already have; staying quiet is " +
+  'often the right call. Send no "on it" or progress messages, and don\'t nudge a thread that ' +
+  "has gone quiet. Where people are talking to each other, stay out unless a message is aimed " +
+  "at you.";
 
 const SEND_SLACK_MESSAGE_INPUT = Schema.Struct({
   text: describeWire(
