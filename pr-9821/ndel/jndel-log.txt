@@ -1,0 +1,10 @@
+== bundle NDEL base 81d67578ba
+  built 81d67578ba base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ndel-full: fails 0 shots 7 
+ndel-marks: fails 0 shots 4 
+ndel-swipe-preview: fails 4 shots 7       Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi
+ndel-rename-scrolled: fails 0 shots 4 
