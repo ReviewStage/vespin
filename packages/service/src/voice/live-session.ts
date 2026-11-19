@@ -30,7 +30,8 @@ import { EXCESS_KEYS, type UnparsedWireValue, unparsedWire } from "../core.js";
 import { HOSTED_OPENAI_DEFAULTS } from "../providers/openai.js";
 
 export const LIVE_SESSION = {
-  MODEL: "gpt-live-1",
+  /** GPT-Live-1.1, which takes the same session body and events as GPT-Live-1 and is told when to delegate in plain language (`voice-instructions.ts`). */
+  MODEL: "gpt-live-1.1",
   PATH: "/live/sessions",
   TRANSPORT: "webrtc",
   DELEGATION: "client",
