@@ -131,7 +131,7 @@ export const CLAUDE_EXECUTABLE = `${CLAUDE_CODE_PIN.DIRECTORY}/${CLAUDE_CODE_PIN
  * the threads it keeps there outlive a stop.
  */
 export const CODEX_PIN = {
-  VERSION: "0.169.0",
+  VERSION: "0.170.0",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/codex`,
   /** Where the image links the binary as `codex`. */
   LINK: "/usr/local/bin/codex",
@@ -287,7 +287,7 @@ export const NODE_MAC_PIN: AgentToolPin = {
  */
 const HOST_CLI_VERSION = {
   CLAUDE_CODE: "0.3.327",
-  CODEX: "0.169.0",
+  CODEX: "0.170.0",
   CURSOR_SDK: "1.4.1",
   GH: "2.103.3",
 } as const;
@@ -320,16 +320,16 @@ export const CODEX_MAC_PIN: AgentToolPin = {
   NAME: "codex",
   VERSION: HOST_CLI_VERSION.CODEX,
   ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-darwin-arm64.tgz`,
-  SHA256: "d67d443253294438a21fde15753d7c1174e6a32147d842eb84428479d664c93d",
-  BYTES: 153_831_622,
+  SHA256: "ab7ba154261db88eef760dfe69978fbb67018c2e1200ff536dc8c51ed9c758b5",
+  BYTES: 154_915_137,
   ROOT: "package/vendor/aarch64-apple-darwin",
   MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
   BINARY: "bin/codex",
   TEAM: "2DC432GLL2",
   FILES: {
-    "bin/codex": "739cda86e15d30a6e2b40cf8dcbbfb988aaf48b305b27065573bb8e9fd41d002",
-    "bin/codex-code-mode-host": "10feae2abe764bcf2273e241ace67aecc360eb8c28a82a2988bf1d8498a9bacf",
-    "codex-path/rg": "2caf75aae63d8fd944456686d5241f4864f5e2a930e0a93434e121873f7ff6bf",
+    "bin/codex": "9248cfeebec9b4cc3034d5114caab10fbf426cbfa79dba410c5fa1b72762abd6",
+    "bin/codex-code-mode-host": "7007fd77fcc428d80542dc272013a187691f5aab3014b0c7a4f11fad3b47c40e",
+    "codex-path/rg": "5899d42cf98592ec0f95a2cb24b243fab870c25de5e77c9861591fde766d4bf7",
   },
 };
 
@@ -479,15 +479,15 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-x64.tgz`,
-    SHA256: "89801b4b97faba562eb80fe0a833159ac79399be674022f4b1a0ccab1d153faa",
-    BYTES: 167_001_509,
+    SHA256: "67c4bccce8e6c3a2b9ae0e586750e0efac7e0b8cd85e6b4734ad474317d2cc32",
+    BYTES: 168_279_228,
     ROOT: "package/vendor/x86_64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "b452ca20f838a8855a88a41050ee4a694033fff4ea3ecdad5633e6e0e8d13f2b",
+      "bin/codex": "880819aab735adcf16f36cd628940b9f1e652a36c01d10a5d32f83cc84902971",
       "bin/codex-code-mode-host":
-        "e9f2ef68671b2b6ac68902d19e8dafda3f5928e678ecf3f30c74b203a2c403ed",
+        "ffc1ad7023864bfc209c408887d6834a8f644201eff4432fb9558b7f1c40e9dc",
       "codex-path/rg": "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849",
       "codex-resources/bwrap": "15fd5f2673d2e1c2f80e34e5108462fd014f5e8bbc7b0731f1ab23d1ff1ac140",
     },
@@ -496,17 +496,17 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-arm64.tgz`,
-    SHA256: "c1555c8ad3913e703d736584ff15e98eaeda685bf6eaedc83ae15943badbc1ff",
-    BYTES: 171_743_625,
+    SHA256: "72a1b05ee522eb7b57a96ad60d26056da8adda20c630f54079c53dd8c292613a",
+    BYTES: 173_169_777,
     ROOT: "package/vendor/aarch64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "3bb41c9a80187773e2a59278d4fc355b1a163c31bb5a79581e37d4fe428af047",
+      "bin/codex": "6a95492ca9d85ee76bd9fc5a4d8f72dd98a6130d1bb409bcfc50e61573106616",
       "bin/codex-code-mode-host":
-        "66874c7881c4004f1c155584e1325cad17795bdd91b886995ad8a043809c1019",
+        "3c0e282eab51c572b4494f94cf20a7ddbaebcacf82408d36438eaa7f62891042",
       "codex-path/rg": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b",
-      "codex-resources/bwrap": "0f543a7356ab343b4827222f910461d4196778f328b28acd6c126ef18e9557ab",
+      "codex-resources/bwrap": "c547cbdc762a70ed216789ffaa4c6c0e7d2beabe32245a498f8e365a9fc8dab4",
     },
   },
 };
