@@ -128,9 +128,13 @@ export function useDictation(words: string, onWords: (words: string) => void): D
 
   // Note that leaving the page for another pushed over it drops a recording under way unsent too, as the page then stands out of sight with no ✕ or ✓ to press.
   const cancelRef = useRef<() => void>(() => undefined);
+  // The page's losses of focus, so a start still waiting on the microphone sees that the page went out of sight meanwhile and records nothing.
+  const unfocused = useRef(0);
   useFocusEffect(
     useCallback(
       () => () => {
+        unfocused.current += 1;
+
         if (recorder.isRecording) cancelRef.current();
       },
       [recorder],
@@ -217,7 +221,16 @@ export function useDictation(words: string, onWords: (words: string) => void): D
     if (busy.current) return;
     busy.current = true;
     setNote(undefined);
+    const focus = unfocused.current;
+    // Whether the page went out of sight, or the screen left, while the start waited.
+    const left = () => unfocused.current !== focus || !standing.current;
     const permission = await requestRecordingPermissionsAsync();
+
+    if (left()) {
+      busy.current = false;
+
+      return;
+    }
 
     if (!permission.granted) {
       fail(DICTATION_NOTE.MICROPHONE_DENIED);
@@ -228,6 +241,15 @@ export function useDictation(words: string, onWords: (words: string) => void): D
     try {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
+
+      // Note that a start whose page left while the microphone opened lets it go unrecorded.
+      if (left()) {
+        releaseMicrophone();
+        busy.current = false;
+
+        return;
+      }
+
       recorder.record();
     } catch (cause) {
       logged("The microphone could not be opened")(cause);
