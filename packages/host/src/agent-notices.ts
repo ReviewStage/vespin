@@ -799,8 +799,11 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         // The list names every agent on its tasks but the archived, so one it named and no longer
         // does takes its dot with it, and one it never named is let go as `pushedUnnamed` says.
         const named = new Set(agents.map((agent) => agent.id));
+        // Note that an agent on no task is never named by the list, so only its account's change lets it go.
         forget((agent, agentId) => {
-          if (agent.taskId === null || !followedTasks.has(agent.taskId)) return false;
+          if (agent.taskId === null) return true;
+
+          if (!followedTasks.has(agent.taskId)) return false;
 
           if (named.has(agentId)) return true;
 
@@ -836,12 +839,9 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         for (const [agentId] of unnamedPushes) {
           const agent = ledger.get(agentId);
 
-          if (
-            agent === undefined ||
-            agent.taskId === null ||
-            !followedTasks.has(agent.taskId) ||
-            !pushedUnnamed(agentId)
-          ) {
+          if (agent?.taskId === null) continue;
+
+          if (agent === undefined || !followedTasks.has(agent.taskId) || !pushedUnnamed(agentId)) {
             gone.push(agentId);
           }
         }
