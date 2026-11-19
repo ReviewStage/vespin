@@ -58,6 +58,7 @@ import {
   glyphSymbol,
   HeldCallBanner,
   ListSection,
+  LoadingRow,
   MenuRow,
   type MenuRowAct,
   ModelChoiceSheet,
@@ -186,6 +187,7 @@ const OPTIONS_WORDS = {
   FAST: "Fast",
   DONE: "Done",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
+  READING_SERVERS: "Reading your MCP servers",
   MORE_SERVERS: "Connect another in Settings.",
 } as const;
 
@@ -1162,14 +1164,19 @@ function AgentOptionsSheet({
         footer={serversFooter}
         footerTone={footerToneOf(servers.note)}
       >
-        {servers.servers.map((server) => (
-          <SwitchRow
-            key={server.connection}
-            label={server.name}
-            on={server.on}
-            onSwitch={(on) => servers.toggle(server.connection, on)}
-          />
-        ))}
+        {/* Note that the servers stand as the bare spinner while they are read, so an unread list never reads as an empty one. */}
+        {servers.read ? (
+          servers.servers.map((server) => (
+            <SwitchRow
+              key={server.connection}
+              label={server.name}
+              on={server.on}
+              onSwitch={(on) => servers.toggle(server.connection, on)}
+            />
+          ))
+        ) : (
+          <LoadingRow words={OPTIONS_WORDS.READING_SERVERS} />
+        )}
       </ListSection>
     </ModelChoiceSheet>
   );
