@@ -191,6 +191,8 @@ export type MenuChoice = {
   readonly tone?: StatusTone | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
+  /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
+  readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -343,6 +345,16 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
 
 /** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+  // Note that a choice saying more under its words, such as a member's email, stands as a menu's title and subtitle.
+  if (choice.detail !== undefined)
+    return menuActContent(
+      choice.label,
+      choice.symbol,
+      choice.detail,
+      choiceColor(choice, colors),
+      choice.photo,
+    );
+
   return actContent(
     choice.label,
     choice.symbol,

@@ -30,6 +30,7 @@ import {
   agentTree,
   type StartedAgentsStanding,
 } from "@repo/features/task-agents-model";
+import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
 import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
@@ -1364,20 +1365,22 @@ function standingMenus(
     },
     assignee: {
       label: WORDS.ASSIGNEE,
+      // Note that No assignee leads, then the members, each with You or their email under their name, as the panel's assignee menu lists them (`task-standing.tsx`'s `assigneeRows`).
       choices: [
-        ...members.map((member) => ({
-          label: member.name,
-          symbol: GLYPH.PERSON,
-          photo: photoOf(member.userId),
-          on: member.userId === assigneeId,
-          onPress: () => overview.setAssignee(task.id, member),
-        })),
         {
           label: NO_ASSIGNEE_WORDS,
           symbol: GLYPH.UNASSIGNED,
           on: assigneeId === undefined,
           onPress: () => overview.setAssignee(task.id, null),
         },
+        ...members.map((member) => ({
+          label: member.name,
+          detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
+          symbol: GLYPH.PERSON,
+          photo: photoOf(member.userId),
+          on: member.userId === assigneeId,
+          onPress: () => overview.setAssignee(task.id, member),
+        })),
       ],
     },
   };
