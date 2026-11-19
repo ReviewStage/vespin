@@ -959,7 +959,10 @@ it.effect(
     }),
 );
 
-it.effect("a photo whose fetches gave out is asked again on the list's refresh", () =>
+it.effect.each([
+  { asked: "on the list's refresh", again: "TASKS_REFRESH" },
+  { asked: "as the app comes forward", again: GATEWAY_METHOD.WORKSPACES_REFRESH },
+] as const)("a photo whose fetches gave out is asked again $asked", ({ again }) =>
   Effect.gen(function* () {
     const service = fakeService([]);
     service.memberships = [PERSONAL, { ...ACME, photoVersion: "v1" }];
@@ -971,7 +974,7 @@ it.effect("a photo whose fetches gave out is asked again on the list's refresh",
     yield* settled;
     yield* TestClock.adjust(Duration.minutes(2));
     service.photosUnanswered = 0;
-    yield* call("TASKS_REFRESH", undefined);
+    yield* again === "TASKS_REFRESH" ? call(again, undefined) : call(again);
     yield* settled;
 
     assert.deepEqual(heldPhotos(pushed).at(-1), {

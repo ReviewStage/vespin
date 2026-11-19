@@ -1719,7 +1719,10 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       Effect.gen(function* () {
         yield* dependencies.focus.raise;
 
-        if (gate()) yield* github.readGithubWhenStale;
+        if (!gate()) return {};
+        // Note that coming forward asks again for a photo whose fetches gave out, as on a launch in the background, where the account could not renew.
+        yield* list.photosListed;
+        yield* github.readGithubWhenStale;
 
         return {};
       }),
