@@ -9,6 +9,7 @@ import {
   ProgressView,
   ScrollView,
   TextField,
+  type TextFieldRef,
   type TextFieldSelection,
   Toggle,
   useNativeState,
@@ -169,6 +170,8 @@ type ComposerProps = {
   readonly saving?: ComposerSaving | undefined;
   /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
   readonly autoFocus?: boolean | undefined;
+  /** Asks the field to take the keyboard, its caret after its words, each time the count moves, as Edit does once it lays a message's words in; none where nothing asks. */
+  readonly focusAsk?: number | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
@@ -436,6 +439,9 @@ function ComposerPieces(props: ComposerProps) {
   } = props;
 
   const text = useNativeState(held ?? "");
+  const field = useRef<TextFieldRef>(null);
+  const { focusAsk } = props;
+
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
   const [opened] = useState(() => (held ?? "").length);
   const caret = useNativeState<TextFieldSelection>({ start: opened, end: opened });
@@ -448,6 +454,16 @@ function ComposerPieces(props: ComposerProps) {
     shown.current = held;
     text.set(held);
   }, [held, text]);
+
+  // Note that the field takes the keyboard once its holder's words have landed in it, after the effect above lays them in, so the caret stands after them.
+  useEffect(() => {
+    if (focusAsk === undefined || focusAsk === 0) return;
+    const end = shown.current.length;
+    void field.current
+      ?.focus()
+      .then(() => field.current?.setSelection(end, end))
+      .catch(() => undefined);
+  }, [focusAsk]);
 
   // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
@@ -480,6 +496,7 @@ function ComposerPieces(props: ComposerProps) {
     <>
       {tools === undefined ? <AddPress menu={addMenu} onAdd={onAdd} /> : null}
       <TextField
+        ref={field}
         text={text}
         placeholder={placeholder}
         axis="vertical"

@@ -83,6 +83,7 @@ export {
 export {
   type AttachedPicture,
   AttachedPictures,
+  EditingLine,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -126,7 +127,7 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
-export { type Keeping, KeepingProvider } from "./held-menu.js";
+export { type HeldAct, type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 
@@ -386,6 +387,7 @@ export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
   AgentTranscript,
+  type MessageItem,
   type OlderPages,
   type TranscriptReveal,
 } from "./transcript.js";

@@ -27,7 +27,7 @@ import {
   turnStretches,
   wholeCallOf,
 } from "@repo/features/agent-parts";
-import { REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
+import { editsInPlace, REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import { usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
@@ -132,7 +132,6 @@ import {
   delegatedTurnsOf,
   isAgentTurn,
   isVoiceLine,
-  spokenLineOf,
 } from "@repo/features/voice-call-lines";
 import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { replyFromWords } from "@repo/features/words";
@@ -1948,8 +1947,6 @@ export function AgentMessage({
 }): ReactNode {
   const words = messageWords(message);
   const forkOffered = useForkOffered();
-  // Note that a line the caller said aloud on a call is drawn as a typed one, but offers no Edit, since it stands as it was said.
-  const spoken = spokenLineOf(message) !== undefined;
   const sending = useLineSending(message.id);
   const marked = useLineMarked(message.id);
   const status = useLineStatus(message.id);
@@ -2099,12 +2096,7 @@ export function AgentMessage({
                 words={shown}
                 copyable={shown !== ""}
                 messageId={message.id}
-                // Note that a comment's or a Slack message's line is drawn from what it carries rather than its words, so it is written again nowhere, as GitHub's is not, and a line said on a call stands as it was said.
-                rewind={
-                  shown === "" || comment !== undefined || slack !== undefined || spoken
-                    ? undefined
-                    : REWIND_ACTION.EDIT
-                }
+                rewind={editsInPlace(message, shown) ? REWIND_ACTION.EDIT : undefined}
               />
             }
           />

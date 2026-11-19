@@ -211,7 +211,8 @@ export function MessageMenu({
  * ChatGPT's row stands under its reply: Copy, Copy link where the turn has
  * an address, then Share, each a 44 pt target in the muted ink, named for
  * VoiceOver by its words, and a ⋯ holding what else the turn offers, in the
- * system's menu; nothing for a turn of no words.
+ * system's menu; for a turn of no words, Copy link and the ⋯ alone, and
+ * nothing where it offers no more.
  */
 export function TurnActs({
   words,
@@ -227,10 +228,15 @@ export function TurnActs({
   const keeping = useContext(KeepingDoor);
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  if (keeping === undefined || words.trim() === "") return null;
+  const copyable = words.trim() !== "";
+
+  // Note that a turn of no words still stands its row where it offers more, such as Fork to new agent, as the panel's foot does.
+  if (keeping === undefined || (!copyable && more.length === 0)) return null;
 
   const acts: readonly HeldAct[] = [
-    { label: COPY_MESSAGE, symbol: GLYPH.COPY, onPress: () => keeping.copyWords(words) },
+    ...(copyable
+      ? [{ label: COPY_MESSAGE, symbol: GLYPH.COPY, onPress: () => keeping.copyWords(words) }]
+      : []),
     ...(link === undefined
       ? []
       : [
@@ -240,11 +246,15 @@ export function TurnActs({
             onPress: () => keeping.copyWords(link),
           },
         ]),
-    {
-      label: MESSAGE_ACT_WORDS.SHARE,
-      symbol: GLYPH.SHARE,
-      onPress: () => keeping.shareWords(words),
-    },
+    ...(copyable
+      ? [
+          {
+            label: MESSAGE_ACT_WORDS.SHARE,
+            symbol: GLYPH.SHARE,
+            onPress: () => keeping.shareWords(words),
+          },
+        ]
+      : []),
   ];
 
   return (

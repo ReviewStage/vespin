@@ -76,7 +76,9 @@ builds a control of its own.
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
   Deny and Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
-  Delete), its `AttachedPictures`, and an `AskNote`.
+  Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  holds a sent message's words to send in its place (the panel's Edit, the field
+  taking the keyboard through `focusAsk`), and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through

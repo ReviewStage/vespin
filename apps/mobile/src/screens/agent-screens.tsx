@@ -44,12 +44,14 @@ import {
   type BarSubtitle,
   BUTTON_LOOK,
   CallCardRow,
+  COMPOSER_CALL,
   Composer,
   type ComposerCall,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
   drawnCallIds,
+  EditingLine,
   FORM_SPACING,
   footerToneOf,
   GLYPH,
@@ -115,6 +117,7 @@ import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
@@ -326,6 +329,7 @@ function AgentComposerBar({
   const head =
     !denies &&
     banner === undefined &&
+    composer.cancelMessageEdit === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
     otherCall === undefined &&
@@ -340,6 +344,9 @@ function AgentComposerBar({
             empty={composer.skills.empty}
             onPick={composer.skills.pick}
           />
+        )}
+        {composer.cancelMessageEdit === undefined ? null : (
+          <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
@@ -375,6 +382,7 @@ function AgentComposerBar({
         />
       ),
     saving: composer.saving,
+    focusAsk: composer.focusAsk,
   };
 
   return <Composer {...props} />;
@@ -785,6 +793,15 @@ function AgentConversation({
   const talk = useAgentTalk(id, shown?.taskId);
   const otherCall = useStandingCallCard(id);
 
+  const messageActs = useMessageActs({
+    agentId: id,
+    agent: shown,
+    transcript,
+    readerId,
+    composer,
+    calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
+  });
+
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
 
@@ -855,6 +872,7 @@ function AgentConversation({
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
       messageLink={messageLink}
+      messageMore={messageActs.more}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
         const key = keyOf(item.url);
@@ -884,6 +902,8 @@ function AgentConversation({
       )}
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk destructive {...composer.removing} />
+      <ConfirmAsk destructive {...composer.sendingEdit} />
+      <ConfirmAsk destructive {...messageActs.reverting} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}

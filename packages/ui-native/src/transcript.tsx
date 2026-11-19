@@ -30,7 +30,7 @@ import { FileChip } from "./file-chip.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
-import { CopyWordsMenu, MessageMenu, TurnActs } from "./held-menu.js";
+import { CopyWordsMenu, type HeldAct, MessageMenu, TurnActs } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
@@ -616,6 +616,8 @@ interface RowDrawing {
   readonly onOpenAddress: (address: string) => void;
   /** A message's address on vespin.dev by its id, which its Copy link copies; none where messages have none. */
   readonly messageLink?: ((messageId: string) => string | undefined) | undefined;
+  /** What a sent line's long press or a finished turn's ⋯ offers past copying and sharing it, in the panel's order, such as Edit, Rewind conversation to here, and Fork to new agent; none where messages offer nothing more. */
+  readonly messageMore?: ((item: MessageItem) => readonly HeldAct[]) | undefined;
   /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
@@ -629,6 +631,12 @@ interface RowDrawing {
   /** Hands the transcript a call's row as it stands and as it goes, so a reader sent to the call lands on it. */
   readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
 }
+
+/** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
+export type MessageItem = Extract<
+  TranscriptItem,
+  { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.FOOT }
+>;
 
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
@@ -766,6 +774,7 @@ function TranscriptRow({
               at={item.at}
               // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
               link={drawing.messageLink?.(item.place.row)}
+              more={drawing.messageMore?.(item)}
               width={rowWidth(drawing.column)}
             >
               <View style={styles.saidHeld}>
@@ -792,7 +801,11 @@ function TranscriptRow({
             {item.words}
           </Text>
           <View style={styles.turnActs}>
-            <TurnActs words={item.copy} link={drawing.messageLink?.(item.place.message)} />
+            <TurnActs
+              words={item.copy}
+              link={drawing.messageLink?.(item.place.message)}
+              more={drawing.messageMore?.(item)}
+            />
           </View>
         </View>
       );
