@@ -269,11 +269,11 @@ function InboxRows({
   );
 }
 
-/** The words a skeleton row stands its placeholder bars in, each about as long as a thread's own, so the bars read as the rows to come. */
+/** The words a skeleton row stands its placeholder bars in, each about as long as a thread's own, so the bars read as the rows to come; filler, never a sentence, so nothing reads as content where a word escapes the placeholder look. */
 const SKELETON_WORDS = {
-  TASK: "A task's name",
-  TITLE: "A thread's title, as its row stands it",
-  SUMMARY: "What the thread asks of the reader",
+  TASK: "xxxx xxxxxx",
+  TITLE: "xxxxxxx xxxxx xx xxx xxxx xxxxxx",
+  SUMMARY: "xxxx xxx xxxxxx xxxx xx xxx xxxxxx",
 } as const;
 
 /** The most skeleton rows the Inbox stands, about a phone's screen of threads, so a placeholder never reads as more than one screen. */
