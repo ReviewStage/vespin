@@ -48,6 +48,7 @@ import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
+import { LongPressMenu, ROW_ACTION_TONE } from "./list-row.js";
 import { Avatar, HarnessMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -1241,25 +1242,35 @@ export function NoteRow({
     return <HStack modifiers={placed}>{drawn}</HStack>;
   }
 
-  const removeAct =
-    remove === undefined ? undefined : (
-      <SwiftUIButton
-        {...actContent(remove.label, NOTE_REMOVE.SYMBOL)}
-        role={NOTE_REMOVE.ROLE}
-        onPress={remove.onPress}
-      />
-    );
-
   const menu = (
-    <ContextMenu>
-      <ContextMenu.Items>
-        {edit === undefined ? null : (
-          <SwiftUIButton {...actContent(edit.label, NOTE_EDIT_SYMBOL)} onPress={edit.onPress} />
-        )}
-        {removeAct}
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
-    </ContextMenu>
+    <LongPressMenu
+      groups={[
+        [
+          ...(edit === undefined
+            ? []
+            : [
+                {
+                  label: edit.label,
+                  symbol: NOTE_EDIT_SYMBOL,
+                  tone: ROW_ACTION_TONE.NEUTRAL,
+                  onPress: edit.onPress,
+                },
+              ]),
+          ...(remove === undefined
+            ? []
+            : [
+                {
+                  label: remove.label,
+                  symbol: NOTE_REMOVE.SYMBOL,
+                  tone: ROW_ACTION_TONE.DESTRUCTIVE,
+                  onPress: remove.onPress,
+                },
+              ]),
+        ],
+      ]}
+    >
+      {drawn}
+    </LongPressMenu>
   );
 
   if (remove === undefined) return <HStack modifiers={placed}>{menu}</HStack>;

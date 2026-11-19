@@ -150,6 +150,8 @@ export {
 
 export {
   ListRow,
+  type LongPressGroup,
+  LongPressMenu,
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,

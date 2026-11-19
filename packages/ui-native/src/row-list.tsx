@@ -60,6 +60,7 @@ import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink, sideMargins } from "./interactions.js";
+import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
@@ -433,6 +434,8 @@ type ListSectionProps = {
   readonly more?: SectionWordsAct | undefined;
   /** An act on the whole section in words at the header's end, as Edit edits a task's description, as Notes' and Reminders' sections end; none where the section offers none. */
   readonly act?: SectionWordsAct | undefined;
+  /** What a long press on its header offers, as the panel's right-click on a sidebar section's header offers it, such as Rename or Mark all as read; none where it offers nothing. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
   readonly children: ReactNode;
 };
 
@@ -687,7 +690,9 @@ function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
  * section stands as its header alone rather than a list of add rows. A
  * header given `more` ends in a Show all that opens every row of a section
  * the list cut short, as Mail's search sections do, and one given `act`,
- * where it has no Show all, ends in the act's words, such as Edit. Its rows fold away and
+ * where it has no Show all, ends in the act's words, such as Edit. A header
+ * given `menu` opens it on a long press (`LongPressMenu`), as the panel's
+ * right-click on a sidebar section's header does. Its rows fold away and
  * come back with the system's quick ease, or at once where the reader
  * reduces motion. Note that SwiftUI's own `Section(isExpanded:)` is not used,
  * because it folds only in a sidebar list, where the system draws its own
@@ -710,6 +715,7 @@ export function ListSection({
   add,
   more,
   act,
+  menu = [],
   children,
 }: ListSectionProps) {
   const [own, setOwn] = useState(false);
@@ -757,11 +763,15 @@ export function ListSection({
       </Button>
     );
 
+  // Note that the long press holds the header's title, never its +, Show all or Edit, which take their own presses.
+  const pressed =
+    pressable === undefined ? undefined : <LongPressMenu groups={menu}>{pressable}</LongPressMenu>;
+
   const dropped =
-    pressable === undefined || onDropLink === undefined ? (
-      pressable
+    pressed === undefined || onDropLink === undefined ? (
+      pressed
     ) : (
-      <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
+      <HStack modifiers={[dropLink(onDropLink)]}>{pressed}</HStack>
     );
 
   // Note that a lone + stands over the header's trailing end rather than beside it, so its 44 pt target lays out nothing and the header keeps its title's height, as a section with no + does; a press is taken across the whole of the overlay's own frame, where a target padded back to its glyph's height answered only inside it. The header keeps the +'s width clear at its end, so a long title or count at a large text size wraps before it rather than running under it. A section with words beside its +, such as Show all, stands them in a row after the header, since their width is the words'.

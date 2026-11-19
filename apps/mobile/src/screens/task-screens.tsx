@@ -6,7 +6,12 @@ import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
-import { INBOX_LINE, INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
+import {
+  INBOX_LINE,
+  INBOX_READ_MARK,
+  MARK_ALL_READ,
+  threadsWaitingWords,
+} from "@repo/features/inbox-list-model";
 import {
   iosAgentRoute,
   iosAppRouteOf,
@@ -71,6 +76,7 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { repositoryPageUrl } from "@repo/features/tasks-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
@@ -112,6 +118,7 @@ import {
   type ListLook,
   ListRow,
   ListSection,
+  type LongPressGroup,
   menuWithout,
   NoSelection,
   PATH_PART,
@@ -936,6 +943,89 @@ function FoldedRows({
  * heads a repository group the tree draws no heading for. A task's row dragged onto
  * its header, as an iPad drags, moves the task there (`placeIn`).
  */
+/** The words of a section header's long press menu, as the panel's sidebar says them. */
+const SECTION_MENU_WORDS = {
+  RENAME_SECTION: "Rename section",
+  DELETE_SECTION: "Delete section",
+  OPEN_ON_GITHUB: "Open on GitHub",
+} as const;
+
+/**
+ * What a long press on a group's header offers, as the panel's right-click
+ * on the sidebar's same header does: Mark all as read on Pinned, Following
+ * and the tasks with no repository, only while one of its tasks is unread;
+ * on one of the member's sections, Rename and Mark all as read, then Delete
+ * section, its Undo in the notice; and on a repository's group, Open on
+ * GitHub, then Mark all as read. Note that the panel's New task, Change
+ * icon, and a repository's Keep at top are left out, since the phone starts
+ * no task in a section, picks no icon, and keeps no repository at top.
+ */
+function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPressGroup[] {
+  const unread = group.rows.map(({ task }) => task).filter((task) => listing.lookOf(task).unread);
+
+  const read: LongPressGroup =
+    unread.length === 0
+      ? []
+      : [
+          {
+            label: MARK_ALL_READ,
+            symbol: GLYPH.MARK_READ,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => {
+              for (const task of unread) listing.markRead(task.id, false);
+            },
+          },
+        ];
+
+  if (group.kind === TASK_TREE_GROUP.SECTION) {
+    const section = listing.placing.sections.find((each) => each.id === group.key);
+
+    if (section === undefined) return [read];
+
+    return [
+      [
+        {
+          label: WORDS.RENAME,
+          symbol: GLYPH.RENAME,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () =>
+            askForName({
+              title: SECTION_MENU_WORDS.RENAME_SECTION,
+              act: WORDS.RENAME,
+              name: section.title,
+              onName: (title) => listing.placing.renameSection(section, title),
+            }),
+        },
+        ...read,
+      ],
+      [
+        {
+          label: SECTION_MENU_WORDS.DELETE_SECTION,
+          symbol: GLYPH.DELETE,
+          tone: ROW_ACTION_TONE.DESTRUCTIVE,
+          onPress: () => listing.placing.deleteSection(section),
+        },
+      ],
+    ];
+  }
+
+  if (group.kind === TASK_TREE_GROUP.REPOSITORY && group.key !== NO_REPOSITORY_KEY) {
+    return [
+      [
+        {
+          label: SECTION_MENU_WORDS.OPEN_ON_GITHUB,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => openInSafari(repositoryPageUrl(group.key)),
+        },
+      ],
+      read,
+    ];
+  }
+
+  return [read];
+}
+
 function GroupSection({
   group,
   listing,
@@ -947,6 +1037,7 @@ function GroupSection({
 }) {
   return (
     <ListSection
+      menu={groupMenu(group, listing)}
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
