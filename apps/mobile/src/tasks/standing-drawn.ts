@@ -20,6 +20,23 @@ interface Pressed {
 /** Each chip's press not yet counted, by its task's id, then by the chip. */
 const pressed = new Map<string, Map<ProductStandingField, Pressed>>();
 
+/** Which stretch in front the app is in, moved on each time it leaves, so a frame asked for before it left counts nothing after it comes back. */
+let inFront = 0;
+
+/** Whether this module watches the app leave the front, which it starts doing at the first press. */
+let watching = false;
+
+/** Lets go of every press, and of every count already asked for a frame, as the app leaves the front, since a wait it held would hold time nobody sat through. */
+function letGoOnLeaving(): void {
+  if (watching) return;
+  watching = true;
+  AppState.addEventListener("change", (state) => {
+    if (state === "active") return;
+    inFront += 1;
+    pressed.clear();
+  });
+}
+
 /** What a task holds on each chip, as a press's value names it. */
 function standingOf(task: TaskSummary, field: ProductStandingField): string | null {
   if (field === PRODUCT_STANDING_FIELD.STATUS) return task.status ?? null;
@@ -35,6 +52,7 @@ export function standingPressed(
   field: ProductStandingField,
   value: string | null,
 ): void {
+  letGoOnLeaving();
   const chips = pressed.get(taskId) ?? new Map<ProductStandingField, Pressed>();
   chips.set(field, { at: performance.now(), value });
   pressed.set(taskId, chips);
@@ -46,8 +64,9 @@ export function standingPressed(
  * time on a rung of `productDrawnMilliseconds` and which chip it was, and
  * nothing else: never the value, the task, or who. Note that a press whose
  * value the task never draws, as one the service refused, is let go by the
- * next press on that chip; and that a draw once the app has left the front
- * counts nothing, since its time would hold a wait nobody sat through.
+ * next press on that chip; and that every press, and every count waiting on
+ * its frame, is let go as the app leaves the front, since its time would
+ * hold a wait nobody sat through.
  */
 export function useStandingDrawnCount(task: TaskSummary | undefined): void {
   const count = useHostCount();
@@ -60,8 +79,9 @@ export function useStandingDrawnCount(task: TaskSummary | undefined): void {
     for (const [field, press] of chips) {
       if (standingOf(task, field) !== press.value) continue;
       chips.delete(field);
+      const asked = inFront;
       requestAnimationFrame(() => {
-        if (AppState.currentState !== "active") return;
+        if (asked !== inFront || AppState.currentState !== "active") return;
         count(PRODUCT_SURFACE_EVENT.STANDING_DRAWN, {
           drawn_ms: productDrawnMilliseconds(performance.now() - press.at),
           standing_field: field,
