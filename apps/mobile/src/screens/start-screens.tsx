@@ -806,8 +806,6 @@ export interface NewTaskDraft {
   readonly pictures?: readonly string[] | undefined;
 }
 
-/** No task list read yet. */
-
 /** The kinds New task's relation offers, in the panel's order: a sub-task of another, or one waiting on or holding up another. */
 const RELATION_ORDER: readonly TaskCreateRelationKind[] = [
   TASK_CREATE_RELATION_KIND.SUB_TASK_OF,

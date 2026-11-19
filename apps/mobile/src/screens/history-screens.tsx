@@ -52,7 +52,6 @@ import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
 export const VERSION_ROUTE = "/tasks/version/[id]";
 
-/** The route a task's version history is opened on. */
 export const HISTORY_ROUTE = "/tasks/history/[id]";
 
 /** The glyph the history stands under while it says nothing else. */

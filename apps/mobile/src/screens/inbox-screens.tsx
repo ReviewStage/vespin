@@ -423,14 +423,8 @@ function InboxRowView({
   );
 }
 
-/**
- * An Inbox item's row, drawn again only where its props moved. Note that
- * every delivery to the Inbox drew every row again, a list off screen's
- * among them, which held the JS thread under a working agent's posts; its
- * props keep their identity while its own thread stands (the item, the
- * task's words it says, and the acts' and the menus' hooks), so a row is now
- * drawn again only where its thread or those words moved.
- */
+// Note that a row's props keep their identity while its thread stands, because
+// a delivery to the Inbox otherwise draws every row again and holds the JS thread.
 const InboxRow = memo(InboxRowView);
 
 /**
@@ -655,11 +649,6 @@ function useAgentLabel(agentId: string): {
     : { name: agentNameOf(agent), harness: providerOf(agent.model) };
 }
 
-/**
- * Where a thread stands: a compact window's pushed screen, whose stack's bar
- * names the path and which draws its own Remind me sheet, or a split view's
- * detail, which opens the sheet its screen draws outside the split view.
- */
 /** The threads either side of an open one, in the order it steps through, which it hands on with each step; none at an end. */
 type ThreadSteps = {
   readonly order: readonly string[];
@@ -667,6 +656,12 @@ type ThreadSteps = {
   readonly next?: string | undefined;
 };
 
+/**
+ * Where a thread stands: a compact window's pushed screen, whose stack's bar
+ * names the thread and holds the path in its ⋯ menu, and which draws its own
+ * Remind me sheet, or a split view's detail, which opens the sheet its screen
+ * draws outside the split view.
+ */
 type ThreadPlace =
   | { readonly inStack: true; readonly steps: ThreadSteps }
   | {
@@ -720,7 +715,7 @@ function ThreadDetail({
 
   const memberFace = useMemberFaces(holder.task.workspaceId);
 
-  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
+  // What happened to the thread, its members named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
   const events = useMemo(
     () =>
       inboxThreadEventsShown(item, {
@@ -808,7 +803,7 @@ function ThreadDetail({
 
   const navigation = useNavigation();
 
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front, read when the start answers rather than when it was sent, since the reader may have switched tabs or pushed a page over it meanwhile: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
+  // A thread the box started opens in this one's place only while this one is in front when the start answers, since the reader may have switched tabs or pushed a page over it meanwhile, and a covered screen stays mounted.
   const openStarted = (id: string) => {
     if (!shown.current || !navigation.isFocused()) return;
 

@@ -97,7 +97,6 @@ const COMMENTS_ROW = "comments";
 /** The least a check must have run to say how long, as the panel's checks say it. */
 const RAN_AT_LEAST_MS = 1_000;
 
-/** A pull request's own page on GitHub, by its repository and number. */
 function gitHubPullRequestUrl(key: PullRequestKey): string {
   return gitHubPageLink({
     kind: GITHUB_PAGE.PULL_REQUEST,
@@ -173,7 +172,6 @@ const MERGE_ASK: MergeAsk = { title: MERGE_WORDS.MERGE_QUESTION };
 interface MergePress {
   readonly words: string;
   readonly prominent: boolean;
-  /** The change it sends. */
   readonly request: PullRequestActionRequest;
   /** What it asks before it sends; none where it only takes back what was asked for, as Disable auto-merge does. */
   readonly ask: MergeAsk | undefined;

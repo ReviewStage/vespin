@@ -32,7 +32,6 @@ const SHEET_WORDS = {
   NOT_FOUND: "Task not found",
 } as const;
 
-/** The route the Following sheet stands at. */
 const FOLLOWING_ROUTE = "/task-following";
 
 /** Whose machines a follower's sentence names: yours, or theirs by name. */
@@ -40,7 +39,6 @@ function whoseMachines(face: FollowerFace): string {
   return face.you ? "your" : `${face.name}’s`;
 }
 
-/** Opens the Following sheet over a task. */
 export function useOpenFollowing(): (taskId: string) => void {
   const router = useRouter();
 
