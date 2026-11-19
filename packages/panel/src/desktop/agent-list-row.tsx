@@ -14,6 +14,7 @@ import {
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
+  TASK_ROW_EDGES,
   TaskRow,
   type TaskRowCell,
   TaskRowGlyph,
@@ -75,7 +76,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
  * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, unless its list
- * chooses none (`choosable`), as the sidebar's Managers do, and a row chosen
+ * chooses none (`choosable`), as the sidebar's Managers do, its row then
+ * keeping no gutter for a box it never draws, and a row chosen
  * among several offers its list's acts on every one chosen instead, under
  * how many (`agents-selection.tsx`). An archived agent's row stands settled,
  * its name in the muted ink, as a done task's does, and its menu offers
@@ -253,6 +255,7 @@ export function AgentListRow({
       }
       more={more}
       settled={settled}
+      edges={choosable ? TASK_ROW_EDGES.LIST : TASK_ROW_EDGES.UNCHOSEN}
       choosable={choosable}
       current={current}
       hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
