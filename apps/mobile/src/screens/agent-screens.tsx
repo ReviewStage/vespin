@@ -6,7 +6,11 @@ import {
   type PortAct,
   type PortRow,
 } from "@repo/features/agent-ports-model";
-import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  type AgentOverviewPullRequest,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
 import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
@@ -29,10 +33,18 @@ import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
-import { agentStillWriting } from "@repo/features/task-agents-model";
+import {
+  agentRunsOnWords,
+  agentStillWriting,
+  RUNS_ON_WORDS,
+} from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
 import { MCP_SERVER_LABEL, PATH_OPENS, VERB } from "@repo/features/words";
-import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
+import {
+  type FollowedAgent,
+  selectInboxReader,
+  selectWorkspaces,
+} from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -70,6 +82,7 @@ import {
   openCuts,
   PERMISSION_MODE_GLYPH,
   QueuedLines,
+  runsOnGlyph,
   Screen,
   SettingsForm,
   SkillSuggestions,
@@ -125,6 +138,7 @@ import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
+import { type AgentCommandsPlace, useAgentCommandsPlace } from "../agents/use-agent-tools.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -147,6 +161,7 @@ import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useDevicePlatform } from "../tasks/use-start.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
 
@@ -310,6 +325,7 @@ function AgentComposerBar({
   note,
   call,
   otherCall,
+  tools,
   trailing,
 }: {
   readonly composer: AgentComposer;
@@ -323,6 +339,8 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** What leads the row under the field after the +: where the agent works. */
+  readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
   readonly trailing: ReactNode;
 }) {
@@ -369,6 +387,7 @@ function AgentComposerBar({
     sendable: composer.sendable,
     onSend: composer.send,
     addMenu,
+    tools,
     trailing,
     onDropPictures: composer.dropPictures,
     onLongPaste: composer.pasteText,
@@ -417,6 +436,7 @@ function AgentComposerArea({
   note,
   call,
   otherCall,
+  tools,
   trailing,
 }: {
   readonly id: string;
@@ -432,6 +452,8 @@ function AgentComposerArea({
   readonly note: string | undefined;
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** What leads the row under the field after the +: where the agent works. */
+  readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
   readonly trailing: ReactNode;
 }) {
@@ -450,6 +472,7 @@ function AgentComposerArea({
         note={note}
         call={call}
         otherCall={otherCall}
+        tools={tools}
         trailing={trailing}
       />
       <ConfirmAsk destructive {...composer.removing} />
@@ -526,6 +549,58 @@ function AgentModelChip({
       {...(harness === undefined ? {} : { harness })}
       onOpen={onOpen}
       testId={MODEL_CHIP_ID}
+    />
+  );
+}
+
+/** What the Machine chip's menu heads where commands go, as the panel's place chip names its Default machine row. */
+const COMMANDS_WORDS = { LABEL: "Terminal and computer use" } as const;
+
+/** The name a flow finds the composer's Machine chip by. */
+const MACHINE_CHIP_ID = "agent-machine-chip";
+
+/**
+ * Where the agent works, as the desktop's Machine chip stands after the +:
+ * Cloud or its device's name, led by the panel's runs-on mark; its menu,
+ * where the agent is offered `run_on_mac`, says where its terminal commands
+ * and computer use go, each machine the agent may send them to, the one
+ * they go to now checked, a pick setting it (`useAgentCommandsPlace`). A
+ * chip with no machine to choose says where the agent works alone.
+ */
+function AgentMachineChip({
+  agent,
+  commands,
+}: {
+  readonly agent: Pick<FollowedAgent, "machine" | "mac">;
+  readonly commands: AgentCommandsPlace | undefined;
+}) {
+  const platform = useDevicePlatform(agent.mac?.deviceId);
+  const symbol = runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform });
+
+  const menu =
+    commands === undefined || commands.machines.length === 0
+      ? undefined
+      : {
+          groups: [
+            {
+              title: COMMANDS_WORDS.LABEL,
+              choices: commands.machines.map((machine) => ({
+                label: machine.name,
+                symbol: runsOnGlyph({ cloud: false }),
+                on: machine.id === commands.machine?.id,
+                onPress: () => commands.choose(machine.id),
+              })),
+            },
+          ],
+        };
+
+  return (
+    <MenuChip
+      look={MENU_CHIP_LOOK.COMPOSER}
+      label={agentRunsOnWords(agent) || RUNS_ON_WORDS.LABEL}
+      symbol={symbol}
+      {...(menu === undefined ? {} : { menu })}
+      testId={MACHINE_CHIP_ID}
     />
   );
 }
@@ -872,6 +947,7 @@ function AgentConversation({
   };
 
   const servers = useAgentServers(id);
+  const commands = useAgentCommandsPlace(id);
 
   // Note that the newest refusal of the page's own acts stands over the field, so a server's switch refused after a Pin says its own words rather than the older one's.
   const note = useNewestNote([
@@ -953,6 +1029,9 @@ function AgentConversation({
       note={note}
       call={talk.call}
       otherCall={otherCall}
+      tools={
+        agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />
+      }
       trailing={<AgentModelChip pick={pick} onOpen={openModels} />}
     />
   );

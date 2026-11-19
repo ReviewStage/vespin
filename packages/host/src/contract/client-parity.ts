@@ -91,8 +91,8 @@ const IOS = {
   AGENT_TAB_DOT: byDesign(
     "An agent's unseen dot marks the desktop's and the web's tab strip, which the phone has none of; a failed run reaches the phone as a push, and a running one as its Live Activity",
   ),
-  RUN_ON_MAC_STANDING: byDesign(
-    "Whether run_on_mac is on for an agent is the desktop's Runs on card's to say, about the Mac its commands would run on",
+  TOOLS_RETRY: notYet(
+    "iOS's Machine chip reads the agent's tools again as its page opens again rather than offering Try again",
   ),
   AGENT_SESSION: notYet(
     "iOS's agent page leaves a fresh session and a restart of the agent's machine to the desktop and the web for now",
@@ -256,7 +256,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_MODELS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DEFAULT_WRITE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: panel(IOS.RUN_ON_MAC_STANDING),
+  [PORT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.HOSTS_FOLLOW]: EVERYWHERE,
@@ -321,8 +321,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW]: panel(IOS.AGENT_PULL_REQUEST_CARD),
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_RETRY]: panel(IOS.AGENT_PULL_REQUEST_CARD),
   [PORT_ACT_KIND.AGENTS_TURN_CHANGES]: panel(IOS.DIFF),
-  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: panel(IOS.RUN_ON_MAC_STANDING),
-  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: panel(IOS.RUN_ON_MAC_STANDING),
+  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: panel(IOS.TOOLS_RETRY),
   [PORT_ACT_KIND.AGENTS_GITHUB_IMAGE]: panel(IOS.DIFF),
 
   [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: EVERYWHERE,
