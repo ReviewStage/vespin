@@ -300,7 +300,6 @@ const LIVE_ACTIVITY: AppExtension = {
   },
   SYMBOLS: [
     "Inbox",
-    "TaskStatusInProgress",
     "TaskStatusDone",
     "Split",
     "SquareCheck",
