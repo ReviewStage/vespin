@@ -205,6 +205,7 @@
     "./picture-wire": "./src/picture-wire.js",
     "./request-body-limit": "./src/request-body-limit.js",
     "./sound-clip-wire": "./src/sound-clip-wire.js",
+    "./person-page-model": "./src/person-page-model.js",
     "./pin-order": "./src/pin-order.js",
     "./read-mark": "./src/read-mark.js",
     "./place-chip-model": "./src/place-chip-model.js",
