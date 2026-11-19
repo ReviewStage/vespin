@@ -21,7 +21,7 @@ import {
   hasRepository,
   readAgentOfConversation,
 } from "@repo/database/models/agent-store";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_KIND, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { Effect, Option } from "effect";
 import { CODER_REFUSAL } from "../coder-host/bounds.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
@@ -46,12 +46,14 @@ export const TOOL_GATE = {
   DESCRIPTIONS: "descriptions",
   /** The agent's workspace has Reply buttons on. */
   REPLY_BUTTONS: "reply-buttons",
-  /** The agent's workspace has Done and follow-ups on. */
+  /** The agent's workspace has Done and follow-ups on, and it is no Manager, whose words reach people through `send_to_user` alone. */
   TURN_END: "turn-end",
   /** The member whose Mac the agent reaches has Computer use on, as their own experiment. */
   COMPUTER_USE: "computer-use",
   /** The member the agent's threads would land with, its task's assignee else its starter, keeps an Inbox. */
   INBOX: "inbox",
+  /** The agent is a Manager, whose page is a chat with the people who can open it. */
+  MANAGER: "manager",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
@@ -97,8 +99,9 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
     opens: (_agent, experiments) => experiments.replyButtonsOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
+  // Note that a Manager ends no turn with a summary, since its page draws none: its chat holds its `send_to_user` messages alone.
   [TOOL_GATE.TURN_END]: {
-    opens: (_agent, experiments) => experiments.turnEndOn,
+    opens: (agent, experiments) => experiments.turnEndOn && agent.kind !== AGENT_KIND.MANAGER,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.COMPUTER_USE]: {
@@ -108,6 +111,10 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
   [TOOL_GATE.INBOX]: {
     opens: (_agent, experiments) => experiments.inboxOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
+  },
+  [TOOL_GATE.MANAGER]: {
+    opens: (agent) => agent.kind === AGENT_KIND.MANAGER,
+    refusal: "Not run: only a Manager has a chat to send to; reach people with your threads.",
   },
 };
 

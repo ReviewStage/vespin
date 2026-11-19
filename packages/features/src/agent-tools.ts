@@ -111,6 +111,8 @@ export const AGENT_TOOL = {
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
   END_TURN: "end_turn",
+  // A Manager's message to its chat, the one way its words reach people.
+  SEND_TO_USER: "send_to_user",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
   SLEEP: "sleep",
 } as const;

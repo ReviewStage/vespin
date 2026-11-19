@@ -58,6 +58,21 @@ const BRIEF_JOB = {
 const UNCLEAR_LINE =
   "If something doesn't make sense, or you can't tell what to build, ask in a thread.";
 
+/**
+ * What a Manager is told in place of its reply's, its threads', and an
+ * unclear request's lines: its page is a chat, whose every message from it
+ * is a `send_to_user` call, so its plain text and its other calls are never
+ * shown; and, where it posts threads, that a thread is kept for the asks a
+ * chat cannot hold, since every post is a notification.
+ */
+function chatLine(posts: boolean): string {
+  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there.`;
+
+  return posts
+    ? `${chat} Post a thread with \`${INBOX_TOOLS.POST.name}\` only for a decision with options or a to-do, since every post reaches people as a notification.`
+    : chat;
+}
+
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
   CODEX: CONVERSATION_RUNTIME.CODEX,
@@ -322,7 +337,9 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * token. A line on a gated tool of ours is told by whether the agent's
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
- * `edit_description`, its reply by `end_turn`, and its threads by
+ * `edit_description`, its reply by `end_turn`, or a Manager's by
+ * `send_to_user`, which stands for its threads' and unclear request's lines
+ * too, and its threads by
  * `post_thread`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
  */
@@ -344,6 +361,7 @@ export function coderInstructions(
   const describes = ownTask !== undefined && offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
   const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
+  const chats = offers(standing, AGENT_TOOL.SEND_TO_USER);
   const posts = offers(standing, INBOX_TOOLS.POST.name);
   const showsPages = offers(standing, AGENT_TOOL.SHOW_PAGE);
   const shell = harness === CODER_HARNESS.CLAUDE_CODE ? "Bash" : "your shell";
@@ -359,17 +377,19 @@ export function coderInstructions(
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
     ownLine(ownTask, own, repository, startBranch, workspace),
     ...machineLines(machine, repository !== null),
-    ...(posts ? [UNCLEAR_LINE] : []),
+    ...(posts && !chats ? [UNCLEAR_LINE] : []),
     ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
     ...(showsPages
       ? [
           `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts ? " and post it in a thread" : ""}.`,
         ]
       : []),
-    endsTurns
-      ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
-      : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
-    ...(posts
+    chats
+      ? chatLine(posts)
+      : endsTurns
+        ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
+        : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
+    ...(posts && !chats
       ? [
           `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
         ]
@@ -423,10 +443,10 @@ export function managerInstructions(place: ManagerPlace): string {
 
   return [
     `You are a Manager in this workspace. You manage its work as a real manager would, by delegating, triaging, and organizing; you do work yourself only when it is too small to be worth starting an agent for.`,
-    `Your conversation opens with this greeting, shown to people as if you said it: "${managerGreeting(place.name)}" So don't introduce yourself again; answer what they ask, and from then on work on your own.`,
+    `Your chat opens with this greeting, shown to people as your first message: "${managerGreeting(place.name)}" So don't introduce yourself again; answer what they ask, and from then on work on your own.`,
     `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, in the right repository. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, with \`runsOn\` ${managerRunsOnOf(place)} and your repositories, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`).`,
     `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
-    `Post a thread with \`${INBOX_TOOLS.POST.name}\` only when you need a person, in words alone, since you cannot attach files, and relay their answer to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
+    `Relay what people tell you, in your chat or on a thread, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
   ].join("\n");
 }

@@ -12,6 +12,8 @@ interface StandingFor {
   readonly turnEnd?: boolean;
   /** Whether the agent's starter keeps an Inbox; on unless the test says otherwise. */
   readonly inbox?: boolean;
+  /** Whether the agent is a Manager; a coder unless the test says otherwise. */
+  readonly manager?: boolean;
 }
 
 /**
@@ -31,6 +33,7 @@ export function standingFor(
     replyButtons = false,
     turnEnd = false,
     inbox = true,
+    manager = false,
   }: StandingFor = {},
 ): AgentStanding {
   const opens: Readonly<Record<ToolGate, boolean>> = {
@@ -40,9 +43,10 @@ export function standingFor(
     [TOOL_GATE.MEMORY]: memory,
     [TOOL_GATE.DESCRIPTIONS]: descriptions,
     [TOOL_GATE.REPLY_BUTTONS]: replyButtons,
-    [TOOL_GATE.TURN_END]: turnEnd,
+    [TOOL_GATE.TURN_END]: turnEnd && !manager,
     [TOOL_GATE.COMPUTER_USE]: false,
     [TOOL_GATE.INBOX]: inbox,
+    [TOOL_GATE.MANAGER]: manager,
   };
 
   const open = Object.values(TOOL_GATE).filter((gate) => opens[gate]);
