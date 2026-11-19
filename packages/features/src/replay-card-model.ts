@@ -1,4 +1,4 @@
-import { isRecord, valueFromJsonText, type WireValue } from "@repo/wire";
+import { isRecord, MESSAGE_ROLE, valueFromJsonText, type WireValue } from "@repo/wire";
 import { AGENT_PART, agentParts, isTaskCall, messageWords } from "./agent-parts.js";
 import {
   firstMessageParts,
@@ -32,6 +32,7 @@ import {
   toolCallView,
 } from "./tool-call-model.js";
 import { CALL_KIND, CALL_WORDS, type CallKind } from "./turn-rows.js";
+import { isVoiceLine } from "./voice-call-lines.js";
 
 /**
  * replay-card-model.ts -- the opening of an agent started from another, read out of its first message: the brief as its source's was, the replay's card, and the developer's note.
@@ -249,14 +250,74 @@ export function replayVerb(replay: Replay): ReplayVerb {
   return replay.messageId === undefined ? REPLAY_VERB.CONTINUED : REPLAY_VERB.FORKED;
 }
 
-/** How many steps the replay kept, and of how many where it left the earliest out: "38 steps", "38 of 212 steps"; nothing for a transcript carried whole, which replays no step. */
+/** How many steps there are, in words: "1 step", "38 steps". */
+function stepsWords(steps: number): string {
+  return steps === 1 ? "1 step" : `${steps} steps`;
+}
+
+/** How many steps the replay kept, and of how many where it left the earliest out: "38 steps", "38 of 212 steps"; nothing for a transcript carried whole, which replays no step (`carriedTranscript` counts its own). */
 export function replayCount(replay: Replay): string | undefined {
   if (replay.carried === true) return undefined;
   const kept = replay.steps.length;
 
   if (kept < replay.totalSteps) return `${kept} of ${replay.totalSteps} steps`;
 
-  return kept === 1 ? "1 step" : `${kept} steps`;
+  return stepsWords(kept);
+}
+
+/** What the card of a transcript carried whole draws of its source's: the messages, oldest first, and how many steps they make, as its summary row says it. */
+export interface CarriedTranscript {
+  readonly messages: readonly AgentTranscriptMessage[];
+  readonly count: string;
+}
+
+/**
+ * How many steps a message makes, as a replay counts them: a line sent to
+ * the agent with words or files is one, and each of the agent's words and
+ * calls in a turn is one, its reasoning none. Note that a line the voice
+ * said on a call is none, because it retells the agent's own replies.
+ */
+function messageSteps(message: AgentTranscriptMessage): number {
+  if (isVoiceLine(message)) return 0;
+  const parts = agentParts(message);
+
+  if (message.role !== MESSAGE_ROLE.ASSISTANT) {
+    const said = parts.some((part) => part.kind !== AGENT_PART.TEXT || part.text.trim() !== "");
+
+    return said ? 1 : 0;
+  }
+
+  return parts.filter(
+    (part) =>
+      part.kind === AGENT_PART.TOOL || (part.kind === AGENT_PART.TEXT && part.text.trim() !== ""),
+  ).length;
+}
+
+/**
+ * What the card of a transcript carried whole draws, from the source's
+ * whole transcript, oldest first: every message after its first, which is
+ * the brief the card already draws, up to and including the one a fork
+ * was cut at, led by the note the source's own first message ended on
+ * where it was started from another in turn; nothing where the fork's
+ * message is not among them, as where it was rewound away. Note that the
+ * steps the source was itself handed are not drawn again, because they
+ * stand on the source's own card in its tab, a press of its chip away.
+ */
+export function carriedTranscript(
+  source: readonly AgentTranscriptMessage[],
+  replay: Replay,
+): CarriedTranscript | undefined {
+  const [first, ...rest] = source;
+  const cut = replay.messageId;
+  const through = cut === undefined ? rest.length : rest.findIndex(({ id }) => id === cut) + 1;
+
+  // Note that a fork at the first message carries none of the others.
+  if (cut !== undefined && through === 0 && first?.id !== cut) return undefined;
+  const note = first === undefined ? undefined : replayOpening(first)?.note;
+  const messages = [...(note === undefined ? [] : [note]), ...rest.slice(0, through)];
+  const steps = messages.reduce((sum, message) => sum + messageSteps(message), 0);
+
+  return { messages, count: stepsWords(steps) };
 }
 
 /** The line saying how many of the source's earliest steps the replay left out; none where it kept them all. */
@@ -291,6 +352,13 @@ export function earlierStepsLine(page: ReplayPage): string {
   if (page.next < page.from) return `Show ${page.next} of ${page.from} earlier steps`;
 
   return page.next === 1 ? "Show 1 earlier step" : `Show ${page.next} earlier steps`;
+}
+
+/** What the row before the drawn messages of a carried transcript says, as `earlierStepsLine` does of steps: "Show 20 of 180 earlier messages", "Show 3 earlier messages". */
+export function earlierMessagesLine(page: ReplayPage): string {
+  if (page.next < page.from) return `Show ${page.next} of ${page.from} earlier messages`;
+
+  return page.next === 1 ? "Show 1 earlier message" : `Show ${page.next} earlier messages`;
 }
 
 /**

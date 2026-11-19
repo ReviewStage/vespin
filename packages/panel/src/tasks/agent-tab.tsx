@@ -2403,6 +2403,33 @@ function sameHeldPiece(a: AgentMessageProps, b: AgentMessageProps): boolean {
 /** A transcript's message, drawn again only where `sameMessageDraw` says it changed. */
 const SteadyAgentMessage = memo(AgentMessage, sameMessageDraw);
 
+/**
+ * A message of another agent's transcript, as the replay card of a
+ * transcript carried whole draws it (`replay-card.tsx`): as this transcript
+ * draws its own, under whoever sent it, and offering no fork.
+ */
+function SourceMessage({
+  message,
+  readerId,
+}: {
+  message: AgentTranscriptMessage;
+  readerId: string | undefined;
+}): ReactNode {
+  const { members, former } = useMemberDirectory();
+
+  return (
+    <AgentMessage
+      message={message}
+      description={false}
+      lead={AGENT_LEAD}
+      moving={false}
+      delegation={undefined}
+      sender={messageSender(message, readerId, members, former)}
+      forkable={false}
+    />
+  );
+}
+
 /** The door that brings a message whose row is not drawn into view, handing its row to `then` once drawn; false where no row draws it. */
 type MessageBringer = (messageId: string, then: (row: HTMLElement) => void) => boolean;
 
@@ -4382,6 +4409,8 @@ function AgentTabBody({
           target: cards?.target,
           onOpenTarget,
           openGitHub,
+          shown,
+          message: (message) => <SourceMessage message={message} readerId={control.me} />,
         })}
         endPress={
           pressed ? (
