@@ -757,7 +757,8 @@ function insertMessage(
 
 const MessageFileWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.String,
+  /** The task its item stands on, which moves the file with it; null for an item on no task, whose file goes with the item alone. */
+  taskId: Schema.NullOr(Schema.String),
   organizationId: Schema.String,
   itemId: Schema.String,
   name: Schema.String,
@@ -789,30 +790,11 @@ const insertMessageFiles = SqlSchema.void({
     ),
 });
 
-/** A message's file as its caller hands it: the task its item stands on, none for an item on no task. */
-type MessageFileWrite = Omit<typeof MessageFileWriteSchema.Type, "taskId"> & {
-  readonly taskId: string | null;
-};
-
-/**
- * A message's files written as rows of the item's in one statement, each
- * naming the message, at its place among the message's files. Note that a
- * file of an item on no task is a broken contract, because a file is kept
- * under its task (`attachment.ts`), so every caller refuses files on such a
- * thread before it writes (`inboxFilesRefused`).
- */
-function writeMessageFiles(files: readonly MessageFileWrite[]): InboxStoreEffect<void> {
-  if (files.length === 0) return Effect.void;
-
-  return Effect.suspend(() => {
-    const onTask = files.flatMap(({ taskId, ...file }) =>
-      taskId === null ? [] : [{ ...file, taskId }],
-    );
-
-    return onTask.length === files.length
-      ? insertMessageFiles(onTask)
-      : Effect.die(new Error("a message's files were written on a thread on no task"));
-  });
+/** A message's files written as rows of the item's in one statement, each naming the message, at its place among the message's files. */
+function writeMessageFiles(
+  files: readonly (typeof MessageFileWriteSchema.Type)[],
+): InboxStoreEffect<void> {
+  return files.length === 0 ? Effect.void : insertMessageFiles(files);
 }
 
 /** Where an ask is to stand: open again, answered, replaced, or withdrawn with why. */

@@ -925,17 +925,32 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "an agent on no task is refused a post drawing a file, and writes nothing, while its words alone post",
+    "an agent on no task keeps the picture its post draws on the thread, at the address its agent holds, for its starter to read",
     () =>
       Effect.gen(function* () {
         const agent = yield* openTasklessAgent;
         const sandbox = sandboxWith({ "shots/form.png": PNG });
         const drawing = { ...QUEUE, body: "![Shot](shots/form.png)" };
 
-        assert.equal(refusalOf(yield* post(agent, drawing, sandbox)), INBOX_REFUSAL.NO_TASK_FILES);
-        assert.deepEqual(yield* agentInboxItems(agent), []);
-        assert.equal((yield* post(agent, QUEUE)).status, ACTION_RESULT_STATUS.ACCEPTED);
-        assert.equal((yield* agentInboxItems(agent)).length, 1);
+        assert.equal((yield* post(agent, drawing, sandbox)).status, ACTION_RESULT_STATUS.ACCEPTED);
+        const [item] = yield* agentInboxItems(agent);
+        const [message] = item?.thread ?? [];
+        const [, address] = /!\[[^\]]*\]\(<?([^\s)>]+)/u.exec(message?.text ?? "") ?? [];
+        const named = inboxAttachmentOf(address ?? "");
+
+        assert.ok(address?.includes(`/agent/${agent.agentId}/inbox/`), address ?? "no picture");
+        assert.deepEqual(named, {
+          itemId: item?.id,
+          attachmentId: message?.files?.[0]?.attachmentId,
+        });
+
+        const kept = yield* readInboxAttachment(
+          agent.userId,
+          named?.itemId ?? "",
+          named?.attachmentId ?? "",
+        );
+
+        assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
       }),
   );
 
