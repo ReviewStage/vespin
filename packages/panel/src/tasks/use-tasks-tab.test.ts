@@ -2478,16 +2478,22 @@ test("a Vespin link to an Inbox thread on no task opens its agent's own page", a
     },
   );
 
+  let landed = false;
   act(() =>
-    tab.control().onOpenLink({
-      workspace: "acme",
-      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: ITEM_ID },
-    }),
+    tab
+      .control()
+      .onOpenLink(
+        { workspace: "acme", place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: ITEM_ID } },
+        () => {
+          landed = true;
+        },
+      ),
   );
   await settle();
 
   assert.equal(tab.control().agentView.agentId, AGENT_ID);
   assert.equal(inboxNow().open, false);
+  assert.equal(landed, true, "the link says it landed once the page stands");
 });
 
 test.each([

@@ -2784,7 +2784,8 @@ export function useTasksTab(input: {
         // A thread on no task stands under its agent, so it opens that agent's own page.
         if (home.taskId === null) {
           const where = workspaceOfSlug(viewed.workspaces, home.workspaceId);
-          openAgentPage(home.agentId, where === undefined ? home.workspaceId : stepOf(where));
+          const step = where === undefined ? home.workspaceId : stepOf(where);
+          linkArrive(() => openAgentPage(home.agentId, step), NOTHING);
 
           return;
         }
