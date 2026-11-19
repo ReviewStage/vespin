@@ -498,7 +498,11 @@ function SelectedWords({ words, onDone }: { readonly words: string; readonly onD
       multiline
       scrollEnabled={false}
       // Note that it opens with every word selected, and ends once the selection is let go to a caret or the view loses the focus.
-      onFocus={() => field.current?.setSelection(0, plain.length)}
+      // Note that the selection set on focus says nothing back on iOS, so it is counted here, and a tap that collapses it ends the selecting.
+      onFocus={() => {
+        field.current?.setSelection(0, plain.length);
+        spanned.current = plain.length > 0;
+      }}
       onSelectionChange={(event) => {
         const { start, end } = event.nativeEvent.selection;
 
