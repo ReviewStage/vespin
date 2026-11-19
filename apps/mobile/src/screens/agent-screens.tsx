@@ -1,4 +1,4 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, the sheet of its options: its model, effort, Fast, permission mode, and MCP servers, and the sheet of its listening ports.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
 
 import {
   AGENT_PORTS_WORDS,
@@ -60,7 +60,8 @@ import {
   glyphSymbol,
   HeldCallBanner,
   ListSection,
-  LoadingRow,
+  MENU_CHIP_LOOK,
+  MenuChip,
   MenuRow,
   type MenuRowAct,
   ModelChoiceSheet,
@@ -73,7 +74,6 @@ import {
   SettingsForm,
   SkillSuggestions,
   StackSubtitle,
-  SwitchRow,
   shownFiles,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
@@ -92,7 +92,15 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -116,7 +124,7 @@ import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-mode
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
-import { useAgentServers } from "../agents/use-agent-servers.js";
+import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -128,6 +136,7 @@ import {
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useNewestNote } from "../newest-note.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
   type PullRequestKey,
@@ -170,10 +179,11 @@ const COPY_TRANSCRIPT_WORDS = {
   SHARE: "Share…",
 } as const;
 
-/** What the + offers beside the options: the photo picker, and the sheet of every option. */
+/** What the + offers, as the desktop composer's + does: the photo picker, and the MCP servers the agent is handed. */
 const ADD_WORDS = {
   PHOTOS: "Photos",
-  OPTIONS: "Options",
+  /** What the model chip is heard as, which opens the model sheet. */
+  MODEL: "Model",
 } as const;
 
 /** What Rename asks, in the system's alert a task's Rename asks in too (`askForName`). */
@@ -182,17 +192,11 @@ const RENAME_WORDS = {
   ACT: "Rename",
 } as const;
 
-/** The options sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
-const OPTIONS_WORDS = {
-  TITLE: "Options",
-  MODEL: "Model",
-  EFFORT: "Effort",
-  FAST: "Fast",
-  DONE: "Done",
-  NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
-  READING_SERVERS: "Reading your MCP servers",
-  MORE_SERVERS: "Connect another in Settings.",
-} as const;
+/** What the model chip says between a model and its effort, as the panel's chip joins them. */
+const MODEL_JOINED = " · ";
+
+/** The name a flow finds the composer's model chip by. */
+const MODEL_CHIP_ID = "agent-model-chip";
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
@@ -306,6 +310,7 @@ function AgentComposerBar({
   note,
   call,
   otherCall,
+  trailing,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -318,6 +323,8 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** What stands at the end of the row under the field, before Send: the model chip. */
+  readonly trailing: ReactNode;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -362,6 +369,7 @@ function AgentComposerBar({
     sendable: composer.sendable,
     onSend: composer.send,
     addMenu,
+    trailing,
     onDropPictures: composer.dropPictures,
     onLongPaste: composer.pasteText,
     onStop: composer.stop,
@@ -405,12 +413,11 @@ function AgentComposerArea({
   editMessage,
   approvals,
   onShowWaiting,
-  mode,
-  pick,
-  openOptions,
+  servers,
   note,
   call,
   otherCall,
+  trailing,
 }: {
   readonly id: string;
   readonly agent: Parameters<typeof useAgentComposer>[1];
@@ -421,12 +428,12 @@ function AgentComposerArea({
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
-  readonly mode: AgentMode | undefined;
-  readonly pick: AgentModelPick;
-  readonly openOptions: (() => void) | undefined;
+  readonly servers: AgentServers;
   readonly note: string | undefined;
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** What stands at the end of the row under the field, before Send: the model chip. */
+  readonly trailing: ReactNode;
 }) {
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
   useEffect(() => {
@@ -439,10 +446,11 @@ function AgentComposerArea({
         composer={composer}
         approvals={approvals}
         onShowWaiting={onShowWaiting}
-        addMenu={agentAddMenu(composer, mode, pick, openOptions)}
+        addMenu={agentAddMenu(composer, servers)}
         note={note}
         call={call}
         otherCall={otherCall}
+        trailing={trailing}
       />
       <ConfirmAsk destructive {...composer.removing} />
       <ConfirmAsk destructive {...composer.sendingEdit} />
@@ -451,52 +459,70 @@ function AgentComposerArea({
 }
 
 /**
- * What the composer's + opens, as the panel's + and model chip offer them,
- * the less frequent of them in one native menu rather than chips along the
- * field: Photos, then Options, the sheet of every option, then the agent's
- * permission mode as a menu of its modes where its harness takes one, and
- * Fast as a switch where its model has a fast version.
+ * What the composer's + opens, as the desktop composer's + does: Photos,
+ * then MCP servers ›, each server the agent is handed, checked while it is
+ * on, a press switching it, once they are read and where any is connected.
+ * The model, its effort, Fast and the permission mode stand once, in the
+ * model chip's sheet at the row's end, as the desktop's model chip holds
+ * them.
  */
-function agentAddMenu(
-  composer: AgentComposer,
-  mode: AgentMode | undefined,
-  pick: AgentModelPick,
-  openOptions: (() => void) | undefined,
-): ComposerMenu {
+function agentAddMenu(composer: AgentComposer, servers: AgentServers): ComposerMenu {
   return {
-    actions: [
-      { label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach },
-      ...(openOptions === undefined
-        ? []
-        : [
-            {
-              label: ADD_WORDS.OPTIONS,
-              symbol: GLYPH.OPTIONS,
-              onPress: openOptions,
-            },
-          ]),
-    ],
+    actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
     submenus:
-      mode === undefined
+      !servers.read || servers.servers.length === 0
         ? []
         : [
             {
-              label: PERMISSION_MODE_WORDS.GROUP,
-              symbol: PERMISSION_MODE_GLYPH[mode.mode],
-              choices: mode.modes.map((option) => ({
-                label: option.label,
-                symbol: PERMISSION_MODE_GLYPH[option.id],
-                on: option.id === mode.mode,
-                onPress: () => mode.choose(option.id),
+              label: MCP_SERVER_LABEL.many,
+              symbol: GLYPH.MCP_SERVER,
+              choices: servers.servers.map((server) => ({
+                label: server.name,
+                symbol: GLYPH.MCP_SERVER,
+                on: server.on,
+                onPress: () => servers.toggle(server.connection, !server.on),
               })),
               actions: [],
             },
           ],
-    switches:
-      pick.fast === undefined
-        ? []
-        : [{ label: OPTIONS_WORDS.FAST, on: pick.fast.on, onPress: pick.fast.toggle }],
   };
+}
+
+/**
+ * The model chip at the end of the composer's row, as the desktop's stands
+ * at its box's foot: the model and its effort, "Opus 5.5 · High", led by its
+ * harness's mark, a press opening the model sheet, where the model, its
+ * effort, Fast and the permission mode are chosen; none before the agent's
+ * model is known.
+ */
+function AgentModelChip({
+  pick,
+  onOpen,
+}: {
+  readonly pick: AgentModelPick;
+  readonly onOpen: (() => void) | undefined;
+}) {
+  if (pick.model === undefined || onOpen === undefined) return null;
+
+  const model =
+    pick.models.find((option) => option.id === pick.model)?.label ?? modelLabel(pick.model);
+
+  const effort =
+    pick.efforts.length > 1
+      ? pick.efforts.find((option) => option.id === pick.effort)?.label
+      : undefined;
+
+  const harness = providerOf(pick.model);
+
+  return (
+    <MenuChip
+      look={MENU_CHIP_LOOK.COMPOSER}
+      label={effort === undefined ? model : `${model}${MODEL_JOINED}${effort}`}
+      {...(harness === undefined ? {} : { harness })}
+      onOpen={onOpen}
+      testId={MODEL_CHIP_ID}
+    />
+  );
 }
 
 /**
@@ -534,19 +560,19 @@ function suggestedSendOf(
 /**
  * The line under the agent's name in its bar: where it stands and the model
  * it runs on, as the panel's tab and its model chip say them ("Working ·
- * Opus 5.5"), a press on it opening Options, where the model is chosen;
- * none before either is known.
+ * Opus 5.5"); none before either is known. Note that it is UIKit's own
+ * subtitle, which takes no press, so the model is chosen from the composer's
+ * model chip.
  */
 function agentSubtitle(
   statusWords: string | undefined,
   model: string | undefined,
-  openOptions: (() => void) | undefined,
 ): BarSubtitle | undefined {
   const words = [statusWords, model]
     .filter((each) => each !== undefined && each !== "")
     .join(" · ");
 
-  return words === "" ? undefined : { words, onPress: openOptions, label: ADD_WORDS.OPTIONS };
+  return words === "" ? undefined : { words };
 }
 
 /**
@@ -554,7 +580,7 @@ function agentSubtitle(
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
  * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
- * browser, Rename, typed in the system's alert, Pin or Unpin, Options, a
+ * browser, Rename, typed in the system's alert, Pin or Unpin, a
  * cloud agent's Ports, which opens the sheet of its listening ports, and
  * Run ›, its repository's run actions where its workspace offers them, each
  * run in its sandbox or stopped while it runs, as the panel's narrow ⋯
@@ -562,8 +588,8 @@ function agentSubtitle(
  * archived, and Permanently delete, red and last, which always asks in the
  * panel's words and goes back once the agent is deleted. Under
  * it, its transcript as one lazy list, its head where the agent stands and
- * the model it runs on, which opens the options sheet, as the menu's
- * Options and the composer's + do. The transcript
+ * the model it runs on, which opens the model sheet, as the composer's
+ * model chip does. The transcript
  * is held live while the page is in focus, so a turn under way draws as it
  * moves, and its older pages are read as the reader scrolls up to them; one
  * that could not be read offers Try again. Each call opens in place, and
@@ -581,7 +607,8 @@ function agentSubtitle(
  * follow-up, with the photos the + attaches, steers the turn under way or
  * waits behind it as the member's Follow-up behavior says, and Stop stands
  * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
- * Photos, Options, the permission mode, and Fast. A `/` typed offers the
+ * Photos and MCP servers ›; the model chip at the row's end opens the model
+ * sheet, its effort, Fast and the permission mode. A `/` typed offers the
  * task's skills over the field. Opened from a split view's detail, it is
  * pushed on the tab's own stack over the whole window, as a compact window
  * pushes it.
@@ -783,16 +810,15 @@ function AgentConversation({
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 
-  // Note that Options stands as the page's own sheet beside it, as its asks do, so the model chip, the + menu and ⋯ all open the one sheet.
-  const [optionsShown, setOptionsShown] = useState(false);
-  const openOptions = agent === undefined ? undefined : () => setOptionsShown(true);
+  // Note that the model sheet stands as the page's own beside it, as its asks do, so the model chip and the bar's line open the one sheet.
+  const [modelsShown, setModelsShown] = useState(false);
+  const openModels = agent === undefined ? undefined : () => setModelsShown(true);
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
   const subtitle = agentSubtitle(
     statusWords,
     agent === undefined ? undefined : modelLabel(agent.model),
-    openOptions,
   );
 
   // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the bar's line changes out of the reader's sight.
@@ -840,6 +866,17 @@ function AgentConversation({
     else router.replace("/tasks");
   };
 
+  const servers = useAgentServers(id);
+
+  // Note that the newest refusal of the page's own acts stands over the field, so a server's switch refused after a Pin says its own words rather than the older one's.
+  const note = useNewestNote([
+    actions.note,
+    transcriptCopy.note,
+    servers.note,
+    mode?.note,
+    pick.note,
+  ]);
+
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
   const taskId = shown?.taskId ?? undefined;
@@ -852,7 +889,7 @@ function AgentConversation({
 
   // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   const copyable = address !== undefined || copiable;
-  const openable = address !== undefined || openOptions !== undefined;
+  const openable = address !== undefined || agent !== undefined;
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
@@ -907,12 +944,11 @@ function AgentConversation({
       editMessage={editMessage}
       approvals={approvals}
       onShowWaiting={showWaiting}
-      mode={mode}
-      pick={pick}
-      openOptions={openOptions}
-      note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
+      servers={servers}
+      note={note}
       call={talk.call}
       otherCall={otherCall}
+      trailing={<AgentModelChip pick={pick} onOpen={openModels} />}
     />
   );
 
@@ -957,12 +993,11 @@ function AgentConversation({
 
   const asks = (
     <>
-      <AgentOptionsSheet
-        agentId={id}
+      <AgentModelSheet
         pick={pick}
         mode={mode}
-        presented={optionsShown}
-        onDismiss={() => setOptionsShown(false)}
+        presented={modelsShown}
+        onDismiss={() => setModelsShown(false)}
       />
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
@@ -1007,7 +1042,7 @@ function AgentConversation({
   return (
     <>
       <Stack.Screen options={barOptions} />
-      {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row; Options stays in ⋯. */}
+      {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row, the model chosen from the composer's model chip. */}
       <StackSubtitle words={subtitle?.words ?? ""} />
       <Stack.Toolbar placement="right">
         {copyable || openable || openTask !== undefined ? (
@@ -1078,17 +1113,12 @@ function AgentConversation({
                     {VERB.OPEN_IN_BROWSER}
                   </Stack.Toolbar.MenuAction>
                 )}
-                {openOptions === undefined ? null : (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
-                    {ADD_WORDS.OPTIONS}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {openOptions !== undefined && hasPorts ? (
+                {agent !== undefined && hasPorts ? (
                   <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
                     {AGENT_PORTS_WORDS.PORTS}
                   </Stack.Toolbar.MenuAction>
                 ) : null}
-                {openOptions === undefined || runActions.length === 0 ? null : (
+                {agent === undefined || runActions.length === 0 ? null : (
                   <Stack.Toolbar.Menu
                     icon={glyphSymbol(GLYPH.RUN)}
                     title={RUN_ACTION_WORDS.SUBMENU}
@@ -1193,42 +1223,27 @@ function AgentPage({
 }
 
 /**
- * The agent's options, as the panel's model chip and + menu change them, in
- * the model sheet over its page (`ModelChoiceSheet`), each change sent at
- * once and drawn on the agent as it is asked, one the service refused reading
- * back and saying why under its section: its model, among the models New
- * agent offers that its harness runs, each under its harness's mark, its
- * effort right under it, and Fast where the model has a fast version, which
- * take effect from its next step; its permission mode, each with its glyph
- * and what it does, where its harness takes one, which takes effect from its
- * next turn; and the connected MCP servers it is handed, each with its
- * switch, a server connected in Settings. Done closes it.
+ * The agent's model sheet (`ModelChoiceSheet`), as the desktop's model chip
+ * opens its menu, each change sent at once and drawn on the agent as it is
+ * asked, one the service refused reading back and saying why: its model,
+ * among the models New agent offers that its harness runs, each under its
+ * harness's mark, its effort right under it, and Fast where the model has a
+ * fast version, which take effect from its next step; and last its
+ * permission mode, each with its glyph and what it does, where its harness
+ * takes one, which takes effect from its next turn. Done closes it.
  */
-function AgentOptionsSheet({
-  agentId,
+function AgentModelSheet({
   pick,
   mode,
   presented,
   onDismiss,
 }: {
-  readonly agentId: string;
-  /** The page's own model and mode, so a change from the sheet or the composer's + menu clears the one refusal and counts as the one latest change. */
+  /** The page's own model and mode, so a change from the sheet clears the one refusal and counts as the one latest change. */
   readonly pick: AgentModelPick;
   readonly mode: AgentMode | undefined;
   readonly presented: boolean;
   readonly onDismiss: () => void;
 }) {
-  const servers = useAgentServers(agentId);
-
-  // Note that the footer says nothing while the servers are read, since a read under way shows no words.
-  const serversFooter =
-    servers.note ??
-    (!servers.read
-      ? undefined
-      : servers.servers.length === 0
-        ? OPTIONS_WORDS.NO_SERVERS
-        : OPTIONS_WORDS.MORE_SERVERS);
-
   const models = pick.models.flatMap((option) => {
     const provider = providerOf(option.id);
 
@@ -1266,27 +1281,7 @@ function AgentOptionsSheet({
               note: mode.note,
             }
       }
-    >
-      <ListSection
-        title={MCP_SERVER_LABEL.many}
-        footer={serversFooter}
-        footerTone={footerToneOf(servers.note)}
-      >
-        {/* Note that the servers stand as the bare spinner while they are read, so an unread list never reads as an empty one. */}
-        {servers.read ? (
-          servers.servers.map((server) => (
-            <SwitchRow
-              key={server.connection}
-              label={server.name}
-              on={server.on}
-              onSwitch={(on) => servers.toggle(server.connection, on)}
-            />
-          ))
-        ) : (
-          <LoadingRow words={OPTIONS_WORDS.READING_SERVERS} />
-        )}
-      </ListSection>
-    </ModelChoiceSheet>
+    />
   );
 }
 

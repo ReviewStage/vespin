@@ -204,7 +204,16 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-menu
-- tapOn: "Options"
+# The model, its effort, Fast and the permission mode stand once, in the
+# model chip's sheet at the end of the composer's row, as the desktop's
+# model chip holds them; ⋯ no longer offers Options. Note that the menu is
+# let go first, by a tap on the transcript's top.
+- tapOn:
+    point: "50%, 25%"
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "agent-model-chip"
 - assertVisible: "Effort"
 - assertVisible: ".*Opus 5.5.*"
 - assertVisible: "Fast"
@@ -222,21 +231,13 @@ env:
 - runFlow:
     file: subflows/full-sheet.yaml
 - tapOn: "Approve for me.*"
-# Note that Options opens at half height in a compact window, so the permission section's footer may stand below the fold until scrolled to.
+# Note that the sheet opens at half height in a compact window, so the permission section's footer may stand below the fold until scrolled to.
 - scrollUntilVisible:
     element: "Takes effect from the next turn."
     direction: DOWN
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-options-mode
-- scrollUntilVisible:
-    element: "Notion · Personal"
-    direction: DOWN
-- assertVisible: "Linear"
-- tapOn: "Notion · Personal"
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: agent-options-servers
 # The models stand in the sheet under their harness, each a row of its own;
 # a pick of Sonnet, which the fixture's catalog lists no fast version of,
 # takes Fast away.
