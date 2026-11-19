@@ -17,8 +17,9 @@
  * installation of every workspace connected to that team, and with it its
  * token and its members' Slack ids, and a message a member
  * addressed to the bot, a mention or a direct message, is acknowledged and
- * acted on once the answer has left (`slack-agent-starts.ts`); every other
- * event is acknowledged unread.
+ * acted on once the answer has left (`slack-agent-starts.ts`), as is a
+ * member's 👍 or 👎 on a message the bot posted in an agent's thread
+ * (`slack-reactions.ts`); every other event is acknowledged unread.
  *
  * A press (`block_actions`) is acknowledged at once with an empty answer,
  * as Slack asks within its three seconds, and acted on once the answer has
@@ -69,6 +70,7 @@ import { INBOX_ASK_ANSWER, readInboxItem } from "../inbox/inbox-store.js";
 import { ANY_METHOD } from "../route.js";
 import { actOnSlackEvent } from "./slack-agent-starts.js";
 import { SlackBot, type SlackMessage } from "./slack-bot.js";
+import { actOnSlackReaction } from "./slack-reactions.js";
 import {
   chosenLine,
   doneLine,
@@ -488,7 +490,10 @@ const eventsEndpoint = Effect.gen(function* () {
         ),
       ),
     );
-  } else yield* actOnSlackEvent(payload, request.headers[SLACK_RETRY_HEADER] !== undefined);
+  } else {
+    const retried = request.headers[SLACK_RETRY_HEADER] !== undefined;
+    yield* actOnSlackReaction(payload, retried) ?? actOnSlackEvent(payload, retried);
+  }
 
   return hostedJsonResponse(200, {});
 });

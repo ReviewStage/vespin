@@ -651,11 +651,11 @@ function refusalReply(what: string, cause: unknown): SlackMessageContent {
  * email is the one Slack holds for them, which is kept from then on;
  * nothing where none is.
  */
-const memberIn = Effect.fnUntraced(function* (
+export const memberIn = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
   email: Effect.Effect<Option.Option<string>>,
   organizationId: string,
-  addressed: SlackAddressed,
+  addressed: { readonly teamId: string; readonly slackUserId: string },
 ) {
   const kept = yield* bot.memberOf(addressed.teamId, addressed.slackUserId);
 
