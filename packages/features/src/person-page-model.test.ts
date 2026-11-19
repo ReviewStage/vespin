@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
-import type { TaskSummary } from "@repo/features/task-wire";
 import { test } from "vitest";
+import { AGENT_STATUS, type ListedAgent } from "./agent-wire.js";
 import {
   agentStarter,
   personCounts,
@@ -10,6 +9,7 @@ import {
   personPageEmpty,
   personRef,
 } from "./person-page-model.js";
+import type { TaskSummary } from "./task-wire.js";
 
 /**
  * A person's page lists what of theirs the listed workspace's task list
