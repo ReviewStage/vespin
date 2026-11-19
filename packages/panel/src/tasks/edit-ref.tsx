@@ -1,4 +1,10 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
+import {
+  type ConflictWords,
+  namedConflict,
+  OWN_CONFLICT,
+  UNNAMED_CONFLICT,
+} from "@repo/features/description-edit-words";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
   DESCRIPTION_ACTOR,
@@ -98,24 +104,6 @@ function writerOf(edit: DescriptionLastEdit, place: EditPlace): Actor | undefine
   return editActor(edit, place.reader, found);
 }
 
-/** What a conflict over the developer's edit says, and the button that takes the other writer's words. */
-export interface ConflictWords {
-  readonly note: string;
-  readonly take: string;
-}
-
-/** A conflict whose writer the service named nobody for, as a service from before it answers. */
-const UNNAMED_CONFLICT: ConflictWords = {
-  note: "This section changed while you were editing.",
-  take: "Use theirs",
-};
-
-/** A conflict with the reader's own words saved elsewhere, as from another window. */
-const OWN_CONFLICT: ConflictWords = {
-  note: "You changed this section elsewhere while you were editing.",
-  take: "Use the other",
-};
-
 /**
  * What a conflict says, naming who wrote the text it met as the "Edited by"
  * line names them: "Charles Pan changed this section while you were
@@ -138,10 +126,7 @@ export function conflictWords(
       ? writer
       : { ...writer, name: agentName(agent, place.agents?.control.models) };
 
-  return {
-    note: `${actorName(named)} changed this section while you were editing.`,
-    take: `Use ${actorName(named, { possessive: true })}`,
-  };
+  return namedConflict(actorName(named));
 }
 
 /** What an actor last did in the description, and how long ago, in a card's line; none where no section's last change is theirs. */

@@ -3109,6 +3109,8 @@ const ANSWERS: StagedAnswers = {
         },
   // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
   [ACT_KIND.TASKS_RENAME]: () => true,
+  // Note that a description's edit is taken as the service takes one, though nothing here moves, so the page draws the description it held.
+  [ACT_KIND.TASKS_EDIT]: () => ({ saved: true }),
   [ACT_KIND.TASKS_DELETE]: () => true,
   // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
   [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {

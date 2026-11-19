@@ -1,4 +1,5 @@
 import { DOCUMENT_EDITOR_STATE, type DocumentEditor } from "@repo/features/description-edit-model";
+import { KEEP_MINE } from "@repo/features/description-edit-words";
 import { DESCRIPTION_ACTOR, TASK_BOUNDS, type Task } from "@repo/features/task-wire";
 import {
   ANNOUNCE,
@@ -1333,7 +1334,7 @@ function DocumentNote({
     return (
       <div className={EDITOR_NOTE_CLASS}>
         <span>{editing.conflict.note}</span>
-        <Button onClick={editing.keepMine}>Keep mine</Button>
+        <Button onClick={editing.keepMine}>{KEEP_MINE}</Button>
         <Button onClick={editing.takeTheirs}>{editing.conflict.take}</Button>
       </div>
     );
