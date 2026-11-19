@@ -19,7 +19,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { MODELS_READ, type ModelsRead } from "../tasks/use-agents.js";
 import type { NewTask } from "../tasks/use-new-task.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
-import { handHostReads, handState } from "../testing/app-state.js";
+import { handHostReads, handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { NO_REPOSITORIES, newTaskControl, tasksControl } from "../testing/tasks-control.js";
@@ -112,8 +112,16 @@ afterEach(() => {
 });
 
 /** The sidebar over the workspace, the experiment as given, the live list carrying both Managers among agents that are not, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named. */
-async function mountSidebar(on: boolean, opened: string[], openId?: string): Promise<HTMLElement> {
+async function mountSidebar(
+  on: boolean,
+  opened: string[],
+  openId?: string,
+  pinned: readonly string[] = [],
+): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
+  writeListedTasks({
+    taskAgentPins: pinned.map((agentId) => ({ agentId, taskId: null, pinnedAt: 5 })),
+  });
   fakeActPort(fakeActPortCalls());
 
   const tasks = tasksControl({
@@ -159,6 +167,26 @@ test("Managers lists the workspace's unarchived Managers of the live list alone,
   );
 
   assert.ok(row, "the Manager's row is drawn");
+  act(() => row.click());
+  assert.deepEqual(opened, [FRONTEND]);
+});
+
+test("a Manager the reader pinned stands under Pinned as well as under Managers, and opens its page from there", async () => {
+  const opened: string[] = [];
+  const sidebar = await mountSidebar(true, opened, undefined, [FRONTEND]);
+  const pins = sidebar.querySelector('nav[aria-label="Pinned"]');
+  const managers = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  assert.ok(pins, "Pinned is drawn");
+  assert.ok(pins.textContent?.includes("Frontend Manager"));
+  assert.ok(!pins.textContent?.includes("Billing Manager"), "an unpinned Manager stays out");
+  assert.ok(managers?.textContent?.includes("Frontend Manager"), "it stays under Managers too");
+
+  const row = [...pins.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("Frontend Manager"),
+  );
+
+  assert.ok(row, "the pinned Manager's row is drawn");
   act(() => row.click());
   assert.deepEqual(opened, [FRONTEND]);
 });

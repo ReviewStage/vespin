@@ -7,6 +7,7 @@ import {
   startedHeard,
   startedShown,
 } from "@repo/features/task-agents-model";
+import { selectAgentPinned } from "@repo/host/app-state-reads";
 import {
   InlineEdit,
   type ListRowFold,
@@ -23,7 +24,9 @@ import {
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
-import { type ReactNode, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useMemo, useRef } from "react";
+import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useMachineAsks } from "../machine-asks.js";
 import { failedUnderMark } from "../state-glyph.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
@@ -34,8 +37,10 @@ import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import { useAgentPinWrite } from "../tasks/use-pin-writes.js";
+import { appStateQuery } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
-import { rowMenu } from "./action-menu.js";
+import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { WaitingCount } from "./task-row-parts.js";
 import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
@@ -70,7 +75,9 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * A press opens the agent, and its ⋯, a right-click, a long press, and the
  * menu key offer the agent's one menu over the doors a row has
  * (`agent-actions.tsx`), as a task's row offers the task's wherever it
- * stands: Copy link, Rename, which turns the row's name into its field
+ * stands, led by Pin, or Unpin once the reader pinned it, the reader's own
+ * pin of the agent, which stands it under the sidebar's Pinned (an archived
+ * agent's row offers neither, as an archived agent stands under no pin): Copy link, Rename, which turns the row's name into its field
  * until the edit ends, Archive, asking first while a teammate's agent
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
@@ -97,6 +104,19 @@ export const AGENT_ROW_CELLS = [
 
 /** What an agent's row is, naming its ⋯ and menu "Agent actions". */
 const AGENT_THING = "Agent";
+
+/** Pin or Unpin, whichever the agent is not yet, in a group of its own, for an unarchived agent; none for an archived one, whose pin stands nowhere. */
+function pinGroups(
+  agent: AgentSummary,
+  pinned: boolean,
+  onPin: (agentId: string, pinned: boolean) => void,
+  subject: Parameters<typeof commandAction>[2],
+): MenuEntry[][] {
+  if (agent.archivedAt !== undefined) return [];
+  const command = pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT;
+
+  return [[commandAction(command, () => onPin(agent.id, !pinned), subject)]];
+}
 
 /** One agent's row; see the module's head. */
 export function AgentListRow({
@@ -172,6 +192,10 @@ export function AgentListRow({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
+
+  const selectPinned = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
+  const pinned = useQuery({ ...appStateQuery, select: selectPinned }).data === true;
+  const onPin = useAgentPinWrite();
 
   // Note that the developer's machines' asks for the agent count as needing them beside its threads.
   const asked = machineAsksByAgent(useMachineAsks()).get(agent.id) ?? 0;
@@ -251,7 +275,15 @@ export function AgentListRow({
           ? undefined
           : chosen !== undefined
             ? chosenRowMenu(AGENT_THING, chosen, shown)
-            : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), shown, true)
+            : rowMenu(
+                AGENT_THING,
+                [
+                  ...pinGroups(agent, pinned, onPin, actions.subject),
+                  ...agentMenuGroups(rowDoors(actions.doors)),
+                ],
+                shown,
+                true,
+              )
       }
       more={more}
       settled={settled}

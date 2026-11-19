@@ -6,10 +6,14 @@
  * is the window's listed agents narrowed to the workspace's unarchived
  * Managers. It follows the live read, so a Manager made, renamed, archived,
  * or at work anywhere moves here as that read hears it, with no read of its
- * own to ask again.
+ * own to ask again. The ones the reader pinned stand under Pinned too
+ * (`pinnedManagersOf`), in the order the pins stand, as the same read
+ * carries the reader's pins.
  */
 
 import { AGENT_KIND, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
+import { inPinOrder } from "@repo/features/pin-order";
+import type { TaskAgentPin } from "@repo/features/task-wire";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { type AgentsControl, readAgentById } from "./use-agents.js";
@@ -39,6 +43,26 @@ function managersOf(listed: readonly ListedAgent[], workspaceId: string): readon
         agent.archivedAt === undefined,
     )
     .toSorted(newestFirst);
+}
+
+/**
+ * The Managers of `managers` the reader pinned, by `pins`, the reader's pins
+ * of agents, in the order Pinned stands its pins: those dragged to a place
+ * by it, then the rest newest pinned first (`pin-order.ts`).
+ */
+export function pinnedManagersOf(
+  managers: readonly AgentSummary[],
+  pins: readonly TaskAgentPin[],
+): readonly AgentSummary[] {
+  const byId = new Map(managers.map((agent) => [agent.id, agent]));
+
+  const pinned = pins.flatMap((pin) => {
+    const agent = pin.taskId === null ? byId.get(pin.agentId) : undefined;
+
+    return agent === undefined ? [] : [{ agent, at: pin.pinnedAt, position: pin.pinPosition }];
+  });
+
+  return inPinOrder(pinned, (each) => each).map((each) => each.agent);
 }
 
 /**
