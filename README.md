@@ -42,8 +42,8 @@ Download the [Mac app](https://github.com/ReviewStage/vespin/releases/latest)
 (Apple silicon, macOS 14 or newer) or open [vespin.dev/app](https://vespin.dev/app).
 Sign in, then connect GitHub in Settings › Workspace.
 
-To run agents on a Linux server or another Mac of yours, run this on it as the
-user who should run them, then approve the code it prints
+To run agents on a Linux server or another Apple silicon Mac of yours, run
+this on it as the user who should run them, then approve the code it prints
 ([Machines](https://vespin.dev/docs/machines)):
 
 ```sh
