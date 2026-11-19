@@ -1636,6 +1636,68 @@ function relationSwipes(
   ];
 }
 
+/**
+ * A task related to the one shown, as a row of its Sub-tasks or Task
+ * relations: its long press leads with Change relation and Remove relation
+ * and then holds the task's own menu, as its Tasks row does (`rowActs`), as
+ * the panel's related row leads its task's menu with them
+ * (`overview-relations.tsx`); its swipe settles it where it is a sub-task,
+ * then changes or removes the relation. A task the list does not hold yet
+ * offers its relation's acts alone.
+ */
+function RelatedTaskRow({
+  overview,
+  id,
+  kind,
+  listing,
+}: {
+  readonly overview: TaskOverview;
+  readonly id: string;
+  readonly kind: TaskRelationKind;
+  readonly listing: TasksListing;
+}) {
+  const openRelation = useOpenRelation();
+  const asker = useRowAsker();
+  const { task, tasks, relations } = overview;
+  const other = tasks.find((each) => each.id === id);
+  const relation = relationSwipes(task.id, id, kind, relations);
+  const sub = kind === TASK_RELATION_KIND.SUB_TASK;
+
+  const acts =
+    other === undefined
+      ? undefined
+      : rowActs(other, listing.lookOf(other).unread, listing, listing.rowAsks(asker), openRelation);
+
+  return (
+    <RelationRow
+      id={id}
+      name={other?.name ?? WORDS.UNLISTED_TASK}
+      status={other?.status}
+      faded={other !== undefined && taskFinished(other)}
+      statusMenu={other === undefined ? undefined : statusSubmenu(other, overview.setStatus)}
+      relation={sub ? undefined : TASK_RELATION_WORDS[kind]}
+      relationMark={
+        sub
+          ? undefined
+          : {
+              glyph: RELATION_KIND_SYMBOL[kind],
+              // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
+              attention:
+                kind === TASK_RELATION_KIND.BLOCKED_BY &&
+                (other === undefined || !taskFinished(other)),
+            }
+      }
+      // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
+      trailingActions={[
+        ...(sub && other !== undefined ? settleSwipes(other, overview.setStatus) : []),
+        ...relation,
+      ]}
+      menu={[relation, ...(acts?.menu ?? [])]}
+      question={acts?.question}
+    />
+  );
+}
+
 /** The page's own words for its sections' adds. */
 const RELATION_WORDS = {
   ADD_SUB_TASK: "Add sub-task",
@@ -1655,14 +1717,16 @@ function subTasksFinishedWords(finished: number, total: number): string {
  * opens the Task relation sheet on Add sub-task; and, only while it holds a
  * row, its parent and the tasks it waits on and holds up, each saying how it
  * stands, its header's + offering the four kinds, which ⋯'s Task relation
- * offers too while it holds none. Each related row's swipe and long press
- * change its kind or take it away (`relationSwipes`).
+ * offers too while it holds none. Each related row's swipe changes its
+ * kind or takes it away (`relationSwipes`), and its long press leads with
+ * them before its task's own menu (`RelatedTaskRow`).
  */
 function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
-  const { task, document, tasks, relations } = overview;
-  const byId = new Map(tasks.map((each) => [each.id, each]));
+  const { task, document, tasks } = overview;
+  // Note that a related row's menu holds its task's own, as its Tasks row does, so the rows act through the list's own doors; each question one raises stands by its row.
+  const { listing } = useListingAsks(useTasksListing(""), useTaskRowDoors(task.workspaceId));
   const subTasks = subTasksOf(tasks, task.id);
   const finished = subTaskCount(task, subTasks);
 
@@ -1704,18 +1768,12 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
         }}
       >
         {subTasks.map((sub) => (
-          <RelationRow
+          <RelatedTaskRow
             key={sub.id}
+            overview={overview}
             id={sub.id}
-            name={sub.name}
-            status={sub.status}
-            faded={taskFinished(sub)}
-            statusMenu={statusSubmenu(sub, overview.setStatus)}
-            // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
-            trailingActions={[
-              ...settleSwipes(sub, overview.setStatus),
-              ...relationSwipes(task.id, sub.id, TASK_RELATION_KIND.SUB_TASK, relations),
-            ]}
+            kind={TASK_RELATION_KIND.SUB_TASK}
+            listing={listing}
           />
         ))}
       </ListSection>
@@ -1736,31 +1794,9 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
           }}
         >
           {sides.map(({ kind, ids }) =>
-            ids.map((id) => {
-              const other = byId.get(id);
-
-              return (
-                <RelationRow
-                  key={id}
-                  id={id}
-                  name={other?.name ?? WORDS.UNLISTED_TASK}
-                  status={other?.status}
-                  faded={other !== undefined && taskFinished(other)}
-                  statusMenu={
-                    other === undefined ? undefined : statusSubmenu(other, overview.setStatus)
-                  }
-                  relation={TASK_RELATION_WORDS[kind]}
-                  relationMark={{
-                    glyph: RELATION_KIND_SYMBOL[kind],
-                    // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
-                    attention:
-                      kind === TASK_RELATION_KIND.BLOCKED_BY &&
-                      (other === undefined || !taskFinished(other)),
-                  }}
-                  trailingActions={relationSwipes(task.id, id, kind, relations)}
-                />
-              );
-            }),
+            ids.map((id) => (
+              <RelatedTaskRow key={id} overview={overview} id={id} kind={kind} listing={listing} />
+            )),
           )}
         </ListSection>
       )}
