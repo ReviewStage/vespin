@@ -35,7 +35,7 @@ const SEND_TO_USER_REFUSAL = {
 const SEND_TO_USER_INPUT = Schema.Struct({
   text: describeWire(
     Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(SEND_TO_USER_CHARS)),
-    "The message, in Markdown, as people will read it in your chat: short, with mention links for what they can open.",
+    "One message, in Markdown, as people will read it in your chat: a line or two making one point, with mention links for what they can open.",
   ),
 });
 
@@ -49,8 +49,10 @@ export const SEND_TO_USER_TOOL = {
     "messages and these alone, never your other text or tool calls. Everyone who can open you sees " +
     "the same chat, so write to all of them, and each of them sees your row marked unread until they " +
     "open it. Call it to answer someone, to report what is done, or " +
-    "to say what you are waiting on; a turn that sends nothing shows nothing. For a decision with " +
-    "options or a to-do, post a thread instead.",
+    "to say what you are waiting on; a turn that sends nothing shows nothing. Write as a coworker " +
+    "would on Slack: several short messages rather than one long one, one point to each, concise " +
+    "and straight to the point, with no greeting, filler, or recap, and no headers or long lists " +
+    "unless what you say needs them. For a decision with options or a to-do, post a thread instead.",
   inputSchema: SEND_TO_USER_INPUT,
 } as const;
 
