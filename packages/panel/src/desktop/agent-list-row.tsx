@@ -74,7 +74,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
- * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen
+ * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, unless its list
+ * chooses none (`choosable`), as the sidebar's Managers do, and a row chosen
  * among several offers its list's acts on every one chosen instead, under
  * how many (`agents-selection.tsx`). An archived agent's row stands settled,
  * its name in the muted ink, as a done task's does, and its menu offers
@@ -111,6 +112,7 @@ export function AgentListRow({
   settled = false,
   current = false,
   runsOn = true,
+  choosable = true,
   depth,
   nest,
   fold,
@@ -144,6 +146,8 @@ export function AgentListRow({
   current?: boolean | undefined;
   /** Whether it says where it runs, Cloud or the device, as every list but the sidebar's Managers does; its failed mark stands either way. */
   runsOn?: boolean | undefined;
+  /** Whether its list may choose it among several, by the box in its gutter, ⌘-click, ⇧-click, and ⌘A, as every list of agents but the sidebar's Managers does. */
+  choosable?: boolean | undefined;
   /** How deep it stands nested under the agent that started it: at the top unless said. */
   depth?: number | undefined;
   /** Where it stands among the agents nested beside it, in a list that nests them; none in one that nests none. */
@@ -249,6 +253,7 @@ export function AgentListRow({
       }
       more={more}
       settled={settled}
+      choosable={choosable}
       current={current}
       hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
       onOpen={onPress}
