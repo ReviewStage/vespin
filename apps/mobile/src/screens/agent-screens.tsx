@@ -460,8 +460,8 @@ function AgentComposerArea({
 
 /**
  * What the composer's + opens, as the desktop composer's + does: Photos,
- * then MCP servers ›, each server the agent is handed, checked while it is
- * on, a press switching it, once they are read and where any is connected.
+ * then MCP servers ›, each server the agent is handed led by its
+ * provider's mark, checked while it is on, a press switching it, once they are read and where any is connected.
  * The model, its effort, Fast and the permission mode stand once, in the
  * model chip's sheet at the row's end, as the desktop's model chip holds
  * them.
@@ -478,7 +478,7 @@ function agentAddMenu(composer: AgentComposer, servers: AgentServers): ComposerM
               symbol: GLYPH.MCP_SERVER,
               choices: servers.servers.map((server) => ({
                 label: server.name,
-                symbol: GLYPH.MCP_SERVER,
+                mark: server.provider,
                 on: server.on,
                 onPress: () => servers.toggle(server.connection, !server.on),
               })),
