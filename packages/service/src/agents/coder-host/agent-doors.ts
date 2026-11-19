@@ -13,6 +13,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type Agent,
+  agentTaskId,
   hasRepository,
   readAgentHeaderOfConversation,
   readAgentOfConversation,
@@ -340,11 +341,11 @@ export function runAgentShowPage(
     const found = yield* agentHeaderOfConversation(admitted);
 
     if (Result.isFailure(found)) return showPageRejected(found.failure);
-    const { id: agentId, taskId } = found.success;
+    const { id: agentId } = found.success;
 
     const binding = {
       userId: admitted.target.userId,
-      taskId,
+      taskId: agentTaskId(found.success),
       sandbox,
     };
 

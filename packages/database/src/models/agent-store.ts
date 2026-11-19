@@ -174,7 +174,8 @@ export interface Agent {
   readonly id: string;
   /** The account that started the agent, whose conversation it runs in and whose provider key pays for it. */
   readonly userId: string;
-  readonly taskId: string;
+  /** The task the agent works on; null for an agent on none, which nothing starts yet. */
+  readonly taskId: string | null;
   /** The workspace the agent belongs to. */
   readonly organizationId: string;
   /** The automation whose run started the agent; null for one started by hand or once that automation is deleted. */
@@ -224,6 +225,17 @@ export interface Agent {
   readonly deviceId?: string | null;
   /** How its tool calls are answered, which each launch reads; full access where unsaid. */
   readonly permissionMode?: AgentPermissionMode;
+}
+
+/**
+ * The task the agent works on, for a path that needs one. Note that we
+ * assert rather than answer none, because nothing starts an agent on no task
+ * yet, so one reaching a path that needs a task is a defect.
+ */
+export function agentTaskId(agent: Pick<Agent, "id" | "taskId">): string {
+  if (agent.taskId === null) throw new Error(`agent ${agent.id} works on no task`);
+
+  return agent.taskId;
 }
 
 /**
@@ -504,7 +516,7 @@ const AuthorColumnSchema = Schema.Literals(Object.values(AGENT_AUTHOR));
 const AgentRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
-  taskId: Schema.String,
+  taskId: Schema.NullOr(Schema.String),
   organizationId: Schema.String,
   automationId: Schema.NullOr(Schema.String),
   automationOrigin: AutomationOriginColumnSchema,
@@ -1599,7 +1611,7 @@ function agentNamed(query: string): SQL | undefined {
 /** The agent a list is read around: the one asking, by its id, its task, and the agent that started it. */
 const AgentAroundSchema = Schema.Struct({
   agentId: Schema.String,
-  taskId: Schema.String,
+  taskId: Schema.NullOr(Schema.String),
   startedByAgentId: Schema.NullOr(Schema.String),
 });
 
@@ -1706,7 +1718,7 @@ function workspaceListOrder(request: typeof AgentsOfWorkspaceSchema.Type): SQL[]
   const { around } = request;
 
   if (around === null) return [desc(agentTable.createdAt), desc(agentTable.id)];
-  const onTask = eq(agentTable.taskId, around.taskId);
+  const onTask = around.taskId === null ? sql`false` : eq(agentTable.taskId, around.taskId);
   const nearness = sql`case when ${ownOfAgent(around)} then 0 when ${onTask} then 1 else 2 end`;
 
   return [nearness, desc(agentTable.createdAt), desc(agentTable.id)];
@@ -2250,7 +2262,7 @@ const AgentHeaderRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
   organizationId: Schema.String,
-  taskId: Schema.String,
+  taskId: Schema.NullOr(Schema.String),
   repository: Schema.NullOr(Schema.String),
   title: Schema.NullOr(Schema.String),
   archivedAt: Schema.NullOr(InstantColumnSchema),

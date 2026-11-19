@@ -8,6 +8,7 @@ import {
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
 import {
+  agentTaskId,
   archiveAgent,
   createAgent,
   fillAgentTitle,
@@ -450,7 +451,7 @@ async function claimed(
     id: started.value.agent.id,
     name: started.value.agent.title ?? AGENT_CHOICE_NAME,
     sessionId: session,
-    taskId: started.value.agent.taskId,
+    taskId: agentTaskId(started.value.agent),
   };
 }
 

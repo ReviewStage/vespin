@@ -3,6 +3,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { RUNNER_LOST_DETAIL, settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import {
   type Agent,
+  agentTaskId,
   readAgentOfConversation,
   readAgentRouting,
   recordAgentCompaction,
@@ -1160,7 +1161,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 
   // Note that a conversation cleared, or a bearer retired, since the bearer was read takes nothing more.
   if (Option.isNone(applied)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-  const { taskId } = agent.value;
+  const taskId = agentTaskId(agent.value);
   const { runtimeSessionId } = admitted.value;
 
   for (const failed of applied.value.failed) {

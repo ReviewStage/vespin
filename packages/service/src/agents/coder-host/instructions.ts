@@ -1,5 +1,5 @@
 import { SHARED_FILES_DIRECTORY } from "@repo/agent-runner/pins";
-import { type Agent, agentBriefOf } from "@repo/database/models/agent-store";
+import { type Agent, agentBriefOf, agentTaskId } from "@repo/database/models/agent-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -433,12 +433,14 @@ export interface AgentInstructionsContext {
  * alike.
  */
 export function agentCoderInstructions(agent: Agent, context: AgentInstructionsContext): string {
+  const taskId = agentTaskId(agent);
+
   const ownTask = {
-    id: agent.taskId,
+    id: taskId,
     link: linkOf(
       {
         kind: LINK_DESTINATION.TASK,
-        taskId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
+        taskId: taskLinkStep({ id: taskId, number: context.taskNumber }),
       },
       context.workspace,
     ),

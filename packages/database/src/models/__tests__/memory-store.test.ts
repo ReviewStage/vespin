@@ -195,7 +195,7 @@ it.layer(getTestDB())("the workspace's memory store", (it) => {
           .from(agentTable)
           .where(eq(agentTable.id, agentId));
 
-        assert.ok(agent !== undefined);
+        assert.ok(agent !== undefined && agent.taskId !== null);
         const line = randomUUID();
 
         const agents = keptId(

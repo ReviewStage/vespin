@@ -102,7 +102,7 @@ export const NO_EXPERIMENT_ON: ExperimentsOn = {
 export interface ExperimentsOf {
   readonly organizationId: string;
   readonly userId: string;
-  readonly taskId: string;
+  readonly taskId: string | null;
   readonly conversationId: string;
 }
 
@@ -116,6 +116,8 @@ export interface ExperimentsOf {
  */
 function inboxKeeperOf(agent: ExperimentsOf) {
   return Effect.gen(function* () {
+    // Note that an agent on no task has no assignee, so its starter keeps its threads.
+    if (agent.taskId === null) return agent.userId;
     const header = yield* readTaskHeader(agent.userId, agent.taskId);
     const assignee = Option.getOrUndefined(header)?.assigneeId ?? null;
 

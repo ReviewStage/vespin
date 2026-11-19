@@ -3,6 +3,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
+  agentTaskId,
   listPublishedAgentsById,
   readAgentByKey,
   readAgentContext,
@@ -262,8 +263,8 @@ function takeoverKindOf(from: StartFrom): Takeover {
 }
 
 /** The place an agent stands in, which a Start from it puts the new agent in: its task. */
-export function placeOfAgent(agent: Pick<Agent, "taskId">): StartWhere {
-  return { taskId: agent.taskId };
+export function placeOfAgent(agent: Pick<Agent, "id" | "taskId">): StartWhere {
+  return { taskId: agentTaskId(agent) };
 }
 
 type InheritedPlace = {

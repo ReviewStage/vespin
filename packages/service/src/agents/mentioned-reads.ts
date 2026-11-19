@@ -68,15 +68,16 @@ const readAgents = (userId: string, workspaceId: string, named: readonly string[
 
     const tasks = yield* taskNamesOf(
       userId,
-      standing.map(({ agent }) => agent.taskId),
+      standing.flatMap(({ agent }) => (agent.taskId === null ? [] : [agent.taskId])),
     );
 
     for (const { agent, published } of standing) {
-      const task = tasks.get(agent.taskId);
+      const { taskId } = agent;
+      const task = taskId === null ? undefined : tasks.get(taskId);
       found.set(agent.id, {
         id: agent.id,
         name: agentName(agent),
-        task: task === undefined ? null : { id: agent.taskId, name: task.name },
+        task: taskId === null || task === undefined ? null : { id: taskId, name: task.name },
         repository: agent.repository,
         branch: agent.branch,
         pullRequest: published === null ? null : { number: published.number, url: published.url },

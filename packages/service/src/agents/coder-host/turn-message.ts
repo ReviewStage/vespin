@@ -15,6 +15,7 @@ import { accountExperimentOn } from "@repo/database/models/account-store";
 import { readAccountTimeZone } from "@repo/database/models/account-time-zone";
 import {
   type Agent,
+  agentTaskId,
   readNativeHanded,
   recordNativeHanded,
 } from "@repo/database/models/agent-store";
@@ -128,7 +129,7 @@ const taskOf = (
   now: number,
 ) =>
   Effect.gen(function* () {
-    const { taskId } = agent;
+    const taskId = agentTaskId(agent);
 
     const descriptionsSince = yield* experimentOnSinceIn(
       agent.organizationId,
