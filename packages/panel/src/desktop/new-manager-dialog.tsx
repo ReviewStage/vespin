@@ -12,10 +12,12 @@
  * asks no charter: the Manager introduces itself on its first turn. Create
  * makes it in the sidebar's workspace (`AGENTS_CREATE_MANAGER`), reads the
  * Managers list again, and opens the new Manager's page; a refusal stands
- * in the card saying why, with what was picked kept for another try under
- * the same key. After that only its model and effort change, from its own
- * box. Where the member's last pick is a device, Create waits on the read
- * of the member's devices, since a Create before it would name none.
+ * in the card saying why, with what was picked kept for another try, under
+ * the same key until a field changes, when the request takes a new one.
+ * After that only its model and effort change, from its own box. Where the
+ * member's last pick is a device, Create waits on a read of the member's
+ * devices made since the card opened (`useDevicesRead`), as New task's
+ * Start does, since a Create before it would name none.
  */
 
 import { startFailureWords } from "@repo/features/agent-refusal-words";
@@ -48,8 +50,12 @@ import { confirmFailure, unreadShown } from "../failure-report.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { CHIP_PLACE, RepositoriesChip } from "../tasks/repository-chip.js";
 import { useRepositoryDefault } from "../tasks/repository-default.js";
-import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "../tasks/runs-on.js";
-import { MODELS_READ } from "../tasks/use-agents.js";
+import {
+  NewTaskRunsOnChip,
+  newTaskRunsOn,
+  useDevicesRead,
+  useNewTaskRunsOn,
+} from "../tasks/runs-on.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { workspaceManagersQueryKey } from "../tasks/workspace-managers.js";
 import { useFormDialog } from "./use-form-dialog.js";
@@ -110,14 +116,16 @@ export function useNewManagerDialog({
     picks ?? (repositoryDefault.repository === null ? [] : [repositoryDefault.repository]);
 
   const field = useRef<HTMLInputElement | null>(null);
-  // Note that one key stands for each opening, so a Create sent again after no answer makes one Manager.
+  // Note that one key stands for each request, so a Create sent again unchanged after no answer makes one Manager.
   const key = useRef(crypto.randomUUID());
 
   const drawnDefault = useAgentDefault();
   const choice = picked ?? drawnDefault.choice;
   const devices = newTask.devices ?? NO_DEVICES;
   const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
-  const devicesUnread = keptDevice && newTask.modelsRead.state !== MODELS_READ.READ;
+  // Note that the card stays mounted between openings, so each counts afresh which devices' read it waits on.
+  const [opening, setOpening] = useState(0);
+  const devicesUnread = useDevicesRead(newTask.modelsRead, keptDevice, opening).unread;
 
   const creating = useMutation({
     mutationKey: [ACT_KIND.AGENTS_CREATE_MANAGER, workspaceId],
@@ -172,8 +180,12 @@ export function useNewManagerDialog({
 
   const form = useFormDialog(confirm, valid);
 
-  // Note that a refusal alone holds the card up, so a change asks the question again rather than clearing it.
+  // Note that a change is a new request under a key of its own, so a retry after an edit never answers
+  // the Manager an earlier, unanswered Create made; and that a refusal alone holds the card up, so a
+  // change asks the question again rather than clearing it.
   const changed = () => {
+    key.current = crypto.randomUUID();
+
     if (confirm.rejection !== undefined) confirm.ask();
   };
 
@@ -296,6 +308,7 @@ export function useNewManagerDialog({
   return {
     ask: () => {
       key.current = crypto.randomUUID();
+      setOpening((was) => was + 1);
       setName("");
       setPicks(undefined);
       setPicked(undefined);

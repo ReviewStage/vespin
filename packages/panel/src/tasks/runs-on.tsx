@@ -30,10 +30,12 @@ import {
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { Schema } from "effect";
+import { useState } from "react";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
 import { Picker } from "../settings/picker-row.js";
 import { keptKey, useKept } from "../use-kept.js";
+import { MODELS_READ, type ModelsRead } from "./use-agents.js";
 
 /**
  * runs-on.tsx -- where a coding agent runs: the cloud, or one of the member's own devices, chosen in a start's chip and shown read-only on each agent's row.
@@ -295,6 +297,54 @@ function offerStateWords(device: MacOffer, book: PresenceBook, name: string): st
   const standing = offerStanding(device, book);
 
   return standing === DEVICE_STANDING.ONLINE ? name : `${name} · ${STANDING_WORDS[standing]}`;
+}
+
+/** Whether a start waits on the member's devices: still unread since the card opened, and whether that read failed. */
+interface DevicesRead {
+  readonly unread: boolean;
+  readonly failed: boolean;
+}
+
+/** Where a card stands on the devices' read: the read it opened on, and whether one made since has landed. */
+interface OpenedMark {
+  readonly opening: number;
+  readonly generation: number;
+  readonly landed: boolean;
+}
+
+/**
+ * Whether a start waits on the devices' read, where `held` (the member's
+ * last pick is a device): until a read made since the card opened lands,
+ * since a start before then would name none. Note that a pick of the cloud,
+ * every member's with no device among them, holds nothing, because a start
+ * before the read runs in the cloud as the pick would after it; that a list
+ * read before the card opened does not count, because it may be one read
+ * before a device was added, and a failed read leaves it standing; and that
+ * a read is told by the generation it took, never by its list, which a read
+ * listing the same devices hands back as it was. A card that stays mounted
+ * between openings counts them (`opening`), each opening marking the read
+ * it opens on afresh.
+ */
+export function useDevicesRead(modelsRead: ModelsRead, held: boolean, opening = 0): DevicesRead {
+  const [kept, keep] = useState<OpenedMark>({
+    opening,
+    generation: modelsRead.generation,
+    landed: false,
+  });
+
+  let mark =
+    kept.opening === opening ? kept : { opening, generation: modelsRead.generation, landed: false };
+
+  const readSince = modelsRead.generation > mark.generation;
+
+  if (!mark.landed && readSince && modelsRead.state === MODELS_READ.READ) {
+    mark = { ...mark, landed: true };
+  }
+
+  if (mark !== kept) keep(mark);
+  const unread = held && !mark.landed;
+
+  return { unread, failed: unread && readSince && modelsRead.state === MODELS_READ.FAILED };
 }
 
 /** What a start sends of New task's pick: the device it names, or the cloud. */
