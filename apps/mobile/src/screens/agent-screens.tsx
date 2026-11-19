@@ -415,6 +415,9 @@ function AgentComposerBar({
   return <Composer {...props} />;
 }
 
+/** No pull request's card on screen yet. */
+const NONE_SHOWN: ReadonlySet<string> = new Set();
+
 /**
  * The agent's composer as the page's foot holds it, with the questions its
  * queue and its edits ask first: the one place the words typed live, so a
@@ -753,14 +756,27 @@ function AgentConversation({
     [workspaceId],
   );
 
+  // The pull requests whose cards stand on screen, by their pages, as the transcript tells them.
+  const [cardsShown, setCardsShown] = useState<ReadonlySet<string>>(NONE_SHOWN);
+
+  const showPullRequests = useCallback(
+    (urls: readonly string[]) =>
+      setCardsShown((held) =>
+        urls.length === held.size && urls.every((url) => held.has(url)) ? held : new Set(urls),
+      ),
+    [],
+  );
+
+  // Note that only the open pull requests whose cards stand on screen are read for their Merge, so an agent that opened dozens never reads them all at once as its page opens, each a follow of its own.
   const open = useMemo(
     () =>
       pullRequests.flatMap(({ state, url }) => {
-        const key = state === PULL_REQUEST_STATE.OPEN ? keyOf(url) : undefined;
+        const key =
+          state === PULL_REQUEST_STATE.OPEN && cardsShown.has(url) ? keyOf(url) : undefined;
 
         return key === undefined ? [] : [key];
       }),
-    [pullRequests, keyOf],
+    [pullRequests, keyOf, cardsShown],
   );
 
   const offers = usePullRequestsRead(open);
@@ -1039,6 +1055,7 @@ function AgentConversation({
   const transcriptView = (
     <AgentTranscript
       items={rows}
+      onPullRequestsShown={showPullRequests}
       reveal={reveal}
       head={null}
       empty={{
