@@ -50,17 +50,22 @@ type AgentFound =
   | { readonly reading: true }
   | { readonly failed: true; readonly onRetry: () => void };
 
+/** The agent found on its task; one on no task stands on nothing the page opens yet, so it reads as missing. */
+function onTaskFound(taskId: string | null): AgentFound {
+  return taskId === null ? { missing: true } : { taskId };
+}
+
 /** The agent of `agentId` as the task list carries it, else as its one read by its id answered. */
 function useAgentFound(tasks: TasksControl, agentId: string): AgentFound {
   const listed = tasks.liveAgents?.find((each) => each.id === agentId);
   const read = useQuery({ ...agentPageQueryOptions(agentId), enabled: listed === undefined });
 
-  if (listed !== undefined) return { taskId: listed.taskId };
+  if (listed !== undefined) return onTaskFound(listed.taskId);
 
   if (read.isPending) return { reading: true };
   const answer = read.data;
 
-  if (answer !== undefined && !("failure" in answer)) return { taskId: answer.agent.taskId };
+  if (answer !== undefined && !("failure" in answer)) return onTaskFound(answer.agent.taskId);
 
   if (answer !== undefined && answer.failure === AGENT_CALL_FAILURE.NOT_FOUND) {
     return { missing: true };

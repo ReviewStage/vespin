@@ -539,7 +539,10 @@ function stillWaitingPost(userId: string, itemId: string) {
     if (!waiting) return Option.none<ThreadPushPost>();
     const home = yield* readInboxItemHome(userId, itemId);
 
-    return Option.map(home, ({ taskId }) => ({ item, asked: asks, taskId: taskId }));
+    // Note that an item on no task is not pushed, since a released iPhone opens an alert on its task.
+    return Option.flatMap(home, ({ taskId }) =>
+      taskId === null ? Option.none() : Option.some({ item, asked: asks, taskId }),
+    );
   });
 }
 

@@ -503,9 +503,9 @@ export function taskListCollections(
               (row) =>
                 !agents.holds(row.id) &&
                 !drawnLater(row.id) &&
-                (letGoSince(row.id) || letGoSince(row.taskId)),
+                (letGoSince(row.id) || (row.taskId !== null && letGoSince(row.taskId))),
             )
-            .map((row) => row.taskId),
+            .flatMap((row) => (row.taskId === null ? [] : [row.taskId])),
         ]);
 
         if (tries < RECHECKS) {
@@ -516,7 +516,11 @@ export function taskListCollections(
 
         // Note that an agent stands only where its task's snapshot does, so an earlier read draws back no agent a later one of its task left out.
         const agentRows = rows.agents.filter(
-          (row) => !agents.holds(row.id) && standing(row) && standing({ id: row.taskId }),
+          (row) =>
+            !agents.holds(row.id) &&
+            standing(row) &&
+            row.taskId !== null &&
+            standing({ id: row.taskId }),
         );
 
         if (planRows.length + agentRows.length === 0) return;
@@ -563,10 +567,11 @@ export function taskListCollections(
 
           const answeredOfTask = new Map<string, string[]>();
 
-          for (const row of answeredRows.agents) {
-            const ofTask = answeredOfTask.get(row.taskId) ?? [];
-            ofTask.push(row.id);
-            answeredOfTask.set(row.taskId, ofTask);
+          for (const { id, taskId } of answeredRows.agents) {
+            if (taskId === null) continue;
+            const ofTask = answeredOfTask.get(taskId) ?? [];
+            ofTask.push(id);
+            answeredOfTask.set(taskId, ofTask);
           }
 
           /** The agents of `taskId` the list holds once the answer is taken. */
@@ -596,7 +601,7 @@ export function taskListCollections(
                 );
 
           const leftAgents = new Set([...left].flatMap(agentsOf));
-          const ofStanding = (row: AgentRow) => !left.has(row.taskId);
+          const ofStanding = (row: AgentRow) => row.taskId === null || !left.has(row.taskId);
 
           const rows = {
             plans: answeredRows.tasks.filter((row) => !left.has(row.id)),

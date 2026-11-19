@@ -6,7 +6,6 @@ import {
   type AgentStartedFromIt,
   agentBriefOf,
   agentLineOf,
-  agentTaskId,
 } from "@repo/database/models/agent-store";
 import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
@@ -519,7 +518,7 @@ export function agentSummary(
 
   return {
     id: line.id,
-    taskId: agentTaskId(line),
+    taskId: line.taskId,
     ...summaryFields(line, standing, now, names, continuedBy, macs),
   };
 }
@@ -577,7 +576,7 @@ export function agentPage(
 ): AgentPage {
   return {
     id: agent.id,
-    taskId: agentTaskId(agent),
+    taskId: agent.taskId,
     ...summaryFields(agentLineOf(agent), standing, now, names, continuedBy, macs),
     automationId: agent.automationId,
     ...(agent.automationOrigin === null

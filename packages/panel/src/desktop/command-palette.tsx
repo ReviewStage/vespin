@@ -1197,7 +1197,12 @@ function archivedAgentRows(
         />
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
-      onChoose: () => show(() => tasks.onShowAgent(agent.taskId, agent.id)),
+      onChoose: () =>
+        show(() =>
+          agent.taskId === null
+            ? tasks.agentView.onOpen(agent.id)
+            : tasks.onShowAgent(agent.taskId, agent.id),
+        ),
     };
   });
 }

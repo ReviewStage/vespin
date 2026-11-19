@@ -64,7 +64,7 @@ export const ACCOUNT_INBOX_REPOSITORYLESS = {
 /** One open item as the account's read carries it: where it waits, who posted it, and what it is called. */
 export const accountInboxEntrySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  taskId: wireUuidSchema,
+  taskId: EffectSchema.NullOr(wireUuidSchema),
   agentId: wireUuidSchema,
   /** The agent's title as its row holds it now; null until it has one. */
   agentTitle: EffectSchema.NullOr(EffectSchema.String),

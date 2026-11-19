@@ -1625,6 +1625,7 @@ const AgentsOfWorkspaceSchema = Schema.Struct({
   words: Schema.NullOr(Schema.String),
   includeArchived: Schema.Boolean,
   archivedOnly: Schema.Boolean,
+  onTaskOnly: Schema.Boolean,
   startedBy: Schema.NullOr(Schema.String),
   automation: Schema.NullOr(Schema.Boolean),
   automationId: Schema.NullOr(Schema.String),
@@ -1672,6 +1673,7 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
   return and(
     agentVisibleTo(userId),
     eq(agentTable.organizationId, organizationId),
+    request.onTaskOnly ? isNotNull(agentTable.taskId) : undefined,
     request.startedBy === null ? undefined : eq(agentTable.userId, request.startedBy),
     request.includeArchived ? undefined : isNull(agentTable.archivedAt),
     request.archivedOnly ? isNotNull(agentTable.archivedAt) : undefined,
@@ -2524,6 +2526,8 @@ interface WorkspaceAgentsAsked {
   readonly includeArchived?: boolean;
   /** Only the archived agents; `includeArchived` must ask for them too. */
   readonly archivedOnly?: boolean;
+  /** Only the agents on a task, for a reader that reads none on no task; every agent where unsaid. */
+  readonly onTaskOnly?: boolean;
   /** Only the agents this member started, by their account's id; every member's where unsaid. */
   readonly startedBy?: string;
   /** Only the agents an automation's run started where true, only those started otherwise where false; both where unsaid. */
@@ -2551,6 +2555,7 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
     words: options.words ?? null,
     includeArchived: options.includeArchived ?? false,
     archivedOnly: options.archivedOnly ?? false,
+    onTaskOnly: options.onTaskOnly ?? false,
     startedBy: options.startedBy ?? null,
     automation: options.automation ?? null,
     automationId: options.automationId ?? null,

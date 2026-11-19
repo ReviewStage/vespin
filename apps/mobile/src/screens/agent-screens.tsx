@@ -600,7 +600,7 @@ function AgentConversation({
   const asked = merging === undefined ? undefined : offers(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId ?? undefined);
   const messageLink = useMessageLink(id, shown?.workspaceId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
@@ -694,7 +694,7 @@ function AgentConversation({
     suggested,
   );
 
-  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId);
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId ?? undefined);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
@@ -705,7 +705,7 @@ function AgentConversation({
     UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
-    shown === undefined
+    shown === undefined || shown.taskId === null
       ? undefined
       : agentActivity(
           {
@@ -779,7 +779,7 @@ function AgentConversation({
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
-  const taskId = shown?.taskId;
+  const taskId = shown?.taskId ?? undefined;
 
   // Note that the agent's task opens as a page pushed over it on the stack the reader stands in, as a thread's path opens its task and the panel's crumbs do. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
   const openTask =
@@ -790,7 +790,7 @@ function AgentConversation({
   // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || openOptions !== undefined;
-  const talk = useAgentTalk(id, shown?.taskId);
+  const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
   const messageActs = useMessageActs({
@@ -1115,7 +1115,7 @@ function AgentPage({
   return (
     <PageScreen
       workspaceId={agent?.workspaceId}
-      taskId={agent?.taskId}
+      taskId={agent?.taskId ?? undefined}
       pageId={pageId}
       version={version}
       title={title}

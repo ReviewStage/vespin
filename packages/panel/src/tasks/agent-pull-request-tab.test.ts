@@ -3000,7 +3000,7 @@ test("its reviewers stand compactly, three faces and a count of the rest: where 
 });
 
 test("the stack it stands in sits beside its branches; its menu lists it tip first, and opens each other one in a Pull request tab of the panel by its repository and number, whichever agent opened it", async () => {
-  const entry = (number: number, agent?: { id: string; taskId: string }) => ({
+  const entry = (number: number, agent?: { id: string; taskId: string | null }) => ({
     number,
     title: `Step ${number}`,
     url: `https://github.com/acme/relay/pull/${number}`,

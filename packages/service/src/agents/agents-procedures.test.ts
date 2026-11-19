@@ -11,9 +11,11 @@ import {
   readRunActions,
   setRunActions,
 } from "@repo/database/models/workspace-sandbox-script-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
+import { CLIENT_HEADER, CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import {
   SANDBOX_STATE,
@@ -24,6 +26,7 @@ import { RUN_ACTION_AVAILABILITY } from "@repo/features/workspace-sandbox-setup-
 import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { noNetwork } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
 import { Clock, type Context, Effect, Layer, Option, Result } from "effect";
 import { SqlClient } from "effect/sql";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
@@ -640,6 +643,55 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
           yield* call.bytes(resumeOf(agent.id), "Bearer owner"),
           refused(405, HOSTED_API_ERROR.METHOD_NOT_ALLOWED),
         );
+      }),
+  );
+});
+
+it.layer(SUITE)("an agent on no task", (it) => {
+  it.effect(
+    "is answered, its task null, to a build that reads one, and is left out of the workspace's list and not found by its id for a build before it",
+    () =>
+      Effect.gen(function* () {
+        const { userId, agent } = yield* openAgent;
+        yield* Effect.flatMap(Database, (db) =>
+          db.update(agentTable).set({ taskId: null }).where(eq(agentTable.id, agent.id)),
+        );
+
+        const call = yield* standing(
+          new Map([["Bearer owner", userId]]),
+          scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
+        );
+
+        const desktop = clientHeaders({ platform: CLIENT_PLATFORM.DESKTOP, version: "1.0.0" });
+        // A build from before an agent on no task, which would refuse a whole answer over one null task.
+        const older = { ...desktop, [CLIENT_HEADER.API_VERSION]: "5" };
+
+        const seenBy = (headers: Record<string, string>) =>
+          Effect.gen(function* () {
+            const listed = yield* call.bytes(
+              `/api/agents?workspaceId=${agent.organizationId}`,
+              "Bearer owner",
+              { headers },
+            );
+
+            const read = yield* call.bytes(agentOf(agent.id), "Bearer owner", { headers });
+
+            // SAFETY: the router answers JSON; the test reads the agents' ids and tasks it compares.
+            const { agents } = JSON.parse(listed.text) as {
+              agents: readonly { id: string; taskId: string | null }[];
+            };
+
+            return {
+              listed: agents.map(({ id, taskId }) => ({ id, taskId })),
+              read: read.status,
+            };
+          });
+
+        assert.deepEqual(yield* seenBy(desktop), {
+          listed: [{ id: agent.id, taskId: null }],
+          read: 200,
+        });
+        assert.deepEqual(yield* seenBy(older), { listed: [], read: 404 });
       }),
   );
 });

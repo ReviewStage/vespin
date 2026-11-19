@@ -3832,7 +3832,7 @@ function AgentTabView({
                                 readerId={readerId}
                                 agentId={agent.id}
                                 payerSubscriptionId={transcript.payerSubscriptionId}
-                                taskId={agent.taskId}
+                                taskId={agent.taskId ?? undefined}
                                 replay={replay}
                                 delegation={{
                                   models,
@@ -3923,12 +3923,15 @@ function AgentTabView({
           doors={doors}
         />
         <ThreadsDock threads={threads} />
-        <FollowOfferDock
-          taskId={agent.taskId}
-          messages={kept}
-          pending={pendingWords}
-          readerId={readerId}
-        />
+        {/* Note that a follow-up is offered on a task, so an agent on none is offered none. */}
+        {agent.taskId === null ? null : (
+          <FollowOfferDock
+            taskId={agent.taskId}
+            messages={kept}
+            pending={pendingWords}
+            readerId={readerId}
+          />
+        )}
         {/* Note that a harness that keeps no goal draws no goal row, whatever its words say. */}
         {goalReach === GOAL_REACH.NONE ? null : (
           <GoalDock
@@ -3995,7 +3998,7 @@ function AgentTabView({
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
                     {...box}
-                    talksIn={agent.taskId}
+                    talksIn={agent.taskId ?? undefined}
                     composer={composer}
                     usage={transcript.usage}
                     payer={transcript.payer}
@@ -4583,7 +4586,7 @@ export function AgentSubagentTab({
                 ended={
                   transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)
                 }
-                failureAbout={{ agentId, taskId: owner?.taskId, callId }}
+                failureAbout={{ agentId, taskId: owner?.taskId ?? undefined, callId }}
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}

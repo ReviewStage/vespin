@@ -18,5 +18,6 @@ export type AgentRow = TaskListLiveRows["agents"][number];
 /** An agent whose starting grace has ended, by its id, with its plan's, as the list holds it beside the agents' rows. */
 export interface PastGrace {
   readonly agentId: string;
-  readonly taskId: string;
+  /** Its plan's; null for an agent on no task. */
+  readonly taskId: string | null;
 }

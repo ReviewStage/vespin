@@ -256,8 +256,8 @@ export interface AgentNotices {
 
 /** What the ledger keeps of one agent: enough to tell one turn's end from the next's. */
 interface HeldAgent {
-  /** The task it works on. */
-  taskId: string;
+  /** The task it works on; null for an agent on no task. */
+  taskId: string | null;
   status: AgentStatus;
   /** Why the turn the status is read from failed, where it did. */
   failure: AgentFailure | undefined;
@@ -310,6 +310,11 @@ function waitingTasks(items: readonly AccountInboxEntry[]): AppInboxSlice["waiti
   const tasks = new Map<string, AppInboxWaitingItem[]>();
 
   for (const item of items) {
+    const { taskId } = item;
+
+    // Note that an item on no task waits under no task, so the counts by task leave it out.
+    if (taskId === null) continue;
+
     const waiting = {
       id: item.id,
       agentId: item.agentId,
@@ -319,9 +324,9 @@ function waitingTasks(items: readonly AccountInboxEntry[]): AppInboxSlice["waiti
       ...reminderOf(item),
     };
 
-    const held = tasks.get(item.taskId);
+    const held = tasks.get(taskId);
 
-    if (held === undefined) tasks.set(item.taskId, [waiting]);
+    if (held === undefined) tasks.set(taskId, [waiting]);
     else held.push(waiting);
   }
 
@@ -494,7 +499,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       const accountId = dependencies.accountId();
 
       if (accountId !== undefined && agent.startedBy === accountId) {
-        const taskName = dependencies.taskName(agent.taskId);
+        const taskName = agent.taskId === null ? undefined : dependencies.taskName(agent.taskId);
         heard(
           { kind: NOTICE_KIND.AGENT_FINISHED, agentId },
           {
@@ -509,7 +514,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
                   : "Your agent failed.",
             place: {
               kind: LINK_DESTINATION.AGENT,
-              taskId: agent.taskId,
+              ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
               agentId,
             },
           },
@@ -619,9 +624,16 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         if (item.asking !== true) continue;
         now.set(item.id, {
           kind: NOTICE_KIND.ITEM_ASKED,
-          title: dependencies.taskName(item.taskId) ?? item.agentTitle ?? UNNAMED_AGENT,
+          title:
+            (item.taskId === null ? undefined : dependencies.taskName(item.taskId)) ??
+            item.agentTitle ??
+            UNNAMED_AGENT,
           body: item.title,
-          place: { kind: LINK_DESTINATION.INBOX_ITEM, taskId: item.taskId, itemId: item.id },
+          place: {
+            kind: LINK_DESTINATION.INBOX_ITEM,
+            ...(item.taskId === null ? undefined : { taskId: item.taskId }),
+            itemId: item.id,
+          },
         });
       }
 
@@ -788,7 +800,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         // does takes its dot with it, and one it never named is let go as `pushedUnnamed` says.
         const named = new Set(agents.map((agent) => agent.id));
         forget((agent, agentId) => {
-          if (!followedTasks.has(agent.taskId)) return false;
+          if (agent.taskId === null || !followedTasks.has(agent.taskId)) return false;
 
           if (named.has(agentId)) return true;
 
@@ -824,7 +836,12 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         for (const [agentId] of unnamedPushes) {
           const agent = ledger.get(agentId);
 
-          if (agent === undefined || !followedTasks.has(agent.taskId) || !pushedUnnamed(agentId)) {
+          if (
+            agent === undefined ||
+            agent.taskId === null ||
+            !followedTasks.has(agent.taskId) ||
+            !pushedUnnamed(agentId)
+          ) {
             gone.push(agentId);
           }
         }

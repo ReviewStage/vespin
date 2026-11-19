@@ -332,7 +332,7 @@ export interface AgentsDependencies extends AccountGateDependencies {
 function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
   return [
     ...new Set([
-      ...answer.items.map((item) => item.taskId),
+      ...answer.items.flatMap((item) => (item.taskId === null ? [] : [item.taskId])),
       ...answer.tasks.map((task) => task.taskId),
     ]),
   ];

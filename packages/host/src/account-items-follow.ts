@@ -86,7 +86,8 @@ const KEPT_INBOX_BOUND = {
 /** One item as the follow last took it, and the plan it is on. */
 interface HeldItem {
   readonly item: InboxItem;
-  readonly taskId: string;
+  /** The item's task; null for one on no task. */
+  readonly taskId: string | null;
 }
 
 /** Every item held, by its id. */
@@ -171,7 +172,7 @@ function withinWindow(held: Map<string, HeldItem>, now: number): void {
  */
 const keptInboxSchema = Schema.Struct({
   at: Schema.optionalKey(Schema.String),
-  plans: Schema.Record(Schema.String, Schema.String),
+  plans: Schema.Record(Schema.String, Schema.NullOr(Schema.String)),
 });
 
 type KeptInbox = typeof keptInboxSchema.Type;
@@ -218,14 +219,15 @@ function inboxItemsPatched(
   const touched = new Set<string>();
 
   for (const id of moved) {
-    for (const on of [was.get(id), held.get(id)]) if (on !== undefined) touched.add(on.taskId);
+    for (const on of [was.get(id), held.get(id)])
+      if (on !== undefined && on.taskId !== null) touched.add(on.taskId);
   }
 
   if (touched.size === 0) return told;
   const lists = new Map<string, InboxItem[]>();
 
   for (const [id, { item, taskId }] of held) {
-    if (!touched.has(taskId)) continue;
+    if (taskId === null || !touched.has(taskId)) continue;
     const items = lists.get(taskId);
     const shown = drawnOf(id) ?? item;
 
