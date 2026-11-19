@@ -68,6 +68,7 @@ export const PRODUCT_EVENT = {
   PAGE_SHOWN: "page:shown",
   /** A picture an agent showed, drawn on the iOS app, counted once a read by how long it took from the page asking for it to its file in hand, on a rung of `productOpenMilliseconds`, whether it came from the phone's own copy or was read through the service, its kind, and its size on a rung. */
   PICTURE_SHOWN: "picture:shown",
+  STANDING_DRAWN: "standing:drawn",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -96,6 +97,7 @@ export const PRODUCT_SURFACE_EVENT = {
   LAUNCH_LOAD: PRODUCT_EVENT.LAUNCH_LOAD,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
   PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
+  STANDING_DRAWN: PRODUCT_EVENT.STANDING_DRAWN,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -135,6 +137,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   LAUNCH_SECONDS: "launch_seconds",
   DRAWN_MS: "drawn_ms",
   REPLY_KIND: "reply_kind",
+  STANDING_FIELD: "standing_field",
   STANDING_SECONDS: "standing_seconds",
   EVALUATED_SECONDS: "evaluated_seconds",
   ACCOUNT_SECONDS: "account_seconds",
@@ -820,6 +823,16 @@ export function productPictureBytes(bytes: number): ProductPictureBytes {
   );
 }
 
+/** Which of a task's standing chips a press changed: its status, its priority, or who it is assigned to; never the value it took. */
+export const PRODUCT_STANDING_FIELD = {
+  STATUS: "status",
+  PRIORITY: "priority",
+  ASSIGNEE: "assignee",
+} as const;
+
+export type ProductStandingField =
+  (typeof PRODUCT_STANDING_FIELD)[keyof typeof PRODUCT_STANDING_FIELD];
+
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
@@ -843,6 +856,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: ProductDrawnMilliseconds;
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: ProductReplyKind;
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: ProductStandingField;
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS]: ProductLaunchSeconds;
@@ -933,6 +947,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: Object.values(PRODUCT_STANDING_FIELD),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
   [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: Object.values(PRODUCT_LAUNCHED_IN),
@@ -1029,6 +1044,10 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.READ_MS,
     PRODUCT_EVENT_PROPERTY.PICTURE_FROM,
     PRODUCT_EVENT_PROPERTY.PICTURE_KIND,
+  ],
+  [PRODUCT_EVENT.STANDING_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.DRAWN_MS,
+    PRODUCT_EVENT_PROPERTY.STANDING_FIELD,
   ],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 

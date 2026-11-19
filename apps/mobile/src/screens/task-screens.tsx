@@ -1,7 +1,7 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
 import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
-import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
@@ -222,6 +222,7 @@ import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useTabDrawnCount } from "../tab-drawn.js";
 
 import { useOnOwnTab } from "../tab-route.js";
+import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
 import {
   threadComments,
   threadOpen,
@@ -1781,11 +1782,26 @@ function standingMenus(
   const { task } = overview;
 
   return {
-    status: { label: WORDS.STATUS, choices: statusSubmenu(task, overview.setStatus).choices },
-    priority: { label: WORDS.PRIORITY, choices: priorityChoices(task, overview.setPriority) },
+    status: {
+      label: WORDS.STATUS,
+      choices: statusSubmenu(task, (taskId, status) => {
+        standingPressed(taskId, PRODUCT_STANDING_FIELD.STATUS, status);
+        overview.setStatus(taskId, status);
+      }).choices,
+    },
+    priority: {
+      label: WORDS.PRIORITY,
+      choices: priorityChoices(task, (taskId, priority) => {
+        standingPressed(taskId, PRODUCT_STANDING_FIELD.PRIORITY, priority);
+        overview.setPriority(taskId, priority);
+      }),
+    },
     assignee: {
       label: WORDS.ASSIGNEE,
-      choices: assigneeChoices(task, members, photoOf, overview.setAssignee),
+      choices: assigneeChoices(task, members, photoOf, (taskId, assignee) => {
+        standingPressed(taskId, PRODUCT_STANDING_FIELD.ASSIGNEE, assignee?.userId ?? null);
+        overview.setAssignee(taskId, assignee);
+      }),
     },
   };
 }
@@ -1836,6 +1852,7 @@ function assigneeChoices(
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const now = useMinute();
   const { task } = overview;
+  useStandingDrawnCount(task);
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
   const members = useListedMembers(task.workspaceId);
