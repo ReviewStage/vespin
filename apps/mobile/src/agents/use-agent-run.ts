@@ -108,11 +108,13 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const { data: shellsRead, refetch: refetchShells } = useQuery({
     queryKey: shellsKey,
     enabled: offered,
-    // Note that a read that failed or was refused is tried again on the same beat until one answers, since nothing is offered to press until then.
+    // Note that a read that failed or was refused is tried again on the same beat until one answers, the last one kept meanwhile included, since an idle answer a failed read left standing may be a run that started since.
     refetchInterval: (query) => {
       const read = shellsOf(query.state.data);
 
-      return offered && focused && (read === undefined || runningActions(read).size > 0)
+      return offered &&
+        focused &&
+        (read === undefined || query.state.status === "error" || runningActions(read).size > 0)
         ? SHELLS_LOOK_EVERY_MS
         : false;
     },
