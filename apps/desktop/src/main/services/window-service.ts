@@ -268,7 +268,11 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     if (displayId !== undefined) panels.focusIfExpanded(displayId);
     windowPushes.push(holder, PUSH.SHOW_LINK, {
       workspace: "",
-      place: { kind: LINK_DESTINATION.AGENT, taskId: call.taskId, agentId: call.agentId },
+      // Note that an agent on no task, a Manager, is opened on its own page, its link naming no task.
+      place:
+        call.taskId === null
+          ? { kind: LINK_DESTINATION.AGENT, agentId: call.agentId }
+          : { kind: LINK_DESTINATION.AGENT, taskId: call.taskId, agentId: call.agentId },
     });
 
     return true;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; and ⌘F finds in its conversation. Synthetic throughout.
+ * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; ⌘F finds in its conversation; and its box offers Talk. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
@@ -257,5 +257,20 @@ test("⌘F on an agent on no task's page opens the find bar over its conversatio
   assert.ok(
     container.querySelector('.agent-page .find-scope > .find-bar input[aria-label="Find"]'),
     "the find bar stands over the agent's column",
+  );
+});
+
+test("an agent on no task's box offers Talk, as an agent's tab on a task does", async () => {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [MANAGER] });
+  const container = await mountAgentPage(history, tasks);
+
+  assert.ok(
+    container.querySelector('.agent-composer [aria-label="Talk"]'),
+    "the box offers a call into the agent",
   );
 });

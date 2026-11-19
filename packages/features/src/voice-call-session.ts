@@ -63,9 +63,9 @@ export type VoiceCallFailure = (typeof VOICE_CALL_FAILURE)[keyof typeof VOICE_CA
 /** The call standing, as a surface draws it. */
 export interface VoiceCallState {
   readonly stage: VoiceCallStage;
-  /** The agent the call speaks to, and the task it works on. */
+  /** The agent the call speaks to, and the task it works on, null for an agent on no task, as a Manager is. */
   readonly agentId: string;
-  readonly taskId: string;
+  readonly taskId: string | null;
   /** The call's id as the service answered it, which its transcript lines name; nothing until it answers. */
   readonly callId: string | undefined;
   /** When the session started, on the epoch's clock; nothing while it connects. */
@@ -75,10 +75,10 @@ export interface VoiceCallState {
   readonly speakerMuted: boolean;
 }
 
-/** The agent a call speaks to, and the task it works on. */
+/** The agent a call speaks to, and the task it works on, null for an agent on no task. */
 export interface VoiceCallInto {
   readonly agentId: string;
-  readonly taskId: string;
+  readonly taskId: string | null;
 }
 
 /** What the platform's peer hears and tells the session about: a server event's text, its channel opening and closing, and the peer failing. */
