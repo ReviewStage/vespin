@@ -1101,6 +1101,8 @@ type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   readonly older?: OlderPages | undefined;
   /** A call's row to scroll into view, such as the one a held approval waits on, each ask a serial of its own so the same call is shown again. */
   readonly reveal?: TranscriptReveal | undefined;
+  /** Told the pull requests whose cards stand on screen, by their pages on GitHub, each time the rows on screen change, so a page reads only those it shows. */
+  readonly onPullRequestsShown?: ((urls: readonly string[]) => void) | undefined;
 };
 
 /** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
@@ -1128,9 +1130,26 @@ export function AgentTranscript({
   now,
   older,
   reveal,
+  onPullRequestsShown,
   ...drawing
 }: AgentTranscriptProps) {
   const colors = useColors();
+  // Note that the list is handed one callback for the rows on screen, which tells the newest one the page gave, since FlashList reads the callback it was first handed.
+  const shownTold = useRef(onPullRequestsShown);
+  useEffect(() => {
+    shownTold.current = onPullRequestsShown;
+  }, [onPullRequestsShown]);
+
+  const onShown = useCallback(
+    ({ viewableItems }: { readonly viewableItems: readonly { readonly item: TranscriptItem }[] }) =>
+      shownTold.current?.(
+        viewableItems.flatMap(({ item }) =>
+          item.kind === TRANSCRIPT_ITEM.PULL_REQUEST ? [item.url] : [],
+        ),
+      ),
+    [],
+  );
+
   const reduceMotion = useReduceMotion();
   const { bottom, left, right } = useSafeAreaInsets();
   const list = useRef<FlashListRef<TranscriptItem>>(null);
@@ -1318,6 +1337,7 @@ export function AgentTranscript({
             focusSentTo();
           }}
           scrollEventThrottle={64}
+          onViewableItemsChanged={onShown}
           accessibilityLabel="Transcript"
         />
       ) : null}
