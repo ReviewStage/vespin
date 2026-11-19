@@ -295,8 +295,7 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   categories do; one listing nothing stands them over its empty state
   (`ScopePicker`), so another scope is one tap away. The Inbox stands its
   scopes in its ⋯ menu instead, the one shown checked over its other acts,
-  as Mail's filter does, and its bar names a scope other than the one it
-  opens on under its title (`ColumnBar`'s `subtitle`, `Screen`'s). `Chip` is a capsule an act or a choice stands in, such as a
+  as Mail's filter does, the checked one saying which is shown. `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do.

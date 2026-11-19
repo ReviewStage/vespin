@@ -32,7 +32,6 @@ import { Fragment, memo, type ReactElement, type ReactNode, useEffect } from "re
 import { BarContent } from "./bar-content.js";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
-import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
@@ -117,8 +116,6 @@ export type BarPath = {
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
-  /** What stands muted under its title, drawn by the system's own bar, such as the scope a list shows where it isn't the one it opens on, as Mail names a filter under its mailbox. */
-  readonly subtitle?: string | undefined;
   readonly leading?: ReactNode | undefined;
   /** Glyph acts at the bar's leading edge, sharing one glass, as Mail's expand and compose stand over a message. */
   readonly lead?: readonly BarAction[] | undefined;
@@ -342,7 +339,6 @@ function Column({
           ? [
               navigationTitle(bar.title),
               toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
-              barSubtitle(BAR_KIND.COLUMN, bar.subtitle),
             ]
           : [toolbarTitleDisplayMode("inline")]),
       ]}
