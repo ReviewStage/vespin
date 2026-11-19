@@ -4,10 +4,11 @@
  * The desktop and the web copy and save through the window's act port
  * (`WINDOW_COPY_IMAGE`, `WINDOW_COPY_RICH`, `WINDOW_SAVE_FILE`); the phone has the system's
  * own pasteboard, Photos, and share sheet, so it answers them here, as it
- * copies a link through `expo-clipboard`. A picture is held as its
- * `data:` address, so it is written under the app's caches before Photos
- * or the share sheet takes it, named for what it shows; a recording or a
- * file is already the file the app wrote (`cached-media.ts`). Quick Look
+ * copies a link through `expo-clipboard`. A picture held as its `data:`
+ * address is written under the app's caches before Photos or the share
+ * sheet takes it, named for what it shows; one the app already wrote to a
+ * file, as an agent's are, a recording, and a file are taken as the file the
+ * app wrote (`cached-media.ts`). Quick Look
  * reads a file too, so a picture is written the same way before it opens,
  * and one drawn from a web address is fetched under the caches first; Quick
  * Look's own share button then offers Copy and Save Image. Photos is
@@ -100,7 +101,7 @@ function picturesBytes(kept: Kept) {
  * written rather than a second write of it.
  */
 async function fileOf(kept: Kept): Promise<string> {
-  if (kept.kind !== KEPT_KIND.PICTURE) return kept.source;
+  if (kept.kind !== KEPT_KIND.PICTURE || kept.source.startsWith(FILE_ADDRESS)) return kept.source;
   const held = picturesBytes(kept);
   const name = kept.name.trim().slice(0, NAME_MAX).trim() || PICTURE_NAME;
   const digest = await digestStringAsync(CryptoDigestAlgorithm.SHA256, held.base64);
@@ -111,7 +112,12 @@ async function fileOf(kept: Kept): Promise<string> {
 /** Copies a picture as a picture, or a text file's words. */
 async function copied(kept: Kept): Promise<void> {
   if (kept.kind === KEPT_KIND.PICTURE) {
-    await setImageAsync(picturesBytes(kept).base64);
+    // Note that a picture the app wrote to a file is read for the copy alone, so its bytes stand in memory only while the pasteboard takes them.
+    const bytes = kept.source.startsWith(FILE_ADDRESS)
+      ? await new File(kept.source).base64()
+      : picturesBytes(kept).base64;
+
+    await setImageAsync(bytes);
 
     return;
   }
