@@ -9,7 +9,10 @@
  * as a Manager is, has no other place, so its page is its own: a head
  * naming it with its one menu (`agentMenuGroups`), and its conversation
  * with its box, the pane its tab on a task draws (`AgentPane`), no tabs
- * beside it. The agent is read from the task list where it carries it,
+ * beside it. Over its box stands the line of the threads it posted, as a
+ * task's agent's does (`threads-dock.tsx`), read from the account's feed,
+ * which alone holds a thread on no task, each opening in the window's
+ * Inbox, beside its list. The agent is read from the task list where it carries it,
  * and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
@@ -21,9 +24,11 @@
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_BOUNDS, type ListedAgent, listedAgentOfPage } from "@repo/features/agent-wire";
+import type { InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
+import { EXPERIMENT } from "@repo/settings";
 import {
   ERROR_STATE_PLACEMENT,
   ErrorState,
@@ -41,11 +46,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { unreadShown } from "../failure-report.js";
+import { useInboxDoor } from "../places/routed-doors.js";
+import { useSteadyDoor } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
+import type { AgentThreads } from "../tasks/threads-dock.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import { useHeldTaskInbox, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
 import { AgentPane } from "./main-tabs.js";
@@ -116,6 +126,63 @@ function useOwnAgents(tasks: TasksControl, agent: ListedAgent): AgentsControl {
       heldIds: [agent.id],
     };
   }, [control, agent]);
+}
+
+/**
+ * The threads an agent on no task posted, as the line over its box draws
+ * them (`ThreadsDock`): read from the account's feed through the held read
+ * an Inbox thread on no task answers on (`useHeldTaskInbox`'s `agentId`),
+ * each opening in the window's Inbox, and an ask's buttons answering as the
+ * Inbox's Send does; none while it posted none.
+ */
+function useOwnAgentThreads(
+  tasks: TasksControl,
+  agents: AgentsControl,
+  agentId: string,
+): AgentThreads | undefined {
+  const control = useHeldTaskInbox({
+    taskId: undefined,
+    agentId,
+    shown: tasks.shown,
+    waiting: false,
+    readerId: tasks.me,
+    agents,
+  });
+
+  const drafts = useInboxCardDrafts(control, { taskId: undefined });
+  const inbox = useInboxDoor(tasks);
+
+  const turnEnd =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.TURN_END) }).data === true;
+
+  const onOpen = useSteadyDoor((item: InboxItem) =>
+    inbox.openItem({ itemId: item.id, opened: true }),
+  );
+
+  // An ask the bar answers from its row's buttons is sent as the Inbox's Send sends it, with the words drafted on its card.
+  const onChoose = useSteadyDoor((item: InboxItem, label: string) =>
+    control.onMessage(item, { ...drafts.draftOf(item), choices: [label] }),
+  );
+
+  const { open, settled, waiting } = control.board;
+  const { sending } = control;
+
+  return useMemo(() => {
+    const posted = [...open, ...settled]
+      .filter((item) => item.agentId === agentId)
+      .toSorted((a, b) => b.updatedAt - a.updatedAt);
+
+    if (posted.length === 0) return undefined;
+
+    return {
+      waiting: waiting.filter((item) => item.agentId === agentId),
+      posted,
+      onOpen,
+      turnEnd,
+      onChoose,
+      sending,
+    };
+  }, [open, settled, waiting, agentId, onOpen, turnEnd, onChoose, sending]);
 }
 
 /**
@@ -207,6 +274,7 @@ function OwnAgentPage({
   away: TaskHeadBack | undefined;
 }): React.JSX.Element {
   const agents = useOwnAgents(tasks, agent);
+  const threads = useOwnAgentThreads(tasks, agents, agent.id);
   const views = useTabViews();
   const label = agentName(agent, agents.models);
   const cards = taskCards({ agents, held: views.held, chosen: () => false, pages: undefined });
@@ -236,6 +304,7 @@ function OwnAgentPage({
             }
             onOpenTarget={openTarget}
             cards={cards}
+            threads={threads}
           />
         </Fill>
       </Fill>
