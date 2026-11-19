@@ -87,8 +87,10 @@ builds a control of its own.
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
   the picture viewer's share button holding the same, and on a message's
-  words Copy message, Copy link where it has an address, Select text (the
-  system's text view in a sheet, held by `KeepingProvider`) and Share, a
+  words Copy message, Copy link where it has an address, Select text (its
+  words selected in the bubble itself, in the system's text view with its
+  handles and edit menu, as Messages does, `MessageWords`; a message SwiftUI
+  draws offers none) and Share, a
   sent line's menu headed by its time (`MessageMenu`), as Messages and
   ChatGPT head one; an agent's finished turn ends on a standing row of the
   panel's glyphs, Copy, Copy link and Share, with a ⋯ for what else it
