@@ -68,7 +68,7 @@ import {
   START_LINE_BRIEF,
   type SuggestedBy,
 } from "@repo/wire";
-import { Cause, Effect, Option } from "effect";
+import { Cause, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { cloudStartGate } from "../../billing/billing-gate.js";
 import {
@@ -953,6 +953,38 @@ const keptPick = (userId: string, ask: Pick<StartAsk, "runsOn" | "byTool" | "aut
         ),
       );
 
+/**
+ * The repositories a Start on no task names beside its own, kept as GitHub
+ * spells them, reached with its own as one set, as the agent's checkout
+ * mints them (`repositorySetReach`): all on the workspace's one installation
+ * of the App, none on the member's own token alone. A set that is not is
+ * refused before anything is made, and extras with no repository of its
+ * own to work beside are refused as naming none.
+ */
+const extrasReached = Effect.fnUntraced(function* (
+  landing: StartLanding,
+  member: string | undefined,
+): Effect.fn.Return<
+  readonly { readonly repository: string }[],
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | GitHubApp
+> {
+  const { repository, extraRepositories, workspaceId } = landing;
+
+  if (extraRepositories.length === 0) return [];
+
+  if (repository === null) return yield* Effect.fail(HOSTED_REFUSAL.NO_REPOSITORY);
+  const app = yield* GitHubApp;
+
+  const set = yield* githubReachOrRefusal(
+    app.repositorySetReach(workspaceId, [repository, ...extraRepositories], member),
+  );
+
+  if (Result.isFailure(set)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
+
+  return set.success.slice(1).map((reached) => ({ repository: reached.fullName }));
+});
+
 /** Starts the account's agent on the task, as above; its sessions are composed only once a new agent needs its session opened, so a retry that found its agent asks for none. */
 export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* (
   agentSessions: Effect.Effect<
@@ -1010,16 +1042,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
         ? Effect.succeed(ask.reached)
         : workspaceRepository(landing.workspaceId, landing.repository, member, landing.mover);
 
-  // The repositories a Start on no task names beside its own are each reached as its own is, so one the
-  // workspace reaches no longer is refused before anything is made, and kept as GitHub spells it.
-  const extras = Effect.forEach(
-    landing.extraRepositories,
-    (extra) =>
-      Effect.map(workspaceRepository(landing.workspaceId, extra, member), (found) => ({
-        repository: found.repository.fullName,
-      })),
-    { concurrency: READ_CONCURRENCY },
-  );
+  const extras = extrasReached(landing, member);
 
   const branchOf = startBranchOf(userId, ask, rules.branch, landing, member);
   const brief = landing.place;

@@ -387,7 +387,7 @@ function agentTurnNotification(agent: Agent, turnId: string, body: string) {
       // Note that a finished turn goes as this kind too, since it is the one a released app opens the agent from.
       kind: PUSH_KIND.RUN_FAILED,
       agentId: agent.id,
-      taskId: agent.taskId,
+      ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
       turnId,
     },
   });
