@@ -33,7 +33,8 @@ import {
   useAudioRecorder,
 } from "expo-audio";
 import { File } from "expo-file-system";
-import { useEffect, useRef, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHostActs } from "./host/host-provider.js";
 
 /** Why a dictation left nothing, in the desktop's words, the microphone's said where iOS keeps its switch. */
@@ -105,6 +106,8 @@ export function useDictation(words: string, onWords: (words: string) => void): D
   // The recording's own count, so a stop on its deadline after a ✕ or a ✓ does nothing.
   const recording = useRef(0);
   const standing = useRef(true);
+  // Whether a dictation is under way, from the press that starts it to its words landing or its end, so a second press while the microphone is asked for or opened starts none.
+  const busy = useRef(false);
 
   // Note that leaving the screen drops a recording under way unsent, as the desktop drops one whose box unmounts.
   useEffect(
@@ -123,7 +126,20 @@ export function useDictation(words: string, onWords: (words: string) => void): D
     [recorder],
   );
 
+  // Note that leaving the page for another pushed over it drops a recording under way unsent too, as the page then stands out of sight with no ✕ or ✓ to press.
+  const cancelRef = useRef<() => void>(() => undefined);
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        if (recorder.isRecording) cancelRef.current();
+      },
+      [recorder],
+    ),
+  );
+
   const fail = (said: string) => {
+    busy.current = false;
+
     if (!standing.current) return;
     buzz(BUZZ.ERROR);
     setNote(said);
@@ -136,12 +152,19 @@ export function useDictation(words: string, onWords: (words: string) => void): D
     recording.current += 1;
     setPhase(DICTATION_PHASE.TRANSCRIBING);
 
+    // Note that a stop the recorder refused, as one whose microphone was taken away meanwhile, ends the dictation as a clip not heard would.
     try {
       await recorder.stop();
-    } finally {
+    } catch (cause) {
+      logged("A recording was not stopped")(cause);
       releaseMicrophone();
+      dropClip(recorder.uri);
+      fail(DICTATION_NOTE.FAILED);
+
+      return;
     }
 
+    releaseMicrophone();
     const uri = recorder.uri;
 
     try {
@@ -174,6 +197,8 @@ export function useDictation(words: string, onWords: (words: string) => void): D
         return;
       }
 
+      busy.current = false;
+
       if (!standing.current) return;
       const before = held.current.trimEnd();
       onWords(before === "" ? heard : `${before} ${heard}`);
@@ -189,6 +214,8 @@ export function useDictation(words: string, onWords: (words: string) => void): D
   };
 
   const start = async () => {
+    if (busy.current) return;
+    busy.current = true;
     setNote(undefined);
     const permission = await requestRecordingPermissionsAsync();
 
@@ -221,6 +248,7 @@ export function useDictation(words: string, onWords: (words: string) => void): D
   };
 
   const cancel = () => {
+    busy.current = false;
     recording.current += 1;
     setPhase(DICTATION_PHASE.IDLE);
     setStartedAt(undefined);
@@ -230,6 +258,10 @@ export function useDictation(words: string, onWords: (words: string) => void): D
       .catch(logged("A recording was not stopped"))
       .finally(releaseMicrophone);
   };
+
+  useEffect(() => {
+    cancelRef.current = cancel;
+  });
 
   return {
     dictation: {

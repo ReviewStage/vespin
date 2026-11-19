@@ -349,7 +349,8 @@ function AgentComposerBar({
   /** Dictate before Send, and its strip while a dictation stands. */
   readonly dictation: ComposerDictation;
 }) {
-  const said = composer.note ?? note;
+  // Note that the newest refusal stands, a send's or one the page or a dictation said, so an older one never hides why the last act did not go.
+  const said = useNewestNote([composer.note, note]);
   const { banner, waiting } = approvals;
   // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
@@ -465,6 +466,8 @@ function AgentComposerArea({
 }) {
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
   const dictated = useDictation(composer.words, composer.onWords);
+  // Note that a dictation's refusal and the page's stand by which was said last.
+  const said = useNewestNote([dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
   }, [editMessage, composer.editMessage]);
@@ -476,7 +479,7 @@ function AgentComposerArea({
         approvals={approvals}
         onShowWaiting={onShowWaiting}
         addMenu={agentAddMenu(composer, servers, agent !== undefined)}
-        note={dictated.note ?? note}
+        note={said}
         call={call}
         otherCall={otherCall}
         tools={tools}
