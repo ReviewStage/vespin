@@ -128,6 +128,7 @@ import {
   DESCRIPTION_COMMENT_CALL_FAILURE,
   type ListedTasksView,
   TASK_CALL_FAILURE,
+  TASKS_READ,
   type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
@@ -1621,10 +1622,12 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
 
   const invitesAgent = AGENTS.get(TASK.INVITES);
 
+  // Note that the staged list is the whole answer, so it stands read, because Search waits on a list still being read before it says nothing matched.
   return {
     ...list,
     tasks,
     listed: true,
+    listStatus: TASKS_READ.READY,
     taskAgents: [
       ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
       ...followed,
@@ -3106,6 +3109,8 @@ const ANSWERS: StagedAnswers = {
         },
   // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
   [ACT_KIND.TASKS_RENAME]: () => true,
+  // Note that a description's edit is taken as the service takes one, though nothing here moves, so the page draws the description it held.
+  [ACT_KIND.TASKS_EDIT]: () => ({ saved: true }),
   [ACT_KIND.TASKS_DELETE]: () => true,
   // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
   [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {

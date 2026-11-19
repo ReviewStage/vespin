@@ -60,7 +60,7 @@ import {
 import type { Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
-import { EXPERIMENT, experimentOn } from "@repo/settings";
+import { EXPERIMENT, experimentOn, newAgentServersOffFrom } from "@repo/settings";
 import {
   MESSAGE_CHANNEL,
   type SlackLineMetadata,
@@ -347,6 +347,8 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
     readonly keys: AccountKeyRows;
     /** The account's Default permissions; none where it never chose. */
     readonly permissionMode: AgentPermissionMode | undefined;
+    /** The MCP servers the account's new agents start switched off; none where it switched none off. */
+    readonly newAgentServersOff: readonly string[];
   },
   HostedRefusal,
   DatabaseServices | ModelCatalog
@@ -396,6 +398,7 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
     choices: { offered, defaultChoice: stored ?? agentFallbackChoice(offered) },
     keys,
     permissionMode: preferences?.preferences.agentPermissionMode,
+    newAgentServersOff: newAgentServersOffFrom(preferences?.preferences.newAgentServersOff),
   };
 });
 
@@ -418,18 +421,19 @@ const acceptedChoiceRead = /* @__PURE__ */ Effect.fnUntraced(function* (
     readonly choice: ModelChoice;
     readonly keys: AccountKeyRows;
     readonly permissionMode: AgentPermissionMode | undefined;
+    readonly newAgentServersOff: readonly string[];
   },
   HostedRefusal | ModelChoiceRefused,
   DatabaseServices | ModelCatalog
 > {
-  const { choices, keys, permissionMode } = yield* modelChoicesRead(userId);
+  const { choices, keys, permissionMode, newAgentServersOff } = yield* modelChoicesRead(userId);
   const { offered, defaultChoice } = choices;
 
   const choice = yield* Effect.fromResult(
     validateModelChoice(offered, named ?? defaultChoice),
   ).pipe(Effect.mapError((reason) => new ModelChoiceRefused({ reason, offered })));
 
-  return { choice, keys, permissionMode };
+  return { choice, keys, permissionMode, newAgentServersOff };
 });
 
 /** Where a Start lands, read as the account: the workspace whose installation reads the repository, the repository, none for a blank Start on a task with none, the task, the account that may move it where that is the account asking, and the store's place for the agent with what it is handed. */
@@ -812,8 +816,30 @@ const machineOfStart = Effect.fnUntraced(function* (
       : yield* defaultPlaceOf(userId, task, ask.automationOrigin !== undefined));
 
   if (place.machine === AGENT_MACHINE.VERCEL) return IN_THE_CLOUD;
-  const { deviceId } = place;
 
+  const { deviceId } = yield* ownDeviceOf(userId, place.deviceId);
+
+  return { asked: { machine: AGENT_MACHINE.DEVICE, deviceId } };
+});
+
+/**
+ * The account's own Mac an agent of its is asked to run on, as a Start's
+ * place and a move's (`move.ts`) admit it: refused as away where its row is
+ * gone, as `not-owner` where it is another member's, naming it and whose it
+ * is, and by name where its owner removed its host.
+ */
+export const ownDeviceOf = Effect.fnUntraced(function* (
+  userId: string,
+  deviceId: string | null | undefined,
+): Effect.fn.Return<
+  {
+    readonly machine: typeof AGENT_MACHINE.DEVICE;
+    readonly deviceId: string;
+    readonly name: string;
+  },
+  HostedRefusal,
+  DatabaseServices
+> {
   const device =
     deviceId === null || deviceId === undefined
       ? undefined
@@ -840,7 +866,7 @@ const machineOfStart = Effect.fnUntraced(function* (
     return yield* Effect.fail(HOSTED_REFUSAL.DEVICE_REMOVED);
   }
 
-  return { asked: { machine: AGENT_MACHINE.DEVICE, deviceId: device.id } };
+  return { machine: AGENT_MACHINE.DEVICE, deviceId: device.id, name: device.name };
 });
 
 /**
@@ -901,7 +927,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     (fitter, noteFiles) => landingOf(userId, ask, fitter, noteFiles, ask.landed),
   );
 
-  const { choice, keys, permissionMode } = read;
+  const { choice, keys, permissionMode, newAgentServersOff } = read;
   // An automation's agent reaches through the workspace's installation alone; a Start by hand, on the starter's token too.
   // Note that a task started with its agent reached the repository a moment ago, in the same
   // request and as the same member, so that reach stands rather than a second round of GitHub reads.
@@ -984,7 +1010,8 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       ),
       githubAccess: reached?.access,
       startBranch: branch,
-      disabledServers: rules.disabledServers,
+      // Note that a Start naming no servers of its own, nor taking another agent's, starts on the account's choice for new agents.
+      disabledServers: rules.disabledServers ?? newAgentServersOff,
       // The servers those words mention are its first turn's, whatever the switches say.
       mentionedServers:
         serverWords === undefined ? [] : mentionedServers(serverWords, landing.repository),

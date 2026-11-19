@@ -9,6 +9,7 @@ import {
   type Replay,
   toolStep,
 } from "@repo/features/agent-replay";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_STATUS,
@@ -27,7 +28,7 @@ import { copyingInto, fakeAppPlatform } from "../testing/app-platform.js";
 import { handHostReads, holdAgentPullRequests } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
-import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
+import { agentsControl, pushedTranscripts, type ToldPage } from "../testing/tasks-control.js";
 import { AgentTab, type TranscriptCards } from "./agent-tab.js";
 import { OpenLinkProvider } from "./use-open-link.js";
 
@@ -36,7 +37,9 @@ import { OpenLinkProvider } from "./use-open-link.js";
  * card saying Continued or Forked from the source's chip and how many of its
  * steps, a brief that is a line its first step, which opens onto the steps
  * one row each, every step onto its words exactly, and the way back to the
- * source's transcript, then the developer's note as their own line. No
+ * source's transcript, then the developer's note as their own line; where
+ * the source's session was carried whole, the source's own transcript in
+ * the steps' place, or a quiet line where it cannot be read. No
  * marker its first message holds is drawn, and a message whose markers do
  * not add up is drawn whole as today. Synthetic throughout.
  */
@@ -109,13 +112,14 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The new agent's tab drawn with its first message as given, sent when given, every tab and place it opens recorded. */
+/** The new agent's tab drawn with its first message as given, sent when given, the source's transcript read as the pages given, every tab and place it opens recorded. */
 async function drawn(
   agent: AgentSummary,
   first: string,
   source = SOURCE,
   listed = true,
   sentAt?: number,
+  sourcePages?: readonly ToldPage[],
 ) {
   const opened: ToolTarget[] = [];
   const places: LinkDestination[] = [];
@@ -134,14 +138,11 @@ async function drawn(
   holdAgentPullRequests(handHostReads({}).deliverParts, () =>
     Promise.resolve({ repository: "acme/app", branch: "luke/start-from", pullRequest: null }),
   );
-  pushedTranscripts(() => [
-    {
-      messages: [...messages],
-      cursor: "2:0",
-      status: AGENT_STATUS.COMPLETED,
-      title: null,
-    },
-  ]);
+  pushedTranscripts((transcript) =>
+    transcript.agentId === source.id && sourcePages !== undefined
+      ? sourcePages
+      : [{ messages: [...messages], cursor: "2:0", status: AGENT_STATUS.COMPLETED, title: null }],
+  );
 
   const control = agentsControl({
     agents: [agent],
@@ -782,4 +783,123 @@ test("a replayed line stands under who sent it, over when and Copy, and the card
     "Use seven days.",
     "Charles Pan: Use seven days.\n\nSeven days it is.",
   ]);
+});
+
+/** The source's own transcript, as its tab reads it: its brief, a turn, a line sent to it, and the turn it was forked at, then a turn after. */
+const SOURCE_MESSAGES: readonly AgentTranscriptMessage[] = [
+  {
+    id: "s1",
+    role: MESSAGE_ROLE.USER,
+    parts: [{ type: "text", text: "Find why the toast fires twice." }],
+  },
+  {
+    id: "s2",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "text", text: "Reading the toast hook." },
+      {
+        type: "tool-Read",
+        toolCallId: "call-1",
+        state: "output-available",
+        input: { file_path: "src/toast.ts" },
+        output: "export function useToast() {}",
+      },
+    ],
+  },
+  {
+    id: "s3",
+    role: MESSAGE_ROLE.USER,
+    parts: [{ type: "text", text: "Check the effect's deps." }],
+  },
+  {
+    id: FORKED_AT,
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [{ type: "text", text: "The deps were missing." }],
+  },
+  {
+    id: "s5",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [{ type: "text", text: "Opened the pull request." }],
+  },
+];
+
+test("a fork that carried its source's session whole counts and draws the source's own transcript up to the message it was forked at, after the brief and before the foot", async () => {
+  const agent = summary({
+    id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
+    brief: AGENT_BRIEF.PROMPT,
+  });
+
+  const carried = replay({ messageId: FORKED_AT, carried: true, steps: [], totalSteps: 0 });
+
+  const { container } = await drawn(
+    agent,
+    firstMessageText("Find why the toast fires twice.", carried, undefined),
+    SOURCE,
+    true,
+    undefined,
+    [
+      {
+        messages: [...SOURCE_MESSAGES],
+        cursor: "5:0",
+        status: AGENT_STATUS.COMPLETED,
+        title: null,
+      },
+    ],
+  );
+
+  // Its words, its call, the line sent to it, and the words it was forked at: four steps.
+  await vi.waitFor(() =>
+    assert.equal(headOf(container), "Forked from Wire the start from field · 4 steps"),
+  );
+
+  press(container.querySelector("[data-replay-card] > summary"));
+  await settle();
+  const body = container.querySelector("[data-replay-card] .ui-disclosure-body");
+  await vi.waitFor(() => assert.match(body?.textContent ?? "", /Builds on luke\/start-from/u));
+  const words = body?.textContent ?? "";
+
+  // The brief stands first, once, then the source's messages in order, through the one forked at and none after.
+  const order = [
+    "Find why the toast fires twice.",
+    "Reading the toast hook.",
+    "Check the effect's deps.",
+    "The deps were missing.",
+    "Builds on",
+  ];
+
+  const at = order.map((each) => words.indexOf(each));
+
+  assert.ok(
+    at.every((place, index) => place >= 0 && (index === 0 || place > (at[index - 1] ?? 0))),
+    words,
+  );
+  assert.equal(words.split("Find why the toast fires twice.").length, 2);
+  assert.match(words, /src\/toast\.ts/u);
+  assert.doesNotMatch(words, /Opened the pull request\./u);
+});
+
+test("a continue that carried its source's session whole, whose source cannot be read, says so in one quiet line", async () => {
+  const agent = summary({
+    id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
+    brief: AGENT_BRIEF.PROMPT,
+  });
+
+  const carried = replay({ carried: true, steps: [], totalSteps: 0 });
+
+  const { container } = await drawn(
+    agent,
+    firstMessageText("Find why the toast fires twice.", carried, undefined),
+    SOURCE,
+    true,
+    undefined,
+    [{ failure: AGENT_CALL_FAILURE.NOT_FOUND }],
+  );
+
+  assert.equal(headOf(container), "Continued from Wire the start from field");
+  press(container.querySelector("[data-replay-card] > summary"));
+  await settle();
+  assert.equal(
+    container.querySelector("[data-replay-card] [data-replay-unread]")?.textContent,
+    "The source agent's transcript could not be read.",
+  );
 });

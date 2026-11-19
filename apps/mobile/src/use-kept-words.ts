@@ -11,6 +11,12 @@ export const DISCARD_WORDS = {
   DISCARD: "Discard draft",
 } as const;
 
+/** What the ask before an edit of words already saved goes says, as iOS's own editors ask it. */
+export const DISCARD_CHANGES_WORDS = {
+  QUESTION: "Discard changes?",
+  DISCARD: "Discard changes",
+} as const;
+
 /** What keeps a sheet's draft, its words typed and pictures attached: whether it asks before they go, and its answers. */
 export interface KeptWords {
   /** Whether the sheet asks whether to discard its draft, after a Cancel or a swipe down. */

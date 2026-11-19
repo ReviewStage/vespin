@@ -329,6 +329,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onStop: () => Promise.resolve(false),
     onRewind: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onClear: () => Promise.resolve(true),
+    onMove: () => Promise.resolve(false),
     onRetry: () => Promise.resolve(false),
     onChoose: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onSwitchServers: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),

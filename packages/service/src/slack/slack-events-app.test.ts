@@ -370,6 +370,33 @@ function threadMention(
   return slackEvent(payload);
 }
 
+/** Slack's message in a public channel by the Slack user given, with the words given, replying in the thread given or, with none, standing on its own, as Slack sends it. */
+function channelMessage(
+  slackUserId: string,
+  eventId: string,
+  text: string,
+  threadTs: string | undefined,
+): Request {
+  const message = {
+    type: "message",
+    channel_type: "channel",
+    user: slackUserId,
+    text,
+    ts: "1700000003.000400",
+    channel: "C0001",
+  };
+
+  const payload = {
+    type: "event_callback",
+    team_id: "T0001",
+    event_id: eventId,
+    authorizations: [{ user_id: "UBOT" }],
+    event: threadTs === undefined ? message : { ...message, thread_ts: threadTs },
+  };
+
+  return slackEvent(payload);
+}
+
 /** Slack's direct message to the bot by the Slack user given, sharing a PNG screenshot, a Mac's HEIC one, and a PDF with no words, as Slack sends it. */
 function directShare(slackUserId: string, eventId: string): Request {
   const shared = (name: string, mimetype: string) => ({
@@ -836,6 +863,75 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(
           calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: threadTs, name: "zzz" }],
+        );
+      });
+    },
+  );
+
+  it.effect(
+    "a reply in an agent's thread that names no bot reaches the agent, while one in a thread no agent's and one standing on its own reach nothing and say nothing",
+    () => {
+      const calls: SlackCall[] = [];
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
+      return Effect.gen(function* () {
+        const { owner, threadTs, slackUserId } = yield* openThreadAgent(
+          CONVERSATION_RUNTIME.CLAUDE_CODE,
+          false,
+        );
+
+        const heard = HARNESS.heard.length;
+        yield* answer(bot, channelMessage(slackUserId, `Ev${randomUUID()}`, "lunch?", undefined));
+        yield* answer(
+          bot,
+          channelMessage(slackUserId, `Ev${randomUUID()}`, "lunch?", "1700000009.000900"),
+        );
+
+        assert.equal(HARNESS.heard.length, heard);
+        assert.deepEqual(
+          calls.filter(
+            (call) => call.method === "chat.postMessage" || call.method === "reactions.add",
+          ),
+          [],
+        );
+
+        yield* answer(
+          bot,
+          channelMessage(slackUserId, `Ev${randomUUID()}`, "now make it faster", threadTs),
+        );
+
+        assert.deepEqual(HARNESS.heard.at(-1), { call: "send", account: owner });
+        assert.deepEqual(
+          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
+          [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
+        );
+      });
+    },
+  );
+
+  it.effect(
+    "a reply in an agent's thread that names the bot, which Slack sends both as a mention and as a message, is handed to the agent once",
+    () => {
+      const calls: SlackCall[] = [];
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
+      return Effect.gen(function* () {
+        const { threadTs, slackUserId } = yield* openThreadAgent(
+          CONVERSATION_RUNTIME.CLAUDE_CODE,
+          false,
+        );
+
+        const sent = HARNESS.heard.filter((heard) => heard.call === "send").length;
+        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs));
+        yield* answer(
+          bot,
+          channelMessage(slackUserId, `Ev${randomUUID()}`, "<@UBOT> now make it faster", threadTs),
+        );
+
+        assert.equal(HARNESS.heard.filter((heard) => heard.call === "send").length, sent + 1);
+        assert.deepEqual(
+          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args.name] : [])),
+          ["eyes"],
         );
       });
     },

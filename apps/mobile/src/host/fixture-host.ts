@@ -18,6 +18,7 @@ import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
+import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import {
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
@@ -528,6 +529,9 @@ function olderRead(
 /** What GitHub says of a pull request change the fixture refuses, as it words a merge it will not make. */
 const PULL_REQUEST_REFUSED_WORDS = "Pull Request is not mergeable";
 
+/** The agent a refused description's edit names as having written over it, the invitations agent as its row names it. */
+const EDIT_CONFLICT_AGENT = "Build the invite flow";
+
 /**
  * A task's start answered as unanswered the first time its task's id is
  * sent, as a dropped connection leaves it, so a flow sees New task's notice
@@ -550,6 +554,26 @@ function startRefusedOnce(
   return { failure: TASK_CALL_FAILURE.UNANSWERED };
 }
 
+/** A description's edit answered as a conflict with the invitations agent's change to its first line, written meanwhile, as the service answers one whose lines both changed. */
+function editConflict({
+  edit,
+}: PortActPayload<typeof ACT_KIND.TASKS_EDIT>): PortActResult<typeof ACT_KIND.TASKS_EDIT> {
+  const [first = "", ...rest] = edit.description.base.split("\n");
+  const current = [`${first} (noted by the agent)`, ...rest].join("\n");
+
+  return {
+    conflict: {
+      current,
+      by: {
+        actor: DESCRIPTION_ACTOR.AGENT,
+        label: EDIT_CONFLICT_AGENT,
+        at: Date.now(),
+        duringCall: false,
+      },
+    },
+  };
+}
+
 /**
  * The writes `-refuseWrites true` refuses, each answered as the host
  * answers once the service has refused it: a task's status and its pin
@@ -560,15 +584,22 @@ function startRefusedOnce(
  * added, a memory deleted or a thread's reminder or reply unanswered, so a
  * flow sees the notice over Add a follower's sheet, Settings', and a
  * thread's composer, the keyboard up or down, and a refused reply's words
- * and pictures put back on its box.
+ * and pictures put back on its box, and a description's edit met by the
+ * invitations agent's note written meanwhile over the same lines, so a flow
+ * sees Edit description's conflict ask.
  */
-const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
+const REFUSED_WRITES: ReadonlyMap<
   PortActKind,
-  () => PortActResult<PortActKind>
->([
+  (payload: PortActPayload<PortActKind>) => PortActResult<PortActKind>
+> = new Map<PortActKind, (payload: PortActPayload<PortActKind>) => PortActResult<PortActKind>>([
   // Note that a memory's save and a version's restore are refused too, so their notices and Try again show.
   [ACT_KIND.MEMORIES_SAVE, () => MEMORY_SAVE_REFUSED],
   [ACT_KIND.TASKS_RESTORE, () => false],
+  // SAFETY: the payload is the kind's, which the map's key names.
+  [
+    ACT_KIND.TASKS_EDIT,
+    (payload) => editConflict(payload as PortActPayload<typeof ACT_KIND.TASKS_EDIT>),
+  ],
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
   [ACT_KIND.AGENTS_START, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
@@ -632,7 +663,7 @@ export function fixtureActs(
         // SAFETY: the port is keyed by act kind.
         const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
 
-        if (refused !== undefined) return Promise.resolve(refused());
+        if (refused !== undefined) return Promise.resolve(refused(payload));
 
         // SAFETY: the port is keyed by act kind.
         const startRefused = refusesWrites

@@ -79,6 +79,7 @@ import { useOpenLink } from "../tasks/use-open-link.js";
 import { AgentAuthSection } from "./agent-auth-section.js";
 import { AlwaysAllowedSection } from "./always-allowed-section.js";
 import { ReadFailed } from "./marks.js";
+import { NewAgentServersRow } from "./new-agent-servers-row.js";
 import { PickerRow } from "./picker-row.js";
 import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
 import { SchemaSettingRows } from "./schema-rows.js";
@@ -132,6 +133,9 @@ import { VoiceSection } from "./voice-section.js";
  * Code agent starts on, each mode with its glyph and its hint under its
  * name, as the model menu offers a running agent's
  * (`agent-approvals.tsx`); it stands while the model's rows are read.
+ * Last, MCP servers picks which of the account's connected servers a new
+ * agent starts with (`new-agent-servers-row.tsx`), every one on until
+ * switched off there.
  *
  * The group is `@repo/ui`'s `SettingsSection`, and Speed, Effort, and Context each
  * its `SettingsRow` holding the shared `ChoiceBar`, segmented.
@@ -483,6 +487,7 @@ function AgentsSection({
           icons={modeGlyph}
         />
       ) : null}
+      {signedIn && view !== undefined ? <NewAgentServersRow view={view} /> : null}
     </SettingsSection>
   );
 }

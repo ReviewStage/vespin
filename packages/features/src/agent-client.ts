@@ -119,6 +119,7 @@ import {
   type AgentPinRequest,
   type AgentQueueChange,
   type AgentRenameRequest,
+  type AgentRunsOnRequest,
   type AgentServersRequest,
   type AgentStartRequest,
   agentMessageRequestSchema,
@@ -1306,6 +1307,21 @@ export class HostedAgentClient {
     actionId: string,
   ): Effect.Effect<AgentRunActionStopAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.stopRunAction, { id: agentId, action: actionId });
+  }
+
+  /** Moves one agent to another place in the same agent, answering it as it then stands. */
+  move(
+    agentId: string,
+    runsOn: AgentRunsOnRequest,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(
+        this.#hosted.agents.move,
+        { params: { id: agentId }, body: { runsOn } },
+        { as: AGENT_NOT_FOUND_RENAMES },
+      ),
+      unansweredBare,
+    );
   }
 
   /** Starts one agent's harness on a fresh session in the same agent, answering it as it then stands. */

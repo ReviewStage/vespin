@@ -143,7 +143,8 @@ you save above), with the Slack team's id and name, the bot's own Slack ids,
 and the scopes it was granted; we delete them when the workspace disconnects
 the bot, when the app is uninstalled from that Slack or its token revoked
 there, and with the workspace. The bot also keeps your Slack user id, and
-messages you send the bot, with the earlier messages of that Slack thread, are
+messages you send the bot, and your replies in a Slack thread an agent was
+started from or posts to, with the earlier messages of that Slack thread, are
 handed to an agent. Your workspace's agents can also read, post, and react as the bot in
 any Slack channel it has been added to, private channels included, so
 messages in those channels may reach the agent that reads them, its

@@ -320,6 +320,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     renameTerminal: SCREEN_ONLY,
     endTerminal: SCREEN_ONLY,
     clear: NOT_YET_BUILT,
+    // Note that an agent moves another between machines with `start_agent`'s continue; an in-place move from a tool waits on a member asking for one.
+    move: NOT_YET_BUILT,
     // A button in an agent's reply is drawn and pressed in its transcript; a member's agent starts or messages one with its own tools.
     readButton: SCREEN_ONLY,
     pressButton: SCREEN_ONLY,

@@ -80,6 +80,9 @@ export const DELETE_FAILED = "The agent could not be deleted. Try again.";
 /** What the toast says when the service did not start an agent's harness on a fresh session (`/clear`). */
 export const CLEAR_FAILED = "A new session could not be started. Try again once the agent is idle.";
 
+/** What the toast says when the service did not move an agent to the place picked (`coder-host/move.ts`). */
+export const MOVE_FAILED = "The agent could not be moved. Try again once it has stopped.";
+
 /** What the toast says when the agent a Stop answered still reads at work: it found no turn open to cancel, and no runner gone quiet to settle. */
 export const STOP_NOTHING_YET = "There's nothing to stop yet. Try again once the agent is working.";
 

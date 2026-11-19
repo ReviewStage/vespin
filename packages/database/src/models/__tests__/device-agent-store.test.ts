@@ -40,6 +40,7 @@ import {
   queueGoneDeviceAgentDiscard,
   settleDeviceAgentLine,
   settleLapsedDeviceAgentLine,
+  settleMovedDeviceAgentLaunches,
   stepDeviceAgentLaunch,
   withdrawExpiredDeviceAgentRows,
   withdrawUnclaimedDeviceAgentLine,
@@ -320,6 +321,41 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           Option.some("checking"),
         );
         assert.equal(settled, false);
+      }),
+  );
+
+  it.effect(
+    "a moved agent's open launch is settled, and another agent's on the same Mac, and another account's, are left open",
+    () =>
+      Effect.gen(function* () {
+        const { userId, deviceId, agentId } = yield* openAccount();
+        const beside = yield* startAgent(userId, deviceId);
+        const other = yield* openAccount();
+
+        for (const [owner, agent] of [
+          [userId, agentId],
+          [userId, beside],
+          [other.userId, other.agentId],
+        ] as const) {
+          yield* queueDeviceAgentLine(owner, launch(agent));
+        }
+
+        yield* settleMovedDeviceAgentLaunches(userId, agentId);
+        yield* settleMovedDeviceAgentLaunches(userId, other.agentId);
+
+        const open = (owner: string, agent: string) =>
+          Effect.map(latestDeviceAgentLaunch(owner, agent), (line) =>
+            Option.exists(line, (each) => !each.settled),
+          );
+
+        assert.deepEqual(
+          [
+            yield* open(userId, agentId),
+            yield* open(userId, beside),
+            yield* open(other.userId, other.agentId),
+          ],
+          [false, true, true],
+        );
       }),
   );
 

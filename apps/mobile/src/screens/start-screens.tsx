@@ -39,6 +39,7 @@ import {
   glyphSymbol,
   MENU_CHIP_LOOK,
   MenuChip,
+  ModelChoiceSheet,
   type PickOption,
   runsOnGlyph,
   STATUS_MARK_SYMBOL,
@@ -209,12 +210,11 @@ function notesOf(...lines: readonly (string | undefined)[]): readonly string[] {
 
 /**
  * The model and effort an agent starts on, as the panel's model chip says
- * them, "Opus 5.5 · High": a capsule whose menu checks the model under
- * Model and, where the model offers more than one, the effort under Effort;
- * where the models could not be read, Try again in its place, the reason
- * said under the words.
+ * them, "Opus 5.5 · High", led by its harness's mark: a capsule that opens
+ * the model sheet (`StartModelSheet`) on a tap; where the models could not
+ * be read, Try again in its place, the reason said under the words.
  */
-function ModelChip({ pick }: { readonly pick: ModelPick }) {
+function ModelChip({ pick, onOpen }: { readonly pick: ModelPick; readonly onOpen: () => void }) {
   if (pick.models.length === 0) {
     return pick.failed === undefined ? null : (
       <Chip label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={pick.retry} />
@@ -222,28 +222,53 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
   }
 
   const efforts = pick.efforts.length > 1 ? pick.efforts : [];
-  const model = labelOf(pick.models, pick.shown?.model) ?? WORDS.MODEL;
+  const model = labelOf(pick.models, pick.model) ?? WORDS.MODEL;
   const effort = labelOf(efforts, pick.shown?.effort);
-
-  const groups: ChipMenuGroup[] = [
-    { title: WORDS.MODEL, choices: choicesOf(pick.models, pick.shown?.model, pick.pickModel) },
-  ];
-
-  if (efforts.length > 0) {
-    groups.push({
-      title: WORDS.EFFORT,
-      choices: choicesOf(efforts, pick.shown?.effort, pick.pickEffort),
-    });
-  }
-
-  const harness = pick.shown === undefined ? undefined : providerOf(pick.shown.model);
+  const harness = pick.model === undefined ? undefined : providerOf(pick.model);
 
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.COMPOSER}
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
       {...(harness === undefined ? {} : { harness })}
-      menu={{ groups }}
+      onOpen={onOpen}
+    />
+  );
+}
+
+/**
+ * The model sheet a start opens from its model capsule, as the agent's page
+ * opens it: the models under each harness's mark, the effort right under the
+ * model, and Fast where the model has a fast version. It offers no
+ * permission mode, since a start takes none and a new agent runs on the
+ * account's default. A pick takes as it is pressed, so Done only closes it.
+ */
+function StartModelSheet({
+  pick,
+  presented,
+  onDismiss,
+}: {
+  readonly pick: ModelPick;
+  readonly presented: boolean;
+  readonly onDismiss: () => void;
+}) {
+  const models = pick.models.flatMap((option) => {
+    const provider = providerOf(option.id);
+
+    return provider === undefined ? [] : [{ ...option, provider }];
+  });
+
+  return (
+    <ModelChoiceSheet
+      presented={presented}
+      onDismiss={onDismiss}
+      models={models}
+      model={pick.model}
+      onModel={pick.pickModel}
+      efforts={pick.efforts}
+      effort={pick.shown?.effort}
+      onEffort={pick.pickEffort}
+      fast={pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle }}
     />
   );
 }
@@ -290,6 +315,13 @@ function RunsOnChip({
   );
 }
 
+/** What leads a repository's capsule, as the panel's repository chip leads: the picked repository's owner's picture, or the glyph standing for none. */
+function repositoryLead(
+  repository: string | undefined,
+): { readonly repository: string } | { readonly symbol: Glyph } {
+  return repository === undefined ? { symbol: GLYPH.NO_REPOSITORY } : { repository };
+}
+
 /**
  * The repository the task works in, as the panel's repository chip says it:
  * a capsule whose menu checks it among those the workspace's GitHub
@@ -309,7 +341,7 @@ function RepositoryChip({
       <MenuChip
         look={MENU_CHIP_LOOK.COMPOSER}
         label={tree.repository ?? NO_REPOSITORY}
-        symbol={GLYPH.REPOSITORY}
+        {...repositoryLead(tree.repository ?? undefined)}
       />
     );
   }
@@ -319,7 +351,7 @@ function RepositoryChip({
       <MenuChip
         look={MENU_CHIP_LOOK.COMPOSER}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
-        symbol={GLYPH.REPOSITORY}
+        {...repositoryLead(repository.picked)}
         menu={{
           groups: [
             {
@@ -339,7 +371,7 @@ function RepositoryChip({
         <MenuChip
           look={MENU_CHIP_LOOK.COMPOSER}
           label={repository.picked}
-          symbol={GLYPH.REPOSITORY}
+          {...repositoryLead(repository.picked)}
         />
       )}
       {repository.failed === undefined ? null : (
@@ -620,6 +652,7 @@ export function NewAgentScreen({
   const [prompt, setPrompt] = useState(brief);
   const [runsOn, setRunsOn] = useState(CLOUD);
   const pick = useModelPick(action === undefined ? undefined : suggestedChoice(action));
+  const [modelsShown, setModelsShown] = useState(false);
   const startAgent = useStartAgent(taskId);
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
@@ -695,6 +728,11 @@ export function NewAgentScreen({
         kept={kept}
         talk={opened === undefined ? talk : undefined}
       />
+      <StartModelSheet
+        pick={pick}
+        presented={modelsShown}
+        onDismiss={() => setModelsShown(false)}
+      />
       <StartPage
         title={
           opened === undefined
@@ -727,7 +765,7 @@ export function NewAgentScreen({
         testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
         chips={
           <>
-            <ModelChip pick={pick} />
+            <ModelChip pick={pick} onOpen={() => setModelsShown(true)} />
             {/* Note that a suggestion's agent runs where the member's agents on the task run, so it offers no Runs on, as the panel's draft hides it. */}
             {opened === undefined ? (
               <RunsOnChip pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
@@ -954,6 +992,7 @@ export function NewTaskScreen({
   const repository = useRepositoryPick(workspace, draft?.repository);
   const relation = useRelationPick(listed, workspaceId, parent);
   const pick = useModelPick();
+  const [modelsShown, setModelsShown] = useState(false);
   const startTask = useStartTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote, draft?.pictures);
@@ -1038,6 +1077,11 @@ export function NewTaskScreen({
   return (
     <>
       <SheetBar title={WORDS.NEW_TASK} kept={kept} talk={talk} />
+      <StartModelSheet
+        pick={pick}
+        presented={modelsShown}
+        onDismiss={() => setModelsShown(false)}
+      />
       <StartPage
         head={head}
         words={{
@@ -1068,7 +1112,7 @@ export function NewTaskScreen({
         chips={
           <>
             <RepositoryChip repository={repository} tree={tree} />
-            <ModelChip pick={pick} />
+            <ModelChip pick={pick} onOpen={() => setModelsShown(true)} />
             <RunsOnChip pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
           </>
         }

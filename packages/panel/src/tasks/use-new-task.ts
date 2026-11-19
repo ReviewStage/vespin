@@ -100,7 +100,8 @@ export interface NewTaskAgent {
   readonly prompt: string;
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
-  readonly disabledServers: readonly string[];
+  /** The servers its + menu switched off; none where it switched none, when the agent starts on the account's choice for new agents. */
+  readonly disabledServers?: readonly string[] | undefined;
   /** The mode the agent starts in, as the chip's Permissions row picked it; none for the member's Default permissions. */
   readonly permissionMode?: AgentPermissionMode | undefined;
   /** Talk's call into the agent, which starts it blank, handed nothing, and opens on it once it lands; none for a start on words. */
@@ -114,7 +115,8 @@ function agentRequest(handed: NewTaskAgent) {
     ...(handed.talk === undefined ? { prompt: handed.prompt } : { blank: true }),
     ...(handed.attachments.length === 0 ? undefined : { attachments: handed.attachments }),
     ...(handed.choice === undefined ? undefined : choiceRequest(handed.choice)),
-    ...(handed.disabledServers.length === 0
+    // Note that servers switched are sent even where none is left off, so the account's choice for new agents does not stand in for them.
+    ...(handed.disabledServers === undefined
       ? undefined
       : { disabledServers: handed.disabledServers }),
     ...(handed.permissionMode === undefined

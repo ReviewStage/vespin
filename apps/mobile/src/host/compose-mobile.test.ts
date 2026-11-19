@@ -5,6 +5,7 @@ import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_ATTACHMENT_TYPE, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { READ_MARK } from "@repo/features/read-mark";
+import { TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_TRANSCRIPT, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import { inboxGroupsIn, selectExperiment, selectInboxHoldings } from "@repo/host/app-state-reads";
@@ -121,7 +122,7 @@ const inboxGroupsOver = (bridge: Parameters<typeof followAppStateInto>[0]) =>
 const ownFolder = Effect.provide(temporaryDirectoryScoped("mobile-host-"), NodeFileSystem.layer);
 
 it.effect(
-  "a fixture run's document lists the Inbox profile's threads, signed in as its account with Skills on",
+  "a fixture run's document lists the Inbox profile's threads, signed in as its account with Skills on and its task list read",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -139,6 +140,8 @@ it.effect(
         expect(titles).toContain(STAGED_THREAD);
         // Note that a `/` in any of the app's composers offers skills only while the account has Skills on (`use-skill-offer.ts`).
         expect(selectExperiment(EXPERIMENT.SKILLS)(state)).toBe(true);
+        // Note that Search says nothing matched only once the task list stands read (`use-search.ts`), so a staged list that stood unread kept a miss reading for good.
+        expect(state.tasks.listStatus).toBe(TASKS_READ.READY);
       }),
     ),
 );

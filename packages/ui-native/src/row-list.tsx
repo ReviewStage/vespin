@@ -430,12 +430,14 @@ type ListSectionProps = {
   /** What a + at the header's end adds to the section, such as New sub-task; none where it adds nothing. */
   readonly add?: SectionAdd | undefined;
   /** What a Show all at the header's end opens: every row the section holds a few of, as a search's section under All; none where it holds them all. */
-  readonly more?: SectionMore | undefined;
+  readonly more?: SectionWordsAct | undefined;
+  /** An act on the whole section in words at the header's end, as Edit edits a task's description, as Notes' and Reminders' sections end; none where the section offers none. */
+  readonly act?: SectionWordsAct | undefined;
   readonly children: ReactNode;
 };
 
-/** A section's Show all: the words it draws, the words it is heard by, and what it opens. */
-type SectionMore = {
+/** Words at a section header's end that act, such as Show all or Edit: the words it draws, the words it is heard by, and what it does. */
+type SectionWordsAct = {
   readonly label: string;
   /** What it is heard as, naming what it shows: "Show all 12 tasks". */
   readonly heard: string;
@@ -633,7 +635,13 @@ export function footerToneOf(refusal: string | undefined): FooterTone {
 }
 
 /** A section's footer: a note in the system's footnote ink, or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
-function SectionFooter({ words, tone }: { readonly words: string; readonly tone: FooterTone }) {
+export function SectionFooter({
+  words,
+  tone,
+}: {
+  readonly words: string;
+  readonly tone: FooterTone;
+}) {
   const failure = tone === FOOTER_TONE.FAILURE;
   useAnnounced(failure ? words : undefined, true);
 
@@ -641,11 +649,12 @@ function SectionFooter({ words, tone }: { readonly words: string; readonly tone:
 }
 
 /**
- * A section header's Show all, as Mail's and Music's search sections end:
- * its words in the header's size, in the ink rather than muted so it reads as
- * a press, beside the header so VoiceOver hears it apart from the heading.
+ * Words at a section header's end that act, such as Show all, as Mail's and
+ * Music's search sections end, or Edit: its words in the header's size, in
+ * the ink rather than muted so it reads as a press, beside the header so
+ * VoiceOver hears it apart from the heading.
  */
-function SectionMoreButton({ more }: { readonly more: SectionMore }) {
+function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
   const colors = useColors();
 
   // Note that the target's frame and shape stand on the words, the button's label, since a borderless button answers only where its label is hit.
@@ -677,7 +686,8 @@ function SectionMoreButton({ more }: { readonly more: SectionMore }) {
  * header given `add` ends in a + that adds to the section, so an empty
  * section stands as its header alone rather than a list of add rows. A
  * header given `more` ends in a Show all that opens every row of a section
- * the list cut short, as Mail's search sections do. Its rows fold away and
+ * the list cut short, as Mail's search sections do, and one given `act`,
+ * where it has no Show all, ends in the act's words, such as Edit. Its rows fold away and
  * come back with the system's quick ease, or at once where the reader
  * reduces motion. Note that SwiftUI's own `Section(isExpanded:)` is not used,
  * because it folds only in a sidebar list, where the system draws its own
@@ -699,6 +709,7 @@ export function ListSection({
   onDropLink,
   add,
   more,
+  act,
   children,
 }: ListSectionProps) {
   const [own, setOwn] = useState(false);
@@ -754,10 +765,12 @@ export function ListSection({
     );
 
   // Note that a lone + stands over the header's trailing end rather than beside it, so its 44 pt target lays out nothing and the header keeps its title's height, as a section with no + does; a press is taken across the whole of the overlay's own frame, where a target padded back to its glyph's height answered only inside it. The header keeps the +'s width clear at its end, so a long title or count at a large text size wraps before it rather than running under it. A section with words beside its +, such as Show all, stands them in a row after the header, since their width is the words'.
+  const words = more ?? act;
+
   const header =
-    dropped === undefined || (add === undefined && more === undefined) ? (
+    dropped === undefined || (add === undefined && words === undefined) ? (
       dropped
-    ) : more === undefined && add !== undefined ? (
+    ) : words === undefined && add !== undefined ? (
       <Overlay alignment="trailing">
         <HStack modifiers={[padding({ trailing: ADD_TARGET.WIDTH })]}>{dropped}</HStack>
         <Overlay.Content>
@@ -767,7 +780,7 @@ export function ListSection({
     ) : (
       <HStack spacing={0}>
         {dropped}
-        {more === undefined ? null : <SectionMoreButton more={more} />}
+        {words === undefined ? null : <SectionWordsButton more={words} />}
         {add === undefined ? null : <SectionAddButton add={add} />}
       </HStack>
     );

@@ -1,5 +1,6 @@
-import { messageWords } from "@repo/features/agent-parts";
+import { computerAppsOf, messageWords } from "@repo/features/agent-parts";
 import { REPLAY_STEP_KIND, type Replay, type ReplayStep } from "@repo/features/agent-replay";
+import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import type {
   AgentPullRequest,
   AgentSummary,
@@ -10,9 +11,13 @@ import { AGENT_SENDER } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
   briefOrigin,
+  type CarriedTranscript,
+  carriedTranscript,
+  earlierMessagesLine,
   earlierStepsLine,
   leftOutLine,
   REPLAY_PAGE,
+  type ReplayPage,
   replayCallsServer,
   replayCount,
   replayPage,
@@ -49,24 +54,35 @@ import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronsUpIcon, SplitIcon, TextQuoteIcon } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ActorRef } from "../actor-ref.js";
 import { Message, MessageContent, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { TranscriptAgentOn } from "../reset-credit.js";
 import { lineSender, providerOf } from "./agent-model.js";
-import { MessageFileChips, MessageFiles } from "./agent-pictures.js";
+import {
+  AgentPicturesProvider,
+  ComputerAppsProvider,
+  MessageFileChips,
+  MessageFiles,
+  useAgentPictureDoor,
+} from "./agent-pictures.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import { CopyMessageAction } from "./copy-message.js";
+import { ForkProvider } from "./fork-action.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, ORIGIN_CHIP } from "./mention-chip.js";
+import { RewindProvider } from "./rewind-action.js";
 import { SentWords } from "./skill-chip.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { TranscriptTool, TranscriptWords } from "./transcript-blocks.js";
+import { useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
 import { useListedAgent } from "./use-workspace-agents.js";
+import { useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 
 /**
  * replay-card.tsx -- the card an agent started from another opens on: "Continued from" or "Forked from" the source agent, folded over the brief and the steps of the source's work it was handed.
@@ -88,6 +104,11 @@ import { useListedAgent } from "./use-workspace-agents.js";
  * words exactly as the agent was handed them, under a row that draws the earlier ones a page at a time,
  * and a foot naming the branch and the pull request the source published,
  * where known. The source's whole transcript is a press of its chip away.
+ * Where the source's own session was carried whole rather than its steps
+ * replayed, the card holds the source's transcript while its tab shows,
+ * reads it to its start, and draws its messages in the steps' place, as
+ * the transcript draws them (`carriedTranscript`), its summary row counting
+ * their steps, or says in one quiet line that it could not be read.
  * The model is `replay-card-model.ts`.
  */
 
@@ -113,6 +134,10 @@ export interface ReplayPlace {
   /** Reads one agent by its id, as a page that lists only its own agent names the source; none where nothing reads one. */
   readonly readAgent: ((agentId: string) => Promise<AgentSummary | undefined>) | undefined;
   readonly openGitHub: (url: string) => void;
+  /** Whether the card's tab is on screen, while which a transcript carried whole holds its source's. */
+  readonly shown: boolean;
+  /** Draws a message of the source's transcript as the transcript draws its own, for a transcript carried whole. */
+  readonly message: (message: AgentTranscriptMessage) => ReactNode;
 }
 
 /** No agents listed yet, one array so a render before the first read hands down the same one. */
@@ -131,8 +156,10 @@ export function replayPlace(input: {
   target: ((target: ToolTarget) => ReactNode) | undefined;
   onOpenTarget: ((target: ToolTarget) => void) | undefined;
   openGitHub: (url: string) => void;
+  shown: boolean;
+  message: (message: AgentTranscriptMessage) => ReactNode;
 }): ReplayPlace {
-  const { agent, control, tile, target, onOpenTarget, openGitHub } = input;
+  const { agent, control, tile, target, onOpenTarget, openGitHub, shown, message } = input;
   const agents = [...(control.agents ?? NO_AGENTS), ...(control.archived ?? NO_AGENTS)];
 
   return {
@@ -148,6 +175,8 @@ export function replayPlace(input: {
     pullRequests: control.pullRequests,
     readAgent: control.readAgent,
     openGitHub,
+    shown,
+    message,
   };
 }
 
@@ -410,32 +439,33 @@ function SummaryRow({ line, text }: { line: string; text: string }): React.JSX.E
 }
 
 /**
- * The steps the opened card draws: the newest page of them, under a row
- * drawing the page before as it is pressed, until every kept step is drawn.
- * The steps land under the row, so what stands above it holds still and the
+ * The rows the opened card draws: the newest page of them, under a row
+ * drawing the page before as it is pressed, until every row is drawn.
+ * The rows land under the row, so what stands above it holds still and the
  * panel stays where it was scrolled; once the last page lands the row goes,
- * and the keys land on the steps it drew rather than on nothing. While a
- * find bar is open every step is drawn, so the find covers the whole
- * replay, as a fold's closed body is drawn for it (`fold.tsx`).
+ * and the keys land on the rows it drew rather than on nothing. While a
+ * find bar is open every row is drawn, so the find covers them all, as a
+ * fold's closed body is drawn for it (`fold.tsx`).
  */
-function ReplaySteps({
-  steps,
-  place,
+function PagedRows({
+  count,
+  earlierLine,
+  children,
 }: {
-  steps: readonly ReplayStep[];
-  place: ReplayPlace;
+  count: number;
+  /** What the row before the drawn ones says of the page it draws (`earlierStepsLine`). */
+  earlierLine: (page: ReplayPage) => string;
+  /** Draws the rows from the one given, oldest first. */
+  children: (from: number) => ReactNode;
 }): React.JSX.Element {
   const finding = useFindOpen();
   const [shown, setShown] = useState(REPLAY_PAGE);
   const list = useRef<HTMLDivElement>(null);
-  const page = replayPage(steps.length, finding ? steps.length : shown);
-  // Note that the replay's calls stand in its first message's words, which the transcript's own check for a server's call never reads.
-  const callsServer = useMemo(() => replayCallsServer(steps), [steps]);
-  const todos = useMemo(() => replayTaskTodos(steps), [steps]);
+  const page = replayPage(count, finding ? count : shown);
 
   const drawMore = () => {
     if (page.next === page.from) list.current?.focus({ preventScroll: true });
-    setShown(steps.length - page.from + page.next);
+    setShown(count - page.from + page.next);
   };
 
   return (
@@ -453,22 +483,152 @@ function ReplaySteps({
             icon={<ChevronsUpIcon aria-hidden="true" />}
             onClick={drawMore}
           >
-            {earlierStepsLine(page)}
+            {earlierLine(page)}
           </Button>
         </Inline>
       )}
-      <ConnectionNames needed={callsServer}>
-        {steps.slice(page.from).map((step, index) => (
-          // Note that a step is keyed by its place among them all, because the replay never changes once handed, and a page landing above keeps the rows below as they were.
-          <StepRow
-            key={page.from + index}
-            step={step}
-            todos={todos.get(page.from + index)}
-            place={place}
-          />
-        ))}
-      </ConnectionNames>
+      {children(page.from)}
     </div>
+  );
+}
+
+/** The replayed steps the opened card draws, a page at a time (`PagedRows`). */
+function ReplaySteps({
+  steps,
+  place,
+}: {
+  steps: readonly ReplayStep[];
+  place: ReplayPlace;
+}): React.JSX.Element {
+  // Note that the replay's calls stand in its first message's words, which the transcript's own check for a server's call never reads.
+  const callsServer = useMemo(() => replayCallsServer(steps), [steps]);
+  const todos = useMemo(() => replayTaskTodos(steps), [steps]);
+
+  return (
+    <PagedRows count={steps.length} earlierLine={earlierStepsLine}>
+      {(from) => (
+        <ConnectionNames needed={callsServer}>
+          {steps.slice(from).map((step, index) => (
+            // Note that a step is keyed by its place among them all, because the replay never changes once handed, and a page landing above keeps the rows below as they were.
+            <StepRow key={from + index} step={step} todos={todos.get(from + index)} place={place} />
+          ))}
+        </ConnectionNames>
+      )}
+    </PagedRows>
+  );
+}
+
+/** Where the source's transcript a card carried whole stands: still being read, read, or not to be read. */
+const CARRIED_READ = {
+  READING: "reading",
+  READ: "read",
+  UNREAD: "unread",
+} as const;
+
+type CarriedRead =
+  | { readonly kind: typeof CARRIED_READ.READING }
+  | { readonly kind: typeof CARRIED_READ.UNREAD }
+  | { readonly kind: typeof CARRIED_READ.READ; readonly transcript: CarriedTranscript };
+
+/** What the card says where the source's transcript could not be read, as where it was deleted or the reader cannot reach it. */
+const CARRIED_UNREAD_LINE = "The source agent's transcript could not be read.";
+
+/** No messages drawn, while the source's transcript is being read or could not be. */
+const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
+
+/**
+ * The source's transcript where the replay carried it whole: held while
+ * the card's tab shows, and read to its start, a page at a time, since a
+ * continue carries it whole and a fork's message may stand on any page;
+ * nothing for a replay of steps, which holds nothing.
+ */
+function useCarried(replay: Replay, place: ReplayPlace): CarriedRead | undefined {
+  const carried = replay.carried === true;
+  const holds = carried && place.shown;
+  const { agentId } = replay;
+
+  const read = useAgentTranscript({
+    transcript: useMemo(() => ({ kind: TRANSCRIPT_KIND.AGENT, agentId }), [agentId]),
+    shown: holds,
+  });
+
+  const { messages, pages, hasOlder, loadingOlder, olderFailed, loadOlder, failed } = read;
+  const whole = pages > 0 && !hasOlder;
+
+  useEffect(() => {
+    if (holds && hasOlder && !loadingOlder && !olderFailed) loadOlder();
+  }, [holds, hasOlder, loadingOlder, olderFailed, loadOlder]);
+
+  const transcript = useMemo(
+    () => (whole ? carriedTranscript(messages, replay) : undefined),
+    [whole, messages, replay],
+  );
+
+  if (!carried) return undefined;
+
+  if (failed || olderFailed) return { kind: CARRIED_READ.UNREAD };
+
+  if (!whole) return { kind: CARRIED_READ.READING };
+
+  return transcript === undefined
+    ? { kind: CARRIED_READ.UNREAD }
+    : { kind: CARRIED_READ.READ, transcript };
+}
+
+/**
+ * The source's messages a card carried whole draws in its steps' place, a
+ * page at a time (`PagedRows`), each as the transcript draws it, under the
+ * source rather than the card's own agent, so a picture, a computer call's
+ * app, and a reasoning's or a call's cut body are read of the source's, and
+ * offering neither a rewind nor a fork, which act on the card's own agent;
+ * a quiet line where they could not be read, and nothing while they are.
+ */
+function CarriedMessages({
+  agentId,
+  read,
+  place,
+}: {
+  agentId: string;
+  read: CarriedRead;
+  place: ReplayPlace;
+}): React.JSX.Element | null {
+  const pictures = useAgentPictureDoor(agentId);
+  const wholeParts = useWholePartDoor(agentId);
+  const messages = read.kind === CARRIED_READ.READ ? read.transcript.messages : NO_MESSAGES;
+  const computerApps = useMemo(() => computerAppsOf(messages), [messages]);
+
+  if (read.kind === CARRIED_READ.READING) return null;
+
+  if (read.kind === CARRIED_READ.UNREAD) {
+    return (
+      <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} data-replay-unread="">
+        {CARRIED_UNREAD_LINE}
+      </Text>
+    );
+  }
+
+  return (
+    <TranscriptAgentOn agentId={agentId} planId={undefined}>
+      <AgentPicturesProvider value={pictures}>
+        <ComputerAppsProvider value={computerApps}>
+          <WholePartsProvider value={wholeParts}>
+            <RewindProvider value={undefined}>
+              <ForkProvider value={undefined}>
+                <PagedRows count={messages.length} earlierLine={earlierMessagesLine}>
+                  {(from) =>
+                    messages
+                      .slice(from)
+                      .map((message) => (
+                        <Fragment key={message.id}>{place.message(message)}</Fragment>
+                      ))
+                  }
+                </PagedRows>
+              </ForkProvider>
+            </RewindProvider>
+          </WholePartsProvider>
+        </ComputerAppsProvider>
+      </AgentPicturesProvider>
+    </TranscriptAgentOn>
   );
 }
 
@@ -591,7 +751,14 @@ export function ReplayCard({
 
   const left = leftOutLine(replay);
   const summary = summaryLine(replay);
-  const count = replayCount(replay);
+  const carried = useCarried(replay, place);
+
+  const count =
+    carried === undefined
+      ? replayCount(replay)
+      : carried.kind === CARRIED_READ.READ
+        ? carried.transcript.count
+        : undefined;
 
   return (
     <Message from={MESSAGE_ROLE.USER} className="agent-origin">
@@ -639,7 +806,11 @@ export function ReplayCard({
               <em>{left}</em>
             </Text>
           )}
-          <ReplaySteps steps={replay.steps} place={place} />
+          {carried === undefined ? (
+            <ReplaySteps steps={replay.steps} place={place} />
+          ) : (
+            <CarriedMessages agentId={agentId} read={carried} place={place} />
+          )}
           <ReplayFoot agentId={agentId} place={place} />
         </PlanContent>
       </Plan>

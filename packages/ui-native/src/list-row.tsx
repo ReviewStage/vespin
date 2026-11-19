@@ -83,6 +83,7 @@ import {
   useColors,
 } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, ROW_INSET, SPACE } from "./tokens/space.js";
+import { SYSTEM_COLOR, type SystemColor, useSystemColors } from "./tokens/swipe-colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How many lines a row's title and its line take: one each at the standard sizes, and more at an accessibility size, so they still read. */
@@ -129,13 +130,43 @@ const PULL_REQUEST_HEARD = "Pull request";
 const SUB_TASKS_SHOWN = "Sub-tasks shown";
 const SUB_TASKS_HIDDEN = "Sub-tasks hidden";
 
-/** How a row's action reads: a plain gray, or a destructive red. Copper is kept for what wants the reader, so no act is drawn in it. */
+/**
+ * What a row's act means, which sets the color its swipe stands on: one
+ * that marks a row read or unread, sets a reminder, finishes something
+ * (Resolve, Mark done), pins, archives, or deletes, and the rest. In a long
+ * press menu only a destructive act, a delete, reads apart, in the system's
+ * red; the rest stand in the menu's ink. Copper is kept for what wants the
+ * reader, so no act is drawn in it.
+ */
 export const ROW_ACTION_TONE = {
   NEUTRAL: "neutral",
   DESTRUCTIVE: "destructive",
+  READ: "read",
+  REMIND: "remind",
+  DONE: "done",
+  PIN: "pin",
+  ARCHIVE: "archive",
 } as const;
 
 export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TONE];
+
+/**
+ * The system color each act's swipe stands on, its glyph in white, as Mail
+ * colors its swipes on iOS 26: Read and Unread blue, Remind Me and Archive
+ * purple, Flag orange (a pin here), Trash red, and More gray, so red is kept
+ * for a delete. Remind me and Archive never share a list. Mail has no act that
+ * finishes a thread, so Resolve and Mark done take green, as Reminders
+ * marks one complete. This one table sets every list's swipe colors.
+ */
+const SWIPE_FILL = {
+  [ROW_ACTION_TONE.NEUTRAL]: SYSTEM_COLOR.GRAY,
+  [ROW_ACTION_TONE.DESTRUCTIVE]: SYSTEM_COLOR.RED,
+  [ROW_ACTION_TONE.READ]: SYSTEM_COLOR.BLUE,
+  [ROW_ACTION_TONE.REMIND]: SYSTEM_COLOR.PURPLE,
+  [ROW_ACTION_TONE.DONE]: SYSTEM_COLOR.GREEN,
+  [ROW_ACTION_TONE.PIN]: SYSTEM_COLOR.ORANGE,
+  [ROW_ACTION_TONE.ARCHIVE]: SYSTEM_COLOR.PURPLE,
+} as const satisfies Record<RowActionTone, SystemColor>;
 
 export type RowAction = {
   /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
@@ -170,6 +201,8 @@ export type RowSubmenu = {
   /** Menus one level further down, after its choices, such as a task's repository inside More. */
   readonly submenus?: readonly RowSubmenu[] | undefined;
   readonly actions?: readonly RowAction[] | undefined;
+  /** What it means as a swipe, which sets the color it stands on, such as Remind me's purple; a plain act's gray where none is given. */
+  readonly tone?: RowActionTone | undefined;
 };
 
 /** What a swipe reveals: an act, or a menu of choices, such as a task's Status, which opens where the act would run. */
@@ -428,32 +461,37 @@ export function rowPlacement(
   ];
 }
 
-/** Whether a full swipe from an edge runs its first act: never where that act is destructive, such as Archive, which then waits for its button's tap, nor where it is a menu. */
+/** The tones of acts that ask before they run, which a full swipe never runs, so they wait for their button's tap. */
+const ASKS_FIRST: ReadonlySet<RowActionTone> = new Set([
+  ROW_ACTION_TONE.DESTRUCTIVE,
+  ROW_ACTION_TONE.ARCHIVE,
+]);
+
+/** Whether a full swipe from an edge runs its first act: never where that act asks first, such as Archive or a delete, nor where it is a menu. */
 function fullSwipes(swipes: readonly RowSwipe[]): boolean {
   const first = swipes[0];
 
-  return first !== undefined && !isSubmenu(first) && first.tone !== ROW_ACTION_TONE.DESTRUCTIVE;
+  return first !== undefined && !isSubmenu(first) && !ASKS_FIRST.has(first.tone);
 }
 
 /**
  * A swipe's piece behind the row: an act's button, or a menu's, filled with
- * the action gray, which holds 4.5:1 under the swipe's white words in both
- * themes where the muted ink, light in dark, did not. Note that an act that
- * takes something away fills with the danger fill, which holds the same
- * under white, without the destructive role, because SwiftUI takes a row
- * out of its list the moment a destructive swipe is pressed, before an act
- * that asks first, such as Archive, hears its answer, so a Cancel left the
- * row gone under its section's count.
+ * the system color its meaning takes (`SWIPE_FILL`). Note that a delete
+ * fills red without the destructive role, because
+ * SwiftUI takes a row out of its list the moment a destructive swipe is
+ * pressed, before an act that asks first, such as Archive, hears its answer,
+ * so a Cancel left the row gone under its section's count.
  */
-function swipeButton(swipe: RowSwipe, colors: BrandColors) {
-  if (isSubmenu(swipe)) return rowSubmenu(swipe, colors, colors.ACTION_FILL);
+function swipeButton(
+  swipe: RowSwipe,
+  colors: BrandColors,
+  fills: Readonly<Record<SystemColor, string>>,
+) {
+  const fill = fills[SWIPE_FILL[swipe.tone ?? ROW_ACTION_TONE.NEUTRAL]];
 
-  return actionButton(
-    swipe,
-    colors,
-    swipe.tone === ROW_ACTION_TONE.DESTRUCTIVE ? colors.DANGER_FILL : colors.ACTION_FILL,
-    false,
-  );
+  if (isSubmenu(swipe)) return rowSubmenu(swipe, colors, fill);
+
+  return actionButton(swipe, colors, fill, false);
 }
 
 /** A swiped act as it stands again in the long press menu: in the muted ink a menu's glyph takes, and red through the system's destructive role, since a menu takes no row away. */
@@ -510,8 +548,10 @@ export function RowFrame({
   readonly leading?: number | undefined;
 }) {
   const colors = useColors();
+  const fills = useSystemColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
+  const choosing = useContext(RowChoosingContext);
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
@@ -533,7 +573,8 @@ export function RowFrame({
   const groups = menuGroups.filter(menuGroupFilled);
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
-  if (!ownGroup && groups.length === 0 && preview === undefined) {
+  // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
+  if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
     return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
@@ -575,12 +616,12 @@ export function RowFrame({
       {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
-          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
+          {trailingActions.map((swipe) => swipeButton(swipe, colors, fills))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
-          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
+          {leadingActions.map((swipe) => swipeButton(swipe, colors, fills))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>
@@ -800,14 +841,14 @@ function FlushLine({ children }: { readonly children: ReactNode }) {
 /**
  * An Inbox row's last line, the glyph and words of what it asks, in the 13
  * pt line, as the panel's row reads and as Mail's preview stands under its
- * subject: the muted ink at rest and the full ink while unread, only the
+ * subject: the muted ink at rest or once done and the full ink while unread, only the
  * ask's glyph in the attention ink. Under a task's line it stands flush with
  * the ring, the glyph leading its words; on an agent's own thread, whose
  * title the glyph leads, it stands in the title's column, a glyph's column
  * left empty, so the words hang under the title at every size.
  */
 function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
-  const { line, summary, flush, unread = false } = props;
+  const { line, summary, flush, unread = false, done = false } = props;
   const colors = useColors();
   const lines = useRowLines();
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
@@ -819,7 +860,7 @@ function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
     <Text
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(unread ? colors.TEXT : colors.TEXT_MUTED),
+        foregroundStyle(unread && !done ? colors.TEXT : colors.TEXT_MUTED),
         lineLimit(lines.line),
       ]}
     >

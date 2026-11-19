@@ -25,8 +25,8 @@ appId: dev.vespin.ios
 - assertVisible: "Reply"
 - waitForAnimationToEnd
 # New thread, from the composer's +: a switch named for the agent, which has
-# the box ask for a new thread, and Got it steps aside, since the next send
-# starts one rather than settling.
+# the box ask for a new thread, its Send never reading Got it, since the next
+# send starts one rather than settling.
 - tapOn:
     id: "composer-add"
 - assertVisible: "Send as a new thread to.*"

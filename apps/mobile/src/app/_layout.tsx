@@ -79,10 +79,10 @@ const SHEET_ROUTE = {
   SETTINGS: "settings",
   START_TASK: "start-task",
   START_AGENT: "start-agent",
-  AGENT_MODEL: "agent-model",
   AGENT_PORTS: "agent-ports",
   TASK_RELATION: "task-relation",
   MOVE_TASK: "move-task",
+  EDIT_DESCRIPTION: "edit-description",
   TASK_FOLLOWING: "task-following",
   ADD_FOLLOWER: "add-follower",
   NEW_WORKSPACE: "new-workspace",
@@ -251,11 +251,6 @@ function GuardedScreens() {
             name={SHEET_ROUTE.START_AGENT}
             options={{ presentation: "fullScreenModal", title: "New agent" }}
           />
-          {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
-          <Stack.Screen
-            name={SHEET_ROUTE.AGENT_MODEL}
-            options={{ presentation: sheetPresentation, title: "Options" }}
-          />
           <Stack.Screen
             name={SHEET_ROUTE.AGENT_PORTS}
             options={{ ...shortSheet, title: "Ports" }}
@@ -267,6 +262,11 @@ function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.MOVE_TASK}
             options={{ ...shortSheet, title: "Move to workspace" }}
+          />
+          {/* Note that Edit description opens whole and can't be swiped away while it holds words not saved (`useKeptWords`), as GitHub's issue editor stands. */}
+          <Stack.Screen
+            name={SHEET_ROUTE.EDIT_DESCRIPTION}
+            options={{ presentation: sheetPresentation, title: "Edit description" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.TASK_FOLLOWING}

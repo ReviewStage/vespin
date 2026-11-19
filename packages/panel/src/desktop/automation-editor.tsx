@@ -53,13 +53,7 @@ import {
   type PullRequestMoment,
 } from "@repo/features/automation-wire";
 import { readerZone } from "@repo/features/date-mention";
-import {
-  INTEGRATION_NAME,
-  INTEGRATION_PROVIDER_LIST,
-  INTEGRATION_STATUS,
-  type IntegrationProvider,
-  integrationConnectionOf,
-} from "@repo/features/integration-wire";
+import { INTEGRATION_NAME, integrationConnectionOf } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -82,7 +76,6 @@ import {
   TERM,
 } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
@@ -114,8 +107,6 @@ import {
   NO_CONTEXT_MENU,
   PAGE_FRAME,
   POPOVER_ALIGN,
-  PROVIDER_MARK_SIZE,
-  ProviderMark,
   Reveal,
   RevealArea,
   RevealChoice,
@@ -176,9 +167,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { useLinkItems } from "../copy-link-item.js";
 import { confirmFailure, failureShown, unreadShown } from "../failure-report.js";
-import { useIntegrationStatuses } from "../integration-statuses.js";
 import { useCreator } from "../member-directory.js";
-import { useOpenSettings } from "../open-settings.js";
 import type { LeaveAsk, PlaceLeave } from "../places/place-leave.js";
 import { Picker, PickerRow } from "../settings/picker-row.js";
 import { SelectRow } from "../settings/select-row.js";
@@ -186,10 +175,10 @@ import { SwitchRow } from "../settings/switch-row.js";
 import { hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { agentMenuRow, useAgentRowPlace } from "../tasks/agent-menu-row.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
-import { AgentServersButton } from "../tasks/agent-servers.js";
 import type { MentionableAgent } from "../tasks/mention-picker.js";
 import { ModelMenu } from "../tasks/model-menu.js";
 import { CHIP_PLACE, RepositoryChip, type RepositoryChooser } from "../tasks/repository-chip.js";
+import { OwnServersRow } from "../tasks/servers-row.js";
 import { mentionableAgent } from "../tasks/task-mentions.js";
 import { useKnownNames } from "../tasks/use-known-names.js";
 import { useListedAgent } from "../tasks/use-workspace-agents.js";
@@ -740,128 +729,12 @@ function ServersRow({
     );
   }
 
-  return <OwnServersRow disabled={disabled} onSwitch={onSwitch} />;
-}
-
-/** Names as a sentence says them: "Linear", "Linear and Notion", "Linear, Notion, and Sentry". */
-function namesSaid(providers: readonly IntegrationProvider[]): string {
-  return andList(providers.map((provider) => INTEGRATION_NAME[provider]));
-}
-
-/** The most marks the servers chip holds before it counts the rest, so it stays a picker's width. */
-const SERVERS_CHIP_MARKS = 4;
-
-/**
- * The servers row while no read of the owner's connections has answered:
- * a block where the chip will stand, claiming nothing, or the
- * failure and Retry where the read was refused.
- */
-function UnreadServersRow({
-  failed,
-  onRetry,
-}: {
-  failed: boolean;
-  onRetry: () => void;
-}): React.JSX.Element {
-  if (failed) {
-    return (
-      <SettingsRow
-        label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}
-        below={() => (
-          <ReplayUnmask>
-            <ErrorState
-              onRetry={onRetry}
-              failure={unreadShown(FAILURE_SURFACE.AUTOMATION_INTEGRATIONS_READ)}
-            >
-              Your connected MCP servers could not be read.
-            </ErrorState>
-          </ReplayUnmask>
-        )}
-      />
-    );
-  }
-
-  return <ServersRowSkeleton />;
-}
-
-/** The servers row while the connections are read: its name, and a block where its field chip will stand, claiming nothing. */
-function ServersRowSkeleton(): React.JSX.Element {
   return (
-    <SettingsRow label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}>
-      {() => (
-        <SkeletonRegion label="Reading your connected MCP servers…">
-          <SettingsControlSkeleton control={SETTINGS_SKELETON_CONTROL.SELECT} />
-        </SkeletonRegion>
-      )}
-    </SettingsRow>
-  );
-}
-
-/** The servers row as the automation's creator sees it: their connections, switched in the agent box's own popover from a field chip. */
-function OwnServersRow({
-  disabled,
-  onSwitch,
-}: {
-  disabled: readonly string[];
-  onSwitch: (disabled: readonly string[]) => void;
-}): React.JSX.Element {
-  const statuses = useIntegrationStatuses();
-  const openSettings = useOpenSettings();
-  // Note that no provider standing yet is a read still to answer, so the row claims nothing until one does.
-  const read = INTEGRATION_PROVIDER_LIST.some((provider) => statuses.statusOf(provider));
-
-  if (!read) {
-    return <UnreadServersRow failed={statuses.readFailed} onRetry={() => void statuses.read()} />;
-  }
-
-  const connected = INTEGRATION_PROVIDER_LIST.filter(
-    (provider) => statuses.statusOf(provider) === INTEGRATION_STATUS.CONNECTED,
-  );
-
-  const on = connected.filter((provider) => !disabled.includes(provider));
-  const off = connected.filter((provider) => disabled.includes(provider));
-  const shown = on.slice(0, SERVERS_CHIP_MARKS);
-
-  // Note that the chip's marks already say which are on, so the words name only what they cannot.
-  const note =
-    connected.length === 0
-      ? "None connected yet."
-      : off.length === 0
-        ? undefined
-        : `${namesSaid(off)} off.`;
-
-  return (
-    <SettingsRow
-      label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}
-      description={note === undefined ? undefined : <ReplayUnmask>{note}</ReplayUnmask>}
-    >
-      {() => (
-        <AgentServersButton
-          servers={{
-            disabled,
-            onSwitch,
-            onOpenSettings: () => openSettings({ page: SETTINGS_VIEW.INTEGRATIONS }),
-          }}
-          statuses={statuses}
-          face={
-            on.length === 0 ? (
-              <ChipName>
-                <ReplayUnmask>None</ReplayUnmask>
-              </ChipName>
-            ) : (
-              <span className="automation-servers inline-flex items-center gap-tight-gap">
-                {shown.map((provider) => (
-                  <ProviderMark key={provider} provider={provider} size={PROVIDER_MARK_SIZE.ICON} />
-                ))}
-                {on.length > shown.length ? (
-                  <ChipName>{`+${on.length - shown.length}`}</ChipName>
-                ) : null}
-              </span>
-            )
-          }
-        />
-      )}
-    </SettingsRow>
+    <OwnServersRow
+      disabled={disabled}
+      onSwitch={onSwitch}
+      readFailure={FAILURE_SURFACE.AUTOMATION_INTEGRATIONS_READ}
+    />
   );
 }
 

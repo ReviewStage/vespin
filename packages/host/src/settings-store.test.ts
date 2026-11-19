@@ -250,6 +250,7 @@ const SAMPLE_VALUE = {
   onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
   introsSeen: '["inbox"]',
   githubWakesOff: '["comment"]',
+  newAgentServersOff: '["posthog"]',
   // On is the default, so an Inbox turned off is the choice that has to survive a reopen.
   inbox: false,
   // Each diff setting away from its default, the look a review tool's reader picked.

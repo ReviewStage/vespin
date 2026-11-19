@@ -1,24 +1,15 @@
 // marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile, the needs-you, working, and failed marks and a glyph in its tone.
 
-import {
-  Circle,
-  Image,
-  ProgressView,
-  RNHostView,
-  RoundedRectangle,
-  Text,
-  ZStack,
-} from "@expo/ui/swift-ui";
+import { Circle, Image, RNHostView, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityLabel,
-  controlSize,
   font,
   foregroundStyle,
   frame,
+  offset,
   opacity,
   resizable,
-  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
@@ -33,9 +24,9 @@ import {
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { identityLetter } from "@repo/features/workspace-tile";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
-import { useScaledSize } from "./accessibility.js";
+import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import {
@@ -49,6 +40,7 @@ import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { readWorkingBeat, subscribeWorkingBeat } from "./working-beat.js";
 import { tileHue } from "./workspace-tile-model.js";
 
 /** The share of an avatar's width its letter stands at, half of it, as the panel's avatar sets its letter. */
@@ -486,17 +478,108 @@ export function FailedMark() {
   );
 }
 
-/** The system's spinner, small and in the working ink, where an agent is at work. */
+/** One cell of the working mark's grid, its side, in points: the panel's 3 px. */
+const WORKING_CELL = 3;
+
+/** One step from a cell to the next, cell and gap, in points: the panel's 5 px. */
+const WORKING_PITCH = 5;
+
+/** The working mark's side, in points: the panel's 16 px icon seat. */
+const WORKING_SIDE = 16;
+
+/** Where the grid's first cell stands from the mark's corner, the grid centered in the side. */
+const WORKING_INSET = (WORKING_SIDE - (2 * WORKING_PITCH + WORKING_CELL)) / 2;
+
+/** The cells of the track, column and row, in the order the chasers lap them, as the panel's mark laps them. */
+const WORKING_TRACK = [
+  [0, 0],
+  [1, 0],
+  [2, 0],
+  [2, 1],
+  [2, 2],
+  [1, 2],
+  [0, 2],
+  [0, 1],
+] as const;
+
+/** The pixels that move: each chaser and the fainter tail one cell behind it, with the track cell each rests on when still and steps on from, as the panel's are. */
+const WORKING_DOTS = [
+  { restsOn: 1, tail: false },
+  { restsOn: 0, tail: true },
+  { restsOn: 5, tail: false },
+  { restsOn: 4, tail: true },
+] as const;
+
+/** How faint the track's cells and a chaser's tail stand, as the panel's mark draws them. */
+const WORKING_OPACITY = { TRACK: 0.3, TAIL: 0.6, LEAD: 1 } as const;
+
+/** A beat that never moves, for a mark held still. */
+function holdBeat(): () => void {
+  return () => undefined;
+}
+
+/** The beat a mark steps on: the one shared beat, or its resting frame where the reader reduces motion. */
+function useBeat(still: boolean): number {
+  return useSyncExternalStore(still ? holdBeat : subscribeWorkingBeat, () =>
+    still ? 0 : readWorkingBeat(),
+  );
+}
+
+/**
+ * The one mark an agent at work wears, the panel's own (`@repo/ui`'s
+ * `WorkingMark`): two pixels chasing each other round the edge of a 3×3 grid
+ * of 3 pt cells 2 pt apart, in the muted ink, each tailed by a fainter one,
+ * stepping a cell on the one 200 ms beat every mark on screen shares
+ * (`working-beat.ts`), so the eight cells lap in 1.6 s and every mark steps
+ * together. Its 16 pt side grows with the reader's text size. Where the
+ * reader reduces motion it holds its resting frame, chosen mid-lap so a
+ * still mark lights four cells and reads as working. Note that only the
+ * mark itself draws again on a step, never the row it stands in, since it
+ * reads the beat alone. It is heard as Working.
+ */
 export function WorkingMark() {
   const colors = useColors();
+  const side = useScaledSize(WORKING_SIDE);
+  const scale = side / WORKING_SIDE;
+  const beat = useBeat(useReduceMotion());
+  const cell = WORKING_CELL * scale;
+
+  const square = (index: number, shade: number, key: string) => {
+    const [column, row] = WORKING_TRACK[index % WORKING_TRACK.length] ?? WORKING_TRACK[0];
+
+    return (
+      <RoundedRectangle
+        key={key}
+        cornerRadius={cell / 4}
+        modifiers={[
+          frame({ width: cell, height: cell }),
+          foregroundStyle(colors.TEXT_MUTED),
+          opacity(shade),
+          offset({
+            x: (WORKING_INSET + column * WORKING_PITCH) * scale,
+            y: (WORKING_INSET + row * WORKING_PITCH) * scale,
+          }),
+        ]}
+      />
+    );
+  };
 
   return (
-    <ProgressView
+    <ZStack
+      alignment="topLeading"
       modifiers={[
-        controlSize("mini"),
-        tint(colors.WORKING),
+        frame({ width: side, height: side, alignment: "topLeading" }),
         accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.WORKING]),
       ]}
-    />
+    >
+      {WORKING_TRACK.map((_, index) => square(index, WORKING_OPACITY.TRACK, `track-${index}`))}
+      {WORKING_DOTS.map(({ restsOn, tail }) =>
+        square(
+          restsOn + beat,
+          tail ? WORKING_OPACITY.TAIL : WORKING_OPACITY.LEAD,
+          `dot-${restsOn}`,
+        ),
+      )}
+    </ZStack>
   );
 }

@@ -126,7 +126,8 @@ export function forkStart(input: {
   readonly words: string;
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
-  readonly disabledServers: readonly string[];
+  /** The servers the draft's + menu switched; none where it switched none, when the new agent runs on its source's. */
+  readonly disabledServers?: readonly string[] | undefined;
   /** Where the new agent runs, where one was picked; none for where its source runs. */
   readonly runsOn?: AgentRunsOnRequest | undefined;
   /** The mode the new agent starts in, where one was picked; none for the member's Default permissions. */
@@ -140,8 +141,8 @@ export function forkStart(input: {
     from: forkFrom(input.fork),
     ...(note === "" && attachments.length === 0 ? undefined : { note }),
     ...(attachments.length === 0 ? undefined : { attachments }),
-    // Note that the servers go even when none is off, because a Start naming none runs on the source's.
-    disabledServers,
+    // Note that servers switched go even when none is off, because a Start naming none runs on the source's.
+    ...(disabledServers === undefined ? undefined : { disabledServers }),
     ...(choice === undefined ? undefined : choiceRequest(choice)),
     ...(runsOn === undefined ? undefined : { runsOn }),
     ...(permissionMode === undefined ? undefined : { permissionMode }),

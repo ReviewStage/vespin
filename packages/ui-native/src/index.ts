@@ -72,7 +72,13 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
-export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
+export {
+  Composer,
+  ComposerFoot,
+  type ComposerMenu,
+  type ComposerSaving,
+  type ComposerSendAs,
+} from "./composer.js";
 
 export {
   type AttachedPicture,
@@ -164,6 +170,8 @@ export { MachineAskSheet } from "./machine-ask-sheet.js";
 
 export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
 
+export { MarkdownEditor } from "./markdown-editor.js";
+
 export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
 
 export { MarkdownPage } from "./markdown-page.js";
@@ -185,6 +193,8 @@ export {
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
 export { useMinute, useToday } from "./minute.js";
+
+export { type ModeChoice, ModelChoiceSheet, type ModelOption } from "./model-choice-sheet.js";
 
 export { SwitchRow } from "./option-rows.js";
 
@@ -315,6 +325,9 @@ export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 export {
   askForName,
   askForWords,
+  askToChoose,
+  type ChoiceAct,
+  type ChoiceAsk,
   type NameAsk,
   shareWords,
   WORDS_KIND,
@@ -322,6 +335,13 @@ export {
   type WordsAsk,
   type WordsKind,
 } from "./system-asks.js";
+
+export {
+  TASK_SKELETON_ROW,
+  TaskHeadSkeleton,
+  TaskSectionsSkeleton,
+  type TaskSkeletonSection,
+} from "./task-page-skeleton.js";
 
 export {
   AGENT_ROW_STATE,

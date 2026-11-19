@@ -15,7 +15,9 @@ builds a control of its own.
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
-  `WordsRow` for its description), `SplitView` (a tab's list
+  `WordsRow` for its description), and its skeleton while it is read
+  (`TaskHeadSkeleton`, `TaskSectionsSkeleton`: those rows with placeholder
+  words in `SkeletonRegion`, as many as the loaded page declares), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
   `ColumnBar`: its inline title, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,
@@ -58,7 +60,10 @@ builds a control of its own.
   `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
   for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
-  `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
+  `WorkingMark`, the panel's own two pixels chasing round a 3×3 grid on the
+  one 200 ms beat every mark shares (`working-beat.ts`), held mid-lap where
+  the reader reduces motion, wherever an agent is at work, the system's
+  spinner kept for a read in flight, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of the
   system's Liquid Glass (`BAR_GLASS`, SwiftUI's `glassEffect`), `GlassDock` the screen that pins one
@@ -280,10 +285,16 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   glyph, a count of what needs you, a reminder's time, the selected tab and
   the Inbox count, a picked option or a switch that is on, and a filled
   `Button`. Everything else stands in the ink: an ask's words on a row,
-  links, bar buttons, swipe actions, a bordered or plain button, and a
-  row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
-  asks for copper by name. Status tones stand on the status marks alone: a
-  task's ring, and a pull request's state.
+  links, bar buttons, a bordered or plain button, and a row that acts,
+  such as New agent. `Screen` tints in `TEXT`, so a piece asks for copper
+  by name. Status tones stand on the status marks alone: a task's ring,
+  and a pull request's state. A swipe act stands on iOS's own system color
+  for what it means, its glyph in white, as Mail colors its swipes: mark
+  read or unread blue, Remind me and Archive purple, pin orange (Mail's
+  Flag), Resolve and Mark done green, a delete red, and the rest gray
+  (Mail's More). The act's `ROW_ACTION_TONE` names its meaning, and
+  `SWIPE_FILL` in `list-row.tsx` is the one table of each meaning's color,
+  over `SYSTEM_COLOR`'s light, dark and Increase Contrast values.
 - **Scopes and capsules.** A list's scopes are the system's segmented
   control under its title, as Mail and the App Store switch a list's views;
   in a split view's 320 pt list column, which cuts the segments' words
@@ -293,8 +304,7 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   categories do; one listing nothing stands them over its empty state
   (`ScopePicker`), so another scope is one tap away. The Inbox stands its
   scopes in its ⋯ menu instead, the one shown checked over its other acts,
-  as Mail's filter does, and its bar names a scope other than the one it
-  opens on under its title (`ColumnBar`'s `subtitle`, `Screen`'s). `Chip` is a capsule an act or a choice stands in, such as a
+  as Mail's filter does, the checked one saying which is shown. `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do.

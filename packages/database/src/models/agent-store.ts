@@ -916,6 +916,30 @@ const updateAgentTargetDeviceRow = SqlSchema.void({
     ),
 });
 
+/** The agent's row pointed at the place it moved to, as `moveAgentPlace` says. */
+const moveAgentRow = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    machine: Schema.Literals(Object.values(AGENT_MACHINE)),
+    deviceId: Schema.NullOr(Schema.String),
+    startedFrom: Schema.NullOr(Schema.Unknown),
+  }),
+  execute: ({ userId, agentId, machine, deviceId, startedFrom }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({
+          machine,
+          deviceId,
+          runnerTokenHash: null,
+          // SAFETY: the value is the agent's own `started_from`, less the keys `moveAgentPlace` drops.
+          startedFrom: startedFrom as StoredStartedFrom | null,
+        })
+        .where(reachableAgent(userId, agentId)),
+    ),
+});
+
 const markTurnFastRefused = SqlSchema.void({
   Request: Schema.Struct({ userId: Schema.String, turnId: Schema.String }),
   execute: ({ userId, turnId }) =>
@@ -3075,6 +3099,36 @@ export function updateAgentTargetDevice(
   targetDeviceId: string,
 ): AgentStoreEffect<void> {
   return updateAgentTargetDeviceRow({ userId, agentId, targetDeviceId });
+}
+
+/**
+ * The agent moved to another place in the same row (`coder-host/move.ts`):
+ * its machine and device, its runner's bearer retired, since any runner it
+ * was handed ran at the old place, and what it was started from kept but for
+ * the sandbox and session a Start handed it, so its first open at the new
+ * place neither forks a source's drive nor forks a source's session again.
+ * Note that the caller halts the old runner and settles its launches; this
+ * writes the row alone.
+ */
+export function moveAgentPlace(
+  userId: string,
+  agent: Pick<Agent, "id" | "startedFrom">,
+  place: { readonly machine: AgentMachineKind; readonly deviceId: string | null },
+): AgentStoreEffect<void> {
+  const kept = agent.startedFrom ?? null;
+
+  const startedFrom =
+    kept === null
+      ? null
+      : {
+          agentId: kept.agentId,
+          steps: kept.steps,
+          totalSteps: kept.totalSteps,
+          ...(kept.messageId === undefined ? undefined : { messageId: kept.messageId }),
+          ...(kept.branch === undefined ? undefined : { branch: kept.branch }),
+        };
+
+  return moveAgentRow({ userId, agentId: agent.id, ...place, startedFrom });
 }
 
 /** The account's turn marked as one a step of ran at standard speed because Anthropic refused it Fast; nothing written for a turn the account does not own. */

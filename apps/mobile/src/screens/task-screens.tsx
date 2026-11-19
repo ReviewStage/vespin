@@ -136,9 +136,13 @@ import {
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
+  TASK_SKELETON_ROW,
   TaskHead,
+  TaskHeadSkeleton,
   TaskPreview,
   TaskRow,
+  TaskSectionsSkeleton,
+  type TaskSkeletonSection,
   useColors,
   useMinute,
   useRowAsker,
@@ -201,6 +205,7 @@ import {
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { PLUS_TAB, useComposeAction, useDetailColumnBar, useListColumn } from "./app-sidebar.js";
+import { EDIT_DESCRIPTION_ROUTE } from "./description-edit-screens.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -211,9 +216,6 @@ const TASKS_TITLE = "Tasks";
 
 /** What a pushed task's screen says where the read list holds no task its link names, such as one deleted since. */
 const TASK_NOT_FOUND = "Task not found";
-
-/** What a pushed task's screen says while the list that holds it is first read. */
-const READING_TASK = readingWords("the task");
 
 /** What the Tasks list says while the list is first read, as the panel's Tasks page does. */
 const READING_TASKS = readingWords(TERM.TASK.many);
@@ -237,6 +239,9 @@ const WORDS = {
   TRY_AGAIN: "Try again",
   PAGES: "Pages",
   DESCRIPTION: "Description",
+  /** The press at the Description header's end that opens it to edit, as Notes' and Reminders' sections end. */
+  EDIT: "Edit",
+  EDIT_DESCRIPTION: "Edit description",
   /** What a task's page says under Description where the task has none, rather than leaving the page blank under its headers. */
   NO_DESCRIPTION: "No description yet",
   CREATED_BY: "Created by",
@@ -341,7 +346,7 @@ function settleSwipes(
           {
             label: WORDS.MARK_DONE,
             symbol: GLYPH.CHECK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
+            tone: ROW_ACTION_TONE.DONE,
             onPress: () => setStatus(task.id, TASK_STATUS.DONE),
           },
         ];
@@ -550,7 +555,7 @@ function rowActs(
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
         symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
-        tone: ROW_ACTION_TONE.NEUTRAL,
+        tone: ROW_ACTION_TONE.PIN,
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
@@ -1104,6 +1109,8 @@ function headPicture(group: TaskTreeGroup): string | undefined {
 /** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
 interface TaskMenuDoors extends TaskRowDoors {
   readonly askDelete: (task: TaskSummary) => void;
+  /** Opens Edit description, where the workspace's descriptions stand on; none where they stand off. */
+  readonly editDescription: ((task: TaskSummary) => void) | undefined;
   readonly newSubTask: (task: TaskSummary) => void;
   readonly openRelation: OpenRelation;
 }
@@ -1124,6 +1131,16 @@ function historyActions(
   ];
 }
 
+/** Edit description as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
+function editActions(
+  task: TaskSummary,
+  open: ((task: TaskSummary) => void) | undefined,
+): BarMenu["actions"] {
+  if (open === undefined) return [];
+
+  return [{ label: WORDS.EDIT_DESCRIPTION, symbol: GLYPH.EDIT, onPress: () => open(task) }];
+}
+
 /** Move to workspace as a task's ⋯ offers it, none where its door is closed. */
 function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
   return open === undefined
@@ -1134,8 +1151,8 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
 /**
  * What a task's ⋯ holds, the panel's acts in four groups set apart by the
  * system's rule, as Reminders and Mail group a list's ⋯: where the task is
- * (Copy link, Open in browser); the task itself (Rename, Version history
- * where the workspace's descriptions stand on, Move to workspace where the
+ * (Copy link, Open in browser); the task itself (Rename, Edit description and
+ * Version history where the workspace's descriptions stand on, Move to workspace where the
  * reader may move it); where it stands among tasks (New sub-task, Remove
  * parent where it has one, Task relation, its section and its repository);
  * and Permanently delete, red, alone, which asks first. Its status is the
@@ -1168,6 +1185,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
             symbol: GLYPH.RENAME,
             onPress: () => askRename(task, overview.rename),
           },
+          ...editActions(task, doors.editDescription),
           ...historyActions(task, doors.history),
           ...moveActions(doors.moveDoor(task)),
         ],
@@ -1239,6 +1257,22 @@ function useNewAgent(): (task: TaskSummary) => void {
   const router = useRouter();
 
   return (task) => router.push({ pathname: "/start-agent", params: { task: task.id } });
+}
+
+/** Opens Edit description over a task where its workspace's descriptions stand on, as the panel's description opens to edit in place; none where they stand off. */
+function useEditDescriptionDoor(
+  workspaceId: string | undefined,
+): ((task: TaskSummary) => void) | undefined {
+  const router = useRouter();
+
+  const { data: descriptions = false } = useQuery({
+    ...appStateQuery,
+    select: selectWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS),
+  });
+
+  if (!descriptions) return undefined;
+
+  return (task) => router.push({ pathname: EDIT_DESCRIPTION_ROUTE, params: { task: task.id } });
 }
 
 /** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
@@ -1560,7 +1594,7 @@ function agentSwipes(
     {
       label: WORDS.ARCHIVE,
       symbol: GLYPH.ARCHIVE,
-      tone: ROW_ACTION_TONE.DESTRUCTIVE,
+      tone: ROW_ACTION_TONE.ARCHIVE,
       onPress: () => onArchive(agent.id),
     },
   ];
@@ -1886,6 +1920,13 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
+/** Edit at the Description header's end: its word, what it is heard as, and the sheet it opens. */
+interface SectionEdit {
+  readonly label: string;
+  readonly heard: string;
+  readonly onPress: () => void;
+}
+
 /** What a long press on a block of the description offers, and how its count of open comments is heard. */
 const COMMENT_WORDS = {
   COMMENT: "Comment",
@@ -1903,9 +1944,12 @@ const COMMENT_WORDS = {
 function OverviewDescription({
   overview,
   body,
+  edit,
 }: {
   readonly overview: TaskOverview;
   readonly body: string;
+  /** Edit at the header's end; none where the description can't be edited here. */
+  readonly edit: SectionEdit | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -1932,7 +1976,7 @@ function OverviewDescription({
 
   if (blocks.length === 0) {
     return (
-      <ListSection title={WORDS.DESCRIPTION}>
+      <ListSection title={WORDS.DESCRIPTION} act={edit}>
         <WordsRow
           words={body}
           repository={task.repository}
@@ -1947,7 +1991,7 @@ function OverviewDescription({
   }
 
   return (
-    <ListSection title={WORDS.DESCRIPTION}>
+    <ListSection title={WORDS.DESCRIPTION} act={edit}>
       {blocks.map((block, index) => {
         const standing = onBlocks.get(block.from) ?? [];
         const oldest = standing[0];
@@ -2061,7 +2105,7 @@ function CommentRow({
         {
           label: open ? RESOLVE : REOPEN,
           symbol: open ? GLYPH.RESOLVED : GLYPH.RESTORE,
-          tone: ROW_ACTION_TONE.NEUTRAL,
+          tone: open ? ROW_ACTION_TONE.DONE : ROW_ACTION_TONE.NEUTRAL,
           onPress: () => onSettle(thread),
         },
       ]}
@@ -2141,6 +2185,61 @@ function useSectionsShown(taskId: string): boolean {
   return useDeferredValue<string | null>(taskId, null) === taskId;
 }
 
+/** No agent's fold stands open, as a page opens. */
+const NONE_SHOWN = () => false;
+
+/** The task page's description as its skeleton stands it while the description is read: its section with the words' one row. */
+const DESCRIPTION_SKELETON: TaskSkeletonSection = {
+  title: WORDS.DESCRIPTION,
+  row: TASK_SKELETON_ROW.WORDS,
+  rows: 1,
+};
+
+/**
+ * The sections a task's page draws under its head, as its skeleton stands
+ * them while they are held back: Sub-tasks and Agents with as many rows as
+ * each lists at its top level, Pages where it lists any, and the
+ * description where the workspace keeps descriptions, each as the loaded
+ * sections below declare them (`OverviewRelations`, `OverviewAgents`,
+ * `OverviewPages`).
+ */
+function overviewSkeleton(
+  overview: TaskOverview | undefined,
+  descriptions: boolean,
+): readonly TaskSkeletonSection[] {
+  const subTasks = overview === undefined ? [] : subTasksOf(overview.tasks, overview.task.id);
+
+  const agents =
+    overview === undefined ? [] : agentTree(overview.agents, (line) => line.agent, NONE_SHOWN);
+
+  const pages = overview?.pages ?? [];
+
+  return [
+    { title: WORDS.SUB_TASKS, row: TASK_SKELETON_ROW.TASK, rows: subTasks.length },
+    { title: WORDS.AGENTS, row: TASK_SKELETON_ROW.AGENT, rows: agents.length },
+    ...(pages.length === 0
+      ? []
+      : [{ title: WORDS.PAGES, row: TASK_SKELETON_ROW.TASK, rows: pages.length }]),
+    ...(descriptions ? [DESCRIPTION_SKELETON] : []),
+  ];
+}
+
+/**
+ * A task's page while the task a link names is read, before anything of it
+ * is known: its head and the sections every task's page heads, as
+ * placeholders, rather than a lone spinner.
+ */
+function TaskReadingSkeleton() {
+  return (
+    <RowList look={LIST_LOOK.DETAIL}>
+      <ListSection>
+        <TaskHeadSkeleton />
+      </ListSection>
+      <TaskSectionsSkeleton sections={overviewSkeleton(undefined, false)} />
+    </RowList>
+  );
+}
+
 function OverviewPage({
   overview,
   onRefresh,
@@ -2171,6 +2270,13 @@ function OverviewPage({
   });
 
   const threads = useTaskComments(descriptions ? task.id : undefined);
+  const editDoor = useEditDescriptionDoor(task.workspaceId);
+
+  const edit: SectionEdit | undefined =
+    editDoor === undefined
+      ? undefined
+      : { label: WORDS.EDIT, heard: WORDS.EDIT_DESCRIPTION, onPress: () => editDoor(task) };
+
   const related = new Set(overview.tasks.map((each) => each.id));
   const agents = new Set(overview.agents.map(({ agent }) => agent.id));
   const commented = new Set(threads.map((thread) => thread.id));
@@ -2189,6 +2295,10 @@ function OverviewPage({
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>
+      {/* Note that the sections held back while the page comes in stand as their skeleton in the meantime, so the page is never blank under its head. */}
+      {sections ? null : (
+        <TaskSectionsSkeleton sections={overviewSkeleton(overview, descriptions)} />
+      )}
       {sections ? <OverviewRelations overview={overview} /> : null}
       {sections ? <OverviewAgents overview={overview} archiving={archiving} /> : null}
       {sections ? <OverviewPages overview={overview} /> : null}
@@ -2196,12 +2306,14 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined ? null : document.description.body.trim() === "" ? (
-        <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION}>
+      ) : document === undefined ? (
+        <TaskSectionsSkeleton sections={[DESCRIPTION_SKELETON]} />
+      ) : document.description.body.trim() === "" ? (
+        <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION} act={edit}>
           {null}
         </ListSection>
       ) : (
-        <OverviewDescription overview={overview} body={document.description.body} />
+        <OverviewDescription overview={overview} body={document.description.body} edit={edit} />
       )}
       {sections && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
@@ -2315,6 +2427,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
   const { setStatus, askDelete } = doors;
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
+  const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
   const read = useTasksRead();
   const archiving = useAgentArchiveAsk();
   const { refreshTasks } = useInboxActs();
@@ -2335,7 +2448,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
-      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
+      <TaskReadingSkeleton />
     );
 
   const acts = taskActs(overview?.task, { newAgent, newSubTask });
@@ -2346,7 +2459,14 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
       : {
           acts,
           menu: menuWithout(
-            taskMenu(overview, { askDelete, newSubTask, history, openRelation, moveDoor }),
+            taskMenu(overview, {
+              askDelete,
+              newSubTask,
+              history,
+              editDescription,
+              openRelation,
+              moveDoor,
+            }),
             acts,
           ),
           path: {
@@ -2474,6 +2594,7 @@ export function TaskScreen() {
   const archiving = useAgentArchiveAsk();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
+  const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
 
   const menu =
     overview === undefined
@@ -2482,6 +2603,7 @@ export function TaskScreen() {
           askDelete: deletion.askDelete,
           newSubTask,
           history,
+          editDescription,
           openRelation,
           moveDoor,
         });
@@ -2531,7 +2653,7 @@ export function TaskScreen() {
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
+          <TaskReadingSkeleton />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />

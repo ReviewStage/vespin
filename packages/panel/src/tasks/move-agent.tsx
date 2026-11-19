@@ -19,30 +19,34 @@ import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**
- * move-agent.tsx -- an agent moved between the cloud and the member's own devices: its menu's Move to ›, and its message box's place chip, each of which continues it at the place picked.
+ * move-agent.tsx -- an agent moved between the cloud and the member's own devices: its menu's Move to ›, and its message box's place chip, which move it in the same agent; and Move to cloud, which continues an agent its Mac could not run in a new one there.
  *
- * A move is a continue onto another place (`use-agents.ts`'s
- * `continueAgent` with a `runsOn`), not a mechanism of its own: the service
- * stops the source, replays its transcript into a new agent at the place,
- * named `<title> (continued)`, and copies a cloud source's work, what it had
- * not committed included, to a branch of its own; the new agent's tab opens
- * as a continue's does, and a refusal is said in a toast. An agent on a
- * device brings only what it pushed, which each place says under its name,
- * and its folder stays on that device. Move to lists Cloud, then each device
- * the member registered, by what every list of machines calls it, its glyph
- * wearing its standing's dot (`runs-on.tsx`), less the place the agent runs
- * now, or the cloud alone for an agent on a device the service did not name;
- * a device that takes no agent now is listed dimmed, saying why. It
- * stands only where a Continue is
- * offered: where a Start from the agent could run (`continueAgent`), under
- * nothing archived, on an agent not archived. On an agent still writing, a
- * move stops it first as Stop does, and continues it only once the Stop took,
- * so the session it carries ends on a whole step and the work it copies is
- * done being written; each place says so, and a Stop refused or with
- * nothing to stop yet moves nothing, its toast saying why. Note that it also stands
- * only where the control lists the agent, its task's or its own page's,
- * because a surface drawing agents of other tasks, such as a person's page,
- * hands the open task's control, whose continue would start on that task.
+ * Move to and the place chip move the agent itself (`use-agents.ts`'s
+ * `onMove`, the service's `coder-host/move.ts`): it keeps its id, its tab,
+ * its transcript, its branch and pull request, and only where it runs
+ * changes, the transcript marking where it moved. A cloud agent's work, what
+ * it had not committed included, is copied to a branch it is told to fetch;
+ * an agent on a device brings only what it pushed, which each place says
+ * under its name, and its folder stays on that device. A refusal is said in
+ * a toast. Move to lists Cloud, then each device the member registered, by
+ * what every list of machines calls it, its glyph wearing its standing's dot
+ * (`runs-on.tsx`), less the place the agent runs now, or the cloud alone for
+ * an agent on a device the service did not name; a device that takes no
+ * agent now is listed dimmed, saying why. It stands only where the agent
+ * is not archived and nothing archived is drawn. On an agent still writing,
+ * a move stops it first as Stop does, and moves it only once the Stop took,
+ * so its session ends on a whole step; it then waits at the new place for
+ * the member's next message, as any stopped agent does. Each place says so,
+ * and a Stop refused or with nothing to stop yet moves nothing, its toast
+ * saying why. Note that it also stands only where the control lists the
+ * agent, its task's or its own page's, because a surface drawing agents of
+ * other tasks, such as a person's page, hands the open task's control.
+ *
+ * Move to cloud (`useMoveToCloud`) is a continue onto a new agent in the
+ * cloud (`use-agents.ts`'s `continueAgent` with a `runsOn`), carrying on the
+ * message its Mac did not take, since it serves an agent whose Mac went
+ * offline or could not start it, which an in-place move could not stop
+ * first.
  */
 
 /**
@@ -82,13 +86,13 @@ const MOVING = new Set<string>();
 /** The agent a move is offered on, as Move to reads it. */
 type MovedAgent = Pick<AgentSummary, "id" | "status" | "archivedAt" | "machine" | "mac">;
 
-/** What Move to reads of the control: where a continue could start, the agents it lists, the member's devices, and the Stop a move of an agent still writing presses first. */
+/** What Move to reads of the control: where a continue could start, the agents it lists, the member's devices, the move, and the Stop a move of an agent still writing presses first. */
 type MoveDoors = Pick<
   AgentsControl,
-  "agents" | "continueAgent" | "macs" | "onUnarchive" | "onStop"
+  "agents" | "continueAgent" | "macs" | "onUnarchive" | "onStop" | "onMove"
 >;
 
-/** Whether the agent offers a move at all, on the terms the header says, the continue that carries it aside. */
+/** Whether the agent offers a move at all, on the terms the header says. */
 function useMoveOffered(agent: MovedAgent | undefined, agents: MoveDoors): boolean {
   return (
     agent !== undefined &&
@@ -136,6 +140,26 @@ function movedBy(
   };
 }
 
+/** The agent moved in place to a place, stopped first where it still writes, and left as it was where the Stop did not take, which says why in its toast, or where a move of it is already out (`MOVING`). */
+function movedInPlace(
+  agent: MovedAgent,
+  { onMove, onStop }: Pick<MoveDoors, "onMove" | "onStop">,
+): (runsOn: AgentRunsOnRequest) => Promise<void> {
+  const writing = agentStillWriting(agent.status);
+
+  return async (runsOn) => {
+    if (MOVING.has(agent.id)) return;
+    MOVING.add(agent.id);
+
+    try {
+      if (writing && !(await onStop(agent.id))) return;
+      await onMove(agent.id, runsOn);
+    } finally {
+      MOVING.delete(agent.id);
+    }
+  };
+}
+
 /**
  * The agent moved to the cloud, as Move to's Cloud does, for a surface that
  * offers that move alone, such as a launch its Mac could not start, or its
@@ -169,7 +193,7 @@ export interface PlaceMove {
 
 /**
  * The move an agent's place chip offers, on the terms Move to › offers one
- * (`useMoveOffered`): the member's devices and the continue that carries
+ * (`useMoveOffered`): the member's devices and the move that carries
  * the agent to a place picked, or none where no move is offered or the
  * agent is not read yet, and none while Move agents is off. Note that it stands though the member has no
  * device, since the chip then says where one is added, rather than taking
@@ -179,12 +203,11 @@ export function useMovePlace(
   agent: MovedAgent | undefined,
   agents: MoveDoors,
 ): PlaceMove | undefined {
-  const { continueAgent } = agents;
   const on = useMoveAgentsOn();
   const offered = useMoveOffered(agent, agents) && on;
 
-  if (agent === undefined || !offered || continueAgent === undefined) return undefined;
-  const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
+  if (agent === undefined || !offered) return undefined;
+  const move = movedInPlace(agent, agents);
 
   return {
     devices: agents.macs ?? NO_DEVICES,
@@ -196,7 +219,6 @@ export function useMovePlace(
 
 /** The agent's Move to ›, the places it may move to, or none where it offers no move, Move agents is off, or it has nowhere to go. */
 export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmenu | undefined {
-  const { continueAgent } = agents;
   const on = useMoveAgentsOn();
   const offered = useMoveOffered(agent, agents) && on;
   const devices = (offered ? agents.macs : undefined) ?? NO_DEVICES;
@@ -204,10 +226,10 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
   const book = useDevicePresence(devices.length > 0);
   const thisMac = useThisMac();
 
-  if (!offered || continueAgent === undefined) return undefined;
+  if (!offered) return undefined;
   const local = agent.machine === AGENT_MACHINE.DEVICE;
   const said = placeDetail(agent);
-  const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
+  const move = movedInPlace(agent, agents);
   const moveTo = (runsOn: AgentRunsOnRequest) => () => void move(runsOn);
 
   const cloud: MenuAction[] = local
