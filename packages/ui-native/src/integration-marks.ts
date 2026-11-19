@@ -33,3 +33,17 @@ export const INTEGRATION_MARK_ASSET = {
 } as const satisfies Record<IntegrationProvider, string>;
 
 export type IntegrationMarkAsset = (typeof INTEGRATION_MARK_ASSET)[IntegrationProvider];
+
+/**
+ * The providers whose mark is a template, drawn in no ink of its own (its
+ * file draws in `currentColor` and names no dark one), which a React Native
+ * image tints as SwiftUI's `foregroundStyle` does; every other mark keeps
+ * its brand's own colors. Note that it must name what
+ * `assets/provider-marks/` holds, which `@repo/ui`'s
+ * `scripts/native-provider-marks.ts` writes.
+ */
+export const INTEGRATION_MARK_TEMPLATE: ReadonlySet<IntegrationProvider> = new Set([
+  INTEGRATION_PROVIDER.GITHUB,
+  INTEGRATION_PROVIDER.LINEAR,
+  INTEGRATION_PROVIDER.VERCEL,
+]);

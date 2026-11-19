@@ -7,6 +7,7 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 import { Image as Photo, PixelRatio, Text, useColorScheme, View } from "react-native";
 import { CHIP_MARK, type ChipMark, type ChipMarkOf } from "./chip-mark-model.js";
 import { type Glyph, glyphSymbol } from "./glyph.js";
+import { INTEGRATION_MARK_ASSET, INTEGRATION_MARK_TEMPLATE } from "./integration-marks.js";
 import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./marks.js";
 import { type BrandColors, toneColor } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
@@ -146,6 +147,19 @@ export function ChipMarkView({
         <Photo
           source={{ uri: HARNESS_MARK_ASSET[mark.harness] }}
           style={{ width: size, height: size }}
+          resizeMode="contain"
+          accessibilityElementsHidden
+        />
+      );
+    case CHIP_MARK.PROVIDER:
+      return (
+        <Photo
+          source={{ uri: INTEGRATION_MARK_ASSET[mark.provider] }}
+          style={{
+            width: size,
+            height: size,
+            tintColor: INTEGRATION_MARK_TEMPLATE.has(mark.provider) ? colors.TEXT_MUTED : undefined,
+          }}
           resizeMode="contain"
           accessibilityElementsHidden
         />

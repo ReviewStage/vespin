@@ -200,14 +200,14 @@ const styles = StyleSheet.create({
   fade: { position: "absolute", top: 0, bottom: 0, width: EDGE_FADE, pointerEvents: "none" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
+  // Note that a chip is the panel's pill (`InlineRef`'s `PILL`): a rounded fill with no edge, a little more room after its name than before its mark, and no height past the line's words, so no edge of it is cut where the line holds it.
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: 4,
     borderRadius: RADIUS.TAG,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    paddingLeft: 4,
+    paddingRight: 6,
   },
   picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
@@ -334,8 +334,7 @@ function MentionChip({
           styles.chip,
           {
             maxWidth: drawing.lineWidth,
-            backgroundColor: colors.WELL,
-            borderColor: colors.CHIP_EDGE,
+            backgroundColor: colors.FILL_STRONG,
           },
         ]}
       >
@@ -389,8 +388,7 @@ function SuggestionChip({
           styles.chip,
           {
             maxWidth: drawing.lineWidth,
-            backgroundColor: colors.WELL,
-            borderColor: colors.CHIP_EDGE,
+            backgroundColor: colors.FILL_STRONG,
           },
         ]}
       >
