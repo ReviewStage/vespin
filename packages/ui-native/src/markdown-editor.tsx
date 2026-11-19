@@ -1,4 +1,4 @@
-// markdown-editor.tsx -- a page of Markdown written whole, as GitHub's iPhone app edits an issue's body: its source in the system's own multi-line field, its preview drawn as the page draws it, and the Write and Preview switch pinned over the keyboard.
+// markdown-editor.tsx -- a page of Markdown written whole, as GitHub's iPhone app edits an issue's body: the Write and Preview switch at its head, its source in the system's own multi-line field, and its preview drawn as the page draws it.
 
 import { Host, RNHostView, ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame, padding, scrollDismissesKeyboard, tint } from "@expo/ui/swift-ui/modifiers";
@@ -7,7 +7,7 @@ import { View } from "react-native";
 import { SCOPE_LOOK, ScopeControl } from "./button.js";
 import { releaseFields } from "./field-focus.js";
 import { WORDS_LOOK, WordsField } from "./form-rows.js";
-import { DockRow, GlassDock, useDockRoom } from "./glass-bar.js";
+import { useKeyboardHeight } from "./glass-bar.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
@@ -70,41 +70,39 @@ function Preview(props: MarkdownEditorProps) {
   );
 }
 
-/** The editor's page: the source to write or its preview, what went wrong under it, clear of the switch at its foot. */
+/** The editor's page: the source to write or its preview, what went wrong over it, its foot clear of the keyboard. */
 function EditorPage({ shows, ...props }: MarkdownEditorProps & { readonly shows: EditorShows }) {
-  const colors = useColors();
-  const room = useDockRoom();
+  // Note that the page leaves the keyboard's height under its last line, so the end of a long description scrolls clear of it.
+  const keyboard = useKeyboardHeight(false);
 
   return (
-    <Host style={{ flex: 1, backgroundColor: colors.GROUND }} modifiers={[tint(colors.TEXT)]}>
-      <ScrollView modifiers={[scrollDismissesKeyboard("interactively")]}>
-        <VStack
-          alignment="leading"
-          spacing={SPACE.ROW}
-          modifiers={[
-            frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-            padding({ horizontal: SPACE.EDGE, top: SPACE.ROW, bottom: room + SPACE.ROW }),
-          ]}
-        >
-          {props.problem === undefined ? null : <ProblemLine text={props.problem} />}
-          {shows === EDITOR_SHOWS.WRITE ? (
-            <WordsField
-              placeholder={props.placeholder}
-              initialWords={props.words}
-              words={props.words}
-              onWords={props.onWords}
-              autoFocus
-              testId={props.testId}
-              label={props.label}
-              disabled={props.disabled}
-              look={WORDS_LOOK.PAGE}
-            />
-          ) : (
-            <Preview {...props} />
-          )}
-        </VStack>
-      </ScrollView>
-    </Host>
+    <ScrollView modifiers={[scrollDismissesKeyboard("interactively")]}>
+      <VStack
+        alignment="leading"
+        spacing={SPACE.ROW}
+        modifiers={[
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+          padding({ horizontal: SPACE.EDGE, top: SPACE.ROW, bottom: keyboard + SPACE.ROW }),
+        ]}
+      >
+        {props.problem === undefined ? null : <ProblemLine text={props.problem} />}
+        {shows === EDITOR_SHOWS.WRITE ? (
+          <WordsField
+            placeholder={props.placeholder}
+            initialWords={props.words}
+            words={props.words}
+            onWords={props.onWords}
+            autoFocus
+            testId={props.testId}
+            label={props.label}
+            disabled={props.disabled}
+            look={WORDS_LOOK.PAGE}
+          />
+        ) : (
+          <Preview {...props} />
+        )}
+      </VStack>
+    </ScrollView>
   );
 }
 
@@ -113,15 +111,17 @@ function EditorPage({ shows, ...props }: MarkdownEditorProps & { readonly shows:
  * body: its source fills the page in the system's own multi-line field,
  * reference lines and pictures' addresses kept exactly as written, and
  * Preview draws the words as the page draws them, its pictures among them.
- * The Write and Preview switch is the system's segmented control pinned over
- * the keyboard in the dock, as a compose sheet's controls stand, so it rides
- * the keyboard up and stands at the foot once it is down. Note that the field
+ * The Write and Preview switch is the system's segmented control at the
+ * page's head, under the bar, as GitHub's editor stands its tabs, so the
+ * keyboard never covers it, and the page leaves the keyboard's height under
+ * the words, so their end scrolls clear of it. Note that the field
  * lets the keyboard go before Preview takes its place, since a field dropped
  * while it holds the keyboard can end the app. What went wrong, such as a
  * conflict with words written meanwhile, stands over the words. The screen's
  * own bar holds Cancel and Save.
  */
 export function MarkdownEditor(props: MarkdownEditorProps) {
+  const colors = useColors();
   const [shows, setShows] = useState<EditorShows>(EDITOR_SHOWS.WRITE);
 
   const show = (next: EditorShows) => {
@@ -130,22 +130,19 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   };
 
   return (
-    <GlassDock
-      bar={
-        <DockRow>
-          <ScopeControl
-            label={SHOWS_LABEL}
-            look={SCOPE_LOOK.SEGMENTED}
-            scopes={Object.values(EDITOR_SHOWS).map((each) => ({
-              label: each,
-              selected: each === shows,
-              onPress: () => show(each),
-            }))}
-          />
-        </DockRow>
-      }
-    >
-      <EditorPage {...props} shows={shows} />
-    </GlassDock>
+    <Host style={{ flex: 1, backgroundColor: colors.GROUND }} modifiers={[tint(colors.TEXT)]}>
+      <VStack spacing={0}>
+        <ScopeControl
+          label={SHOWS_LABEL}
+          look={SCOPE_LOOK.SEGMENTED}
+          scopes={Object.values(EDITOR_SHOWS).map((each) => ({
+            label: each,
+            selected: each === shows,
+            onPress: () => show(each),
+          }))}
+        />
+        <EditorPage {...props} shows={shows} />
+      </VStack>
+    </Host>
   );
 }
