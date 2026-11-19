@@ -15,6 +15,7 @@ import {
 import type { PullRequestMarkState } from "@repo/features/pull-request-model";
 import { Button as Act, BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
@@ -42,6 +43,8 @@ type PullRequestCardProps = {
   readonly acts?: readonly PullRequestAct[] | undefined;
   /** Opens its own page, as a press on the card asks; none where it has no page to open. */
   readonly onOpen?: (() => void) | undefined;
+  /** What its long press holds, as the panel's pull request row's right-click offers it: Copy GitHub link, then where a press does not open it; nothing where none is given. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
 /** A line count as the card ends with it: "+1.9k", "−312". */
@@ -69,6 +72,7 @@ export function PullRequestCard({
   deletions,
   acts = [],
   onOpen,
+  menu = [],
 }: PullRequestCardProps) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[state];
@@ -118,13 +122,15 @@ export function PullRequestCard({
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
-      {onOpen === undefined ? (
-        card
-      ) : (
-        <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
-          {card}
-        </Button>
-      )}
+      <LongPressMenu groups={menu}>
+        {onOpen === undefined ? (
+          card
+        ) : (
+          <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
+            {card}
+          </Button>
+        )}
+      </LongPressMenu>
       {acts.length === 0 ? null : (
         <HStack spacing={SPACE.TIGHT + 2}>
           {acts.map((act) => (

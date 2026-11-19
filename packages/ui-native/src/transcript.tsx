@@ -30,8 +30,9 @@ import { FileChip } from "./file-chip.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
-import { CopyWordsMenu, type HeldAct, MessageMenu, TurnActs } from "./held-menu.js";
+import { CopyWordsMenu, type HeldAct, MessageMenu, TurnActs, useCopyWords } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
+import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
@@ -117,6 +118,12 @@ const PAGE_WORD = "Page";
 
 /** What a pull request's card offers first: its page on GitHub. */
 const REVIEW_WORD = "Review";
+
+/** What a pull request card's long press offers, as the panel's pull request row's right-click names them. */
+const PULL_REQUEST_MENU_WORDS = {
+  COPY_GITHUB_LINK: "Copy GitHub link",
+  OPEN_ON_GITHUB: "Open on GitHub",
+} as const;
 
 /** How near its oldest row the reader scrolls before the page older than it is read, in points. */
 const OLDER_REACH = 400;
@@ -714,6 +721,7 @@ function TranscriptRow({
   const large = useAccessibilitySize();
   const pageMark = useScaledSize(MARK_SIZE.WRITER);
   const pageChevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const copyWords = useCopyWords();
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
@@ -948,6 +956,29 @@ function TranscriptRow({
                   ? undefined
                   : () => drawing.onOpenPullRequest?.(item)
               }
+              // Note that the long press offers what a press does not, as the panel's pull request row's right-click does: its GitHub link to copy, then its page on GitHub, where a press opens its own screen.
+              menu={[
+                copyWords === undefined
+                  ? []
+                  : [
+                      {
+                        label: PULL_REQUEST_MENU_WORDS.COPY_GITHUB_LINK,
+                        symbol: GLYPH.LINK,
+                        tone: ROW_ACTION_TONE.NEUTRAL,
+                        onPress: () => copyWords(item.url),
+                      },
+                    ],
+                drawing.onOpenPullRequest === undefined
+                  ? []
+                  : [
+                      {
+                        label: PULL_REQUEST_MENU_WORDS.OPEN_ON_GITHUB,
+                        symbol: GLYPH.OPEN_EXTERNALLY,
+                        tone: ROW_ACTION_TONE.NEUTRAL,
+                        onPress: () => drawing.onOpenAddress(item.url),
+                      },
+                    ],
+              ]}
             />
           </InlineHost>
         </View>

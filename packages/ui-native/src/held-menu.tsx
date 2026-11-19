@@ -85,6 +85,11 @@ export function KeepingProvider({
   );
 }
 
+/** Copies words to the pasteboard through the app's keeping, as a held link's Copy link does; none where no app answers it. */
+export function useCopyWords(): ((words: string) => void) | undefined {
+  return useContext(KeepingDoor)?.copyWords;
+}
+
 /** The acts a kept thing's menu offers, in their order; none where nothing is kept yet, or no app answers them. */
 export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
   const keeping = useContext(KeepingDoor);
