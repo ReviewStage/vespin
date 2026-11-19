@@ -687,24 +687,6 @@ const findCurrentThread = SqlSchema.findOneOption({
     ),
 });
 
-const findSlackStart = SqlSchema.findOneOption({
-  Request: Schema.Struct({ agentId: Schema.String }),
-  Result: Schema.Struct({ threadTs: Schema.String }),
-  execute: ({ agentId }) =>
-    Database.use((db) =>
-      db
-        .select({ threadTs: slackAgentThread.threadTs })
-        .from(slackAgentThread)
-        .where(
-          and(
-            eq(slackAgentThread.agentId, agentId),
-            eq(slackAgentThread.origin, SLACK_THREAD_ORIGIN.START),
-          ),
-        )
-        .limit(1),
-    ),
-});
-
 /** The message that started the agent in the thread kept as its start, or the thread's first message where a thread kept before it was recorded names none. */
 const findStartMessage = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String }),
@@ -1202,11 +1184,6 @@ export function slackWorkingMessages(
 /** Clears the thread's mark where it still names the message, answering whether it did; false where another message was marked since. */
 export function clearSlackThreadWorking(message: SlackThreadMessageAt): TaskStoreEffect<boolean> {
   return Effect.map(clearWorking(message), (cleared) => cleared.length > 0);
-}
-
-/** Whether the agent was started from a Slack message, or continues one that was: a started thread is kept for it. */
-export function isSlackStartedAgent(agentId: string): TaskStoreEffect<boolean> {
-  return Effect.map(findSlackStart({ agentId }), Option.isSome);
 }
 
 /** The workspace's default repository for Slack starts, and each channel's, as an owner or admin named them. */

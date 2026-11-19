@@ -819,7 +819,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a message in the thread of an archived agent brings it back, hands it the message, reacts with 👀, and takes 💤 off the message that started it",
+    "a message in the thread of an archived agent brings it back, hands it the message, and reacts with 👀",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -847,10 +847,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(
           calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
-        );
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: threadTs, name: "zzz" }],
         );
       });
     },
