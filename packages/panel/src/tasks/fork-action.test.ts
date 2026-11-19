@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import type { AgentFork } from "@repo/features/agent-fork-model";
 import {
   AGENT_BRIEF,
   AGENT_STATUS,
@@ -18,7 +19,6 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AGENT_LEAD, AgentMessage, AgentTab } from "./agent-tab.js";
 import { agentForkDoors, ForkProvider } from "./fork-action.js";
-import type { AgentFork } from "./fork-model.js";
 
 /**
  * fork-action.test.ts -- Fork to new agent stands on an agent's own
