@@ -374,6 +374,13 @@ function InboxRowView({
         ]
       : [];
 
+  const mark = {
+    label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+    symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+    tone: ROW_ACTION_TONE.READ,
+    onPress: () => onMark(item, !unread),
+  } as const;
+
   return (
     <ListRow
       id={item.id}
@@ -394,23 +401,19 @@ function InboxRowView({
       at={item.updatedAt}
       due={item.remindAt}
       trailingActions={[...resolve, remindMenu(item)]}
-      leadingActions={[
-        {
-          label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-          symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-          tone: ROW_ACTION_TONE.READ,
-          onPress: () => onMark(item, !unread),
-        },
-      ]}
+      leadingActions={[mark]}
       link={link}
-      // Note that the long press offers Copy link after the swipes' acts, as the panel's row menu and the thread's ⋯ offer it.
-      menuActions={[
-        {
-          label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
-          symbol: GLYPH.LINK,
-          tone: ROW_ACTION_TONE.NEUTRAL,
-          onPress: () => keeping.copyWords(link),
-        },
+      // Note that the long press holds the panel's row menu in its order (`useInboxItemActions`): Copy link, then Mark as read or unread, Remind me and Resolve, its swipes standing behind the swipe alone.
+      menu={[
+        [
+          {
+            label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => keeping.copyWords(link),
+          },
+        ],
+        [mark, remindMenu(item), ...resolve],
       ]}
       preview={
         <ThreadPreview
