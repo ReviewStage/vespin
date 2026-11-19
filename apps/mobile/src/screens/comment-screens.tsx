@@ -78,7 +78,6 @@ const READING_DESCRIPTION = readingWords("the description");
 /** What the page says where the description could not be read, beside Try again. */
 const DESCRIPTION_UNREAD = readFailedWords("the description");
 
-/** What a failed read offers. */
 const TRY_AGAIN = "Try again";
 
 /** Where a refused start's field opens again: its task, its block's span and words, and the thread id it went under. */

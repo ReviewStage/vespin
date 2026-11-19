@@ -239,3 +239,25 @@ export const IDENTITY = {
   // The letter's ink on every hue.
   ON: "#ffffff",
 };
+
+// A file's type icon in the file tree's own palette (`@pierre/trees`), which
+// its shadow root keeps to itself, said again for a file drawn outside the
+// tree, and the colors a sidebar section's glyph may wear (the panel's
+// section icon picker). The window (file-icon.css) and the iOS app
+// (file-icon-inks.ts) both draw them, so they are written from here rather
+// than kept twice. Each is its light ink, then its dark.
+export const FILE_ICON = {
+  GRAY: ["#84848a", "#adadb1"],
+  RED: ["#d52c36", "#ff6762"],
+  VERMILION: ["#ff8c5b", "#d5512f"],
+  ORANGE: ["#d47628", "#ffa359"],
+  YELLOW: ["#d5a910", "#ffd452"],
+  GREEN: ["#199f43", "#5ecc71"],
+  TEAL: ["#17a5af", "#64d1db"],
+  CYAN: ["#1ca1c7", "#68cdf2"],
+  BLUE: ["#1a85d4", "#69b1ff"],
+  INDIGO: ["#693acf", "#9d6afb"],
+  PURPLE: ["#a631be", "#d568ea"],
+  PINK: ["#d32a61", "#ff678d"],
+  MAUVE: ["#594c5b", "#79697b"],
+};

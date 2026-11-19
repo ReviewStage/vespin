@@ -1,3 +1,4 @@
+import type { AgentFork } from "@repo/features/agent-fork-model";
 import {
   AGENT_MACHINE,
   AGENT_SOURCE,
@@ -33,7 +34,6 @@ import {
 } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
 import type { SuggestDoor } from "../tasks/fork-action.js";
-import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import type { HeldAction } from "../tasks/terminal-held.js";

@@ -102,10 +102,12 @@ function GitHubPageRow({ workspaceId }: { readonly workspaceId: string }) {
   const router = useRouter();
   const { listed, read, failed } = useWorkspaceRepositories(workspaceId);
 
-  // Note that the row opens no install of its own, so it has no refusal to say: the page's install says its own.
+  // Note that the row opens no install of its own, so it has no refusal to say: the page's install says its own; and that it says nothing while its repositories are read, its name alone standing, since a read under way shows no words.
   const lines: readonly ConnectionLine[] = read
     ? githubLines(listed, undefined)
-    : [failed ? { text: GITHUB_WORDS.READ_FAILED, problem: true } : { text: GITHUB_WORDS.READING }];
+    : failed
+      ? [{ text: GITHUB_WORDS.READ_FAILED, problem: true }]
+      : [];
 
   return (
     <ListSection>

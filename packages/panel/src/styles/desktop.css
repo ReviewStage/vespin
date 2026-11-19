@@ -1249,12 +1249,12 @@ body,
 /* Automations ---------------------------------------------------------------- */
 
 /* A narrow room's row says when it runs next in the line under its name,
-   a failure's mark leading the line as it leads an agent's end line. Note
-   that the mark stands inside the line's replay mark, a box of its own in
-   the tree though not on the screen, so it is reached as a descendant. */
+   a failure's mark leading the line as it leads an agent's end line, centered
+   on the words by the mark itself (`row-mark.tsx`). Note that the mark
+   stands inside the line's replay mark, a box of its own in the tree though
+   not on the screen, so it is reached as a descendant. */
 .automation-group .ui-list-row-description .failed-mark {
   margin-right: var(--ui-tight-gap);
-  vertical-align: -3px; /* off-scale: centers a 14px mark on 12px words */
 }
 
 /* An automation's page's toolbar stands in a box of its own whose width the

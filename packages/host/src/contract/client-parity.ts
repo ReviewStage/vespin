@@ -95,7 +95,7 @@ const IOS = {
     "Whether run_on_mac is on for an agent is the desktop's Runs on card's to say, about the Mac its commands would run on",
   ),
   AGENT_SESSION: notYet(
-    "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
+    "iOS's agent page leaves a fresh session and a restart of the agent's machine to the desktop and the web for now",
   ),
   AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
   COPY_PICTURE: byDesign(
@@ -294,7 +294,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_QUEUE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_STOP]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_REWIND]: panel(IOS.AGENT_SESSION),
+  [PORT_ACT_KIND.AGENTS_REWIND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_MOVE]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),

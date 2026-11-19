@@ -1,4 +1,4 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
@@ -34,7 +34,6 @@ import {
   type AnswerField,
   type AnswerFieldKind,
   AnswerFields,
-  AskActs,
   AskNote,
   AttachedPictures,
   type BarAction,
@@ -191,12 +190,10 @@ function controlsStand(item: InboxItem): boolean {
  * The open ask's card under the thread, as the panel's box draws its
  * controls: a decide's options to pick, the recommended tagged; a do's steps
  * to tick, with Mark done and Couldn't do it, each sending at once with the
- * note typed; an answer's fields to fill. A notice asking nothing offers Got
- * it while the box is empty, as the panel's Send reads then, which settles it
- * without messaging its agent, and steps aside once pressed. What the last
- * send said where it did not go stands in the box's head
- * (`ThreadComposer`), beside the words it put back. None where nothing is
- * asked.
+ * note typed; an answer's fields to fill. A notice asking nothing has no
+ * card: its Got it is the box's empty Send (`ThreadComposer`), as the
+ * panel's is. What the last send said where it did not go stands in the
+ * box's head, beside the words it put back. None where nothing is asked.
  */
 export function OpenAskCard({
   item,
@@ -207,17 +204,9 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, send, nods, acknowledge, asNew } = answer;
+  const { draft, onDraft, send, asNew } = answer;
   // Note that the ask's controls step aside while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
   const ask = asNew ? undefined : openAsk(item);
-
-  if (ask === undefined && nods) {
-    return (
-      <AskActs
-        acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK, onPress: acknowledge }]}
-      />
-    );
-  }
 
   if (ask === undefined) return null;
 
@@ -299,10 +288,17 @@ export function OpenAskCard({
   );
 }
 
+/** A notice's empty Send, as the panel's reads Got it. */
+const GOT_IT_SEND = { label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK } as const;
+
 /**
  * The box under a thread: the composer, its line asking for a note while an
  * ask's controls stand over it and a reply otherwise, Send lit once an answer
  * is picked; docked in a compact window, or at a split view column's foot.
+ * A notice waiting on the reader's nod, where opening did not settle it,
+ * reads Got it on the empty box's Send, as the panel's Send does, which
+ * settles it without messaging its agent, with Undo; a word or a picture
+ * makes it Send again.
  * Its + attaches pictures from Photos, as the panel's box attaches files,
  * held on the thread's draft as capsules over the field until a send
  * carries them, and holds the panel's "Send as a new thread to" the
@@ -324,6 +320,7 @@ export function ThreadComposer({
   readonly inColumn?: boolean | undefined;
 }) {
   const { draft, onDraft, note: sendNote, answerReady, send, asNew, setAsNew, start } = answer;
+  const { nods, acknowledge } = answer;
   const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
 
   // Note that the pictures picked are named and bounded against the draft as it stands when the picker answers, since a refused send may have put words and pictures back while it stood open.
@@ -379,8 +376,9 @@ export function ThreadComposer({
     words: draft.note,
     onWords: (note: string) => onDraft({ ...draft, note }),
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
-    sendable: !asNew && answerReady,
-    onSend: () => (asNew ? start() : send()),
+    sendable: !asNew && (answerReady || nods),
+    onSend: () => (asNew ? start() : nods ? acknowledge() : send()),
+    sendAs: nods ? GOT_IT_SEND : undefined,
     // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,
     addMenu: {

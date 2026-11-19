@@ -80,7 +80,13 @@ export function useMemberFaces(workspaceId?: string): MemberOf {
 }
 
 /** A member as a people menu lists them: their account id and their name. */
-export type ListedMember = { readonly userId: string; readonly name: string };
+export type ListedMember = {
+  readonly userId: string;
+  readonly name: string;
+  readonly email: string;
+  /** Whether the member is the reader, whom a menu names You under their name. */
+  readonly you: boolean;
+};
 
 /** No members, as before their list is read. */
 const NO_MEMBERS: readonly ListedMember[] = [];
@@ -104,7 +110,12 @@ export function useListedMembers(workspaceId: string | undefined): readonly List
     () =>
       members === undefined
         ? NO_MEMBERS
-        : readerFirst(members, readerId).map(({ userId, name }) => ({ userId, name })),
+        : readerFirst(members, readerId).map(({ userId, name, email }) => ({
+            userId,
+            name,
+            email,
+            you: userId === readerId,
+          })),
     [members, readerId],
   );
 }

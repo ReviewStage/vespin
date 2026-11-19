@@ -1,15 +1,28 @@
 // marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile, the needs-you, working, and failed marks and a glyph in its tone.
 
-import { Circle, Image, RNHostView, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
+import {
+  Circle,
+  Gauge,
+  HStack,
+  Image,
+  RNHostView,
+  RoundedRectangle,
+  Text,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityLabel,
   font,
   foregroundStyle,
   frame,
+  gaugeStyle,
+  monospacedDigit,
   offset,
   opacity,
   resizable,
+  scaleEffect,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
@@ -37,7 +50,7 @@ import {
 } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
-import { MARK_SIZE } from "./tokens/space.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { readWorkingBeat, subscribeWorkingBeat } from "./working-beat.js";
@@ -581,5 +594,55 @@ export function WorkingMark() {
         ),
       )}
     </ZStack>
+  );
+}
+
+/** The size SwiftUI's circular capacity gauge stands at on its own, which the progress ring is scaled down from to the mark's size. */
+const GAUGE_SIDE = 58;
+
+/** What a sub-task count is heard as, in place of its ring and figures. */
+export function subTasksHeard(done: number, total: number): string {
+  return `${done} of ${total} sub-tasks finished`;
+}
+
+/**
+ * How many of a task's sub-tasks are finished, of all of them, as the
+ * panel's rows say it (`ProgressCount`): a small ring filled to that share
+ * in the working blue from twelve o'clock, then "2/5" in the muted ink and
+ * tabular figures. The ring is SwiftUI's own circular capacity gauge, scaled
+ * to a mark's size, since a shape here takes no trim. Hidden from VoiceOver,
+ * since its row says the count in words (`subTasksHeard`).
+ */
+export function SubTaskProgress({
+  done,
+  total,
+}: {
+  readonly done: number;
+  readonly total: number;
+}) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH - 2);
+
+  return (
+    <HStack spacing={SPACE.TIGHT} modifiers={[accessibilityHidden(true)]}>
+      <Gauge
+        value={total > 0 ? done / total : 0}
+        modifiers={[
+          gaugeStyle("circularCapacity"),
+          tint(colors.WORKING),
+          scaleEffect(size / GAUGE_SIDE),
+          frame({ width: size, height: size }),
+        ]}
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.TIME }),
+          monospacedDigit(),
+          foregroundStyle(colors.TEXT_MUTED),
+        ]}
+      >
+        {`${done}/${total}`}
+      </Text>
+    </HStack>
   );
 }

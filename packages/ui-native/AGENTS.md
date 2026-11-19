@@ -15,9 +15,7 @@ builds a control of its own.
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
-  `WordsRow` for its description), and its skeleton while it is read
-  (`TaskHeadSkeleton`, `TaskSectionsSkeleton`: those rows with placeholder
-  words in `SkeletonRegion`, as many as the loaded page declares), `SplitView` (a tab's list
+  `WordsRow` for its description), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
   `ColumnBar`: its inline title, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,
@@ -78,7 +76,9 @@ builds a control of its own.
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
   Deny and Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
-  Delete), its `AttachedPictures`, and an `AskNote`.
+  Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  holds a sent message's words to send in its place (the panel's Edit, the field
+  taking the keyboard through `focusAsk`), and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
@@ -86,8 +86,19 @@ builds a control of its own.
   file. A long press on a picture, a recording, a file's chip, or a message
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
-  the picture viewer's share button holding the same, and Copy message on a
-  message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
+  the picture viewer's share button holding the same, and on a message's
+  words Copy message, Copy link where it has an address, Select text (the
+  system's text view in a sheet, held by `KeepingProvider`) and Share, a
+  sent line's menu headed by its time (`MessageMenu`), as Messages and
+  ChatGPT head one; an agent's finished turn ends on a standing row of the
+  panel's glyphs, Copy, Copy link and Share, with a ⋯ for what else it
+  offers (`TurnActs`), since a phone has no hover to show the panel's; the
+  app answers them through `KeepingProvider`. A
+  mention's chip, which stands inside a line of words where no SwiftUI menu
+  can wrap it, is held for the system's sheet of Open link and Copy link
+  instead, as the panel's link menu offers them, a popover from the chip in
+  a regular window, its hold a little shorter than the system's so it wins
+  over a message's own. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with
@@ -146,11 +157,15 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its status
-  ring, its name, set in semibold while it has news with no unread dot, and
-  at its end a thread that needs you, a failed agent, one at work, or its
-  pull request, then its key; its priority stands on the task's own
-  Priority chip, not the row), and `AgentRow` an agent
+  thread, with no task, in two), `TaskRow` a task on one line, as the
+  panel's sidebar row draws it (its status ring, or a parent's fold chevron
+  in the ring's place, as the panel's row stands it with no hover; its name,
+  set in semibold while it has news with no unread dot; and at its end the
+  stop sign of a blocked task, a thread that needs you, its sub-tasks as a
+  ring and "2/5", one mark for its agents, the face of who is on it where
+  that is someone other than the reader or the dashed mark where no one is,
+  and when it last moved; a search's finds end in its key; its priority
+  stands on the task's own Priority chip, not the row), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
   developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
@@ -279,16 +294,31 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
-  empty section stands as its header alone rather than a list of add rows.
+  empty section stands as its header alone rather than a list of add rows;
+  a long press on one given a `menu` opens it, as the panel's right-click
+  on the sidebar's same header does.
+- **Long press** opens one menu everywhere, `LongPressMenu`: SwiftUI's own
+  context menu, its groups in the panel's order and words, set apart by
+  dividers, red where an act takes something away, lifting a preview where
+  the system's apps lift one. A row draws it through `RowFrame`, a section's
+  header through `ListSection`'s `menu`, and held SwiftUI or React Native
+  views through `HeldSwiftMenu` and `HeldMenu`, so wherever the panel opens
+  a right-click menu the app opens the same menu on a long press.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and
   the Inbox count, a picked option or a switch that is on, and a filled
   `Button`. Everything else stands in the ink: an ask's words on a row,
-  links, bar buttons, swipe actions, a bordered or plain button, and a
-  row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
-  asks for copper by name. Status tones stand on the status marks alone: a
-  task's ring, and a pull request's state.
+  links, bar buttons, a bordered or plain button, and a row that acts,
+  such as New agent. `Screen` tints in `TEXT`, so a piece asks for copper
+  by name. Status tones stand on the status marks alone: a task's ring,
+  and a pull request's state. A swipe act stands on iOS's own system color
+  for what it means, its glyph in white, as Mail colors its swipes: mark
+  read or unread blue, Remind me and Archive purple, pin orange (Mail's
+  Flag), Resolve and Mark done green, a delete red, and the rest gray
+  (Mail's More). The act's `ROW_ACTION_TONE` names its meaning, and
+  `SWIPE_FILL` in `list-row.tsx` is the one table of each meaning's color,
+  over `SYSTEM_COLOR`'s light, dark and Increase Contrast values.
 - **Scopes and capsules.** A list's scopes are the system's segmented
   control under its title, as Mail and the App Store switch a list's views;
   in a split view's 320 pt list column, which cuts the segments' words

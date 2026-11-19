@@ -1,10 +1,14 @@
 // held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted.
 
-import { Button, ContextMenu, RNHostView } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import { accessibilityLabel, buttonStyle, frame } from "@expo/ui/swift-ui/modifiers";
 import type { DraftCopy } from "@repo/features/draft-text";
+import { dayAndTimeText } from "@repo/features/time-format";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import type { Glyph } from "./glyph.js";
+import { useScaledSize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
 import {
@@ -15,6 +19,10 @@ import {
   type Kept,
   keepActs,
 } from "./keep-model.js";
+import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
+import { SelectTextSheet } from "./select-text-sheet.js";
+import { useColors } from "./tokens/colors.js";
+import { MARK_SIZE, PRESS_SIZE } from "./tokens/space.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
@@ -47,12 +55,17 @@ export interface Keeping {
   readonly open: (kept: Kept) => void;
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
+  /** Shares words in the system's share sheet, such as a message's. */
+  readonly shareWords: (words: string) => void;
   readonly copyRich: (copy: DraftCopy) => void;
 }
 
 const KeepingDoor = createContext<Keeping | undefined>(undefined);
 
-/** Hands every picture, recording, file, and message under it what the app does with what is held; none offers no menu. */
+/** Opens a message's words in the sheet they are selected in, which `KeepingProvider` holds. */
+const SelectTextDoor = createContext<((words: string) => void) | undefined>(undefined);
+
+/** Hands every picture, recording, file, and message under it what the app does with what is held, and holds the one sheet a message's Select text opens; none offers no menu. */
 export function KeepingProvider({
   keeping,
   children,
@@ -60,7 +73,16 @@ export function KeepingProvider({
   readonly keeping: Keeping;
   readonly children: ReactNode;
 }) {
-  return <KeepingDoor value={keeping}>{children}</KeepingDoor>;
+  const [selecting, setSelecting] = useState<string | undefined>(undefined);
+
+  return (
+    <KeepingDoor value={keeping}>
+      <SelectTextDoor value={setSelecting}>
+        {children}
+        <SelectTextSheet words={selecting} onDone={() => setSelecting(undefined)} />
+      </SelectTextDoor>
+    </KeepingDoor>
+  );
 }
 
 /** The acts a kept thing's menu offers, in their order; none where nothing is kept yet, or no app answers them. */
@@ -92,19 +114,197 @@ export function useQuickLook(kept: Kept | undefined): (() => void) | undefined {
   return () => keeping.open(kept);
 }
 
-/** A message's Copy, which copies its words as they were written, Markdown and all, as the panel's does; none for a message of no words. */
-function useCopyWordsActs(words: string): readonly HeldAct[] {
+/** The words of a message's acts beyond its Copy, as the panel and iOS's own apps say them. */
+const MESSAGE_ACT_WORDS = {
+  COPY_LINK: "Copy link",
+  SELECT_TEXT: "Select text",
+  SHARE: KEEP_WORDS[KEEP_ACT.SHARE],
+  MORE: "More",
+} as const;
+
+/**
+ * A message's acts, in the panel's order and then iOS's own: Copy, Copy
+ * link where the message has an address, then Select text and Share, as
+ * Messages and ChatGPT offer them on a held message, with what the message
+ * offers of its own after Copy link, such as the panel's Edit; none for a
+ * message of no words, or where no app answers them.
+ */
+function useMessageActs(
+  words: string,
+  link: string | undefined,
+  more: readonly HeldAct[],
+): readonly HeldAct[] {
   const keeping = useContext(KeepingDoor);
+  const selectText = useContext(SelectTextDoor);
 
   if (keeping === undefined || words.trim() === "") return [];
 
   return [
+    { label: COPY_MESSAGE, symbol: GLYPH.COPY, onPress: () => keeping.copyWords(words) },
+    ...(link === undefined
+      ? []
+      : [
+          {
+            label: MESSAGE_ACT_WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            onPress: () => keeping.copyWords(link),
+          },
+        ]),
+    ...more,
+    ...(selectText === undefined
+      ? []
+      : [
+          {
+            label: MESSAGE_ACT_WORDS.SELECT_TEXT,
+            symbol: GLYPH.SELECT_TEXT,
+            onPress: () => selectText(words),
+          },
+        ]),
     {
-      label: COPY_MESSAGE,
-      symbol: KEEP_SYMBOL[KEEP_ACT.COPY],
-      onPress: () => keeping.copyWords(words),
+      label: MESSAGE_ACT_WORDS.SHARE,
+      symbol: GLYPH.SHARE,
+      onPress: () => keeping.shareWords(words),
     },
   ];
+}
+
+/**
+ * A line of the member's own, or a teammate's, that a long press lifts and
+ * opens SwiftUI's own menu on, as Messages and ChatGPT open one on a sent
+ * bubble: headed by when it was sent ("Oct 11, 2:14 PM"), then Copy, Copy
+ * link where it has an address, Select text, and Share; the line alone where
+ * it has no words.
+ */
+export function MessageMenu({
+  words,
+  at,
+  link,
+  more = [],
+  width,
+  children,
+}: {
+  readonly words: string;
+  /** When it was sent; none where its line kept no time. */
+  readonly at: number | undefined;
+  /** Its address on vespin.dev, which Copy link copies; none where it has none. */
+  readonly link?: string | undefined;
+  /** What it offers of its own after Copy link, in the panel's order, such as Edit. */
+  readonly more?: readonly HeldAct[] | undefined;
+  /** The width it stands in where the caller knows it before it is laid out (`HeldMenu`'s `width`). */
+  readonly width?: number | undefined;
+  readonly children: ReactElement;
+}) {
+  return (
+    <HeldMenu
+      acts={useMessageActs(words, link, more)}
+      title={at === undefined ? undefined : dayAndTimeText(at)}
+      width={width}
+    >
+      {children}
+    </HeldMenu>
+  );
+}
+
+/**
+ * The acts under an agent's finished turn, standing as a quiet row of the
+ * panel's glyphs rather than on a hover, which a phone has none of, as
+ * ChatGPT's row stands under its reply: Copy, Copy link where the turn has
+ * an address, then Share, each a 44 pt target in the muted ink, named for
+ * VoiceOver by its words, and a ⋯ holding what else the turn offers, in the
+ * system's menu; for a turn of no words, Copy link and the ⋯ alone, and
+ * nothing where it offers no more.
+ */
+export function TurnActs({
+  words,
+  link,
+  more = [],
+}: {
+  readonly words: string;
+  readonly link?: string | undefined;
+  /** What the turn offers past its row, in the panel's order, such as Fork to new agent, behind a ⋯ at the row's end. */
+  readonly more?: readonly HeldAct[] | undefined;
+}) {
+  const colors = useColors();
+  const keeping = useContext(KeepingDoor);
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+
+  const copyable = words.trim() !== "";
+
+  // Note that a turn of no words still stands its row where it offers more, such as Fork to new agent, as the panel's foot does.
+  if (keeping === undefined || (!copyable && more.length === 0)) return null;
+
+  const acts: readonly HeldAct[] = [
+    ...(copyable
+      ? [{ label: COPY_MESSAGE, symbol: GLYPH.COPY, onPress: () => keeping.copyWords(words) }]
+      : []),
+    ...(link === undefined
+      ? []
+      : [
+          {
+            label: MESSAGE_ACT_WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            onPress: () => keeping.copyWords(link),
+          },
+        ]),
+    ...(copyable
+      ? [
+          {
+            label: MESSAGE_ACT_WORDS.SHARE,
+            symbol: GLYPH.SHARE,
+            onPress: () => keeping.shareWords(words),
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <InlineHost matchContents>
+      <HStack spacing={0}>
+        {acts.map((act) => (
+          <Button
+            key={act.label}
+            onPress={act.onPress}
+            modifiers={[buttonStyle("borderless"), accessibilityLabel(act.label)]}
+          >
+            <Image
+              {...glyphImage(act.symbol)}
+              size={size}
+              color={colors.TEXT_MUTED}
+              modifiers={[
+                frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+                SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+              ]}
+            />
+          </Button>
+        ))}
+        {more.length === 0 ? null : (
+          <Menu
+            label={
+              <Image
+                {...glyphImage(GLYPH.MORE)}
+                size={size}
+                color={colors.TEXT_MUTED}
+                modifiers={[
+                  frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+                  SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+                ]}
+              />
+            }
+            modifiers={[accessibilityLabel(MESSAGE_ACT_WORDS.MORE)]}
+          >
+            {more.map((act) => (
+              <Button
+                key={act.label}
+                {...actContent(act.label, act.symbol)}
+                onPress={act.onPress}
+                {...(act.destructive === true ? { role: "destructive" as const } : {})}
+              />
+            ))}
+          </Menu>
+        )}
+      </HStack>
+    </InlineHost>
+  );
 }
 
 /** What the app does with what is held, for a piece that copies on a press of its own, such as a draft's Copy; none where no app answers it. */
@@ -112,15 +312,14 @@ export function useKeeping(): Keeping | undefined {
   return useContext(KeepingDoor);
 }
 
-function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
-  return acts.map((act) => (
-    <Button
-      key={act.label}
-      {...actContent(act.label, act.symbol)}
-      onPress={act.onPress}
-      {...(act.destructive === true ? { role: "destructive" as const } : {})}
-    />
-  ));
+/** A held thing's act as the long press menu takes it: red where it takes something away for good. */
+function heldItem(act: HeldAct): RowAction {
+  return {
+    label: act.label,
+    symbol: act.symbol,
+    tone: act.destructive === true ? ROW_ACTION_TONE.DESTRUCTIVE : ROW_ACTION_TONE.NEUTRAL,
+    onPress: act.onPress,
+  };
 }
 
 /**
@@ -130,20 +329,18 @@ function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
  */
 export function HeldSwiftMenu({
   acts,
+  title,
   children,
 }: {
   readonly acts: readonly HeldAct[];
+  /** What heads the menu, such as when a message was sent. */
+  readonly title?: string | undefined;
   readonly children: ReactElement;
 }) {
-  if (acts.length === 0) return children;
-
   return (
-    <ContextMenu>
-      <ContextMenu.Items>
-        <HeldActButtons acts={acts} />
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
-    </ContextMenu>
+    <LongPressMenu groups={[acts.map(heldItem)]} title={title}>
+      {children}
+    </LongPressMenu>
   );
 }
 
@@ -160,10 +357,13 @@ export function HeldSwiftMenu({
  */
 export function HeldMenu({
   acts,
+  title,
   width: known,
   children,
 }: {
   readonly acts: readonly HeldAct[];
+  /** What heads the menu, such as when a message was sent. */
+  readonly title?: string | undefined;
   /** The width the held views stand in where the caller knows it before they are laid out, as a transcript's row does, so they are bounded from their first frame; else the width the menu measures where it stands. */
   readonly width?: number | undefined;
   readonly children: ReactElement;
@@ -177,7 +377,7 @@ export function HeldMenu({
   return (
     <View style={styles.host} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <InlineHost matchContents={{ vertical: true }} style={styles.host}>
-        <HeldSwiftMenu acts={acts}>
+        <HeldSwiftMenu acts={acts} title={title}>
           <RNHostView matchContents={{ vertical: true }}>
             <View style={width === undefined ? undefined : { width }}>{children}</View>
           </RNHostView>
@@ -187,7 +387,7 @@ export function HeldMenu({
   );
 }
 
-/** A message's React Native views, whose long press offers Copy message; the views alone for a message of no words. */
+/** A message's React Native views, whose long press offers Copy message, Select text and Share; the views alone for a message of no words. */
 export function CopyWordsMenu({
   words,
   width,
@@ -199,13 +399,13 @@ export function CopyWordsMenu({
   readonly children: ReactElement;
 }) {
   return (
-    <HeldMenu acts={useCopyWordsActs(words)} width={width}>
+    <HeldMenu acts={useMessageActs(words, undefined, [])} width={width}>
       {children}
     </HeldMenu>
   );
 }
 
-/** A message drawn in SwiftUI, such as a thread's, whose long press offers Copy message; the message alone where it has no words. */
+/** A message drawn in SwiftUI, such as a thread's, whose long press offers Copy message, Select text and Share; the message alone where it has no words. */
 export function CopyWordsSwiftMenu({
   words,
   children,
@@ -213,5 +413,5 @@ export function CopyWordsSwiftMenu({
   readonly words: string;
   readonly children: ReactElement;
 }) {
-  return <HeldSwiftMenu acts={useCopyWordsActs(words)}>{children}</HeldSwiftMenu>;
+  return <HeldSwiftMenu acts={useMessageActs(words, undefined, [])}>{children}</HeldSwiftMenu>;
 }

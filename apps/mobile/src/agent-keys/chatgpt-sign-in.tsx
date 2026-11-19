@@ -16,6 +16,7 @@ import {
   GLYPH,
   glyphSymbol,
   ListSection,
+  LOADING_ROW_LOOK,
   LoadingRow,
   PUSH_ROW_GOES,
   PushRow,
@@ -179,7 +180,7 @@ export function ChatGptSignIn() {
   const body =
     standing.kind === STANDING.STARTING ? (
       <ListSection>
-        <LoadingRow words={CHATGPT_DEVICE_WORDS.GETTING_CODE} />
+        <LoadingRow words={CHATGPT_DEVICE_WORDS.GETTING_CODE} look={LOADING_ROW_LOOK.SAID} />
       </ListSection>
     ) : standing.kind === STANDING.FAILED ? (
       <ListSection footer={standing.words} footerTone={FOOTER_TONE.FAILURE}>
@@ -198,7 +199,7 @@ export function ChatGptSignIn() {
         <ListSection
           footer={`${CHATGPT_DEVICE_WORDS.TURN_ON}. ${CHATGPT_DEVICE_WORDS.TURN_ON_HINT}.`}
         >
-          <LoadingRow words={CHATGPT_DEVICE_WORDS.WAITING} />
+          <LoadingRow words={CHATGPT_DEVICE_WORDS.WAITING} look={LOADING_ROW_LOOK.SAID} />
         </ListSection>
       </>
     );

@@ -107,7 +107,12 @@ export function useRemind(): UseRemindResult {
           ]
         : [];
 
-      return { ...REMIND_ME, choices: [], actions: [...times, pick, ...clear] };
+      return {
+        ...REMIND_ME,
+        tone: ROW_ACTION_TONE.REMIND,
+        choices: [],
+        actions: [...times, pick, ...clear],
+      };
     },
     [send, details],
   );

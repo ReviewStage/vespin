@@ -1,5 +1,12 @@
 import { expect, test } from "vitest";
-import { foldedTaskRows, searchedTasks, type TaskTree, taskTree } from "./task-tree-model.js";
+import {
+  foldedTaskRows,
+  searchedTasks,
+  TASK_ROW_FACE,
+  type TaskTree,
+  taskRowFace,
+  taskTree,
+} from "./task-tree-model.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
 /**
@@ -8,7 +15,8 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
  * Pinned, a sectioned one in its section, a child under its parent, the
  * rest under their repository, and a teammate's task they follow under
  * Following; a search finds a settled task by its key;
- * a shut parent hides every row under it, however deep, and no row past it.
+ * a shut parent hides every row under it, however deep, and no row past it;
+ * a row wears a teammate's face, the unassigned mark, or none for the reader's own.
  */
 
 const READER = "user-ada";
@@ -201,4 +209,21 @@ test("a shut parent hides every row under it, however deep, and the rows after i
   expect(
     foldedTaskRows(rows, (taskId) => taskId === "Invites").map(({ task: each }) => each.name),
   ).toEqual(["Invites", "Invite copy", "Invite email", "Digest"]);
+});
+
+test("a row wears a teammate's face, the unassigned mark where no one is on it, and none for the reader's own", () => {
+  const grace = { userId: "user-grace", name: "Grace Hopper" };
+  const { assignee: _reader, ...unassigned }: TaskSummary = task("ship", TASK_STATUS.TODO, null, 1);
+
+  expect([
+    taskRowFace(task("ship", TASK_STATUS.TODO, null, 1, { assignee: grace }), READER, false),
+    taskRowFace(unassigned, READER, false),
+    taskRowFace(unassigned, READER, true),
+    taskRowFace(task("ship", TASK_STATUS.TODO, null, 1), READER, false),
+  ]).toEqual([
+    { kind: TASK_ROW_FACE.PERSON, userId: "user-grace", name: "Grace Hopper" },
+    { kind: TASK_ROW_FACE.NOBODY },
+    undefined,
+    undefined,
+  ]);
 });
