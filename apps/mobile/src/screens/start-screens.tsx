@@ -72,6 +72,7 @@ import {
   useStartTask,
 } from "../tasks/use-start.js";
 import { useAttachedPictures } from "../use-attached-pictures.js";
+import { useDictation } from "../use-dictation.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -671,6 +672,7 @@ export function NewAgentScreen({
   const action = opened?.view.action;
   const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
   const [prompt, setPrompt] = useState(brief);
+  const dictated = useDictation(prompt, setPrompt);
   const [runsOn, setRunsOn] = useState(CLOUD);
   const source = useShownAgent(fork?.agentId ?? "");
 
@@ -793,7 +795,8 @@ export function NewAgentScreen({
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
-        notes={notesOf(note, pick.failed)}
+        notes={notesOf(dictated.note, note, pick.failed)}
+        dictation={dictated.dictation}
         add={{ onAdd: pictures.attach }}
         // Note that a fork goes with the box empty, as the panel's forks alone.
         ready={(drafted || fork !== undefined) && placed && !starting}
@@ -1022,6 +1025,7 @@ export function NewTaskScreen({
   readonly draft?: NewTaskDraft | undefined;
 }) {
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
+  const dictated = useDictation(prompt, setPrompt);
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const listed = useListedTasks();
@@ -1138,7 +1142,8 @@ export function NewTaskScreen({
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
-        notes={notesOf(note, unreached, pick.failed)}
+        notes={notesOf(dictated.note, note, unreached, pick.failed)}
+        dictation={dictated.dictation}
         add={{
           menu: {
             actions: [{ label: WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: pictures.attach }],

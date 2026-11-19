@@ -59,6 +59,7 @@ import {
   COMPOSER_CALL,
   Composer,
   type ComposerCall,
+  type ComposerDictation,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
@@ -162,6 +163,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useDevicePlatform } from "../tasks/use-start.js";
+import { useDictation } from "../use-dictation.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
 
@@ -327,6 +329,7 @@ function AgentComposerBar({
   otherCall,
   tools,
   trailing,
+  dictation,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -343,6 +346,8 @@ function AgentComposerBar({
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
   readonly trailing: ReactNode;
+  /** Dictate before Send, and its strip while a dictation stands. */
+  readonly dictation: ComposerDictation;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -389,6 +394,7 @@ function AgentComposerBar({
     addMenu,
     tools,
     trailing,
+    dictation,
     onDropPictures: composer.dropPictures,
     onLongPaste: composer.pasteText,
     onStop: composer.stop,
@@ -458,6 +464,7 @@ function AgentComposerArea({
   readonly trailing: ReactNode;
 }) {
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
+  const dictated = useDictation(composer.words, composer.onWords);
   useEffect(() => {
     editMessage.current = composer.editMessage;
   }, [editMessage, composer.editMessage]);
@@ -469,11 +476,12 @@ function AgentComposerArea({
         approvals={approvals}
         onShowWaiting={onShowWaiting}
         addMenu={agentAddMenu(composer, servers, agent !== undefined)}
-        note={note}
+        note={dictated.note ?? note}
         call={call}
         otherCall={otherCall}
         tools={tools}
         trailing={trailing}
+        dictation={dictated.dictation}
       />
       <ConfirmAsk destructive {...composer.removing} />
       <ConfirmAsk destructive {...composer.sendingEdit} />
