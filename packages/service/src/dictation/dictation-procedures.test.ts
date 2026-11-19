@@ -247,8 +247,25 @@ it.layer(getTestDB())("the dictation route", (it) => {
         const file = form.get("file");
         assert.ok(file instanceof File);
         assert.equal(file.type, "audio/webm");
+        assert.equal(file.name, "dictation.webm");
         assert.deepEqual(new Uint8Array(yield* Effect.promise(() => file.arrayBuffer())), CLIP);
       }),
+  );
+
+  it.effect("an iPhone's clip, AAC in MPEG-4, goes to the model as an M4A file", () =>
+    Effect.gen(function* () {
+      const { userId, ask, calls } = yield* openAccount();
+
+      const answered = yield* ask(clip(userId, { audioType: "audio/mp4" }));
+
+      assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { text: SAID } });
+      const [call] = calls;
+      assert.ok(call);
+      const file = formOf(call).get("file");
+      assert.ok(file instanceof File);
+      assert.equal(file.type, "audio/mp4");
+      assert.equal(file.name, "dictation.m4a");
+    }),
   );
 
   it.effect(
