@@ -1,7 +1,7 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
 import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
-import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
@@ -175,6 +175,7 @@ import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
+import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
 import {
   threadComments,
   threadOpen,
@@ -1351,7 +1352,13 @@ function standingMenus(
   const assigneeId = task.assignee?.userId;
 
   return {
-    status: { label: WORDS.STATUS, choices: statusSubmenu(task, overview.setStatus).choices },
+    status: {
+      label: WORDS.STATUS,
+      choices: statusSubmenu(task, (taskId, status) => {
+        standingPressed(taskId, PRODUCT_STANDING_FIELD.STATUS, status);
+        overview.setStatus(taskId, status);
+      }).choices,
+    },
     priority: {
       label: WORDS.PRIORITY,
       choices: TASK_PRIORITY_ORDER.map((priority) => ({
@@ -1359,7 +1366,10 @@ function standingMenus(
         symbol: PRIORITY_MARK_SYMBOL[priority],
         tone: PRIORITY_MARK_TONE[priority],
         on: task.priority === priority,
-        onPress: () => overview.setPriority(task.id, priority),
+        onPress: () => {
+          standingPressed(task.id, PRODUCT_STANDING_FIELD.PRIORITY, priority);
+          overview.setPriority(task.id, priority);
+        },
       })),
     },
     assignee: {
@@ -1370,13 +1380,19 @@ function standingMenus(
           symbol: GLYPH.PERSON,
           photo: photoOf(member.userId),
           on: member.userId === assigneeId,
-          onPress: () => overview.setAssignee(task.id, member),
+          onPress: () => {
+            standingPressed(task.id, PRODUCT_STANDING_FIELD.ASSIGNEE, member.userId);
+            overview.setAssignee(task.id, member);
+          },
         })),
         {
           label: NO_ASSIGNEE_WORDS,
           symbol: GLYPH.UNASSIGNED,
           on: assigneeId === undefined,
-          onPress: () => overview.setAssignee(task.id, null),
+          onPress: () => {
+            standingPressed(task.id, PRODUCT_STANDING_FIELD.ASSIGNEE, null);
+            overview.setAssignee(task.id, null);
+          },
         },
       ],
     },
@@ -1387,6 +1403,7 @@ function standingMenus(
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const now = useMinute();
   const { task } = overview;
+  useStandingDrawnCount(task);
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
   const members = useListedMembers(task.workspaceId);

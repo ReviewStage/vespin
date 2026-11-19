@@ -7,6 +7,7 @@ import {
   PRODUCT_EXPERIMENT_SCOPE,
   PRODUCT_REPLY_KIND,
   PRODUCT_SETTING_VALUE,
+  PRODUCT_STANDING_FIELD,
   productDrawnMilliseconds,
   productEventBuildFromWire,
   productEventFromWire,
@@ -226,6 +227,39 @@ test("a reply's wait to stand in its thread travels on a rung, with what it carr
       properties: {
         [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 640,
         [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: PRODUCT_REPLY_KIND.WORDS,
+      },
+    }),
+    undefined,
+  );
+});
+
+test("a standing chip's wait to draw its change travels on a rung, with which chip it was, never the value it took", () => {
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.STANDING_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 200,
+        [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: PRODUCT_STANDING_FIELD.PRIORITY,
+        priority: "high",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.STANDING_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 200,
+        [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: PRODUCT_STANDING_FIELD.PRIORITY,
+      },
+    },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.STANDING_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 200,
+        [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: "high",
       },
     }),
     undefined,
