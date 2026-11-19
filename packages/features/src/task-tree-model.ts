@@ -285,6 +285,38 @@ export function taskRowLook(
   };
 }
 
+/** Who a task's row names by face: a person, or no one, drawn as the unassigned mark. */
+export const TASK_ROW_FACE = {
+  PERSON: "person",
+  NOBODY: "nobody",
+} as const;
+
+/** A task row's face: the member assigned, or the unassigned mark. */
+export type TaskRowFace =
+  | { readonly kind: typeof TASK_ROW_FACE.PERSON; readonly userId: string; readonly name: string }
+  | { readonly kind: typeof TASK_ROW_FACE.NOBODY };
+
+/**
+ * The face a task's row wears, as the panel's sidebar row wears it
+ * (`@repo/ui`'s `assigneeFace`): the member it is assigned to where that is
+ * someone other than the reader, and the unassigned mark where no one is,
+ * but in a workspace of one, where no one else could be on it; a task
+ * assigned to the reader wears none.
+ */
+export function taskRowFace(
+  task: TaskSummary,
+  readerId: string | undefined,
+  soleMember: boolean,
+): TaskRowFace | undefined {
+  const { assignee } = task;
+
+  if (assignee === undefined) return soleMember ? undefined : { kind: TASK_ROW_FACE.NOBODY };
+
+  if (assignee.userId === readerId) return undefined;
+
+  return { kind: TASK_ROW_FACE.PERSON, userId: assignee.userId, name: assignee.name };
+}
+
 /**
  * A group's rows as the phone draws them under its folds: each parent row
  * open where `opened` says so and shut otherwise, and every row under a

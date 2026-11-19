@@ -59,7 +59,9 @@ import {
 import {
   foldedTaskRows,
   NO_REPOSITORY_KEY,
+  TASK_ROW_FACE,
   TASK_TREE_GROUP,
+  type TaskRowFace,
   type TaskTree,
   type TaskTreeGroup,
 } from "@repo/features/task-tree-model";
@@ -102,6 +104,7 @@ import {
   type ColumnBar,
   ConfirmAsk,
   EmptyState,
+  type Face,
   FailedReadRow,
   GLYPH,
   type Glyph,
@@ -669,6 +672,17 @@ function keyOf(task: TaskSummary, workspace: Workspace | undefined): string | un
   return taskKey(workspace.name, task.number);
 }
 
+/** What a task row's end says of who is on it: their face, the unassigned mark, or nothing for the reader's own. */
+function rowFace(face: TaskRowFace | undefined, pictureOf: (userId: string) => string | undefined) {
+  if (face === undefined) return {};
+
+  if (face.kind === TASK_ROW_FACE.NOBODY) return { unassigned: true };
+
+  const assignee: Face = { name: face.name, id: face.userId, picture: pictureOf(face.userId) };
+
+  return { assignee };
+}
+
 /** A task's path, as the bar names it: its repository's name and its key. */
 function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly string[] {
   const repository = task.repository?.split("/").at(-1);
@@ -679,11 +693,12 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
 }
 
 /**
- * One task's row, set in by how deep it stands and led by its sub-tasks' fold
- * where it has any: the one row every list of tasks draws, the Search tab's
- * among them. Its key ends the line only where `keyed` asks, as a search's
- * finds do; a regular window's list column leaves it out, as the panel's
- * sidebar does, since it took the title's room and wrapped there.
+ * One task's row, as the panel's sidebar draws it, set in by how deep it
+ * stands and its fold standing in its status mark's place where it has
+ * sub-tasks: the one row every list of tasks draws, the Search tab's among
+ * them. Its key ends the line only where `keyed` asks, as a search's finds
+ * do, ⌘K's among them; a list of tasks leaves it out, as the panel's sidebar
+ * does.
  */
 export function TaskListRow({
   task,
@@ -713,6 +728,9 @@ export function TaskListRow({
       needsYou={look.needsYou}
       agents={look.agents}
       blocked={task.blocked === true}
+      subTasks={listing.subTasksOf(task.id)}
+      {...rowFace(listing.faceOf(task), listing.pictureOf)}
+      at={look.at}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, asks, openRelation)}
@@ -903,7 +921,6 @@ function FoldedRows({
   readonly listing: TasksListing;
   readonly parents: OpenedParents;
 }) {
-  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const { opened, toggle } = parents;
 
   const folded = useMemo(
@@ -918,7 +935,7 @@ function FoldedRows({
           task={row.task}
           listing={listing}
           depth={row.depth}
-          keyed={keyed}
+          keyed={false}
           fold={
             row.open === undefined
               ? undefined

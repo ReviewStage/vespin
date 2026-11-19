@@ -21,7 +21,13 @@ import {
   agentsOfTask,
   inAgentListOrder,
 } from "@repo/features/task-agents-model";
-import { ASSIGNED_TO, NO_REPOSITORY, TASKS_HEAD_WORDS } from "@repo/features/task-list-model";
+import {
+  ASSIGNED_TO,
+  type ChildTaskCount,
+  childTaskCounts,
+  NO_REPOSITORY,
+  TASKS_HEAD_WORDS,
+} from "@repo/features/task-list-model";
 import { TASK_SECTION_WRITE, type TaskSection } from "@repo/features/task-section-wire";
 import {
   NO_TASK_SECTIONS,
@@ -34,8 +40,10 @@ import {
 } from "@repo/features/task-sections-model";
 import {
   searchedTasks,
+  type TaskRowFace,
   type TaskRowLook,
   type TaskTree,
+  taskRowFace,
   taskRowLook,
   taskTree,
 } from "@repo/features/task-tree-model";
@@ -96,6 +104,7 @@ import {
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
+import { useMemberPictures } from "../member-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
 import { useWorkspaceRepositories } from "./use-start.js";
@@ -383,6 +392,12 @@ export interface TasksListing {
   readonly searching: boolean;
   readonly workspace: Workspace | undefined;
   readonly lookOf: (task: TaskSummary) => TaskRowLook;
+  /** How many of a task's sub-tasks are finished, of all of them, as its row says it; none where it has none. */
+  readonly subTasksOf: (taskId: string) => ChildTaskCount | undefined;
+  /** The face a task's row wears, as the panel's sidebar row wears it (`taskRowFace`); none for the reader's own. */
+  readonly faceOf: (task: TaskSummary) => TaskRowFace | undefined;
+  /** A member's sign-in picture by their id, which a row's face draws; none where they have none. */
+  readonly pictureOf: (userId: string) => string | undefined;
   readonly setStatus: SetStatus;
   readonly workingAgents: (taskId: string) => number;
   /** Marks a task unread by hand, or read, as the panel's Mark as unread and Mark as read do. */
@@ -557,6 +572,7 @@ export function useTasksListing(search: string): ReadListing {
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
   const relations = useTaskRelationWrites();
+  const pictureOf = useMemberPictures();
   const searching = useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
   const [keepTree] = useState(answerKeeper<TaskTree>);
@@ -627,6 +643,10 @@ export function useTasksListing(search: string): ReadListing {
     // Note that the agents are grouped by task once, since every row's preview reads its own.
     const byTask = agentsByTask(listedAgents);
 
+    // Note that each parent's count is read once for the list, from every task it holds and the service's count on the parent, as the sidebar's is.
+    const counts = childTaskCounts(tasks);
+    const soleMember = workspace?.memberCount === 1;
+
     const glanceOf = (taskId: string): TaskGlance => ({
       waiting: waiting.byTask.get(taskId) ?? 0,
       agents: taskAgentsInOrder(byTask, taskId),
@@ -636,6 +656,9 @@ export function useTasksListing(search: string): ReadListing {
       tree,
       workspace,
       lookOf,
+      subTasksOf: (taskId: string) => counts.get(taskId),
+      faceOf: (task: TaskSummary) => taskRowFace(task, readerId, soleMember),
+      pictureOf: (userId: string) => pictureOf(userId),
       setStatus,
       workingAgents,
       markRead,
@@ -661,6 +684,7 @@ export function useTasksListing(search: string): ReadListing {
     rename,
     placing,
     relations,
+    pictureOf,
   ]);
 
   return useMemo(() => ({ ...rest, found, searching }), [rest, found, searching]);
