@@ -234,7 +234,6 @@ const READING_TASK = readingWords("the task");
 /** What the Tasks list says where the list could not be read, beside Try again, as the panel's Tasks page does. */
 const TASKS_UNREAD = readFailedWords(`your ${TERM.TASK.many}`);
 
-/** What a failed read offers. */
 const TRY_AGAIN = "Try again";
 
 /** What the list's search field says before anything is typed. */
@@ -973,7 +972,6 @@ function useTreeHoldState(): TreeHold {
   return { opened, toggleParent, folded, setFolded };
 }
 
-/** One group's opened parents out of the tree's hold. */
 function groupParents(hold: TreeHold, group: string): OpenedParents {
   return {
     opened: hold.opened.get(group) ?? NONE_OPEN,
@@ -1017,12 +1015,6 @@ function FoldedRows({
   );
 }
 
-/**
- * One group of the tree as its section: Pinned, Following, a section of the
- * member's, or a repository, folding under its header and count; My tasks
- * heads a repository group the tree draws no heading for. A task's row dragged onto
- * its header, as an iPad drags, moves the task there (`placeIn`).
- */
 /** The words of a section header's long press menu, as the panel's sidebar says them. */
 const SECTION_MENU_WORDS = {
   RENAME_SECTION: "Rename section",
@@ -1106,6 +1098,12 @@ function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPr
   return [read];
 }
 
+/**
+ * One group of the tree as its section: Pinned, Following, a section of the
+ * member's, or a repository, folding under its header and count; My tasks
+ * heads a repository group the tree draws no heading for. A task's row dragged onto
+ * its header, as an iPad drags, moves the task there (`placeIn`).
+ */
 function GroupSection({
   group,
   listing,
@@ -2359,13 +2357,6 @@ function OverviewComments({
 }
 
 /**
- * A task's Overview, as the panel's phone draws it: its head, its relations,
- * its agents with New agent and the line of its threads that need you, its
- * pages, and, where its workspace has Task descriptions on, its description
- * read-only and the comment threads that stand open on it. A pull reads the
- * task list again.
- */
-/**
  * Whether a task's page draws the sections under its head yet: not on the
  * render that opens it, and on the next, which React renders after the
  * first is committed and drops if another task opens first. Note that the
@@ -2387,6 +2378,13 @@ function TaskReading() {
   return <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />;
 }
 
+/**
+ * A task's Overview, as the panel's phone draws it: its head, its relations,
+ * its agents with New agent and the line of its threads that need you, its
+ * pages, and, where its workspace has Task descriptions on, its description
+ * read-only and the comment threads that stand open on it. A pull reads the
+ * task list again.
+ */
 function OverviewPage({
   overview,
   onRefresh,
