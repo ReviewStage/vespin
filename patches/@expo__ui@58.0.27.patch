@@ -27,10 +27,10 @@ index b542a50431f0a501a81c96d06d8705e745364a81..25de3ea1f08148cf00abb15c275fc229
       * Description of why the content is not available.
       */
 diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
-index f1aeaae3b55fd5cb2d30b952c096b086391575a6..2b1ebb457380626cbddb8f0b335e6be90bea1cef 100644
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..15b708c45f7f84f70404d6ebbfec0e01bff19650 100644
 --- a/build/swift-ui/Image/index.d.ts
 +++ b/build/swift-ui/Image/index.d.ts
-@@ -28,6 +28,17 @@ export interface ImageProps extends CommonViewModifierProps {
+@@ -28,6 +28,24 @@ export interface ImageProps extends CommonViewModifierProps {
       * Can be a color name like '#ff00ff', 'red', 'blue', etc.
       */
      color?: ColorValue;
@@ -39,6 +39,13 @@ index f1aeaae3b55fd5cb2d30b952c096b086391575a6..2b1ebb457380626cbddb8f0b335e6be9
 +     * system menu, which templates an icon tinted by `color`, keeps it.
 +     */
 +    originalColor?: ColorValue;
++    /**
++     * A second symbol from the asset catalog drawn under the first, in
++     * `originalColor` at `underOpacity`, both into one image kept original,
++     * so a system menu, which holds one image per item, keeps the two.
++     */
++    underAssetName?: string;
++    underOpacity?: number;
 +    /**
 +     * The side, in points, of a photo a system menu draws: `uiImage`, a
 +     * `file://` address alone, drawn into its circle at that size with its
@@ -175,21 +182,24 @@ index 56dc559f87456e0b6b86f1b91529d9395d4c6a61..495964269db54444a1344d045cb893a4
    }
  }
 diff --git a/ios/ImageView.swift b/ios/ImageView.swift
-index 170de73445439a3ba4e5495643ee5f7c3eb332ab..95c9de4367df2853066c81d9f06320bb7cd4c874 100644
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..e5d91c606a58a7e4936e0bc962c3c5eb1f82769e 100644
 --- a/ios/ImageView.swift
 +++ b/ios/ImageView.swift
-@@ -8,6 +8,10 @@ public final class ImageViewProps: UIBaseViewProps {
+@@ -8,6 +8,13 @@ public final class ImageViewProps: UIBaseViewProps {
    @Field var systemName: String?
    @Field var assetName: String?
    @Field var variableValue: Double?
 +  // A color drawn into the symbol itself, which a system menu keeps where it templates an icon tinted by a modifier.
 +  @Field var originalColor: Color?
++  // A second symbol drawn under it in the same color at `underOpacity`, both into one image kept original, as a task's priority stands its lit bars over every bar it can light, drawn faint.
++  @Field var underAssetName: String?
++  @Field var underOpacity: Double?
 +  // The side, in points, a photo stands at where a system menu draws it: drawn into its circle at that size, read only from a file on this device.
 +  @Field var photoSize: Double?
    @Field var useTapGesture: Bool?
    var onTap = EventDispatcher()
  }
-@@ -19,7 +23,41 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -19,7 +26,52 @@ public struct ImageView: ExpoSwiftUI.View {
      self.props = props
    }
  
@@ -202,7 +212,18 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..95c9de4367df2853066c81d9f06320bb
 +    guard let tinted = symbol?.withTintColor(UIColor(color), renderingMode: .alwaysOriginal) else {
 +      return nil
 +    }
-+    return Image(uiImage: tinted)
++    guard let underName = props.underAssetName, let under = UIImage(named: underName) else {
++      return Image(uiImage: tinted)
++    }
++    let faint = under.withTintColor(UIColor(color).withAlphaComponent(props.underOpacity ?? 1), renderingMode: .alwaysOriginal)
++    let size = CGSize(width: max(tinted.size.width, faint.size.width), height: max(tinted.size.height, faint.size.height))
++    // Both stand centered in one image, the faint symbol under the lit one, since a menu holds one image per item.
++    let layered = UIGraphicsImageRenderer(size: size).image { _ in
++      for image in [faint, tinted] {
++        image.draw(at: CGPoint(x: (size.width - image.size.width) / 2, y: (size.height - image.size.height) / 2))
++      }
++    }
++    return Image(uiImage: layered.withRenderingMode(.alwaysOriginal))
 +  }
 +
 +  // A photo already drawn into its circle at its size, its rendering kept original, so a system menu, which templates an image and takes it at its own size, keeps it. Note that it reads only a file on this device, never the network, since the read is synchronous.
@@ -231,7 +252,7 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..95c9de4367df2853066c81d9f06320bb
      if let systemName = props.systemName {
        if #available(iOS 16.0, tvOS 16.0, *) {
          return Image(systemName: systemName, variableValue: props.variableValue)
-@@ -41,6 +79,12 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -41,6 +93,12 @@ public struct ImageView: ExpoSwiftUI.View {
        symbolImage
          .applyImageModifiers(props.modifiers, appContext: props.appContext)
          .applyOnTapGesture(useTapGesture: props.useTapGesture, eventDispatcher: props.onTap)

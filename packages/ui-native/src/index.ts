@@ -311,6 +311,7 @@ export {
 export {
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
+  priorityMarkUnder,
   STATUS_MARK_SYMBOL,
 } from "./status-mark-model.js";
 
