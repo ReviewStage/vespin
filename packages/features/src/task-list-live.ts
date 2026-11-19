@@ -963,8 +963,7 @@ function gracedAt(row: AgentLiveRow, now: number): GracedAgent {
 export function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
   const { taskId, pinnedAt, pinPosition } = row;
 
-  // Note that an agent on no task has no pin here, because a pin is drawn under its task.
-  if (taskId === null || pinnedAt === null || row.archivedAt !== null) return undefined;
+  if (pinnedAt === null || row.archivedAt !== null) return undefined;
   const at = { agentId: row.id, taskId, pinnedAt };
 
   return pinPosition === null ? at : { ...at, pinPosition };
@@ -1026,9 +1025,9 @@ export function taskAgentsOfLiveRows(rows: TaskListLiveRows, now: number): reado
 }
 
 /**
- * The reader's pins of agents on a plan, the archived ones left out, since
- * an archived agent stands in no list a pin is drawn in: what the sidebar's
- * Pinned section draws beside the pinned plans.
+ * The reader's pins of agents, on a plan or on none, the archived ones left
+ * out, since an archived agent stands in no list a pin is drawn in: what the
+ * sidebar's Pinned section draws beside the pinned plans.
  */
 export function taskAgentPinsOfLiveRows(rows: TaskListLiveRows): readonly TaskAgentPin[] {
   return rows.agents.flatMap((row) => {

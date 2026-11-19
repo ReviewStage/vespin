@@ -885,14 +885,14 @@ export const listedPullRequestSchema = EffectSchema.Struct({
 export type ListedPullRequest = typeof listedPullRequestSchema.Type;
 
 /**
- * The reader's own pin of one agent on a plan (`agent_pin`), as a plan's
- * is: the agent, the plan it stands on, when they pinned it, and where they
- * dragged it in the sidebar's Pinned section (`pin-order.ts`), absent while
- * it stands by `pinnedAt`.
+ * The reader's own pin of one agent (`agent_pin`), as a plan's is: the
+ * agent, the plan it stands on, null for an agent on none, as a Manager is,
+ * when they pinned it, and where they dragged it in the sidebar's Pinned
+ * section (`pin-order.ts`), absent while it stands by `pinnedAt`.
  */
 export const taskAgentPinSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
-  taskId: EffectSchema.String,
+  taskId: EffectSchema.NullOr(EffectSchema.String),
   pinnedAt: countedNumber,
   pinPosition: EffectSchema.optionalKey(EffectSchema.String),
 });
