@@ -111,13 +111,13 @@ export function suggestedWords(written: string, suggested: string): string {
   return [written.trim(), suggested].filter((each) => each !== "").join("\n\n");
 }
 
-/** What a send from a suggestion's draft carries: its words and files as left, and for a new agent the model and effort its chip holds, beside the title and branch the suggestion named. */
+/** What a send from a suggestion's draft carries: its words and files as left, and for a new agent the model and effort its chip holds and the servers its + menu switched where it switched any, beside the title and branch the suggestion named. */
 export function sentOf(
   suggestion: DraftSuggestion,
   words: string,
   attachments: readonly AgentAttachment[],
   choice?: ModelChoice,
-  disabledServers: readonly string[] = [],
+  disabledServers?: readonly string[] | undefined,
   runsOn?: AgentRunsOnRequest,
   permissionMode?: AgentPermissionMode,
 ): ReplyButtonSent {
@@ -127,7 +127,7 @@ export function sentOf(
     ...(suggestion.title === undefined ? undefined : { title: suggestion.title }),
     ...(suggestion.branch === undefined ? undefined : { branch: suggestion.branch }),
     ...(choice === undefined ? undefined : { model: choice.model, effort: choice.effort }),
-    ...(disabledServers.length === 0 ? undefined : { disabledServers }),
+    ...(disabledServers === undefined ? undefined : { disabledServers }),
     ...(runsOn === undefined ? undefined : { runsOn }),
     ...(permissionMode === undefined ? undefined : { permissionMode }),
   };

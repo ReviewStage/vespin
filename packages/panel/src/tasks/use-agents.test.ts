@@ -414,7 +414,8 @@ test("a draft asks nothing of the service, one per plan, until its first message
 
   let failed: Failure | undefined;
   await act(async () => {
-    failed = await tab.control().startPrompt(draft, prompt, choice, []);
+    // Every server switched back on is still sent, so the account's choice for new agents does not stand in for it.
+    failed = await tab.control().startPrompt(draft, prompt, choice, [], []);
   });
   assert.equal(failed?.text, "The agent could not be started.");
   assert.equal(tab.control().draft?.id, draft, "a send that did not start keeps the draft");
@@ -431,7 +432,7 @@ test("a draft asks nothing of the service, one per plan, until its first message
   });
   assert.equal(failed, undefined);
   assert.deepEqual(startPayloads(tab.asked), [
-    { taskId: TASK, idempotencyKey: draft, prompt, ...choice },
+    { taskId: TASK, idempotencyKey: draft, prompt, disabledServers: [], ...choice },
     {
       taskId: TASK,
       idempotencyKey: draft,
@@ -551,7 +552,6 @@ test("a draft's words outlast a relaunch, the plan opening on its draft again un
     prompt,
     attachments: [],
     choice: undefined,
-    disabledServers: [],
   });
   act(() => after.control().onDiscardDraft(draft));
   assert.equal(after.control().draft, undefined);
@@ -787,7 +787,6 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
     prompt: "Try the queue",
     attachments: [],
     choice: undefined,
-    disabledServers: [],
     fork,
   });
   act(() => after.control().onDropFork());
@@ -797,7 +796,6 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
     prompt: "Try the queue, then retry",
     attachments: [],
     choice: undefined,
-    disabledServers: [],
   });
   relaunch();
 
