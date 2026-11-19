@@ -89,6 +89,7 @@ import { archivedAgent, changedAgent } from "./agent-change.js";
 import {
   clearedAgentById,
   deletedAgent,
+  movedAgentById,
   resumedAgentSandbox,
   rewoundAgentById,
   warmedAgent,
@@ -603,6 +604,14 @@ export function agentsProcedures(
     /** The agent's harness started on a fresh session in the same agent (`agent-lifecycle.ts`), answered as it then stands. */
     clear: signedIn.clear.effect(function* ({ input, context }) {
       return { agent: yield* clearedAgentById(writer, context.userId, input.id) };
+    }),
+    /** The agent moved to another place in the same agent (`agent-lifecycle.ts`), answered as it then stands. */
+    move: signedIn.move.effect(function* ({ input, context }) {
+      const id = yield* pathUuid(input.params.id);
+
+      return {
+        agent: yield* inSandbox(movedAgentById(writer, context.userId, id, input.body.runsOn)),
+      };
     }),
     /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {

@@ -28,6 +28,7 @@ import {
   AGENT_CHAT,
   AGENT_STATUS,
   type AgentChatHold,
+  type AgentRunsOnRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
@@ -42,9 +43,11 @@ import {
 import { controlsAgent, reachedAgentById } from "./agent-reach.js";
 import { agentSandboxName } from "./agent-sandbox-open.js";
 import { clearedAgent } from "./coder-host/clear.js";
+import { movedAgent } from "./coder-host/move.js";
 import { rewoundAgent } from "./coder-host/rewind.js";
 import { sandboxLetGo } from "./coder-host/runner-sessions.js";
 import { runnerWarmed } from "./coder-host/runtime-sessions.js";
+import type { SourceCopyServices } from "./coder-host/snapshot.js";
 import { startedBlank } from "./coder-host/status.js";
 import { standsStopped, statusOf, stoppedForGood, summaryOf } from "./coder-host/stop.js";
 import { type Retiring, retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
@@ -143,6 +146,20 @@ export const clearedAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* clearedAgent(writer, userId, agent);
 
   return yield* summaryOf(userId, agent);
+});
+
+/** The agent moved to another place in the same agent (`coder-host/move.ts`), answered as it then stands. */
+export const movedAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
+  writer: Effect.Effect<StoreWriter>,
+  account: string,
+  id: string,
+  runsOn: AgentRunsOnRequest,
+): Effect.fn.Return<AgentSummary, HostedRefusal, DatabaseServices | SourceCopyServices> {
+  const { userId, agent } = yield* reachedAgentById(account, id);
+  yield* movedAgent(writer, userId, agent, runsOn);
+  const moved = yield* reachedAgentById(account, id);
+
+  return yield* summaryOf(userId, moved.agent);
 });
 
 /** The agent taken back to just before the developer's line named (`coder-host/rewind.ts`), answered as it then stands. */

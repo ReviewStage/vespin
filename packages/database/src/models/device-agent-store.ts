@@ -963,6 +963,29 @@ const writeGoneSettled = SqlSchema.void({
     ),
 });
 
+const writeAgentLaunchesSettled = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, now: Schema.Date }),
+  execute: ({ userId, agentId, now }) =>
+    Database.use((db) =>
+      db
+        .update(deviceAgentLine)
+        .set({
+          settledAt: now,
+          exitCode: null,
+          claimedAt: sql`coalesce(${deviceAgentLine.claimedAt}, ${now}::timestamptz)`,
+          sealedSecrets: null,
+        })
+        .where(
+          and(
+            eq(deviceAgentLine.userId, userId),
+            eq(deviceAgentLine.agentId, agentId),
+            eq(deviceAgentLine.kind, DEVICE_AGENT_LINE_KIND.LAUNCH),
+            isNull(deviceAgentLine.settledAt),
+          ),
+        ),
+    ),
+});
+
 const deleteExpiredRequests = SqlSchema.void({
   Request: Schema.Struct({ userId: Schema.String, before: Schema.Date }),
   execute: ({ userId, before }) =>
@@ -1243,6 +1266,21 @@ export function settleGoneDeviceAgentLaunches(
   deviceIds: readonly string[],
 ): DeviceAgentEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => writeGoneSettled({ userId, deviceIds, now }));
+}
+
+/**
+ * Settles the launches still open of one of the account's agents, on
+ * whichever Mac, as a gone device's are settled (`settleGoneDeviceAgentLaunches`),
+ * for an agent moved off its Mac (`coder-host/move.ts`), so the place it
+ * moved to never reads a launch on the old one as its runner still live.
+ */
+export function settleMovedDeviceAgentLaunches(
+  userId: string,
+  agentId: string,
+): DeviceAgentEffect<void> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    writeAgentLaunchesSettled({ userId, agentId, now }),
+  );
 }
 
 /**

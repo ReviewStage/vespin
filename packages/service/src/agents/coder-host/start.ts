@@ -812,8 +812,30 @@ const machineOfStart = Effect.fnUntraced(function* (
       : yield* defaultPlaceOf(userId, task, ask.automationOrigin !== undefined));
 
   if (place.machine === AGENT_MACHINE.VERCEL) return IN_THE_CLOUD;
-  const { deviceId } = place;
 
+  const { deviceId } = yield* ownDeviceOf(userId, place.deviceId);
+
+  return { asked: { machine: AGENT_MACHINE.DEVICE, deviceId } };
+});
+
+/**
+ * The account's own Mac an agent of its is asked to run on, as a Start's
+ * place and a move's (`move.ts`) admit it: refused as away where its row is
+ * gone, as `not-owner` where it is another member's, naming it and whose it
+ * is, and by name where its owner removed its host.
+ */
+export const ownDeviceOf = Effect.fnUntraced(function* (
+  userId: string,
+  deviceId: string | null | undefined,
+): Effect.fn.Return<
+  {
+    readonly machine: typeof AGENT_MACHINE.DEVICE;
+    readonly deviceId: string;
+    readonly name: string;
+  },
+  HostedRefusal,
+  DatabaseServices
+> {
   const device =
     deviceId === null || deviceId === undefined
       ? undefined
@@ -840,7 +862,7 @@ const machineOfStart = Effect.fnUntraced(function* (
     return yield* Effect.fail(HOSTED_REFUSAL.DEVICE_REMOVED);
   }
 
-  return { asked: { machine: AGENT_MACHINE.DEVICE, deviceId: device.id } };
+  return { machine: AGENT_MACHINE.DEVICE, deviceId: device.id, name: device.name };
 });
 
 /**

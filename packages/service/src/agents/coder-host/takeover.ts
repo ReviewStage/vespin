@@ -733,7 +733,7 @@ const SANDBOX_CHECKOUTS: MachineCheckouts = {
 };
 
 /** The checkouts of the machine given, a Mac's as the account holds it (`macCheckoutsOf`); none where the account holds no such Mac standing. */
-const checkoutsOn = (
+export const checkoutsOn = (
   userId: string,
   machine: AgentMachineKind,
   deviceId: string | null | undefined,

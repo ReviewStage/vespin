@@ -30,7 +30,12 @@ import { SESSION_TURN } from "../sessions/agent-sessions.js";
 import { runAgentEditDescription } from "./agent-doors.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
-import { handedAfterCompaction, type TurnHanded, taskWithLead } from "./turn-context.js";
+import {
+  handedAfterCompaction,
+  handedToFreshSession,
+  type TurnHanded,
+  taskWithLead,
+} from "./turn-context.js";
 import { coderTurnMessage } from "./turn-message.js";
 
 /**
@@ -151,6 +156,35 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         assert.ok(!next.text?.includes("This turn is"), next.text ?? "");
         const compacted = yield* typedOn(handedAfterCompaction({ spoken: true }));
         assert.ok(compacted.text?.startsWith("This turn is typed"), compacted.text ?? "");
+      }),
+  );
+
+  it.effect(
+    "a move is told in the turn after it, even where that turn opens a fresh session, and never in the turn after that",
+    () =>
+      Effect.gen(function* () {
+        const { agent, admitted } = yield* openAgent;
+
+        const typedOn = (handed: TurnHanded) =>
+          coderTurnMessage(
+            admitted,
+            agent,
+            { kind: SESSION_TURN.TYPED, turnId: undefined },
+            handed,
+            TURN_STARTS_AT,
+          );
+
+        const moved: TurnHanded = {
+          moved: { from: { onMac: false }, to: { onMac: true, name: "Studio" } },
+        };
+
+        const after = yield* typedOn(handedToFreshSession(moved));
+        assert.ok(
+          after.text?.startsWith("You moved from the cloud to the developer's Mac `Studio`"),
+          after.text ?? "",
+        );
+        const next = yield* typedOn(after.handed);
+        assert.ok(!next.text?.includes("You moved"), next.text ?? "");
       }),
   );
 

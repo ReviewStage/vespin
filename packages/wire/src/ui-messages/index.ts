@@ -1,3 +1,5 @@
+export * from "./agent-moved.js";
+
 export * from "./client-parts.js";
 
 export * from "./compacted.js";

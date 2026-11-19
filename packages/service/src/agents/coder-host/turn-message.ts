@@ -38,6 +38,7 @@ import { experimentOnIn, experimentOnSinceIn } from "../workspace-experiment-on.
 import {
   handedAfterCompaction,
   memoriesWithLead,
+  movedWords,
   resizedWords,
   savedByAnotherSince,
   type TurnHanded,
@@ -229,8 +230,8 @@ const memoriesOf = (agent: Agent, words: string) =>
  * The message the agent's turn opens with after the history, and what the
  * session has handed once it is: on a spoken turn, the words for a reply
  * read aloud, and after one, the line saying they no longer hold
- * (`turnKindWords`); once, the size its sandbox was stopped for since its
- * last turn (`resizedWords`); the developer's time on
+ * (`turnKindWords`); once, a move to another place since its last turn
+ * (`movedWords`) and the size its sandbox was stopped for (`resizedWords`); the developer's time on
  * every turn, in their zone (`developerZone`); the task where `taskOf` hands it; and on the agent's first
  * turn alone, the memories its task's name, brief, and description and the
  * line's words find (`memoriesOf`). Note that a later turn is handed none,
@@ -263,6 +264,7 @@ export function coderTurnMessage(
 
     const kind = turnKindWords(handed, turn.spoken === true, endsTurns);
     const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
+    const moved = handed.moved === undefined ? undefined : movedWords(handed.moved);
     const taskHanded = task === undefined ? handed.task : task.key;
 
     const next: TurnHanded = {
@@ -270,7 +272,7 @@ export function coderTurnMessage(
       ...(turn.spoken === true ? { spoken: true } : undefined),
     };
 
-    const parts = [kind, resized, standing, memories].filter((part) => part !== undefined);
+    const parts = [kind, moved, resized, standing, memories].filter((part) => part !== undefined);
 
     return { text: parts.join("\n\n"), handed: next };
   });

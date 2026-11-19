@@ -2799,9 +2799,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
    * An agent whose session opened with every experiment of its workspace off
    * and took one step, its runner since ended, and whose workspace then
    * turned Task descriptions on: the next message finds the session opened
-   * on experiments no longer standing.
+   * on experiments no longer standing; or, where it is asked, whose agent
+   * moved to another place since (`move.ts`), its experiments left standing.
    */
-  const flippedSession = (api: ReturnType<typeof runnerSandboxApi>) =>
+  const flippedSession = (api: ReturnType<typeof runnerSandboxApi>, moved = false) =>
     Effect.gen(function* () {
       const { userId, agent } = yield* openAgent;
       const sequence = { next: 0 };
@@ -2820,6 +2821,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       // The session opened with every experiment of its workspace off, and took one step.
       yield* recordNativeTurnHanded(target, {
         experiments: { descriptionsOn: false, memoryOn: false },
+        ...(moved ? { moved: { from: { onMac: true }, to: { onMac: false } } } : undefined),
       });
       yield* (yield* Database).insert(messages).values({
         id: randomUUID(),
@@ -2837,23 +2839,29 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         Effect.provide(api.layer),
       );
       api.idleStop();
-      yield* setWorkspaceExperiment({
-        organizationId: agent.organizationId,
-        experiment: EXPERIMENT.DESCRIPTIONS,
-        on: true,
-        by: userId,
-      });
+
+      if (!moved) {
+        yield* setWorkspaceExperiment({
+          organizationId: agent.organizationId,
+          experiment: EXPERIMENT.DESCRIPTIONS,
+          on: true,
+          by: userId,
+        });
+      }
 
       return { userId, agent, sessions, opened };
     });
 
-  it.effect(
-    "a message to an agent whose workspace's experiments changed since its session opened opens a fresh session in the same sandbox, its conversation so far replayed ahead of the turn's words",
-    () =>
+  it.effect.each([
+    ["whose workspace's experiments changed since its session opened", false],
+    ["moved to another place since its session opened", true],
+  ] as const)(
+    "a message to an agent %s opens a fresh session, its conversation so far replayed ahead of the turn's words",
+    ([, moved]) =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
-        const { userId, agent, sessions, opened } = yield* flippedSession(api);
+        const { userId, agent, sessions, opened } = yield* flippedSession(api, moved);
 
         const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
 
@@ -2866,7 +2874,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const [ahead] = line?.type === INPUT_LINE.MESSAGE ? line.content : [];
         assert.ok(
           ahead?.type === "text" &&
-            ahead.text.includes("I renamed InviteToken to InvitationToken."),
+            ahead.text.includes("I renamed InviteToken to InvitationToken.") &&
+            ahead.text.includes("You moved from the developer's Mac to the cloud") === moved,
           JSON.stringify(ahead),
         );
         assert.deepEqual(developerContent(line), [{ type: "text", text: "Now the emails." }]);
