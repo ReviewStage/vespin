@@ -79,7 +79,6 @@ const SHEET_ROUTE = {
   SETTINGS: "settings",
   START_TASK: "start-task",
   START_AGENT: "start-agent",
-  AGENT_MODEL: "agent-model",
   AGENT_PORTS: "agent-ports",
   TASK_RELATION: "task-relation",
   MOVE_TASK: "move-task",
@@ -251,11 +250,6 @@ function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.START_AGENT}
             options={{ presentation: "fullScreenModal", title: "New agent" }}
-          />
-          {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
-          <Stack.Screen
-            name={SHEET_ROUTE.AGENT_MODEL}
-            options={{ presentation: sheetPresentation, title: "Options" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.AGENT_PORTS}
