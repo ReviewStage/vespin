@@ -42,6 +42,13 @@ const MANAGER: AgentSummary = {
   turnId: null,
 };
 
+/** A second Manager, which no page stands open on. */
+const BILLING: AgentSummary = {
+  ...MANAGER,
+  id: "0a1b2c3d-0000-4000-8000-00000000000b",
+  title: "Billing Manager",
+};
+
 const roots: Root[] = [];
 
 beforeEach(() => {
@@ -63,22 +70,27 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The sidebar over the workspace, the experiment as given, the workspace's agents read as `asked` hears them, a Manager's page opened as `opened` hears it. */
-async function mountSidebar(on: boolean, asked: unknown[], opened: string[]): Promise<HTMLElement> {
+/** The sidebar over the workspace, the experiment as given, the workspace's agents read as `asked` hears them, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named. */
+async function mountSidebar(
+  on: boolean,
+  asked: unknown[],
+  opened: string[],
+  openId?: string,
+): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_WORKSPACE_LIST]: (params) => {
       asked.push(params);
 
-      return Promise.resolve({ agents: [MANAGER] });
+      return Promise.resolve({ agents: [MANAGER, BILLING] });
     },
   });
 
   const tasks = tasksControl({
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    agentView: { agentId: undefined, onOpen: (agentId) => opened.push(agentId) },
+    agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
   });
 
   const container = document.body.appendChild(document.createElement("div"));
@@ -114,4 +126,23 @@ test("Managers stands nowhere, and reads nothing, while the workspace has the ex
 
   assert.equal(sidebar.querySelector('nav[aria-label="Managers"]'), null);
   assert.deepEqual(asked, []);
+});
+
+test("Managers folded leaves the open Manager's row standing and folds the rest away", async () => {
+  const sidebar = await mountSidebar(true, [], [], FRONTEND);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  assert.ok(list, "the Managers section is drawn");
+
+  const fold = list.querySelector<HTMLButtonElement>("button[aria-expanded]");
+
+  const named = () =>
+    ["Frontend Manager", "Billing Manager"].filter((name) =>
+      [...list.querySelectorAll("button")].some((button) => button.textContent?.includes(name)),
+    );
+
+  assert.ok(fold, "the Managers head folds");
+  assert.deepEqual(named(), ["Frontend Manager", "Billing Manager"]);
+  act(() => fold.click());
+  assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
 });
