@@ -751,6 +751,8 @@ export type PickOption = {
   readonly hint?: string | undefined;
   /** The panel's glyph the option leads with, in a menu or a row of `PickRows`, such as a permission mode's; none for none. */
   readonly symbol?: Glyph | undefined;
+  /** A mark of its own leading a row of `PickRows` in the glyph's place, such as a model's harness mark; none for none. */
+  readonly mark?: ReactNode | undefined;
 };
 
 type PickRowsProps = {
@@ -817,9 +819,10 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            {option.symbol === undefined ? null : (
-              <Image {...glyphImage(option.symbol)} color={colors.TEXT_MUTED} />
-            )}
+            {option.mark ??
+              (option.symbol === undefined ? null : (
+                <Image {...glyphImage(option.symbol)} color={colors.TEXT_MUTED} />
+              ))}
             <VStack alignment="leading" spacing={2}>
               <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
               {option.hint === undefined ? null : (
