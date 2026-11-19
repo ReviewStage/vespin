@@ -281,7 +281,16 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
-  empty section stands as its header alone rather than a list of add rows.
+  empty section stands as its header alone rather than a list of add rows;
+  a long press on one given a `menu` opens it, as the panel's right-click
+  on the sidebar's same header does.
+- **Long press** opens one menu everywhere, `LongPressMenu`: SwiftUI's own
+  context menu, its groups in the panel's order and words, set apart by
+  dividers, red where an act takes something away, lifting a preview where
+  the system's apps lift one. A row draws it through `RowFrame`, a section's
+  header through `ListSection`'s `menu`, and held SwiftUI or React Native
+  views through `HeldSwiftMenu` and `HeldMenu`, so wherever the panel opens
+  a right-click menu the app opens the same menu on a long press.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and

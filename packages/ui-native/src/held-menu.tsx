@@ -1,11 +1,10 @@
 // held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted.
 
-import { Button, ContextMenu, RNHostView } from "@expo/ui/swift-ui";
+import { RNHostView } from "@expo/ui/swift-ui";
 import type { DraftCopy } from "@repo/features/draft-text";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import type { Glyph } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
 import {
   KEEP_ACT,
@@ -15,6 +14,7 @@ import {
   type Kept,
   keepActs,
 } from "./keep-model.js";
+import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
@@ -112,15 +112,14 @@ export function useKeeping(): Keeping | undefined {
   return useContext(KeepingDoor);
 }
 
-function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
-  return acts.map((act) => (
-    <Button
-      key={act.label}
-      {...actContent(act.label, act.symbol)}
-      onPress={act.onPress}
-      {...(act.destructive === true ? { role: "destructive" as const } : {})}
-    />
-  ));
+/** A held thing's act as the long press menu takes it: red where it takes something away for good. */
+function heldItem(act: HeldAct): RowAction {
+  return {
+    label: act.label,
+    symbol: act.symbol,
+    tone: act.destructive === true ? ROW_ACTION_TONE.DESTRUCTIVE : ROW_ACTION_TONE.NEUTRAL,
+    onPress: act.onPress,
+  };
 }
 
 /**
@@ -135,16 +134,7 @@ export function HeldSwiftMenu({
   readonly acts: readonly HeldAct[];
   readonly children: ReactElement;
 }) {
-  if (acts.length === 0) return children;
-
-  return (
-    <ContextMenu>
-      <ContextMenu.Items>
-        <HeldActButtons acts={acts} />
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
-    </ContextMenu>
-  );
+  return <LongPressMenu groups={[acts.map(heldItem)]}>{children}</LongPressMenu>;
 }
 
 /**
