@@ -70,8 +70,8 @@ const STANDS_FOR = {
 /** How far the banner travels down from above its place as it arrives, in points. */
 const ARRIVAL = 120;
 
-/** How long it takes to slide in or out, in milliseconds, as the system's own banners do. */
-const SLIDE_MS = 280;
+/** How long the system's default spring takes to settle as the banner slides in or out, in milliseconds, after which one that left is let go. */
+const SLIDE_MS = 500;
 
 /** The banner's own room above and below its line, in points, which its press's 44 pt target reaches into. */
 const BANNER_INSET = SPACE.ROW + 2;
@@ -189,7 +189,8 @@ function NoticeBody({
           accessibilityIdentifier("failure-notice"),
           offset({ y: arrived || reduceMotion ? 0 : -ARRIVAL }),
           opacity(arrived ? 1 : 0),
-          animation(Animation.easeInOut({ duration: SLIDE_MS / 1000 }), arrived),
+          // Note that it moves on the system's default spring, as SwiftUI's own transitions do, rather than a curve and a duration of ours.
+          animation(Animation.default, arrived),
         ]}
       >
         <Image {...glyphImage(NOTICE_SYMBOL[notice.kind])} size={MARK_SIZE.LEAD} color={ink} />
