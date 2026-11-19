@@ -582,11 +582,6 @@ function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
   }));
 }
 
-/** What the bar says under its title while the list shows a scope other than Open, the one it opens on, so a list never stands narrowed or widened unsaid; nothing on Open. */
-function scopeSubtitle(show: InboxShow): string | undefined {
-  return show === INBOX_SHOW.OPEN ? undefined : INBOX_SHOW_LABEL[show];
-}
-
 /** The Inbox's ⋯ menu: its scopes, the one shown checked, then Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
 function moreMenu(
   scopes: readonly Scope[],
@@ -1253,7 +1248,6 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
     listing,
     skeleton,
     acts,
-    subtitle: scopeSubtitle(show),
     menu,
     remind,
     choosing,
@@ -1279,7 +1273,6 @@ function InboxStackList(held: InboxHeld) {
     listing,
     skeleton,
     acts,
-    subtitle,
     menu,
     remind,
     choosing,
@@ -1363,8 +1356,7 @@ function InboxStackList(held: InboxHeld) {
           <Stack.Toolbar.Spacer />
         </Stack.Toolbar>
       )}
-      {/* Note that the bar names a scope other than Open under its title, since the scopes stand in ⋯, so the list never stands narrowed or widened unsaid; Select mode names its count instead. */}
-      <Screen subtitle={choosing === undefined ? subtitle : undefined}>
+      <Screen>
         {/* Note that the list stands even with no thread, its empty state its one row, so a pull still reads the Inbox again. */}
         <InboxRows
           look={LIST_LOOK.PLAIN}
@@ -1425,7 +1417,6 @@ function InboxSplitScreen({
     listing,
     skeleton,
     acts,
-    subtitle,
     menu,
     remind,
     choosing,
@@ -1481,7 +1472,6 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
-            subtitle,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
