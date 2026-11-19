@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { test } from "vitest";
-import { forkStart, forksOf, messageOpening, startingWords } from "./fork-model.js";
+import { forkStart, forksOf, messageOpening, startingWords } from "./agent-fork-model.js";
+import { AGENT_STATUS, type AgentSummary } from "./agent-wire.js";
 
 /**
- * fork-model.test.ts -- what a fork's chip quotes of the message, the Start
+ * agent-fork-model.test.ts -- what a fork's chip quotes of the message, the Start
  * a forked draft sends, and where each of an agent's messages was forked
  * to, read off the task's agents.
  */

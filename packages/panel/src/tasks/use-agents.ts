@@ -1,4 +1,5 @@
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
+import { type AgentFork, continueFork, forkStart } from "@repo/features/agent-fork-model";
 import {
   ARCHIVE_NOT_READY,
   CLEAR_FAILED,
@@ -17,6 +18,7 @@ import {
   CONTEXT_WINDOW,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
+import { choiceRequest } from "@repo/features/model-effort";
 import type {
   CatalogModel,
   MacOffer,
@@ -89,7 +91,6 @@ import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approva
 import {
   archivedManyWords,
   archiveWords,
-  choiceRequest,
   continueFailureNote,
   RENAME_FAILED,
   RETRY_FAILED,
@@ -103,7 +104,6 @@ import {
   agentPageQueryOptions,
   repositorySkillsQueryOptions,
 } from "./agent-reads.js";
-import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
 import { type HeldUpdate, heldUpdateOver } from "./refused-send.js";
 import { keptSkills } from "./repository-skills.js";
 import type { SkillSource } from "./skill-picker.js";

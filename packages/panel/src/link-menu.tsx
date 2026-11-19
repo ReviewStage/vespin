@@ -18,6 +18,7 @@
  * does.
  */
 
+import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import { dropBelowStart, linkAddressOf, MENU_ALIGN, type MenuPlacement, useMenu } from "@repo/ui";
 import { ExternalLinkIcon, LinkIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -36,7 +37,7 @@ interface HeardLink {
 const LINK_MENU_LABEL = "Link";
 
 /** What the menu's opening item is called. */
-const OPEN_LINK_LABEL = "Open link";
+const OPEN_LINK_LABEL = LINK_MENU_WORDS.OPEN;
 
 /**
  * Whether `element` stands in words being edited: the nearest element that
