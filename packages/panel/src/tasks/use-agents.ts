@@ -1065,7 +1065,9 @@ export function useAgents(input: {
    * stands, and that one still out past its bound is said as failed, so
    * nothing waits on it for ever; should it land after, it settles as read.
    * An ask that landed settles once the slice says how it went (below),
-   * since a Try again answers alike whether its ask was answered or not.
+   * since a Try again answers alike whether its ask was answered or not;
+   * one the host refused is failed at once, since the slice may still hold
+   * an earlier list it did not read again.
    * The ask and its bound run as one fiber, stopped by the next ask or as
    * the hook leaves, so neither sets state on a tab no longer standing.
    */
@@ -1084,8 +1086,20 @@ export function useAgents(input: {
     stopModelsRead.current = rendererFork(
       Effect.all(
         [
-          Effect.promise(() => retryModels().catch(() => undefined)).pipe(
-            Effect.andThen(Effect.sync(() => setModelsLanded(generation))),
+          // Note that a refused ask is failed at once, never landed, because the slice may still hold an earlier list it did not read again.
+          Effect.promise(() =>
+            retryModels().then(
+              () => true,
+              () => false,
+            ),
+          ).pipe(
+            Effect.andThen((answered) =>
+              Effect.sync(() =>
+                answered
+                  ? setModelsLanded(generation)
+                  : settleModels(generation, MODELS_READ.FAILED),
+              ),
+            ),
           ),
           Effect.sleep(Duration.millis(MODELS_READ_BOUND_MS)).pipe(
             Effect.andThen(Effect.sync(() => settleModels(generation, MODELS_READ.FAILED))),

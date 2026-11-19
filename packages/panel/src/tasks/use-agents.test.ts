@@ -265,7 +265,7 @@ function startPayloads(
 
 // Note that the refusal raises the window's toast, whose waits stand on the test's clock.
 
-test("an ask of the models that never lands is said as failed past its bound, one that lands on models never read as failed, and one that lands on models read as read, no device as none", async () => {
+test("an ask of the models that never lands is said as failed past its bound, one that lands on models never read as failed, one that lands on models read as read, no device as none, and one refused as failed though models read before stay held", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
 
   try {
@@ -295,6 +295,14 @@ test("an ask of the models that never lands is said as failed past its bound, on
     await settle();
     assert.equal(tab.control().modelsRead.state, MODELS_READ.READ);
     assert.deepEqual(tab.control().macs, []);
+
+    // Note that the list read before stays held, so only the ask's own refusal can say this one failed.
+    fakeActPort({
+      [ACT_KIND.AGENTS_MODELS_RETRY]: () => Promise.reject(new Error("The host refused the read.")),
+    });
+    act(() => tab.control().readModels());
+    await settle();
+    assert.equal(tab.control().modelsRead.state, MODELS_READ.FAILED);
   } finally {
     vi.useRealTimers();
   }
