@@ -18,7 +18,7 @@ import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
-import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
+import { DESCRIPTION_ACTOR, type TaskSummary } from "@repo/features/task-wire";
 import {
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
@@ -110,16 +110,39 @@ function markedTasksView(list: ListedTasksView, marks: KeptReadMarks): ListedTas
   return tasks.every((task, place) => task === list.tasks[place]) ? list : { ...list, tasks };
 }
 
+/** PROBE: the standing each run's presses set on a task, by its store, then by the task's id. */
+const STANDINGS = new WeakMap<object, ReadonlyMap<string, Partial<Pick<TaskSummary, "status" | "priority">>>>();
+
+/** PROBE: the list with each task's kept standing laid over it. */
+function stoodTasksView(
+  list: ListedTasksView,
+  standings: ReadonlyMap<string, Partial<Pick<TaskSummary, "status" | "priority">>>,
+): ListedTasksView {
+  if (standings.size === 0) return list;
+
+  return {
+    ...list,
+    tasks: list.tasks.map((task) => {
+      const kept = standings.get(task.id);
+
+      return kept === undefined ? task : { ...task, ...kept };
+    }),
+  };
+}
+
 /** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made and its rows on the read marks it set: the tasks slice, and the lists beside it. */
 function stagedTasks(
   held: AppStateSnapshot,
   lists: TaskListParts,
   choices: AgentChoices,
   marks: KeptReadMarks,
+  standings: ReadonlyMap<string, Partial<Pick<TaskSummary, "status" | "priority">>> = new Map(),
 ): ListedApart {
   const view = { ...held.tasks, ...lists };
   const listed = stagedLists.has(lists) ? view : inboxTasksView(held.run.profile, view);
-  const apart = listedApart(markedTasksView(chosenTasksView(listed, choices), marks));
+  const apart = listedApart(
+    stoodTasksView(markedTasksView(chosenTasksView(listed, choices), marks), standings),
+  );
   stagedLists.add(apart.lists);
 
   return apart;
@@ -327,6 +350,7 @@ export function stageFixture(
     state.taskList(),
     CHOICES.get(state) ?? NO_CHOICES,
     READ_MARKS.get(state) ?? NO_READ_MARKS,
+    STANDINGS.get(state),
   );
 
   const staged = {
@@ -678,6 +702,26 @@ export function fixtureActs(
 
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         if (keepReadMark(state, kind as PortActKind, payload)) return Promise.resolve(true);
+
+        // PROBE: a standing press is laid over the staged tasks, as the host's declared write draws it, with a mark either side of the staging.
+        if (kind === ACT_KIND.TASKS_SET_STANDING) {
+          // SAFETY: the guard above names the kind.
+          const { taskId, status, priority } = payload as PortActPayload<typeof ACT_KIND.TASKS_SET_STANDING>;
+          // @ts-expect-error -- probe only.
+          globalThis.__perfMark?.("standing-act");
+          STANDINGS.set(
+            state,
+            new Map(STANDINGS.get(state) ?? []).set(taskId, {
+              ...(status === undefined ? undefined : { status }),
+              ...(priority === undefined ? undefined : { priority }),
+            }),
+          );
+          stageFixture(state);
+          // @ts-expect-error -- probe only.
+          globalThis.__perfMark?.("standing-staged");
+
+          return Promise.resolve(true);
+        }
 
         // SAFETY: as above.
         const sentFile = sentFileRead(state, kind as PortActKind, payload);
