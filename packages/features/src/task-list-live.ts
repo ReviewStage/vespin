@@ -214,9 +214,11 @@ const agentLiveRowSchema = EffectSchema.Struct({
   source: EffectSchema.optionalKey(EffectSchema.NullOr(agentSourceSchema)),
   pinnedAt: EffectSchema.NullOr(countedNumber),
   pinPosition: EffectSchema.NullOr(EffectSchema.String),
-  /** The reader's read mark (`read-mark.ts`); absent from a service before read marks were kept. */
+  /** The reader's read mark (`read-mark.ts`): their look at a Manager's chat, else its start; absent from a service before read marks were kept. */
   readThrough: EffectSchema.optionalKey(countedNumber),
   markedUnread: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** When a Manager last sent its chat a message (`send_to_user`); null before its first and for a coder, and absent from a statement before it was carried. */
+  saidAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   createdAt: countedNumber,
   turnId: EffectSchema.NullOr(EffectSchema.String),
   turnStatus: EffectSchema.NullOr(EffectSchema.String),
@@ -885,6 +887,13 @@ function agentSummaryOf(
     ...(runtime === undefined ? undefined : { runtime }),
     title: row.title,
     ...(row.kind === AGENT_KIND.MANAGER ? { kind: AGENT_KIND.MANAGER } : undefined),
+    // Note that only a Manager's chat is read by a mark, so a coder's row carries none.
+    ...(row.kind === AGENT_KIND.MANAGER && row.readThrough !== undefined
+      ? { readThrough: row.readThrough }
+      : undefined),
+    ...(row.kind === AGENT_KIND.MANAGER && row.saidAt !== undefined && row.saidAt !== null
+      ? { saidAt: row.saidAt }
+      : undefined),
     ...(row.machine === AGENT_MACHINE.DEVICE
       ? { machine: AGENT_MACHINE.DEVICE }
       : { sandboxVcpus: row.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),

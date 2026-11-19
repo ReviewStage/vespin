@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
+import { markAgentRead, stampAgentSaid } from "@repo/database/models/agent-chat-reads";
 import {
   recordAgentSandboxBooted,
   recordAgentSandboxBooting,
@@ -1070,6 +1071,45 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           ],
         );
         assert.deepEqual((yield* liveRowsOf(owner)).agents, []);
+      }),
+  );
+
+  it.effect(
+    "a Manager's row carries when its chat last said something, and each member's own look at it as their mark alone",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, teammate);
+
+        const { agent } = Option.getOrThrow(
+          yield* createAgent(owner, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        );
+
+        const said = agent.createdAt.getTime() + 60_000;
+        const looked = said + 60_000;
+        yield* stampAgentSaid(agent.id, new Date(said));
+        yield* markAgentRead(owner, agent.id, new Date(looked));
+
+        const marksOf = (userId: string) =>
+          Effect.map(liveRowsOf(userId, EVERY_TASK, TASKLESS_LIVE.CARRIED), (rows) =>
+            taskAgentsOfLiveRows(rows, NOW).map((each) => [each.readThrough, each.saidAt]),
+          );
+
+        assert.deepEqual(yield* marksOf(owner), [[looked, said]]);
+        assert.deepEqual(yield* marksOf(teammate), [[agent.createdAt.getTime(), said]]);
       }),
   );
 

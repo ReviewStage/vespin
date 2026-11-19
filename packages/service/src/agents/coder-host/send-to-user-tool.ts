@@ -10,12 +10,15 @@
  * refuses what is not one, or a caller that is no Manager.
  */
 
+import type { DatabaseServices } from "@repo/database/core/query";
+import { stampAgentSaid } from "@repo/database/models/agent-chat-reads";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Effect, Predicate, Result, Schema } from "effect";
+import { Clock, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
+import { logStoreFailure } from "../../http/store-failure.js";
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
 
 /** The most characters one message may spell. */
@@ -44,7 +47,8 @@ export const SEND_TO_USER_TOOL = {
   description:
     "Send a message to your chat, the only way your words reach people: your page shows people's " +
     "messages and these alone, never your other text or tool calls. Everyone who can open you sees " +
-    "the same chat, so write to all of them. Call it to answer someone, to report what is done, or " +
+    "the same chat, so write to all of them, and each of them sees your row marked unread until they " +
+    "open it. Call it to answer someone, to report what is done, or " +
     "to say what you are waiting on; a turn that sends nothing shows nothing. For a decision with " +
     "options or a to-do, post a thread instead.",
   inputSchema: SEND_TO_USER_INPUT,
@@ -66,16 +70,24 @@ function readSend(input: UnparsedWireValue): Result.Result<void, string> {
 export function runSendToUser(
   call: AgentCall,
   input: UnparsedWireValue,
-): Effect.Effect<WireRecord> {
+): Effect.Effect<WireRecord, never, DatabaseServices> {
   const read = readSend(input);
 
   if (Result.isFailure(read)) return Effect.succeed(agentToolRejected(read.failure));
 
-  if (callerAgent(call.caller)?.kind !== AGENT_KIND.MANAGER) {
+  const manager = callerAgent(call.caller);
+
+  if (manager?.kind !== AGENT_KIND.MANAGER) {
     return Effect.succeed(agentToolRejected(SEND_TO_USER_REFUSAL.NOT_MANAGER));
   }
 
   const answer: WireRecord = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
-  return Effect.succeed(answer);
+  // Note that a stamp that fails is logged and the message still taken, since it stands in the transcript whatever the row says.
+  return Clock.currentTimeMillis.pipe(
+    Effect.flatMap((now) => stampAgentSaid(manager.id, new Date(now))),
+    Effect.tapError(logStoreFailure),
+    Effect.ignore,
+    Effect.as(answer),
+  );
 }

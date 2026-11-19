@@ -210,6 +210,7 @@ import {
   pushDeviceStatusRequestSchema,
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
+import type { ReadMark } from "./read-mark.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
 import { imageAnswerOf, servedGitHubImage, servedRefusal, unansweredCall } from "./served-bytes.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
@@ -1294,6 +1295,22 @@ export class HostedAgentClient {
       hostedCall(
         this.#hosted.agents.change,
         { params: { id: agentId }, body },
+        { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
+      ),
+      rowWritten,
+    );
+  }
+
+  /** Moves the account's own read mark of a Manager's chat, under the idempotency key given where one is, answering the agent as it then stands. */
+  markRead(
+    agentId: string,
+    readMark: ReadMark,
+    key?: string,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(
+        this.#hosted.agents.change,
+        { params: { id: agentId }, body: { readMark } },
         { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
       ),
       rowWritten,

@@ -31,6 +31,7 @@ import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentQueue } from "../schemas/agent-queue.js";
+import { agentRead } from "../schemas/agent-read.js";
 import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { attachment } from "../schemas/attachment.js";
 import { invitation, member, organization, user } from "../schemas/auth.js";
@@ -436,6 +437,12 @@ export const agentPinSync = defineSyncTable(agentPin, {
 /** How far an account read a task, or that it marked it unread, on the account's topic. */
 export const taskReadSync = defineSyncTable(taskRead, {
   topics: [{ kind: TOPIC.ACCOUNT, column: taskRead.userId }],
+  log: LOG.EVERY,
+});
+
+/** How far an account read a Manager's chat, on the account's topic. */
+export const agentReadSync = defineSyncTable(agentRead, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: agentRead.userId }],
   log: LOG.EVERY,
 });
 
@@ -938,6 +945,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskPinSync,
   agentPinSync,
   taskReadSync,
+  agentReadSync,
   machineCommandSync,
   machineCommandAskSync,
   accountPreferenceSync,

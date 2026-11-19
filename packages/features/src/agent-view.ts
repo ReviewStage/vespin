@@ -82,6 +82,7 @@ import {
   pushDeviceRegisterRequestSchema,
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
+import { readMarkSchema } from "./read-mark.js";
 import { replyButtonSentSchema } from "./reply-button-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
@@ -1023,6 +1024,14 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
+
+/** A look at a Manager's chat, as the window names it to move the reader's own mark (`read-mark.ts`). */
+export const agentMarkReadParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  readMark: readMarkSchema,
+});
+
+export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;
 
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({

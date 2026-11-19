@@ -312,6 +312,8 @@ export const agentTable = pgTable(
     compactedAt: timestamptz("compacted_at"),
     /** When GitHub was last read of the agent's pull request, and of which branch; null before one, and once a change lets it go. */
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
+    /** When a Manager last sent its chat a message (`send_to_user`), which marks its row unread for each member who has not looked since (`agent-read.ts`); null before its first, and for a coder. */
+    saidAt: timestamptz("said_at"),
     /** When the developer archived the agent; null while it is not. */
     archivedAt: timestamptz("archived_at"),
     /** Who archived the agent, and why; null while it is not, and for an archive no one was recorded for. */

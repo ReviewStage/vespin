@@ -312,6 +312,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_RUN_ACTION_STOP: "agents.runActionStop",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
+  /** A look at a Manager's chat, which moves the reader's own read mark of it. */
+  AGENTS_MARK_READ: "agents.markRead",
   AGENTS_DELETE: "agents.delete",
   /**
    * Which agent's tab the panel shows, or none: what an agent's end leaves no
@@ -1171,6 +1173,7 @@ export const PORT_ACT_USE = {
   AGENTS_RUN_ACTION_STOP: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
+  AGENTS_MARK_READ: ACT_USE.WRITE,
   AGENTS_DELETE: ACT_USE.WRITE,
   AGENTS_SHOWN: ACT_USE.WRITE,
   AGENTS_SEEN: ACT_USE.WRITE,
