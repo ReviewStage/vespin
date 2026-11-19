@@ -722,7 +722,7 @@ test("an item waits on whoever the service says, its task's assignee, rather tha
   assert.deepEqual(whose({ kind: INBOX_WHOSE.PERSON, ...KAI }), ["older-service"]);
 });
 
-test("Needs you lists and counts only the questions whose ask waits on the reader, whomever Addressed to names: never a notice of theirs, which asks nothing, a question of theirs they set a reminder on, a question that waits on a teammate, or one the reader followed up on before answering until its agent posts again", () => {
+test("Needs you lists and counts only the questions whose ask waits on the reader, whomever Addressed to names: never a notice of theirs, which asks nothing, a question of theirs they set a reminder on, a question that waits on a teammate, or one the reader followed up on before answering until its agent posts again, which Open leaves out too", () => {
   const question = [asking({ type: INBOX_ASK.ANSWER })];
 
   const followUp = message({
@@ -778,6 +778,13 @@ test("Needs you lists and counts only the questions whose ask waits on the reade
     [false, true],
     "the sidebar's count leaves out a thread the reader followed up on until its agent posts again",
   );
+  const open = { show: INBOX_SHOW.OPEN, readerId: ME.userId, chosen: undefined, whose: MINE };
+  assert.deepEqual(
+    drawn(inboxList(groups, open)),
+    ["asks-me", "replied", "tells-me"],
+    "Open leaves out a thread the reader followed up on until its agent posts again",
+  );
+  assert.equal(inboxCounts(groups, ME.userId, MINE)[INBOX_SHOW.OPEN], 3);
 });
 
 test("a task done or canceled hides none of its items: Open lists and counts its open ones and its unread answered ones as any task's, and leaves out the asks its settle withdrew, which All keeps", () => {
