@@ -30,7 +30,14 @@ import { FileChip } from "./file-chip.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
-import { CopyWordsMenu, type HeldAct, MessageMenu, TurnActs, useCopyWords } from "./held-menu.js";
+import {
+  CopyWordsMenu,
+  type HeldAct,
+  MessageMenu,
+  MessageWords,
+  TurnActs,
+  useCopyWords,
+} from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, Picture } from "./markdown.js";
@@ -787,13 +794,16 @@ function TranscriptRow({
             >
               <View style={styles.saidHeld}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
-                  <Markdown
-                    words={item.words}
-                    typed
-                    repository={drawing.repository}
-                    onOpenLink={drawing.onOpenLink}
-                    width={bubbleWordsWidth(drawing.column)}
-                  />
+                  {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
+                  <MessageWords>
+                    <Markdown
+                      words={item.words}
+                      typed
+                      repository={drawing.repository}
+                      onOpenLink={drawing.onOpenLink}
+                      width={bubbleWordsWidth(drawing.column)}
+                    />
+                  </MessageWords>
                 </View>
               </View>
             </MessageMenu>
@@ -836,13 +846,15 @@ function TranscriptRow({
         <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
           <CopyWordsMenu words={item.words} width={rowWidth(drawing.column, item.depth)}>
             <View>
-              <Markdown
-                words={item.words}
-                repository={drawing.repository}
-                onOpenLink={drawing.onOpenLink}
-                suggestion={drawing.suggestion}
-                width={rowWidth(drawing.column, item.depth)}
-              />
+              <MessageWords>
+                <Markdown
+                  words={item.words}
+                  repository={drawing.repository}
+                  onOpenLink={drawing.onOpenLink}
+                  suggestion={drawing.suggestion}
+                  width={rowWidth(drawing.column, item.depth)}
+                />
+              </MessageWords>
             </View>
           </CopyWordsMenu>
         </View>
