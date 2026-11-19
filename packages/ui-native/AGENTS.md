@@ -15,9 +15,7 @@ builds a control of its own.
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
-  `WordsRow` for its description), and its skeleton while it is read
-  (`TaskHeadSkeleton`, `TaskSectionsSkeleton`: those rows with placeholder
-  words in `SkeletonRegion`, as many as the loaded page declares), `SplitView` (a tab's list
+  `WordsRow` for its description), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
   `ColumnBar`: its inline title, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,

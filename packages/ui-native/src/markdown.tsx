@@ -50,7 +50,6 @@ import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
 import { COLUMN_BOUNDS, type MediaBounds, type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
-import { SkeletonWords, useInSkeleton } from "./skeleton.js";
 import {
   SUGGESTION_LOOK,
   SUGGESTION_SENT_WORDS,
@@ -1413,7 +1412,6 @@ export function Markdown({
   width: known,
   diagrams = false,
 }: MarkdownProps) {
-  const skeleton = useInSkeleton();
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
   const markOf = useChipMarkOf();
@@ -1453,9 +1451,6 @@ export function Markdown({
     markOf,
     suggestion,
   };
-
-  // Note that words inside a skeleton draw as its placeholder bars, never as words, since SwiftUI's placeholder look never reaches React Native's text.
-  if (skeleton) return <SkeletonWords words={words} />;
 
   return (
     <View

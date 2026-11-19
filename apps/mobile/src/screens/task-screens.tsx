@@ -141,13 +141,9 @@ import {
   sectionEmoji,
   sectionGlyph,
   sectionGlyphColor,
-  TASK_SKELETON_ROW,
   TaskHead,
-  TaskHeadSkeleton,
   TaskPreview,
   TaskRow,
-  TaskSectionsSkeleton,
-  type TaskSkeletonSection,
   useColors,
   useMinute,
   useRowAsker,
@@ -225,6 +221,9 @@ const TASK_NOT_FOUND = "Task not found";
 /** What the Tasks list says while the list is first read, as the panel's Tasks page does. */
 const READING_TASKS = readingWords(TERM.TASK.many);
 
+/** What VoiceOver hears a task's page as while the task a link names is read. */
+const READING_TASK = readingWords("the task");
+
 /** What the Tasks list says where the list could not be read, beside Try again, as the panel's Tasks page does. */
 const TASKS_UNREAD = readFailedWords(`your ${TERM.TASK.many}`);
 
@@ -262,6 +261,8 @@ const WORDS = {
   NEW_SUB_TASK: "New sub-task",
   COMMENTS: "Comments",
   DESCRIPTION_UNREAD: readFailedWords("the description"),
+  /** What VoiceOver hears the description's spinner as while it is read. */
+  DESCRIPTION_READING: readingWords("the description"),
   COMMENTS_UNREAD: readFailedWords("the comments"),
   DELETE: "Permanently delete",
   NO_TASKS: "No tasks",
@@ -2209,59 +2210,13 @@ function useSectionsShown(taskId: string): boolean {
   return useDeferredValue<string | null>(taskId, null) === taskId;
 }
 
-/** No agent's fold stands open, as a page opens. */
-const NONE_SHOWN = () => false;
-
-/** The task page's description as its skeleton stands it while the description is read: its section with the words' one row. */
-const DESCRIPTION_SKELETON: TaskSkeletonSection = {
-  title: WORDS.DESCRIPTION,
-  row: TASK_SKELETON_ROW.WORDS,
-  rows: 1,
-};
-
-/**
- * The sections a task's page draws under its head, as its skeleton stands
- * them while they are held back: Sub-tasks and Agents with as many rows as
- * each lists at its top level, Pages where it lists any, and the
- * description where the workspace keeps descriptions, each as the loaded
- * sections below declare them (`OverviewRelations`, `OverviewAgents`,
- * `OverviewPages`).
- */
-function overviewSkeleton(
-  overview: TaskOverview | undefined,
-  descriptions: boolean,
-): readonly TaskSkeletonSection[] {
-  const subTasks = overview === undefined ? [] : subTasksOf(overview.tasks, overview.task.id);
-
-  const agents =
-    overview === undefined ? [] : agentTree(overview.agents, (line) => line.agent, NONE_SHOWN);
-
-  const pages = overview?.pages ?? [];
-
-  return [
-    { title: WORDS.SUB_TASKS, row: TASK_SKELETON_ROW.TASK, rows: subTasks.length },
-    { title: WORDS.AGENTS, row: TASK_SKELETON_ROW.AGENT, rows: agents.length },
-    ...(pages.length === 0
-      ? []
-      : [{ title: WORDS.PAGES, row: TASK_SKELETON_ROW.TASK, rows: pages.length }]),
-    ...(descriptions ? [DESCRIPTION_SKELETON] : []),
-  ];
-}
-
 /**
  * A task's page while the task a link names is read, before anything of it
- * is known: its head and the sections every task's page heads, as
- * placeholders, rather than a lone spinner.
+ * is known: the system's bare spinner where the page will stand, heard as
+ * the read under way.
  */
-function TaskReadingSkeleton() {
-  return (
-    <RowList look={LIST_LOOK.DETAIL}>
-      <ListSection>
-        <TaskHeadSkeleton />
-      </ListSection>
-      <TaskSectionsSkeleton sections={overviewSkeleton(undefined, false)} />
-    </RowList>
-  );
+function TaskReading() {
+  return <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />;
 }
 
 function OverviewPage({
@@ -2319,10 +2274,6 @@ function OverviewPage({
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>
-      {/* Note that the sections held back while the page comes in stand as their skeleton in the meantime, so the page is never blank under its head. */}
-      {sections ? null : (
-        <TaskSectionsSkeleton sections={overviewSkeleton(overview, descriptions)} />
-      )}
       {sections ? <OverviewRelations overview={overview} /> : null}
       {sections ? <OverviewAgents overview={overview} archiving={archiving} /> : null}
       {sections ? <OverviewPages overview={overview} /> : null}
@@ -2331,7 +2282,9 @@ function OverviewPage({
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
       ) : document === undefined ? (
-        <TaskSectionsSkeleton sections={[DESCRIPTION_SKELETON]} />
+        <ListSection title={WORDS.DESCRIPTION}>
+          <EmptyState title={WORDS.DESCRIPTION_READING} symbol={GLYPH.FILE_TEXT} loading />
+        </ListSection>
       ) : document.description.body.trim() === "" ? (
         <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION} act={edit}>
           {null}
@@ -2472,7 +2425,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
-      <TaskReadingSkeleton />
+      <TaskReading />
     );
 
   const acts = taskActs(overview?.task, { newAgent, newSubTask });
@@ -2677,7 +2630,7 @@ export function TaskScreen() {
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <TaskReadingSkeleton />
+          <TaskReading />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />
