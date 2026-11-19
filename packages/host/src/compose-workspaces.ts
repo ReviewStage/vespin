@@ -660,6 +660,8 @@ function workspaceList(reach: WorkspacesReach) {
       rows: () => list.rows,
       followed,
       standOnLocal,
+      /** Each listed photo neither held nor asked for fetched again, such as one whose fetches gave out before the account could renew. */
+      photosListed: photos.photosListed,
       photosReset: photos.reset,
       /** The follow let go and the session's workspaces closed, a new session's opened in their place. */
       reset: Effect.gen(function* () {
@@ -1755,7 +1757,10 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       yield* list.followed;
       yield* github.opened;
     }),
-    refreshed: Effect.andThen(list.followed, github.readGithubWhenStale),
+    // Note that a refresh asks again for a photo whose fetches gave out, since the workspaces may not move again for the whole session.
+    refreshed: Effect.all([list.followed, list.photosListed, github.readGithubWhenStale], {
+      discard: true,
+    }),
     reset: Effect.gen(function* () {
       // Note that the session's token repository writes are let go first, so none still out lays its answer while the rest of the reset runs.
       yield* tokens.tokenRepositoryWritten.letGo;
