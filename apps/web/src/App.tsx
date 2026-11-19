@@ -161,6 +161,11 @@ export function App(): React.JSX.Element {
         more={{ label: "Get the apps", href: `${DOCS_URL}/install#download-for-mac` }}
         scene={LANDING_SCENE.DEVICES}
       />
+      <LandingSection
+        title="Start agents from Slack or your terminal."
+        lead={`Mention @${PRODUCT_NAME} in a thread, or run the vespin CLI.`}
+        scene={LANDING_SCENE.STARTS}
+      />
       <LandingMore title="And much more." items={MORE_FEATURES} />
     </LandingPage>
   );

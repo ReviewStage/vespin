@@ -43,6 +43,7 @@ const SCENE_FIELD: Readonly<Record<LandingScene, LandingFieldPattern | null>> = 
   [LANDING_SCENE.DEVICES]: LANDING_FIELD.FLOW,
   // Note that the keys scene stands on a glow of its own, since its tiles are lost among dots.
   [LANDING_SCENE.KEYS]: null,
+  [LANDING_SCENE.STARTS]: LANDING_FIELD.RINGS,
 };
 
 /** A feature: `title` over `lead`, its link to read `more`, and `aside` where given, beside its scene's stage, the two trading sides from one section to the next. */
