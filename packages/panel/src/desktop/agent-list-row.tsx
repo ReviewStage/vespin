@@ -60,7 +60,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * color for where it stands and its number (`pull-request-chip.tsx`),
  * hanging the pull request's one card, the agent whose it is and who it
  * names among what the card says (`pull-request-card.tsx`); and where it
- * runs (`runs-on.tsx`), Cloud or the device, with its failed mark once its
+ * runs (`runs-on.tsx`), Cloud or the device, unless its list leaves that out
+ * (`runsOn`), as the sidebar's Managers do, with its failed mark once its
  * turn failed, or once an agent it started failed, its hint saying how
  * many, so a fold never hides a failure. Its time says when it last moved, and its ⋯ comes in over
  * it, as a task's does.
@@ -73,7 +74,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
- * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen
+ * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, unless its list
+ * chooses none (`choosable`), as the sidebar's Managers do, and a row chosen
  * among several offers its list's acts on every one chosen instead, under
  * how many (`agents-selection.tsx`). An archived agent's row stands settled,
  * its name in the muted ink, as a done task's does, and its menu offers
@@ -108,6 +110,9 @@ export function AgentListRow({
   place,
   more,
   settled = false,
+  current = false,
+  runsOn = true,
+  choosable = true,
   depth,
   nest,
   fold,
@@ -137,6 +142,12 @@ export function AgentListRow({
   more?: boolean | undefined;
   /** Whether it stands settled beside the agents still listed, its name in the muted ink: an archived agent. */
   settled?: boolean | undefined;
+  /** Whether it is the agent its window stands open on, its own page, in the current fill, as a sidebar marks its open row. */
+  current?: boolean | undefined;
+  /** Whether it says where it runs, Cloud or the device, as every list but the sidebar's Managers does; its failed mark stands either way. */
+  runsOn?: boolean | undefined;
+  /** Whether its list may choose it among several, by the box in its gutter, ⌘-click, ⇧-click, and ⌘A, as every list of agents but the sidebar's Managers does. */
+  choosable?: boolean | undefined;
   /** How deep it stands nested under the agent that started it: at the top unless said. */
   depth?: number | undefined;
   /** Where it stands among the agents nested beside it, in a list that nests them; none in one that nests none. */
@@ -209,7 +220,7 @@ export function AgentListRow({
           ),
         [TASK_ROW_CELL.AGENTS]: (
           <ReplayMask>
-            <RunsOnPlace agent={agent} devices={macs} />
+            {runsOn ? <RunsOnPlace agent={agent} devices={macs} /> : null}
             {agentEndMark(agent, true) ??
               (started === undefined || started.failed === 0
                 ? null
@@ -242,6 +253,8 @@ export function AgentListRow({
       }
       more={more}
       settled={settled}
+      choosable={choosable}
+      current={current}
       hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
       onOpen={onPress}
       pressRef={press}

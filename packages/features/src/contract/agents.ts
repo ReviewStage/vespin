@@ -27,6 +27,7 @@ import {
   approvalAnswerRequestSchema,
 } from "../agent-approval-wire.js";
 import {
+  AGENT_KIND,
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
   agentAnswerSchema,
@@ -267,6 +268,9 @@ export const agentsContract = {
         [AGENT_WORKSPACE_QUERY.WORDS]: EffectSchema.optionalKey(EffectSchema.String),
         [AGENT_WORKSPACE_QUERY.ARCHIVED]: archivedQuery,
         [AGENT_WORKSPACE_QUERY.OFFSET]: EffectSchema.optionalKey(offsetQuery),
+        [AGENT_WORKSPACE_QUERY.KIND]: EffectSchema.optionalKey(
+          EffectSchema.Literals(Object.values(AGENT_KIND)),
+        ),
       }),
     )
     .output(EffectSchema.flip(agentWorkspaceListAnswerSchema)),
