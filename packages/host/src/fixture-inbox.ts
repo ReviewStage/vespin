@@ -128,6 +128,7 @@ import {
   DESCRIPTION_COMMENT_CALL_FAILURE,
   type ListedTasksView,
   TASK_CALL_FAILURE,
+  TASKS_READ,
   type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
@@ -1621,10 +1622,12 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
 
   const invitesAgent = AGENTS.get(TASK.INVITES);
 
+  // Note that the staged list is the whole answer, so it stands read, because Search waits on a list still being read before it says nothing matched.
   return {
     ...list,
     tasks,
     listed: true,
+    listStatus: TASKS_READ.READY,
     taskAgents: [
       ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
       ...followed,
