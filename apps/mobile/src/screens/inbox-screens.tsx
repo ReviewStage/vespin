@@ -887,7 +887,7 @@ function ThreadDetail({
   const focused = useIsFocused();
   useStandFrontSteps(place.inStack ? place.steps : {}, stepTo, place.inStack && focused);
 
-  const answer = useThreadAnswer(listed, openStarted);
+  const answer = useThreadAnswer(listed, readerId, openStarted);
   const remind = useRemind();
   const inboxActs = useInboxActs();
   const keeping = useKeeping();

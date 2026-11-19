@@ -146,11 +146,15 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its status
-  ring, its name, set in semibold while it has news with no unread dot, and
-  at its end a thread that needs you, a failed agent, one at work, or its
-  pull request, then its key; its priority stands on the task's own
-  Priority chip, not the row), and `AgentRow` an agent
+  thread, with no task, in two), `TaskRow` a task on one line, as the
+  panel's sidebar row draws it (its status ring, or a parent's fold chevron
+  in the ring's place, as the panel's row stands it with no hover; its name,
+  set in semibold while it has news with no unread dot; and at its end the
+  stop sign of a blocked task, a thread that needs you, its sub-tasks as a
+  ring and "2/5", one mark for its agents, the face of who is on it where
+  that is someone other than the reader or the dashed mark where no one is,
+  and when it last moved; a search's finds end in its key; its priority
+  stands on the task's own Priority chip, not the row), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
   developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it

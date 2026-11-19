@@ -11,6 +11,18 @@ import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { machineName, type ThisMac } from "@repo/features/machine-name";
+import {
+  agentStarter,
+  PERSON_TASKS_SHOWN,
+  type PersonAgent,
+  type PersonCounted,
+  type PersonCounts,
+  personCounts,
+  personHeld,
+  personPage,
+  personPageEmpty,
+  personRef,
+} from "@repo/features/person-page-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
@@ -68,18 +80,6 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { land } from "@repo/ui/landed";
-import {
-  agentStarter,
-  PERSON_TASKS_SHOWN,
-  type PersonAgent,
-  type PersonCounted,
-  type PersonCounts,
-  personCounts,
-  personHeld,
-  personPage,
-  personPageEmpty,
-  personRef,
-} from "@repo/ui/person-page-model";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
@@ -152,7 +152,7 @@ import { useAutomations } from "./use-automations.js";
  * items their agents wait on, the tasks assigned to them, the rest of the
  * tasks they created, and their other
  * agents, each from the listed workspace's task list and Inbox
- * (`@repo/ui/person-page-model`), the workspace's automations they
+ * (`@repo/features/person-page-model`), the workspace's automations they
  * made, and their machines, each by its platform's glyph wearing the Runs
  * on menu's dot for whether it is there now, its name, and its platform, a
  * section with nothing in it left out.

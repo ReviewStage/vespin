@@ -62,6 +62,8 @@ import {
   type Face,
   FailedMark,
   NeedsYouDot,
+  SubTaskProgress,
+  subTasksHeard,
   TaskStatusMark,
   ToneGlyph,
   UnreadDot,
@@ -291,9 +293,17 @@ type TaskRowProps = RowActs & {
   readonly agents?: TaskAgentsStatus | undefined;
   /** Whether a task it waits on is still open, which its end marks with a stop sign in the muted ink and says as Blocked, as the panel's rows do. */
   readonly blocked?: boolean | undefined;
-  /** Its key, `ACME-42`, which ends the line. */
+  /** How many of its sub-tasks are finished, of all of them, as a ring and "2/5"; none where it has none. */
+  readonly subTasks?: { readonly finished: number; readonly total: number } | undefined;
+  /** The face of who is on it, where someone other than the reader is. */
+  readonly assignee?: Face | undefined;
+  /** Whether no one is on it, which its end marks with the dashed unassigned mark, as the panel's sidebar row does. */
+  readonly unassigned?: boolean | undefined;
+  /** When it last moved, said at the line's end ("18m"), as the panel's sidebar row ends. */
+  readonly at?: number | undefined;
+  /** Its key, `ACME-42`, which ends the line, where a search's finds draw it, as ⌘K's do. */
   readonly taskKey?: string | undefined;
-  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
+  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does, the chevron standing in its status mark's place. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
   readonly fold?: RowFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
@@ -715,7 +725,7 @@ export function RowHead({
   readonly dot?: boolean | undefined;
   readonly unread: boolean;
   readonly faded: boolean;
-  /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
+  /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing, or a task's, whose chevron stands in its lead's place. */
   readonly fold?: ReactNode;
   /** A mark before the lead, in a column of the lead's width, as a task row's priority stands before its status. */
   readonly mark?: ReactNode;
@@ -1046,8 +1056,8 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
   }
 }
 
-/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
-function taskHeard(props: TaskRowProps): RowHeard {
+/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its sub-tasks' count, its agents, who is on it, when it last moved, its key, and whether its sub-tasks are open. */
+function taskHeard(props: TaskRowProps, moment: number): RowHeard {
   const {
     name,
     status,
@@ -1057,6 +1067,10 @@ function taskHeard(props: TaskRowProps): RowHeard {
     agents,
     taskKey,
     fold,
+    subTasks,
+    assignee,
+    unassigned = false,
+    at,
   } = props;
 
   return {
@@ -1066,20 +1080,25 @@ function taskHeard(props: TaskRowProps): RowHeard {
       TASK_STATUS_WORDS[status],
       blocked && BLOCKED_WORDS,
       needsYou && NEEDS_YOU.LABEL,
+      subTasks === undefined ? undefined : subTasksHeard(subTasks.finished, subTasks.total),
       agentsHeard(agents),
+      assignee?.name,
+      unassigned && NO_ASSIGNEE_HEARD,
+      at === undefined ? undefined : sinceHeard(at, moment),
       taskKey,
       fold !== undefined && (fold.open ? SUB_TASKS_SHOWN : SUB_TASKS_HIDDEN),
     ],
   };
 }
 
+/** What VoiceOver hears of a task no one is on, the panel's words for the assignee it has not. */
+const NO_ASSIGNEE_HEARD = "No assignee";
+
 /** What a blocked task's row says, the panel's word for its mark (`@repo/ui`'s `BLOCKED_WORDS`). */
 const BLOCKED_WORDS = "Blocked";
 
-/** What a task row's end says first: a thread that needs the reader, then a failed agent, one at work, or its pull request's state. */
-function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou" | "agents">) {
-  if (needsYou) return <NeedsYouDot />;
-
+/** What a task's agents say on its row, as the panel's sidebar row says it in one mark: a failed agent, one at work, or its pull request's state. */
+function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   switch (agents?.kind) {
     case TASK_AGENTS_STATUS.FAILED:
       return <FailedMark />;
@@ -1259,26 +1278,33 @@ export function useNestColumn(): number {
 }
 
 /**
- * One task on a single line, as Linear's rows stand: its status ring, its
- * name in the row title's style, semibold while it has news, and at the line's end what its
- * agents say and its key, as the panel's task rows draw it, with no unread
- * dot and no priority's mark, which the task's own Priority chip says. Its
- * ring stands at the list's edge, where an Inbox row's ring stands past the
- * dot's margin, so the two lists' marks and words line up. A
- * task with sub-tasks leads with the panel's fold before its marks, whose
- * press opens them; its caller draws them as rows
- * of their own under it, a level deeper. Note that SwiftUI's disclosure is
- * not used, because a press on its row folds it rather than picking the row.
+ * One task on a single line, as the panel's sidebar draws it
+ * (`SidebarTask`): its status ring, its name in the row title's style,
+ * semibold while it has news, and at the line's end its trailing run: the
+ * stop sign while a task it waits on is open, the needs-you dot while a
+ * thread of it waits on the reader, how many of its sub-tasks are finished
+ * as a ring and "2/5", one mark for its agents (failed, at work, or its pull
+ * request), the face of who is on it where that is someone other than the
+ * reader or the dashed mark where no one is, and how long ago it last moved.
+ * Its ring stands at the list's edge, where an Inbox row's ring stands past
+ * the dot's margin, so the two lists' marks and words line up. A task with
+ * sub-tasks stands the panel's fold chevron in its ring's place, as the
+ * panel's row stands it at rest on a screen with no hover, so every row's
+ * mark keeps one column and the names one edge; its caller draws the
+ * sub-tasks as rows of their own under it, a level deeper, their marks under
+ * its name. Note that SwiftUI's disclosure is not used, because a press on
+ * its row folds it rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
   const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
+  const minute = useMinute();
   const lead = useScaledSize(MARK_SIZE.LEAD);
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
   const column = useNestColumn();
-  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth and past a parent's fold, each a column of the lead's scaled width, and by however much the lead has grown.
-  const grown = lead - MARK_SIZE.LEAD;
-  const indent = (depth + (fold === undefined ? 0 : 1)) * column + grown;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, each a column of the lead's scaled width, and by however much the lead has grown.
+  const indent = depth * column + lead - MARK_SIZE.LEAD;
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * column })]}>
@@ -1286,13 +1312,12 @@ export function TaskRow(props: TaskRowProps) {
         dot={false}
         unread={unread}
         faded={finished}
-        fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={SUB_TASK_FOLD} />}
         lead={
-          <StatusRing
-            status={status}
-            menu={props.statusMenu}
-            edge={fold === undefined ? ROW_INSET.PLAIN : 0}
-          />
+          fold === undefined ? (
+            <StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />
+          ) : (
+            <FoldChevron fold={fold} words={SUB_TASK_FOLD} />
+          )
         }
         title={name}
         ink={titleInk(colors, unread, finished)}
@@ -1301,7 +1326,28 @@ export function TaskRow(props: TaskRowProps) {
             {props.blocked === true ? (
               <ToneGlyph glyph={GLYPH.BLOCKED_BY} tone={STATUS_TONE.NEUTRAL} hidden />
             ) : null}
-            <TaskEndMark needsYou={props.needsYou} agents={props.agents} />
+            {props.needsYou === true ? <NeedsYouDot /> : null}
+            {props.subTasks === undefined ? null : (
+              <SubTaskProgress done={props.subTasks.finished} total={props.subTasks.total} />
+            )}
+            <TaskAgentsMark agents={props.agents} />
+            {props.assignee === undefined ? null : (
+              <Avatar
+                name={props.assignee.name}
+                id={props.assignee.id}
+                picture={props.assignee.picture}
+                size={MARK_SIZE.FACE}
+              />
+            )}
+            {props.unassigned === true ? (
+              <Image
+                {...glyphImage(GLYPH.UNASSIGNED)}
+                size={glyph}
+                color={colors.TEXT_MUTED}
+                modifiers={[accessibilityHidden(true)]}
+              />
+            ) : null}
+            {props.at === undefined ? null : <RowTime at={props.at} now={minute} />}
             {taskKey === undefined ? null : (
               <Text
                 modifiers={[
@@ -1328,7 +1374,7 @@ export function TaskRow(props: TaskRowProps) {
       indent={indent}
       leading={ROW_INSET.PLAIN}
       menuActions={[...foldActions(fold, SUB_TASK_FOLD), ...(props.menuActions ?? [])]}
-      heard={props.heard ?? taskHeard(props)}
+      heard={props.heard ?? taskHeard(props, minute)}
     />
   );
 }
