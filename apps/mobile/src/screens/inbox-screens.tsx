@@ -6,7 +6,6 @@ import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
-  INBOX_LINE,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -38,7 +37,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
+import type { TaskSummary } from "@repo/features/task-wire";
 import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
@@ -77,7 +76,6 @@ import {
   type RowSubmenu,
   type Scope,
   Screen,
-  SkeletonRegion,
   SplitView,
   THREAD_MEDIA,
   type ThreadMedia,
@@ -97,7 +95,6 @@ import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/hos
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
-  type InboxListing,
   useInboxActs,
   useInboxListing,
   useInboxScope,
@@ -208,8 +205,6 @@ type InboxRowsProps = {
   readonly scopes?: ListScopes | undefined;
   /** What stands over the list while it lists no thread: why, and the way on. */
   readonly empty?: ReactNode | undefined;
-  /** How many skeleton rows stand in the threads' place while the feed is on its first read with none to list; none once it lists or answered. */
-  readonly skeleton?: number | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
 };
@@ -235,7 +230,6 @@ function InboxRows({
   choosing,
   scopes,
   empty,
-  skeleton,
   onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
@@ -250,73 +244,19 @@ function InboxRows({
       choosing={choosing}
       lead={<NotificationAsk />}
       scopes={scopes}
-      empty={skeleton === undefined ? empty : undefined}
+      empty={empty}
       onChooseStart={onChooseStart}
     >
-      {skeleton === undefined ? (
-        <InboxItemRows
-          listed={listed}
-          readerId={readerId}
-          pictureOf={pictureOf}
-          onMark={onMark}
-          remindMenu={remindMenu}
-          onResolve={onResolve}
-        />
-      ) : (
-        <InboxSkeleton count={skeleton} />
-      )}
+      <InboxItemRows
+        listed={listed}
+        readerId={readerId}
+        pictureOf={pictureOf}
+        onMark={onMark}
+        remindMenu={remindMenu}
+        onResolve={onResolve}
+      />
     </RowList>
   );
-}
-
-/** The words a skeleton row stands its placeholder bars in, each about as long as a thread's own, so the bars read as the rows to come; filler, never a sentence, so nothing reads as content where a word escapes the placeholder look. */
-const SKELETON_WORDS = {
-  TASK: "xxxx xxxxxx",
-  TITLE: "xxxxxxx xxxxx xx xxx xxxx xxxxxx",
-  SUMMARY: "xxxx xxx xxxxxx xxxx xx xxx xxxxxx",
-} as const;
-
-/** The most skeleton rows the Inbox stands, about a phone's screen of threads, so a placeholder never reads as more than one screen. */
-const SKELETON_ROWS_MOST = 8;
-
-/**
- * The Inbox while its feed is on its first read with no thread to list, as
- * Mail stands its list before it reads: `count` of the Inbox's own rows,
- * a task's line over a title and what it asks, their words standing as
- * SwiftUI's placeholder bars (`SkeletonRegion`), so the list has its shape
- * from the first frame and its rows take the bars' places as they land.
- */
-function InboxSkeleton({ count }: { readonly count: number }) {
-  return (
-    <SkeletonRegion>
-      {Array.from({ length: count }, (_, at) => (
-        <ListRow
-          key={at}
-          id={String(at)}
-          title={SKELETON_WORDS.TITLE}
-          task={{ name: SKELETON_WORDS.TASK, status: TASK_STATUS.TODO }}
-          line={INBOX_LINE.SAID}
-          summary={SKELETON_WORDS.SUMMARY}
-        />
-      ))}
-    </SkeletonRegion>
-  );
-}
-
-/**
- * How many skeleton rows the Inbox stands while its feed is on its first
- * read and lists nothing, under no search: as many as the scope holds where
- * that is known, up to `SKELETON_ROWS_MOST`, else that many; none once it
- * lists a thread or the feed answered or failed.
- */
-function skeletonRows(listing: InboxListing, show: InboxShow, search: string): number | undefined {
-  const reading =
-    listing.listed.length === 0 && listing.feed === INBOX_FEED.READING && search.trim() === "";
-
-  if (!reading) return undefined;
-  const known = listing.counts[show];
-
-  return known > 0 ? Math.min(known, SKELETON_ROWS_MOST) : SKELETON_ROWS_MOST;
 }
 
 /**
@@ -483,14 +423,8 @@ function InboxRowView({
   );
 }
 
-/**
- * An Inbox item's row, drawn again only where its props moved. Note that
- * every delivery to the Inbox drew every row again, a list off screen's
- * among them, which held the JS thread under a working agent's posts; its
- * props keep their identity while its own thread stands (the item, the
- * task's words it says, and the acts' and the menus' hooks), so a row is now
- * drawn again only where its thread or those words moved.
- */
+// Note that a row's props keep their identity while its thread stands, because
+// a delivery to the Inbox otherwise draws every row again and holds the JS thread.
 const InboxRow = memo(InboxRowView);
 
 /**
@@ -715,11 +649,6 @@ function useAgentLabel(agentId: string): {
     : { name: agentNameOf(agent), harness: providerOf(agent.model) };
 }
 
-/**
- * Where a thread stands: a compact window's pushed screen, whose stack's bar
- * names the path and which draws its own Remind me sheet, or a split view's
- * detail, which opens the sheet its screen draws outside the split view.
- */
 /** The threads either side of an open one, in the order it steps through, which it hands on with each step; none at an end. */
 type ThreadSteps = {
   readonly order: readonly string[];
@@ -727,6 +656,12 @@ type ThreadSteps = {
   readonly next?: string | undefined;
 };
 
+/**
+ * Where a thread stands: a compact window's pushed screen, whose stack's bar
+ * names the thread and holds the path in its ⋯ menu, and which draws its own
+ * Remind me sheet, or a split view's detail, which opens the sheet its screen
+ * draws outside the split view.
+ */
 type ThreadPlace =
   | { readonly inStack: true; readonly steps: ThreadSteps }
   | {
@@ -780,7 +715,7 @@ function ThreadDetail({
 
   const memberFace = useMemberFaces(holder.task.workspaceId);
 
-  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
+  // What happened to the thread, its members named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
   const events = useMemo(
     () =>
       inboxThreadEventsShown(item, {
@@ -868,7 +803,7 @@ function ThreadDetail({
 
   const navigation = useNavigation();
 
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front, read when the start answers rather than when it was sent, since the reader may have switched tabs or pushed a page over it meanwhile: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
+  // A thread the box started opens in this one's place only while this one is in front when the start answers, since the reader may have switched tabs or pushed a page over it meanwhile, and a covered screen stays mounted.
   const openStarted = (id: string) => {
     if (!shown.current || !navigation.isFocused()) return;
 
@@ -887,7 +822,7 @@ function ThreadDetail({
   const focused = useIsFocused();
   useStandFrontSteps(place.inStack ? place.steps : {}, stepTo, place.inStack && focused);
 
-  const answer = useThreadAnswer(listed, openStarted);
+  const answer = useThreadAnswer(listed, readerId, openStarted);
   const remind = useRemind();
   const inboxActs = useInboxActs();
   const keeping = useKeeping();
@@ -1197,7 +1132,6 @@ type InboxHeld = {
 function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
-  const skeleton = skeletonRows(listing, show, search);
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
@@ -1246,7 +1180,6 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
     search,
     setSearch,
     listing,
-    skeleton,
     acts,
     menu,
     remind,
@@ -1265,19 +1198,8 @@ function InboxStackList(held: InboxHeld) {
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
 
-  const {
-    show,
-    choose,
-    search,
-    setSearch,
-    listing,
-    skeleton,
-    acts,
-    menu,
-    remind,
-    choosing,
-    chooseStart,
-  } = useInboxScreen(held);
+  const { show, choose, search, setSearch, listing, acts, menu, remind, choosing, chooseStart } =
+    useInboxScreen(held);
 
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
@@ -1375,7 +1297,6 @@ function InboxStackList(held: InboxHeld) {
           onResolve={acts.resolve}
           choosing={choosing?.rows}
           onChooseStart={chooseStart}
-          skeleton={skeleton}
           empty={
             listing.listed.length === 0 ? (
               <InboxEmpty
@@ -1409,19 +1330,8 @@ function InboxSplitScreen({
   readonly select: (id: string) => void;
   readonly held: InboxHeld;
 }) {
-  const {
-    show,
-    choose,
-    search,
-    setSearch,
-    listing,
-    skeleton,
-    acts,
-    menu,
-    remind,
-    choosing,
-    chooseStart,
-  } = useInboxScreen(held, selected);
+  const { show, choose, search, setSearch, listing, acts, menu, remind, choosing, chooseStart } =
+    useInboxScreen(held, selected);
 
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
@@ -1448,7 +1358,6 @@ function InboxSplitScreen({
       onResolve={acts.resolve}
       choosing={choosing?.rows}
       onChooseStart={chooseStart}
-      skeleton={skeleton}
       empty={
         listing.listed.length === 0 ? (
           <InboxEmpty

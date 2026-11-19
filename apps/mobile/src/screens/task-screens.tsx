@@ -6,7 +6,12 @@ import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
-import { INBOX_LINE, INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
+import {
+  INBOX_LINE,
+  INBOX_READ_MARK,
+  MARK_ALL_READ,
+  threadsWaitingWords,
+} from "@repo/features/inbox-list-model";
 import {
   iosAgentRoute,
   iosAppRouteOf,
@@ -30,6 +35,7 @@ import {
   agentTree,
   type StartedAgentsStanding,
 } from "@repo/features/task-agents-model";
+import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
 import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
@@ -59,7 +65,9 @@ import {
 import {
   foldedTaskRows,
   NO_REPOSITORY_KEY,
+  TASK_ROW_FACE,
   TASK_TREE_GROUP,
+  type TaskRowFace,
   type TaskTree,
   type TaskTreeGroup,
 } from "@repo/features/task-tree-model";
@@ -71,6 +79,11 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import {
+  deleteAgentWords,
+  repositoryPageUrl,
+  type StopAgentsWords,
+} from "@repo/features/tasks-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
@@ -102,6 +115,7 @@ import {
   type ColumnBar,
   ConfirmAsk,
   EmptyState,
+  type Face,
   FailedReadRow,
   GLYPH,
   type Glyph,
@@ -112,6 +126,7 @@ import {
   type ListLook,
   ListRow,
   ListSection,
+  type LongPressGroup,
   menuWithout,
   NoSelection,
   PATH_PART,
@@ -125,7 +140,6 @@ import {
   type RowFold,
   RowForEach,
   RowList,
-  type RowMenuGroup,
   type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
@@ -136,13 +150,10 @@ import {
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
-  TASK_SKELETON_ROW,
+  sectionGlyphColor,
   TaskHead,
-  TaskHeadSkeleton,
   TaskPreview,
   TaskRow,
-  TaskSectionsSkeleton,
-  type TaskSkeletonSection,
   useColors,
   useMinute,
   useRowAsker,
@@ -153,7 +164,14 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, type ReactNode, useDeferredValue, useMemo, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -193,6 +211,7 @@ import {
   type TaskPlacing,
   type TaskRowDoors,
   type TasksListing,
+  type TaskWrites,
   useDeleteAsk,
   useListingAsks,
   useStatusAsk,
@@ -220,10 +239,12 @@ const TASK_NOT_FOUND = "Task not found";
 /** What the Tasks list says while the list is first read, as the panel's Tasks page does. */
 const READING_TASKS = readingWords(TERM.TASK.many);
 
+/** What VoiceOver hears a task's page as while the task a link names is read. */
+const READING_TASK = readingWords("the task");
+
 /** What the Tasks list says where the list could not be read, beside Try again, as the panel's Tasks page does. */
 const TASKS_UNREAD = readFailedWords(`your ${TERM.TASK.many}`);
 
-/** What a failed read offers. */
 const TRY_AGAIN = "Try again";
 
 /** What the list's search field says before anything is typed. */
@@ -257,6 +278,8 @@ const WORDS = {
   NEW_SUB_TASK: "New sub-task",
   COMMENTS: "Comments",
   DESCRIPTION_UNREAD: readFailedWords("the description"),
+  /** What VoiceOver hears the description's spinner as while it is read. */
+  DESCRIPTION_READING: readingWords("the description"),
   COMMENTS_UNREAD: readFailedWords("the comments"),
   DELETE: "Permanently delete",
   NO_TASKS: "No tasks",
@@ -513,31 +536,95 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
   ];
 }
 
+/**
+ * Follow or Unfollow, whichever the reader does not stand at yet, as the
+ * panel's row offers it beside Pin while the task carries its followers;
+ * Unfollow dimmed for the assignee, who follows while assigned.
+ */
+function followActs(task: TaskSummary, listing: TasksListing): readonly RowAction[] {
+  const { readerId } = listing;
+
+  if (task.followers === undefined || readerId === undefined) return [];
+  const reader = task.followers.find((each) => each.userId === readerId);
+
+  if (reader === undefined) {
+    return [
+      {
+        label: FOLLOWING_WORDS.FOLLOW,
+        symbol: GLYPH.FOLLOW,
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => listing.follow(task.id, true),
+      },
+    ];
+  }
+
+  // Note that the assignee follows while assigned, so their Unfollow stands dimmed, saying why.
+  const assigned = reader.assignee === true;
+
+  return [
+    {
+      label: FOLLOWING_WORDS.UNFOLLOW,
+      symbol: GLYPH.UNFOLLOW,
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: () => listing.follow(task.id, false),
+      disabled: assigned,
+      detail: assigned ? FOLLOWING_WORDS.ASSIGNEE_STAYS : undefined,
+    },
+  ];
+}
+
+/** What the panel's one Move to is called, and what it names the move out of the task's workspace at the foot of its sections. */
+const MOVE_TO_WORDS = { MOVE_TO: "Move to", ANOTHER_WORKSPACE: "Another workspace" } as const;
+
+/**
+ * A task's one Move to, as the panel's row offers it: its sections and
+ * Remove from section, then Another workspace where the task may leave its
+ * workspace; where the member keeps no section, Move to workspace alone.
+ */
+function moveToEntries(task: TaskSummary, listing: TasksListing): LongPressGroup {
+  const section = sectionSubmenu(task, listing.placing);
+  const another = listing.doors.moveDoor(task);
+
+  if (section === undefined) return rowActions(moveActions(another));
+
+  const away: readonly RowAction[] =
+    another === undefined
+      ? []
+      : [
+          {
+            label: MOVE_TO_WORDS.ANOTHER_WORKSPACE,
+            symbol: GLYPH.MOVE,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: another,
+          },
+        ];
+
+  return [
+    { ...section, label: MOVE_TO_WORDS.MOVE_TO, actions: [...(section.actions ?? []), ...away] },
+  ];
+}
+
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
-  readonly menuActions: readonly RowAction[];
-  readonly menuGroups: readonly RowMenuGroup[];
+  readonly menu: readonly LongPressGroup[];
   readonly question: RowQuestion;
 };
 
 /**
- * A row's acts, as the panel's row menu offers them on a phone: behind its
- * trailing swipe Mark done, offered on a task not yet done, which a full
- * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
- * the task is not, which a full swipe runs. Its long press menu groups them
- * as the task page's ⋯ does (`taskMenu`), each group set apart by a divider:
- * the swipes' acts with Mark as read or unread, whichever the task is not;
- * then Task relation, which opens the Task relation sheet on a kind, and Move
- * to section, with Remove parent where it has one; then Rename, in the
- * system's name alert, and Copy link, which raises the share sheet; then
- * More, holding its repository, its version history and Move to workspace
- * where offered, and Open in browser; and Permanently delete alone, last,
- * which asks first. What asks first, Done or Canceled where it stops agents
- * and Permanently delete, asks by the row pressed (`asks`), as Mail stands
- * its question by the message.
- * Priority and assignee are set from the chips on the task's page
- * (`standingMenus`).
+ * A row's acts, as the panel's row offers them: behind its trailing swipe
+ * Mark done, offered on a task not yet done, which a full swipe runs, and
+ * Status; behind its leading swipe Pin or Unpin, whichever the task is not,
+ * which a full swipe runs. Its long press menu is the panel's right-click
+ * (`taskActionGroups`), in its groups and order, each set apart by a
+ * divider: Copy link and Open in browser; Rename, Version history where the
+ * workspace's descriptions stand on, and Mark as read or unread; Status,
+ * Priority and Assignee; Task relation, and Remove parent where it has one;
+ * Pin, Follow or Unfollow (dimmed for the assignee), and Move to; Change
+ * repository, or Choose a repository on a task with none; and Permanently
+ * delete alone, last. What asks first, Done or Canceled where it stops
+ * agents and Permanently delete, asks by the row pressed (`asks`), as Mail
+ * stands its question by the message.
  */
 function rowActs(
   task: TaskSummary,
@@ -548,80 +635,76 @@ function rowActs(
 ): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
+  const pin = {
+    label: pinned ? WORDS.UNPIN : WORDS.PIN,
+    symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
+    tone: ROW_ACTION_TONE.PIN,
+    onPress: () => listing.pin(task.id, !pinned),
+  };
+
   return {
     question: asks.question(task.id),
     trailingActions: settleSwipes(task, asks.setStatus),
-    leadingActions: [
-      {
-        label: pinned ? WORDS.UNPIN : WORDS.PIN,
-        symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
-        tone: ROW_ACTION_TONE.PIN,
-        onPress: () => listing.pin(task.id, !pinned),
-      },
-    ],
-    menuActions: [
-      {
-        label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-        symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => listing.markRead(task.id, !unread),
-      },
-    ],
-    menuGroups: [
-      {
-        submenus: [
-          relationSubmenu(task, openRelation),
-          ...present(sectionSubmenu(task, listing.placing)),
-        ],
-        actions: removeParentActs(task, listing.relations),
-      },
-      {
-        actions: [
-          {
-            label: WORDS.RENAME,
-            symbol: GLYPH.RENAME,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => askRename(task, listing.rename),
-          },
-          {
-            label: WORDS.COPY_LINK,
-            symbol: GLYPH.LINK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => copyTaskLink(task, listing.workspace),
-          },
-        ],
-      },
-      {
-        // Note that the acts a phone reaches for least wait one level down in More, its repository, version history, Move to workspace and Open in browser, so the menu fits an iPhone 18 Pro's window under the lifted preview and Permanently delete stands in it rather than below its fold.
-        submenus: [
-          {
-            ...WORDS.MORE,
-            choices: [],
-            submenus: present(repositorySubmenu(task, listing.placing)),
-            actions: [
-              ...rowActions(historyActions(task, listing.doors.history)),
-              ...rowActions(moveActions(listing.doors.moveDoor(task))),
-              {
-                label: VERB.OPEN_IN_BROWSER,
-                symbol: GLYPH.OPEN_EXTERNALLY,
-                tone: ROW_ACTION_TONE.NEUTRAL,
-                onPress: () =>
-                  openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
-              },
-            ],
-          },
-        ],
-      },
-      {
-        actions: [
-          {
-            label: WORDS.DELETE,
-            symbol: GLYPH.DELETE,
-            tone: ROW_ACTION_TONE.DESTRUCTIVE,
-            onPress: () => asks.askDelete(task),
-          },
-        ],
-      },
+    leadingActions: [pin],
+    menu: [
+      [
+        {
+          label: WORDS.COPY_LINK,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => copyTaskLink(task, listing.workspace),
+        },
+        {
+          label: VERB.OPEN_IN_BROWSER,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () =>
+            openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+        },
+      ],
+      [
+        {
+          label: WORDS.RENAME,
+          symbol: GLYPH.RENAME,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => askRename(task, listing.rename),
+        },
+        ...rowActions(historyActions(task, listing.doors.history)),
+        {
+          label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+          symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => listing.markRead(task.id, !unread),
+        },
+      ],
+      [
+        statusSubmenu(task, asks.setStatus),
+        {
+          label: WORDS.PRIORITY,
+          symbol: GLYPH.PRIORITY_BARS,
+          choices: priorityChoices(task, listing.setPriority),
+        },
+        {
+          label: WORDS.ASSIGNEE,
+          symbol: GLYPH.PERSON,
+          choices: assigneeChoices(task, listing.members, listing.pictureOf, listing.setAssignee),
+        },
+      ],
+      [relationSubmenu(task, openRelation), ...removeParentActs(task, listing.relations)],
+      [
+        { ...pin, tone: ROW_ACTION_TONE.NEUTRAL },
+        ...followActs(task, listing),
+        ...moveToEntries(task, listing),
+      ],
+      present(repositorySubmenu(task, listing.placing)),
+      [
+        {
+          label: WORDS.DELETE,
+          symbol: GLYPH.DELETE,
+          tone: ROW_ACTION_TONE.DESTRUCTIVE,
+          onPress: () => asks.askDelete(task),
+        },
+      ],
     ],
   };
 }
@@ -669,6 +752,17 @@ function keyOf(task: TaskSummary, workspace: Workspace | undefined): string | un
   return taskKey(workspace.name, task.number);
 }
 
+/** What a task row's end says of who is on it: their face, the unassigned mark, or nothing for the reader's own. */
+function rowFace(face: TaskRowFace | undefined, pictureOf: (userId: string) => string | undefined) {
+  if (face === undefined) return {};
+
+  if (face.kind === TASK_ROW_FACE.NOBODY) return { unassigned: true };
+
+  const assignee: Face = { name: face.name, id: face.userId, picture: pictureOf(face.userId) };
+
+  return { assignee };
+}
+
 /** A task's path, as the bar names it: its repository's name and its key. */
 function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly string[] {
   const repository = task.repository?.split("/").at(-1);
@@ -679,11 +773,12 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
 }
 
 /**
- * One task's row, set in by how deep it stands and led by its sub-tasks' fold
- * where it has any: the one row every list of tasks draws, the Search tab's
- * among them. Its key ends the line only where `keyed` asks, as a search's
- * finds do; a regular window's list column leaves it out, as the panel's
- * sidebar does, since it took the title's room and wrapped there.
+ * One task's row, as the panel's sidebar draws it, set in by how deep it
+ * stands and its fold standing in its status mark's place where it has
+ * sub-tasks: the one row every list of tasks draws, the Search tab's among
+ * them. Its key ends the line only where `keyed` asks, as a search's finds
+ * do, ⌘K's among them; a list of tasks leaves it out, as the panel's sidebar
+ * does.
  */
 export function TaskListRow({
   task,
@@ -713,6 +808,9 @@ export function TaskListRow({
       needsYou={look.needsYou}
       agents={look.agents}
       blocked={task.blocked === true}
+      subTasks={listing.subTasksOf(task.id)}
+      {...rowFace(listing.faceOf(task), listing.pictureOf)}
+      at={look.at}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, asks, openRelation)}
@@ -885,7 +983,6 @@ function useTreeHoldState(): TreeHold {
   return { opened, toggleParent, folded, setFolded };
 }
 
-/** One group's opened parents out of the tree's hold. */
 function groupParents(hold: TreeHold, group: string): OpenedParents {
   return {
     opened: hold.opened.get(group) ?? NONE_OPEN,
@@ -903,7 +1000,6 @@ function FoldedRows({
   readonly listing: TasksListing;
   readonly parents: OpenedParents;
 }) {
-  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const { opened, toggle } = parents;
 
   const folded = useMemo(
@@ -918,7 +1014,7 @@ function FoldedRows({
           task={row.task}
           listing={listing}
           depth={row.depth}
-          keyed={keyed}
+          keyed={false}
           fold={
             row.open === undefined
               ? undefined
@@ -928,6 +1024,89 @@ function FoldedRows({
       )}
     </RowForEach>
   );
+}
+
+/** The words of a section header's long press menu, as the panel's sidebar says them. */
+const SECTION_MENU_WORDS = {
+  RENAME_SECTION: "Rename section",
+  DELETE_SECTION: "Delete section",
+  OPEN_ON_GITHUB: "Open on GitHub",
+} as const;
+
+/**
+ * What a long press on a group's header offers, as the panel's right-click
+ * on the sidebar's same header does: Mark all as read on Pinned, Following
+ * and the tasks with no repository, only while one of its tasks is unread;
+ * on one of the member's sections, Rename and Mark all as read, then Delete
+ * section, its Undo in the notice; and on a repository's group, Open on
+ * GitHub, then Mark all as read. Note that the panel's New task, Change
+ * icon, and a repository's Keep at top are left out, since the phone starts
+ * no task in a section, picks no icon, and keeps no repository at top.
+ */
+function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPressGroup[] {
+  const unread = group.rows.map(({ task }) => task).filter((task) => listing.lookOf(task).unread);
+
+  const read: LongPressGroup =
+    unread.length === 0
+      ? []
+      : [
+          {
+            label: MARK_ALL_READ,
+            symbol: GLYPH.MARK_READ,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => {
+              for (const task of unread) listing.markRead(task.id, false);
+            },
+          },
+        ];
+
+  if (group.kind === TASK_TREE_GROUP.SECTION) {
+    const section = listing.placing.sections.find((each) => each.id === group.key);
+
+    if (section === undefined) return [read];
+
+    return [
+      [
+        {
+          label: WORDS.RENAME,
+          symbol: GLYPH.RENAME,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () =>
+            askForName({
+              title: SECTION_MENU_WORDS.RENAME_SECTION,
+              act: WORDS.RENAME,
+              name: section.title,
+              onName: (title) => listing.placing.renameSection(section, title),
+            }),
+        },
+        ...read,
+      ],
+      [
+        {
+          label: SECTION_MENU_WORDS.DELETE_SECTION,
+          symbol: GLYPH.DELETE,
+          tone: ROW_ACTION_TONE.DESTRUCTIVE,
+          onPress: () => listing.placing.deleteSection(section),
+        },
+      ],
+    ];
+  }
+
+  if (group.kind === TASK_TREE_GROUP.REPOSITORY && group.key !== NO_REPOSITORY_KEY) {
+    return [
+      [
+        {
+          label: SECTION_MENU_WORDS.OPEN_ON_GITHUB,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => openInSafari(repositoryPageUrl(group.key)),
+        },
+      ],
+      read,
+    ];
+  }
+
+  return [read];
 }
 
 /**
@@ -947,8 +1126,12 @@ function GroupSection({
 }) {
   return (
     <ListSection
+      menu={groupMenu(group, listing)}
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      glyphColor={
+        group.kind === TASK_TREE_GROUP.SECTION ? sectionGlyphColor(group.icon) : undefined
+      }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
@@ -1327,39 +1510,58 @@ function standingMenus(
   photoOf: (userId: string) => string | undefined,
 ): StandingMenus {
   const { task } = overview;
-  const assigneeId = task.assignee?.userId;
 
   return {
     status: { label: WORDS.STATUS, choices: statusSubmenu(task, overview.setStatus).choices },
-    priority: {
-      label: WORDS.PRIORITY,
-      choices: TASK_PRIORITY_ORDER.map((priority) => ({
-        label: TASK_PRIORITY_WORDS[priority],
-        symbol: PRIORITY_MARK_SYMBOL[priority],
-        tone: PRIORITY_MARK_TONE[priority],
-        on: task.priority === priority,
-        onPress: () => overview.setPriority(task.id, priority),
-      })),
-    },
+    priority: { label: WORDS.PRIORITY, choices: priorityChoices(task, overview.setPriority) },
     assignee: {
       label: WORDS.ASSIGNEE,
-      choices: [
-        ...members.map((member) => ({
-          label: member.name,
-          symbol: GLYPH.PERSON,
-          photo: photoOf(member.userId),
-          on: member.userId === assigneeId,
-          onPress: () => overview.setAssignee(task.id, member),
-        })),
-        {
-          label: NO_ASSIGNEE_WORDS,
-          symbol: GLYPH.UNASSIGNED,
-          on: assigneeId === undefined,
-          onPress: () => overview.setAssignee(task.id, null),
-        },
-      ],
+      choices: assigneeChoices(task, members, photoOf, overview.setAssignee),
     },
   };
+}
+
+/** A task's priorities as its Priority menu offers them, the most pressing first, the one it holds checked. */
+function priorityChoices(task: TaskSummary, setPriority: TaskWrites["setPriority"]) {
+  return TASK_PRIORITY_ORDER.map((priority) => ({
+    label: TASK_PRIORITY_WORDS[priority],
+    symbol: PRIORITY_MARK_SYMBOL[priority],
+    tone: PRIORITY_MARK_TONE[priority],
+    on: task.priority === priority,
+    onPress: () => setPriority(task.id, priority),
+  }));
+}
+
+/**
+ * Who a task may be assigned to, as its Assignee menu offers them: No
+ * assignee first, then the members, each with You or their email under
+ * their name, as the panel's assignee menu lists them
+ * (`task-standing.tsx`'s `assigneeRows`), the one on it checked.
+ */
+function assigneeChoices(
+  task: TaskSummary,
+  members: readonly ListedMember[],
+  photoOf: (userId: string) => string | undefined,
+  setAssignee: TaskWrites["setAssignee"],
+) {
+  const assigneeId = task.assignee?.userId;
+
+  return [
+    {
+      label: NO_ASSIGNEE_WORDS,
+      symbol: GLYPH.UNASSIGNED,
+      on: assigneeId === undefined,
+      onPress: () => setAssignee(task.id, null),
+    },
+    ...members.map((member) => ({
+      label: member.name,
+      detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
+      symbol: GLYPH.PERSON,
+      photo: photoOf(member.userId),
+      on: member.userId === assigneeId,
+      onPress: () => setAssignee(task.id, member),
+    })),
+  ];
 }
 
 /** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
@@ -1568,7 +1770,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
 
 /**
  * An agent row's swipe: Stop while it works, which a full swipe runs, or
- * Archive once it rests, which asks first (`useAgentArchiveAsk`), as the
+ * Archive once it rests, which asks first (`useAgentRowAsk`), as the
  * agent page's menu asks, since the phone has no Undo to offer after; a
  * destructive act never runs on a full swipe.
  */
@@ -1600,77 +1802,183 @@ function agentSwipes(
   ];
 }
 
+/** What an agent row's Rename asks, as the agent page's Rename asks it (`askForName`). */
+const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
+
 /**
- * What an agent row's long press holds past its swipes, which `RowFrame`
- * stands in the menu already (Stop, or Archive asked first): the panel's
- * Copy link and Open in browser (`agentMenuGroups`), once its workspace is
- * known. Rename, Copy transcript and Permanently delete stay on the agent's
- * page, which holds the questions and the transcript they need.
+ * An agent row's long press menu, in the panel's agent menu's groups
+ * (`agentMenuGroups`) and its row's choice of them: Copy link and Open in
+ * browser, once its workspace is known; Rename; Stop while it works and
+ * Archive, asked first; and last and alone, Permanently delete, asked
+ * always. Copy transcript stays on the agent's page, as the panel's row
+ * leaves it out too (`NOT_ON_A_ROW`).
  */
-function agentMenuActs(
-  link: string | undefined,
-  onCopyLink: (link: string) => void,
-): readonly RowAction[] {
-  return link === undefined
-    ? []
-    : [
-        {
-          label: WORDS.COPY_LINK,
-          symbol: GLYPH.LINK,
-          tone: ROW_ACTION_TONE.NEUTRAL,
-          onPress: () => onCopyLink(link),
+function agentMenu({
+  agent,
+  name,
+  link,
+  acts,
+  asking,
+  onCopyLink,
+}: {
+  readonly agent: TaskAgentLine["agent"];
+  readonly name: string;
+  readonly link: string | undefined;
+  readonly acts: ReturnType<typeof useAgentRowActs>;
+  /** Archive and Permanently delete, each asked first by the row; neither stands where none is given. */
+  readonly asking: { readonly archive: () => void; readonly remove: () => void } | undefined;
+  readonly onCopyLink: (link: string) => void;
+}): readonly LongPressGroup[] {
+  const links: readonly RowAction[] =
+    link === undefined
+      ? []
+      : [
+          {
+            label: WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => onCopyLink(link),
+          },
+          {
+            label: VERB.OPEN_IN_BROWSER,
+            symbol: GLYPH.OPEN_EXTERNALLY,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => openInSafari(link),
+          },
+        ];
+
+  const rename: RowAction = {
+    label: WORDS.RENAME,
+    symbol: GLYPH.RENAME,
+    tone: ROW_ACTION_TONE.NEUTRAL,
+    onPress: () =>
+      askForName({
+        title: AGENT_RENAME_WORDS.TITLE,
+        act: AGENT_RENAME_WORDS.ACT,
+        name,
+        onName: (title) => {
+          if (title !== "" && title !== name) acts.rename(agent.id, title);
         },
+      }),
+  };
+
+  const stop: readonly RowAction[] = agentStillWriting(agent.status)
+    ? [
         {
-          label: VERB.OPEN_IN_BROWSER,
-          symbol: GLYPH.OPEN_EXTERNALLY,
+          label: WORDS.STOP,
+          symbol: GLYPH.STOP,
           tone: ROW_ACTION_TONE.NEUTRAL,
-          onPress: () => openInSafari(link),
+          onPress: () => acts.stop(agent.id),
         },
-      ];
+      ]
+    : [];
+
+  if (asking === undefined) return [links, [rename], stop];
+
+  return [
+    links,
+    [rename],
+    [
+      ...stop,
+      {
+        label: WORDS.ARCHIVE,
+        symbol: GLYPH.ARCHIVE,
+        tone: ROW_ACTION_TONE.ARCHIVE,
+        onPress: asking.archive,
+      },
+    ],
+    [
+      {
+        label: WORDS.DELETE,
+        symbol: GLYPH.DELETE,
+        tone: ROW_ACTION_TONE.DESTRUCTIVE,
+        onPress: asking.remove,
+      },
+    ],
+  ];
 }
 
-/** Archive on agents' rows, asked first by the row pressed. */
-export interface AgentArchiving {
-  /** Raises the question for an agent by the drawn row `asker` names. */
+/** Archive and Permanently delete on agents' rows, each asked first by the row pressed. */
+export interface AgentAsking {
+  /** Raises Archive's question for an agent by the drawn row `asker` names. */
   readonly archive: (agentId: string, asker: RowAsker) => void;
+  /** Raises Permanently delete's question for an agent, named `name`, by the drawn row `asker` names. */
+  readonly remove: (agent: AgentDeleting, asker: RowAsker) => void;
   /** The question standing by the drawn row `asker` names for an agent, `QUIET_ROW_QUESTION` where it raised none about it. */
   readonly question: (agentId: string, asker: RowAsker) => RowQuestion;
 }
 
-/** An agent's Archive question as it stands: the agent, the row that raised it, and whether it is shown. */
-interface AskedArchive {
+/** What Permanently delete's question names of an agent: its id, its name, and whether it is archived, which leaves out the question's word on archiving instead. */
+interface AgentDeleting {
+  readonly agentId: string;
+  readonly name: string;
+  readonly archived: boolean;
+}
+
+/** An agent's question as it stands: the agent, the row that raised it, whether it is shown, and, for Permanently delete, its words, none for Archive. */
+interface AskedAgent {
   readonly agentId: string;
   readonly asker: RowAsker;
   readonly presented: boolean;
+  readonly deleting: StopAgentsWords | undefined;
 }
 
 /**
- * Archive on an agent's row, asked first by the row pressed, as Mail stands
- * its question by the message: `archive` raises the question for an agent
- * by its row, and `question` is what stands by that row. Note that the
- * question reads where the agent stands now, as the agent page's menu asks
- * (`useArchiveAsk`), raised at once on where the list holds it and checked
- * afresh as its act is pressed, because one that starts working while the
- * question is up would otherwise be stopped and archived without a word of
- * it.
+ * Archive and Permanently delete on an agent's row, each asked first by the
+ * row pressed, as Mail stands its question by the message: `archive` and
+ * `remove` raise the question for an agent by its row, and `question` is
+ * what stands by that row. Note that Archive's question reads where the agent
+ * stands now, as the agent page's menu asks (`useArchiveAsk`), raised at once
+ * on where the list holds it and checked afresh as its act is pressed,
+ * because one that starts working while the question is up would otherwise
+ * be stopped and archived without a word of it. Permanently delete asks in
+ * the panel's words (`deleteAgentWords`) whatever the agent does, since
+ * nothing brings it back.
  */
-export function useAgentArchiveAsk(): AgentArchiving {
+export function useAgentRowAsk(): AgentAsking {
   const acts = useAgentRowActs();
-  const [asked, setAsked] = useState<AskedArchive>();
+  const [asked, setAsked] = useState<AskedAgent>();
   const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
+  // Note that each question raised counts up, so an Archive read that lands after a later question was raised, such as Permanently delete, never stands its own over it.
+  const raised = useRef(0);
 
   return {
     archive: (agentId, asker) => {
+      raised.current += 1;
+      const mine = raised.current;
       // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
       letGo();
       void readAfresh(agentId).then((stands) => {
-        if (stands) setAsked({ agentId, asker, presented: true });
+        if (stands && raised.current === mine) {
+          setAsked({ agentId, asker, presented: true, deleting: undefined });
+        }
       });
+    },
+    remove: ({ agentId, name, archived }, asker) => {
+      raised.current += 1;
+      setAsked({ agentId, asker, presented: true, deleting: deleteAgentWords(name, archived) });
     },
     question: (agentId, asker) => {
       if (asked === undefined || asked.agentId !== agentId || asked.asker !== asker) {
         return QUIET_ROW_QUESTION;
+      }
+
+      const { deleting } = asked;
+
+      if (deleting !== undefined) {
+        return {
+          title: deleting.title,
+          message: deleting.body,
+          act: deleting.verb,
+          presented: asked.presented,
+          onAct: () => {
+            if (!asked.presented) return;
+            letGo();
+            acts.remove(agentId);
+          },
+          onDismiss: letGo,
+        };
       }
 
       return {
@@ -1680,10 +1988,15 @@ export function useAgentArchiveAsk(): AgentArchiving {
         presented: asked.presented,
         onAct: () => {
           if (!asked.presented) return;
+          const mine = raised.current;
           letGo();
           answered(
             () => acts.archive(agentId),
-            () => setAsked({ agentId, asker, presented: true }),
+            () => {
+              if (raised.current === mine) {
+                setAsked({ agentId, asker, presented: true, deleting: undefined });
+              }
+            },
           );
         },
         onDismiss: letGo,
@@ -1703,7 +2016,7 @@ export function TaskAgentRow({
   line,
   task,
   named = false,
-  archiving,
+  asking,
   nest,
 }: {
   readonly line: TaskAgentLine;
@@ -1713,8 +2026,8 @@ export function TaskAgentRow({
   readonly task?: TaskSummary | undefined;
   /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
   readonly named?: boolean | undefined;
-  /** Archive asked first, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
-  readonly archiving?: AgentArchiving | undefined;
+  /** Archive and Permanently delete, each asked first (`useAgentRowAsk`); its row offers neither where none is given. */
+  readonly asking?: AgentAsking | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -1775,10 +2088,27 @@ export function TaskAgentRow({
       trailingActions={agentSwipes(
         agent,
         acts,
-        archiving === undefined ? undefined : (agentId) => archiving.archive(agentId, asker),
+        asking === undefined ? undefined : (agentId) => asking.archive(agentId, asker),
       )}
-      question={archiving?.question(agent.id, asker)}
-      menuActions={agentMenuActs(link, keeping.copyWords)}
+      question={asking?.question(agent.id, asker)}
+      menu={agentMenu({
+        agent,
+        name,
+        link,
+        acts,
+        asking:
+          asking === undefined
+            ? undefined
+            : {
+                archive: () => asking.archive(agent.id, asker),
+                remove: () =>
+                  asking.remove(
+                    { agentId: agent.id, name, archived: agent.archivedAt !== undefined },
+                    asker,
+                  ),
+              },
+        onCopyLink: keeping.copyWords,
+      })}
       preview={
         <AgentPreview
           name={name}
@@ -1814,10 +2144,10 @@ type AgentNest = {
  */
 function OverviewAgents({
   overview,
-  archiving,
+  asking,
 }: {
   readonly overview: TaskOverview;
-  readonly archiving: AgentArchiving;
+  readonly asking: AgentAsking;
 }) {
   const router = useRouter();
   const inboxShown = useInboxShown();
@@ -1862,7 +2192,7 @@ function OverviewAgents({
             waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
           }}
           task={task}
-          archiving={archiving}
+          asking={asking}
           nest={{
             depth,
             fold:
@@ -2166,13 +2496,6 @@ function OverviewComments({
 }
 
 /**
- * A task's Overview, as the panel's phone draws it: its head, its relations,
- * its agents with New agent and the line of its threads that need you, its
- * pages, and, where its workspace has Task descriptions on, its description
- * read-only and the comment threads that stand open on it. A pull reads the
- * task list again.
- */
-/**
  * Whether a task's page draws the sections under its head yet: not on the
  * render that opens it, and on the next, which React renders after the
  * first is committed and drops if another task opens first. Note that the
@@ -2185,71 +2508,32 @@ function useSectionsShown(taskId: string): boolean {
   return useDeferredValue<string | null>(taskId, null) === taskId;
 }
 
-/** No agent's fold stands open, as a page opens. */
-const NONE_SHOWN = () => false;
-
-/** The task page's description as its skeleton stands it while the description is read: its section with the words' one row. */
-const DESCRIPTION_SKELETON: TaskSkeletonSection = {
-  title: WORDS.DESCRIPTION,
-  row: TASK_SKELETON_ROW.WORDS,
-  rows: 1,
-};
-
-/**
- * The sections a task's page draws under its head, as its skeleton stands
- * them while they are held back: Sub-tasks and Agents with as many rows as
- * each lists at its top level, Pages where it lists any, and the
- * description where the workspace keeps descriptions, each as the loaded
- * sections below declare them (`OverviewRelations`, `OverviewAgents`,
- * `OverviewPages`).
- */
-function overviewSkeleton(
-  overview: TaskOverview | undefined,
-  descriptions: boolean,
-): readonly TaskSkeletonSection[] {
-  const subTasks = overview === undefined ? [] : subTasksOf(overview.tasks, overview.task.id);
-
-  const agents =
-    overview === undefined ? [] : agentTree(overview.agents, (line) => line.agent, NONE_SHOWN);
-
-  const pages = overview?.pages ?? [];
-
-  return [
-    { title: WORDS.SUB_TASKS, row: TASK_SKELETON_ROW.TASK, rows: subTasks.length },
-    { title: WORDS.AGENTS, row: TASK_SKELETON_ROW.AGENT, rows: agents.length },
-    ...(pages.length === 0
-      ? []
-      : [{ title: WORDS.PAGES, row: TASK_SKELETON_ROW.TASK, rows: pages.length }]),
-    ...(descriptions ? [DESCRIPTION_SKELETON] : []),
-  ];
-}
-
 /**
  * A task's page while the task a link names is read, before anything of it
- * is known: its head and the sections every task's page heads, as
- * placeholders, rather than a lone spinner.
+ * is known: the system's bare spinner where the page will stand, heard as
+ * the read under way.
  */
-function TaskReadingSkeleton() {
-  return (
-    <RowList look={LIST_LOOK.DETAIL}>
-      <ListSection>
-        <TaskHeadSkeleton />
-      </ListSection>
-      <TaskSectionsSkeleton sections={overviewSkeleton(undefined, false)} />
-    </RowList>
-  );
+function TaskReading() {
+  return <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />;
 }
 
+/**
+ * A task's Overview, as the panel's phone draws it: its head, its relations,
+ * its agents with New agent and the line of its threads that need you, its
+ * pages, and, where its workspace has Task descriptions on, its description
+ * read-only and the comment threads that stand open on it. A pull reads the
+ * task list again.
+ */
 function OverviewPage({
   overview,
   onRefresh,
-  archiving,
+  asking,
   entered,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
-  /** Archive on its agents' rows, asked first by the row pressed (`useAgentArchiveAsk`). */
-  readonly archiving: AgentArchiving;
+  /** Archive and Permanently delete on its agents' rows, each asked first by the row pressed (`useAgentRowAsk`). */
+  readonly asking: AgentAsking;
   /**
    * Whether the page has come in: a pushed page once its push has ended
    * (`usePushStood`), and a split view's detail, which slides in nothing,
@@ -2295,19 +2579,17 @@ function OverviewPage({
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>
-      {/* Note that the sections held back while the page comes in stand as their skeleton in the meantime, so the page is never blank under its head. */}
-      {sections ? null : (
-        <TaskSectionsSkeleton sections={overviewSkeleton(overview, descriptions)} />
-      )}
       {sections ? <OverviewRelations overview={overview} /> : null}
-      {sections ? <OverviewAgents overview={overview} archiving={archiving} /> : null}
+      {sections ? <OverviewAgents overview={overview} asking={asking} /> : null}
       {sections ? <OverviewPages overview={overview} /> : null}
       {!sections || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
       ) : document === undefined ? (
-        <TaskSectionsSkeleton sections={[DESCRIPTION_SKELETON]} />
+        <ListSection title={WORDS.DESCRIPTION}>
+          <EmptyState title={WORDS.DESCRIPTION_READING} symbol={GLYPH.FILE_TEXT} loading />
+        </ListSection>
       ) : document.description.body.trim() === "" ? (
         <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION} act={edit}>
           {null}
@@ -2429,7 +2711,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
   const history = useHistoryDoor(overview?.task.workspaceId);
   const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
   const read = useTasksRead();
-  const archiving = useAgentArchiveAsk();
+  const asking = useAgentRowAsk();
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -2440,7 +2722,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
         key={overview.task.id}
         overview={overview}
         onRefresh={refreshTasks}
-        archiving={archiving}
+        asking={asking}
         entered
       />
     ) : selected === undefined ? (
@@ -2448,7 +2730,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
-      <TaskReadingSkeleton />
+      <TaskReading />
     );
 
   const acts = taskActs(overview?.task, { newAgent, newSubTask });
@@ -2591,7 +2873,7 @@ export function TaskScreen() {
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
-  const archiving = useAgentArchiveAsk();
+  const asking = useAgentRowAsk();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
   const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
@@ -2647,13 +2929,13 @@ export function TaskScreen() {
           <OverviewPage
             overview={overview}
             onRefresh={refreshTasks}
-            archiving={archiving}
+            asking={asking}
             entered={stood}
           />
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <TaskReadingSkeleton />
+          <TaskReading />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />

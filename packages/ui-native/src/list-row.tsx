@@ -7,6 +7,7 @@ import {
   HStack,
   Image,
   Menu,
+  Section,
   Spacer,
   SwipeActions,
   Text,
@@ -22,6 +23,7 @@ import {
   alignmentGuide,
   background,
   buttonStyle,
+  disabled,
   fixedSize,
   font,
   foregroundStyle,
@@ -62,6 +64,8 @@ import {
   type Face,
   FailedMark,
   NeedsYouDot,
+  SubTaskProgress,
+  subTasksHeard,
   TaskStatusMark,
   ToneGlyph,
   UnreadDot,
@@ -177,6 +181,8 @@ export type RowAction = {
   readonly detail?: string | undefined;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
+  /** Whether it stands dimmed and takes no press, its `detail` saying why, as the panel's Unfollow stands for the assignee. */
+  readonly disabled?: boolean | undefined;
 };
 
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
@@ -189,6 +195,8 @@ export type MenuChoice = {
   readonly tone?: StatusTone | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
+  /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
+  readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -214,11 +222,6 @@ export type RowMenuGroup = {
   readonly actions?: readonly RowAction[] | undefined;
 };
 
-/** A group's key in its menu: its first piece's words, which a menu holds once. */
-function menuGroupKey(group: RowMenuGroup): string {
-  return group.submenus?.[0]?.label ?? group.actions?.[0]?.label ?? "";
-}
-
 /** Whether a group holds anything to draw. */
 function menuGroupFilled(group: RowMenuGroup): boolean {
   return (group.submenus?.length ?? 0) + (group.actions?.length ?? 0) > 0;
@@ -243,6 +246,8 @@ type RowActs = {
   readonly menuActions?: readonly RowAction[] | undefined;
   /** The long press menu's further groups, after the swipes' group, each set apart by a divider, such as a task's ways to organize it and, last, Permanently delete. */
   readonly menuGroups?: readonly RowMenuGroup[] | undefined;
+  /** The long press menu whole, in its own order, for a row whose menu follows the panel's right-click rather than leading with its swipes: each group set apart by a divider, after Open. Where given, the swipes stand behind the swipe alone, and `menuSubmenus`, `menuActions` and `menuGroups` are left out. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
   /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
   readonly preview?: ReactElement | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
@@ -296,9 +301,17 @@ type TaskRowProps = RowActs & {
   readonly agents?: TaskAgentsStatus | undefined;
   /** Whether a task it waits on is still open, which its end marks with a stop sign in the muted ink and says as Blocked, as the panel's rows do. */
   readonly blocked?: boolean | undefined;
-  /** Its key, `ACME-42`, which ends the line. */
+  /** How many of its sub-tasks are finished, of all of them, as a ring and "2/5"; none where it has none. */
+  readonly subTasks?: { readonly finished: number; readonly total: number } | undefined;
+  /** The face of who is on it, where someone other than the reader is. */
+  readonly assignee?: Face | undefined;
+  /** Whether no one is on it, which its end marks with the dashed unassigned mark, as the panel's sidebar row does. */
+  readonly unassigned?: boolean | undefined;
+  /** When it last moved, said at the line's end ("18m"), as the panel's sidebar row ends. */
+  readonly at?: number | undefined;
+  /** Its key, `ACME-42`, which ends the line, where a search's finds draw it, as ⌘K's do. */
   readonly taskKey?: string | undefined;
-  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
+  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does, the chevron standing in its status mark's place. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
   readonly fold?: RowFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
@@ -321,7 +334,10 @@ export function actionButton(
       {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
-      modifiers={destructive ? [] : [tint(ink)]}
+      modifiers={[
+        ...(destructive ? [] : [tint(ink)]),
+        ...(action.disabled === true ? [disabled(true)] : []),
+      ]}
     />
   );
 }
@@ -333,6 +349,16 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
 
 /** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+  // Note that a choice saying more under its words, such as a member's email, stands as a menu's title and subtitle.
+  if (choice.detail !== undefined)
+    return menuActContent(
+      choice.label,
+      choice.symbol,
+      choice.detail,
+      choiceColor(choice, colors),
+      choice.photo,
+    );
+
   return actContent(
     choice.label,
     choice.symbol,
@@ -501,6 +527,55 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
+/** One group of a long press menu, in the menu's order: its acts and the menus within it. */
+export type LongPressGroup = readonly RowSwipe[];
+
+/**
+ * The one long press menu the app opens on anything held, as the panel opens
+ * its right-click menu on the same things: SwiftUI's own menu, its groups in
+ * the panel's order, each set apart from the next by a divider, an act red
+ * where it takes something away, and the preview it lifts where it has one,
+ * as the system's own apps lift a glance at what a row opens. A row draws it
+ * through `RowFrame`, a section's header through `ListSection`'s `menu`,
+ * and SwiftUI or React Native views held through `HeldSwiftMenu` and
+ * `HeldMenu`. The content alone where it offers nothing.
+ */
+export function LongPressMenu({
+  groups,
+  title,
+  preview,
+  children,
+}: {
+  readonly groups: readonly LongPressGroup[];
+  /** What heads the menu, such as when a message was sent, as Messages heads a held message's menu by its time; none where it says nothing over its acts. */
+  readonly title?: string | undefined;
+  readonly preview?: ReactElement | undefined;
+  readonly children: ReactElement;
+}) {
+  const colors = useColors();
+  const filled = groups.filter((group) => group.length > 0);
+
+  if (filled.length === 0 && preview === undefined) return children;
+
+  const items = filled.map((group, at) => (
+    // Note that a group is keyed by its first item's words, which a menu holds once.
+    <Fragment key={group[0]?.label ?? at}>
+      {at === 0 ? null : <Divider />}
+      {group.map((item) => swipeMenuButton(item, colors))}
+    </Fragment>
+  ));
+
+  return (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {title === undefined ? items : <Section title={title}>{items}</Section>}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
+      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
+    </ContextMenu>
+  );
+}
+
 /** A row's content with the question its acts ask standing by it, where its acts ask any. */
 function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
   return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
@@ -531,6 +606,7 @@ export function RowFrame({
   menuSubmenus = [],
   menuActions = [],
   menuGroups = [],
+  menu: ordered,
   preview,
   link,
   question,
@@ -571,7 +647,11 @@ export function RowFrame({
   ];
 
   const groups = menuGroups.filter(menuGroupFilled);
-  const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
+
+  const ownGroup =
+    ordered === undefined
+      ? swiped.length + menuSubmenus.length + menuActions.length > 0
+      : ordered.some((group) => group.length > 0);
 
   // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
   if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
@@ -587,24 +667,20 @@ export function RowFrame({
         ];
 
   const menu = asking(
-    <ContextMenu>
-      <ContextMenu.Items>
-        {opening.map((action) => actionButton(action, colors))}
-        {opening.length > 0 && ownGroup ? <Divider /> : null}
-        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
-        {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
-        {menuActions.map((action) => actionButton(action, colors))}
-        {groups.map((group, at) => (
-          <Fragment key={menuGroupKey(group)}>
-            {at === 0 && opening.length === 0 && !ownGroup ? null : <Divider />}
-            {(group.submenus ?? []).map((submenu) => rowSubmenu(submenu, colors))}
-            {(group.actions ?? []).map((action) => actionButton(action, colors))}
-          </Fragment>
-        ))}
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
-      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
-    </ContextMenu>,
+    <LongPressMenu
+      groups={
+        ordered === undefined
+          ? [
+              opening,
+              [...swiped, ...menuSubmenus, ...menuActions],
+              ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
+            ]
+          : [opening, ...ordered]
+      }
+      preview={preview}
+    >
+      {row}
+    </LongPressMenu>,
     question,
   );
 
@@ -684,7 +760,7 @@ export function RowHead({
   readonly dot?: boolean | undefined;
   readonly unread: boolean;
   readonly faded: boolean;
-  /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
+  /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing, or a task's, whose chevron stands in its lead's place. */
   readonly fold?: ReactNode;
   /** A mark before the lead, in a column of the lead's width, as a task row's priority stands before its status. */
   readonly mark?: ReactNode;
@@ -1015,8 +1091,8 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
   }
 }
 
-/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
-function taskHeard(props: TaskRowProps): RowHeard {
+/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its sub-tasks' count, its agents, who is on it, when it last moved, its key, and whether its sub-tasks are open. */
+function taskHeard(props: TaskRowProps, moment: number): RowHeard {
   const {
     name,
     status,
@@ -1026,6 +1102,10 @@ function taskHeard(props: TaskRowProps): RowHeard {
     agents,
     taskKey,
     fold,
+    subTasks,
+    assignee,
+    unassigned = false,
+    at,
   } = props;
 
   return {
@@ -1035,20 +1115,25 @@ function taskHeard(props: TaskRowProps): RowHeard {
       TASK_STATUS_WORDS[status],
       blocked && BLOCKED_WORDS,
       needsYou && NEEDS_YOU.LABEL,
+      subTasks === undefined ? undefined : subTasksHeard(subTasks.finished, subTasks.total),
       agentsHeard(agents),
+      assignee?.name,
+      unassigned && NO_ASSIGNEE_HEARD,
+      at === undefined ? undefined : sinceHeard(at, moment),
       taskKey,
       fold !== undefined && (fold.open ? SUB_TASKS_SHOWN : SUB_TASKS_HIDDEN),
     ],
   };
 }
 
+/** What VoiceOver hears of a task no one is on, the panel's words for the assignee it has not. */
+const NO_ASSIGNEE_HEARD = "No assignee";
+
 /** What a blocked task's row says, the panel's word for its mark (`@repo/ui`'s `BLOCKED_WORDS`). */
 const BLOCKED_WORDS = "Blocked";
 
-/** What a task row's end says first: a thread that needs the reader, then a failed agent, one at work, or its pull request's state. */
-function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou" | "agents">) {
-  if (needsYou) return <NeedsYouDot />;
-
+/** What a task's agents say on its row, as the panel's sidebar row says it in one mark: a failed agent, one at work, or its pull request's state. */
+function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   switch (agents?.kind) {
     case TASK_AGENTS_STATUS.FAILED:
       return <FailedMark />;
@@ -1228,26 +1313,33 @@ export function useNestColumn(): number {
 }
 
 /**
- * One task on a single line, as Linear's rows stand: its status ring, its
- * name in the row title's style, semibold while it has news, and at the line's end what its
- * agents say and its key, as the panel's task rows draw it, with no unread
- * dot and no priority's mark, which the task's own Priority chip says. Its
- * ring stands at the list's edge, where an Inbox row's ring stands past the
- * dot's margin, so the two lists' marks and words line up. A
- * task with sub-tasks leads with the panel's fold before its marks, whose
- * press opens them; its caller draws them as rows
- * of their own under it, a level deeper. Note that SwiftUI's disclosure is
- * not used, because a press on its row folds it rather than picking the row.
+ * One task on a single line, as the panel's sidebar draws it
+ * (`SidebarTask`): its status ring, its name in the row title's style,
+ * semibold while it has news, and at the line's end its trailing run: the
+ * stop sign while a task it waits on is open, the needs-you dot while a
+ * thread of it waits on the reader, how many of its sub-tasks are finished
+ * as a ring and "2/5", one mark for its agents (failed, at work, or its pull
+ * request), the face of who is on it where that is someone other than the
+ * reader or the dashed mark where no one is, and how long ago it last moved.
+ * Its ring stands at the list's edge, where an Inbox row's ring stands past
+ * the dot's margin, so the two lists' marks and words line up. A task with
+ * sub-tasks stands the panel's fold chevron in its ring's place, as the
+ * panel's row stands it at rest on a screen with no hover, so every row's
+ * mark keeps one column and the names one edge; its caller draws the
+ * sub-tasks as rows of their own under it, a level deeper, their marks under
+ * its name. Note that SwiftUI's disclosure is not used, because a press on
+ * its row folds it rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
   const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
+  const minute = useMinute();
   const lead = useScaledSize(MARK_SIZE.LEAD);
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
   const column = useNestColumn();
-  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth and past a parent's fold, each a column of the lead's scaled width, and by however much the lead has grown.
-  const grown = lead - MARK_SIZE.LEAD;
-  const indent = (depth + (fold === undefined ? 0 : 1)) * column + grown;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, each a column of the lead's scaled width, and by however much the lead has grown.
+  const indent = depth * column + lead - MARK_SIZE.LEAD;
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * column })]}>
@@ -1255,13 +1347,12 @@ export function TaskRow(props: TaskRowProps) {
         dot={false}
         unread={unread}
         faded={finished}
-        fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={SUB_TASK_FOLD} />}
         lead={
-          <StatusRing
-            status={status}
-            menu={props.statusMenu}
-            edge={fold === undefined ? ROW_INSET.PLAIN : 0}
-          />
+          fold === undefined ? (
+            <StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />
+          ) : (
+            <FoldChevron fold={fold} words={SUB_TASK_FOLD} />
+          )
         }
         title={name}
         ink={titleInk(colors, unread, finished)}
@@ -1270,7 +1361,28 @@ export function TaskRow(props: TaskRowProps) {
             {props.blocked === true ? (
               <ToneGlyph glyph={GLYPH.BLOCKED_BY} tone={STATUS_TONE.NEUTRAL} hidden />
             ) : null}
-            <TaskEndMark needsYou={props.needsYou} agents={props.agents} />
+            {props.needsYou === true ? <NeedsYouDot /> : null}
+            {props.subTasks === undefined ? null : (
+              <SubTaskProgress done={props.subTasks.finished} total={props.subTasks.total} />
+            )}
+            <TaskAgentsMark agents={props.agents} />
+            {props.assignee === undefined ? null : (
+              <Avatar
+                name={props.assignee.name}
+                id={props.assignee.id}
+                picture={props.assignee.picture}
+                size={MARK_SIZE.FACE}
+              />
+            )}
+            {props.unassigned === true ? (
+              <Image
+                {...glyphImage(GLYPH.UNASSIGNED)}
+                size={glyph}
+                color={colors.TEXT_MUTED}
+                modifiers={[accessibilityHidden(true)]}
+              />
+            ) : null}
+            {props.at === undefined ? null : <RowTime at={props.at} now={minute} />}
             {taskKey === undefined ? null : (
               <Text
                 modifiers={[
@@ -1297,7 +1409,7 @@ export function TaskRow(props: TaskRowProps) {
       indent={indent}
       leading={ROW_INSET.PLAIN}
       menuActions={[...foldActions(fold, SUB_TASK_FOLD), ...(props.menuActions ?? [])]}
-      heard={props.heard ?? taskHeard(props)}
+      heard={props.heard ?? taskHeard(props, minute)}
     />
   );
 }

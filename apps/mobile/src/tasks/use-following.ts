@@ -19,7 +19,7 @@ import { selectInboxReader } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import type { TaskFollowerWire } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -58,6 +58,33 @@ function refusedNote(answer: TasksFollowersAnswer): string | undefined {
 /** Whether another attempt of a refused follower write could go: only one that got no answer. */
 function mayRetry(answer: TasksFollowersAnswer): boolean {
   return "failure" in answer && answer.failure === FOLLOWER_CALL_FAILURE.UNANSWERED;
+}
+
+/**
+ * The reader's Follow or Unfollow of any listed task, as a list's long press
+ * sends it (`TASKS_FOLLOW`, `TASKS_UNFOLLOW`): the host draws it on the task
+ * at once and puts it back where the service refused it.
+ */
+export function useFollowWrite(): (taskId: string, on: boolean) => void {
+  const acts = useHostActs();
+  const write = useWrite();
+
+  return useCallback(
+    (taskId: string, on: boolean) => {
+      const saying = {
+        refused: refusedNote,
+        retry: mayRetry,
+        subject: { kind: WRITE_SUBJECT.TASK_FOLLOWING, id: taskId },
+        went: BUZZ.SELECTION,
+      } as const;
+
+      void write(
+        () => acts[on ? ACT_KIND.TASKS_FOLLOW : ACT_KIND.TASKS_UNFOLLOW]({ taskId }),
+        saying,
+      );
+    },
+    [acts, write],
+  );
 }
 
 /**

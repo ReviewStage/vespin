@@ -7,10 +7,27 @@ import {
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
-import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { machineName, type ThisMac } from "@repo/features/machine-name";
+import {
+  agentStarter,
+  PERSON_TASKS_SHOWN,
+  type PersonAgent,
+  type PersonCounted,
+  type PersonCounts,
+  personCounts,
+  personHeld,
+  personPage,
+  personPageEmpty,
+  personRef,
+} from "@repo/features/person-page-model";
+import {
+  PERSON_PAGE_WORDS,
+  PERSON_SECTION_WORDS,
+  personWords,
+} from "@repo/features/person-page-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
@@ -68,18 +85,6 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { land } from "@repo/ui/landed";
-import {
-  agentStarter,
-  PERSON_TASKS_SHOWN,
-  type PersonAgent,
-  type PersonCounted,
-  type PersonCounts,
-  personCounts,
-  personHeld,
-  personPage,
-  personPageEmpty,
-  personRef,
-} from "@repo/ui/person-page-model";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
@@ -152,7 +157,7 @@ import { useAutomations } from "./use-automations.js";
  * items their agents wait on, the tasks assigned to them, the rest of the
  * tasks they created, and their other
  * agents, each from the listed workspace's task list and Inbox
- * (`@repo/ui/person-page-model`), the workspace's automations they
+ * (`@repo/features/person-page-model`), the workspace's automations they
  * made, and their machines, each by its platform's glyph wearing the Runs
  * on menu's dot for whether it is there now, its name, and its platform, a
  * section with nothing in it left out.
@@ -199,10 +204,10 @@ function headLine(person: Actor): ReactNode {
   }
 
   if (person.kind === ACTOR_KIND.SOMEONE && person.reason === SOMEONE_REASON.FORMER) {
-    return "Former member";
+    return PERSON_PAGE_WORDS.FORMER;
   }
 
-  return "Not in this workspace";
+  return PERSON_PAGE_WORDS.OUTSIDE;
 }
 
 /** The name the page heads with: a member's own, never "You", since the badge says so. */
@@ -397,7 +402,7 @@ function PersonAgentsSection({
 }
 
 /** What the page's ⋯ is called, on its button and its menu alike. */
-const PERSON = "Person";
+const PERSON = PERSON_PAGE_WORDS.PERSON;
 
 /**
  * The workspace the page's links are written under: the one its page stands
@@ -457,13 +462,19 @@ function PersonActions({
   const link =
     slug === undefined ? undefined : linkOf({ kind: LINK_DESTINATION.PERSON, userId }, slug);
 
-  const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
+  const showTasks = personWords(PERSON_SECTION_WORDS.SHOW_TASKS, you);
 
   const copies = [
     ...(link === undefined ? [] : linkItems(copy, link)),
     ...(email === undefined
       ? []
-      : [{ label: "Copy email", icon: <MailIcon />, onSelect: () => copy(email, "Email copied") }]),
+      : [
+          {
+            label: PERSON_PAGE_WORDS.COPY_EMAIL,
+            icon: <MailIcon />,
+            onSelect: () => copy(email, PERSON_PAGE_WORDS.EMAIL_COPIED),
+          },
+        ]),
   ];
 
   const actions: MenuAction[][] = [
@@ -476,7 +487,7 @@ function PersonActions({
       : [
           [
             {
-              label: "Manage in workspace settings",
+              label: PERSON_PAGE_WORDS.MANAGE,
               icon: <UsersIcon />,
               onSelect: () =>
                 openSettings({
@@ -1028,7 +1039,7 @@ function PersonColumn({
   // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
   const unread = useUnreadTasks({ staged });
   const you = userId === tasks.me;
-  const waitingTitle = you ? NEEDS_YOU.LABEL : "Waiting on their answer";
+  const waitingTitle = personWords(PERSON_SECTION_WORDS.WAITING, you);
   const theirAutomations = usePersonAutomations(tasks.workspace?.id, userId);
   const { automations } = theirAutomations;
   const theirMachines = usePersonMachines(tasks.workspace?.id, userId);
@@ -1070,10 +1081,9 @@ function PersonColumn({
   const note =
     refused && unnamed ? (
       <div className="home-note my-tight-gap">
-        <ErrorState
-          failure={unreadShown(FAILURE_SURFACE.PERSON_READ)}
-          onRetry={retry}
-        >{`${you ? "Your" : "Their"} profile could not be read.`}</ErrorState>
+        <ErrorState failure={unreadShown(FAILURE_SURFACE.PERSON_READ)} onRetry={retry}>
+          {personWords(PERSON_SECTION_WORDS.UNREAD, you)}
+        </ErrorState>
       </div>
     ) : unnamed ? (
       <PersonReadingSkeleton />
@@ -1140,7 +1150,7 @@ function PersonColumn({
           ) : null}
           {page.working.length === 0 ? null : (
             <PersonAgentsSection
-              title="Working now"
+              title={PERSON_PAGE_WORDS.WORKING}
               agents={page.working}
               tasks={tasks}
               pullRequests={pullRequests}
@@ -1180,7 +1190,7 @@ function PersonColumn({
             </PersonSectionFrame>
           )}
           <PersonTasks
-            title={you ? "Assigned to you" : "Assigned"}
+            title={personWords(PERSON_SECTION_WORDS.ASSIGNED, you)}
             listed={page.assigned}
             count={counts.assigned}
             tasks={tasks}
@@ -1188,7 +1198,7 @@ function PersonColumn({
             onShowAll={shared ? showTasks : undefined}
           />
           <PersonTasks
-            title={you ? "Created by you" : "Created"}
+            title={personWords(PERSON_SECTION_WORDS.CREATED, you)}
             listed={page.created}
             count={counts.created}
             tasks={tasks}
@@ -1196,7 +1206,7 @@ function PersonColumn({
           />
           {page.agents.length === 0 ? null : (
             <PersonAgentsSection
-              title="Agents"
+              title={PERSON_PAGE_WORDS.AGENTS}
               agents={page.agents}
               count={counts.agents}
               tasks={tasks}
@@ -1260,7 +1270,7 @@ function PersonColumn({
             machines.length === 0 ? (
             <div className="home-note my-tight-gap">
               <NoteLine look={NOTE_LINE_LOOK.INSET}>
-                {you ? "Nothing of yours here yet." : "Nothing of theirs here yet."}
+                {personWords(PERSON_SECTION_WORDS.NOTHING, you)}
               </NoteLine>
             </div>
           ) : null}

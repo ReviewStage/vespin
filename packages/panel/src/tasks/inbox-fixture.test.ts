@@ -12,11 +12,11 @@ import {
   inboxItemSchema,
 } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { personPage } from "@repo/features/person-page-model";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, NO_ACCESS, RUN_PROFILE } from "@repo/host/app-state";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
-import { personPage } from "@repo/ui/person-page-model";
 import { Effect, Result, Schema } from "effect";
 import { afterEach } from "vitest";
 import { fakeActPortAnswering, refusedOnPort } from "../testing/app-bridge.js";

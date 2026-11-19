@@ -1,7 +1,6 @@
 // task-rows.tsx -- the rows a task's page and the Tasks list draw beside the task rows: a task's head, an agent, a related task, a group, a row that opens somewhere, and a description's words.
 
 import {
-  ContextMenu,
   HStack,
   Image,
   RNHostView,
@@ -54,10 +53,11 @@ import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import {
-  actionButton,
   FoldChevron,
   type FoldWords,
   foldActions,
+  type LongPressGroup,
+  LongPressMenu,
   ROW_ACTION_TONE,
   type RowAction,
   type RowFold,
@@ -252,8 +252,8 @@ type AgentRowProps = {
     | undefined;
   /** What a swipe from the trailing edge reveals, such as Stop or Archive, the first of it on a full swipe. */
   readonly trailingActions?: readonly RowSwipe[] | undefined;
-  /** What its long press menu holds past its swipes, as the panel's agent menu offers it: its links, then Archive. */
-  readonly menuActions?: readonly RowAction[] | undefined;
+  /** Its long press menu past its fold and its pull request, in the panel's agent menu's groups (`agentMenuGroups`): its links, Rename, Stop and Archive, and last and alone, Permanently delete. Its swipes stand behind the swipe alone. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
   /** What its long press lifts over its menu (`AgentPreview`). */
   readonly preview?: ReactElement | undefined;
   /** What its acts ask first, such as Archive, standing by the row; none where its acts never ask. */
@@ -480,10 +480,9 @@ export function AgentRow(props: AgentRowProps) {
       row={row}
       indent={(depth + (fold === undefined ? 0 : 1)) * column}
       trailingActions={props.trailingActions}
-      menuActions={[
-        ...foldActions(fold, folding),
-        ...pullRequestActions(pullRequest),
-        ...(props.menuActions ?? []),
+      menu={[
+        [...foldActions(fold, folding), ...pullRequestActions(pullRequest)],
+        ...(props.menu ?? []),
       ]}
       preview={props.preview}
       question={props.question}
@@ -917,8 +916,6 @@ export function WordsRow({
   hidesHtml,
   change = VERSION_CHANGE.SAME,
 }: WordsRowProps) {
-  const colors = useColors();
-
   const host = (
     <RNHostView matchContents={{ vertical: true }}>
       <View>
@@ -940,17 +937,7 @@ export function WordsRow({
     </RNHostView>
   );
 
-  const held =
-    menuActions.length === 0 ? (
-      host
-    ) : (
-      <ContextMenu>
-        <ContextMenu.Items>
-          {menuActions.map((action) => actionButton(action, colors))}
-        </ContextMenu.Items>
-        <ContextMenu.Trigger>{host}</ContextMenu.Trigger>
-      </ContextMenu>
-    );
+  const held = <LongPressMenu groups={[menuActions]}>{host}</LongPressMenu>;
 
   return (
     <HStack

@@ -44,12 +44,14 @@ import {
   type BarSubtitle,
   BUTTON_LOOK,
   CallCardRow,
+  COMPOSER_CALL,
   Composer,
   type ComposerCall,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
   drawnCallIds,
+  EditingLine,
   FORM_SPACING,
   footerToneOf,
   GLYPH,
@@ -58,6 +60,7 @@ import {
   glyphSymbol,
   HeldCallBanner,
   ListSection,
+  LoadingRow,
   MenuRow,
   type MenuRowAct,
   ModelChoiceSheet,
@@ -114,6 +117,7 @@ import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
@@ -185,8 +189,8 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
+  READING_SERVERS: "Reading your MCP servers",
   MORE_SERVERS: "Connect another in Settings.",
 } as const;
 
@@ -208,6 +212,23 @@ function useAgentAddress(
       : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
+}
+
+/**
+ * A message's address on vespin.dev under its agent, as the panel's Copy
+ * link names one (`agentMessagePlace`), by the message's id; none before the
+ * agent's workspace is known.
+ */
+function useMessageLink(
+  agentId: string,
+  workspaceId: string | undefined,
+): ((messageId: string) => string | undefined) | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const step = linkWorkspaceStep(workspaceId, workspaces);
+
+  if (step === undefined) return undefined;
+
+  return (messageId) => linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step);
 }
 
 /** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
@@ -308,6 +329,7 @@ function AgentComposerBar({
   const head =
     !denies &&
     banner === undefined &&
+    composer.cancelMessageEdit === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
     otherCall === undefined &&
@@ -322,6 +344,9 @@ function AgentComposerBar({
             empty={composer.skills.empty}
             onPick={composer.skills.pick}
           />
+        )}
+        {composer.cancelMessageEdit === undefined ? null : (
+          <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
@@ -357,6 +382,7 @@ function AgentComposerBar({
         />
       ),
     saving: composer.saving,
+    focusAsk: composer.focusAsk,
   };
 
   return <Composer {...props} />;
@@ -575,6 +601,7 @@ function AgentConversation({
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
+  const messageLink = useMessageLink(id, shown?.workspaceId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -750,7 +777,6 @@ function AgentConversation({
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
-  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
   const taskId = shown?.taskId;
@@ -761,10 +787,20 @@ function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
+  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || openOptions !== undefined;
   const talk = useAgentTalk(id, shown?.taskId);
   const otherCall = useStandingCallCard(id);
+
+  const messageActs = useMessageActs({
+    agentId: id,
+    agent: shown,
+    transcript,
+    readerId,
+    composer,
+    calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
+  });
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
@@ -835,6 +871,8 @@ function AgentConversation({
       onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
+      messageLink={messageLink}
+      messageMore={messageActs.more}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
         const key = keyOf(item.url);
@@ -864,6 +902,8 @@ function AgentConversation({
       )}
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk destructive {...composer.removing} />
+      <ConfirmAsk destructive {...composer.sendingEdit} />
+      <ConfirmAsk destructive {...messageActs.reverting} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
@@ -1111,10 +1151,11 @@ function AgentOptionsSheet({
 }) {
   const servers = useAgentServers(agentId);
 
+  // Note that the footer says nothing while the servers are read, since a read under way shows no words.
   const serversFooter =
     servers.note ??
     (!servers.read
-      ? OPTIONS_WORDS.READING_SERVERS
+      ? undefined
       : servers.servers.length === 0
         ? OPTIONS_WORDS.NO_SERVERS
         : OPTIONS_WORDS.MORE_SERVERS);
@@ -1162,14 +1203,19 @@ function AgentOptionsSheet({
         footer={serversFooter}
         footerTone={footerToneOf(servers.note)}
       >
-        {servers.servers.map((server) => (
-          <SwitchRow
-            key={server.connection}
-            label={server.name}
-            on={server.on}
-            onSwitch={(on) => servers.toggle(server.connection, on)}
-          />
-        ))}
+        {/* Note that the servers stand as the bare spinner while they are read, so an unread list never reads as an empty one. */}
+        {servers.read ? (
+          servers.servers.map((server) => (
+            <SwitchRow
+              key={server.connection}
+              label={server.name}
+              on={server.on}
+              onSwitch={(on) => servers.toggle(server.connection, on)}
+            />
+          ))
+        ) : (
+          <LoadingRow words={OPTIONS_WORDS.READING_SERVERS} />
+        )}
       </ListSection>
     </ModelChoiceSheet>
   );

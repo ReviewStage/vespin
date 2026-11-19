@@ -217,6 +217,12 @@ export function useKeeping(): Keeping {
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>
         run(() => setStringAsync(words).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
+      shareWords: (words) =>
+        run(
+          () => Share.share({ message: words }).then(() => undefined),
+          KEEP_FAILED[KEEP_ACT.SHARE],
+          false,
+        ),
       copyRich: (copy) =>
         run(() => copiedRich(copy).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
     };

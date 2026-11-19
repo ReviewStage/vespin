@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { continueFork } from "@repo/features/agent-fork-model";
 import {
   AGENT_MACHINE,
   AGENT_STATUS,
@@ -21,7 +22,6 @@ import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.j
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl } from "../testing/tasks-control.js";
 import { DraftAgentTab } from "./draft-agent-tab.js";
-import { continueFork } from "./fork-model.js";
 import type { AgentDraft } from "./use-agents.js";
 
 /**

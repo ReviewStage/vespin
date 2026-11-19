@@ -19,6 +19,7 @@
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { type AgentFork, forkStart } from "@repo/features/agent-fork-model";
 import {
   billingRequiredWords,
   localAgentRefusalWords,
@@ -404,6 +405,38 @@ export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartA
       ...(picked === undefined ? undefined : { model: picked.model, effort: picked.effort }),
       ...(runsOn === CLOUD ? undefined : { runsOn: runsOnOf(runsOn) }),
     }).catch(unanswered("The agent's start"));
+
+    if ("failure" in answer) return { refused: startRefusalWords(answer) };
+
+    return { agentId: answer.agent.id, taskId };
+  };
+}
+
+/**
+ * New agent's start as a fork, as the panel's forked draft sends it
+ * (`forkStart`): from the source at its message, the words and pictures as
+ * a note, the choice only where one was picked, since a fork otherwise runs
+ * on its source's, and where it runs left to its source's; under one key
+ * for the page, so a retry after no answer starts the agent once.
+ */
+export function useStartFork(
+  taskId: string,
+  fork: AgentFork,
+): (ask: Omit<StartAsk, "runsOn">) => Promise<StartAnswer> {
+  const acts = useHostActs();
+  const [key] = useState(randomUUID);
+
+  return async ({ prompt, attachments, picked }) => {
+    const answer = await acts[ACT_KIND.AGENTS_START]({
+      taskId,
+      ...forkStart({
+        draftId: key,
+        fork,
+        words: prompt ?? "",
+        attachments: attachments ?? [],
+        choice: picked,
+      }),
+    }).catch(unanswered("The fork's start"));
 
     if ("failure" in answer) return { refused: startRefusalWords(answer) };
 
