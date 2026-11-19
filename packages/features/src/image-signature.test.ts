@@ -94,6 +94,19 @@ test("a JPEG's size is its frame's, never a frame marker inside an earlier segme
   assert.deepEqual(imageDimensions(withExif, INBOX_IMAGE_TYPE.JPEG), { width: 37, height: 23 });
 });
 
+/** An APP1 segment's EXIF, big-endian as macOS writes a screenshot's, whose one tag turns the pixels a quarter to be seen (orientation 8). */
+const EXIF_TURNED_A_QUARTER = [
+  0xff, 0xe1, 0x00, 0x22, 0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x4d, 0x4d, 0x00, 0x2a, 0x00, 0x00,
+  0x00, 0x08, 0x00, 0x01, 0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x08, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00,
+];
+
+test("a JPEG whose EXIF turns it a quarter reads as the size it is seen at", () => {
+  const jpeg = bytesOf(JPEG_37_BY_23);
+  const turned = new Uint8Array([...jpeg.slice(0, 2), ...EXIF_TURNED_A_QUARTER, ...jpeg.slice(2)]);
+  assert.deepEqual(imageDimensions(turned, INBOX_IMAGE_TYPE.JPEG), { width: 23, height: 37 });
+});
+
 test("a lossy and a lossless WebP chunk state their sizes", () => {
   // VP8: a frame tag, the start code, then width and height in fourteen bits each, little-endian.
   const lossy = webpWith("VP8 ", [0, 0, 0, 0x9d, 0x01, 0x2a, 37, 0, 23, 0]);

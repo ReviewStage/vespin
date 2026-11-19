@@ -7,6 +7,7 @@ import {
   type ReactNode,
   useContext,
   useLayoutEffect,
+  useState,
 } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ImageOffIcon } from "../../icons/icons.js";
@@ -226,10 +227,13 @@ function TileFace({
   state,
   words,
   why,
+  onDrawn,
 }: {
   state: PictureState;
   words: string;
   why: string | undefined;
+  /** Hears the shape the picture decoded at, width over height. */
+  onDrawn: (ratio: number) => void;
 }): ReactNode {
   if (state.kind === PICTURE_STATE.FAILED) {
     return (
@@ -253,6 +257,11 @@ function TileFace({
       alt={words}
       decoding="async"
       draggable={false}
+      onLoad={(event) => {
+        const { naturalWidth, naturalHeight } = event.currentTarget;
+
+        if (naturalWidth > 0 && naturalHeight > 0) onDrawn(naturalWidth / naturalHeight);
+      }}
     />
   );
 }
@@ -285,7 +294,12 @@ export function PictureSetTile({
   onOpen?: (() => void) | undefined;
 }): React.JSX.Element {
   const { many, more } = useContext(TilePlaceContext);
-  const ratio = width === undefined || height === undefined ? WAITING_RATIO : width / height;
+  const [drawn, setDrawn] = useState<number | undefined>(undefined);
+
+  // Note that the shape the picture decoded at wins over the one it was kept with, because a picture kept before its EXIF turn was read stands sideways to its size.
+  const ratio =
+    drawn ?? (width === undefined || height === undefined ? WAITING_RATIO : width / height);
+
   const gone = state.kind === PICTURE_STATE.MISSING;
   const failed = state.kind === PICTURE_STATE.FAILED;
 
@@ -299,7 +313,7 @@ export function PictureSetTile({
       aria-label={gone ? goneWords(words, why ?? MEDIA_READ_WORDS.NOT_AVAILABLE) : undefined}
       className={FRAME}
     >
-      <TileFace state={state} words={words} why={why} />
+      <TileFace state={state} words={words} why={why} onDrawn={setDrawn} />
       {/* Note that a failed tile wears no veil, because the veil would cover its Retry, and the words under the set still say how many it holds. */}
       {more > 0 && !failed ? (
         <span

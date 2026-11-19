@@ -74,14 +74,63 @@ function isFrameMarker(marker: number): boolean {
   return marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
 }
 
+/** The marker of the segment EXIF stands in, and the bytes its payload opens with. */
+const APP1 = 0xe1;
+const EXIF_HEADER = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00] as const;
+
+/** A TIFF header's byte orders: Intel's little-endian `II`, Motorola's big-endian `MM`. */
+const TIFF_LITTLE_ENDIAN = [0x49, 0x49] as const;
+const TIFF_BIG_ENDIAN = [0x4d, 0x4d] as const;
+
+/** The EXIF tag saying how the stored pixels turn to be seen, and the bytes an IFD entry takes. */
+const ORIENTATION_TAG = 0x0112;
+const IFD_ENTRY_BYTES = 12;
+
+/** The orientations, of EXIF's eight, that turn the stored pixels a quarter, so the picture is seen with its width and height swapped. */
+const QUARTER_TURNS: ReadonlySet<number> = new Set([5, 6, 7, 8]);
+
 /**
- * A JPEG's size, read from its first frame header. Note that the segments
- * before it are stepped over by their stated lengths rather than scanned
- * for a marker byte, because a thumbnail inside an EXIF segment holds
- * frame markers of its own.
+ * The orientation an EXIF payload's first IFD states, read from the TIFF
+ * header at `tiff`; nothing where it states none or is cut short.
+ */
+function exifOrientation(bytes: Uint8Array, tiff: number, end: number): number | undefined {
+  const little = startsWith(bytes, TIFF_LITTLE_ENDIAN, tiff);
+
+  if (!little && !startsWith(bytes, TIFF_BIG_ENDIAN, tiff)) return undefined;
+  const read16 = (at: number) => (little ? littleEndian16(bytes, at) : bigEndian16(bytes, at));
+
+  const read32 = (at: number) =>
+    little ? read16(at) + read16(at + 2) * 2 ** 16 : read16(at) * 2 ** 16 + read16(at + 2);
+
+  const ifd = tiff + read32(tiff + 4);
+
+  if (ifd + 2 > end) return undefined;
+  const entries = read16(ifd);
+
+  for (let index = 0; index < entries; index += 1) {
+    const entry = ifd + 2 + index * IFD_ENTRY_BYTES;
+
+    if (entry + IFD_ENTRY_BYTES > end) return undefined;
+
+    if (read16(entry) === ORIENTATION_TAG) return read16(entry + 8);
+  }
+
+  return undefined;
+}
+
+/**
+ * A JPEG's size as it is seen, read from its first frame header. Note that
+ * the segments before it are stepped over by their stated lengths rather
+ * than scanned for a marker byte, because a thumbnail inside an EXIF
+ * segment holds frame markers of its own; and that an EXIF orientation
+ * turning the pixels a quarter swaps the frame's width and height, because
+ * every browser and image view draws a picture turned as it says, as macOS
+ * writes a screenshot of a landscape iPad's simulator: its pixels stood
+ * portrait, and its orientation turning them to landscape.
  */
 function jpegDimensions(bytes: Uint8Array): ImageDimensions | undefined {
   let at = 2;
+  let orientation: number | undefined;
 
   while (at + 9 < bytes.length) {
     if (bytes[at] !== 0xff) return undefined;
@@ -99,10 +148,22 @@ function jpegDimensions(bytes: Uint8Array): ImageDimensions | undefined {
     }
 
     if (isFrameMarker(marker)) {
-      return { width: bigEndian16(bytes, at + 7), height: bigEndian16(bytes, at + 5) };
+      const width = bigEndian16(bytes, at + 7);
+      const height = bigEndian16(bytes, at + 5);
+
+      return orientation !== undefined && QUARTER_TURNS.has(orientation)
+        ? { width: height, height: width }
+        : { width, height };
     }
 
-    at += 2 + bigEndian16(bytes, at + 2);
+    const next = at + 2 + bigEndian16(bytes, at + 2);
+
+    // Note that only the first EXIF segment is read, as a browser reads it.
+    if (marker === APP1 && orientation === undefined && startsWith(bytes, EXIF_HEADER, at + 4)) {
+      orientation = exifOrientation(bytes, at + 4 + EXIF_HEADER.length, next);
+    }
+
+    at = next;
   }
 
   return undefined;
