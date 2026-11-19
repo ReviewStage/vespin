@@ -1223,6 +1223,19 @@
   --color-file-icon-purple: var(--file-icon-purple);
   --color-file-icon-pink: var(--file-icon-pink);
   --color-file-icon-mauve: var(--file-icon-mauve);
+  /* A Manager's face (`manager-face/`): its seat at a row's and a message's
+     disc size, the working mark's disc at its end corner at each, and the
+     soft fill its character's body is drawn in, one to each color. */
+  --spacing-manager-face-row: var(--spacing-avatar-row);
+  --spacing-manager-face-message: var(--spacing-avatar-card);
+  --spacing-manager-face-badge-row: var(--ui-space-12);
+  --spacing-manager-face-badge-message: var(--ui-space-16);
+  --color-manager-face-yellow: var(--ui-color-manager-face-yellow);
+  --color-manager-face-green: var(--ui-color-manager-face-green);
+  --color-manager-face-blue: var(--ui-color-manager-face-blue);
+  --color-manager-face-pink: var(--ui-color-manager-face-pink);
+  --color-manager-face-purple: var(--ui-color-manager-face-purple);
+  --color-manager-face-peach: var(--ui-color-manager-face-peach);
   /* A file opened over the window (`attachment-viewer.tsx`): a text file's
      reading width, centered in the card, never wider than the room the card
      leaves it. */

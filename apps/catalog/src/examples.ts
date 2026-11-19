@@ -85,6 +85,7 @@ import { LINK_FIELD_EXAMPLE } from "./examples/link-field";
 import { LIST_MOTION_EXAMPLE } from "./examples/list-motion";
 import { LIST_ROW_EXAMPLE } from "./examples/list-row";
 import { LOADING_INDICATORS_EXAMPLE } from "./examples/loading-indicators";
+import { MANAGER_FACES_EXAMPLE } from "./examples/manager-faces";
 import { MARKDOWN_EXAMPLE } from "./examples/markdown";
 import { MENU_EXAMPLE } from "./examples/menu";
 import { MENU_SECTIONS_EXAMPLE } from "./examples/menu-sections";
@@ -278,6 +279,7 @@ export const EXAMPLES: readonly Example[] = [
   EVENT_NOTES_EXAMPLE,
   SIDEBAR_PARTS_EXAMPLE,
   ROW_MARKS_EXAMPLE,
+  MANAGER_FACES_EXAMPLE,
   SELECTION_EXAMPLE,
   LIST_MOTION_EXAMPLE,
   ROVING_KEYS_EXAMPLE,
