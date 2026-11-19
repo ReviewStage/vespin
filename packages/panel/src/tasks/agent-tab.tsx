@@ -27,6 +27,7 @@ import {
   turnStretches,
   wholeCallOf,
 } from "@repo/features/agent-parts";
+import { REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import { usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
@@ -355,7 +356,7 @@ import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
 import { OutOfMemoryOffer } from "./out-of-memory-offer.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
-import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
+import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { type SentLine as RailSentLine, sentLineOf } from "./sent-lines.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";

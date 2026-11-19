@@ -1,3 +1,4 @@
+import { forkChoice, startingWords } from "@repo/features/agent-fork-model";
 import { AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
 import { rejectedFailure } from "@repo/features/failure-remedy";
 import type { MacOffer } from "@repo/features/models-wire";
@@ -18,7 +19,6 @@ import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectAgentBanner } from "./connect-agent-banner.js";
 import { ForkChip, SuggestionChip } from "./fork-action.js";
-import { forkChoice, startingWords } from "./fork-model.js";
 import { NewTaskRunsOnChip, useStartRunsOn } from "./runs-on.js";
 import type { AgentComposerControl, ComposerNote } from "./use-agent-composer.js";
 import type { AgentDraft, AgentsControl } from "./use-agents.js";
