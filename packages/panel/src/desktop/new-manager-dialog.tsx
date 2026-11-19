@@ -123,9 +123,9 @@ export function useNewManagerDialog({
   const choice = picked ?? drawnDefault.choice;
   const devices = newTask.devices ?? NO_DEVICES;
   const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
-  // Note that the card stays mounted between openings, so each counts afresh which devices' read it waits on.
-  const [opening, setOpening] = useState(0);
-  const devicesUnread = useDevicesRead(newTask.modelsRead, keptDevice, opening).unread;
+  // Note that the card stays mounted between openings, so each waits on a devices' read made since it opened.
+  const [openedOn, setOpenedOn] = useState<number | undefined>(undefined);
+  const devicesUnread = useDevicesRead(newTask.modelsRead, keptDevice, openedOn).unread;
 
   const creating = useMutation({
     mutationKey: [ACT_KIND.AGENTS_CREATE_MANAGER, workspaceId],
@@ -308,7 +308,7 @@ export function useNewManagerDialog({
   return {
     ask: () => {
       key.current = crypto.randomUUID();
-      setOpening((was) => was + 1);
+      setOpenedOn(newTask.modelsRead.generation);
       setName("");
       setPicks(undefined);
       setPicked(undefined);

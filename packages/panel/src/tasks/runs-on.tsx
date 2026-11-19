@@ -305,13 +305,6 @@ interface DevicesRead {
   readonly failed: boolean;
 }
 
-/** Where a card stands on the devices' read: the read it opened on, and whether one made since has landed. */
-interface OpenedMark {
-  readonly opening: number;
-  readonly generation: number;
-  readonly landed: boolean;
-}
-
 /**
  * Whether a start waits on the devices' read, where `held` (the member's
  * last pick is a device): until a read made since the card opened lands,
@@ -321,28 +314,25 @@ interface OpenedMark {
  * read before the card opened does not count, because it may be one read
  * before a device was added, and a failed read leaves it standing; and that
  * a read is told by the generation it took, never by its list, which a read
- * listing the same devices hands back as it was. A card that stays mounted
- * between openings counts them (`opening`), each opening marking the read
- * it opens on afresh.
+ * listing the same devices hands back as it was. A card opens on the
+ * generation standing as it mounts, or, for one that stays mounted between
+ * openings, on `openedOn`, the generation its opening read before it asked
+ * the devices again, since that ask takes the next generation at once.
  */
-export function useDevicesRead(modelsRead: ModelsRead, held: boolean, opening = 0): DevicesRead {
-  const [kept, keep] = useState<OpenedMark>({
-    opening,
-    generation: modelsRead.generation,
-    landed: false,
-  });
+export function useDevicesRead(
+  modelsRead: ModelsRead,
+  held: boolean,
+  openedOn?: number,
+): DevicesRead {
+  const [mountedOn] = useState(modelsRead.generation);
+  // The opening a read since has landed for, which a later read failing does not take back.
+  const [landedFor, setLandedFor] = useState<number | undefined>(undefined);
+  const since = openedOn ?? mountedOn;
+  const readSince = modelsRead.generation > since;
+  const landed = landedFor === since || (readSince && modelsRead.state === MODELS_READ.READ);
 
-  let mark =
-    kept.opening === opening ? kept : { opening, generation: modelsRead.generation, landed: false };
-
-  const readSince = modelsRead.generation > mark.generation;
-
-  if (!mark.landed && readSince && modelsRead.state === MODELS_READ.READ) {
-    mark = { ...mark, landed: true };
-  }
-
-  if (mark !== kept) keep(mark);
-  const unread = held && !mark.landed;
+  if (landed && landedFor !== since) setLandedFor(since);
+  const unread = held && !landed;
 
   return { unread, failed: unread && readSince && modelsRead.state === MODELS_READ.FAILED };
 }

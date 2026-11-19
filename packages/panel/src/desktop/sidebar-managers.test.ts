@@ -4,13 +4,15 @@ import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_KIND, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
-import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { MODELS_READ, type ModelsRead } from "../tasks/use-agents.js";
+import type { NewTask } from "../tasks/use-new-task.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads, handState } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
@@ -154,7 +156,28 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
 });
 
-test("a Create sent again after an edit is a request of its own, under a key of its own", async () => {
+/** A Mac the member registered, their last Runs on pick. */
+const MAC: MacOffer = {
+  deviceId: "0a1b2c3d-0000-4000-8000-0000000000aa",
+  name: "Ada's Mac",
+  providers: [MODEL_PROVIDER.ANTHROPIC],
+};
+
+/** New Task's control as New Manager reads it: the recent repository, and the devices as `modelsRead` stands. */
+function newManagerTask(overrides: Partial<NewTask> = {}): NewTask {
+  return newTaskControl({
+    repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: [RELAY] }),
+    ...overrides,
+  });
+}
+
+/**
+ * The sidebar over the workspace with Managers on, the account's default
+ * model read, each Create the service hears kept in `created` and answered
+ * unanswered; answers how to draw it again over another New Task, press a
+ * button by its name, and type the Manager's name.
+ */
+async function mountNewManager(newTask: NewTask) {
   handState({ [EXPERIMENT.MANAGERS]: true });
   handHostReads({
     models: {
@@ -190,25 +213,37 @@ test("a Create sent again after an edit is a request of its own, under a key of 
     },
   });
 
-  const tasks = tasksControl({
-    workspaces: [WORKSPACE],
-    workspace: WORKSPACE,
-    newTask: newTaskControl({ repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: [RELAY] }) }),
-  });
-
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
+
+  const draw = (next: NewTask) =>
+    root.render(
+      withQueryClient(
+        drawnSidebar(
+          sidebarProps(
+            tasksControl({ workspaces: [WORKSPACE], workspace: WORKSPACE, newTask: next }),
+          ),
+        ),
+      ),
+    );
+
+  act(() => draw(newTask));
   await settleQueries();
 
-  const press = (label: string) => {
-    const button = [...document.querySelectorAll("button")].find(
+  const button = (label: string) => {
+    const found = [...document.querySelectorAll("button")].find(
       (each) => each.getAttribute("aria-label") === label || each.textContent === label,
     );
 
-    assert.ok(button, `${label} is drawn`);
-    act(() => button.click());
+    assert.ok(found, `${label} is drawn`);
+
+    return found;
+  };
+
+  const press = (label: string) => {
+    const found = button(label);
+    act(() => found.click());
   };
 
   const name = (words: string) => {
@@ -220,6 +255,12 @@ test("a Create sent again after an edit is a request of its own, under a key of 
       field.dispatchEvent(new Event("input", { bubbles: true }));
     });
   };
+
+  return { created, draw, button, press, name };
+}
+
+test("a Create sent again after an edit is a request of its own, under a key of its own", async () => {
+  const { created, press, name } = await mountNewManager(newManagerTask());
 
   press("New Manager");
   name("Alpha");
@@ -234,4 +275,33 @@ test("a Create sent again after an edit is a request of its own, under a key of 
     ["Alpha", "Beta"],
   );
   assert.notEqual(created[0]?.idempotencyKey, created[1]?.idempotencyKey);
+});
+
+test("where the last pick is a device, Create waits on the read of the devices New Manager asks as it opens, and stands once that read lands", async () => {
+  window.localStorage.setItem("app.newTaskRunsOn", MAC.deviceId);
+
+  // Note that the ask stamps its generation at once, in the press that opens the card, as the agents control does.
+  let asked: () => void = () => undefined;
+
+  const standing = (state: ModelsRead["state"]) =>
+    newManagerTask({
+      devices: [MAC],
+      modelsRead: { state, generation: state === MODELS_READ.READ ? 1 : 2 },
+      readModels: () => asked(),
+    });
+
+  const reading = { ...standing(MODELS_READ.READING) };
+  const { draw, button, press, name } = await mountNewManager(standing(MODELS_READ.READ));
+
+  asked = () => draw(reading);
+  press("New Manager");
+  name("Alpha");
+
+  const create = () => button("Create Manager");
+
+  assert.equal(create().disabled || create().getAttribute("aria-disabled") === "true", true);
+  act(() => draw({ ...reading, modelsRead: { state: MODELS_READ.READ, generation: 2 } }));
+  await vi.waitFor(() =>
+    assert.equal(create().disabled || create().getAttribute("aria-disabled") === "true", false),
+  );
 });
