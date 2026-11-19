@@ -446,7 +446,7 @@ function AgentComposerArea({
         composer={composer}
         approvals={approvals}
         onShowWaiting={onShowWaiting}
-        addMenu={agentAddMenu(composer, servers)}
+        addMenu={agentAddMenu(composer, servers, agent !== undefined)}
         note={note}
         call={call}
         otherCall={otherCall}
@@ -466,11 +466,16 @@ function AgentComposerArea({
  * model chip's sheet at the row's end, as the desktop's model chip holds
  * them.
  */
-function agentAddMenu(composer: AgentComposer, servers: AgentServers): ComposerMenu {
+function agentAddMenu(
+  composer: AgentComposer,
+  servers: AgentServers,
+  /** Whether the task list holds the agent, whose servers a switch changes; none are offered before, since a switch then changes nothing. */
+  listed: boolean,
+): ComposerMenu {
   return {
     actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
     submenus:
-      !servers.read || servers.servers.length === 0
+      !listed || !servers.read || servers.servers.length === 0
         ? []
         : [
             {
