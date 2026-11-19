@@ -40,6 +40,7 @@ import {
   AGENT_MACHINE,
   AGENT_SOURCE,
   type AgentAttachment,
+  type AgentKind,
   type AgentMachineKind,
   type AgentRunsOnRequest,
   type AgentSource,
@@ -260,6 +261,8 @@ export type StartAsk = StartPlace & {
   readonly startedBy?: Agent | undefined;
   /** The agent's title from the start, a run's fixed name, which no model is asked for; none for a Start the model names. */
   readonly title?: string | undefined;
+  /** What the agent is: a Manager, made on no task; none for a coder, as every other Start makes. */
+  readonly kind?: AgentKind | undefined;
   /** What carried the prompt where something other than the Start did, which the first line says in place of its brief: a member's message to the Slack bot; none for every other Start. */
   readonly carried?: SlackLineMetadata | undefined;
   /** How the summary of the steps a replay cannot keep is written, for a Start from another agent; none leaves those steps out unsummarized. */
@@ -1072,6 +1075,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       source: sourceOf(ask.carried),
       startedByAgentId: ask.startedBy?.id,
       title: rules.title,
+      kind: ask.kind,
       idempotencyKey: ask.idempotencyKey,
       model: choice.model,
       effort: choice.effort,

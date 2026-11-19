@@ -49,6 +49,7 @@ import {
   agentWorkspaceListAnswerSchema,
   MAXIMUM_START_BODY_BYTES,
 } from "../agent-wire.js";
+import { MANAGER_CREATE_BODY_BYTES, managerCreateRequestSchema } from "../manager-wire.js";
 import { modelChoiceSchema } from "../models-wire.js";
 import { replyButtonSentSchema, replyButtonViewSchema } from "../reply-button-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
@@ -64,7 +65,7 @@ import {
   defaultMachineRequestSchema,
   workspaceToolsAnswerSchema,
 } from "../workspace-tools-wire.js";
-import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
+import { bodyCap, declaredProcedure, exactBodyInput, exactInput, refuses } from "./base.js";
 import { MESSAGE_REFUSALS } from "./messages.js";
 
 /** A change names a model, an effort, and a window, a title, an archive, or a pin, at most, so a body past this is no change. */
@@ -293,6 +294,19 @@ export const agentsContract = {
       }),
     )
     .input(exactBodyInput(idParams, agentStartRequestSchema))
+    .output(EffectSchema.flip(startAnswerSchema)),
+  /** A Manager made in the workspace the body names, where it has the Managers experiment on, or the one a retry under the same key already made: refused as not permitted where the experiment is off. */
+  createManager: declaredProcedure
+    .errors(refuses(...START_REFUSALS))
+    .meta(bodyCap(MANAGER_CREATE_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: HOSTED_SERVICE_PATH.MANAGERS,
+        outputStructure: "detailed",
+      }),
+    )
+    .input(exactInput(managerCreateRequestSchema))
     .output(EffectSchema.flip(startAnswerSchema)),
   /** An agent started from the one the path names, continuing it or forking it, in that agent's own place, its task. */
   startFrom: declaredProcedure

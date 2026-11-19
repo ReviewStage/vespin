@@ -100,6 +100,7 @@ import { askedPullRequest, githubReadRefusal, pullRequestNumberOf } from "./aske
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { answeredApproval } from "./coder-host/approval-answer.js";
 import { retryBoot } from "./coder-host/boot.js";
+import { startManager } from "./coder-host/manager-start.js";
 import { harnessTakesMode } from "./coder-host/permission-mode.js";
 import {
   agentPullRequestReach,
@@ -377,6 +378,16 @@ export function agentsProcedures(
         { taskId },
         input.body,
         yield* summaryModelOf,
+      );
+
+      return startAnswer(started);
+    }),
+    /** A Manager made in the workspace the body names, as its creator (`coder-host/manager-start.ts`). */
+    createManager: signedIn.createManager.effect(function* ({ input, context }) {
+      const started = yield* startManager(
+        routedSessions<TypedTurn>(context.userId),
+        context.userId,
+        input,
       );
 
       return startAnswer(started);
