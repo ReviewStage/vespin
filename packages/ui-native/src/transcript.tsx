@@ -783,10 +783,9 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
-      // Note that an agent held for an answer says so in the attention ink with no spinner, since it waits on the reader rather than working.
+      // Note that the line is words alone, as the panel's Working line is, its mark left to the rows of what runs; and that an agent held for an answer says so in the attention ink, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
-          {item.waiting === true ? null : <TranscriptWorkingMark />}
           <Text
             style={{
               fontSize: ROLE_SIZE.ROW_LINE,
