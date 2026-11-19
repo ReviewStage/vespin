@@ -164,7 +164,14 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, type ReactNode, useDeferredValue, useMemo, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -1933,16 +1940,23 @@ export function useAgentRowAsk(): AgentAsking {
   const [asked, setAsked] = useState<AskedAgent>();
   const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
+  // Note that each question raised counts up, so an Archive read that lands after a later question was raised, such as Permanently delete, never stands its own over it.
+  const raised = useRef(0);
 
   return {
     archive: (agentId, asker) => {
+      raised.current += 1;
+      const mine = raised.current;
       // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
       letGo();
       void readAfresh(agentId).then((stands) => {
-        if (stands) setAsked({ agentId, asker, presented: true, deleting: undefined });
+        if (stands && raised.current === mine) {
+          setAsked({ agentId, asker, presented: true, deleting: undefined });
+        }
       });
     },
     remove: ({ agentId, name, archived }, asker) => {
+      raised.current += 1;
       setAsked({ agentId, asker, presented: true, deleting: deleteAgentWords(name, archived) });
     },
     question: (agentId, asker) => {
@@ -1974,10 +1988,15 @@ export function useAgentRowAsk(): AgentAsking {
         presented: asked.presented,
         onAct: () => {
           if (!asked.presented) return;
+          const mine = raised.current;
           letGo();
           answered(
             () => acts.archive(agentId),
-            () => setAsked({ agentId, asker, presented: true, deleting: undefined }),
+            () => {
+              if (raised.current === mine) {
+                setAsked({ agentId, asker, presented: true, deleting: undefined });
+              }
+            },
           );
         },
         onDismiss: letGo,

@@ -229,6 +229,8 @@ export function useAgentRowActs(): {
         write(() => acts[ACT_KIND.AGENTS_RENAME]({ agentId, title }), {
           refused: (answer) => ("failure" in answer ? RENAME_FAILED : undefined),
           unanswered: RENAME_FAILED,
+          // Note that the name is its agent's subject, so a later Rename holds off a stale Try again.
+          subject: { kind: WRITE_SUBJECT.AGENT_NAME, id: agentId },
           retry: true,
           went: BUZZ.SUCCESS,
         });
@@ -251,6 +253,7 @@ export function useAgentRowActs(): {
                 : DELETE_FAILED
               : undefined,
           unanswered: DELETE_FAILED,
+          retry: true,
           went: BUZZ.SUCCESS,
         });
       },
