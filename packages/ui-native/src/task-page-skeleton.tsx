@@ -26,13 +26,15 @@ export type TaskSkeletonSection = {
 
 /**
  * The words a placeholder row is handed, which SwiftUI's placeholder look
- * draws as bars of their length: a name's, a short fact's, and a paragraph's.
+ * draws as bars of their length: a name's, a short fact's, and a
+ * paragraph's. Note that they are filler, never a sentence, so nothing reads
+ * as content where a word escapes the placeholder look.
  */
 const PLACEHOLDER = {
-  NAME: "Placeholder name of a task",
-  FACT: "Placeholder",
+  NAME: "xxxxxxx xxxxx xxxxxxxx",
+  FACT: "xxxxxx",
   WORDS:
-    "Placeholder words of a description, standing where its first paragraph is drawn once it is read, long enough to run over a few lines.",
+    "xxxxxxxx xxxxx xx x xxxxxxxxxxx xxxxxxxx xx xxxx xxxxx xxxxxxxx xxxxxx xx xxxxx xxxxxxx xx xx xxxx xxxxxx xxxx xx xxx xxxx x xxx xxxxx.",
 } as const;
 
 /** Nothing to open, since a placeholder's link is never pressed. */
