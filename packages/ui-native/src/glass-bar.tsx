@@ -241,7 +241,8 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
  * where it has one, along the row's foot, so a field grown past one line
  * keeps its buttons beside its last line, as Messages' do, and over what
- * stands under the row, such as a start's capsules. It stands inside
+ * stands under the row, such as a start's capsules, over which the field
+ * stands alone at the bar's width. It stands inside
  * the screen's bottom safe area, which the tab bar's height is part of, so
  * the bar sits above the tab bar rather than under it. Its glass is the
  * system's own (`BAR_GLASS`) on its SwiftUI, which iOS draws solid where
@@ -278,16 +279,19 @@ export function GlassBar({
   ];
 
   const alone = head === undefined && foot === undefined;
+  const rowModifiers = alone ? [...modifiers, ...pill, ...glass] : [...pill];
 
-  const row = (
-    <HStack
-      alignment="bottom"
-      spacing={BAR_ROW_SPACING}
-      modifiers={alone ? [...modifiers, ...pill, ...glass] : [...pill]}
-    >
-      {children}
-    </HStack>
-  );
+  // Note that a row over a foot holds the field alone, so it stands in a column that hands it the bar's width as it is, rather than a row that sizes the field's text view again for each width it tries.
+  const row =
+    foot === undefined ? (
+      <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={rowModifiers}>
+        {children}
+      </HStack>
+    ) : (
+      <VStack alignment="leading" spacing={BAR_ROW_SPACING} modifiers={rowModifiers}>
+        {children}
+      </VStack>
+    );
 
   const bar = (
     <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
