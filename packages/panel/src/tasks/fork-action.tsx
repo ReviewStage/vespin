@@ -1,3 +1,9 @@
+import {
+  type AgentFork,
+  FORK_WORDS,
+  forksOf,
+  messageOpening,
+} from "@repo/features/agent-fork-model";
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
@@ -25,7 +31,6 @@ import { ActorRef } from "../actor-ref.js";
 import { MessageAction } from "../ai-elements/message.js";
 import { agentActor, agentName } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
-import { type AgentFork, FORK_WORDS, forksOf, messageOpening } from "./fork-model.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
 

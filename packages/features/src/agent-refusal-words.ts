@@ -65,6 +65,9 @@ export const STOP_FAILED = "The agent could not be stopped. Try again.";
 /** What an agent's archive the service refused says, wherever it was pressed. */
 export const ARCHIVE_FAILED = "The agent could not be archived.";
 
+/** What an agent's rename the service refused says, wherever it was asked. */
+export const RENAME_FAILED = "The agent could not be renamed.";
+
 /** What an agent's pin or unpin the service refused says, wherever it was pressed. */
 export const PIN_FAILED = {
   PIN: "The agent could not be pinned.",
