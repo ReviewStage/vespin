@@ -578,13 +578,16 @@ type LinkRowProps = {
   readonly tone?: LinkRowTone | undefined;
   readonly disabled?: boolean | undefined;
   readonly onPress: () => void;
+  /** What its long press holds, in the panel's right-click menu's groups for what it opens, such as a page's Copy link; none for a row that acts rather than opens, such as New agent. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
 /**
  * A row pressed to go somewhere or act, in a row's columns: its glyph, its
  * words, and its detail at the line's end, with no mark of where it goes,
  * as the panel's draw none: Automations, New agent, a page, or the threads
- * that need you.
+ * that need you. A row that opens something, such as a page, holds the
+ * panel's menu for it on a long press (`LongPressMenu`).
  */
 export function LinkRow({
   symbol,
@@ -593,16 +596,19 @@ export function LinkRow({
   tone = LINK_ROW_TONE.PLAIN,
   disabled: off = false,
   onPress,
+  menu,
 }: LinkRowProps) {
   const colors = useColors();
   const ink = linkInk(colors, tone);
+  // Note that a held row stands its place in the list on the frame around its menu, as `RowFrame` does, since the menu wraps the button.
+  const placed = menu === undefined ? rowPlacement(colors) : [];
 
-  return (
+  const button = (
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
         disabled(off),
-        ...rowPlacement(colors),
+        ...placed,
         buttonStyle("borderless"),
         accessibilityLabel(label),
         // Note that the detail is heard after the label, since the label stands for the whole row.
@@ -621,6 +627,14 @@ export function LinkRow({
         />
       </HStack>
     </SwiftUIButton>
+  );
+
+  if (menu === undefined) return button;
+
+  return (
+    <HStack modifiers={rowPlacement(colors)}>
+      <LongPressMenu groups={menu}>{button}</LongPressMenu>
+    </HStack>
   );
 }
 
@@ -671,6 +685,8 @@ type VersionRowProps = {
   /** Whether it heads its list, which then draws no hairline over it, as a plain list in Mail or Files begins. */
   readonly first: boolean;
   readonly onPress: () => void;
+  /** What its long press holds, in the panel's version row menu's groups: its links, then Restore this version on any but the description as it stands. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
 /**
@@ -689,17 +705,23 @@ export function VersionRow({
   current,
   first,
   onPress,
+  menu,
 }: VersionRowProps) {
   const colors = useColors();
   const said = current ? `${VERSION_HISTORY_WORDS.CURRENT} · ${summary}` : summary;
 
-  return (
+  const placed = [
+    ...rowPlacement(colors),
+    // Note that a headless plain list draws a hairline over its first row, which iOS's own plain lists leave out.
+    ...(first ? [listRowSeparator("hidden", "top")] : []),
+  ];
+
+  const button = (
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
-        ...rowPlacement(colors),
-        // Note that a headless plain list draws a hairline over its first row, which iOS's own plain lists leave out.
-        ...(first ? [listRowSeparator("hidden", "top")] : []),
+        // Note that a held row stands its place in the list on the frame around its menu, as `RowFrame` does, since the menu wraps the button.
+        ...(menu === undefined ? placed : []),
         buttonStyle("borderless"),
         accessibilityLabel(name),
         accessibilityValue([said, sinceHeard(at, now)].join(", ")),
@@ -727,6 +749,14 @@ export function VersionRow({
         </RowLine>
       </VStack>
     </SwiftUIButton>
+  );
+
+  if (menu === undefined) return button;
+
+  return (
+    <HStack modifiers={placed}>
+      <LongPressMenu groups={menu}>{button}</LongPressMenu>
+    </HStack>
   );
 }
 
