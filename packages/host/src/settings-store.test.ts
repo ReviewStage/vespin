@@ -768,6 +768,60 @@ test("tokens a failed sign-out or an uninstall left in the vault are cleared by 
   assert.equal(vault.held(), undefined);
 });
 
+it.effect("a read begun before a renewal never answers the tokens the renewal replaced", () =>
+  Effect.gen(function* () {
+    const directory = yield* temporaryDirectoryScoped("settings-");
+    const kept = memoryVault();
+    const reading = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    yield* new SettingsStore({
+      directory: () => directory,
+      cipher: testCipher(),
+      tokenVault: kept,
+      fileSystem: FILE_SYSTEM,
+      path: PATH,
+    }).setAccount(TEST_ACCOUNT);
+
+    // Note that the vault holds its first read open, with the text it held before the renewal, until the renewal has written.
+    let first = true;
+
+    const vault: TokenVault = {
+      ...kept,
+      read: Effect.suspend(() => {
+        if (!first) return kept.read;
+        first = false;
+        const before = kept.held();
+
+        return Deferred.succeed(reading, undefined).pipe(
+          Effect.andThen(Deferred.await(release)),
+          Effect.as(before),
+        );
+      }),
+    };
+
+    const store = new SettingsStore({
+      directory: () => directory,
+      cipher: testCipher(),
+      tokenVault: vault,
+      fileSystem: FILE_SYSTEM,
+      path: PATH,
+    });
+
+    const renewed = {
+      ...TEST_ACCOUNT,
+      accessToken: "renewed-access",
+      refreshToken: "renewed-refresh",
+    } as const satisfies StoredAccount;
+
+    const stale = yield* Effect.forkChild(store.readAccount());
+    yield* Deferred.await(reading);
+    yield* store.setAccount(renewed, { renewal: true });
+    yield* Deferred.succeed(release, undefined);
+    assert.deepEqual(yield* Fiber.join(stale), renewed);
+    assert.deepEqual(yield* store.readAccount(), renewed);
+  }).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
 it.effect("a sign-out while an older build's tokens are moving leaves no tokens in the vault", () =>
   Effect.gen(function* () {
     const directory = yield* temporaryDirectoryScoped("settings-");

@@ -53,7 +53,7 @@ function lineCount(sign: string, count: number): string {
 
 /**
  * A pull request on a page: its state's glyph in GitHub's color, the one
- * status tone the card carries, its number and title in 15 pt, and its added
+ * status tone the card carries, its number and title in the row title's style, and its added
  * and removed lines in green and red, on the surface inside a hairline; its
  * acts stand under it as the system's regular bordered buttons in the ink.
  * Note that they are regular rather than small capsules, because an act

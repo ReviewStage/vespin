@@ -42,7 +42,7 @@ import { KEEP_ACT, KEEP_SYMBOL } from "./keep-model.js";
 import { Press } from "./press.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
 
 /** The glyph each draft's header leads with, the panel's own: Slack's nearest, the mail, and the pen. */
 const DRAFT_GLYPH = {
@@ -56,7 +56,7 @@ const MARK_LOOK = {
   [DRAFT_MARK.BOLD]: { fontWeight: "600" },
   [DRAFT_MARK.ITALIC]: { fontStyle: "italic" },
   [DRAFT_MARK.STRIKE]: { textDecorationLine: "line-through" },
-  [DRAFT_MARK.CODE]: { fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.FOOTNOTE },
+  [DRAFT_MARK.CODE]: { fontFamily: MONOSPACE_FONT, fontSize: ROLE_SIZE.ROW_LINE },
 } as const satisfies Record<DraftMark, TextStyle>;
 
 /** How far a bar's words stand from its top and bottom edges. */
@@ -194,7 +194,7 @@ export function DraftCard({
   const colors = useColors();
   const keeping = useKeeping();
   const edge = { borderColor: colors.CHIP_EDGE };
-  const quiet = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
+  const quiet = { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED };
   const { subject } = draft;
   const links = draftLinks(draft.runs);
 

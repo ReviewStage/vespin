@@ -349,9 +349,13 @@ const MENU =
 /** The rows pinned under the list, behind a hairline, where the scrolling cannot take them. */
 const FOOT = "ui-searchable-menu-foot block flex-none border-t border-border p-menu-inset";
 
-/** One muted line under a submenu's rows, inset as a row's words are: what the long context window costs. */
+/**
+ * One muted line under a submenu's rows, its words in line with the rows'
+ * (the list's own inset, then a row's), and as far from the submenu's foot
+ * as from the last row: what the long context window costs.
+ */
 const NOTE =
-  "ui-searchable-menu-note px-row-inset pt-ui-4 pb-0 [.ui-searchable-menu-submenu>&]:pb-menu-inset";
+  "ui-searchable-menu-note mx-menu-inset px-row-inset pt-ui-4 pb-0 [.ui-searchable-menu-submenu>&]:pb-row-inset";
 
 /** What stands over the rows, inset as a popover card's content is, behind a hairline from them. */
 const LEAD =

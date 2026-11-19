@@ -256,8 +256,8 @@ function opensHeard(address: string): string {
 
 /**
  * A row of a pull request's page, such as a check or a reviewer: its mark
- * in the lead column, its name in 15 pt, and what ends its line, 12 pt and
- * muted, standing as every list row does, plain and edge to edge with a
+ * in the lead column, its name in the row title's style, and what ends its
+ * line in the time's, muted, standing as every list row does, plain and edge to edge with a
  * hairline under the words. A reviewer's face takes the lead column, its
  * mark moving to the line's end before its words, as the panel's facepile
  * wears where each stands; a check's App stands by its avatar beside the

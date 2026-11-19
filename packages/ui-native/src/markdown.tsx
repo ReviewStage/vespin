@@ -58,7 +58,7 @@ import {
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /**
@@ -107,7 +107,7 @@ const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.MACHINE]: GLYPH.MAC,
 };
 
-/** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
+/** Each heading level's size and weight, a step above the body's words, never past a page's own heading. */
 const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
   1: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
   2: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
@@ -312,7 +312,7 @@ function MentionChip({
 }) {
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
-  const size = TEXT_SIZE.FOOTNOTE;
+  const size = ROLE_SIZE.ROW_LINE;
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
 
@@ -375,7 +375,7 @@ function SuggestionChip({
   readonly drawing: Drawing;
 }) {
   const { colors, fontScale } = drawing;
-  const size = TEXT_SIZE.FOOTNOTE;
+  const size = ROLE_SIZE.ROW_LINE;
   const offered = look.look === SUGGESTION_LOOK.OFFERED;
 
   return (
@@ -471,7 +471,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         <Text
           style={{
             fontFamily: MONOSPACE_FONT,
-            fontSize: TEXT_SIZE.FOOTNOTE,
+            fontSize: ROLE_SIZE.ROW_LINE,
             backgroundColor: colors.WELL,
           }}
         >
@@ -992,7 +992,7 @@ function TableView({
                     runs={cell}
                     drawing={drawing}
                     style={{
-                      fontSize: TEXT_SIZE.FOOTNOTE,
+                      fontSize: ROLE_SIZE.ROW_LINE,
                       textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
                       ...(rowAt === 0 && { fontWeight: "600", color: colors.TEXT }),
                     }}
@@ -1020,7 +1020,7 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
       <SidewaysScroll ground={colors.WELL} lines={styles.wellLines}>
         <Text
           selectable
-          style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT }}
+          style={{ fontFamily: MONOSPACE_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT }}
         >
           {text}
         </Text>

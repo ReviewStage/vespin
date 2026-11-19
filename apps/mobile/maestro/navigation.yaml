@@ -68,19 +68,16 @@ onFlowComplete:
             TAB: Inbox
       - tapOn:
           id: "workspace-switcher"
-      # Note that the account's item is matched with or without its address,
-      # because iPadOS 26 names a menu item by its title alone and 27 by its
-      # title and subtitle.
-      - assertVisible: "Settings(, .*)?"
-      - assertVisible: "Workspace settings|Settings…"
+      - assertVisible: "Settings"
+      - assertVisible: "Manage"
       - takeScreenshot: ipad-switcher-settings
       - tapOn:
           point: "75%, 90%"
       - setOrientation: PORTRAIT
       - waitForAnimationToEnd
 # A compact window, the iPhone's, names its workspace as the Inbox's one
-# leading button, whose list holds the workspaces, New workspace and
-# Workspace settings, then the account opening Settings, and keeps the
+# leading button, whose list holds the workspaces, New workspace, the
+# workspace's Manage, then the account opening Settings, and keeps the
 # system's tab bar, minimizing it as the Tasks list scrolls down, the round +
 # staying on its own glass beside it.
 - runFlow:
@@ -89,8 +86,8 @@ onFlowComplete:
     commands:
       - tapOn:
           id: "workspace-switcher"
-      - assertVisible: "Settings(, .*)?"
-      - assertVisible: "Workspace settings|Settings…"
+      - assertVisible: "Settings"
+      - assertVisible: "Manage"
       - takeScreenshot: switcher-settings
       # Note that the switcher's list is a sheet at the window's foot, so it
       # is put away by a tap above it, since one low on the window lands on

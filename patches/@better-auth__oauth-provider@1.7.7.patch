@@ -1,24 +1,103 @@
+diff --git a/dist/authorize-K1WHCNih.mjs b/dist/authorize-K1WHCNih.mjs
+index 892e39ff5f37078ee30b8c950be5f12adf96262e..6fe9a3e59a90a8a1acc87059faa47d51ebf8c653 100644
+--- a/dist/authorize-K1WHCNih.mjs
++++ b/dist/authorize-K1WHCNih.mjs
+@@ -3509,7 +3509,7 @@ async function revokeRefreshToken(ctx, opts, token, clientId) {
+ 		error: "invalid_request"
+ 	});
+ 	if (refreshToken.revoked) {
+-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
++		await invalidateRefreshFamily(ctx, clientId, refreshToken);
+ 		throw new APIError$1("BAD_REQUEST", {
+ 			error_description: "refresh token revoked",
+ 			error: "invalid_request"
+@@ -3530,7 +3530,7 @@ async function revokeRefreshToken(ctx, opts, token, clientId) {
+ 		increment: {},
+ 		set: { revoked: /* @__PURE__ */ new Date(iat * 1e3) }
+ 	})) {
+-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
++		await invalidateRefreshFamily(ctx, clientId, refreshToken);
+ 		throw new APIError$1("BAD_REQUEST", {
+ 			error_description: "refresh token revoked",
+ 			error: "invalid_request"
 diff --git a/dist/introspect-CNR06Oy3.mjs b/dist/introspect-CNR06Oy3.mjs
-index e633e0e33a23a0c41537d099585ddb4138a6b5fa..ed2bf382f4f911b35d72bcc4e85e215f0cc25e44 100644
+index e633e0e33a23a0c41537d099585ddb4138a6b5fa..16974a7d25d19a4d3f5f1bc5496c3c6a8aba2f1b 100644
 --- a/dist/introspect-CNR06Oy3.mjs
 +++ b/dist/introspect-CNR06Oy3.mjs
-@@ -1514,7 +1514,7 @@ async function invalidateRefreshFamily(ctx, clientId, userId) {
+@@ -1479,8 +1479,10 @@ async function createOpaqueAccessToken(ctx, opts, user, client, scopes, payload,
+ 	return (opts.prefix?.opaqueAccessToken ?? "") + token;
+ }
+ /**
+-* Tear down the entire refresh-token family for a (client, user) pair, plus
+-* any access tokens that reference those refresh rows, per RFC 9700 §4.14.
++* Tear down the presented token's refresh-token family, the rows descended
++* from its original authorization code (or, for a row with none, every row of
++* its (client, user) pair), plus any access tokens that reference those rows,
++* per RFC 9700 §4.14.2, so the user's other sign-ins stay signed in.
+ * Access tokens are deleted first so the parent rows' foreign-key children
+ * do not block the refresh-row delete.
+ *
+@@ -1495,16 +1497,22 @@ async function createOpaqueAccessToken(ctx, opts, user, client, scopes, payload,
+ *
+ * @internal
+ */
+-async function invalidateRefreshFamily(ctx, clientId, userId) {
++async function invalidateRefreshFamily(ctx, clientId, refreshToken) {
++	const userId = refreshToken.userId;
++	const familyWhere = [{
++		field: "clientId",
++		value: clientId
++	}, {
++		field: "userId",
++		value: userId
++	}];
++	if (refreshToken.authorizationCodeId) familyWhere.push({
++		field: "authorizationCodeId",
++		value: refreshToken.authorizationCodeId
++	});
+ 	const refreshTokens = await ctx.context.adapter.findMany({
+ 		model: "oauthRefreshToken",
+-		where: [{
+-			field: "clientId",
+-			value: clientId
+-		}, {
+-			field: "userId",
+-			value: userId
+-		}]
++		where: familyWhere
+ 	});
+ 	if (refreshTokens.length) await ctx.context.adapter.deleteMany({
+ 		model: "oauthAccessToken",
+@@ -1514,16 +1522,12 @@ async function invalidateRefreshFamily(ctx, clientId, userId) {
  			value: refreshTokens.map((r) => r.id)
  		}]
  	});
 -	await ctx.context.adapter.deleteMany({
 +	const deletedRefreshTokens = await ctx.context.adapter.deleteMany({
  		model: "oauthRefreshToken",
- 		where: [{
- 			field: "clientId",
-@@ -1524,6 +1524,7 @@ async function invalidateRefreshFamily(ctx, clientId, userId) {
- 			value: userId
- 		}]
+-		where: [{
+-			field: "clientId",
+-			value: clientId
+-		}, {
+-			field: "userId",
+-			value: userId
+-		}]
++		where: familyWhere
  	});
-+	ctx.context.logger.warn(`oauth-provider: invalidated the refresh-token family of client ${clientId} for user ${userId}, deleting ${deletedRefreshTokens} refresh tokens and their stored access tokens.`);
++	const signedInAt = normalizeTimestampValue(refreshToken.authTime)?.toISOString() ?? "an unknown time";
++	ctx.context.logger.warn(`oauth-provider: invalidated the refresh-token chain of client ${clientId} for user ${userId} signed in at ${signedInAt}, deleting ${deletedRefreshTokens} refresh tokens and their stored access tokens.`);
  }
  async function revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId) {
  	const deleteIssuedTokens = async (model) => {
+@@ -2157,7 +2161,7 @@ async function handleRefreshTokenGrant(ctx, opts) {
+ 				error: "invalid_grant"
+ 			});
+ 		}
+-		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
++		await invalidateRefreshFamily(ctx, client_id, refreshToken);
+ 		throw new APIError("BAD_REQUEST", {
+ 			error_description: "invalid refresh token",
+ 			error: "invalid_grant"
 diff --git a/dist/oauth-Dtt-caL2.d.mts b/dist/oauth-Dtt-caL2.d.mts
 index 7dc7a3b92fe1a7df8a8561992059ba37f9668d50..885f1cad7490283de66f4f35cf9ef4bf723a48a9 100644
 --- a/dist/oauth-Dtt-caL2.d.mts

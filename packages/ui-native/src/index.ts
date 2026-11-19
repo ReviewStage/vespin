@@ -72,14 +72,6 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
-export {
-  type ChipMenu,
-  type ChipMenuGroup,
-  ComposeSheet,
-  MENU_CHIP_LOOK,
-  MenuChip,
-} from "./compose-sheet.js";
-
 export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
 
 export {
@@ -287,6 +279,8 @@ export {
   WorkspaceRow,
 } from "./settings-form.js";
 
+export { SkeletonRegion } from "./skeleton.js";
+
 export {
   type BarAction,
   type BarFootItem,
@@ -301,6 +295,14 @@ export {
   menuWithout,
   SplitView,
 } from "./split-view.js";
+
+export {
+  type ChipMenu,
+  type ChipMenuGroup,
+  MENU_CHIP_LOOK,
+  MenuChip,
+  StartPage,
+} from "./start-page.js";
 
 export {
   PRIORITY_MARK_SYMBOL,

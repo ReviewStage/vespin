@@ -100,7 +100,7 @@ function linkInk(colors: BrandColors, tone: LinkRowTone): string {
   return colors.TEXT_BODY;
 }
 
-/** A row's 12 pt words at the line's end, in the muted ink or the one given, with tabular figures. */
+/** A row's words at the line's end, in the time's style,, in the muted ink or the one given, with tabular figures. */
 function EndWords({ words, ink }: { readonly words: string; readonly ink?: string | undefined }) {
   const colors = useColors();
   // Note that at an accessibility size the end stands under the title with the row's width, so a long name, such as a device's, wraps to a second line rather than being cut.
@@ -134,7 +134,7 @@ function LeadGlyph({
 }
 
 /**
- * A row's 13 pt line under its title, set in to the title's words, which
+ * A row's line under its title, in the row line's style,, set in to the title's words, which
  * start past the lead's column as it grows with the reader's text. At an
  * accessibility size each fact stands on a line of its own, as Mail's rows
  * stack, since side by side they broke mid-word.

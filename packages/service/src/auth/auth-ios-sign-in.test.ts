@@ -385,6 +385,22 @@ test("a refresh whose answer the phone never kept, sent again within a minute, a
   assert.equal((await refresh(auth, kept.refresh_token)).status, HOSTED_HTTP_STATUS.OK);
 });
 
+test("a rotated token sent again past the minute signs out only its own sign-in, and the account's other phone stays signed in", async () => {
+  const auth = iosAuth();
+  const phone = await exchange(auth, (await signIn(auth)).returned);
+  const tablet = await exchange(auth, (await signIn(auth)).returned);
+
+  const rotated = await refresh(auth, phone.refresh_token);
+  assert.equal(rotated.status, HOSTED_HTTP_STATUS.OK);
+  const kept = decodeTokens(await rotated.json());
+
+  vi.setSystemTime(new Date(NOW.getTime() + 5 * 60_000));
+  assert.notEqual((await refresh(auth, phone.refresh_token)).status, HOSTED_HTTP_STATUS.OK);
+
+  assert.notEqual((await refresh(auth, kept.refresh_token)).status, HOSTED_HTTP_STATUS.OK);
+  assert.equal((await refresh(auth, tablet.refresh_token)).status, HOSTED_HTTP_STATUS.OK);
+});
+
 test("a refresh after the consenting browser's session ran out still mints a token that names the account", async () => {
   const auth = iosAuth();
   const { returned } = await signIn(auth);

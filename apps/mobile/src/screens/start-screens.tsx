@@ -1,11 +1,6 @@
-// start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules, or File for later, which files it with no agent.
+// start-screens.tsx -- the two pages that start work, each a new conversation's page over the agent page's composer: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus under the composer's field; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
-import {
-  AGENT_ATTACHMENT_TYPE,
-  type AgentAttachment,
-  hasWordsOrFiles,
-} from "@repo/features/agent-wire";
-import { attachmentText } from "@repo/features/attachment-model";
+import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -22,16 +17,13 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
-  TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
   TASK_STATUS,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { type FiledTask, filedTaskOf } from "@repo/features/tasks-model";
 import type { VoiceCallInto } from "@repo/features/voice-call-session";
-import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
@@ -40,7 +32,6 @@ import {
   buzz,
   Chip,
   type ChipMenuGroup,
-  ComposeSheet,
   ConfirmAsk,
   FieldChip,
   GLYPH,
@@ -51,6 +42,7 @@ import {
   type PickOption,
   runsOnGlyph,
   STATUS_MARK_SYMBOL,
+  StartPage,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -71,7 +63,6 @@ import {
   runsOnOptions,
   type StartAnswer,
   startRefusalWords,
-  useFileTask,
   useModelPick,
   useRepositoryPick,
   useStartAgent,
@@ -95,8 +86,6 @@ const WORDS = {
   MODEL: "Model",
   EFFORT: "Effort",
   RUNS_ON: "Machine",
-  START: "Start",
-  FILE_FOR_LATER: "File for later",
   PHOTOS: "Photos",
   TASK_RELATION: TASK_RELATION_MENU,
   RELATION: "Relation",
@@ -128,12 +117,6 @@ const TEST_IDS = {
   NEW_TASK: { WORDS: "new-task-words", ATTACH: "new-task-attach" },
 } as const;
 
-/** File for later, as New task's bar offers it before Start: whether it is lit, and its press. */
-interface FileForLater {
-  readonly ready: boolean;
-  readonly onFile: () => void;
-}
-
 /** Where a closing start lands once it went: on its task's page, or on to the agent it started. */
 const LANDING = {
   TASK: "task",
@@ -143,30 +126,21 @@ const LANDING = {
 type Landing = (typeof LANDING)[keyof typeof LANDING];
 
 /**
- * The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to
- * VoiceOver), and Start at its trailing one, lit once there are words or
- * pictures to send and while no start is out, with File for later before it
- * on New task; and the ask the ✕ or a swipe down raises while the sheet
- * holds a draft. While the sheet holds nothing, Talk stands in Start's
- * place where the sheet offers it, the waveform on the same button, as an
- * agent's composer puts Talk in Send's (Dean, Nov 17), with the question it
- * asks first while another call stands.
+ * The page's bar: its name, and the system's ✕ at its leading edge (Cancel
+ * to VoiceOver), as a new conversation's page closes; and the ask the ✕
+ * raises while the page holds a draft, and the question Talk asks first
+ * while another call stands. Start and Talk stand at the composer's end,
+ * as Send and Talk do on an agent's page.
  */
 function SheetBar({
   title,
-  ready,
-  onStart,
-  file,
   kept,
   talk,
 }: {
   readonly title: string;
-  readonly ready: boolean;
-  readonly onStart: () => void;
-  readonly file?: FileForLater | undefined;
   readonly kept: KeptWords;
-  /** Talk while the sheet holds nothing, and whether it may be pressed; none where the sheet offers no Talk or holds something to start on. */
-  readonly talk?: { readonly talk: NewAgentTalk; readonly ready: boolean } | undefined;
+  /** Talk where the page offers it, whose question stands here; none where it offers none. */
+  readonly talk?: NewAgentTalk | undefined;
 }) {
   const colors = useColors();
   const close = useCloseSheet(kept);
@@ -189,40 +163,14 @@ function SheetBar({
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
       <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
-        {/* Note that the sheet closes with the system's ✕, as Mail's compose sheet does, its word kept for VoiceOver. */}
+        {/* Note that the page closes with the system's ✕, as a new conversation's page does, its word kept for VoiceOver. */}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={WORDS.CANCEL}
           onPress={close}
         />
       </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
-        {file === undefined ? null : (
-          <Stack.Toolbar.Button disabled={!file.ready} onPress={file.onFile}>
-            {WORDS.FILE_FOR_LATER}
-          </Stack.Toolbar.Button>
-        )}
-        {talk === undefined ? (
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.SEND)}
-            variant="prominent"
-            tintColor={colors.ACCENT}
-            accessibilityLabel={WORDS.START}
-            disabled={!ready}
-            onPress={onStart}
-          />
-        ) : (
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.TALK)}
-            variant="prominent"
-            tintColor={colors.ACCENT}
-            accessibilityLabel={TALK_LABEL.TALK}
-            disabled={!talk.ready}
-            onPress={talk.talk.onTalk}
-          />
-        )}
-      </Stack.Toolbar>
-      {talk === undefined ? null : <ConfirmAsk destructive {...talk.talk.switching} />}
+      {talk === undefined ? null : <ConfirmAsk destructive {...talk.switching} />}
       <ConfirmAsk
         title={DISCARD_WORDS.QUESTION}
         act={DISCARD_WORDS.DISCARD}
@@ -292,7 +240,7 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
 
   return (
     <MenuChip
-      look={MENU_CHIP_LOOK.DOCK}
+      look={MENU_CHIP_LOOK.COMPOSER}
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
       {...(harness === undefined ? {} : { harness })}
       menu={{ groups }}
@@ -322,7 +270,7 @@ function RunsOnChip({
 
   return (
     <MenuChip
-      look={MENU_CHIP_LOOK.DOCK}
+      look={MENU_CHIP_LOOK.COMPOSER}
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
       symbol={glyphOf(runsOn)}
       menu={{
@@ -359,7 +307,7 @@ function RepositoryChip({
   if (tree !== undefined) {
     return (
       <MenuChip
-        look={MENU_CHIP_LOOK.DOCK}
+        look={MENU_CHIP_LOOK.COMPOSER}
         label={tree.repository ?? NO_REPOSITORY}
         symbol={GLYPH.REPOSITORY}
       />
@@ -369,7 +317,7 @@ function RepositoryChip({
   if (repository.options.length > 0) {
     return (
       <MenuChip
-        look={MENU_CHIP_LOOK.DOCK}
+        look={MENU_CHIP_LOOK.COMPOSER}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
         symbol={GLYPH.REPOSITORY}
         menu={{
@@ -388,7 +336,11 @@ function RepositoryChip({
   return (
     <>
       {repository.picked === undefined ? null : (
-        <MenuChip look={MENU_CHIP_LOOK.DOCK} label={repository.picked} symbol={GLYPH.REPOSITORY} />
+        <MenuChip
+          look={MENU_CHIP_LOOK.COMPOSER}
+          label={repository.picked}
+          symbol={GLYPH.REPOSITORY}
+        />
       )}
       {repository.failed === undefined ? null : (
         <Chip label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={repository.retry} />
@@ -473,8 +425,7 @@ function sameStanding(was: Standing, now: Standing): boolean {
 
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
- * gives way to its page; on a task made with no agent, filed for later or
- * whose agent was refused, to the task's page; on a refusal, the sheet stays
+ * gives way to its page; on a task made whose agent was refused, to the task's page; on a refusal, the sheet stays
  * with its words and pictures, the refusal said under them. Pictures the
  * service would refuse hold a start that carries them, saying why, as the
  * agent's composer holds a send.
@@ -553,7 +504,7 @@ function useSheetStart(
  * by its brief, as the panel's New agent lands on the agent it started. A start refused is said in the failure notice, whose Try again
  * sends the same start again. Note that this never makes a second task or
  * agent, because the task's id and its agent's key are minted once per sheet
- * (`useStartTask`, `useFileTask`, `useStartAgent`), and the service answers
+ * (`useStartTask`, `useStartAgent`), and the service answers
  * a start it already made with the same one. Pictures the service would
  * refuse still hold the sheet, saying why under its words.
  */
@@ -641,30 +592,7 @@ function useClosingStart(
   return { starting: sent, go };
 }
 
-/**
- * The task File for later files from the sheet's words and the files it
- * holds: none while it holds a picture, which goes only with an agent's
- * start. Note that a long paste held as a text file is filed as words after
- * the words typed, since a task filed for later carries no file, so a pasted
- * description can still be filed, while it fits in a brief.
- */
-function filedOf(
-  prompt: string,
-  files: readonly AgentAttachment[] | undefined,
-): FiledTask | undefined {
-  const held = files ?? [];
-
-  if (held.some((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT)) return undefined;
-  const words = [prompt.trim(), ...held.map((file) => attachmentText(file.data).trim())];
-  const kept = words.filter((each) => each !== "").join("\n\n");
-
-  // Note that pasted text a brief would cut holds File for later back rather than being filed short, since a paste may run far past a brief's bound.
-  if (held.length > 0 && kept.length > TASK_BOUNDS.MAX_BRIEF_CHARS) return undefined;
-
-  return filedTaskOf(kept);
-}
-
-/** The skills a `/` offers, as the compose sheet takes them. */
+/** The skills a `/` offers, as the start page takes them. */
 function offered(skills: SkillsOffered | undefined) {
   return skills === undefined
     ? undefined
@@ -764,16 +692,10 @@ export function NewAgentScreen({
     <>
       <SheetBar
         title={WORDS.NEW_AGENT}
-        ready={drafted && placed && !starting}
-        onStart={start}
         kept={kept}
-        talk={
-          talk === undefined || drafted || opened !== undefined
-            ? undefined
-            : { talk, ready: talk.ready && !starting }
-        }
+        talk={opened === undefined ? talk : undefined}
       />
-      <ComposeSheet
+      <StartPage
         title={
           opened === undefined
             ? undefined
@@ -788,14 +710,21 @@ export function NewAgentScreen({
           words: prompt,
           onWords: setPrompt,
           onLongPaste: pictures.pasteText,
-          testId: TEST_IDS.NEW_AGENT.WORDS,
         }}
         skills={offered(skills)}
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
         notes={notesOf(note, pick.failed)}
-        add={{ onAdd: pictures.attach, testId: TEST_IDS.NEW_AGENT.ATTACH }}
+        add={{ onAdd: pictures.attach }}
+        ready={drafted && placed && !starting}
+        onStart={start}
+        onTalk={
+          talk === undefined || opened !== undefined || !talk.ready || starting
+            ? undefined
+            : talk.onTalk
+        }
+        testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
         chips={
           <>
             <ModelChip pick={pick} />
@@ -992,17 +921,14 @@ function RelationChip({ pick }: { readonly pick: RelationPick }) {
 }
 
 /**
- * New task, Home's composer as a compose sheet: the task described and the
+ * New task, Home's composer as a page of its own: the task described and the
  * pictures that go with it, the task it is related to, picked from the +
- * and shown over the words once picked, and, as capsules above the
- * keyboard, the repository it works in, the newest one the account's tasks
+ * and shown at the page's head once picked, and, as capsules under the
+ * composer's field, the repository it works in, the newest one the account's tasks
  * were about until another is picked, or its parent's in another's tree,
  * its agent's model and effort, and where its agent runs. Start makes the
  * task and starts its agent in one act, as Home does, in the workspace the
- * app works in, or the one a share draft it opens on was kept for; File for
- * later before it files the task in the Backlog under its words with no
- * agent, offered on words and pasted text alone, since pictures go only
- * with an agent's start. A task's New sub-task opens it as a sub-task of `parent`, in the
+ * app works in, or the one a share draft it opens on was kept for. A task's New sub-task opens it as a sub-task of `parent`, in the
  * parent's workspace, which a task opened by a link may hold apart from the
  * one the app works in, since a tree stands in one.
  */
@@ -1029,12 +955,10 @@ export function NewTaskScreen({
   const relation = useRelationPick(listed, workspaceId, parent);
   const pick = useModelPick();
   const startTask = useStartTask(workspaceId);
-  const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote, draft?.pictures);
-  // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
+  // Note that a share draft's pictures are read as the sheet opens, and nothing starts until they are in, so its words never go without them.
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
-  const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
   const place = { repository: repository.picked, relation: relation.relation };
@@ -1086,10 +1010,6 @@ export function NewTaskScreen({
     );
   };
 
-  const file = () => {
-    if (filed !== undefined) go(() => fileTask({ filed, ...place }));
-  };
-
   // Talk starts the task and its agent blank on the sheet's chips and calls the agent once it lands.
   const talk = useNewAgentTalk(
     () =>
@@ -1117,26 +1037,14 @@ export function NewTaskScreen({
 
   return (
     <>
-      <SheetBar
-        title={WORDS.NEW_TASK}
-        ready={drafted && placed && !starting}
-        onStart={start}
-        file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
-        kept={kept}
-        talk={
-          talk === undefined || drafted || pictures.opening
-            ? undefined
-            : { talk, ready: talk.ready && placed && !starting }
-        }
-      />
-      <ComposeSheet
+      <SheetBar title={WORDS.NEW_TASK} kept={kept} talk={talk} />
+      <StartPage
         head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
           onLongPaste: pictures.pasteText,
-          testId: TEST_IDS.NEW_TASK.WORDS,
         }}
         skills={offered(skills)}
         pictures={pictures.attached}
@@ -1148,8 +1056,15 @@ export function NewTaskScreen({
             actions: [{ label: WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: pictures.attach }],
             submenus: related === undefined ? [] : [related],
           },
-          testId: TEST_IDS.NEW_TASK.ATTACH,
         }}
+        ready={drafted && placed && !starting}
+        onStart={start}
+        onTalk={
+          talk === undefined || pictures.opening || !talk.ready || !placed || starting
+            ? undefined
+            : talk.onTalk
+        }
+        testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
         chips={
           <>
             <RepositoryChip repository={repository} tree={tree} />
