@@ -159,6 +159,7 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  RowDisclosure,
   type RowFold,
   type RowMenuGroup,
   type RowSubmenu,

@@ -3,6 +3,7 @@
 import {
   Button,
   ContextMenu,
+  DisclosureGroup,
   Divider,
   HStack,
   Image,
@@ -308,7 +309,7 @@ type TaskRowProps = RowActs & {
   readonly at?: number | undefined;
   /** Its key, `ACME-42`, which ends the line, where a search's finds draw it, as ⌘K's do. */
   readonly taskKey?: string | undefined;
-  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does, the chevron standing in its status mark's place. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
+  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its long press's Show or Hide sub-tasks does, the chevron being its caller's `RowDisclosure`'s. */
   readonly fold?: RowFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
@@ -1091,6 +1092,34 @@ function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   }
 }
 
+/**
+ * A row with the rows nested under it, folded by SwiftUI's own disclosure,
+ * as Files and Notes fold a folder: the row stands as its label, its
+ * chevron at the line's trailing edge, turning as it opens, the rows under
+ * it set in by the system and eased in and out, and VoiceOver hearing it
+ * expanded or collapsed. Its holder keeps whether it stands open, since a
+ * recycled row holds no state (`RowForEach`). Note that the label is the
+ * row's own press, which opens what the row is, so only the chevron folds.
+ */
+export function RowDisclosure({
+  open,
+  onOpenChange,
+  label,
+  children,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly label: ReactNode;
+  readonly children: ReactNode;
+}) {
+  return (
+    <DisclosureGroup isExpanded={open} onIsExpandedChange={onOpenChange}>
+      <DisclosureGroup.Label>{label}</DisclosureGroup.Label>
+      {children}
+    </DisclosureGroup>
+  );
+}
+
 /** What a parent task's chevron is heard as, folded and open. */
 const SUB_TASK_FOLD: FoldWords = { show: "Show sub-tasks", hide: "Hide sub-tasks" };
 
@@ -1257,12 +1286,10 @@ export function useNestColumn(): number {
  * reader or the dashed mark where no one is, and how long ago it last moved.
  * Its ring stands at the list's edge, where an Inbox row's ring stands past
  * the dot's margin, so the two lists' marks and words line up. A task with
- * sub-tasks stands the panel's fold chevron in its ring's place, as the
- * panel's row stands it at rest on a screen with no hover, so every row's
- * mark keeps one column and the names one edge; its caller draws the
- * sub-tasks as rows of their own under it, a level deeper, their marks under
- * its name. Note that SwiftUI's disclosure is not used, because a press on
- * its row folds it rather than picking the row.
+ * sub-tasks stands as the label of its caller's `RowDisclosure`, whose
+ * chevron, at the line's trailing edge as Files and Notes stand theirs,
+ * folds them; the row offers Show and Hide sub-tasks in its long press too
+ * (`fold`), and says which.
  */
 export function TaskRow(props: TaskRowProps) {
   const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
@@ -1281,13 +1308,7 @@ export function TaskRow(props: TaskRowProps) {
         dot={false}
         unread={unread}
         faded={finished}
-        lead={
-          fold === undefined ? (
-            <StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />
-          ) : (
-            <FoldChevron fold={fold} words={SUB_TASK_FOLD} />
-          )
-        }
+        lead={<StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
         end={

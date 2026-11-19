@@ -1,9 +1,10 @@
 import { expect, test } from "vitest";
 import {
-  foldedTaskRows,
   searchedTasks,
   TASK_ROW_FACE,
+  type TaskBranch,
   type TaskTree,
+  taskBranches,
   taskRowFace,
   taskTree,
 } from "./task-tree-model.js";
@@ -15,12 +16,15 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
  * Pinned, a sectioned one in its section, a child under its parent, the
  * rest under their repository, and a teammate's task they follow under
  * Following; a search finds a settled task by its key;
- * a shut parent hides every row under it, however deep, and no row past it;
+ * a row nests under the nearest shallower row above it, however deep;
  * a row wears a teammate's face, the unassigned mark, or none for the reader's own.
  */
 
 const READER = "user-ada";
 const WORKSPACE = "workspace-acme";
+
+/** A branch as the test reads it: a row's name, or its name and the branches under it. */
+type Named = string | readonly [string, readonly Named[]];
 
 /** A task the reader made and is on, last updated `updatedAt` minutes in. */
 function task(
@@ -185,30 +189,29 @@ test("a search finds the workspace's tasks whatever their status, by name or key
   expect(found.map((each) => each.name)).toEqual(["Rounding"]);
 });
 
-test("a shut parent hides every row under it, however deep, and the rows after it stand", () => {
+test("each row stands under the nearest shallower row above it, however deep, and the rows after it at the top", () => {
   const row = (name: string, depth: number, open: boolean | undefined) => ({
     task: task(name, TASK_STATUS.TODO, "ada/relay", 0),
     depth,
     open,
   });
 
-  const rows = [
-    row("Invites", 0, true),
-    row("Invite copy", 1, true),
-    row("Invite links", 2, undefined),
-    row("Invite email", 1, undefined),
-    row("Digest", 0, undefined),
-  ];
+  const names = (branches: readonly TaskBranch[]): readonly Named[] =>
+    branches.map(({ row: { task: each }, branches: under }) =>
+      under.length === 0 ? each.name : [each.name, names(under)],
+    );
 
-  const shown = foldedTaskRows(rows, (taskId) => taskId !== "Invites");
-
-  expect(shown.map(({ task: each, open }) => [each.name, open])).toEqual([
-    ["Invites", false],
-    ["Digest", undefined],
-  ]);
   expect(
-    foldedTaskRows(rows, (taskId) => taskId === "Invites").map(({ task: each }) => each.name),
-  ).toEqual(["Invites", "Invite copy", "Invite email", "Digest"]);
+    names(
+      taskBranches([
+        row("Invites", 0, true),
+        row("Invite copy", 1, true),
+        row("Invite links", 2, undefined),
+        row("Invite email", 1, undefined),
+        row("Digest", 0, undefined),
+      ]),
+    ),
+  ).toEqual([["Invites", [["Invite copy", ["Invite links"]], "Invite email"]], "Digest"]);
 });
 
 test("a row wears a teammate's face, the unassigned mark where no one is on it, and none for the reader's own", () => {
