@@ -185,7 +185,6 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
   MORE_SERVERS: "Connect another in Settings.",
 } as const;
@@ -1111,10 +1110,11 @@ function AgentOptionsSheet({
 }) {
   const servers = useAgentServers(agentId);
 
+  // Note that the footer says nothing while the servers are read, since a read under way shows no words.
   const serversFooter =
     servers.note ??
     (!servers.read
-      ? OPTIONS_WORDS.READING_SERVERS
+      ? undefined
       : servers.servers.length === 0
         ? OPTIONS_WORDS.NO_SERVERS
         : OPTIONS_WORDS.MORE_SERVERS);
