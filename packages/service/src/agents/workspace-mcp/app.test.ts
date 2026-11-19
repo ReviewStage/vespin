@@ -841,6 +841,18 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       }),
       withheld: [],
     },
+    {
+      why: "on no task, the task's pages and the browser",
+      agent: Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        yield* Database.use((db) =>
+          db.update(agentTable).set({ taskId: null }).where(eq(agentTable.id, agent.agentId)),
+        );
+
+        return agent;
+      }),
+      withheld: ["show_page", "browser"],
+    },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Done and follow-ups, Reply buttons, and Computer use off",
     ({ agent: made, withheld }) =>

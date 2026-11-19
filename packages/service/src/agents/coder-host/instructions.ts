@@ -343,6 +343,7 @@ export function coderInstructions(
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
   const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
   const posts = offers(standing, INBOX_TOOLS.POST.name);
+  const showsPages = offers(standing, AGENT_TOOL.SHOW_PAGE);
   const shell = harness === CODER_HARNESS.CLAUDE_CODE ? "Bash" : "your shell";
   const branch = startBranch === null ? "" : ` on \`${startBranch}\``;
 
@@ -358,7 +359,11 @@ export function coderInstructions(
     ...machineLines(machine, repository !== null),
     ...(posts ? [UNCLEAR_LINE] : []),
     ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
-    `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts ? " and post it in a thread" : ""}.`,
+    ...(showsPages
+      ? [
+          `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts ? " and post it in a thread" : ""}.`,
+        ]
+      : []),
     endsTurns
       ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
       : "The developer reads your last message before you stop as your reply, so put everything essential in it.",

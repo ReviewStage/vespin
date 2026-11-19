@@ -343,6 +343,7 @@ export function runAgentShowPage(
     if (Result.isFailure(found)) return showPageRejected(found.failure);
     const { id: agentId } = found.success;
 
+    // Note that the catalog refuses the call of an agent on no task at its `TASK` gate (`../tool-catalog/gates.ts`), so the agent read here stands on one.
     const binding = {
       userId: admitted.target.userId,
       taskId: agentTaskId(found.success),

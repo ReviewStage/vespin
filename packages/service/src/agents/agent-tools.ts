@@ -436,6 +436,9 @@ export const START_AGENT_REFUSAL = {
   BRANCH_NO_REPOSITORY:
     "Not started: the task works in no repository, so there is no branch to clone; leave branch " +
     `out, or give the task a repository with ${AGENT_TOOL.UPDATE_TASK} first.`,
+  NO_OWN_TASK:
+    "Not started: you work on no task, so name the task to start the agent on by its taskId; " +
+    `${AGENT_TOOL.CREATE_TASK} makes one, and ${AGENT_TOOL.LIST_TASKS} names those that stand.`,
   NEW_TASK:
     `Not started: start_agent takes no newTask; make the task with ${AGENT_TOOL.CREATE_TASK}, then ` +
     "start the agent on it by its taskId.",
@@ -2480,7 +2483,16 @@ export function runStartAgent(
   const { model, effort, taskId: taskRef, permissionMode } = asked.success;
   const from = startFromOf(asked.success.from);
 
-  if (taskRef === undefined) return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_TASK));
+  // Note that a coding agent on no task has no taskId of its own to name, so it is told to make one.
+  if (taskRef === undefined) {
+    const taskless = callerAgent(call.caller) !== undefined && callerTask(call.caller) === null;
+
+    return Effect.succeed(
+      agentToolRejected(
+        taskless ? START_AGENT_REFUSAL.NO_OWN_TASK : START_AGENT_REFUSAL.NO_TASK,
+      ),
+    );
+  }
 
   if (from === undefined && model === undefined) {
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_MODEL));
