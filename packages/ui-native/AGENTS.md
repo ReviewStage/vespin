@@ -85,7 +85,12 @@ builds a control of its own.
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
   the picture viewer's share button holding the same, and Copy message on a
-  message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
+  message's words; the app answers them through `KeepingProvider`. A
+  mention's chip, which stands inside a line of words where no SwiftUI menu
+  can wrap it, is held for the system's sheet of Open link and Copy link
+  instead, as the panel's link menu offers them, a popover from the chip in
+  a regular window, its hold a little shorter than the system's so it wins
+  over a message's own. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with
