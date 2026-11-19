@@ -52,7 +52,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPlayed } from "../cached-media.js";
+import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -337,9 +337,14 @@ async function agentMediaSource(
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
-  return isPlayedType(read.contentType)
-    ? cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
-    : `data:${read.contentType};base64,${read.base64}`;
+  if (isPlayedType(read.contentType)) {
+    return cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
+  }
+
+  // Note that a picture is written to the app's caches and drawn from its file, so the page holds its address rather than its bytes, and the system's image cache holds what it decodes; a type no file can be named for keeps its `data:` address.
+  const written = await cachedPicture(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
+
+  return written ?? `data:${read.contentType};base64,${read.base64}`;
 }
 
 /** What an agent's pictures and recordings are drawn from, by id, and what reads one that failed again. */

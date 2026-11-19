@@ -143,6 +143,7 @@ export {
   type KeepAct,
   type Kept,
   type KeptKind,
+  pictureExtension,
 } from "./keep-model.js";
 
 export {
