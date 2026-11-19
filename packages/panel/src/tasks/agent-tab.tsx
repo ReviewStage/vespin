@@ -66,6 +66,7 @@ import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
+import { managerChatLines } from "@repo/features/manager-chat";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
@@ -3378,7 +3379,10 @@ function AgentTranscriptView({
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
         {greeting === undefined ? null : <ManagerGreetingMessage words={greeting} />}
         {starting ??
-          (greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
+          (greeting !== undefined && working ? (
+            // Note that a Manager's chat says only that it works, whatever its turn holds, even while nothing it sent stands yet.
+            <WorkingLine startedAt={undefined} words={workingLineWords(phase, waitsUntil)} />
+          ) : greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
             <WorkingLine startedAt={undefined} words={leadLine} />
           ))}
         {endTrail}
@@ -3548,6 +3552,9 @@ function AgentTabView({
   );
 
   const conditions = useMemo(() => goalConditions(kept), [kept]);
+  // Note that a Manager's page is its chat, never its transcript: people's lines and its `send_to_user` words alone, its work shown only as the working line.
+  const chat = agent.kind === AGENT_KIND.MANAGER;
+  const drawnLines = useMemo(() => (chat ? managerChatLines(lines) : lines), [chat, lines]);
 
   // Note that only a line still on its way is the reader's newest, since a refused one never reached the agent.
   const pendingWords = useMemo(
@@ -3843,7 +3850,7 @@ function AgentTabView({
                           <ApprovalsProvider asks={approvals.asks}>
                             <GoalConditions value={conditions}>
                               <AgentTranscriptView
-                                messages={lines}
+                                messages={drawnLines}
                                 standingCalls={transcript.calls}
                                 brief={agent.brief}
                                 briefSender={starter === undefined ? undefined : starterActor}
@@ -3877,7 +3884,7 @@ function AgentTabView({
                                 turnId={standing.turnId ?? agent.turnId}
                                 // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
                                 startedAt={
-                                  !counts
+                                  !counts || chat
                                     ? undefined
                                     : composer.rewinding
                                       ? composer.rewoundAt
@@ -3916,11 +3923,7 @@ function AgentTabView({
                                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                 olderFailed={transcript.olderFailed}
                                 fromStart={transcript.pages > 0 && !transcript.hasOlder}
-                                greeting={
-                                  agent.kind === AGENT_KIND.MANAGER
-                                    ? managerGreeting(agent.title)
-                                    : undefined
-                                }
+                                greeting={chat ? managerGreeting(agent.title) : undefined}
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}
@@ -3939,7 +3942,7 @@ function AgentTabView({
         </AgentPicturesProvider>
       </CallPlaceProvider>
       <AgentTabFoot>
-        <TodosDock messages={lines} working={standing.working} />
+        {chat ? null : <TodosDock messages={lines} working={standing.working} />}
         <PublishedDock
           published={published}
           agentId={agent.id}
