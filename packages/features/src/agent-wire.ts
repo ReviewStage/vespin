@@ -1097,10 +1097,10 @@ export const agentPinRequestSchema = EffectSchema.Struct({
 export type AgentPinRequest = typeof agentPinRequestSchema.Type;
 
 /**
- * Moving the asking member's own read mark of an agent with no task (PATCH),
- * which a released desktop still sends. Every agent stands on a task, read
- * through its task's mark alone, so the service changes nothing and answers
- * the agent as it stands.
+ * Moving the asking member's own read mark of a Manager's chat (PATCH): a
+ * look reads it through the service's now, never back, and a mark by hand
+ * changes nothing. A coder's mark moves too, though nothing reads it. The
+ * answer is the agent as it then stands.
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
 
@@ -1250,6 +1250,10 @@ export const agentSummarySchema = EffectSchema.Struct({
   title: EffectSchema.NullOr(EffectSchema.String),
   /** That the agent is a Manager, whose page opens on its greeting (`@repo/features/manager-greeting`); absent for a coder, and from a service older than it. */
   kind: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_KIND.MANAGER)),
+  /** How far the reader read a Manager's chat (`read-mark.ts`), the service's instant; absent for a coder, and from a service older than it. */
+  readThrough: EffectSchema.optionalKey(countedNumber),
+  /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */
+  saidAt: EffectSchema.optionalKey(countedNumber),
   /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
   machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
   /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */

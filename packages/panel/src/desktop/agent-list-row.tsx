@@ -1,6 +1,12 @@
-import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  AGENT_KIND,
+  type AgentPullRequest,
+  type AgentSummary,
+} from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
+import { readsUnread } from "@repo/features/read-mark";
 import {
   STARTED_STANDING,
   type StartedAgentsStanding,
@@ -38,7 +44,7 @@ import { RunsOnPlace } from "../tasks/runs-on.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useAgentPinWrite } from "../tasks/use-pin-writes.js";
-import { appStateQuery } from "../use-app-state.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
@@ -88,7 +94,10 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * among several offers its list's acts on every one chosen instead, under
  * how many (`agents-selection.tsx`). An archived agent's row stands settled,
  * its name in the muted ink, as a done task's does, and its menu offers
- * Unarchive in Archive's place.
+ * Unarchive in Archive's place. A Manager's row stands unread, its name in
+ * the heavier weight, while its chat said something after the reader's
+ * mark of it (`chatUnread`), but on the Manager's own page standing open,
+ * whose chat the reader sees as it lands, and in a staged run.
  */
 
 /** The cells an agent's row draws, in a task's row's order. */
@@ -116,6 +125,16 @@ function pinGroups(
   const command = pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT;
 
   return [[commandAction(command, () => onPin(agent.id, !pinned), subject)]];
+}
+
+/** Whether a Manager's chat said something after the reader's mark of it (`read-mark.ts`); never a coder's, whose row carries no mark. */
+function chatUnread(agent: AgentSummary): boolean {
+  if (agent.kind !== AGENT_KIND.MANAGER || agent.saidAt === undefined) return false;
+
+  return readsUnread(
+    { ...(agent.readThrough === undefined ? undefined : { readThrough: agent.readThrough }) },
+    agent.saidAt,
+  );
 }
 
 /** One agent's row; see the module's head. */
@@ -193,6 +212,7 @@ export function AgentListRow({
     terminals: { onOpenTerminal: undefined },
   });
 
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const selectPinned = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
   const pinned = useQuery({ ...appStateQuery, select: selectPinned }).data === true;
   const onPin = useAgentPinWrite();
@@ -287,6 +307,7 @@ export function AgentListRow({
       }
       more={more}
       settled={settled}
+      unread={!staged && !current && chatUnread(agent)}
       edges={choosable ? TASK_ROW_EDGES.LIST : TASK_ROW_EDGES.UNCHOSEN}
       choosable={choosable}
       current={current}

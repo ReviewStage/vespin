@@ -51,6 +51,7 @@ const DECLARED_TABLES = [
   "agent_pin",
   "agent_pull_request",
   "agent_queue",
+  "agent_read",
   "agent_repository",
   "agent_runner_lease",
   "agent_runner_record",

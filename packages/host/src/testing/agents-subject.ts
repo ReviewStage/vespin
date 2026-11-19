@@ -684,6 +684,12 @@ function fakeService() {
 
         return { agent: AGENT };
       }),
+    markRead: (agentId, readMark) =>
+      Effect.sync(() => {
+        asked.push(`markRead:${agentId}:${readMark}`);
+
+        return { agent: AGENT };
+      }),
     agent: (agentId) =>
       Effect.sync(() => {
         asked.push(`page:${agentId}`);

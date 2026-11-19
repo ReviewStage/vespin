@@ -12,6 +12,7 @@ import {
 import {
   agentPin,
   agentPullRequest,
+  agentRead,
   conversations,
   device,
   taskFollower,
@@ -33,6 +34,7 @@ import {
   agentBootSync,
   agentPinSync,
   agentPullRequestSync,
+  agentReadSync,
   agentSandboxSync,
   agentSync,
   automationRunSync,
@@ -352,9 +354,9 @@ function issuesStatement() {
  * claim writes on the conversation's row, so a delta read takes the flip
  * from the log (`movedAgents`) and a pane waiting on the sandbox connects
  * as it lands, and where that sandbox stands (`SANDBOX_STATE_OF_AGENT`),
- * from its row in `agent_sandbox`, on its agent's topic. Note that its read mark is a constant, read through its
- * start and never marked unread, since an agent is read through its task's
- * mark alone and a released desktop reads one only for an agent on no task;
+ * from its row in `agent_sandbox`, on its agent's topic. Note that its read mark is the reader's look at a
+ * Manager's chat (`agent_read`), else its start, beside the instant it last
+ * said something there (`said_at`), and never marked unread by hand;
  * and that the Mac's last beat is not read,
  * because a beat wakes nothing (`deviceSync`) and a window judges a Mac by
  * its own presence read. An agent on no task is read only where `taskless`,
@@ -417,13 +419,14 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = f
           true | null
         >`case when ${agentBootTable.phase} = ${BOOT_PHASE.BUILDING} then true else null end`,
         sandboxRunsUntil: SANDBOX_RUNS_UNTIL_OF_AGENT,
-        // Note that a released desktop reads an agent's read mark only for one on no task, which no agent is, so it is never marked.
+        // Note that no window marks an agent unread by hand, so it never stands marked.
         markedUnread: sql<boolean>`false`,
       },
       instants: {
         archivedAt: agentTable.archivedAt,
         pinnedAt: outerJoined(agentPin.pinnedAt),
-        readThrough: agentTable.createdAt,
+        readThrough: sql<Date>`coalesce(${agentRead.readThrough}, ${agentTable.createdAt})`,
+        saidAt: agentTable.saidAt,
         createdAt: agentTable.createdAt,
         cancelRequestedAt: latest.cancelRequestedAt,
         queuedAt: outerJoined(latest.queuedAt),
@@ -443,6 +446,10 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = f
         .select(selection)
         .from(agentTable)
         .leftJoin(agentPin, and(eq(agentPin.agentId, agentTable.id), eq(agentPin.userId, userId)))
+        .leftJoin(
+          agentRead,
+          and(eq(agentRead.agentId, agentTable.id), eq(agentRead.userId, userId)),
+        )
         .leftJoin(starter, eq(starter.id, agentTable.userId))
         .leftJoin(automationRun, eq(automationRun.id, agentTable.automationRunId))
         .leftJoin(archiver, eq(archiver.id, sql`${agentTable.archivedBy} ->> 'userId'`))
@@ -573,6 +580,7 @@ function movedAgents(moved: SyncMoved): SQL {
       liveKeysIn(agentTable.id, [
         ...agents,
         ...moved.keys(agentPinSync, agentPin.agentId),
+        ...moved.keys(agentReadSync, agentRead.agentId),
         ...moved.keys(agentPullRequestSync, agentPullRequest.agentId),
         ...moved.topics(agentApprovalSync, TOPIC.AGENT),
         ...moved.topics(agentSandboxSync, TOPIC.AGENT),
@@ -609,6 +617,7 @@ const TASK_LIST_TABLES = [
   taskReadSync,
   agentSync,
   agentPinSync,
+  agentReadSync,
   agentPullRequestSync,
   agentApprovalSync,
   agentSandboxSync,

@@ -347,6 +347,7 @@ import {
 } from "./line-cards.js";
 import { useMachineAskHeld } from "./machine-ask-waiting.js";
 import { MachineRefusalCard } from "./machine-refusal-card.js";
+import { useManagerChatLooks } from "./manager-chat-looks.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
 import {
   agentMessagePlace,
@@ -3566,6 +3567,7 @@ function AgentTabView({
   // Note that a Manager's page is its chat, never its transcript: people's lines and its `send_to_user` words alone, its work shown only as the working line.
   const chat = agent.kind === AGENT_KIND.MANAGER;
   const drawnLines = useMemo(() => (chat ? managerChatLines(lines) : lines), [chat, lines]);
+  useManagerChatLooks(chat ? agent.id : undefined, agent.saidAt);
 
   // Note that only a line still on its way is the reader's newest, since a refused one never reached the agent.
   const pendingWords = useMemo(

@@ -32,6 +32,7 @@ import {
   agentGitHubImageViewSchema,
   agentListAnswerViewSchema,
   agentListParamsSchema,
+  agentMarkReadParamsSchema,
   agentMessageParamsSchema,
   agentMessagesAnswerViewSchema,
   agentMessagesParamsSchema,
@@ -487,6 +488,14 @@ export const AGENT_ACTS = declaredActs({
     door: ACT.ROW_WRITE,
     unanswered: AGENT_UNANSWERED,
     byHand: true,
+  }),
+  AGENTS_MARK_READ: hostAct({
+    input: agentMarkReadParamsSchema,
+    output: agentAgentAnswerSchema,
+    refusal: "Could not mark the agent on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: AGENT_UNANSWERED,
   }),
   AGENTS_DELETE: hostAct({
     input: agentStopParamsSchema,

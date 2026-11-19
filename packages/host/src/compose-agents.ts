@@ -26,6 +26,7 @@ import {
   type AgentInboxRemindParams,
   type AgentInboxTakeBackParams,
   type AgentInboxTakenBackView,
+  type AgentMarkReadParams,
   type AgentPermissionModeParams,
   type AgentPinParams,
   type AgentRenameParams,
@@ -62,6 +63,7 @@ import type { ModelsAnswer } from "@repo/features/models-wire";
 import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
+import { markedAs } from "@repo/features/read-mark";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD } from "@repo/gateway";
@@ -246,6 +248,7 @@ export type AgentClient = Pick<
   | "changeQueue"
   | "archive"
   | "pin"
+  | "markRead"
   | "stop"
   | "rewind"
   | "clear"
@@ -950,6 +953,14 @@ function composed(
     { name: AGENT_QUEUED_WRITE.PIN, input: agentPinParamsSchema },
   );
 
+  /** A look at a Manager's chat, drawn on the reader's mark of its row at once, never moved back, and kept once the list carries the service's instant. */
+  const markedRead = agentWrite<AgentMarkReadParams>(
+    ({ readMark }) =>
+      (row) =>
+        markedAs(readMark, row, kernel.now()),
+    ({ agentId, readMark }, key) => asked(client.markRead(agentId, readMark, key)),
+  );
+
   /**
    * A Start, on a task or from another agent, which draws no row, since
    * only the service names its agent, which the list then carries. Where
@@ -1255,6 +1266,7 @@ function composed(
     }),
     AGENTS_ARCHIVE: declaredWrite(dependencies.pool, archived),
     AGENTS_PIN: declaredWrite(dependencies.pool, pinned),
+    AGENTS_MARK_READ: declaredWrite(dependencies.pool, markedRead),
     // Note that a repository added draws nothing on the agent's row, which lists no repositories, so it is asked and answered alone.
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
     AGENTS_REWIND: declaredWrite(dependencies.pool, rewound),
