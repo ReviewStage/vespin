@@ -70,7 +70,7 @@ export interface SecretCipher {
   /**
    * `plainText` sealed and answered as the base64 of what `encrypt` would
    * answer, in one step, where the platform does both faster than
-   * JavaScript, as the iPhone's native sealer does. Where it is present, a
+   * JavaScript, as the Mac's `safeStorage` does. Where it is present, a
    * caller keeping sealed text prefers it to `encrypt` and its own base64.
    */
   sealText?(plainText: string): string;

@@ -38,7 +38,7 @@ const NOTICE = "acceptInvite can add a member twice";
 /** A picture's bytes as a reply carries them: a PNG's signature alone, which no reader here draws. */
 const PICTURE = "iVBORw0KGgo=";
 
-/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a cipher that seals in the clear, a sign-in sheet closed at once, and no share token kept. */
+/** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a Keychain that keeps no tokens, a sign-in sheet closed at once, and no share token kept. */
 const testDevice: DeviceSeams = {
   fileSystem: NodeFileSystem.layer,
   createId: () => crypto.randomUUID(),
@@ -46,11 +46,7 @@ const testDevice: DeviceSeams = {
   openSheet: () => Promise.resolve(),
   openSocket: () => Effect.succeed({ unreachable: true }),
   onAppActiveChanged: () => () => undefined,
-  cipher: {
-    isAvailable: () => true,
-    encrypt: (plainText) => new TextEncoder().encode(plainText),
-    decrypt: (cipherText) => new TextDecoder().decode(cipherText),
-  },
+  tokenVault: { read: Effect.succeed(undefined), write: () => Effect.void, clear: Effect.void },
   authSession: {
     open: () => Promise.resolve({ end: AUTH_SESSION_END.CLOSED }),
     dismiss: () => undefined,

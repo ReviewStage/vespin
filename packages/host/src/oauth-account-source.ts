@@ -13,7 +13,7 @@ import {
 } from "@repo/features";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { Effect, Layer, Option } from "effect";
-import type { AccountSession, AccountSourceHost } from "./account-source.js";
+import type { AccountSession, AccountSourceHost, AccountSourceSeam } from "./account-source.js";
 import {
   AccountSource,
   PlatformRenewalWindow,
@@ -42,39 +42,51 @@ export const OAUTH_ACCOUNT_CLIENT = {
 
 /**
  * An account signed in through OAuth as `client`, whose consent the shell
- * stands up (`SignInConsent`), with the tokens it lands sealed in the
- * settings file by the shell's cipher (`SecretCipher`): the Mac's browser and
- * Keychain, or the iPhone's authentication session and Keychain. These two
- * seams are this source's alone, so a host assembled over another source is
- * handed neither.
+ * stands up (`SignInConsent`), with the tokens it lands kept by `tokens`: the
+ * desktop's sealed in the settings file by its cipher, or the iPhone's in its
+ * Keychain itself.
  */
-export const oauthAccountSourceLayerFor = (
+const oauthAccountSource = (
   client: OAuthAccountClient,
-): Layer.Layer<AccountSource, never, SecretCipher | SignInConsent> =>
-  Layer.effect(
-    AccountSource,
-    Effect.gen(function* () {
-      const cipher = yield* SecretCipher;
-      const consent = yield* SignInConsent;
-      const vault = yield* Effect.serviceOption(PlatformTokenVault);
-      const window = yield* Effect.serviceOption(PlatformRenewalWindow);
-      const renewalWindow = Option.getOrUndefined(window);
+  tokens: Pick<AccountSourceSeam, "tokenCipher" | "tokenVault">,
+): Effect.Effect<AccountSourceSeam, never, SignInConsent> =>
+  Effect.gen(function* () {
+    const consent = yield* SignInConsent;
+    const renewalWindow = Option.getOrUndefined(yield* Effect.serviceOption(PlatformRenewalWindow));
 
-      return {
-        tokenCipher: cipher,
-        ...(Option.isSome(vault) ? { tokenVault: vault.value } : undefined),
-        open: (host: AccountSourceHost) =>
-          openOAuthSession(host, consent.open, client, renewalWindow),
-      };
-    }),
-  );
+    return {
+      ...tokens,
+      open: (host: AccountSourceHost) =>
+        openOAuthSession(host, consent.open, client, renewalWindow),
+    };
+  });
 
-/** The desktop's account: an OAuth sign-in through the developer's browser, as the `desktop` client. */
+/** The desktop's account: an OAuth sign-in through the developer's browser, as the `desktop` client, its tokens sealed by the shell's Keychain-backed cipher (`SecretCipher`). */
 export const oauthAccountSourceLayer: Layer.Layer<
   AccountSource,
   never,
   SecretCipher | SignInConsent
-> = oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.DESKTOP);
+> = Layer.effect(
+  AccountSource,
+  Effect.gen(function* () {
+    const cipher = yield* SecretCipher;
+
+    return yield* oauthAccountSource(OAUTH_ACCOUNT_CLIENT.DESKTOP, { tokenCipher: cipher });
+  }),
+);
+
+/** An account signed in through OAuth as `client` whose tokens the platform keeps itself (`PlatformTokenVault`), as the iPhone's Keychain does, with no cipher of the host's. */
+export const oauthVaultAccountSourceLayerFor = (
+  client: OAuthAccountClient,
+): Layer.Layer<AccountSource, never, PlatformTokenVault | SignInConsent> =>
+  Layer.effect(
+    AccountSource,
+    Effect.gen(function* () {
+      const vault = yield* PlatformTokenVault;
+
+      return yield* oauthAccountSource(client, { tokenCipher: undefined, tokenVault: vault });
+    }),
+  );
 
 const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   host: AccountSourceHost,

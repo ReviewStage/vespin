@@ -39,7 +39,7 @@ export {
   OAUTH_ACCOUNT_CLIENT,
   type OAuthAccountClient,
   oauthAccountSourceLayer,
-  oauthAccountSourceLayerFor,
+  oauthVaultAccountSourceLayerFor,
 } from "../oauth-account-source.js";
 
 export { type ConnectWebSocket, openTerminalSocketOver } from "../web-socket-terminal.js";
