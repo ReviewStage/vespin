@@ -423,13 +423,8 @@ function InboxRowView({
   );
 }
 
-/**
- * An Inbox item's row, drawn again only where its props moved. Note that its
- * props keep their identity while its own thread stands (the item, the task's
- * words it says, and the acts' and the menus' hooks), because a delivery to
- * the Inbox otherwise draws every row again, a list off screen's among them,
- * which held the JS thread under a working agent's posts.
- */
+// Note that a row's props keep their identity while its thread stands, because
+// a delivery to the Inbox otherwise draws every row again and holds the JS thread.
 const InboxRow = memo(InboxRowView);
 
 /**
@@ -663,8 +658,9 @@ type ThreadSteps = {
 
 /**
  * Where a thread stands: a compact window's pushed screen, whose stack's bar
- * names the path and which draws its own Remind me sheet, or a split view's
- * detail, which opens the sheet its screen draws outside the split view.
+ * names the thread and holds the path in its ⋯ menu, and which draws its own
+ * Remind me sheet, or a split view's detail, which opens the sheet its screen
+ * draws outside the split view.
  */
 type ThreadPlace =
   | { readonly inStack: true; readonly steps: ThreadSteps }
