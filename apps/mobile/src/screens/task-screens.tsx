@@ -136,7 +136,6 @@ import {
   type RowFold,
   RowForEach,
   RowList,
-  type RowMenuGroup,
   type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
@@ -201,6 +200,7 @@ import {
   type TaskPlacing,
   type TaskRowDoors,
   type TasksListing,
+  type TaskWrites,
   useDeleteAsk,
   useListingAsks,
   useStatusAsk,
@@ -526,31 +526,95 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
   ];
 }
 
+/**
+ * Follow or Unfollow, whichever the reader does not stand at yet, as the
+ * panel's row offers it beside Pin while the task carries its followers;
+ * Unfollow dimmed for the assignee, who follows while assigned.
+ */
+function followActs(task: TaskSummary, listing: TasksListing): readonly RowAction[] {
+  const { readerId } = listing;
+
+  if (task.followers === undefined || readerId === undefined) return [];
+  const reader = task.followers.find((each) => each.userId === readerId);
+
+  if (reader === undefined) {
+    return [
+      {
+        label: FOLLOWING_WORDS.FOLLOW,
+        symbol: GLYPH.FOLLOW,
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => listing.follow(task.id, true),
+      },
+    ];
+  }
+
+  // Note that the assignee follows while assigned, so their Unfollow stands dimmed, saying why.
+  const assigned = reader.assignee === true;
+
+  return [
+    {
+      label: FOLLOWING_WORDS.UNFOLLOW,
+      symbol: GLYPH.UNFOLLOW,
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: () => listing.follow(task.id, false),
+      disabled: assigned,
+      detail: assigned ? FOLLOWING_WORDS.ASSIGNEE_STAYS : undefined,
+    },
+  ];
+}
+
+/** What the panel's one Move to is called, and what it names the move out of the task's workspace at the foot of its sections. */
+const MOVE_TO_WORDS = { MOVE_TO: "Move to", ANOTHER_WORKSPACE: "Another workspace" } as const;
+
+/**
+ * A task's one Move to, as the panel's row offers it: its sections and
+ * Remove from section, then Another workspace where the task may leave its
+ * workspace; where the member keeps no section, Move to workspace alone.
+ */
+function moveToEntries(task: TaskSummary, listing: TasksListing): LongPressGroup {
+  const section = sectionSubmenu(task, listing.placing);
+  const another = listing.doors.moveDoor(task);
+
+  if (section === undefined) return rowActions(moveActions(another));
+
+  const away: readonly RowAction[] =
+    another === undefined
+      ? []
+      : [
+          {
+            label: MOVE_TO_WORDS.ANOTHER_WORKSPACE,
+            symbol: GLYPH.MOVE,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: another,
+          },
+        ];
+
+  return [
+    { ...section, label: MOVE_TO_WORDS.MOVE_TO, actions: [...(section.actions ?? []), ...away] },
+  ];
+}
+
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
-  readonly menuActions: readonly RowAction[];
-  readonly menuGroups: readonly RowMenuGroup[];
+  readonly menu: readonly LongPressGroup[];
   readonly question: RowQuestion;
 };
 
 /**
- * A row's acts, as the panel's row menu offers them on a phone: behind its
- * trailing swipe Mark done, offered on a task not yet done, which a full
- * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
- * the task is not, which a full swipe runs. Its long press menu groups them
- * as the task page's ⋯ does (`taskMenu`), each group set apart by a divider:
- * the swipes' acts with Mark as read or unread, whichever the task is not;
- * then Task relation, which opens the Task relation sheet on a kind, and Move
- * to section, with Remove parent where it has one; then Rename, in the
- * system's name alert, and Copy link, which raises the share sheet; then
- * More, holding its repository, its version history and Move to workspace
- * where offered, and Open in browser; and Permanently delete alone, last,
- * which asks first. What asks first, Done or Canceled where it stops agents
- * and Permanently delete, asks by the row pressed (`asks`), as Mail stands
- * its question by the message.
- * Priority and assignee are set from the chips on the task's page
- * (`standingMenus`).
+ * A row's acts, as the panel's row offers them: behind its trailing swipe
+ * Mark done, offered on a task not yet done, which a full swipe runs, and
+ * Status; behind its leading swipe Pin or Unpin, whichever the task is not,
+ * which a full swipe runs. Its long press menu is the panel's right-click
+ * (`taskActionGroups`), in its groups and order, each set apart by a
+ * divider: Copy link and Open in browser; Rename, Version history where the
+ * workspace's descriptions stand on, and Mark as read or unread; Status,
+ * Priority and Assignee; Task relation, and Remove parent where it has one;
+ * Pin, Follow or Unfollow (dimmed for the assignee), and Move to; Change
+ * repository, or Choose a repository on a task with none; and Permanently
+ * delete alone, last. What asks first, Done or Canceled where it stops
+ * agents and Permanently delete, asks by the row pressed (`asks`), as Mail
+ * stands its question by the message.
  */
 function rowActs(
   task: TaskSummary,
@@ -561,80 +625,76 @@ function rowActs(
 ): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
+  const pin = {
+    label: pinned ? WORDS.UNPIN : WORDS.PIN,
+    symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
+    tone: ROW_ACTION_TONE.PIN,
+    onPress: () => listing.pin(task.id, !pinned),
+  };
+
   return {
     question: asks.question(task.id),
     trailingActions: settleSwipes(task, asks.setStatus),
-    leadingActions: [
-      {
-        label: pinned ? WORDS.UNPIN : WORDS.PIN,
-        symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
-        tone: ROW_ACTION_TONE.PIN,
-        onPress: () => listing.pin(task.id, !pinned),
-      },
-    ],
-    menuActions: [
-      {
-        label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-        symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => listing.markRead(task.id, !unread),
-      },
-    ],
-    menuGroups: [
-      {
-        submenus: [
-          relationSubmenu(task, openRelation),
-          ...present(sectionSubmenu(task, listing.placing)),
-        ],
-        actions: removeParentActs(task, listing.relations),
-      },
-      {
-        actions: [
-          {
-            label: WORDS.RENAME,
-            symbol: GLYPH.RENAME,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => askRename(task, listing.rename),
-          },
-          {
-            label: WORDS.COPY_LINK,
-            symbol: GLYPH.LINK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => copyTaskLink(task, listing.workspace),
-          },
-        ],
-      },
-      {
-        // Note that the acts a phone reaches for least wait one level down in More, its repository, version history, Move to workspace and Open in browser, so the menu fits an iPhone 18 Pro's window under the lifted preview and Permanently delete stands in it rather than below its fold.
-        submenus: [
-          {
-            ...WORDS.MORE,
-            choices: [],
-            submenus: present(repositorySubmenu(task, listing.placing)),
-            actions: [
-              ...rowActions(historyActions(task, listing.doors.history)),
-              ...rowActions(moveActions(listing.doors.moveDoor(task))),
-              {
-                label: VERB.OPEN_IN_BROWSER,
-                symbol: GLYPH.OPEN_EXTERNALLY,
-                tone: ROW_ACTION_TONE.NEUTRAL,
-                onPress: () =>
-                  openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
-              },
-            ],
-          },
-        ],
-      },
-      {
-        actions: [
-          {
-            label: WORDS.DELETE,
-            symbol: GLYPH.DELETE,
-            tone: ROW_ACTION_TONE.DESTRUCTIVE,
-            onPress: () => asks.askDelete(task),
-          },
-        ],
-      },
+    leadingActions: [pin],
+    menu: [
+      [
+        {
+          label: WORDS.COPY_LINK,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => copyTaskLink(task, listing.workspace),
+        },
+        {
+          label: VERB.OPEN_IN_BROWSER,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () =>
+            openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+        },
+      ],
+      [
+        {
+          label: WORDS.RENAME,
+          symbol: GLYPH.RENAME,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => askRename(task, listing.rename),
+        },
+        ...rowActions(historyActions(task, listing.doors.history)),
+        {
+          label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+          symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => listing.markRead(task.id, !unread),
+        },
+      ],
+      [
+        statusSubmenu(task, asks.setStatus),
+        {
+          label: WORDS.PRIORITY,
+          symbol: GLYPH.PRIORITY_BARS,
+          choices: priorityChoices(task, listing.setPriority),
+        },
+        {
+          label: WORDS.ASSIGNEE,
+          symbol: GLYPH.PERSON,
+          choices: assigneeChoices(task, listing.members, listing.pictureOf, listing.setAssignee),
+        },
+      ],
+      [relationSubmenu(task, openRelation), ...removeParentActs(task, listing.relations)],
+      [
+        { ...pin, tone: ROW_ACTION_TONE.NEUTRAL },
+        ...followActs(task, listing),
+        ...moveToEntries(task, listing),
+      ],
+      present(repositorySubmenu(task, listing.placing)),
+      [
+        {
+          label: WORDS.DELETE,
+          symbol: GLYPH.DELETE,
+          tone: ROW_ACTION_TONE.DESTRUCTIVE,
+          onPress: () => asks.askDelete(task),
+        },
+      ],
     ],
   };
 }
@@ -1441,41 +1501,58 @@ function standingMenus(
   photoOf: (userId: string) => string | undefined,
 ): StandingMenus {
   const { task } = overview;
-  const assigneeId = task.assignee?.userId;
 
   return {
     status: { label: WORDS.STATUS, choices: statusSubmenu(task, overview.setStatus).choices },
-    priority: {
-      label: WORDS.PRIORITY,
-      choices: TASK_PRIORITY_ORDER.map((priority) => ({
-        label: TASK_PRIORITY_WORDS[priority],
-        symbol: PRIORITY_MARK_SYMBOL[priority],
-        tone: PRIORITY_MARK_TONE[priority],
-        on: task.priority === priority,
-        onPress: () => overview.setPriority(task.id, priority),
-      })),
-    },
+    priority: { label: WORDS.PRIORITY, choices: priorityChoices(task, overview.setPriority) },
     assignee: {
       label: WORDS.ASSIGNEE,
-      // Note that No assignee leads, then the members, each with You or their email under their name, as the panel's assignee menu lists them (`task-standing.tsx`'s `assigneeRows`).
-      choices: [
-        {
-          label: NO_ASSIGNEE_WORDS,
-          symbol: GLYPH.UNASSIGNED,
-          on: assigneeId === undefined,
-          onPress: () => overview.setAssignee(task.id, null),
-        },
-        ...members.map((member) => ({
-          label: member.name,
-          detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
-          symbol: GLYPH.PERSON,
-          photo: photoOf(member.userId),
-          on: member.userId === assigneeId,
-          onPress: () => overview.setAssignee(task.id, member),
-        })),
-      ],
+      choices: assigneeChoices(task, members, photoOf, overview.setAssignee),
     },
   };
+}
+
+/** A task's priorities as its Priority menu offers them, the most pressing first, the one it holds checked. */
+function priorityChoices(task: TaskSummary, setPriority: TaskWrites["setPriority"]) {
+  return TASK_PRIORITY_ORDER.map((priority) => ({
+    label: TASK_PRIORITY_WORDS[priority],
+    symbol: PRIORITY_MARK_SYMBOL[priority],
+    tone: PRIORITY_MARK_TONE[priority],
+    on: task.priority === priority,
+    onPress: () => setPriority(task.id, priority),
+  }));
+}
+
+/**
+ * Who a task may be assigned to, as its Assignee menu offers them: No
+ * assignee first, then the members, each with You or their email under
+ * their name, as the panel's assignee menu lists them
+ * (`task-standing.tsx`'s `assigneeRows`), the one on it checked.
+ */
+function assigneeChoices(
+  task: TaskSummary,
+  members: readonly ListedMember[],
+  photoOf: (userId: string) => string | undefined,
+  setAssignee: TaskWrites["setAssignee"],
+) {
+  const assigneeId = task.assignee?.userId;
+
+  return [
+    {
+      label: NO_ASSIGNEE_WORDS,
+      symbol: GLYPH.UNASSIGNED,
+      on: assigneeId === undefined,
+      onPress: () => setAssignee(task.id, null),
+    },
+    ...members.map((member) => ({
+      label: member.name,
+      detail: member.you ? FOLLOWING_WORDS.YOU : member.email,
+      symbol: GLYPH.PERSON,
+      photo: photoOf(member.userId),
+      on: member.userId === assigneeId,
+      onPress: () => setAssignee(task.id, member),
+    })),
+  ];
 }
 
 /** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
