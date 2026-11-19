@@ -81,7 +81,7 @@ import {
   StatusQuestionAsk,
   TaskAgentRow,
   TaskRows,
-  useAgentArchiveAsk,
+  useAgentRowAsk,
   useTaskRowDoors,
 } from "./task-screens.js";
 
@@ -291,7 +291,7 @@ function PersonPage({
   const listRead = listStatus === TASKS_READ.READY;
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const remind = useRemind();
-  const archiving = useAgentArchiveAsk();
+  const asking = useAgentRowAsk();
 
   // What a press on each row opens, by the row's id: a task's page, a thread, or an agent's page, each pushed on this tab.
   const routes = useMemo(
@@ -399,7 +399,7 @@ function PersonPage({
         line={line(each)}
         task={tasksById.get(each.agent.taskId)}
         named
-        archiving={archiving}
+        asking={asking}
       />
     ));
 

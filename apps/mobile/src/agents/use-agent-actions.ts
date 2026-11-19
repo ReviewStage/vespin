@@ -23,6 +23,7 @@ import {
   ARCHIVE_NOT_READY,
   DELETE_FAILED,
   PIN_FAILED,
+  RENAME_FAILED,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { agentStillWriting } from "@repo/features/task-agents-model";
@@ -45,7 +46,7 @@ import { useFollowedAgent, useReadAgent } from "./use-agent.js";
 
 /** Why each act did not take, said over the composer. */
 const ACT_FAILED = {
-  RENAME: "The agent could not be renamed.",
+  RENAME: RENAME_FAILED,
   ARCHIVE: ARCHIVE_FAILED,
   COPY: "The link could not be copied.",
 } as const;
