@@ -84,8 +84,14 @@ builds a control of its own.
   file. A long press on a picture, a recording, a file's chip, or a message
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
-  the picture viewer's share button holding the same, and Copy message on a
-  message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
+  the picture viewer's share button holding the same, and on a message's
+  words Copy message, Copy link where it has an address, Select text (the
+  system's text view in a sheet, held by `KeepingProvider`) and Share, a
+  sent line's menu headed by its time (`MessageMenu`), as Messages and
+  ChatGPT head one; an agent's finished turn ends on a standing row of the
+  panel's glyphs, Copy, Copy link and Share, with a ⋯ for what else it
+  offers (`TurnActs`), since a phone has no hover to show the panel's; the
+  app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with

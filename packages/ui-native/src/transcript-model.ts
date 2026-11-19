@@ -253,7 +253,12 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly running: boolean;
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.MEDIA; readonly media: readonly ShownMedia[] }
-  | { readonly kind: typeof TRANSCRIPT_ITEM.FOOT; readonly words: string }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.FOOT;
+      readonly words: string;
+      /** The turn's words, its stretches of words joined, which its row's Copy and Share take, as the panel's turn foot copies them. */
+      readonly copy: string;
+    }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.WORKING;
       readonly words: string;
@@ -632,6 +637,14 @@ export function transcriptOriginOf(input: {
     from: from.filter((part) => part !== undefined),
     body: run?.body,
   };
+}
+
+/** A turn's words as its foot copies them: each stretch of its words, in order, a blank line between. */
+function turnWords(items: readonly TranscriptItem[]): string {
+  return items
+    .flatMap((item) => (item.kind === TRANSCRIPT_ITEM.WORDS ? [item.words.trim()] : []))
+    .filter((words) => words !== "")
+    .join("\n\n");
 }
 
 /** A line's place in the list: its own row, in the turn it stands in. */
@@ -1053,6 +1066,7 @@ export function transcriptItems(
               depth: 0,
               kind: TRANSCRIPT_ITEM.FOOT,
               words: workedForText(startedAt, finishedAt, reading.now),
+              copy: turnWords(turn),
             },
           ];
 

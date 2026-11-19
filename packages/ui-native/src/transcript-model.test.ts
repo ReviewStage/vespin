@@ -452,6 +452,36 @@ describe("transcriptItems", () => {
     expect(turn(false)).toEqual([TRANSCRIPT_ITEM.WORDS]);
     expect(turn(true)).toEqual(["Written reply", TRANSCRIPT_ITEM.FOOT]);
   });
+  it("hands a finished turn's foot the turn's words to copy, each stretch of words and none of its calls", () => {
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            { type: "text", text: "Running the tests." },
+            {
+              type: "tool-bash",
+              toolCallId: "run",
+              state: "output-available",
+              input: { command: "pnpm test" },
+              output: { stdout: "ok" },
+            },
+            { type: "text", text: "They pass." },
+          ],
+          startedAt: 0,
+          finishedAt: 1,
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    const foot = items.find((item) => item.kind === TRANSCRIPT_ITEM.FOOT);
+
+    expect(foot?.kind === TRANSCRIPT_ITEM.FOOT ? foot.copy : undefined).toBe(
+      "Running the tests.\n\nThey pass.",
+    );
+  });
 });
 
 describe("withWaitingLine", () => {

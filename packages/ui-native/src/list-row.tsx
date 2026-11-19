@@ -7,6 +7,7 @@ import {
   HStack,
   Image,
   Menu,
+  Section,
   Spacer,
   SwipeActions,
   Text,
@@ -533,10 +534,13 @@ export type LongPressGroup = readonly RowSwipe[];
  */
 export function LongPressMenu({
   groups,
+  title,
   preview,
   children,
 }: {
   readonly groups: readonly LongPressGroup[];
+  /** What heads the menu, such as when a message was sent, as Messages heads a held message's menu by its time; none where it says nothing over its acts. */
+  readonly title?: string | undefined;
   readonly preview?: ReactElement | undefined;
   readonly children: ReactElement;
 }) {
@@ -545,16 +549,18 @@ export function LongPressMenu({
 
   if (filled.length === 0 && preview === undefined) return children;
 
+  const items = filled.map((group, at) => (
+    // Note that a group is keyed by its first item's words, which a menu holds once.
+    <Fragment key={group[0]?.label ?? at}>
+      {at === 0 ? null : <Divider />}
+      {group.map((item) => swipeMenuButton(item, colors))}
+    </Fragment>
+  ));
+
   return (
     <ContextMenu>
       <ContextMenu.Items>
-        {filled.map((group, at) => (
-          // Note that a group is keyed by its first item's words, which a menu holds once.
-          <Fragment key={group[0]?.label ?? at}>
-            {at === 0 ? null : <Divider />}
-            {group.map((item) => swipeMenuButton(item, colors))}
-          </Fragment>
-        ))}
+        {title === undefined ? items : <Section title={title}>{items}</Section>}
       </ContextMenu.Items>
       <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
