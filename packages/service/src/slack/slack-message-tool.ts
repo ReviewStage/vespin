@@ -327,7 +327,7 @@ export function runSendSlackMessage(
       if (Result.isFailure(posted)) return agentToolRejected(posted.failure);
       const { message, threadTs, keptFor } = posted.success;
       const thread = threadTs ?? message.ts;
-      yield* reach.bot.upload(message.channel, thread, files.success);
+      // Note that the thread is kept before its files are sent, so a reply while they upload reaches the agent.
       yield* recordSlackAgentThread({
         organizationId: agent.organizationId,
         channelId: message.channel,
@@ -336,6 +336,7 @@ export function runSendSlackMessage(
         userId: keptFor,
         origin: SLACK_THREAD_ORIGIN.AGENT_POST,
       });
+      yield* reach.bot.upload(message.channel, thread, files.success);
       const link = yield* reach.bot.permalink(message.channel, message.ts);
 
       // Note that the answer names where it went, so the agent can reply or react to it later.

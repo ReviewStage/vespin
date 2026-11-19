@@ -408,7 +408,10 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
   const { item, outcome } = answered.value;
 
   const message = (item.thread ?? []).find((each) => each.id === choice.ask);
-  const status = message?.ask?.status;
+
+  // Note that an ask the read thread no longer holds leaves its DM as it stands, because its words are not at hand to draw again.
+  if (message === undefined) return;
+  const status = message.ask?.status;
 
   // A refused answer to an ask still open leaves the DM's buttons standing.
   if (outcome === INBOX_ASK_ANSWER.REFUSED && status === INBOX_ASK_STATUS.OPEN) return;
@@ -421,7 +424,7 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
   yield* rewriteThreadDm(
     dm,
     choice.item,
-    { id: choice.ask, text: message?.text ?? "", ask: message?.ask },
+    { id: choice.ask, text: message.text, ask: message.ask },
     said,
   );
 });
