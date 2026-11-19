@@ -33,7 +33,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
-import { IntegrationMark } from "./marks.js";
+import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
@@ -212,6 +212,21 @@ function bubbleWordsWidth(column: number): number {
   return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING * 2;
 }
 
+/**
+ * The working mark among the transcript's React Native views, in a host of
+ * its own the mark's size, as the panel stands its mark in a running call's
+ * row; hidden from VoiceOver, since its row says it is working.
+ */
+function TranscriptWorkingMark() {
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <InlineHost matchContents>
+        <WorkingMark />
+      </InlineHost>
+    </View>
+  );
+}
+
 /** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well; heard in its row's value rather than apart. */
 function StandingMark({
   running,
@@ -223,8 +238,7 @@ function StandingMark({
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  if (running)
-    return <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />;
+  if (running) return <TranscriptWorkingMark />;
 
   if (!failed) return null;
 
@@ -772,9 +786,7 @@ function TranscriptRow({
       // Note that an agent held for an answer says so in the attention ink with no spinner, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
-          {item.waiting === true ? null : (
-            <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />
-          )}
+          {item.waiting === true ? null : <TranscriptWorkingMark />}
           <Text
             style={{
               fontSize: ROLE_SIZE.ROW_LINE,

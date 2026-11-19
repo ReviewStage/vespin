@@ -60,7 +60,10 @@ builds a control of its own.
   `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
   for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
-  `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
+  `WorkingMark`, the panel's own two pixels chasing round a 3×3 grid on the
+  one 200 ms beat every mark shares (`working-beat.ts`), held mid-lap where
+  the reader reduces motion, wherever an agent is at work, the system's
+  spinner kept for a read in flight, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of the
   system's Liquid Glass (`BAR_GLASS`, SwiftUI's `glassEffect`), `GlassDock` the screen that pins one
