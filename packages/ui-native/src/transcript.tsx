@@ -764,7 +764,8 @@ function TranscriptRow({
             <MessageMenu
               words={item.words}
               at={item.at}
-              link={drawing.messageLink?.(item.place.message)}
+              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
+              link={drawing.messageLink?.(item.place.row)}
               width={rowWidth(drawing.column)}
             >
               <View style={styles.saidHeld}>
