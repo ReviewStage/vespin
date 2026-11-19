@@ -234,11 +234,14 @@ export type NativeAgentRuntime = (typeof NATIVE_AGENT_RUNTIMES)[number];
 
 /**
  * What kind of agent a row is: a coder, which every agent started on work is;
- * or a pilot, which a row from before Pilot was removed may still hold, and
- * which every reader treats as a coder. Nothing writes a pilot now.
+ * a manager, which works across a workspace's tasks rather than on one; or a
+ * pilot, which a row from before Pilot was removed may still hold, and which
+ * every reader treats as a coder. Nothing writes a pilot now. The kind never
+ * leaves the service but in its counted events.
  */
 export const AGENT_KIND = {
   CODER: "coder",
+  MANAGER: "manager",
   PILOT: "pilot",
 } as const;
 
