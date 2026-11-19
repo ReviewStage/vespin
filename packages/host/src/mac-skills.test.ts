@@ -11,15 +11,16 @@ import { readMacSkills } from "./mac-skills.js";
  * The Mac's skills read from a home folder the test lays out in a temporary
  * directory: a skill offered with its own files, a folder linked from a
  * second agent's skills folder offered once, from where it really is, an
- * agent's own skill passed over, an invalid one left out with why, and only
- * the folders asked read. Synthetic skills throughout.
+ * agent's own skill passed over, a file linked from outside a skill's folder
+ * left out of it, an invalid one left out with why, and only the folders
+ * asked read. Synthetic skills throughout.
  */
 
 const skillFile = (name: string, description: string) =>
   `---\nname: ${name}\ndescription: ${description}\n---\n\nDo the thing.\n`;
 
 it.effect(
-  "a home's skills are offered with their files, a linked folder once and an agent's own never, and an invalid one is left out with why",
+  "a home's skills are offered with their own files, a linked folder once and an agent's own never, and an invalid one is left out with why",
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -38,6 +39,11 @@ it.effect(
       yield* write(".agents/skills/release-notes/.DS_Store", "finder");
       yield* write(".agents/skills/release-notes/node_modules/dep/index.js", "module");
       yield* write(".claude/skills/flaky-tests/SKILL.md", skillFile("flaky-tests", "Reruns."));
+      yield* write(".netrc", "machine example.test");
+      yield* fs.symlink(
+        path.join(home, ".netrc"),
+        path.join(home, ".claude/skills/flaky-tests/netrc"),
+      );
       yield* write(".claude/skills/no-description/SKILL.md", "---\nname: no-description\n---\n");
       yield* write(".claude/skills/not-a-skill/README.md", "No SKILL.md here.");
       yield* write(".codex/skills/.system/plan/SKILL.md", skillFile("plan", "Codex's own."));
