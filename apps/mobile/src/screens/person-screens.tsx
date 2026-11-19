@@ -22,13 +22,14 @@ import { TASKS_READ } from "@repo/features/tasks-view";
 import { readingWords } from "@repo/features/words";
 import { WORKSPACE_ROLE_WORDS } from "@repo/features/workspace-role";
 import {
+  type FormerMember,
   WORKSPACE_ROLE,
   type Workspace,
   type WorkspaceMember,
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectAccount } from "@repo/host/app-state-reads";
+import { INBOX_FEED, selectAccount, selectInboxFeed } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   BAR_TITLE,
@@ -88,6 +89,9 @@ import {
 function selectListStatus(state: AppStateSnapshot) {
   return state.tasks.listStatus;
 }
+
+/** Who left a workspace whose members read names nobody. */
+const NOBODY_LEFT: readonly FormerMember[] = [];
 
 /** The words the page's ⋯ copies say where the copy did not go. */
 const COPY_FAILED = "The copy did not go.";
@@ -219,8 +223,10 @@ function PersonPage({
   const readerId = account === undefined ? undefined : signedInAccountId(account);
   const you = userId === readerId;
   const pictureOf = useMemberPictures();
-  const members = held?.members?.rows?.members;
-  const former = held?.members?.rows?.former;
+  const rows = held?.members?.rows;
+  const members = rows?.members;
+  // Note that a read naming nobody who left omits them, so who left stands as nobody once the members are read, as the panel's directory reads it.
+  const former = rows === undefined ? undefined : (rows.former ?? NOBODY_LEFT);
   const member = members?.find((each) => each.userId === userId);
   const left = former?.find((each) => each.userId === userId);
 
@@ -246,6 +252,14 @@ function PersonPage({
   // Every open Inbox thread of the workspace waiting on them, on the reader's own page only once it waits on them now, as the panel's page lists them.
   const inboxShown = useInboxShown();
   const groups = useInboxGroupsIn(workspaceId);
+
+  const { data: feed = INBOX_FEED.READING } = useQuery({
+    ...appStateQuery,
+    select: selectInboxFeed,
+  });
+
+  // Note that an Inbox turned off names nothing, so the page waits only on one shown.
+  const inboxRead = !inboxShown || feed !== INBOX_FEED.READING;
 
   const waiting = useMemo(
     () =>
@@ -366,8 +380,15 @@ function PersonPage({
     );
   }
 
-  // Note that the page is said to hold nothing of theirs only once the task list has answered, since it may yet name something.
-  const nothing = listRead && personPageEmpty(page) && waiting.length === 0;
+  // Note that the page is said to hold nothing of theirs only once the task list and the Inbox have answered, since either may yet name something; until then an empty page says it reads.
+  const empty = personPageEmpty(page) && waiting.length === 0;
+
+  const footer = !empty
+    ? undefined
+    : listRead && inboxRead
+      ? personWords(PERSON_SECTION_WORDS.NOTHING, you)
+      : `${readingWords(you ? "your tasks" : "their tasks")}…`;
+
   const assigned = page.assigned.slice(0, PERSON_TASKS_SHOWN);
   const created = page.created.slice(0, PERSON_TASKS_SHOWN);
 
@@ -393,9 +414,7 @@ function PersonPage({
             await Promise.all([refresh(), refreshTasks()]);
           }}
         >
-          <ListSection
-            footer={nothing ? personWords(PERSON_SECTION_WORDS.NOTHING, you) : undefined}
-          >
+          <ListSection footer={footer}>
             <PersonHead
               id={userId}
               name={name}
