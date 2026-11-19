@@ -499,7 +499,7 @@ function SidebarTaskMarks({
   task,
   disabled,
 }: {
-  tasks: TasksControl;
+  tasks: Pick<TasksControl, "typedNamesNow">;
   task: TaskSummary;
   disabled: boolean;
 }): React.JSX.Element {
@@ -1150,7 +1150,7 @@ function SidebarTaskCard({
   task,
   now,
 }: {
-  tasks: TasksControl;
+  tasks: SidebarRowTab;
   task: TaskSummary;
   now: number;
 }): React.JSX.Element {
@@ -1194,7 +1194,33 @@ function SidebarTaskCard({
  *
  */
 export function SidebarTask({ tasks, ...rest }: SidebarTaskProps): React.JSX.Element {
-  return <SidebarTaskRow tasks={tasks} {...useSteadyDoors(rest)} />;
+  const tab = useSteadyDoors(sidebarRowTab(tasks));
+  const opened = openedAs(openedTaskOf(tasks), rest.task.id);
+
+  return <SidebarTaskRow {...useSteadyDoors(rest)} tasks={tab} opened={opened} />;
+}
+
+/**
+ * What a sidebar row and its card read of the tab (`TasksControl`). Note
+ * that the row is handed this rather than the tab, because the tab is made
+ * afresh on every delivery, an agent's state or a Mac's moving it, and a
+ * row handed it whole drew again, every row of the sidebar, for each.
+ */
+interface SidebarRowTab
+  extends TaskRowTab,
+    Pick<TasksControl, "onPointTask" | "onShowAgent" | "onSelect" | "typedNames"> {
+  readonly agents: Pick<TasksControl["agents"], "models">;
+}
+
+function sidebarRowTab(tasks: TasksControl): SidebarRowTab {
+  return {
+    ...taskRowTab(tasks),
+    onPointTask: tasks.onPointTask,
+    onShowAgent: tasks.onShowAgent,
+    onSelect: tasks.onSelect,
+    typedNames: tasks.typedNames,
+    agents: { models: tasks.agents.models },
+  };
 }
 
 /** What a sidebar task row is handed (`SidebarTask`). */
@@ -1237,6 +1263,7 @@ interface SidebarTaskProps {
  */
 const SidebarTaskRow = memo(function SidebarTaskRow({
   tasks,
+  opened,
   task,
   current,
   open = current,
@@ -1251,7 +1278,11 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   fold,
   childCount,
   onOpen,
-}: SidebarTaskProps): React.JSX.Element {
+}: Omit<SidebarTaskProps, "tasks"> & {
+  tasks: SidebarRowTab;
+  /** The open task where this row is it (`openedTaskOf`); none on every other row, so a save of the open document draws its row alone. */
+  opened: OpenedTask | undefined;
+}): React.JSX.Element {
   const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const pins = usePinWrites(tasks.typedNamesNow);
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
@@ -1289,12 +1320,12 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     statusDrawn ? () => setStatusAsks((asks) => asks + 1) : undefined,
   );
 
-  const actions = useTaskMenuItems(taskRowTab(tasks), task.id, task.name, {
+  const actions = useTaskMenuItems(tasks, task.id, task.name, {
     rename: rename.begin,
     drawn: true,
     unread,
     row: rowSubject,
-    opened: openedTaskOf(tasks),
+    opened,
   });
 
   const card = useMemo(
