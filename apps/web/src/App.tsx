@@ -85,7 +85,7 @@ const MORE_FEATURES: readonly LandingMoreItem[] = [
     id: "slack",
     icon: <ProviderMark provider={MARK_PROVIDER.SLACK} />,
     title: "Slack",
-    words: "Start agents and answer your Inbox without leaving Slack.",
+    words: `Mention @${PRODUCT_NAME} to start an agent, and trade messages and files with it in the thread.`,
   },
   {
     id: "automations",
