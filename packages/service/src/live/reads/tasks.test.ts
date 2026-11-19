@@ -52,6 +52,7 @@ import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_FAILURE,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentSummary,
@@ -1022,7 +1023,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "an agent on no task reads with its sandbox for a build that reads one, and stays off an older build's list",
+    "a Manager on no task reads as a Manager with its sandbox for a build that reads one, and stays off an older build's list",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -1039,6 +1040,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
             descriptionSnapshot: null,
             prompt: null,
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
           }),
         );
 
@@ -1052,8 +1054,20 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const carried = yield* liveRowsOf(owner, EVERY_TASK, TASKLESS_LIVE.CARRIED);
 
         assert.deepEqual(
-          taskAgentsOfLiveRows(carried, NOW).map((each) => [each.id, each.taskId, each.sandbox]),
-          [[agent.id, null, { state: SANDBOX_STATE.BOOTING, stateAt: NOW, runsUntil: null }]],
+          taskAgentsOfLiveRows(carried, NOW).map((each) => [
+            each.id,
+            each.taskId,
+            each.kind,
+            each.sandbox,
+          ]),
+          [
+            [
+              agent.id,
+              null,
+              AGENT_KIND.MANAGER,
+              { state: SANDBOX_STATE.BOOTING, stateAt: NOW, runsUntil: null },
+            ],
+          ],
         );
         assert.deepEqual((yield* liveRowsOf(owner)).agents, []);
       }),

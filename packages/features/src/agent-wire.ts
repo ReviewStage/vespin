@@ -1131,8 +1131,6 @@ export const AGENT_WORKSPACE_QUERY = {
   WORDS: "words",
   ARCHIVED: AGENT_LIST_QUERY.ARCHIVED,
   OFFSET: "offset",
-  /** Only the agents of one kind (`AGENT_KIND`), as the sidebar's Managers asks for its own. */
-  KIND: "kind",
 } as const;
 
 /** What the list's `archived` query may say. */

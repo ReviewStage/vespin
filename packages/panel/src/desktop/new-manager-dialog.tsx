@@ -10,8 +10,8 @@
  * Runs on chip on the member's last pick (`runs-on.tsx`); and its model and effort, the
  * agent box's model chip on the account's default until one is picked. It
  * asks no charter: the Manager introduces itself on its first turn. Create
- * makes it in the sidebar's workspace (`AGENTS_CREATE_MANAGER`), reads the
- * Managers list again, and opens the new Manager's page; a refusal stands
+ * makes it in the sidebar's workspace (`AGENTS_CREATE_MANAGER`), which the
+ * live task list then carries to the Managers list, and opens the new Manager's page; a refusal stands
  * in the card saying why, with what was picked kept for another try, under
  * the same key until a field changes or the place it runs on moves, when
  * the request takes a new one.
@@ -43,7 +43,7 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { askAct } from "../act.js";
@@ -59,7 +59,6 @@ import {
   useNewTaskRunsOn,
 } from "../tasks/runs-on.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { workspaceManagersQueryKey } from "../tasks/workspace-managers.js";
 import { useFormDialog } from "./use-form-dialog.js";
 
 /** The card's title, and what its + is named. */
@@ -114,7 +113,6 @@ export function useNewManagerDialog({
 }): NewManagerAsk {
   const { newTask } = tasks;
   const workspaceId = tasks.workspace?.id;
-  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const chooser = newTask.repositoriesIn(workspaceId);
   const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
@@ -173,7 +171,6 @@ export function useNewManagerDialog({
       });
 
       if (!("agent" in answer)) return refused(createFailureWords(answer.failure));
-      void queryClient.invalidateQueries({ queryKey: workspaceManagersQueryKey(workspaceId) });
       onOpen(answer.agent.id);
 
       return { status: ACTION_RESULT_STATUS.ACCEPTED };

@@ -1,101 +1,75 @@
 /**
- * workspace-managers.ts -- the workspace's Managers, as the sidebar's Managers lists them: read from the service, newest started first, and read again as they change.
+ * workspace-managers.ts -- the workspace's Managers, as the sidebar's Managers lists them: drawn from the window's live task list, newest started first.
  *
- * A Manager is an agent of kind `manager` on no task, which the window's
- * live task list never carries, so the list is the service's list of the
- * workspace's agents narrowed to Managers (`AGENTS_WORKSPACE_LIST`), its
- * archived ones left out. It is no live read: it is read as the sidebar
- * first draws it, again every half minute while it stands and as the window
- * comes back into focus, and at once after a write from one of its rows (a
- * rename, an archive asked or not, a delete) settles, so a Manager archived elsewhere
- * leaves it at the next read at the latest.
+ * A Manager is an agent of kind `manager` on no task, which the live task
+ * list carries beside the tasks' agents (`tasklessLiveParam`), so the list
+ * is the window's listed agents narrowed to the workspace's unarchived
+ * Managers. It follows the live read, so a Manager made, renamed, archived,
+ * or at work anywhere moves here as that read hears it, with no read of its
+ * own to ask again.
  */
 
-import { AGENT_KIND, type AgentSummary } from "@repo/features/agent-wire";
-import { ACT_KIND } from "@repo/host/acts";
-import { queryOptions, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Duration } from "effect";
+import { AGENT_KIND, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { askAct } from "../act.js";
-import { QUERY_ROOT } from "../query-keys.js";
 import { type AgentsControl, readAgentById } from "./use-agents.js";
 
-/** How often the list is read again while it stands. */
-const READ_EVERY = Duration.seconds(30);
-
-/** The workspace's Managers as the sidebar reads them: the Managers, none before the first answer, whether the read failed, and its retry. */
+/** The workspace's Managers as the sidebar draws them, and the agents control a Manager's row acts through. */
 interface WorkspaceManagers {
+  /** The Managers; none while the live list carries no agents yet. */
   readonly managers: readonly AgentSummary[] | undefined;
-  readonly failed: boolean;
-  readonly onRetry: () => void;
-  /** The agents control a Manager's row acts through, each write it settles reading the list again. */
   readonly agents: AgentsControl;
 }
 
-/** The key the workspace's Managers are read under, which a write from a row, or a Manager made, reads again. */
-export function workspaceManagersQueryKey(workspaceId: string | undefined) {
-  return [QUERY_ROOT.WORKSPACE_MANAGERS, workspaceId] as const;
+/** Newest started first, and by id among those started at one instant. */
+function newestFirst(a: ListedAgent, b: ListedAgent): number {
+  if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
+
+  return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
-/** The workspace's unarchived Managers, newest started first; none asked while no workspace is named. */
-function workspaceManagersQueryOptions(workspaceId: string | undefined) {
-  return queryOptions({
-    queryKey: workspaceManagersQueryKey(workspaceId),
-    queryFn:
-      workspaceId === undefined
-        ? skipToken
-        : () => askAct(ACT_KIND.AGENTS_WORKSPACE_LIST, { workspaceId, kind: AGENT_KIND.MANAGER }),
-    refetchInterval: Duration.toMillis(READ_EVERY),
-    refetchOnWindowFocus: true,
-    retry: false,
-  });
-}
-
-/** A write's mutation, its settling reading the list again as well as doing what it did. */
-function refreshing<Options extends { readonly onSettled?: unknown }>(
-  options: Options,
-  refresh: () => void,
-): Options {
-  return { ...options, onSettled: refresh };
+/** The workspace's unarchived Managers of `listed`, newest started first. */
+function managersOf(listed: readonly ListedAgent[], workspaceId: string): readonly ListedAgent[] {
+  return listed
+    .filter(
+      (agent) =>
+        agent.kind === AGENT_KIND.MANAGER &&
+        agent.taskId === null &&
+        agent.workspaceId === workspaceId &&
+        agent.archivedAt === undefined,
+    )
+    .toSorted(newestFirst);
 }
 
 /**
- * The workspace's Managers while `listed` (the Managers experiment on for
- * it), read through `control`, the window's agents control, whose writes
- * from a Manager's row read the list again once they settle.
+ * The Managers of `workspaceId` while `listed` (the Managers experiment on
+ * for it), from `liveAgents`, the window's live task list's agents, each
+ * row acting through `control`, the window's agents control.
  */
 export function useWorkspaceManagers(
   workspaceId: string | undefined,
   listed: boolean,
+  liveAgents: readonly ListedAgent[] | undefined,
   control: AgentsControl,
 ): WorkspaceManagers {
   const queryClient = useQueryClient();
-  const read = useQuery(workspaceManagersQueryOptions(listed ? workspaceId : undefined));
-  const { data, refetch } = read;
 
-  const agents = useMemo((): AgentsControl => {
-    const refresh = () =>
-      void queryClient.invalidateQueries({ queryKey: workspaceManagersQueryKey(workspaceId) });
+  const managers = useMemo(
+    () =>
+      !listed || workspaceId === undefined || liveAgents === undefined
+        ? undefined
+        : managersOf(liveAgents, workspaceId),
+    [listed, workspaceId, liveAgents],
+  );
 
-    // Note that a Manager is read again by its own id before it is archived, because the window's control reads only the open task's agents.
-    return {
+  // Note that a Manager is read again by its own id before it is archived, because the window's control reads only the open task's agents.
+  const agents = useMemo(
+    (): AgentsControl => ({
       ...control,
       readAgent: (agentId: string) => readAgentById(queryClient, agentId),
-      // Note that an archive asked nothing goes through `onArchive` rather than the mutation, so it reads the list again too.
-      onArchive: (...asked) => control.onArchive(...asked).finally(refresh),
-      rename: { ...control.rename, options: refreshing(control.rename.options, refresh) },
-      archiveAgent: refreshing(control.archiveAgent, refresh),
-      archiveAgents: refreshing(control.archiveAgents, refresh),
-      deleteAgent: refreshing(control.deleteAgent, refresh),
-    };
-  }, [control, queryClient, workspaceId]);
+    }),
+    [control, queryClient],
+  );
 
-  const answered = data === undefined || "failure" in data ? undefined : data.agents;
-
-  return {
-    managers: answered,
-    failed: read.isError || (data !== undefined && "failure" in data),
-    onRetry: () => void refetch(),
-    agents,
-  };
+  return { managers, agents };
 }
