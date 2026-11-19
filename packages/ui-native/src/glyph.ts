@@ -325,8 +325,8 @@ export function runsOnGlyph(place: {
  * glyph its member chose from the picker's suggestions; the folder, the
  * picker's first, for a glyph the app's catalog doesn't hold or no icon,
  * since a sidebar row always leads with a glyph, and for an emoji, which
- * `sectionEmoji` draws in the glyph's place. Note that a glyph's color is
- * left to the panel, which alone draws it.
+ * `sectionEmoji` draws in the glyph's place. Its chosen color is
+ * `sectionGlyphColor`'s, which the header draws it in.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;

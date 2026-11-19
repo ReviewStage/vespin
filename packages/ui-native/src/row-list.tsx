@@ -44,6 +44,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { searchTokens } from "@repo/features/search-tokens";
+import type { TaskSectionIconColor } from "@repo/features/task-section-wire";
 import { Predicate } from "effect";
 import {
   createContext,
@@ -55,6 +56,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useColorScheme } from "react-native";
 import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
@@ -69,6 +71,7 @@ import {
   RowSearchedContext,
   RowSelectedContext,
 } from "./row-open.js";
+import { sectionInk } from "./section-ink.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -409,6 +412,8 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
   readonly glyph?: Glyph | undefined;
+  /** The color a section's member chose its glyph in, which it wears as the panel's sidebar draws it; the muted ink where none. */
+  readonly glyphColor?: TaskSectionIconColor | undefined;
   /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
   readonly emoji?: string | undefined;
   /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
@@ -484,6 +489,7 @@ function GroupHeader({
   progress,
   mark,
   glyph,
+  glyphColor,
   emoji,
   repository,
   folded,
@@ -493,11 +499,13 @@ function GroupHeader({
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
   readonly glyph: Glyph | undefined;
+  readonly glyphColor: TaskSectionIconColor | undefined;
   readonly emoji: string | undefined;
   readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
@@ -531,7 +539,7 @@ function GroupHeader({
         <Image
           {...glyphImage(glyph)}
           size={glyphSize}
-          color={colors.TEXT_MUTED}
+          color={glyphColor === undefined ? colors.TEXT_MUTED : sectionInk(glyphColor, dark)}
           modifiers={[accessibilityHidden()]}
         />
       )}
@@ -699,6 +707,7 @@ export function ListSection({
   progress,
   mark,
   glyph,
+  glyphColor,
   emoji,
   repository,
   foldable = false,
@@ -733,6 +742,7 @@ export function ListSection({
         progress={progress}
         mark={mark}
         glyph={glyph}
+        glyphColor={glyphColor}
         emoji={emoji}
         repository={repository}
         folded={foldable ? folded : undefined}
