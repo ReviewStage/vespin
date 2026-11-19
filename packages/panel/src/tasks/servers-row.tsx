@@ -129,7 +129,8 @@ export function OwnServersRow({
   return (
     <SettingsRow
       label={<ReplayUnmask>{MCP_SERVER_LABEL.many}</ReplayUnmask>}
-      description={note === undefined ? undefined : <ReplayUnmask>{note}</ReplayUnmask>}
+      // Note that the words stay masked in a session replay, because they name the accounts switched off, which a member labels.
+      description={note}
     >
       {() => (
         <AgentServersButton

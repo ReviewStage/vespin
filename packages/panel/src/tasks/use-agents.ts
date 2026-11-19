@@ -1621,7 +1621,7 @@ export function useAgents(input: {
     words: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
-    disabledServers: readonly string[] = [],
+    disabledServers?: readonly string[] | undefined,
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {

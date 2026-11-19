@@ -51,7 +51,12 @@ export function NewAgentServersRow({ view }: { view: SettingsRowsInput }): React
   return (
     <OwnServersRow
       disabled={newAgentServersOffFrom(latest)}
-      onSwitch={(off) => write.run(newAgentServersOffJsonOf(off))}
+      onSwitch={(off) => {
+        const list = newAgentServersOffJsonOf(off);
+
+        // Note that a list past an agent's own bounds is never written, so no new agent starts on one its answer would refuse.
+        if (list !== undefined) write.run(list);
+      }}
       readFailure={FAILURE_SURFACE.INTEGRATIONS_READ}
     />
   );

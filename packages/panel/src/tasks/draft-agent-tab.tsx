@@ -154,6 +154,10 @@ export function DraftAgentTab({
   const listed = [...(control.agents ?? []), ...(control.archived ?? [])];
   const source = fork === undefined ? undefined : listed.find((agent) => agent.id === fork.agentId);
 
+  // A fork or a continue its + menu never switched runs on its source's servers, as the service starts it; any other draft, on the account's choice for new agents.
+  const unswitchedServers =
+    fork === undefined ? newAgentServersOff : (source?.disabledServers ?? NONE_OFF);
+
   const suggester =
     suggestion === undefined ? undefined : listed.find((agent) => agent.id === suggestion.agentId);
 
@@ -336,7 +340,7 @@ export function DraftAgentTab({
           usage={undefined}
           mode={mode}
           servers={{
-            disabled: draft.disabledServers ?? newAgentServersOff,
+            disabled: draft.disabledServers ?? unswitchedServers,
             onSwitch: (next) => control.onDraftChange({ disabledServers: next }),
             onOpenSettings: control.onOpenIntegrations,
           }}
