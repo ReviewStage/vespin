@@ -2227,25 +2227,26 @@ function OverviewAgents({
         ],
       }}
     >
-      {tree.map(({ entry, depth, started, folded }) => (
-        <TaskAgentRow
-          key={entry.agent.id}
-          line={{
-            ...entry,
-            waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
-          }}
-          task={task}
-          asking={asking}
-          nest={{
-            depth,
-            fold:
-              started === undefined
-                ? undefined
-                : { open: opened.has(entry.agent.id), onToggle: () => toggle(entry.agent.id) },
-            started,
-          }}
-        />
-      ))}
+      <RowForEach data={tree} keyOf={({ entry }) => entry.agent.id}>
+        {({ entry, depth, started, folded }) => (
+          <TaskAgentRow
+            line={{
+              ...entry,
+              waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
+            }}
+            task={task}
+            asking={asking}
+            nest={{
+              depth,
+              fold:
+                started === undefined
+                  ? undefined
+                  : { open: opened.has(entry.agent.id), onToggle: () => toggle(entry.agent.id) },
+              started,
+            }}
+          />
+        )}
+      </RowForEach>
       {overview.waitingElsewhere === 0 || !inboxShown ? null : (
         <LinkRow
           symbol={GLYPH.INBOX}
@@ -2396,53 +2397,55 @@ function OverviewDescription({
 
   return (
     <ListSection title={WORDS.DESCRIPTION} act={edit}>
-      {blocks.map((block, index) => {
-        const standing = onBlocks.get(block.from) ?? [];
-        const oldest = standing[0];
+      {/* Note that the blocks are recycled as the page scrolls, as the Inbox's rows are, so a long description mounts only the blocks near the screen, each its own host of words, rather than every one as the page opens. */}
+      <RowForEach data={blocks} keyOf={(block) => `${block.from}`}>
+        {(block) => {
+          const standing = onBlocks.get(block.from) ?? [];
+          const oldest = standing[0];
 
-        return (
-          <WordsRow
-            key={`${block.from}`}
-            words={block.drawn}
-            repository={task.repository}
-            onOpenLink={openLink}
-            pictureSource={pictureSource}
-            videoAt={videoAt}
-            fileAt={fileAt}
-            linkStanding={linkStanding}
-            last={index === blocks.length - 1}
-            menuActions={
-              block.quote === undefined
-                ? undefined
-                : [
-                    {
-                      label: COMMENT_WORDS.COMMENT,
-                      symbol: GLYPH.COMMENT,
-                      tone: ROW_ACTION_TONE.NEUTRAL,
-                      onPress: () => {
-                        const quote = block.quote ?? "";
-                        const from = `${block.from}`;
-                        const to = `${block.to}`;
-                        router.push({
-                          pathname: onOwnTab("/tasks/comments/new"),
-                          params: { task: task.id, from, to, quote },
-                        });
+          return (
+            <WordsRow
+              words={block.drawn}
+              repository={task.repository}
+              onOpenLink={openLink}
+              pictureSource={pictureSource}
+              videoAt={videoAt}
+              fileAt={fileAt}
+              linkStanding={linkStanding}
+              last={block.from === blocks.at(-1)?.from}
+              menuActions={
+                block.quote === undefined
+                  ? undefined
+                  : [
+                      {
+                        label: COMMENT_WORDS.COMMENT,
+                        symbol: GLYPH.COMMENT,
+                        tone: ROW_ACTION_TONE.NEUTRAL,
+                        onPress: () => {
+                          const quote = block.quote ?? "";
+                          const from = `${block.from}`;
+                          const to = `${block.to}`;
+                          router.push({
+                            pathname: onOwnTab("/tasks/comments/new"),
+                            params: { task: task.id, from, to, quote },
+                          });
+                        },
                       },
-                    },
-                  ]
-            }
-            comments={
-              oldest === undefined
-                ? undefined
-                : {
-                    count: standing.length,
-                    heard: COMMENT_WORDS.heard(standing.length),
-                    onOpen: () => openThread(oldest.id),
-                  }
-            }
-          />
-        );
-      })}
+                    ]
+              }
+              comments={
+                oldest === undefined
+                  ? undefined
+                  : {
+                      count: standing.length,
+                      heard: COMMENT_WORDS.heard(standing.length),
+                      onOpen: () => openThread(oldest.id),
+                    }
+              }
+            />
+          );
+        }}
+      </RowForEach>
     </ListSection>
   );
 }
@@ -2554,9 +2557,9 @@ function OverviewComments({
 
   return (
     <ListSection title={WORDS.COMMENTS} count={listed.length}>
-      {listed.map((thread) => (
-        <CommentRow key={thread.id} thread={thread} now={now} onSettle={settle} />
-      ))}
+      <RowForEach data={listed} keyOf={(thread) => thread.id}>
+        {(thread) => <CommentRow thread={thread} now={now} onSettle={settle} />}
+      </RowForEach>
       {resolved.length === 0 ? null : (
         <LinkRow
           symbol={showingResolved ? GLYPH.COMMENT : GLYPH.RESOLVED}
