@@ -24,7 +24,6 @@ import {
 import { HARNESS_INFO } from "@repo/features/agent-credentials-model";
 import { FAST_WORD } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { MenuPickRow } from "./form-rows.js";
 import { HarnessMark } from "./marks.js";
@@ -73,8 +72,6 @@ type ModelChoiceSheetProps = {
   readonly mode?: ModeChoice | undefined;
   /** Why the last pick did not take, under the model's section; none while none failed. */
   readonly note?: string | undefined;
-  /** More of the agent's options under them, such as its MCP servers, as sections of the sheet's form. */
-  readonly children?: ReactNode;
 };
 
 /** The harnesses in the order the panel's menu stands them, each with the models it runs, the ones with none left out. */
@@ -239,7 +236,6 @@ function ModelChoiceForm(props: ModelChoiceSheetProps) {
                     />
                   </Section>
                 )}
-                {props.children}
               </Form>
               <Toolbar.Content>
                 <ToolbarItem placement="confirmationAction">
