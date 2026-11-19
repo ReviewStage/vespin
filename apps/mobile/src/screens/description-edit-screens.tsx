@@ -285,7 +285,8 @@ function DescriptionEditor({
 
       update(settled);
 
-      if (went) {
+      // Note that words the save didn't carry keep the sheet open, so they are saved or discarded rather than dropped with it.
+      if (went && settled.draft === settled.base) {
         leave();
 
         return;
