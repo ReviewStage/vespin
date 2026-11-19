@@ -24,6 +24,7 @@ import type {
   LocalDatabaseValue,
 } from "@repo/host/local-database";
 import type { SQLiteBindValue } from "expo-sqlite";
+import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 
 /** The values a statement binds, as `expo-sqlite` takes them. */
 type BindValues = SQLiteBindValue[];
@@ -55,6 +56,8 @@ function openAt(openDatabase: OpenDatabase, file: string): LocalDatabaseConnecti
   if (slash <= 0 || slash === file.length - 1) throw new Error(`not a file in a folder: ${file}`);
 
   const database = openDatabase(file.slice(slash + 1), undefined, file.slice(0, slash));
+  // Note that the launch's first open is noted as its local phase, which `app:ready` counts.
+  noteLaunchPhase(LAUNCH_PHASE.LOCAL);
 
   return {
     exec: (sql) => database.execSync(sql),

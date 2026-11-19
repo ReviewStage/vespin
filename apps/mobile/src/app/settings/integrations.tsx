@@ -1,6 +1,11 @@
-// integrations.tsx -- Settings' Integrations page: each of the account's servers under Connected and Not connected, as the panel's page lists them; a connected one opening its own page, as iOS Settings opens an account, one to connect with Connect at its end, one waited on with Cancel, and a search across them.
+// integrations.tsx -- Settings' Integrations page: each of the account's servers under Connected and Not connected, as the panel's page lists them; a connected one opening its own page, as iOS Settings opens an account, one to connect a press of its own that opens the provider's sign-in, one waited on with Cancel, and a search across them.
 
-import { searchServers, serverGroups } from "@repo/features/agent-servers-model";
+import {
+  SERVER_ROW,
+  type ServerRow,
+  searchServers,
+  serverGroups,
+} from "@repo/features/agent-servers-model";
 import { INTEGRATIONS_PAGE_WORDS } from "@repo/features/integration-settings-words";
 import { readingWords } from "@repo/features/words";
 import {
@@ -9,6 +14,7 @@ import {
   GLYPH,
   INTEGRATION_MARK_ASSET,
   ListSection,
+  PUSH_ROW_GOES,
   SCREEN_GROUND,
   Screen,
   SettingsForm,
@@ -25,6 +31,49 @@ const READING = readingWords("the integrations");
 
 /** The glyph a page of integrations stands under. */
 const INTEGRATIONS_SYMBOL = GLYPH.PLUG;
+
+/** The rows whose act connects them, by the provider's sign-in out of the app: Connect, Reconnect, and Try again after one that did not go. */
+const CONNECTS: ReadonlySet<ServerRow["kind"]> = new Set([
+  SERVER_ROW.CONNECT,
+  SERVER_ROW.RECONNECT,
+  SERVER_ROW.TRY_AGAIN,
+]);
+
+/**
+ * A row that opens no page of its own: one to connect, the whole row one
+ * press ending in the arrow out, as iOS Settings stands "Add Account" rather
+ * than a button inside a row, held while its last press is out; else its act
+ * at its end, such as a sign-in's Cancel while it is waited on.
+ */
+function IntegrationRow({
+  row,
+  page,
+}: {
+  readonly row: ServerRow;
+  readonly page: ReturnType<typeof useIntegrations>["page"];
+}) {
+  const act = page.actOf(row);
+  const lines = rowLines(row, page.refusals.get(row.connection));
+  const mark = INTEGRATION_MARK_ASSET[row.provider];
+
+  if (act !== undefined && CONNECTS.has(row.kind)) {
+    return (
+      <ConnectionRow
+        name={row.name}
+        mark={mark}
+        lines={lines}
+        goes={PUSH_ROW_GOES.OUT}
+        onOpen={() => {
+          if (!act.disabled) act.onPress();
+        }}
+      />
+    );
+  }
+
+  return (
+    <ConnectionRow name={row.name} mark={mark} lines={lines} act={act} menu={page.menuOf(row)} />
+  );
+}
 
 export default function IntegrationsScreen() {
   const router = useRouter();
@@ -64,14 +113,7 @@ export default function IntegrationsScreen() {
                   onOpen={() => open(row.connection)}
                 />
               ) : (
-                <ConnectionRow
-                  key={row.connection}
-                  name={row.name}
-                  mark={INTEGRATION_MARK_ASSET[row.provider]}
-                  lines={rowLines(row, page.refusals.get(row.connection))}
-                  act={page.actOf(row)}
-                  menu={page.menuOf(row)}
-                />
+                <IntegrationRow key={row.connection} row={row} page={page} />
               ),
             )}
           </ListSection>
