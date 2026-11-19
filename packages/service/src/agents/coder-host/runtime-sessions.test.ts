@@ -33,6 +33,7 @@ import {
   AGENT_MACHINE,
   AGENT_PAYER,
   type AgentPayer,
+  type AgentRunsOnRequest,
   LOCAL_AGENT_REFUSAL,
 } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
@@ -48,6 +49,7 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import type { AgentMovedMark } from "@repo/wire/ui-messages";
 import { eq } from "drizzle-orm";
 import { Clock, Duration, Effect, Layer, Match, Option, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
@@ -86,6 +88,7 @@ import {
 import { AgentSandbox, type AgentSandboxService } from "../terminal/agent-sandbox.js";
 import { macOffers, THIS_MAC } from "./agent-runtime-choice.js";
 import { clearedAgent } from "./clear.js";
+import { movedAgent } from "./move.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import { rewoundAgent } from "./rewind.js";
 import {
@@ -105,6 +108,7 @@ import { stoppedTurn } from "./stop.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { consumeTurnDelivery } from "./turn-delivery.js";
 import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
+import { readNativeTurnHanded } from "./turn-message.js";
 
 type Answers = {
   open: string;
@@ -796,6 +800,62 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             rows.flatMap((row) => (row.parts as { type: string }[]).map((part) => part.type)),
             ["data-session-cleared"],
           );
+        }),
+    );
+
+    it.effect(
+      "a move puts a Claude Code agent in the cloud on its owner's Mac in the same agent: its runner ended, its row naming the Mac, its transcript marked, and its next turn to be told; the place it runs and a teammate's Mac are refused, with nothing stopped",
+      () =>
+        Effect.gen(function* () {
+          const { owner, teammate, taskId } = yield* openTeam;
+          const agent = yield* agentOn(owner, taskId, "claude_code");
+          const studio = randomUUID();
+          const theirs = randomUUID();
+          yield* registerDevice(owner, { id: studio, name: "Studio", ...HOST_LAYOUT });
+          yield* registerDevice(teammate, { id: theirs, name: "Laptop", ...HOST_LAYOUT });
+          const { claudeCode, native } = runtimes();
+          const writer = storeWriter({ tools: CODER_TOOL_SET });
+          const nativeSession = `${NATIVE_SESSION_PREFIX.claude_code}000000000001-${randomUUID()}`;
+          const target = { userId: owner, conversationId: agent.conversationId };
+          yield* claimRuntimeSession(target, nativeSession, new Date(0));
+
+          const moveTo = (runsOn: AgentRunsOnRequest) =>
+            movedAgent(writer, owner, agent, runsOn).pipe(Effect.provide(native), Effect.result);
+
+          const here = yield* moveTo({ machine: AGENT_MACHINE.VERCEL });
+          const borrowed = yield* moveTo({ machine: AGENT_MACHINE.DEVICE, deviceId: theirs });
+          const moved = yield* moveTo({ machine: AGENT_MACHINE.DEVICE, deviceId: studio });
+
+          assert.deepEqual(here, Result.fail(HOSTED_REFUSAL.INVALID_REQUEST));
+          assert.equal(
+            Result.isFailure(borrowed) ? borrowed.failure.localAgentRefusal : undefined,
+            LOCAL_AGENT_REFUSAL.NOT_OWNER,
+          );
+          assert.ok(Result.isSuccess(moved));
+          assert.deepEqual(claudeCode.calls, [`halt:${nativeSession}:${agent.conversationId}`]);
+          const read = yield* readAgent(owner, agent.id);
+          assert.ok(Option.isSome(read));
+          assert.deepEqual(
+            [read.value.machine, read.value.deviceId],
+            [AGENT_MACHINE.DEVICE, studio],
+          );
+
+          const rows = yield* (yield* Database)
+            .select({ parts: messages.parts })
+            .from(messages)
+            .where(eq(messages.conversationId, agent.conversationId));
+
+          // SAFETY: a message's parts are stored as its UI parts, each naming its type and data.
+          const marks = rows.flatMap(
+            (row) => row.parts as { type: string; data: AgentMovedMark }[],
+          );
+
+          assert.deepEqual(
+            marks.map((part) => [part.type, part.data.from, part.data.to]),
+            [["data-agent-moved", {}, { deviceId: studio, name: "Studio" }]],
+          );
+          const told = yield* readNativeTurnHanded(target);
+          assert.deepEqual(told.moved?.to, { onMac: true, name: "Studio" });
         }),
     );
 

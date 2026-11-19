@@ -35,6 +35,7 @@ import {
   agentChatHoldSchema,
   agentDeleteAnswerSchema,
   agentListAnswerSchema,
+  agentMoveRequestSchema,
   agentPageAnswerSchema,
   agentPinRequestSchema,
   agentReadRequestSchema,
@@ -379,6 +380,33 @@ export const agentsContract = {
     )
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/clear` }))
     .input(idParams)
+    .output(EffectSchema.flip(agentAnswerSchema)),
+  /**
+   * One agent moved between the cloud and one of its starter's own devices
+   * in the same agent (`coder-host/move.ts`), its transcript kept with a mark
+   * where it moved; refused while the agent works, for one on no harness,
+   * for the place it already runs at, and for a device that is not the
+   * starter's own, standing.
+   */
+  move: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.AGENT_NOT_READY,
+        HOSTED_API_ERROR.INVALID_REQUEST,
+        HOSTED_API_ERROR.LOCAL_AGENT_REFUSED,
+        HOSTED_API_ERROR.DEVICE_REMOVED,
+      ),
+    )
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: `${AGENT_PATH}/move`,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(idParams, agentMoveRequestSchema))
     .output(EffectSchema.flip(agentAnswerSchema)),
   /** One agent's failed first launch booted again (`coder-host/boot.ts`), its queued messages going once its machine is up. */
   boot: declaredProcedure

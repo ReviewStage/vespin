@@ -730,6 +730,11 @@ export const agentRunsOnRequestSchema = EffectSchema.Union([
 
 export type AgentRunsOnRequest = typeof agentRunsOnRequestSchema.Type;
 
+/** A move of an agent to another place in the same agent: the cloud, or one of its starter's own devices (`coder-host/move.ts`). */
+export const agentMoveRequestSchema = EffectSchema.Struct({ runsOn: agentRunsOnRequestSchema });
+
+export type AgentMoveRequest = typeof agentMoveRequestSchema.Type;
+
 /** A branch a Start names for a checkout to be cloned at: a name git takes, with no space and none of the characters a ref refuses. */
 export const startBranchSchema = EffectSchema.String.check(
   EffectSchema.isNonEmpty(),
