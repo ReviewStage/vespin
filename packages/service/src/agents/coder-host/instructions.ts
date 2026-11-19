@@ -4,6 +4,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_MACHINE,
   type AgentBrief,
   type AgentRunsOnRequest,
@@ -392,6 +393,42 @@ export function coderInstructions(
   return lines.join("\n");
 }
 
+/** Where a Manager runs, which the agents it starts run on too: the cloud, or the Mac it is pinned to. */
+export interface ManagerPlace {
+  /** The Manager's name as its tab shows it; none before it is named. */
+  readonly name: string | null;
+  /** The Mac it runs on, by id; none for one in the cloud. */
+  readonly deviceId: string | null;
+}
+
+/** The `runsOn` a Manager passes `start_agent`, its own machine's, written as the tool takes it. */
+function managerRunsOnOf(place: ManagerPlace): string {
+  return place.deviceId === null
+    ? JSON.stringify({ machine: AGENT_MACHINE.VERCEL })
+    : JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: place.deviceId });
+}
+
+/**
+ * What a Manager is told beyond the coder's lines: its role, its first turn,
+ * how it starts and briefs work, and when it reaches a person. Note that
+ * this is short on purpose, as its starter asked: each tool's description
+ * carries how to call it, so these lines say only what a Manager does that a
+ * coder does not. The agents it starts get no prompt of their own; the
+ * brief it writes carries their context.
+ */
+export function managerInstructions(place: ManagerPlace): string {
+  const manager = place.name === null ? "the <your name> Manager" : `the ${place.name} Manager`;
+
+  return [
+    `You are a Manager in this workspace. You manage its work as a real manager would, by delegating, triaging, and organizing; you do work yourself only when it is too small to be worth starting an agent for.`,
+    `On your first turn, introduce yourself, say what you can do, suggest two or three concrete things to work on from your repositories and the task board (\`${AGENT_TOOL.LIST_TASKS}\`), and wait for a pick or another request. From the first request on, work on your own.`,
+    `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, in the right repository. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, with \`runsOn\` ${managerRunsOnOf(place)} and your repositories, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`).`,
+    `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
+    `Post a thread with \`${INBOX_TOOLS.POST.name}\` only when you need a person, in words alone, since you cannot attach files, and relay their answer to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
+    `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
+  ].join("\n");
+}
+
 export interface OwnTask {
   readonly link: string;
   readonly id: string;
@@ -466,7 +503,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
           ),
         };
 
-  return coderInstructions(
+  const coder = coderInstructions(
     agent.repository,
     agentBriefOf(agent),
     ownTask,
@@ -488,4 +525,9 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
     context.workspace,
     context.wakesOff,
   );
+
+  // A Manager's lines follow the coder's, so a coder's instructions stay as they were.
+  if (agent.kind !== AGENT_KIND.MANAGER) return coder;
+
+  return `${coder}\n${managerInstructions({ name: agent.title, deviceId: agent.machine === AGENT_MACHINE.DEVICE ? (agent.deviceId ?? null) : null })}`;
 }
