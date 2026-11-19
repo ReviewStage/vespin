@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { test } from "vitest";
+import { beforeAll, test } from "vitest";
 import {
   type EmittedFunction,
   emitBuildOutput,
@@ -91,10 +91,16 @@ async function emitFromTask(): Promise<{
   return { outputDirectory, paths };
 }
 
+let emitted: Awaited<ReturnType<typeof emitFromTask>>;
+
+beforeAll(async () => {
+  emitted = await emitFromTask();
+}, 180_000);
+
 test("every planned function and every rewrite lands on a .func, and a queue's consumer carries its trigger", {
   timeout: 180_000,
 }, async () => {
-  const { outputDirectory, paths } = await emitFromTask();
+  const { outputDirectory, paths } = emitted;
   const functions = await webFunctions(WEB);
   assert.deepEqual(
     paths,
@@ -130,7 +136,7 @@ test("every planned function and every rewrite lands on a .func, and a queue's c
 });
 
 test("each .func loads with nothing above it available", { timeout: 180_000 }, async () => {
-  const { outputDirectory, paths } = await emitFromTask();
+  const { outputDirectory, paths } = emitted;
 
   for (const path of paths) {
     const directory = functionDirectory(outputDirectory, path);
@@ -152,7 +158,7 @@ test("each .func loads with nothing above it available", { timeout: 180_000 }, a
 test("the default .func, loaded alone, lands the fallback's requests on the hosted oRPC router", {
   timeout: 180_000,
 }, async () => {
-  const { outputDirectory } = await emitFromTask();
+  const { outputDirectory } = emitted;
   const grouped = (await webFunctions(WEB)).find((definition) => definition.file === "default");
   assert.ok(grouped);
   const path = functionPublicPath(grouped);
