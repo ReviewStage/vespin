@@ -5,8 +5,8 @@
  * member's stands here, newest started first, as the service lists them
  * (`workspace-managers.ts`), its archived ones left out. Each is an agent's
  * row as every list of agents draws it (`AgentListRow`), its menu the
- * agent's own, its press opening its page (`/<workspace>/agent/<id>`), and
- * the row of the page standing open marked as the sidebar marks its open
+ * agent's own, its press opening its page (`/<workspace>/agent/<id>`), saying
+ * nothing of where it runs (`runsOn`), and the row of the page standing open marked as the sidebar marks its open
  * task. Its head folds it as Pinned's does, kept across launches. It stands
  * only where the workspace has the Managers experiment on, and says so
  * where it holds none or could not be read; until the first answer lands
@@ -137,6 +137,7 @@ export function SidebarManagers({
                     chosen={undefined}
                     more={more}
                     current={agent.id === openId}
+                    runsOn={false}
                     onPress={() => onOpen(agent.id)}
                     onOpenPullRequest={() => onOpen(agent.id)}
                   />

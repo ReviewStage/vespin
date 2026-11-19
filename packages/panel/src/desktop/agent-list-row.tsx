@@ -60,7 +60,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * color for where it stands and its number (`pull-request-chip.tsx`),
  * hanging the pull request's one card, the agent whose it is and who it
  * names among what the card says (`pull-request-card.tsx`); and where it
- * runs (`runs-on.tsx`), Cloud or the device, with its failed mark once its
+ * runs (`runs-on.tsx`), Cloud or the device, unless its list leaves that out
+ * (`runsOn`), as the sidebar's Managers do, with its failed mark once its
  * turn failed, or once an agent it started failed, its hint saying how
  * many, so a fold never hides a failure. Its time says when it last moved, and its ⋯ comes in over
  * it, as a task's does.
@@ -109,6 +110,7 @@ export function AgentListRow({
   more,
   settled = false,
   current = false,
+  runsOn = true,
   depth,
   nest,
   fold,
@@ -140,6 +142,8 @@ export function AgentListRow({
   settled?: boolean | undefined;
   /** Whether it is the agent its window stands open on, its own page, in the current fill, as a sidebar marks its open row. */
   current?: boolean | undefined;
+  /** Whether it says where it runs, Cloud or the device, as every list but the sidebar's Managers does; its failed mark stands either way. */
+  runsOn?: boolean | undefined;
   /** How deep it stands nested under the agent that started it: at the top unless said. */
   depth?: number | undefined;
   /** Where it stands among the agents nested beside it, in a list that nests them; none in one that nests none. */
@@ -212,7 +216,7 @@ export function AgentListRow({
           ),
         [TASK_ROW_CELL.AGENTS]: (
           <ReplayMask>
-            <RunsOnPlace agent={agent} devices={macs} />
+            {runsOn ? <RunsOnPlace agent={agent} devices={macs} /> : null}
             {agentEndMark(agent, true) ??
               (started === undefined || started.failed === 0
                 ? null
