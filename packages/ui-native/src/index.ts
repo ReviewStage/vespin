@@ -72,7 +72,13 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
-export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
+export {
+  Composer,
+  ComposerFoot,
+  type ComposerMenu,
+  type ComposerSaving,
+  type ComposerSendAs,
+} from "./composer.js";
 
 export {
   type AttachedPicture,

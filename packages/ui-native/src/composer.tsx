@@ -149,6 +149,8 @@ type ComposerProps = {
   readonly sendable?: boolean | undefined;
   /** Called with the words typed once Send is pressed; Send stands disabled where none is given. */
   readonly onSend?: ((words: string) => void) | undefined;
+  /** What Send stands for while the field is empty and `sendable`, where that is an act of its own rather than a message, such as a notice's Got it: its glyph on the same round and its name; Send's own once a word is typed. */
+  readonly sendAs?: ComposerSendAs | undefined;
   /** Opens what the + adds, such as a picture; the + is not drawn where neither this nor `addMenu` is given. */
   readonly onAdd?: (() => void) | undefined;
   /** What the + opens as a menu in place of `onAdd`'s one act, such as an agent's Photos, Permissions, and Fast. */
@@ -176,6 +178,12 @@ type ComposerProps = {
   /** The names a flow finds the field and the + by, where its holder names its own. */
   readonly testIds?: { readonly field: string; readonly add: string } | undefined;
 };
+
+/** An act Send stands for while the field is empty, as the panel's empty Send reads Got it on a notice. */
+export interface ComposerSendAs {
+  readonly label: string;
+  readonly symbol: Glyph;
+}
 
 /** What Send does while the field holds a queued message's words being edited. */
 export interface ComposerSaving {
@@ -229,16 +237,24 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
  * while a turn runs, and the system's spinner once it is pressed, and else
  * Talk where the composer calls its agent, the waveform on the same circle,
  * as ChatGPT's composer offers voice, so the first word turns it into Send.
+ * Where the empty field's Send stands for an act of its own (`sendAs`), such
+ * as a notice's Got it, the round wears that act's glyph and name until a
+ * word is typed.
  */
 function SendButton({
   empty,
+  typed,
   onSend,
+  sendAs,
   onStop,
   stopping,
   onTalk,
 }: {
   readonly empty: boolean;
+  /** Whether the field holds words, which make the round Send whatever it stood for while empty. */
+  readonly typed: boolean;
   readonly onSend: (() => void) | undefined;
+  readonly sendAs: ComposerSendAs | undefined;
   readonly onStop: (() => void) | undefined;
   readonly stopping: boolean;
   readonly onTalk: (() => void) | undefined;
@@ -282,6 +298,7 @@ function SendButton({
   }
 
   const sendable = !empty && onSend !== undefined;
+  const act = typed ? undefined : sendAs;
 
   return (
     <Button
@@ -289,10 +306,14 @@ function SendButton({
       modifiers={[
         ...(sendable ? roundModifiers(colors) : idleRoundModifiers(colors, round)),
         disabled(!sendable),
-        accessibilityLabel("Send"),
+        accessibilityLabel(act?.label ?? "Send"),
       ]}
     >
-      <Image {...glyphImage(GLYPH.SEND)} size={sendSize} modifiers={roundMark(round)} />
+      <Image
+        {...glyphImage(act?.symbol ?? GLYPH.SEND)}
+        size={sendSize}
+        modifiers={roundMark(round)}
+      />
     </Button>
   );
 }
@@ -403,6 +424,7 @@ function ComposerPieces(props: ComposerProps) {
     onWords,
     sendable = false,
     onSend,
+    sendAs,
     onAdd,
     addMenu,
     call,
@@ -483,7 +505,9 @@ function ComposerPieces(props: ComposerProps) {
       {props.saving === undefined ? (
         <SendButton
           empty={empty}
+          typed={words.trim() !== ""}
           onSend={send}
+          sendAs={sendAs}
           onStop={onStop}
           stopping={stopping}
           onTalk={call?.kind === COMPOSER_CALL.TALK ? call.onTalk : undefined}
