@@ -5,9 +5,9 @@
  * and "Continued in" are, since it says what followed in the session
  * rather than asking anything: where the harness folded the conversation
  * into a summary to free up its context, with the tokens it held before
- * where the harness counted them; and where the agent's harness was
+ * where the harness counted them; where the agent's harness was
  * started on a fresh session (`/clear`), the messages above it no longer
- * the session's.
+ * the session's; and where the agent moved between the cloud and a Mac.
  */
 import type { CompactedNotice } from "@repo/wire/ui-messages";
 import { GLYPH } from "../../icons/icons.js";
@@ -23,6 +23,15 @@ export function CompactedLine({ notice }: { notice: CompactedNotice }): React.JS
       {notice.tokensBefore === null
         ? "Compacted the conversation"
         : `Compacted the conversation from ${TOKENS.format(notice.tokensBefore)} tokens`}
+    </NoteLine>
+  );
+}
+
+/** The line where the agent moved between the cloud and one of its starter's Macs, naming where it runs now, as its caller calls that place; the cloud where it names none. */
+export function MovedLine({ to }: { to: string | undefined }): React.JSX.Element {
+  return (
+    <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={<GLYPH.MOVE />} data-agent-moved="">
+      {`Moved to ${to ?? "the cloud"}`}
     </NoteLine>
   );
 }

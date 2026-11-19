@@ -16,6 +16,7 @@ import {
   agentChatHoldSchema,
   agentMessageRequestSchema,
   agentMessagesAnswerSchema,
+  agentMoveRequestSchema,
   agentPinRequestSchema,
   agentQueueChangeSchema,
   agentRenameRequestSchema,
@@ -1026,6 +1027,12 @@ export type AgentPinParams = typeof agentPinParamsSchema.Type;
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
+});
+
+/** One agent moved to another place in the same agent, as the window asks it: the agent, and the cloud or one of the member's devices (`coder-host/move.ts`). */
+export const agentMoveParamsSchema = EffectSchema.Struct({
+  ...agentStopParamsSchema.fields,
+  ...agentMoveRequestSchema.fields,
 });
 
 /** An agent's chat said shown or hidden by the window or device showing it (`agentChatHoldSchema`), or a bare warm as a build older than the hold asks. */

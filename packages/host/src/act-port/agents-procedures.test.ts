@@ -88,6 +88,7 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_REWIND]: "Could not rewind the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_CLEAR]: "Could not start a new session for the agent on this system.",
+  [AGENT_ACT_KIND.AGENTS_MOVE]: "Could not move the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_WARM]: "Could not keep the agent warm on this system.",
   [AGENT_ACT_KIND.AGENTS_UNSEND]: "Could not let the message go on this system.",
   [AGENT_ACT_KIND.AGENTS_BOOT]: "Could not start the agent's machine again on this system.",
@@ -151,6 +152,7 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_STOP: { agentId: AGENT_ID },
   AGENTS_REWIND: { agentId: AGENT_ID, messageId: "m-1" },
   AGENTS_CLEAR: { agentId: AGENT_ID },
+  AGENTS_MOVE: { agentId: AGENT_ID, runsOn: { machine: "vercel" } },
   AGENTS_WARM: { agentId: AGENT_ID },
   AGENTS_UNSEND: { agentId: AGENT_ID, lineId: "m-1" },
   AGENTS_BOOT: { agentId: AGENT_ID },
@@ -188,6 +190,7 @@ const NOTED_ACTS = [
   "AGENTS_STOP",
   "AGENTS_REWIND",
   "AGENTS_CLEAR",
+  "AGENTS_MOVE",
   "AGENTS_ARCHIVE",
   "AGENTS_PIN",
 ] as const satisfies readonly (keyof NotedActs)[];

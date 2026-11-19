@@ -45,6 +45,7 @@ type NotedAgentAct =
   | "AGENTS_STOP"
   | "AGENTS_REWIND"
   | "AGENTS_CLEAR"
+  | "AGENTS_MOVE"
   | "AGENTS_ARCHIVE"
   | "AGENTS_PIN";
 
@@ -140,6 +141,9 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
       input,
     }) {
       return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_CLEAR, acts.AGENTS_CLEAR, input));
+    }),
+    [AGENT_ACT_KIND.AGENTS_MOVE]: actPort[AGENT_ACT_KIND.AGENTS_MOVE].effect(function* ({ input }) {
+      return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_MOVE, acts.AGENTS_MOVE, input));
     }),
     [AGENT_ACT_KIND.AGENTS_ARCHIVE]: actPort[AGENT_ACT_KIND.AGENTS_ARCHIVE].effect(function* ({
       input,

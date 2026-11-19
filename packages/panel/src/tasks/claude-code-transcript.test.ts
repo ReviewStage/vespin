@@ -474,18 +474,27 @@ test("a usage-limit notice stays visible between the work before a pause and the
   );
 });
 
-test("a compaction says so where it happened, with the tokens it folded where the harness counted them, and a new session says the agent no longer has the messages above", () => {
+test("a compaction says so where it happened, with the tokens it folded where the harness counted them, a new session says the agent no longer has the messages above, and a move names where the agent runs now", () => {
+  const at = Date.UTC(2026, 10, 10);
+
   const { container } = drawn([
     { type: "text", text: "Read the guide." },
     { type: "data-compacted", data: { tokensBefore: 148_000 } },
     { type: "data-compacted", data: { tokensBefore: null } },
-    { type: "data-session-cleared", data: { at: Date.UTC(2026, 10, 10) } },
+    { type: "data-session-cleared", data: { at } },
+    {
+      type: "data-agent-moved",
+      data: { at, from: {}, to: { deviceId: "device-studio", name: "Studio" } },
+    },
+    { type: "data-agent-moved", data: { at, from: { deviceId: "device-studio" }, to: {} } },
   ]);
 
   const said = container.textContent ?? "";
   assert.ok(said.includes("Compacted the conversation from 148K tokens"), said);
   assert.equal(said.split("Compacted the conversation").length - 1, 2, said);
   assert.ok(said.includes("The agent no longer has the messages above."), said);
+  assert.ok(said.includes("Moved to Studio"), said);
+  assert.ok(said.includes("Moved to the cloud"), said);
 });
 
 test("a usage limit with no known reset tells the reader to send a message", () => {
