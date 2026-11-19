@@ -854,11 +854,24 @@ const STRUCK_OPACITY = 0.62;
 /** How wide a changed section's bar stands, in points. */
 const CHANGE_BAR_WIDTH = 3;
 
-/** A changed section's row: its bar, then its words beside it. */
+/**
+ * A changed section: its words in the page's own column, set in by the
+ * bar's room, and the bar standing in that room the words' whole height.
+ * Note that the words never stand in a row beside the bar, because a row
+ * the host measured with no width of its own laid them out at their whole
+ * length, so a changed section's lines ran past the page cut off rather
+ * than wrapping, as an unchanged one's wrap.
+ */
 const CHANGED_STYLE = StyleSheet.create({
-  row: { flexDirection: "row", gap: SPACE.ROW },
-  bar: { width: CHANGE_BAR_WIDTH, borderRadius: CHANGE_BAR_WIDTH / 2, alignSelf: "stretch" },
-  words: { flex: 1 },
+  words: { paddingLeft: CHANGE_BAR_WIDTH + SPACE.ROW },
+  bar: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: CHANGE_BAR_WIDTH,
+    borderRadius: CHANGE_BAR_WIDTH / 2,
+  },
   struck: { opacity: STRUCK_OPACITY },
 });
 
@@ -879,15 +892,13 @@ function ChangedWords({
   const bar = CHANGE_BAR[change];
 
   return (
-    <View style={CHANGED_STYLE.row}>
+    <View style={CHANGED_STYLE.words}>
       <View
         accessible
         accessibilityLabel={VERSION_CHANGE_HEARD[change]}
         style={[CHANGED_STYLE.bar, { backgroundColor: colors[bar.color] }]}
       />
-      <View style={[CHANGED_STYLE.words, bar.dimmed ? CHANGED_STYLE.struck : undefined]}>
-        {children}
-      </View>
+      <View style={bar.dimmed ? CHANGED_STYLE.struck : undefined}>{children}</View>
     </View>
   );
 }
