@@ -71,6 +71,7 @@ const wakesTheTaskList = <A, E, R>(
       liveSince: "0",
       taskless: TASKLESS_LIVE.LEFT_OUT,
     });
+
     const fired = yield* expectTopicsFire(write, topics);
     assert.ok(
       wokenBy(topics, woken),
