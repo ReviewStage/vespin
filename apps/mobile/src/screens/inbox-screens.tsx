@@ -6,6 +6,7 @@ import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
+  INBOX_LINE,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -37,7 +38,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import type { TaskSummary } from "@repo/features/task-wire";
+import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
@@ -76,6 +77,7 @@ import {
   type RowSubmenu,
   type Scope,
   Screen,
+  SkeletonRegion,
   SplitView,
   THREAD_MEDIA,
   type ThreadMedia,
@@ -95,6 +97,7 @@ import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/hos
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
+  type InboxListing,
   useInboxActs,
   useInboxListing,
   useInboxScope,
@@ -149,6 +152,9 @@ const MORE = { label: "More", symbol: GLYPH.MORE } as const;
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
 
+/** What a dimmed bar act does when pressed, which the system never lets happen. */
+const doNothing = (): void => undefined;
+
 /** What a video or a sound clip the words draw in place is heard as, where the words give it no alt. */
 const PLAYED_LABEL = {
   [INBOX_MEDIA.VIDEO]: "Video",
@@ -202,6 +208,8 @@ type InboxRowsProps = {
   readonly scopes?: ListScopes | undefined;
   /** What stands over the list while it lists no thread: why, and the way on. */
   readonly empty?: ReactNode | undefined;
+  /** How many skeleton rows stand in the threads' place while the feed is on its first read with none to list; none once it lists or answered. */
+  readonly skeleton?: number | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
 };
@@ -227,6 +235,7 @@ function InboxRows({
   choosing,
   scopes,
   empty,
+  skeleton,
   onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
@@ -241,19 +250,73 @@ function InboxRows({
       choosing={choosing}
       lead={<NotificationAsk />}
       scopes={scopes}
-      empty={empty}
+      empty={skeleton === undefined ? empty : undefined}
       onChooseStart={onChooseStart}
     >
-      <InboxItemRows
-        listed={listed}
-        readerId={readerId}
-        pictureOf={pictureOf}
-        onMark={onMark}
-        remindMenu={remindMenu}
-        onResolve={onResolve}
-      />
+      {skeleton === undefined ? (
+        <InboxItemRows
+          listed={listed}
+          readerId={readerId}
+          pictureOf={pictureOf}
+          onMark={onMark}
+          remindMenu={remindMenu}
+          onResolve={onResolve}
+        />
+      ) : (
+        <InboxSkeleton count={skeleton} />
+      )}
     </RowList>
   );
+}
+
+/** The words a skeleton row stands its placeholder bars in, each about as long as a thread's own, so the bars read as the rows to come. */
+const SKELETON_WORDS = {
+  TASK: "A task's name",
+  TITLE: "A thread's title, as its row stands it",
+  SUMMARY: "What the thread asks of the reader",
+} as const;
+
+/** The most skeleton rows the Inbox stands, about a phone's screen of threads, so a placeholder never reads as more than one screen. */
+const SKELETON_ROWS_MOST = 8;
+
+/**
+ * The Inbox while its feed is on its first read with no thread to list, as
+ * Mail stands its list before it reads: `count` of the Inbox's own rows,
+ * a task's line over a title and what it asks, their words standing as
+ * SwiftUI's placeholder bars (`SkeletonRegion`), so the list has its shape
+ * from the first frame and its rows take the bars' places as they land.
+ */
+function InboxSkeleton({ count }: { readonly count: number }) {
+  return (
+    <SkeletonRegion>
+      {Array.from({ length: count }, (_, at) => (
+        <ListRow
+          key={at}
+          id={String(at)}
+          title={SKELETON_WORDS.TITLE}
+          task={{ name: SKELETON_WORDS.TASK, status: TASK_STATUS.TODO }}
+          line={INBOX_LINE.SAID}
+          summary={SKELETON_WORDS.SUMMARY}
+        />
+      ))}
+    </SkeletonRegion>
+  );
+}
+
+/**
+ * How many skeleton rows the Inbox stands while its feed is on its first
+ * read and lists nothing, under no search: as many as the scope holds where
+ * that is known, up to `SKELETON_ROWS_MOST`, else that many; none once it
+ * lists a thread or the feed answered or failed.
+ */
+function skeletonRows(listing: InboxListing, show: InboxShow, search: string): number | undefined {
+  const reading =
+    listing.listed.length === 0 && listing.feed === INBOX_FEED.READING && search.trim() === "";
+
+  if (!reading) return undefined;
+  const known = listing.counts[show];
+
+  return known > 0 ? Math.min(known, SKELETON_ROWS_MOST) : SKELETON_ROWS_MOST;
 }
 
 /**
@@ -1139,6 +1202,7 @@ type InboxHeld = {
 function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
+  const skeleton = skeletonRows(listing, show, search);
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
@@ -1164,11 +1228,13 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
           onChoose: selecting.choose,
         } satisfies RowChoosing,
         title:
-          pickedItems.length === 0 ? SELECTION_WORDS.SELECT : selectedWords(pickedItems.length),
+          pickedItems.length === 0
+            ? SELECTION_WORDS.SELECT_ITEMS
+            : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
-        // Note that Select all takes every thread listed, and Select none lets them go once all are chosen, as Mail's edit bar leads with them.
+        // Note that Select all takes every thread listed, and Deselect all lets them go once all are chosen, as Mail's edit bar leads with them.
         all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
-          ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
+          ? { label: SELECTION_WORDS.DESELECT_ALL, onPress: () => selecting.choose([]) }
           : {
               label: SELECTION_WORDS.SELECT_ALL,
               // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
@@ -1185,6 +1251,7 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
     subtitle: scopeSubtitle(show),
     menu,
@@ -1210,6 +1277,7 @@ function InboxStackList(held: InboxHeld) {
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
     subtitle,
     menu,
@@ -1273,13 +1341,9 @@ function InboxStackList(held: InboxHeld) {
           {/* Note that the acts stand side by side between two flexible spaces, so iOS 26 draws them in one glass capsule centered over the foot, as Files and Mail group their edit bar's acts, never a glass circle each spread across it. */}
           <Stack.Toolbar.Spacer />
           {choosing.acts.map((act) =>
-            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
-            isBarMenu(act) ? (
-              <Stack.Toolbar.Menu
-                key={act.label}
-                accessibilityLabel={act.label}
-                disabled={act.disabled === true}
-              >
+            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
+            isBarMenu(act) && act.disabled !== true ? (
+              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1288,7 +1352,7 @@ function InboxStackList(held: InboxHeld) {
                 key={act.label}
                 accessibilityLabel={act.label}
                 disabled={act.disabled === true}
-                onPress={act.onPress}
+                onPress={isBarMenu(act) ? doNothing : act.onPress}
               >
                 {act.symbol === undefined ? null : (
                   <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
@@ -1319,6 +1383,7 @@ function InboxStackList(held: InboxHeld) {
           onResolve={acts.resolve}
           choosing={choosing?.rows}
           onChooseStart={chooseStart}
+          skeleton={skeleton}
           empty={
             listing.listed.length === 0 ? (
               <InboxEmpty
@@ -1358,6 +1423,7 @@ function InboxSplitScreen({
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
     subtitle,
     menu,
@@ -1391,6 +1457,7 @@ function InboxSplitScreen({
       onResolve={acts.resolve}
       choosing={choosing?.rows}
       onChooseStart={chooseStart}
+      skeleton={skeleton}
       empty={
         listing.listed.length === 0 ? (
           <InboxEmpty

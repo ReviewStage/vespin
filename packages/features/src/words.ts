@@ -194,6 +194,10 @@ export const SELECTION_WORDS = {
   CLEAR_SELECTION: "Clear selection",
   SELECT_ALL: "Select all",
   SELECT_NONE: "Select none",
+  /** What lets every chosen row go once all are chosen, where a bar's Select all stood, as Mail's edit bar says it. */
+  DESELECT_ALL: "Deselect all",
+  /** What a selection's title says while none is chosen yet, as Mail's edit mode says it. */
+  SELECT_ITEMS: "Select items",
   SELECT: "Select",
   ALL: "All",
   NONE: "None",

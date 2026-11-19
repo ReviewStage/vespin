@@ -512,6 +512,7 @@ export function RowFrame({
   const colors = useColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
+  const choosing = useContext(RowChoosingContext);
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
@@ -533,7 +534,8 @@ export function RowFrame({
   const groups = menuGroups.filter(menuGroupFilled);
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
-  if (!ownGroup && groups.length === 0 && preview === undefined) {
+  // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
+  if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
     return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
@@ -800,14 +802,14 @@ function FlushLine({ children }: { readonly children: ReactNode }) {
 /**
  * An Inbox row's last line, the glyph and words of what it asks, in the 13
  * pt line, as the panel's row reads and as Mail's preview stands under its
- * subject: the muted ink at rest and the full ink while unread, only the
+ * subject: the muted ink at rest or once done and the full ink while unread, only the
  * ask's glyph in the attention ink. Under a task's line it stands flush with
  * the ring, the glyph leading its words; on an agent's own thread, whose
  * title the glyph leads, it stands in the title's column, a glyph's column
  * left empty, so the words hang under the title at every size.
  */
 function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
-  const { line, summary, flush, unread = false } = props;
+  const { line, summary, flush, unread = false, done = false } = props;
   const colors = useColors();
   const lines = useRowLines();
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
@@ -819,7 +821,7 @@ function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
     <Text
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(unread ? colors.TEXT : colors.TEXT_MUTED),
+        foregroundStyle(unread && !done ? colors.TEXT : colors.TEXT_MUTED),
         lineLimit(lines.line),
       ]}
     >

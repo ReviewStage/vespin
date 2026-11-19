@@ -290,6 +290,13 @@ function RunsOnChip({
   );
 }
 
+/** What leads a repository's capsule, as the panel's repository chip leads: the picked repository's owner's picture, or the glyph standing for none. */
+function repositoryLead(
+  repository: string | undefined,
+): { readonly repository: string } | { readonly symbol: Glyph } {
+  return repository === undefined ? { symbol: GLYPH.NO_REPOSITORY } : { repository };
+}
+
 /**
  * The repository the task works in, as the panel's repository chip says it:
  * a capsule whose menu checks it among those the workspace's GitHub
@@ -309,7 +316,7 @@ function RepositoryChip({
       <MenuChip
         look={MENU_CHIP_LOOK.COMPOSER}
         label={tree.repository ?? NO_REPOSITORY}
-        symbol={GLYPH.REPOSITORY}
+        {...repositoryLead(tree.repository ?? undefined)}
       />
     );
   }
@@ -319,7 +326,7 @@ function RepositoryChip({
       <MenuChip
         look={MENU_CHIP_LOOK.COMPOSER}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
-        symbol={GLYPH.REPOSITORY}
+        {...repositoryLead(repository.picked)}
         menu={{
           groups: [
             {
@@ -339,7 +346,7 @@ function RepositoryChip({
         <MenuChip
           look={MENU_CHIP_LOOK.COMPOSER}
           label={repository.picked}
-          symbol={GLYPH.REPOSITORY}
+          {...repositoryLead(repository.picked)}
         />
       )}
       {repository.failed === undefined ? null : (

@@ -329,6 +329,13 @@ export {
 } from "./system-asks.js";
 
 export {
+  TASK_SKELETON_ROW,
+  TaskHeadSkeleton,
+  TaskSectionsSkeleton,
+  type TaskSkeletonSection,
+} from "./task-page-skeleton.js";
+
+export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
