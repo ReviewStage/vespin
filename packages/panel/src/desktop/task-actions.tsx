@@ -905,19 +905,17 @@ function TaskMenuFooter({
 }
 
 /**
- * The question Permanently delete asks, naming the task. Deleting a task
- * removes its document and its board and clears the conversation its
- * transcript is read from, which nothing in the app brings back, so a task
- * not yet done or canceled is pointed at Mark done, which keeps
- * all of it.
+ * The question Permanently delete asks of a task. Deleting a task removes its
+ * description and clears the conversation its transcript is read from, which
+ * nothing in the app brings back, so a task not yet done or canceled is
+ * pointed at Mark done, which keeps all of it.
  */
-function deleteQuestion(name: string, task: TaskSummary | undefined): DialogQuestion {
+function deleteQuestion(task: TaskSummary | undefined): DialogQuestion {
   return {
-    ...deleteTaskWords(name, task),
+    ...deleteTaskWords(task),
     running: "Deleting",
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
-    bodyReplayMasked: true,
   };
 }
 
@@ -1051,7 +1049,7 @@ export function useTaskMenuItems(
       <ConfirmDialog
         open
         confirm={deletion}
-        question={deleteQuestion(name, task)}
+        question={deleteQuestion(task)}
         restoreTo={nextRowOrHead}
       />
       {moving.dialog}

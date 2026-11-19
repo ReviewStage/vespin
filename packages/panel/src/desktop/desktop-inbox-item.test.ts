@@ -332,7 +332,7 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
   });
   assert.match(
     document.querySelector('[role="alertdialog"]')?.textContent ?? "",
-    new RegExp(BILLING.name, "u"),
+    /Permanently delete task\?/u,
     "⌘⌫ asks first, about the thread's task",
   );
 });

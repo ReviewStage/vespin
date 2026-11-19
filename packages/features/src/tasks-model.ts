@@ -352,15 +352,12 @@ export function archiveStopWords(several: boolean): StopAgentsWords {
 }
 
 /**
- * What Permanently delete asks of a task named `name`: what goes, and, on a
+ * What Permanently delete asks of a task: that it cannot be undone, and, on a
  * task not yet out of the way, that marking it done keeps it out of the way
  * instead. Every client's confirm asks it in these words.
  */
-export function deleteTaskWords(
-  name: string,
-  task: Pick<TaskSummary, "status"> | undefined,
-): StopAgentsWords {
-  const lost = `“${name}” and its board and transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+export function deleteTaskWords(task: Pick<TaskSummary, "status"> | undefined): StopAgentsWords {
+  const lost = IRREVERSIBLE_WORDS;
 
   const settled =
     task !== undefined &&
