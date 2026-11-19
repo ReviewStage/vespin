@@ -8,7 +8,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentTaskId, readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
+import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
 import { Effect, Option } from "effect";
 import type { UnparsedWireValue } from "../../core.js";
@@ -49,14 +49,8 @@ export function runAgentInbox(
     );
 
     if (Option.isNone(found)) return inboxRejected(INBOX_REFUSAL.NO_AGENT);
-    const { id: agentId, organizationId } = found.value;
-
-    const agent = {
-      userId: admitted.target.userId,
-      taskId: agentTaskId(found.value),
-      agentId,
-      organizationId,
-    };
+    const { id: agentId, taskId, organizationId } = found.value;
+    const agent = { userId: admitted.target.userId, taskId, agentId, organizationId };
 
     switch (call.tool) {
       case INBOX_TOOL.POST:

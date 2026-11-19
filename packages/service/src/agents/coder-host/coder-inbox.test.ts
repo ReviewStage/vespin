@@ -41,6 +41,7 @@ import { TestClock } from "effect/testing";
 import { ACTION_RESULT_STATUS } from "../../core.js";
 import {
   acknowledgeInboxItem,
+  agentInboxItems,
   answerInboxAsk,
   closeInboxItemAsMember,
   type InboxAgent,
@@ -106,6 +107,33 @@ const agentOn = (userId: string, task: { readonly id: string; readonly workspace
 
     return { ...agent, workspaceId: task.workspaceId };
   });
+
+/** An account with one agent started on no task, in a workspace of its own. */
+const openTasklessAgent = Effect.gen(function* () {
+  const userId = yield* openUser;
+  const workspaceId = yield* openWorkspace(userId);
+
+  const started = yield* createAgent(userId, {
+    taskId: null,
+    workspaceId,
+    idempotencyKey: randomUUID(),
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    repository: null,
+    descriptionSnapshot: null,
+    prompt: "Keep an eye on the release.",
+    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+  });
+
+  assert.ok(Option.isSome(started));
+
+  return {
+    userId,
+    taskId: null,
+    agentId: started.value.agent.id,
+    organizationId: workspaceId,
+  } satisfies ThreadPoster;
+});
 
 /** An account with one task and one agent started on it, in its repository. */
 const openAgent = Effect.gen(function* () {
@@ -893,6 +921,21 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         }
 
         assert.deepEqual(yield* taskInboxItems(agent.userId, agent.taskId), []);
+      }),
+  );
+
+  it.effect(
+    "an agent on no task is refused a post drawing a file, and writes nothing, while its words alone post",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openTasklessAgent;
+        const sandbox = sandboxWith({ "shots/form.png": PNG });
+        const drawing = { ...QUEUE, body: "![Shot](shots/form.png)" };
+
+        assert.equal(refusalOf(yield* post(agent, drawing, sandbox)), INBOX_REFUSAL.NO_TASK_FILES);
+        assert.deepEqual(yield* agentInboxItems(agent), []);
+        assert.equal((yield* post(agent, QUEUE)).status, ACTION_RESULT_STATUS.ACCEPTED);
+        assert.equal((yield* agentInboxItems(agent)).length, 1);
       }),
   );
 

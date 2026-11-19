@@ -349,6 +349,8 @@ export const INBOX_REFUSAL = {
     "an option's media is {path, caption}, {page, version} with the version show_page answered, or {url, label}.",
   NO_TITLE:
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
+  NO_TASK_FILES:
+    "Not posted: you work on no task, and a thread of yours keeps no pictures, recordings, sound clips, or PDFs yet; post the words alone.",
   TOO_MANY_PICTURES: `Not posted: a message draws at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} pictures from your sandbox.`,
   NO_OPTIONS: "Not posted: a decide's options each stand under a label of their own.",
   NONE_OFFERED: `Not posted: an option carrying media may not be labeled "${NONE_OF_THESE}", which the reader is offered beside your options already.`,
@@ -1045,6 +1047,12 @@ export function postToInbox(
     const options = yield* optionMedia(agent, post.ask, files.length, sandbox);
 
     if (Result.isFailure(options)) return inboxRejected(options.failure);
+
+    // Note that a thread's files are kept under its task (`attachment.ts`), so an agent on no task posts words alone.
+    if (agent.taskId === null && files.length + options.success.files.length > 0) {
+      return inboxRejected(INBOX_REFUSAL.NO_TASK_FILES);
+    }
+
     const thread = threadPost({ ...post, body }, place.success, options.success);
     const wasOpen = yield* threadStandsOpen(agent, thread.key);
     const posted = yield* postInboxThread(agent, thread, files, options.success.files);
@@ -1060,10 +1068,15 @@ export function postToInbox(
         wasOpen,
       }),
     );
-    yield* afterResponse(
-      "a thread's push",
-      pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId: agent.taskId }),
-    );
+    const { taskId } = agent;
+
+    // Note that a thread on no task is not pushed, since a released iPhone opens an alert on its task.
+    if (taskId !== null) {
+      yield* afterResponse(
+        "a thread's push",
+        pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId }),
+      );
+    }
 
     return yield* written(agent, posted.success);
   }).pipe(

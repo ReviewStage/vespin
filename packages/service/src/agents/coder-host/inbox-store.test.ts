@@ -86,6 +86,7 @@ import {
   postInboxThread,
   readInboxAttachment,
   readInboxItem,
+  readInboxItemHome,
   remindInboxItem,
   replyInboxItem,
   taskInboxItems,
@@ -391,6 +392,51 @@ it.layer(getTestDB())("the inbox store", (it) => {
             items: [lately.id, fresh.id].toSorted(),
           },
         );
+      }),
+  );
+
+  it.effect(
+    "an agent on no task posts a thread on no task, which waits on its starter, its workspace reads, another workspace does not, and the account-wide live reads leave out",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openUser;
+        const workspaceId = yield* openWorkspace(userId);
+
+        const started = yield* createAgent(userId, {
+          taskId: null,
+          workspaceId,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: null,
+          descriptionSnapshot: null,
+          prompt: "Keep an eye on the release.",
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        });
+
+        assert.ok(Option.isSome(started));
+        const agent: InboxAgent = { userId, taskId: null, agentId: started.value.agent.id };
+        const teammate = yield* openUser;
+        yield* joinWorkspace(workspaceId, teammate);
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const posted = yield* post(agent);
+
+        assert.deepEqual(Option.getOrThrow(yield* readInboxItemHome(teammate, posted.id)), {
+          agentId: agent.agentId,
+          taskId: null,
+          workspaceId,
+        });
+        assert.equal(posted.waitsOn?.userId, userId);
+        assert.deepEqual(
+          (yield* memberAgentInboxItems(teammate, agent.agentId)).map((item) => item.id),
+          [posted.id],
+        );
+        assert.ok(Option.isNone(yield* readInboxItem(outsider, posted.id)));
+        assert.ok(Option.isNone(yield* readInboxItemHome(outsider, posted.id)));
+        assert.deepEqual(yield* memberAgentInboxItems(outsider, agent.agentId), []);
+        // A build before HOSTED_API_VERSION 6 fails its whole answer on a null task, and a live read is not told the build.
+        assert.deepEqual(yield* accountItemIdsOf(teammate, 0, 0), { stamps: [], items: [] });
       }),
   );
 
