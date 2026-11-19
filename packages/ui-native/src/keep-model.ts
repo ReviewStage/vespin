@@ -85,8 +85,8 @@ const SHARED_PICTURE_EXTENSION: ReadonlyMap<string, string> = new Map([["image/s
 /** The scheme of a file the app wrote. */
 const FILE_SCHEME = "file://";
 
-/** A file's extension, after its last dot, before any query or fragment. */
-const FILE_EXTENSION = /\.([a-z0-9]+)(?:[?#].*)?$/iu;
+/** What a file's extension is made of; anchored at both ends, so it is checked in one pass. */
+const FILE_EXTENSION = /^[a-z0-9]+$/iu;
 
 /** A picture's `data:` address: its type, then its bytes in base64 up to any fragment. */
 const PICTURE_DATA = /^data:(image\/[a-z0-9.+-]+);base64,([^#]+)/iu;
@@ -131,6 +131,21 @@ export function pictureExtension(mediaType: string): string | undefined {
   return DECODED_PICTURE_EXTENSION.get(type) ?? SHARED_PICTURE_EXTENSION.get(type);
 }
 
+/**
+ * A file address's extension: after the last dot of its last segment, before any query or fragment.
+ * Note that we cut by index rather than with one regular expression, because an unanchored
+ * one backtracks on a long run of dots.
+ */
+function fileExtension(source: string): string | undefined {
+  const cut = source.search(/[?#]/u);
+  const path = cut === -1 ? source : source.slice(0, cut);
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  const extension = dot === -1 ? "" : name.slice(dot + 1);
+
+  return FILE_EXTENSION.test(extension) ? extension : undefined;
+}
+
 /** Whether a picture's extension names a type the system decodes, which may be copied and saved as well as shared. */
 function decodedExtension(extension: string): boolean {
   return [...DECODED_PICTURE_EXTENSION.values()].includes(extension.toLowerCase());
@@ -139,7 +154,7 @@ function decodedExtension(extension: string): boolean {
 /** What may be done with a picture: nothing for one drawn from a web address, sharing alone for one the system does not decode. */
 function pictureActs(source: string): readonly KeepAct[] {
   const extension = source.startsWith(FILE_SCHEME)
-    ? FILE_EXTENSION.exec(source)?.[1]
+    ? fileExtension(source)
     : heldPicture(source)?.extension;
 
   if (extension === undefined) return [];
