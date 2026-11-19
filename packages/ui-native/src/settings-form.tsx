@@ -245,8 +245,8 @@ function PressedRow({
 
 /**
  * The form a settings screen is: its sections (`ListSection`) of the rows
- * below, under their small muted headers, every row's words in the denser
- * scale's 15 pt. Note that it stands on the sidebar's ground with each row
+ * below, under their small muted headers, every row's words in the row
+ * title's style, as iOS's Settings reads. Note that it stands on the sidebar's ground with each row
  * on the surface, as the panel's settings cards stand on its page, rather
  * than on the system's grouped grays. A drag on it lowers the keyboard at
  * once, as a composing sheet's words otherwise keep it standing over the
@@ -1327,8 +1327,10 @@ type ConnectionRowProps = {
     | undefined;
   /** The rest of what it offers, in the menu a long press opens, a destructive one also behind a swipe from the trailing edge. */
   readonly menu?: readonly MemberRowAct[] | undefined;
-  /** Opens the connection's own page, as iOS Settings opens an account from its row: the whole row one press ending in the chevron, its acts on that page rather than at its end. */
+  /** Opens the connection's own page, as iOS Settings opens an account from its row: the whole row one press ending in the chevron, its acts on that page rather than at its end; or, with `goes` out, leaves the app to connect it, ending in the arrow out. */
   readonly onOpen?: (() => void) | undefined;
+  /** Where `onOpen` goes: a page of Settings, the chevron, or out of the app, such as a provider's sign-in, the arrow out. */
+  readonly goes?: PushRowGoes | undefined;
 };
 
 /**
@@ -1342,9 +1344,19 @@ type ConnectionRowProps = {
  * a destructive one, such as Disconnect, behind a swipe too, which a full
  * swipe never runs, since it asks first. A connection with a page of its
  * own (`onOpen`) is one press ending in the chevron instead, its acts on
- * that page.
+ * that page, and one to connect is one press ending in the arrow out
+ * (`goes`), which opens the provider's sign-in, as "Add Account" stands in
+ * iOS Settings, rather than a button inside the row.
  */
-export function ConnectionRow({ name, mark, lines, act, menu = [], onOpen }: ConnectionRowProps) {
+export function ConnectionRow({
+  name,
+  mark,
+  lines,
+  act,
+  menu = [],
+  onOpen,
+  goes = PUSH_ROW_GOES.PAGE,
+}: ConnectionRowProps) {
   const colors = useColors();
   const markSize = useScaledSize(CONNECTION_MARK_SIZE);
   const said = lines.map((line) => line.text).join(", ");
@@ -1389,7 +1401,7 @@ export function ConnectionRow({ name, mark, lines, act, menu = [], onOpen }: Con
         }
         end={
           onOpen !== undefined ? (
-            <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+            <GoesMark goes={goes} />
           ) : act === undefined ? (
             menu.length > 0 ? (
               <RowMoreMenu acts={menu} />

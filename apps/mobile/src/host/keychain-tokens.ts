@@ -13,6 +13,7 @@
 import { EncryptedStorageUnavailable, type TokenVault } from "@repo/host";
 import { Effect } from "effect";
 import * as SecureStore from "expo-secure-store";
+import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 
 /** The Keychain item the tokens are kept under, in the app's own Keychain. */
 const TOKENS_ITEM = "account-tokens";
@@ -27,7 +28,11 @@ export const keychainTokens: TokenVault = {
   read: Effect.orElseSucceed(
     Effect.tryPromise(() => SecureStore.getItemAsync(TOKENS_ITEM, KEYCHAIN_OPTIONS)),
     () => null,
-  ).pipe(Effect.map((held) => held ?? undefined)),
+  ).pipe(
+    Effect.map((held) => held ?? undefined),
+    // Note that the launch's first read is noted as its account phase, which `app:ready` counts.
+    Effect.tap(() => Effect.sync(() => noteLaunchPhase(LAUNCH_PHASE.ACCOUNT))),
+  ),
   write: (tokens) =>
     Effect.tryPromise({
       try: () => SecureStore.setItemAsync(TOKENS_ITEM, tokens, KEYCHAIN_OPTIONS),

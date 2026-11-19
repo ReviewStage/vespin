@@ -26,6 +26,7 @@ import {
   foregroundStyle,
   frame,
   labelsHidden,
+  lineLimit,
   menuIndicator,
   menuStyle,
   monospacedDigit,
@@ -40,7 +41,7 @@ import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-stan
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactElement, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
@@ -134,7 +135,7 @@ export function Button(props: ButtonProps) {
 
 /**
  * A small capsule's look: filled with the ink where it stands chosen, and
- * otherwise the surface inside a hairline edge, its words 13 pt.
+ * otherwise the surface inside a hairline edge, its words in the row line's style.
  */
 function capsuleModifiers(colors: BrandColors, filled: boolean) {
   return [
@@ -154,7 +155,7 @@ function capsuleModifiers(colors: BrandColors, filled: boolean) {
 }
 
 /**
- * A capsule's words, 13 pt medium in the ink its fill reads in, its count
+ * A capsule's words, in the row line's style, medium, in the ink its fill reads in, its count
  * after them in its own ink. Note that the words are the text itself where
  * no count follows, and the joined text is drawn anew whenever its words or
  * count change, because `@expo/ui`'s native text joins the texts nested in
@@ -172,10 +173,14 @@ function CapsuleWords({
   readonly ink: string;
   readonly countInk: string;
 }) {
+  const large = useAccessibilitySize();
+
   const modifiers = [
     font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
     foregroundStyle(ink),
     monospacedDigit(),
+    // Note that a capsule's words stand on one line, cut short at their end where the row gives them less than their width, but for an accessibility size, where the capsules stand one to a line and their words wrap rather than cut.
+    ...(large ? [] : [lineLimit(1)]),
   ];
 
   if (count === undefined) return <Text modifiers={modifiers}>{label}</Text>;

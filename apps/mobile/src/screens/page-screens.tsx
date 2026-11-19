@@ -2,13 +2,18 @@
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LIVE_READ } from "@repo/features/live-wire";
+import { PAGE_OWNER } from "@repo/features/page-wire";
 import { VERB } from "@repo/features/words";
+import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { BUTTON_LOOK, EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { usePageHtml } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useHostActs } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { openInSafari } from "../open-link.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
@@ -38,14 +43,42 @@ function usePageAddress(
   );
 }
 
-/** A page's version, by its task and its workspace, and the name it is opened under until its own is read. */
+/** A page's version, by its task and its workspace, and the name it is opened under until its own is read; a link names no version, so it opens at the newest. */
 type PageOpened = {
   readonly workspaceId: string | undefined;
   readonly taskId: string | undefined;
   readonly pageId: string;
-  readonly version: number;
+  readonly version: number | undefined;
   readonly title: string;
 };
+
+/** A route's version as its screen opens it: the number it names, or none for a link, which names none. */
+export function openedVersion(version: string): number | undefined {
+  return version === "" ? undefined : Number(version);
+}
+
+/**
+ * The version a page opens at: the one its opener named, else the newest
+ * the task's pages hold, as the panel opens a page's link, those pages
+ * followed while the page stands; none until they are read, and `missing`
+ * where they hold no such page.
+ */
+function useVersionOf(taskId: string | undefined, pageId: string, named: number | undefined) {
+  const acts = useHostActs();
+  const follows = named === undefined ? taskId : undefined;
+  useLiveFollow(follows, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
+
+  const { data: pages } = useQuery({
+    ...appStateQuery,
+    select: (state) =>
+      follows === undefined ? undefined : state[LIVE_READ.PAGES][PAGE_OWNER.TASK][follows]?.rows,
+  });
+
+  if (named !== undefined) return { version: named, missing: false };
+  const newest = pages?.find(({ id }) => id === pageId)?.version;
+
+  return { version: newest, missing: pages !== undefined && newest === undefined };
+}
 
 /**
  * One version of a page, opened whole in the app's one web view, sealed
@@ -53,9 +86,12 @@ type PageOpened = {
  * it, with a ⋯ that opens it in the browser. It reads until its task is
  * known.
  */
-export function PageScreen({ workspaceId, taskId, pageId, version, title }: PageOpened) {
+export function PageScreen({ workspaceId, taskId, pageId, version: asked, title }: PageOpened) {
   useSurfaceOpen(PRODUCT_SURFACE.PAGE, pageId);
-  const { read, again } = usePageHtml(taskId, pageId, version);
+  const { version, missing } = useVersionOf(taskId, pageId, asked);
+  const html = usePageHtml(taskId, pageId, version);
+  const { again } = html;
+  const read = missing ? { failed: true as const } : html.read;
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
 
@@ -114,7 +150,7 @@ export function TaskPageScreen() {
       pageId={id}
       taskId={task}
       workspaceId={workspace === "" ? undefined : workspace}
-      version={Number(version)}
+      version={openedVersion(version)}
       title={title}
     />
   );

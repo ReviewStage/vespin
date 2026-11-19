@@ -93,7 +93,7 @@ function nextPicked(
   return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
 }
 
-/** One option's row: its label in 15 pt with the tag beside it, or under it at an accessibility size, its detail in 13 pt muted, and the copper check at its end once picked. */
+/** One option's row: its label in the row title's style with the tag beside it, or under it at an accessibility size, its detail in the row line's style, muted, and the copper check at its end once picked. */
 function ChoiceRow({
   choice,
   picked,

@@ -145,6 +145,7 @@
     "./dictation-wire": "./src/dictation-wire.js",
     "./draft-text": "./src/draft-text.js",
     "./github-connection-wire": "./src/github-connection-wire.js",
+    "./github-holds-words": "./src/github-holds-words.js",
     "./github-image": "./src/github-image.js",
     "./github-repositories-wire": "./src/github-repositories-wire.js",
     "./github-installation-wire": "./src/github-installation-wire.js",

@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace's button in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen, a video in the system's player, and a PDF's chip opening its viewer, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list, the workspace's button in its bar, its ⋯ menu with its scopes, its search, a row's swipes and its long press preview, a thread with a picture opened full screen, a video in the system's player, and a PDF's chip opening its viewer, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -22,47 +22,25 @@ env:
     id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
-# The ⋯ menu: Mark all as read. A tap off the menu closes it.
+# The ⋯ menu: the scopes, Open checked, then Mark all as read. A tap off the
+# menu closes it.
 - tapOn: "More"
 - assertVisible: "Mark all as read"
+- assertVisible: "Questions.*"
 - takeScreenshot: inbox-more
 - runFlow:
     file: subflows/dismiss.yaml
-# The scopes' segmented control over the list, Open chosen: All lists the
-# settled threads too. An iPad's list column holds them as a menu picker
-# instead, its Filter button, so the flow opens it first there, whether or
-# not a thread stands beside it. Note that it is found by "Filter", its whole
-# name on iOS 26.5, where it is a glyph alone, and the start of it on iOS 27,
-# where the scope chosen follows; and that the word must end there, because a
-# narrowing scope stands "Filtered by: …" under the column's title, which a
-# bare "Filter.*" matches first.
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - tapOn: 'Filter(\W.*)?'
+# The scopes stand in the ⋯ menu, on every window, as Mail's filter does:
+# All lists the settled threads too. Note that All is picked while Open
+# stands, so the bar names no scope yet and its "All" is the menu's alone.
+- tapOn: "More"
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: inbox-all
-# Note that a compact window's list is scrolled up to its scopes rather than
-# to its first row, which a scroll up stands under the bar with the scopes
-# above it, out of sight.
-- runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - scrollUntilVisible:
-          element: "Open.*"
-          direction: UP
-- waitForAnimationToEnd
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - tapOn: 'Filter(\W.*)?'
+- tapOn: "More"
 - tapOn: "Open.*"
 # The thread comes first, before the row's swipes and its long press: a row
 # a swipe opened takes the next tap to close its actions, and its files, the
@@ -254,21 +232,13 @@ env:
       true: ${FLOATING_TABS == 'true'}
     commands:
       - assertVisible: "Reminder .*"
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - tapOn: 'Filter(\W.*)?'
+- tapOn: "More"
 - tapOn: "Reminders"
 - assertVisible: "Recorded the invite flow"
 - assertVisible: "Reminder .*"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-reminders
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - tapOn: 'Filter(\W.*)?'
+- tapOn: "More"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
 # The search, a round glass button in the bar, narrows the list to

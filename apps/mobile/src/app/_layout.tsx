@@ -29,6 +29,7 @@ import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
 import { useKeeping } from "../keeping.js";
+import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
@@ -44,8 +45,11 @@ import { VoiceCallProvider } from "../voice-call.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
-// The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
+// The splash stands until the screens first draw (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
 holdSplash();
+
+// Note that the root layout evaluates after every module it imports, so this is when the bundle's eager modules have run.
+noteLaunchPhase(LAUNCH_PHASE.EVALUATED);
 
 /**
  * The navigators' theme: react-navigation's own for the color scheme, its
@@ -92,7 +96,14 @@ const SHEET_ROUTE = {
 const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
-const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
+const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set([
+  "modal",
+  "formSheet",
+  "fullScreenModal",
+]);
+
+/** The pages that start work, which open over the whole window as a new conversation does, rather than as a sheet. */
+const START_PAGE: ReadonlySet<string> = new Set([SHEET_ROUTE.START_TASK, SHEET_ROUTE.START_AGENT]);
 
 /** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useFocusShown` hears the sheet's own focus. */
 function SheetNoticeLayer({ children }: { readonly children: ReactNode }) {
@@ -127,7 +138,10 @@ function screenLayout({
     children
   );
 
-  const lifted = LIFTED_SHEETS.has(route.name) && options.sheetAllowedDetents === undefined;
+  const lifted =
+    LIFTED_SHEETS.has(route.name) &&
+    !START_PAGE.has(route.name) &&
+    options.sheetAllowedDetents === undefined;
 
   return lifted ? <ElevatedGround>{placed}</ElevatedGround> : placed;
 }
@@ -162,10 +176,14 @@ function screenLayout({
  * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
-  const { data: signedIn = false } = useQuery({
+  // Note that the account is known only once the host's first reading lands, which a launch spends on the Inbox's skeleton rather than the sign-in screen, since nearly every launch is signed in: only the host's own word that nobody is stands sign-in, and only its word that someone is starts what needs an account.
+  const { data: account } = useQuery({
     ...appStateQuery,
-    select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
+    select: (state) => state.account.status,
   });
+
+  const signedIn = account === ACCOUNT_STATUS.SIGNED_IN;
+  const shown = signedIn || account === undefined;
 
   const { data: updateNeeded = false } = useQuery({
     ...appStateQuery,
@@ -182,8 +200,8 @@ function GuardedScreens() {
   useNoticeForAccount();
   useShareSheet(updateNeeded);
   useHostConnectLink(signedIn && !updateNeeded);
-  const app = signedIn && !updateNeeded;
-  const gate = useSetupGate(app);
+  const app = shown && !updateNeeded;
+  const gate = useSetupGate(signedIn && !updateNeeded);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -225,13 +243,14 @@ function GuardedScreens() {
             name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
+          {/* Note that New task and New agent open over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, their composer docked on the keyboard. */}
           <Stack.Screen
             name={SHEET_ROUTE.START_TASK}
-            options={{ presentation: sheetPresentation, title: "New task" }}
+            options={{ presentation: "fullScreenModal", title: "New task" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.START_AGENT}
-            options={{ presentation: sheetPresentation, title: "New agent" }}
+            options={{ presentation: "fullScreenModal", title: "New agent" }}
           />
           {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
           <Stack.Screen
@@ -287,7 +306,7 @@ function GuardedScreens() {
             options={{ presentation: sheetPresentation, title: "Codex plan" }}
           />
         </Stack.Protected>
-        <Stack.Protected guard={!signedIn && !updateNeeded}>
+        <Stack.Protected guard={!shown && !updateNeeded}>
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
         <Stack.Protected guard={updateNeeded}>

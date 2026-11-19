@@ -477,7 +477,7 @@ function progressKey({ done, total }: SectionProgress): number {
   return ((done + total) * (done + total + 1)) / 2 + total;
 }
 
-/** A section's header: its fold chevron where it folds, its title in 13 pt medium, and its count, all muted. */
+/** A section's header: its fold chevron where it folds, its title in the group header's style, medium, and its count, all muted. */
 function GroupHeader({
   title,
   count,

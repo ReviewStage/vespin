@@ -1,6 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { GlassEffectContainer, Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   frame,
@@ -38,9 +38,6 @@ const DockLifted = createContext(false);
 
 /** Tells the dock how tall the bar inside it stands, with its gap, and where its top stands in the window; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
-
-/** How far apart the controls of a row with no bar stand (`DockRow`), as the glass buttons over Notes' keyboard stand apart. */
-const DOCK_ROW_SPACING = SPACE.TIGHT * 2;
 
 /** How round the bar stands: a rounded field, as a composer's is. */
 export const BAR_RADIUS = 24;
@@ -80,7 +77,6 @@ const styles = StyleSheet.create({
   // The bar's column, as wide as the dock and no wider than the reading width a wide window centers its content at.
   column: { width: "100%" },
   // A row with no bar stands in from the screen's edges as far as a bar does.
-  row: { marginHorizontal: BAR_MARGIN },
   // What stands over a bar in a glass of its own, as far in as the bar and apart from it.
   above: { marginHorizontal: BAR_MARGIN, marginBottom: SPACE.TIGHT * 2 },
   // The bar stands in from the screen's edges, its glass drawn by its SwiftUI.
@@ -244,7 +240,8 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
  * the content it scrolls above, as the system's own bars do. Its children
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
  * where it has one, along the row's foot, so a field grown past one line
- * keeps its buttons beside its last line, as Messages' do. It stands inside
+ * keeps its buttons beside its last line, as Messages' do, and over what
+ * stands under the row, such as a start's capsules. It stands inside
  * the screen's bottom safe area, which the tab bar's height is part of, so
  * the bar sits above the tab bar rather than under it. Its glass is the
  * system's own (`BAR_GLASS`) on its SwiftUI, which iOS draws solid where
@@ -253,11 +250,14 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
 export function GlassBar({
   children,
   head,
+  foot,
   above,
   modifiers = [],
   field = false,
 }: {
   readonly children: ReactNode;
+  /** What stands under the row inside the same glass, such as the capsules saying where a start runs; nothing where none is given. */
+  readonly foot?: ReactNode;
   /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box; nothing where none is given. */
   readonly above?: ReactNode;
   /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
@@ -277,11 +277,13 @@ export function GlassBar({
     ...BAR_GLASS,
   ];
 
+  const alone = head === undefined && foot === undefined;
+
   const row = (
     <HStack
       alignment="bottom"
       spacing={BAR_ROW_SPACING}
-      modifiers={head === undefined ? [...modifiers, ...pill, ...glass] : [...pill]}
+      modifiers={alone ? [...modifiers, ...pill, ...glass] : [...pill]}
     >
       {children}
     </HStack>
@@ -289,12 +291,13 @@ export function GlassBar({
 
   const bar = (
     <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
-      {head === undefined ? (
+      {alone ? (
         row
       ) : (
         <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
-          <BarHead filled={field}>{head}</BarHead>
+          {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
           {row}
+          {foot}
         </VStack>
       )}
     </Host>
@@ -308,36 +311,6 @@ export function GlassBar({
         </Host>
       )}
       {bar}
-    </DockedFoot>
-  );
-}
-
-/**
- * A row of controls a dock pins at its foot with no bar around them, each
- * control standing in the system's own glass, one layer, as the controls
- * over the keyboard in Notes and Reminders stand: a compose sheet's + and
- * its capsule menus. Its children are SwiftUI pieces drawn with a glass
- * button style (`buttonStyle("glass")`), laid in a row inside the system's
- * glass container, so neighbors draw as one family of glass rather than a
- * glass inside a glass. Note that the system's glass styles stand solid on
- * their own where the reader turned on Reduce Transparency, so the row needs
- * no stand-in of its own.
- */
-export function DockRow({
-  children,
-  modifiers = [],
-}: {
-  readonly children: ReactNode;
-  /** What the row's SwiftUI takes over its whole width, such as a drop of pictures. */
-  readonly modifiers?: readonly ModifierConfig[];
-}) {
-  return (
-    <DockedFoot>
-      <Host matchContents={{ vertical: true }} style={[styles.content, styles.row]}>
-        <GlassEffectContainer spacing={DOCK_ROW_SPACING} modifiers={[...modifiers]}>
-          <HStack spacing={DOCK_ROW_SPACING}>{children}</HStack>
-        </GlassEffectContainer>
-      </Host>
     </DockedFoot>
   );
 }

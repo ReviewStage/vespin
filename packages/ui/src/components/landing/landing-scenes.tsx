@@ -2,7 +2,7 @@ import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
   CheckIcon,
@@ -86,6 +86,9 @@ import {
   useLandingTeammate,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
+import { MovingList } from "./landing-motion.js";
+import { heldStill } from "./landing-paint.js";
+import { DemoPointer, usePointer } from "./landing-pointer.js";
 import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./landing-story.js";
 
 /**
@@ -109,22 +112,11 @@ import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./la
 const BEAT = { AGENTS: 1800, RUNS: 1700 } as const;
 
 /**
- * A window's story: how many steps it plays, the last it draws (held for the
- * rest), and the step it opens on, its telling moment, since the window is
- * cut to the panel that moment happens in.
+ * The team scene's story: how many steps it plays, the last its log draws
+ * (held a beat), and the step the log turns over on, scrolling its finished
+ * turn away to the opening it starts from, so the loop has no cut.
  */
-const STORY = {
-  AGENTS: { STEPS: 9, LAST: 6, FROM: 0 },
-} as const;
-
-/** The step a window's `story` draws, from its telling moment on. */
-function useWindowStory(
-  ref: RefObject<HTMLDivElement | null>,
-  story: (typeof STORY)[keyof typeof STORY],
-  beat: number,
-): number {
-  return Math.min(useStory(ref, story.STEPS - story.FROM, beat) + story.FROM, story.LAST);
-}
+const AGENTS_STORY = { STEPS: 9, LAST: 6, TURN: 8 } as const;
 
 /** The scenes the landing plays, by the feature each shows. */
 export const LANDING_SCENE = {
@@ -619,8 +611,8 @@ function ColumnCard({
  * The Inbox demo's beats, in order: the list, the question arriving, the
  * pointer going to it and pressing, the thread opening, the pointer picking
  * an option, pressing into the note and typing it, pressing send, the
- * answer standing in the thread, and the list again with the question
- * settled, held before the loop starts over.
+ * answer standing in the thread, the question resolved out of the list
+ * behind it, and the list again as it opened, held before the loop.
  */
 const INBOX_BEAT = {
   LIST: 0,
@@ -679,8 +671,9 @@ function pressedAt(beat: number): boolean {
   );
 }
 
-/** The element the pointer goes to for `aim`, found in the scene's own markup. */
-const AIM_TARGET: Readonly<Record<Exclude<PointerAim, typeof POINTER_AIM.REST>, string>> = {
+/** The element the pointer goes to for `aim`, found in the scene's own markup, or nothing at rest. */
+const AIM_TARGET: Readonly<Record<PointerAim, string | null>> = {
+  [POINTER_AIM.REST]: null,
   [POINTER_AIM.ROW]: ".ui-landing-demo-list li",
   [POINTER_AIM.PICK]: `.ui-landing-demo-thread [data-value="${QUESTION.PICK}"]`,
   [POINTER_AIM.NOTE]: ".ui-landing-demo-thread textarea",
@@ -693,9 +686,10 @@ function listStep(beat: number): number {
 
   if (beat < INBOX_BEAT.PRESS_ROW) return 1;
 
-  if (beat < INBOX_BEAT.BACK) return 2;
+  // Note that the answered question is resolved and leaves the list as it is sent, so the list the thread slides back to stands as the demo opened and the loop starts over without a cut.
+  if (beat < INBOX_BEAT.SENT) return 2;
 
-  return 5;
+  return 0;
 }
 
 /** The thread's step (`QuestionThread`) at a beat of the demo. */
@@ -705,71 +699,6 @@ function threadStep(beat: number): number {
   if (beat < INBOX_BEAT.SENT) return 3;
 
   return 5;
-}
-
-/** A point in the scene, in pixels from its top left. */
-type Point = { readonly x: number; readonly y: number };
-
-/**
- * Where the pointer stands at `aim`: the middle of its target as the scene
- * draws it now, or a corner of the screen at rest. Note that we measure
- * after each beat draws, because the target moves as the thread opens.
- */
-function usePointer(scene: RefObject<HTMLDivElement | null>, aim: PointerAim, beat: number): Point {
-  const [point, setPoint] = useState<Point>({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const root = scene.current;
-
-    if (!root) return;
-    const box = root.getBoundingClientRect();
-    const target = aim === POINTER_AIM.REST ? null : root.querySelector(AIM_TARGET[aim]);
-
-    if (target === null) {
-      setPoint({ x: box.width * 0.82, y: box.height * 0.84 });
-
-      return;
-    }
-
-    const rect = target.getBoundingClientRect();
-    setPoint({
-      x: rect.left - box.left + Math.min(rect.width / 2, 120),
-      y: rect.top - box.top + rect.height / 2,
-    });
-  }, [scene, aim, beat]);
-
-  return point;
-}
-
-/**
- * The demo's pointer: an arrow at `point`, pressing where `pressed`. A
- * picture, never a control. Note that it moves across and down on two
- * boxes eased apart, so its path bows as a hand's does rather than running
- * straight.
- */
-function DemoPointer({ point, pressed }: { point: Point; pressed: boolean }): React.JSX.Element {
-  return (
-    <span
-      className="ui-landing-pointer"
-      aria-hidden="true"
-      style={cssCustomProperties({
-        "--ui-landing-pointer-x": `${point.x}px`,
-        "--ui-landing-pointer-y": `${point.y}px`,
-      })}
-    >
-      <span className="ui-landing-pointer-down">
-        <svg
-          className="ui-landing-pointer-arrow"
-          viewBox="0 0 16 20"
-          aria-hidden="true"
-          focusable="false"
-          data-pressed={pressed || undefined}
-        >
-          <path d="M1 1v15.5l4.2-4.1 2.9 6.6 2.6-1.1-2.9-6.5H14L1 1z" />
-        </svg>
-      </span>
-    </span>
-  );
 }
 
 /**
@@ -783,7 +712,7 @@ function InboxScene(): React.JSX.Element {
   const beat = useTimeline(ref, INBOX_DURATIONS);
   const open = beat >= INBOX_BEAT.OPEN && beat < INBOX_BEAT.BACK;
   const aim = pointerAim(beat);
-  const point = usePointer(ref, aim, beat);
+  const point = usePointer(ref, AIM_TARGET[aim], beat);
 
   const pressed = pressedAt(beat);
   const note = useTyping(QUESTION.NOTE, beat === INBOX_BEAT.TYPE, beat > INBOX_BEAT.TYPE);
@@ -818,11 +747,12 @@ function InboxScene(): React.JSX.Element {
         >
           <div className="ui-landing-demo" data-open={open}>
             <div className="ui-landing-demo-list ui-landing-rows">
-              <List label="Inbox items">
-                {inboxItems(listStep(beat)).map((item) => (
-                  <InboxRow key={item.id} item={item} />
-                ))}
-              </List>
+              <MovingList
+                label="Inbox items"
+                items={inboxItems(listStep(beat))}
+                keyOf={(item) => item.id}
+                row={(item) => <InboxRow key={item.id} item={item} />}
+              />
             </div>
             <div className="ui-landing-demo-thread">
               <QuestionThread
@@ -1042,21 +972,49 @@ export function PullRequestCard({
   );
 }
 
-/** The agent's log at `step` under its tabs: its words, its calls, and the other agent's answers. */
-function LogCard({ step }: { step: number }): React.JSX.Element {
+/**
+ * The agent's log at `step` under its tabs, or `turning` over to its
+ * opening: its finished turn scrolling up and away and the opening arriving
+ * under it, stopping where the log starts. Note that the log on show keeps
+ * one key through the turn, so its rows never enter again when the turn
+ * ends and the loop starts over; the finished turn drawn above it is a
+ * copy, whose rows stand still as they arrive. It measures the opening's
+ * place as the turn starts, because the finished turn's height comes from
+ * its words.
+ */
+function LogCard({ step, turning }: { step: number; turning: boolean }): React.JSX.Element {
+  const reel = useRef<HTMLDivElement>(null);
+  const [by, setBy] = useState(0);
+
+  useLayoutEffect(() => {
+    const opening = reel.current?.lastElementChild;
+
+    setBy(turning && opening instanceof HTMLElement ? opening.offsetTop : 0);
+  }, [turning]);
+
   return (
     <ColumnCard
       bar={
         <Toolbar
           start={TOOLBAR_INSET.COLUMN}
           look={TOOLBAR_LOOK.TABS}
-          title={<TaskTabs step={step} />}
+          title={<TaskTabs step={turning ? 0 : step} />}
           actions={<MoreButton thing="agent" onClick={still} />}
         />
       }
     >
       <div className="ui-landing-log-sheet">
-        <AgentLog step={step} />
+        <div className="ui-landing-log-turn">
+          <div
+            ref={reel}
+            className="ui-landing-log-reel"
+            data-turning={(turning && by > 0) || undefined}
+            style={cssCustomProperties({ "--ui-landing-turn-by": `${String(by)}px` })}
+          >
+            {turning ? <AgentLog key="finished" step={AGENTS_STORY.LAST} /> : null}
+            <AgentLog key="on-show" step={turning ? 0 : step} />
+          </div>
+        </div>
       </div>
     </ColumnCard>
   );
@@ -1065,12 +1023,15 @@ function LogCard({ step }: { step: number }): React.JSX.Element {
 /**
  * A task close up: the agent's log, where it starts another agent and the
  * two trade messages, then the member tags a teammate to review and the
- * teammate answers in the same log, the plan's sub-tasks over its corner
- * stepping to done.
+ * teammate answers in the same log, and the log turns over to the opening
+ * it starts from, so the story loops without a cut.
  */
 function AgentsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
-  const step = useWindowStory(ref, STORY.AGENTS, BEAT.AGENTS);
+  const played = useStory(ref, AGENTS_STORY.STEPS, BEAT.AGENTS);
+  const step = Math.min(played, AGENTS_STORY.LAST);
+  // Note that where motion is held the story stands on its last full step, never mid-turn.
+  const turning = played === AGENTS_STORY.TURN && !heldStill();
 
   return (
     <div
@@ -1081,7 +1042,7 @@ function AgentsScene(): React.JSX.Element {
       {...DESKTOP_SURFACE}
     >
       <div className="ui-landing-closeup-cards" inert>
-        <LogCard step={step} />
+        <LogCard step={step} turning={turning} />
       </div>
     </div>
   );
