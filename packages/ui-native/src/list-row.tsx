@@ -191,6 +191,8 @@ export type MenuChoice = {
   readonly tone?: StatusTone | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
+  /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
+  readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -215,11 +217,6 @@ export type RowMenuGroup = {
   readonly submenus?: readonly RowSubmenu[] | undefined;
   readonly actions?: readonly RowAction[] | undefined;
 };
-
-/** A group's key in its menu: its first piece's words, which a menu holds once. */
-function menuGroupKey(group: RowMenuGroup): string {
-  return group.submenus?.[0]?.label ?? group.actions?.[0]?.label ?? "";
-}
 
 /** Whether a group holds anything to draw. */
 function menuGroupFilled(group: RowMenuGroup): boolean {
@@ -343,6 +340,16 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
 
 /** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+  // Note that a choice saying more under its words, such as a member's email, stands as a menu's title and subtitle.
+  if (choice.detail !== undefined)
+    return menuActContent(
+      choice.label,
+      choice.symbol,
+      choice.detail,
+      choiceColor(choice, colors),
+      choice.photo,
+    );
+
   return actContent(
     choice.label,
     choice.symbol,
@@ -511,6 +518,50 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
+/** One group of a long press menu, in the menu's order: its acts and the menus within it. */
+export type LongPressGroup = readonly RowSwipe[];
+
+/**
+ * The one long press menu the app opens on anything held, as the panel opens
+ * its right-click menu on the same things: SwiftUI's own menu, its groups in
+ * the panel's order, each set apart from the next by a divider, an act red
+ * where it takes something away, and the preview it lifts where it has one,
+ * as the system's own apps lift a glance at what a row opens. A row draws it
+ * through `RowFrame`, a section's header through `ListSection`'s `menu`,
+ * and SwiftUI or React Native views held through `HeldSwiftMenu` and
+ * `HeldMenu`. The content alone where it offers nothing.
+ */
+export function LongPressMenu({
+  groups,
+  preview,
+  children,
+}: {
+  readonly groups: readonly LongPressGroup[];
+  readonly preview?: ReactElement | undefined;
+  readonly children: ReactElement;
+}) {
+  const colors = useColors();
+  const filled = groups.filter((group) => group.length > 0);
+
+  if (filled.length === 0 && preview === undefined) return children;
+
+  return (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {filled.map((group, at) => (
+          // Note that a group is keyed by its first item's words, which a menu holds once.
+          <Fragment key={group[0]?.label ?? at}>
+            {at === 0 ? null : <Divider />}
+            {group.map((item) => swipeMenuButton(item, colors))}
+          </Fragment>
+        ))}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
+      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
+    </ContextMenu>
+  );
+}
+
 /** A row's content with the question its acts ask standing by it, where its acts ask any. */
 function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
   return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
@@ -597,24 +648,16 @@ export function RowFrame({
         ];
 
   const menu = asking(
-    <ContextMenu>
-      <ContextMenu.Items>
-        {opening.map((action) => actionButton(action, colors))}
-        {opening.length > 0 && ownGroup ? <Divider /> : null}
-        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
-        {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
-        {menuActions.map((action) => actionButton(action, colors))}
-        {groups.map((group, at) => (
-          <Fragment key={menuGroupKey(group)}>
-            {at === 0 && opening.length === 0 && !ownGroup ? null : <Divider />}
-            {(group.submenus ?? []).map((submenu) => rowSubmenu(submenu, colors))}
-            {(group.actions ?? []).map((action) => actionButton(action, colors))}
-          </Fragment>
-        ))}
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
-      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
-    </ContextMenu>,
+    <LongPressMenu
+      groups={[
+        opening,
+        [...swiped, ...menuSubmenus, ...menuActions],
+        ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
+      ]}
+      preview={preview}
+    >
+      {row}
+    </LongPressMenu>,
     question,
   );
 

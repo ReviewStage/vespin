@@ -28,13 +28,19 @@ import {
   NO_REPOSITORY,
   TASKS_HEAD_WORDS,
 } from "@repo/features/task-list-model";
-import { TASK_SECTION_WRITE, type TaskSection } from "@repo/features/task-section-wire";
+import {
+  TASK_SECTION_WRITE,
+  type TaskSection,
+  type TaskSectionWrite,
+} from "@repo/features/task-section-wire";
 import {
   NO_TASK_SECTIONS,
   placeWrites,
+  SECTION_DELETED,
   SECTION_WRITE_FAILED_NOTE,
   sectionOfTask,
   sectionOrder,
+  undeleteWrites,
   unplaceAllWrites,
   workspaceSections,
 } from "@repo/features/task-sections-model";
@@ -85,14 +91,16 @@ import {
 import {
   BUZZ,
   heldValue,
+  NOTICE_KIND,
   QUIET_ROW_QUESTION,
   type RowAsker,
   type RowQuestion,
+  useFailureNotices,
   useHeldValue,
 } from "@repo/ui-native";
 import { caseWhen, coalesce, gt, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
@@ -322,6 +330,10 @@ export interface TaskPlacing {
   readonly repositories: readonly string[];
   /** Gives a task its repository, or takes it away under null, as the panel's Change repository does. */
   readonly setRepository: (taskId: string, repository: string | null) => void;
+  /** Names one of the member's sections anew, keeping its icon, as the panel's Rename on a section's header does. */
+  readonly renameSection: (section: TaskSection, title: string) => void;
+  /** Deletes one of the member's sections, its tasks left where they stand, and offers Undo, as the panel's Delete section does. */
+  readonly deleteSection: (section: TaskSection) => void;
 }
 
 /**
@@ -337,6 +349,7 @@ export interface TaskPlacing {
 export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
   const acts = useHostActs();
   const write = useWrite();
+  const notices = useFailureNotices();
 
   const { data: state = NO_TASK_SECTIONS } = useQuery({
     ...appStateQuery,
@@ -345,7 +358,63 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
 
   const { listed } = useWorkspaceRepositories(workspaceId);
 
+  // Note that an Undo reads the sections as they stand when it is pressed, which a delete's own answer may have moved on since.
+  const current = useRef(state);
+  useEffect(() => {
+    current.current = state;
+  }, [state]);
+
   return useMemo(() => {
+    const sendSections = (writes: readonly TaskSectionWrite[], id: string) => {
+      const [first, ...rest] = writes;
+
+      if (first === undefined) return Promise.resolve(false);
+
+      return write(() => acts[ACT_KIND.TASKS_WRITE_SECTION]({ writes: [first, ...rest] }), {
+        refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
+        subject: { kind: WRITE_SUBJECT.TASK_SECTION, id },
+        went: BUZZ.SUCCESS,
+      });
+    };
+
+    const renameSection = (section: TaskSection, title: string) => {
+      // Note that a name left blank keeps the one it had, as the panel's rename never leaves a section nameless.
+      const named = title.trim() === "" ? section.title : title.trim();
+
+      if (named === section.title) return;
+      void sendSections(
+        [
+          {
+            kind: TASK_SECTION_WRITE.EDIT,
+            id: section.id,
+            title: named,
+            icon: section.icon ?? null,
+          },
+        ],
+        section.id,
+      );
+    };
+
+    const deleteSection = (section: TaskSection) => {
+      const before = current.current;
+
+      void sendSections([{ kind: TASK_SECTION_WRITE.DELETE, id: section.id }], section.id).then(
+        (landed) => {
+          if (!landed) return;
+          notices.say({
+            kind: NOTICE_KIND.DONE,
+            words: SECTION_DELETED,
+            undo: () => {
+              void sendSections(
+                undeleteWrites(before, current.current, section, Date.now()),
+                section.id,
+              );
+            },
+          });
+        },
+      );
+    };
+
     const moveToSection = (taskId: string, sectionId: string | null) => {
       const [first, ...rest] =
         sectionId === null
@@ -379,8 +448,10 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       moveToSection,
       repositories: listed,
       setRepository,
+      renameSection,
+      deleteSection,
     };
-  }, [acts, write, state, workspaceId, listed]);
+  }, [acts, write, notices, state, workspaceId, listed]);
 }
 
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
