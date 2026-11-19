@@ -286,6 +286,27 @@ it.effect(
 );
 
 it.effect(
+  "an agent on no task, which the followed list never names, is kept through every push and move of it, so its end is still dotted",
+  () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const notices = yield* f.notices;
+      f.focus(false);
+      const other = agent(AGENT_STATUS.RUNNING, { id: "a1b2c3d4-0000-4000-8000-000000000003" });
+
+      notices.observeAgents([agent(AGENT_STATUS.RUNNING, { taskId: null })]);
+
+      for (let push = 0; push < 4; push += 1) notices.observeFollowed([], [TASK_ID]);
+      notices.observeFollowedMoved([{ was: undefined, now: other }], []);
+      notices.observeFollowedMoved([{ was: other, now: undefined }], []);
+      notices.observeStatus(AGENT_ID, AGENT_STATUS.COMPLETED);
+      yield* settled;
+
+      assert.deepEqual(f.unseen.at(-1), [AGENT_ID]);
+    }),
+);
+
+it.effect(
   "an agent a Start answered that the list never names, as one archived before it did, is let go after a few pushes with its dot",
   () =>
     Effect.gen(function* () {

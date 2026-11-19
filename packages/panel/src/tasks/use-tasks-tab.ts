@@ -2646,8 +2646,19 @@ export function useTasksTab(input: {
   // An agent's place opened by the agent as the list or the service has it: on its task, an archived agent's tab among its tabs,
   // or through its own address where it stands on none.
   const openFoundAgent = (agent: AgentSummary, place: AgentPlace, home: string) => {
-    if (agent.taskId === null) linkArrive(() => openAgentPage(agent.id, home), NOTHING);
-    else openOnTask(agent.taskId, place);
+    if (agent.taskId !== null) {
+      openOnTask(agent.taskId, place);
+
+      return;
+    }
+
+    // Note that a message's page is asked to bring it into view once the agent's own page has arrived, as its tab is on a task.
+    linkArrive(
+      () => openAgentPage(agent.id, home),
+      () => {
+        if (place.kind === LINK_DESTINATION.MESSAGE) revealMessage(place);
+      },
+    );
   };
 
   /**
