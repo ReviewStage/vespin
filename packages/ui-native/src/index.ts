@@ -204,6 +204,8 @@ export { type PageFollowing, PageHeader, type StandingMenus } from "./page-heade
 
 export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
 
+export { PersonHead } from "./person-head.js";
+
 export { PictureSet, type SetPicture } from "./picture-set.js";
 
 export { ProblemLine } from "./problem-line.js";
