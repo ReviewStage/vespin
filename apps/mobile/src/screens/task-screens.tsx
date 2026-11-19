@@ -79,7 +79,11 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { repositoryPageUrl } from "@repo/features/tasks-model";
+import {
+  deleteAgentWords,
+  repositoryPageUrl,
+  type StopAgentsWords,
+} from "@repo/features/tasks-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
@@ -1759,7 +1763,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
 
 /**
  * An agent row's swipe: Stop while it works, which a full swipe runs, or
- * Archive once it rests, which asks first (`useAgentArchiveAsk`), as the
+ * Archive once it rests, which asks first (`useAgentRowAsk`), as the
  * agent page's menu asks, since the phone has no Undo to offer after; a
  * destructive act never runs on a full swipe.
  */
@@ -1791,63 +1795,142 @@ function agentSwipes(
   ];
 }
 
+/** What an agent row's Rename asks, as the agent page's Rename asks it (`askForName`). */
+const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
+
 /**
- * What an agent row's long press holds past its swipes, which `RowFrame`
- * stands in the menu already (Stop, or Archive asked first): the panel's
- * Copy link and Open in browser (`agentMenuGroups`), once its workspace is
- * known. Rename, Copy transcript and Permanently delete stay on the agent's
- * page, which holds the questions and the transcript they need.
+ * An agent row's long press menu, in the panel's agent menu's groups
+ * (`agentMenuGroups`) and its row's choice of them: Copy link and Open in
+ * browser, once its workspace is known; Rename; Stop while it works and
+ * Archive, asked first; and last and alone, Permanently delete, asked
+ * always. Copy transcript stays on the agent's page, as the panel's row
+ * leaves it out too (`NOT_ON_A_ROW`).
  */
-function agentMenuActs(
-  link: string | undefined,
-  onCopyLink: (link: string) => void,
-): readonly RowAction[] {
-  return link === undefined
-    ? []
-    : [
-        {
-          label: WORDS.COPY_LINK,
-          symbol: GLYPH.LINK,
-          tone: ROW_ACTION_TONE.NEUTRAL,
-          onPress: () => onCopyLink(link),
+function agentMenu({
+  agent,
+  name,
+  link,
+  acts,
+  asking,
+  onCopyLink,
+}: {
+  readonly agent: TaskAgentLine["agent"];
+  readonly name: string;
+  readonly link: string | undefined;
+  readonly acts: ReturnType<typeof useAgentRowActs>;
+  /** Archive and Permanently delete, each asked first by the row; neither stands where none is given. */
+  readonly asking: { readonly archive: () => void; readonly remove: () => void } | undefined;
+  readonly onCopyLink: (link: string) => void;
+}): readonly LongPressGroup[] {
+  const links: readonly RowAction[] =
+    link === undefined
+      ? []
+      : [
+          {
+            label: WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => onCopyLink(link),
+          },
+          {
+            label: VERB.OPEN_IN_BROWSER,
+            symbol: GLYPH.OPEN_EXTERNALLY,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => openInSafari(link),
+          },
+        ];
+
+  const rename: RowAction = {
+    label: WORDS.RENAME,
+    symbol: GLYPH.RENAME,
+    tone: ROW_ACTION_TONE.NEUTRAL,
+    onPress: () =>
+      askForName({
+        title: AGENT_RENAME_WORDS.TITLE,
+        act: AGENT_RENAME_WORDS.ACT,
+        name,
+        onName: (title) => {
+          if (title !== "" && title !== name) acts.rename(agent.id, title);
         },
+      }),
+  };
+
+  const stop: readonly RowAction[] = agentStillWriting(agent.status)
+    ? [
         {
-          label: VERB.OPEN_IN_BROWSER,
-          symbol: GLYPH.OPEN_EXTERNALLY,
+          label: WORDS.STOP,
+          symbol: GLYPH.STOP,
           tone: ROW_ACTION_TONE.NEUTRAL,
-          onPress: () => openInSafari(link),
+          onPress: () => acts.stop(agent.id),
         },
-      ];
+      ]
+    : [];
+
+  if (asking === undefined) return [links, [rename], stop];
+
+  return [
+    links,
+    [rename],
+    [
+      ...stop,
+      {
+        label: WORDS.ARCHIVE,
+        symbol: GLYPH.ARCHIVE,
+        tone: ROW_ACTION_TONE.ARCHIVE,
+        onPress: asking.archive,
+      },
+    ],
+    [
+      {
+        label: WORDS.DELETE,
+        symbol: GLYPH.DELETE,
+        tone: ROW_ACTION_TONE.DESTRUCTIVE,
+        onPress: asking.remove,
+      },
+    ],
+  ];
 }
 
-/** Archive on agents' rows, asked first by the row pressed. */
-export interface AgentArchiving {
-  /** Raises the question for an agent by the drawn row `asker` names. */
+/** Archive and Permanently delete on agents' rows, each asked first by the row pressed. */
+export interface AgentAsking {
+  /** Raises Archive's question for an agent by the drawn row `asker` names. */
   readonly archive: (agentId: string, asker: RowAsker) => void;
+  /** Raises Permanently delete's question for an agent, named `name`, by the drawn row `asker` names. */
+  readonly remove: (agent: AgentDeleting, asker: RowAsker) => void;
   /** The question standing by the drawn row `asker` names for an agent, `QUIET_ROW_QUESTION` where it raised none about it. */
   readonly question: (agentId: string, asker: RowAsker) => RowQuestion;
 }
 
-/** An agent's Archive question as it stands: the agent, the row that raised it, and whether it is shown. */
-interface AskedArchive {
+/** What Permanently delete's question names of an agent: its id, its name, and whether it is archived, which leaves out the question's word on archiving instead. */
+interface AgentDeleting {
+  readonly agentId: string;
+  readonly name: string;
+  readonly archived: boolean;
+}
+
+/** An agent's question as it stands: the agent, the row that raised it, whether it is shown, and, for Permanently delete, its words, none for Archive. */
+interface AskedAgent {
   readonly agentId: string;
   readonly asker: RowAsker;
   readonly presented: boolean;
+  readonly deleting: StopAgentsWords | undefined;
 }
 
 /**
- * Archive on an agent's row, asked first by the row pressed, as Mail stands
- * its question by the message: `archive` raises the question for an agent
- * by its row, and `question` is what stands by that row. Note that the
- * question reads where the agent stands now, as the agent page's menu asks
- * (`useArchiveAsk`), raised at once on where the list holds it and checked
- * afresh as its act is pressed, because one that starts working while the
- * question is up would otherwise be stopped and archived without a word of
- * it.
+ * Archive and Permanently delete on an agent's row, each asked first by the
+ * row pressed, as Mail stands its question by the message: `archive` and
+ * `remove` raise the question for an agent by its row, and `question` is
+ * what stands by that row. Note that Archive's question reads where the agent
+ * stands now, as the agent page's menu asks (`useArchiveAsk`), raised at once
+ * on where the list holds it and checked afresh as its act is pressed,
+ * because one that starts working while the question is up would otherwise
+ * be stopped and archived without a word of it. Permanently delete asks in
+ * the panel's words (`deleteAgentWords`) whatever the agent does, since
+ * nothing brings it back.
  */
-export function useAgentArchiveAsk(): AgentArchiving {
+export function useAgentRowAsk(): AgentAsking {
   const acts = useAgentRowActs();
-  const [asked, setAsked] = useState<AskedArchive>();
+  const [asked, setAsked] = useState<AskedAgent>();
   const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
@@ -1856,12 +1939,32 @@ export function useAgentArchiveAsk(): AgentArchiving {
       // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
       letGo();
       void readAfresh(agentId).then((stands) => {
-        if (stands) setAsked({ agentId, asker, presented: true });
+        if (stands) setAsked({ agentId, asker, presented: true, deleting: undefined });
       });
+    },
+    remove: ({ agentId, name, archived }, asker) => {
+      setAsked({ agentId, asker, presented: true, deleting: deleteAgentWords(name, archived) });
     },
     question: (agentId, asker) => {
       if (asked === undefined || asked.agentId !== agentId || asked.asker !== asker) {
         return QUIET_ROW_QUESTION;
+      }
+
+      const { deleting } = asked;
+
+      if (deleting !== undefined) {
+        return {
+          title: deleting.title,
+          message: deleting.body,
+          act: deleting.verb,
+          presented: asked.presented,
+          onAct: () => {
+            if (!asked.presented) return;
+            letGo();
+            acts.remove(agentId);
+          },
+          onDismiss: letGo,
+        };
       }
 
       return {
@@ -1874,7 +1977,7 @@ export function useAgentArchiveAsk(): AgentArchiving {
           letGo();
           answered(
             () => acts.archive(agentId),
-            () => setAsked({ agentId, asker, presented: true }),
+            () => setAsked({ agentId, asker, presented: true, deleting: undefined }),
           );
         },
         onDismiss: letGo,
@@ -1894,7 +1997,7 @@ export function TaskAgentRow({
   line,
   task,
   named = false,
-  archiving,
+  asking,
   nest,
 }: {
   readonly line: TaskAgentLine;
@@ -1904,8 +2007,8 @@ export function TaskAgentRow({
   readonly task?: TaskSummary | undefined;
   /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
   readonly named?: boolean | undefined;
-  /** Archive asked first, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
-  readonly archiving?: AgentArchiving | undefined;
+  /** Archive and Permanently delete, each asked first (`useAgentRowAsk`); its row offers neither where none is given. */
+  readonly asking?: AgentAsking | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -1966,10 +2069,27 @@ export function TaskAgentRow({
       trailingActions={agentSwipes(
         agent,
         acts,
-        archiving === undefined ? undefined : (agentId) => archiving.archive(agentId, asker),
+        asking === undefined ? undefined : (agentId) => asking.archive(agentId, asker),
       )}
-      question={archiving?.question(agent.id, asker)}
-      menuActions={agentMenuActs(link, keeping.copyWords)}
+      question={asking?.question(agent.id, asker)}
+      menu={agentMenu({
+        agent,
+        name,
+        link,
+        acts,
+        asking:
+          asking === undefined
+            ? undefined
+            : {
+                archive: () => asking.archive(agent.id, asker),
+                remove: () =>
+                  asking.remove(
+                    { agentId: agent.id, name, archived: agent.archivedAt !== undefined },
+                    asker,
+                  ),
+              },
+        onCopyLink: keeping.copyWords,
+      })}
       preview={
         <AgentPreview
           name={name}
@@ -2005,10 +2125,10 @@ type AgentNest = {
  */
 function OverviewAgents({
   overview,
-  archiving,
+  asking,
 }: {
   readonly overview: TaskOverview;
-  readonly archiving: AgentArchiving;
+  readonly asking: AgentAsking;
 }) {
   const router = useRouter();
   const inboxShown = useInboxShown();
@@ -2053,7 +2173,7 @@ function OverviewAgents({
             waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
           }}
           task={task}
-          archiving={archiving}
+          asking={asking}
           nest={{
             depth,
             fold:
@@ -2388,13 +2508,13 @@ function TaskReading() {
 function OverviewPage({
   overview,
   onRefresh,
-  archiving,
+  asking,
   entered,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
-  /** Archive on its agents' rows, asked first by the row pressed (`useAgentArchiveAsk`). */
-  readonly archiving: AgentArchiving;
+  /** Archive and Permanently delete on its agents' rows, each asked first by the row pressed (`useAgentRowAsk`). */
+  readonly asking: AgentAsking;
   /**
    * Whether the page has come in: a pushed page once its push has ended
    * (`usePushStood`), and a split view's detail, which slides in nothing,
@@ -2441,7 +2561,7 @@ function OverviewPage({
         <OverviewHead overview={overview} />
       </ListSection>
       {sections ? <OverviewRelations overview={overview} /> : null}
-      {sections ? <OverviewAgents overview={overview} archiving={archiving} /> : null}
+      {sections ? <OverviewAgents overview={overview} asking={asking} /> : null}
       {sections ? <OverviewPages overview={overview} /> : null}
       {!sections || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
@@ -2572,7 +2692,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
   const history = useHistoryDoor(overview?.task.workspaceId);
   const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
   const read = useTasksRead();
-  const archiving = useAgentArchiveAsk();
+  const asking = useAgentRowAsk();
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -2583,7 +2703,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
         key={overview.task.id}
         overview={overview}
         onRefresh={refreshTasks}
-        archiving={archiving}
+        asking={asking}
         entered
       />
     ) : selected === undefined ? (
@@ -2734,7 +2854,7 @@ export function TaskScreen() {
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
-  const archiving = useAgentArchiveAsk();
+  const asking = useAgentRowAsk();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
   const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
@@ -2790,7 +2910,7 @@ export function TaskScreen() {
           <OverviewPage
             overview={overview}
             onRefresh={refreshTasks}
-            archiving={archiving}
+            asking={asking}
             entered={stood}
           />
         ) : read && !found.seeking ? (
