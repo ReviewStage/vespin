@@ -184,9 +184,8 @@ function selectionActs(
 }
 
 /**
- * The question Permanently delete asks of the tasks chosen, naming how many.
- * Each goes with its description and transcript, which nothing in the app brings
- * back.
+ * The question Permanently delete asks of the tasks chosen, naming how many,
+ * which nothing in the app brings back.
  */
 function deleteChosenQuestion(count: number): DialogQuestion {
   const one = count === 1;
@@ -194,7 +193,7 @@ function deleteChosenQuestion(count: number): DialogQuestion {
 
   return {
     title: `Permanently delete ${named}?`,
-    body: `${one ? "The task and its description and transcript" : `The ${named} and their descriptions and transcripts`} will be deleted. ${IRREVERSIBLE_WORDS}`,
+    body: IRREVERSIBLE_WORDS,
     verb: `Permanently delete ${one ? TERM.TASK.one : TERM.TASK.many}`,
     running: "Deleting",
     loss: CONFIRM_LOSS.IRREVERSIBLE,

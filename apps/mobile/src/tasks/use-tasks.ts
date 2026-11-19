@@ -1148,7 +1148,7 @@ export function useDeleteAsk(
     (task) =>
       setHeld({
         taskId: task.id,
-        words: deleteTaskWords(task.name, task),
+        words: deleteTaskWords(task),
         presented: true,
         asker,
       });
