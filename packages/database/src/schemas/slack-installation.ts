@@ -139,9 +139,9 @@ export const slackAgentThread = pgTable(
     origin: text("origin").$type<SlackThreadOrigin>().notNull().default(SLACK_THREAD_ORIGIN.START),
     /** When the thread last became its agent's current one, kept for it or written in by a member; a settled turn is posted in the agent's latest. The epoch for a thread the agent posted to that no member has written in yet, which is never current. */
     activeAt: timestamptz("active_at").notNull().defaultNow(),
-    /** The timestamp of the member's message that started the agent, which shows where its work ended (merged, asleep); null for a run's result DM, and for a thread kept before it was recorded. */
+    /** The timestamp of the member's message that started the agent; null for a run's result DM, and for a thread kept before it was recorded. */
     startTs: text("start_ts"),
-    /** The timestamp of the member's message the bot marked as being worked on, cleared once the turn it started ends; null while none is. */
+    /** Written by nothing since agents react in Slack themselves: the timestamp of the message the bot once marked 👀, kept until a migration drops it. */
     workingTs: text("working_ts"),
   },
   (t) => [

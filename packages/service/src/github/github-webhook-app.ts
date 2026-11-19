@@ -58,8 +58,6 @@ import {
 } from "../http/http-effect.js";
 import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
-import { markMergedInSlack } from "../slack/slack-agent-starts.js";
-import type { SlackBot } from "../slack/slack-bot.js";
 import { agentWakeOf, checksCompletedWakeOf, wakeAgents } from "./agent-wakes.js";
 import { clearRevokedAuthorization, GitHubApp } from "./github-app.js";
 import { GITHUB_DELIVERY_READ } from "./github-delivery-read-bounds.js";
@@ -273,16 +271,6 @@ const PullRequestDeliverySchema = Schema.Struct({
   action: Schema.String,
   repository: RepositorySchema,
   pull_request: HeadSchema,
-});
-
-/** A pull request's delivery as far as a merge is read off it: closed, merged, and which. */
-const MergedDeliverySchema = Schema.Struct({
-  action: Schema.Literal("closed"),
-  repository: RepositorySchema,
-  pull_request: Schema.Struct({
-    number: Schema.Number,
-    merged: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
-  }),
 });
 
 const CheckSuiteDeliverySchema = Schema.Struct({
@@ -533,22 +521,6 @@ function noteMoved(repositoryId: number, moved: PullRequestsMoved, at: Date) {
     : notePullRequestsMoved(repositoryId, moved.named, at);
 }
 
-/** The pull request a delivery says merged; nothing for any other event, or a pull request closed unmerged. */
-function mergedPullRequest(
-  event: string,
-  payload: UnparsedWireValue,
-): { readonly repository: string; readonly number: number } | undefined {
-  if (event !== WEBHOOK_EVENT.PULL_REQUEST) return undefined;
-  const read = readDelivery(MergedDeliverySchema, payload);
-
-  if (Result.isFailure(read) || read.success.pull_request.merged !== true) return undefined;
-
-  return {
-    repository: read.success.repository.full_name,
-    number: read.success.pull_request.number,
-  };
-}
-
 /** The `owner/name` a repository delivery says the repository had before, where its action is a rename or a transfer. */
 function formerName(payload: UnparsedWireValue): string | undefined {
   const read = readDelivery(RepositoryChangeDeliverySchema, payload);
@@ -668,7 +640,6 @@ type DeliveryReadServices =
   | HttpClient.HttpClient
   | GitHubApp
   | Sandbox
-  | SlackBot
   | MentionServices;
 
 const NOTHING_READ: DeliveryReadCounts = { read: 0, told: 0 };
@@ -692,9 +663,6 @@ const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(funct
   const taken = mention === undefined ? false : yield* actOnGitHubMention(mention);
   const target = deliveryTarget(event, payload);
   const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
-  const merged = mergedPullRequest(event, payload);
-
-  if (merged !== undefined) yield* markMergedInSlack(merged.repository, merged.number);
   const now = yield* Clock.currentTimeMillis;
 
   // Note that the checks finishing are read after the agents' pull requests were read again above,

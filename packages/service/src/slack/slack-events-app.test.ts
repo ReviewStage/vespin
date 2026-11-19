@@ -17,7 +17,7 @@ import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { inboxMessage } from "@repo/database/schemas/inbox-message";
 import { slackAgentThread } from "@repo/database/schemas/slack-installation";
-import { messages, turns } from "@repo/database/schemas/storage";
+import { messages } from "@repo/database/schemas/storage";
 import {
   CONVERSATION_RUNTIME,
   type ConversationRuntime,
@@ -34,7 +34,7 @@ import {
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { ACTION_RESULT_STATUS, TURN_STATUS, type WireRecord } from "@repo/wire";
+import { ACTION_RESULT_STATUS, type WireRecord } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, ConfigProvider, DateTime, Effect, Layer, Option, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
@@ -54,7 +54,6 @@ import {
   openGithubUser,
 } from "../testing/github-app-fake.js";
 import { recordingHarness } from "../testing/native-harness-fake.js";
-import { postTurnToSlack } from "./slack-agent-starts.js";
 import { SlackBot, type SlackFileTransfer, type SlackWebApi, slackBotOver } from "./slack-bot.js";
 import { slackEventsApp } from "./slack-events-app.js";
 import { runSendSlackMessage } from "./slack-message-tool.js";
@@ -758,11 +757,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(HARNESS.heard.at(-1), { call: "open", account: owner });
         const [refused, ...others] = replies();
         assert.match(refused?.args.text ?? "", /couldn't find you/u);
-        const reactions = calls.filter((call) => call.method === "reactions.add");
-        assert.deepEqual(
-          reactions.map((call) => call.args),
-          [{ channel: "C0001", timestamp: "1700000002.000300", name: "eyes" }],
-        );
 
         const [startedAgent] = yield* (yield* Database)
           .select({
@@ -779,7 +773,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           .where(eq(slackAgentThread.userId, owner));
 
         assert.equal(startedAgent?.repository, "Acme/Relay");
-        // The start says nothing in the thread; the reaction shows it was heard.
+        // The start says nothing in the thread; the agent speaks and reacts there itself.
         assert.deepEqual(others, []);
         const made = Option.getOrThrow(yield* readTask(owner, startedAgent?.taskId ?? ""));
         assert.deepEqual(
@@ -803,6 +797,10 @@ it.layer(SUITE)("our Slack route", (it) => {
           startedAgent?.prompt?.startsWith("find the flakiest test and fix it"),
           "the message is the agent's prompt",
         );
+        assert.ok(
+          startedAgent?.prompt?.includes("channel `C0001`, message `1700000002.000300`"),
+          "the prompt names the message as react_slack takes it",
+        );
         // The agent keeps where it came from, which the lists mark it by.
         assert.deepEqual(startedAgent?.source, {
           kind: "slack",
@@ -819,7 +817,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a message in the thread of an archived agent brings it back, hands it the message, and reacts with 👀",
+    "a message in the thread of an archived agent brings it back, hands it the message, and posts nothing in the thread",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -843,10 +841,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(
           calls.filter((call) => call.method === "chat.postMessage"),
           [],
-        );
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
         );
       });
     },
@@ -873,9 +867,7 @@ it.layer(SUITE)("our Slack route", (it) => {
 
         assert.equal(HARNESS.heard.length, heard);
         assert.deepEqual(
-          calls.filter(
-            (call) => call.method === "chat.postMessage" || call.method === "reactions.add",
-          ),
+          calls.filter((call) => call.method === "chat.postMessage"),
           [],
         );
 
@@ -885,10 +877,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         );
 
         assert.deepEqual(HARNESS.heard.at(-1), { call: "send", account: owner });
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
-        );
       });
     },
   );
@@ -956,79 +944,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         );
 
         assert.equal(HARNESS.heard.filter((heard) => heard.call === "send").length, sent + 1);
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args.name] : [])),
-          ["eyes"],
-        );
-      });
-    },
-  );
-
-  it.effect(
-    "a message the agent takes into a turn already running is marked with 👍, the turn's end takes 👀 off the message that started it, and that end heard late leaves the next turn's 👀",
-    () => {
-      const calls: SlackCall[] = [];
-      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
-
-      return Effect.gen(function* () {
-        const { owner, agent, threadTs, slackUserId } = yield* openThreadAgent(
-          CONVERSATION_RUNTIME.CLAUDE_CODE,
-          false,
-        );
-
-        const first = "1700000003.000400";
-        const second = "1700000004.000500";
-        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, first));
-        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, second));
-
-        const added = (name: string) =>
-          calls.flatMap((call) =>
-            call.method === "reactions.add" && call.args.name === name ? [call.args.timestamp] : [],
-          );
-
-        assert.deepEqual(added("eyes"), [first]);
-        assert.deepEqual(added("+1"), [second]);
-
-        const [turn] = yield* (yield* Database)
-          .select({ id: turns.id })
-          .from(turns)
-          .where(eq(turns.conversationId, agent.conversationId));
-
-        assert.ok(turn !== undefined, "the first message started a turn");
-        yield* postTurnToSlack({
-          userId: owner,
-          conversationId: agent.conversationId,
-          turnId: turn.id,
-          status: TURN_STATUS.SETTLED,
-          failure: null,
-          ranMs: 1,
-        }).pipe(Effect.provide(bot));
-
-        const removed = () =>
-          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : []));
-
-        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
-
-        // The first turn's end is heard again only after a third message started the next turn.
-        yield* (yield* Database)
-          .update(turns)
-          .set({ status: TURN_STATUS.SETTLED })
-          .where(eq(turns.id, turn.id));
-        // The next turn is queued later than the first, as it would be outside a test's still clock.
-        yield* TestClock.adjust("1 second");
-        const third = "1700000005.000600";
-        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, third));
-        yield* postTurnToSlack({
-          userId: owner,
-          conversationId: agent.conversationId,
-          turnId: turn.id,
-          status: TURN_STATUS.SETTLED,
-          failure: null,
-          ranMs: 1,
-        }).pipe(Effect.provide(bot));
-
-        assert.deepEqual(added("eyes"), [first, third]);
-        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
       });
     },
   );
@@ -1068,10 +983,6 @@ it.layer(SUITE)("our Slack route", (it) => {
           calls.filter((call) => call.method === "chat.postMessage"),
           [],
           "the new agent speaks for itself",
-        );
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
         );
       });
     },
