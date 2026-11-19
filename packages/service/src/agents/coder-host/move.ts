@@ -185,6 +185,9 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
     }
 
     const standing = read.value;
+
+    // Note that control is asked again of the agent as it stands, since a move just before may have put it on its starter's Mac.
+    if (!controlsAgent(account, standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
     const [from, to] = yield* Effect.all([placeOf(standing), askedPlaceOf(standing, runsOn)]);
 
     if (from.machine === to.machine && from.deviceId === to.deviceId) {
@@ -222,7 +225,7 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
     // never told of, or with no mark where it moved.
     const store = yield* writer;
 
-    const written = Effect.gen(function* () {
+    const steps = Effect.gen(function* () {
       yield* cancelAgentWakeup(agent.id);
       yield* moveAgentPlace(agent.userId, standing, { machine: to.machine, deviceId: to.deviceId });
 
@@ -236,10 +239,15 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
       return yield* store.markAgentMoved(target, { from: markedPlace(from), to: markedPlace(to) });
     });
 
-    const client = yield* SqlClient.SqlClient;
-    const marked = yield* hostedStoreOrUnavailable(client.withTransaction(written));
+    // Note that a conversation gone fails inside the transaction, so nothing written before the mark stands.
+    const written = Effect.gen(function* () {
+      const marked = yield* hostedStoreOrUnavailable(steps);
 
-    if (Result.isFailure(marked)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      if (Result.isFailure(marked)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+    });
+
+    const client = yield* SqlClient.SqlClient;
+    yield* client.withTransaction(written);
   });
 
   // Note that messages that kept the claim past a send's own wait read as an agent at work.

@@ -1781,6 +1781,22 @@ export const runnerSessions = <
       );
 
     /**
+     * Whether the agent moved to another place since its session last took a
+     * line (`move.ts`), as the line still waiting for its runner will have
+     * handed it or, with none waiting, its conversation's row keeps it. Note
+     * that a read that failed fails, since a launch that resumed the old
+     * session on it would hand the agent the place it left.
+     */
+    const movedSinceSession = (agent: Agent) =>
+      Effect.gen(function* () {
+        const target = { userId, conversationId: agent.conversationId };
+        const pending = yield* readPendingTurnHanded(target, agent.id);
+        const handed = Option.isSome(pending) ? pending.value : yield* heldNativeTurnHanded(target);
+
+        return handed.moved !== undefined;
+      });
+
+    /**
      * The session a launch resumes, the one decision every launch, the line
      * a send queues for one, and a warm call ask. The harness
      * resumes from the store whenever it holds any entry of the session, and
@@ -1808,14 +1824,9 @@ export const runnerSessions = <
     ) =>
       Effect.gen(function* () {
         const { conversationId } = agent;
-        const target = { userId, conversationId };
+
         // A move since the last turn opens afresh, its conversation replayed, since the session's instructions name the place it left.
-        // Note that a read that failed fails the launch, since one that resumed the old session would hand it that place.
-        const pending = yield* readPendingTurnHanded(target, agent.id);
-
-        const handed = Option.isSome(pending) ? pending.value : yield* heldNativeTurnHanded(target);
-
-        if (handed.moved !== undefined) return { replay: true } satisfies ResumedSession;
+        if (yield* movedSinceSession(agent)) return { replay: true } satisfies ResumedSession;
         const routing = yield* readAgentRouting(userId, agent.id);
 
         const own = Option.getOrUndefined(
@@ -2882,7 +2893,9 @@ export const runnerSessions = <
             const first = messageLine(message, layout);
 
             if (layout.linesRead) {
-              const opened = yield* openedLine(agent, sessionId, first, true);
+              // Note that an agent moved since its last turn is handed its steps, as every launch after a move resumes none.
+              const replayed = yield* movedSinceSession(agent);
+              const opened = yield* openedLine(agent, sessionId, first, true, replayed);
               yield* queued(agent, ANY_LAUNCH, [opened.line], {
                 files: first.files,
                 handed: opened.handed,

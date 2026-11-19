@@ -2885,6 +2885,34 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message to an agent moved since its session opened, whose sandbox is gone, opens a new session handed its conversation so far and told of the move",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent, sessions, opened } = yield* flippedSession(api, true);
+        yield* sessions.reset(opened.sessionId);
+        // Note that the clock moves on, so the new session's id is minted after the one it replaces.
+        yield* TestClock.adjust(Duration.minutes(1));
+
+        const reopened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Now the emails."),
+        );
+
+        assert.ok(reopened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const [line] = yield* handedLines(userId, api.commands.at(-1));
+        const [ahead] = line?.type === INPUT_LINE.MESSAGE ? line.content : [];
+        assert.ok(
+          ahead?.type === "text" &&
+            ahead.text.includes("I renamed InviteToken to InvitationToken.") &&
+            ahead.text.includes("You moved from the developer's Mac to the cloud"),
+          JSON.stringify(ahead),
+        );
+      }),
+  );
+
+  it.effect(
     "a message that opened a fresh session for experiments since changed, whose delivery failed, never keeps those experiments as handed, so the next message opens it again with its replay",
     () =>
       Effect.gen(function* () {
