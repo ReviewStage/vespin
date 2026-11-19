@@ -1744,8 +1744,10 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
 
   return (
     <>
+      {/* Note that Sub-tasks folds only while it holds a row, as the panel's group does, since a fold over no rows would hide nothing; it opens unfolded and keeps its fold while the page stands. */}
       <ListSection
         title={WORDS.SUB_TASKS}
+        foldable={subTasks.length > 0}
         progress={
           finished.total === 0
             ? undefined
@@ -2213,8 +2215,10 @@ function OverviewAgents({
     });
 
   return (
+    // Note that Agents folds only while it holds an agent, as the panel's group does.
     <ListSection
       title={WORDS.AGENTS}
+      foldable={overview.agents.length > 0}
       count={overview.agents.length === 0 ? undefined : overview.agents.length}
       add={{
         label: WORDS.NEW_AGENT,
