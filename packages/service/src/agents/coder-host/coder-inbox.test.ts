@@ -938,11 +938,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const file = message?.files?.[0];
 
         assert.match(message?.text ?? "", /\/agent\/[0-9a-f-]{36}\/inbox\//u);
+
         const kept = yield* readInboxAttachment(
           agent.userId,
           item?.id ?? "",
           file?.attachmentId ?? "",
         );
+
         assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
       }),
   );
