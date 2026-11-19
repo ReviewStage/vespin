@@ -185,6 +185,7 @@ import {
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
 import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
+import { type ManagerCreateRequest, managerCreateRequestSchema } from "./manager-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
   agentDefaultWriteSchema,
@@ -979,6 +980,28 @@ export class HostedAgentClient {
         { params: { id: taskId }, body: admitted },
         { as: AGENT_START_RENAMES, deadline: HOSTED_DEADLINE.START },
       ),
+      (started) => ("failure" in started ? started : started.body),
+    );
+  }
+
+  /**
+   * Makes a Manager in the workspace the request names (`manager-wire.ts`),
+   * under the request's own key, so a retry carrying the same key answers the
+   * Manager the first made; a request the service would refuse by shape is
+   * refused here without traveling.
+   */
+  createManager(
+    request: ManagerCreateRequest,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(managerCreateRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return Effect.map(
+      hostedCall(this.#hosted.agents.createManager, admitted, {
+        as: AGENT_START_RENAMES,
+        deadline: HOSTED_DEADLINE.START,
+      }),
       (started) => ("failure" in started ? started : started.body),
     );
   }

@@ -73,6 +73,7 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_LIST]: "Could not read the task's agents on this system.",
   [AGENT_ACT_KIND.AGENTS_WORKSPACE_LIST]: "Could not read the workspace's agents on this system.",
   [AGENT_ACT_KIND.AGENTS_START]: "Could not start an agent on this system.",
+  [AGENT_ACT_KIND.AGENTS_CREATE_MANAGER]: "Could not make a Manager on this system.",
   [AGENT_ACT_KIND.AGENTS_MESSAGES]: "Could not read the agent's transcript on this system.",
   [AGENT_ACT_KIND.AGENTS_PART]: "Could not read the agent's output on this system.",
   [AGENT_ACT_KIND.AGENTS_TRANSCRIPT_OLDER]:
@@ -132,6 +133,15 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_LIST: { taskId: TASK_ID },
   AGENTS_WORKSPACE_LIST: { workspaceId: WORKSPACE_ID },
   AGENTS_START: { taskId: TASK_ID, idempotencyKey: "press-1" },
+  AGENTS_CREATE_MANAGER: {
+    idempotencyKey: "press-1",
+    workspaceId: WORKSPACE_ID,
+    name: "Release captain",
+    repositories: ["acme/app"],
+    runsOn: { machine: "vercel" },
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+  },
   AGENTS_MESSAGES: { agentId: AGENT_ID, after: AGENT_CURSOR_START },
   AGENTS_PART: { agentId: AGENT_ID, messageId: "m-1", index: 0 },
   AGENTS_TRANSCRIPT_OLDER: { kind: TRANSCRIPT_KIND.AGENT, agentId: AGENT_ID, before: "40" },

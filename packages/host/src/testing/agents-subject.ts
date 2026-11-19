@@ -531,6 +531,12 @@ function fakeService() {
 
         return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
       }),
+    createManager: (request) =>
+      Effect.sync(() => {
+        asked.push(`create-manager:${request.workspaceId}:${request.idempotencyKey}`);
+
+        return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
+      }),
     messagesNow: (agentId, after, callId) =>
       Effect.andThen(
         Effect.suspend(() => pageGate),

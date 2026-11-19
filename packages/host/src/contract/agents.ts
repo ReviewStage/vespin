@@ -85,6 +85,7 @@ import {
   hostPairingViewSchema,
 } from "@repo/features/host-pairing-view";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { managerCreateRequestSchema } from "@repo/features/manager-wire";
 import {
   agentPortShareAnswerViewSchema,
   agentPortShareParamsSchema,
@@ -249,6 +250,14 @@ export const AGENT_ACTS = declaredActs({
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
     byHand: true,
+  }),
+  AGENTS_CREATE_MANAGER: hostAct({
+    input: managerCreateRequestSchema,
+    output: agentAgentAnswerSchema,
+    refusal: "Could not make a Manager on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
   }),
   AGENTS_MESSAGES: hostAct({
     input: agentMessagesParamsSchema,
