@@ -92,7 +92,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -386,6 +386,68 @@ function AgentComposerBar({
   };
 
   return <Composer {...props} />;
+}
+
+/**
+ * The agent's composer as the page's foot holds it, with the questions its
+ * queue and its edits ask first: the one place the words typed live, so a
+ * keystroke draws the composer alone, never the transcript over it. Note
+ * that Edit on a sent line in the transcript reaches it through `editMessage`,
+ * which it keeps pointed at its own.
+ */
+function AgentComposerArea({
+  id,
+  agent,
+  transcript,
+  status,
+  messageSent,
+  suggested,
+  editMessage,
+  approvals,
+  onShowWaiting,
+  mode,
+  pick,
+  openOptions,
+  note,
+  call,
+  otherCall,
+}: {
+  readonly id: string;
+  readonly agent: Parameters<typeof useAgentComposer>[1];
+  readonly transcript: Parameters<typeof useAgentComposer>[2];
+  readonly status: Parameters<typeof useAgentComposer>[3];
+  readonly messageSent: Parameters<typeof useAgentComposer>[4];
+  readonly suggested: Parameters<typeof useAgentComposer>[5];
+  readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
+  readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
+  readonly onShowWaiting: (() => void) | undefined;
+  readonly mode: AgentMode | undefined;
+  readonly pick: AgentModelPick;
+  readonly openOptions: (() => void) | undefined;
+  readonly note: string | undefined;
+  readonly call: ComposerCall | undefined;
+  readonly otherCall: ReturnType<typeof useStandingCallCard>;
+}) {
+  const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
+  useEffect(() => {
+    editMessage.current = composer.editMessage;
+  }, [editMessage, composer.editMessage]);
+
+  return (
+    <>
+      <AgentComposerBar
+        composer={composer}
+        approvals={approvals}
+        onShowWaiting={onShowWaiting}
+        addMenu={agentAddMenu(composer, mode, pick, openOptions)}
+        note={note}
+        call={call}
+        otherCall={otherCall}
+      />
+      <ConfirmAsk destructive {...composer.removing} />
+      <ConfirmAsk destructive {...composer.sendingEdit} />
+    </>
+  );
 }
 
 /**
@@ -685,13 +747,15 @@ function AgentConversation({
   const sendSuggestion = useSuggestionSender();
   const suggested = suggestedSendOf(opened, id, sendSuggestion);
 
-  const composer = useAgentComposer(
-    id,
-    agent,
-    transcript,
-    status,
-    approvals.messageSent,
-    suggested,
+  // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
+  const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
+
+  const composer = useMemo(
+    () => ({
+      editMessage: (line: Parameters<AgentComposer["editMessage"]>[0]) =>
+        editMessage.current?.(line),
+    }),
+    [],
   );
 
   const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId ?? undefined);
@@ -776,7 +840,6 @@ function AgentConversation({
     else router.replace("/tasks");
   };
 
-  const addMenu = agentAddMenu(composer, mode, pick, openOptions);
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
   const taskId = shown?.taskId ?? undefined;
@@ -834,11 +897,19 @@ function AgentConversation({
   };
 
   const composerBar = (
-    <AgentComposerBar
-      composer={composer}
+    <AgentComposerArea
+      id={id}
+      agent={agent}
+      transcript={transcript}
+      status={status}
+      messageSent={approvals.messageSent}
+      suggested={suggested}
+      editMessage={editMessage}
       approvals={approvals}
       onShowWaiting={showWaiting}
-      addMenu={addMenu}
+      mode={mode}
+      pick={pick}
+      openOptions={openOptions}
       note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
       call={talk.call}
       otherCall={otherCall}
@@ -901,8 +972,6 @@ function AgentConversation({
         />
       )}
       <ConfirmAsk destructive {...talk.switching} />
-      <ConfirmAsk destructive {...composer.removing} />
-      <ConfirmAsk destructive {...composer.sendingEdit} />
       <ConfirmAsk destructive {...messageActs.reverting} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
