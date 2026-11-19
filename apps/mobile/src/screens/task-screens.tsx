@@ -2215,14 +2215,44 @@ function OverviewAgents({
   );
 }
 
-/** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
+/** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds, and held for the panel's page row menu: Copy link and Open in browser, once its workspace is known. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   const now = useMinute();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
+  const keeping = useKeeping();
   const { task, pages } = overview;
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const linkStep = linkWorkspaceStep(task.workspaceId, workspaces);
 
   if (pages.length === 0) return null;
+
+  /** A page's links, as the panel's row offers them (`useLinkItems`); none before its workspace is known. */
+  const pageMenu = (pageId: string): readonly LongPressGroup[] => {
+    if (linkStep === undefined) return [];
+
+    const link = linkOf(
+      { kind: LINK_DESTINATION.PAGE, taskId: taskLinkStep(task), pageId },
+      linkStep,
+    );
+
+    return [
+      [
+        {
+          label: WORDS.COPY_LINK,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => keeping.copyWords(link),
+        },
+        {
+          label: VERB.OPEN_IN_BROWSER,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => openInSafari(link),
+        },
+      ],
+    ];
+  };
 
   return (
     <ListSection title={WORDS.PAGES} count={pages.length}>
@@ -2232,6 +2262,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           symbol={GLYPH.PAGE}
           label={page.title}
           detail={provenanceText(page.at, now)}
+          menu={pageMenu(page.id)}
           onPress={() =>
             router.push({
               pathname: onOwnTab("/tasks/page/[id]"),
