@@ -619,7 +619,7 @@ export function useStepReach(input: {
   readonly access: RouteAccess;
   readonly tasks: Pick<
     TasksControl,
-    "boundFor" | "listFailed" | "mainTabs" | "workspace" | "workspaces"
+    "boundFor" | "listFailed" | "mainTabs" | "workspace" | "workspaces" | "liveAgents"
   >;
   /** The task list's rows, by id. */
   readonly rows: HistoryRows;
@@ -675,6 +675,8 @@ export function useStepReach(input: {
     taskStands,
     columnStands,
     automationStands: (automationId: string) => !automations.deletedNow(automationId),
+    agentOnNoTask: (agentId: string) =>
+      tasks.liveAgents?.some((each) => each.id === agentId && each.taskId === null) === true,
     listed: (workspace: string) =>
       workspaceOfSlug(tasks.workspaces, workspace)?.id === listedWorkspace,
   });

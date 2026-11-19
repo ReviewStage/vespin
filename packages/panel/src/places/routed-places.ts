@@ -119,6 +119,8 @@ export interface PlaceThere {
   /** Whether `column` still stands on the strip of `taskId`'s column, as far as the window last saw it; a task not seen since, or no tab, stands. */
   readonly columnStands: (taskId: string, column: StripTab | undefined) => boolean;
   readonly automationStands: (automationId: string) => boolean;
+  /** Whether the task list carries `agentId` on no task, whose page is its own place. */
+  readonly agentOnNoTask: (agentId: string) => boolean;
   readonly listed: (workspace: string) => boolean;
 }
 
@@ -550,8 +552,9 @@ export const ROUTED_PLACE = {
     claims: everyAddress,
     // Note that its route draws the page under any address, as it always has, so this gate is Back and Forward's alone.
     gate: workspaceGate,
-    // Note that the page only opens its agent on its task (`desktop-agent-page.tsx`), so Back and Forward pass over its step to the task's.
-    stillThere: () => false,
+    // Note that the page opens an agent on a task on its task (`desktop-agent-page.tsx`), so Back and Forward pass over its step to the task's; an agent on no task is drawn there, so its step stands.
+    stillThere: (params, _search, there) =>
+      params.agentId !== undefined && there.agentOnNoTask(params.agentId),
     binding: PLACE_BINDING.KEPT,
     overThePlan: true,
     inTaskPlace: true,
