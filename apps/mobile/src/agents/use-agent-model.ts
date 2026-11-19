@@ -26,14 +26,13 @@ import {
   MODEL_SPEED,
   MODEL_SPEED_SUFFIX,
   type ModelChoice,
-  modelSpeedOf,
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PickOption } from "@repo/ui-native";
 import { useMemo, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
-import { effortOptions, modelOptions, useModelCatalog } from "../tasks/use-start.js";
+import { atSpeed, effortOptions, modelOptions, useModelCatalog } from "../tasks/use-start.js";
 import { useWrite } from "../use-write.js";
 import { useFollowedAgent } from "./use-agent.js";
 
@@ -53,16 +52,6 @@ export interface AgentModelPick {
   readonly pickEffort: (effort: string) => void;
   /** Fast: whether the agent runs its model's fast version, and the switch; none where the model has none it may run. */
   readonly fast: { readonly on: boolean; readonly toggle: () => void } | undefined;
-}
-
-/** The catalog id a pick of a model sends: its version at the speed the agent runs, where the catalog offers one, else the model's own. */
-function atSpeed(offered: readonly CatalogModel[], model: string, running: string): string {
-  const speed = modelSpeedOf(running);
-
-  if (speed === MODEL_SPEED.STANDARD) return model;
-  const version = `${model}${MODEL_SPEED_SUFFIX[speed]}`;
-
-  return offered.some(({ id }) => id === version) ? version : model;
 }
 
 /**
