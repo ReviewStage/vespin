@@ -301,6 +301,7 @@ import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 import {
   coderTurnMessage,
   handedValue,
+  heldNativeTurnHanded,
   readNativeTurnHanded,
   readPendingTurnHanded,
   recordNativeTurnHanded,
@@ -1809,9 +1810,10 @@ export const runnerSessions = <
         const { conversationId } = agent;
         const target = { userId, conversationId };
         // A move since the last turn opens afresh, its conversation replayed, since the session's instructions name the place it left.
+        // Note that a read that failed fails the launch, since one that resumed the old session would hand it that place.
         const pending = yield* readPendingTurnHanded(target, agent.id);
 
-        const handed = Option.isSome(pending) ? pending.value : yield* readNativeTurnHanded(target);
+        const handed = Option.isSome(pending) ? pending.value : yield* heldNativeTurnHanded(target);
 
         if (handed.moved !== undefined) return { replay: true } satisfies ResumedSession;
         const routing = yield* readAgentRouting(userId, agent.id);

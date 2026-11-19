@@ -827,7 +827,10 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const moved = yield* moveTo({ machine: AGENT_MACHINE.DEVICE, deviceId: studio });
 
           assert.deepEqual(here, Result.fail(HOSTED_REFUSAL.INVALID_REQUEST));
-          assert.ok(Result.isFailure(borrowed));
+          assert.equal(
+            Result.isFailure(borrowed) ? borrowed.failure.localAgentRefusal : undefined,
+            LOCAL_AGENT_REFUSAL.NOT_OWNER,
+          );
           assert.ok(Result.isSuccess(moved));
           assert.deepEqual(claudeCode.calls, [`halt:${nativeSession}:${agent.conversationId}`]);
           const read = yield* readAgent(owner, agent.id);

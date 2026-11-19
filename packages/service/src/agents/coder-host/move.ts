@@ -32,6 +32,7 @@ import {
   type Agent,
   hasRepository,
   moveAgentPlace,
+  readAgent,
   readAgentRouting,
 } from "@repo/database/models/agent-store";
 import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
@@ -53,11 +54,11 @@ import {
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { harnessOf } from "./native-runtime.js";
 import { runnerHalted } from "./runtime-sessions.js";
-import { copySourceWork, type SourceCopyServices } from "./snapshot.js";
+import { copySourceWork, SNAPSHOT_MISS, type SourceCopyServices } from "./snapshot.js";
 import { ownDeviceOf } from "./start.js";
 import { checkoutsOn } from "./takeover.js";
 import type { AgentMoved } from "./turn-context.js";
-import { readNativeTurnHanded, recordNativeTurnHanded } from "./turn-message.js";
+import { heldNativeTurnHanded, keptNativeTurnHanded } from "./turn-message.js";
 
 /** A place as the move reads it: the cloud, or one of the starter's Macs by its id and name. */
 interface MovePlace {
@@ -126,13 +127,28 @@ const movedFromPath = Effect.fnUntraced(function* (agent: Agent, from: MovePlace
   return old === onto.value.checkoutPathOf(agent.id) ? undefined : old;
 });
 
-/** The branch an agent leaving the cloud has its checkout copied to (`copySourceWork`); none where it leaves a Mac or the copy missed. */
-const copiedBranchOf = Effect.fnUntraced(function* (agent: Agent, from: MovePlace) {
+/**
+ * The branch an agent leaving the cloud has its checkout copied to
+ * (`copySourceWork`); none where it leaves a Mac, works in no repository, or
+ * left nothing to copy, as one that never opened a sandbox. A copy that
+ * failed or ran past its bound is refused as unavailable, so the agent stays
+ * where its work is and the move may be asked again.
+ */
+const copiedBranchOf = Effect.fnUntraced(function* (
+  agent: Agent,
+  from: MovePlace,
+): Effect.fn.Return<string | undefined, HostedRefusal, SourceCopyServices> {
   if (from.machine !== AGENT_MACHINE.VERCEL || !hasRepository(agent)) return undefined;
   // Note that the key is a fresh one, since no Start is made under it and every move copies anew.
   const copy = yield* copySourceWork(agent.userId, agent, agent.repository, false, randomUUID());
 
-  return copy.copied ? copy.branch : undefined;
+  if (copy.copied) return copy.branch;
+
+  if (copy.miss === SNAPSHOT_MISS.FAILED || copy.miss === SNAPSHOT_MISS.TIMED_OUT) {
+    return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  }
+
+  return undefined;
 });
 
 /**
@@ -156,17 +172,25 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
   const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
 
   if (runtime === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  const [from, to] = yield* Effect.all([placeOf(agent), askedPlaceOf(agent, runsOn)]);
-
-  if (from.machine === to.machine && from.deviceId === to.deviceId) {
-    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  }
-
   const target = { userId: agent.userId, conversationId: agent.conversationId };
 
   // Note that the move holds the conversation's dispatch claim throughout, so no message reaches the
-  // old place between the read that finds no turn under way and the row naming the new one.
+  // old place between the read that finds no turn under way and the row naming the new one, and
+  // the agent is read again under it, so a move asked twice at once moves from where the first left it.
   const moved = Effect.gen(function* () {
+    const read = yield* hostedStoreOrUnavailable(readAgent(agent.userId, agent.id));
+
+    if (Option.isNone(read) || read.value.archivedAt !== null) {
+      return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+    }
+
+    const standing = read.value;
+    const [from, to] = yield* Effect.all([placeOf(standing), askedPlaceOf(standing, runsOn)]);
+
+    if (from.machine === to.machine && from.deviceId === to.deviceId) {
+      return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    }
+
     const latest = yield* hostedStoreOrUnavailable(
       latestTurnsOf(agent.userId, [agent.conversationId]),
     );
@@ -177,14 +201,13 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
 
     const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
 
-    if (sessionId !== undefined && !(yield* runnerHalted(agent, runtime, sessionId))) {
+    if (sessionId !== undefined && !(yield* runnerHalted(standing, runtime, sessionId))) {
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
 
-    const [copiedBranch, movedFrom, handed] = yield* Effect.all([
-      copiedBranchOf(agent, from),
-      movedFromPath(agent, from, to),
-      readNativeTurnHanded(target),
+    const [copiedBranch, movedFrom] = yield* Effect.all([
+      copiedBranchOf(standing, from),
+      movedFromPath(standing, from, to),
     ]);
 
     const told: AgentMoved = {
@@ -194,17 +217,21 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
       ...(copiedBranch === undefined ? undefined : { copiedBranch }),
     };
 
-    // Note that the row, the launches, and the mark are written in one transaction, so a failed write
-    // leaves the agent where it stood rather than at a new place with no mark where it moved.
+    // Note that the row, the launches, what the next message is told, and the mark are written in one
+    // transaction, so a failed write leaves the agent where it stood rather than at a new place it was
+    // never told of, or with no mark where it moved.
     const store = yield* writer;
 
     const written = Effect.gen(function* () {
       yield* cancelAgentWakeup(agent.id);
-      yield* moveAgentPlace(agent.userId, agent, { machine: to.machine, deviceId: to.deviceId });
+      yield* moveAgentPlace(agent.userId, standing, { machine: to.machine, deviceId: to.deviceId });
 
       if (from.machine === AGENT_MACHINE.DEVICE) {
         yield* settleMovedDeviceAgentLaunches(agent.userId, agent.id);
       }
+
+      const handed = yield* heldNativeTurnHanded(target);
+      yield* keptNativeTurnHanded(target, { ...handed, moved: told });
 
       return yield* store.markAgentMoved(target, { from: markedPlace(from), to: markedPlace(to) });
     });
@@ -213,8 +240,6 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
     const marked = yield* hostedStoreOrUnavailable(client.withTransaction(written));
 
     if (Result.isFailure(marked)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-    // Note that the next message reads the move from here, after the row names the new place.
-    yield* recordNativeTurnHanded(target, { ...handed, moved: told });
   });
 
   // Note that messages that kept the claim past a send's own wait read as an agent at work.
