@@ -1,0 +1,51 @@
+# standing.yaml -- MEASUREMENT ONLY: on the Inbox fixture, a task's page opened, then its priority and its status changed five times each from their chips, each press and its draw marked by the probe (`standing-press`, `standing-act`, `standing-staged`, `delivery`, `standing-render`, `standing-frame`).
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: ../subflows/tab.yaml
+    env:
+      TAB: Tasks
+- extendedWaitUntil:
+    visible: "Weekly digest email"
+    timeout: 30000
+- tapOn: "Weekly digest email"
+- extendedWaitUntil:
+    visible: "Priority, .*"
+    timeout: 30000
+- waitForAnimationToEnd
+- repeat:
+    times: 5
+    commands:
+      - tapOn: "Priority, .*"
+      - tapOn:
+          text: "High"
+          label: "T:priority-high"
+      - extendedWaitUntil:
+          visible: "Priority, High"
+          timeout: 10000
+      - waitForAnimationToEnd
+      - tapOn: "Priority, .*"
+      - tapOn:
+          text: "Low"
+          label: "T:priority-low"
+      - extendedWaitUntil:
+          visible: "Priority, Low"
+          timeout: 10000
+      - waitForAnimationToEnd
+- repeat:
+    times: 5
+    commands:
+      - tapOn: "Status, .*"
+      - tapOn:
+          text: "In progress"
+          label: "T:status-progress"
+      - waitForAnimationToEnd
+      - tapOn: "Status, .*"
+      - tapOn:
+          text: "Todo"
+          label: "T:status-todo"
+      - waitForAnimationToEnd

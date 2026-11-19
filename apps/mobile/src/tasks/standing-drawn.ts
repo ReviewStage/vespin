@@ -36,6 +36,8 @@ export function standingPressed(
   value: string | null,
 ): void {
   const chips = pressed.get(taskId) ?? new Map<ProductStandingField, Pressed>();
+  // @ts-expect-error -- probe only.
+  globalThis.__perfMark?.("standing-press", { field });
   chips.set(field, { at: performance.now(), value });
   pressed.set(taskId, chips);
 }
@@ -60,7 +62,11 @@ export function useStandingDrawnCount(task: TaskSummary | undefined): void {
     for (const [field, press] of chips) {
       if (standingOf(task, field) !== press.value) continue;
       chips.delete(field);
+      // @ts-expect-error -- probe only.
+      globalThis.__perfMark?.("standing-render", { field, ms: performance.now() - press.at });
       requestAnimationFrame(() => {
+        // @ts-expect-error -- probe only.
+        globalThis.__perfMark?.("standing-frame", { field, ms: performance.now() - press.at });
         if (AppState.currentState !== "active") return;
         count(PRODUCT_SURFACE_EVENT.STANDING_DRAWN, {
           drawn_ms: productDrawnMilliseconds(performance.now() - press.at),
