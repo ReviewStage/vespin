@@ -313,7 +313,7 @@ export function agentsProcedures(
      */
     listOfWorkspace: signedIn.listOfWorkspace.effect(function* ({ input, context }) {
       const workspaceId = input.workspaceId ?? "";
-      const { repository, kind } = input;
+      const { repository } = input;
       const words = input.words?.trim();
 
       if (
@@ -336,7 +336,6 @@ export function agentsProcedures(
         listWorkspaceAgentLines(context.userId, workspaceId, {
           ...(repository === undefined ? undefined : { repository }),
           ...(words === undefined ? undefined : { words }),
-          ...(kind === undefined ? undefined : { kind }),
           includeArchived: listsArchived(input.archived),
           onTaskOnly: !readsTasklessAgents(context.request),
           offset,

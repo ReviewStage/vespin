@@ -53,8 +53,6 @@ export const QUERY_ROOT = {
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",
   WORKSPACE_AGENTS: "workspace-agents",
-  /** A workspace's Managers, as the sidebar's Managers lists them (`tasks/workspace-managers.ts`). */
-  WORKSPACE_MANAGERS: "workspace-managers",
   REPOSITORY_PATHS: "repository-paths",
   AGENT_PART: "agent-part",
   /** The window's one app-state document (`use-app-state.ts`'s `appStateQuery`), read by no id. */
@@ -105,7 +103,6 @@ export const QUERY_ROOT = {
 const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.TASK_TREE,
   QUERY_ROOT.WORKSPACE_AGENTS,
-  QUERY_ROOT.WORKSPACE_MANAGERS,
   QUERY_ROOT.TASK_FILE,
   QUERY_ROOT.PAGE_SOURCE,
   QUERY_ROOT.REPOSITORY_PATHS,

@@ -12,6 +12,7 @@ import {
 } from "./agent-status.js";
 import {
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentArchivedBy,
@@ -180,6 +181,10 @@ const agentLiveRowSchema = EffectSchema.Struct({
   effort: EffectSchema.String,
   contextWindow: EffectSchema.NullOr(EffectSchema.String),
   title: EffectSchema.NullOr(EffectSchema.String),
+  /** What kind of agent it is (`AGENT_KIND`), a word this build does not know read as a coder; absent from a statement before it was carried. */
+  kind: EffectSchema.optionalKey(
+    literalsReadingUnknown(Object.values(AGENT_KIND), AGENT_KIND.CODER),
+  ),
   /** Whether the agent was handed a prompt rather than its description. */
   /** What the agent was handed as its first message: the description, the developer's prompt, or nothing, for one started blank. */
   brief: literalsReadingUnknown(Object.values(AGENT_BRIEF), AGENT_BRIEF.PROMPT),
@@ -879,6 +884,7 @@ function agentSummaryOf(
       : undefined),
     ...(runtime === undefined ? undefined : { runtime }),
     title: row.title,
+    ...(row.kind === AGENT_KIND.MANAGER ? { kind: AGENT_KIND.MANAGER } : undefined),
     ...(row.machine === AGENT_MACHINE.DEVICE
       ? { machine: AGENT_MACHINE.DEVICE }
       : { sandboxVcpus: row.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),

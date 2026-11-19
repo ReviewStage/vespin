@@ -6,7 +6,7 @@ import {
   AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
-  type AgentSummary,
+  type ListedAgent,
 } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -26,9 +26,9 @@ import { NO_REPOSITORIES, newTaskControl, tasksControl } from "../testing/tasks-
 
 /**
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
- * Managers, read as Managers alone, listed under their head where the
- * workspace has the experiment on, each opening its page, and no head at all
- * where it is off; and New Manager, whose edited retry is a request of its
+ * Managers of the live task list's agents, listed under their head where
+ * the workspace has the experiment on, each opening its page, and no head
+ * at all where it is off; and New Manager, whose edited retry is a request of its
  * own. Synthetic throughout.
  */
 
@@ -44,24 +44,51 @@ const RELAY = "ada/relay";
 
 const FRONTEND = "0a1b2c3d-0000-4000-8000-00000000000a";
 
-/** A Manager on no task, as the service lists it. */
-const MANAGER: AgentSummary = {
+/** A Manager on no task, as the live task list carries it. */
+const MANAGER: ListedAgent = {
   id: FRONTEND,
   taskId: null,
+  workspaceId: WORKSPACE.id,
+  repository: null,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Frontend Manager",
+  kind: AGENT_KIND.MANAGER,
   createdAt: 1,
   status: AGENT_STATUS.COMPLETED,
   turnId: null,
 };
 
-/** A second Manager, which no page stands open on. */
-const BILLING: AgentSummary = {
+/** A second Manager, started later, which no page stands open on. */
+const BILLING: ListedAgent = {
   ...MANAGER,
   id: "0a1b2c3d-0000-4000-8000-00000000000b",
   title: "Billing Manager",
+  createdAt: 2,
 };
+
+const { kind: _kind, ...CODER } = MANAGER;
+
+/** What the live list carries beside the workspace's Managers, none of them one: a coder on no task, a Manager archived, and another workspace's Manager. */
+const NOT_MANAGERS: readonly ListedAgent[] = [
+  {
+    ...CODER,
+    id: "0a1b2c3d-0000-4000-8000-00000000000c",
+    title: "Loose Coder",
+  },
+  {
+    ...MANAGER,
+    id: "0a1b2c3d-0000-4000-8000-00000000000d",
+    title: "Retired Manager",
+    archivedAt: 3,
+  },
+  {
+    ...MANAGER,
+    id: "0a1b2c3d-0000-4000-8000-00000000000e",
+    title: "Elsewhere Manager",
+    workspaceId: "workspace-other",
+  },
+];
 
 const roots: Root[] = [];
 
@@ -84,26 +111,15 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The sidebar over the workspace, the experiment as given, the workspace's agents read as `asked` hears them, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named. */
-async function mountSidebar(
-  on: boolean,
-  asked: unknown[],
-  opened: string[],
-  openId?: string,
-): Promise<HTMLElement> {
+/** The sidebar over the workspace, the experiment as given, the live list carrying both Managers among agents that are not, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named. */
+async function mountSidebar(on: boolean, opened: string[], openId?: string): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
-  fakeActPort({
-    ...fakeActPortCalls(),
-    [ACT_KIND.AGENTS_WORKSPACE_LIST]: (params) => {
-      asked.push(params);
-
-      return Promise.resolve({ agents: [MANAGER, BILLING] });
-    },
-  });
+  fakeActPort(fakeActPortCalls());
 
   const tasks = tasksControl({
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
+    liveAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
     agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
   });
 
@@ -116,14 +132,27 @@ async function mountSidebar(
   return container;
 }
 
-test("Managers lists the workspace's Managers, asked for as Managers alone, and a row opens its Manager's page", async () => {
-  const asked: unknown[] = [];
+test("Managers lists the workspace's unarchived Managers of the live list alone, newest first, and a row opens its Manager's page", async () => {
   const opened: string[] = [];
-  const sidebar = await mountSidebar(true, asked, opened);
+  const sidebar = await mountSidebar(true, opened);
   const list = sidebar.querySelector('nav[aria-label="Managers"]');
 
   assert.ok(list, "the Managers section is drawn");
-  assert.deepEqual(asked, [{ workspaceId: WORKSPACE.id, kind: AGENT_KIND.MANAGER }]);
+
+  const titled = [
+    "Billing Manager",
+    "Frontend Manager",
+    "Loose Coder",
+    "Retired Manager",
+    "Elsewhere Manager",
+  ].filter((name) => list.textContent?.includes(name));
+
+  assert.deepEqual(titled, ["Billing Manager", "Frontend Manager"]);
+  assert.ok(
+    (list.textContent?.indexOf("Billing Manager") ?? -1) <
+      (list.textContent?.indexOf("Frontend Manager") ?? -1),
+    "the newest Manager stands first",
+  );
 
   const row = [...list.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Frontend Manager"),
@@ -134,16 +163,14 @@ test("Managers lists the workspace's Managers, asked for as Managers alone, and 
   assert.deepEqual(opened, [FRONTEND]);
 });
 
-test("Managers stands nowhere, and reads nothing, while the workspace has the experiment off", async () => {
-  const asked: unknown[] = [];
-  const sidebar = await mountSidebar(false, asked, []);
+test("Managers stands nowhere while the workspace has the experiment off", async () => {
+  const sidebar = await mountSidebar(false, []);
 
   assert.equal(sidebar.querySelector('nav[aria-label="Managers"]'), null);
-  assert.deepEqual(asked, []);
 });
 
 test("Managers folded leaves the open Manager's row standing and folds the rest away", async () => {
-  const sidebar = await mountSidebar(true, [], [], FRONTEND);
+  const sidebar = await mountSidebar(true, [], FRONTEND);
   const list = sidebar.querySelector('nav[aria-label="Managers"]');
 
   assert.ok(list, "the Managers section is drawn");
@@ -210,7 +237,6 @@ async function mountNewManager(newTask: NewTask) {
   const created: { idempotencyKey: string; name: string; runsOn: unknown }[] = [];
   fakeActPort({
     ...fakeActPortCalls(),
-    [ACT_KIND.AGENTS_WORKSPACE_LIST]: () => Promise.resolve({ agents: [] }),
     [ACT_KIND.AGENTS_CREATE_MANAGER]: (request) => {
       created.push(request);
 

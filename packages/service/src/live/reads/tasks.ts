@@ -375,6 +375,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = f
         effort: agentTable.effort,
         contextWindow: sql<string | null>`${agentTable.contextWindow}`,
         title: agentTable.title,
+        kind: agentTable.kind,
         brief: sql<
           AgentRow["brief"]
         >`case when ${agentTable.prompt} is not null then ${AGENT_BRIEF.PROMPT} when ${agentTable.descriptionSnapshot} is not null then ${AGENT_BRIEF.DESCRIPTION} else ${AGENT_BRIEF.BLANK} end`,

@@ -2,7 +2,7 @@
  * sidebar-managers.tsx -- the workspace's Managers in the sidebar, above Pinned and Tasks: one flat list of agent rows, each opening the Manager's own page.
  *
  * A Manager is an agent on no task that its workspace shares, so every
- * member's stands here, newest started first, as the service lists them
+ * member's stands here, newest started first, as the live task list carries them
  * (`workspace-managers.ts`), its archived ones left out. Each is an agent's
  * row as every list of agents draws it (`AgentListRow`), its menu the
  * agent's own, its press opening its page (`/<workspace>/agent/<id>`), saying
@@ -12,18 +12,15 @@
  * Manager's row still standing under the fold, and its +
  * opens New Manager (`new-manager-dialog.tsx`). It stands
  * only where the workspace has the Managers experiment on, and says so
- * where it holds none or could not be read; until the first answer lands
- * it stands as its head alone.
+ * where it holds none; until the live list carries its agents it stands as
+ * its head alone.
  */
 
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
-import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import { EXPERIMENT } from "@repo/settings";
 import {
   BUTTON_SIZE,
-  ERROR_STATE_PLACEMENT,
-  ErrorState,
   GroupHeader,
   IconButton,
   motionKey,
@@ -36,7 +33,6 @@ import {
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { unreadShown } from "../failure-report.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
@@ -75,9 +71,10 @@ export function SidebarManagers({
   const workspaceId = tasks.workspace?.id;
   const listed = useWorkspaceExperiment(workspaceId, EXPERIMENT.MANAGERS) && tasks.signedIn;
 
-  const { managers, failed, onRetry, agents } = useWorkspaceManagers(
+  const { managers, agents } = useWorkspaceManagers(
     workspaceId,
     listed,
+    tasks.liveAgents,
     tasks.agents,
   );
 
@@ -158,16 +155,7 @@ export function SidebarManagers({
           </Tooltip>
         }
       >
-        {failed ? (
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.MANAGERS_READ)}
-            onRetry={onRetry}
-            placement={ERROR_STATE_PLACEMENT.ROWS}
-          >
-            The workspace's Managers could not be read.
-          </ErrorState>
-        ) : null}
-        {managers?.length === 0 && !failed ? (
+        {managers?.length === 0 ? (
           <NoteLine look={NOTE_LINE_LOOK.ROWS}>No Managers yet.</NoteLine>
         ) : null}
         {listedManagers.length === 0 ? null : rows(listedManagers)}

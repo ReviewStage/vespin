@@ -944,7 +944,7 @@ export class HostedAgentClient {
     });
   }
 
-  /** A workspace's agents, newest started first, narrowed to one repository where one is named, to the words given where some are, and to one kind where one is named, the archived ones among them where `includeArchived` asks. */
+  /** A workspace's agents, newest started first, narrowed to one repository where one is named, to the words given where some are, the archived ones among them where `includeArchived` asks. */
   listWorkspace(
     params: AgentWorkspaceListParams,
   ): Effect.Effect<AgentListAnswer, never, HttpClient.HttpClient> {
@@ -957,7 +957,6 @@ export class HostedAgentClient {
       ...(params.includeArchived === true
         ? { [AGENT_WORKSPACE_QUERY.ARCHIVED]: AGENT_LIST_ARCHIVED.INCLUDE }
         : undefined),
-      ...(params.kind === undefined ? undefined : { [AGENT_WORKSPACE_QUERY.KIND]: params.kind }),
     });
   }
 

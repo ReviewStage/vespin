@@ -2048,52 +2048,6 @@ it.layer(getTestDB())("the coding-agent store's list lines", (it) => {
   );
 });
 
-it.layer(getTestDB())("the coding-agent store's list of a workspace's agents of one kind", (it) => {
-  it.effect(
-    "a workspace's list narrowed to managers holds its managers alone, for every member, and nothing for an account outside it",
-    () =>
-      Effect.gen(function* () {
-        const starter = yield* openAccount;
-        const teammate = yield* openAccount;
-        const outsider = yield* openAccount;
-        const workspace = yield* openWorkspace(starter);
-        yield* joinWorkspace(workspace, teammate);
-        yield* openWorkspace(outsider);
-        const task = yield* createTask(starter, { organizationId: workspace, name: "Billing" });
-
-        const start = (
-          kind: AgentKind,
-          place: { taskId: string } | { taskId: null; workspaceId: string },
-        ) =>
-          createAgent(starter, {
-            ...place,
-            descriptionSnapshot: null,
-            prompt: "Watch the billing queue.",
-            idempotencyKey: randomUUID(),
-            model: "anthropic/claude-opus-5.5",
-            effort: "high",
-            repository: null,
-            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-            kind,
-          }).pipe(Effect.map((started) => Option.getOrThrow(started).agent.id));
-
-        const taskless = { taskId: null, workspaceId: workspace };
-        const manager = yield* start(AGENT_KIND.MANAGER, taskless);
-        yield* start(AGENT_KIND.CODER, taskless);
-        yield* start(AGENT_KIND.CODER, { taskId: task.id });
-
-        const managers = (userId: string) =>
-          listWorkspaceAgentLines(userId, workspace, { kind: AGENT_KIND.MANAGER, limit: 10 }).pipe(
-            Effect.map((lines) => lines.map((line) => line.id)),
-          );
-
-        assert.deepEqual(yield* managers(starter), [manager]);
-        assert.deepEqual(yield* managers(teammate), [manager]);
-        assert.deepEqual(yield* managers(outsider), []);
-      }),
-  );
-});
-
 it.layer(getTestDB())("the coding-agent store's agent with no repository, started blank", (it) => {
   it.effect(
     "an agent started on a task with no repository and handed nothing is read back by its workspace's members with no repository and neither description nor prompt",
