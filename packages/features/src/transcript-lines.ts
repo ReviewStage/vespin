@@ -7,6 +7,7 @@ import {
   GITHUB_LINE_EVENT,
   type GitHubCheckConclusion,
   type GitHubLineMetadata,
+  isDeveloperLine,
   isFailingConclusion,
   isRecord,
   isWireNumber,
@@ -22,7 +23,7 @@ import {
 import { Option, Schema } from "effect";
 import { AGENT_PART, type AgentPart, agentParts, messageWords } from "./agent-parts.js";
 import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "./agent-tools.js";
-import type { AgentTranscriptMessage } from "./agent-wire.js";
+import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
 import { MESSAGE_BLOCK, messageText } from "./reply-quote.js";
 
 /**
@@ -46,6 +47,46 @@ export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMet
   const read = userMetadataOf(message);
 
   return read?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE ? read : undefined;
+}
+
+/** The channels a person's own words reach an agent on: typed into its box, said on a call, or sent from a suggestion. */
+const PEOPLES_CHANNELS: ReadonlySet<string> = new Set([
+  MESSAGE_CHANNEL.TYPED,
+  MESSAGE_CHANNEL.VOICE,
+  MESSAGE_CHANNEL.SUGGESTION,
+]);
+
+/**
+ * Whether a line is a person's own words to the agent, sent from its page:
+ * typed, said on a call by the caller rather than the voice, or sent from a
+ * suggestion, or a line that holds no metadata, as one the window drew as it
+ * sent; never another agent's message, a wakeup, a thread's, a comment's,
+ * GitHub's, Slack's, an automation's, the app's, a runtime note, or a line
+ * whose metadata this build cannot read.
+ */
+export function isPersonLine(message: AgentTranscriptMessage): boolean {
+  if (message.role !== MESSAGE_ROLE.USER) return false;
+  const { sentBy, metadata } = message;
+
+  if (sentBy?.agent === true) return false;
+
+  if (
+    sentBy?.kind !== undefined &&
+    sentBy.kind !== AGENT_SENDER.MEMBER &&
+    sentBy.kind !== AGENT_SENDER.FORMER
+  ) {
+    return false;
+  }
+
+  if (metadata === undefined) return true;
+  const read = Option.getOrUndefined(readUserMetadata(metadata));
+
+  return (
+    read !== undefined &&
+    isDeveloperLine(read) &&
+    "channel" in read &&
+    PEOPLES_CHANNELS.has(read.channel)
+  );
 }
 
 /**
