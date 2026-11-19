@@ -1,4 +1,4 @@
-// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for words, such as a name as Files and Notes rename or an address, and the share sheet a link or words are copied or sent from.
+// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for words, such as a name as Files and Notes rename or an address, the alert that asks which of a few acts to take, and the share sheet a link or words are copied or sent from.
 
 import { Alert, Share } from "react-native";
 
@@ -95,6 +95,40 @@ export function askForName({ title, act, name, onName }: NameAsk): void {
       },
     ],
   });
+}
+
+/** One press a choice offers beside Cancel. */
+export interface ChoiceAct {
+  readonly label: string;
+  readonly onPress: () => void;
+  /** Whether it takes something away, which the system draws red. */
+  readonly destructive?: boolean | undefined;
+}
+
+/** What a choice asks: its question, what it explains, and its acts, the first preferred. */
+export interface ChoiceAsk {
+  readonly title: string;
+  readonly message?: string | undefined;
+  readonly acts: readonly ChoiceAct[];
+}
+
+/**
+ * Asks the person to choose among a few acts in the system's alert, its acts
+ * stacked with Cancel last and the first preferred, as iOS asks how to settle
+ * a document changed elsewhere. Note that it is UIKit's alert in every
+ * window, rather than an action sheet, since the choice is a decision whose
+ * words must be read, not an act confirmed.
+ */
+export function askToChoose({ title, message, acts }: ChoiceAsk): void {
+  Alert.alert(title, message, [
+    ...acts.map((act, at) => ({
+      text: act.label,
+      style: act.destructive === true ? ("destructive" as const) : ("default" as const),
+      isPreferred: at === 0,
+      onPress: act.onPress,
+    })),
+    { text: CANCEL.LABEL, style: CANCEL.STYLE },
+  ]);
 }
 
 /**

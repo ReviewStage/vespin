@@ -44,7 +44,7 @@ import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { appStateQuery, selectExperiment, selectNewAgentServersOff } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
@@ -290,10 +290,16 @@ function sameAsk(a: AgentAsk, b: AgentAsk): boolean {
     a.agent.choice?.model === b.agent.choice?.model &&
     a.agent.choice?.effort === b.agent.choice?.effort &&
     a.agent.choice?.contextWindow === b.agent.choice?.contextWindow &&
-    a.agent.disabledServers.length === b.agent.disabledServers.length &&
-    a.agent.disabledServers.every((server) => b.agent.disabledServers.includes(server)) &&
+    sameServers(a.agent.disabledServers, b.agent.disabledServers) &&
     a.agent.permissionMode === b.agent.permissionMode
   );
+}
+
+/** Whether two asks switched the same servers off, or both switched none. */
+function sameServers(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  if (a === undefined || b === undefined) return a === b;
+
+  return a.length === b.length && a.every((server) => b.includes(server));
 }
 
 /** Whether two names are one repository, as GitHub spells it or not. */
@@ -423,10 +429,15 @@ export function NewTaskComposer({
     ? undefined
     : sections.sections.find((each) => each.id === sectionId && each.workspaceId === workspaceId);
 
-  // The servers the + menu switched off, a refused card's as it was pressed.
-  const [disabledServers, setDisabledServers] = useState<readonly string[]>(
-    refused?.card.press.ask.agent.disabledServers ?? NONE_OFF,
+  // The servers the + menu switched off, a refused card's as it was pressed; none until switched, when the account's choice for new agents stands.
+  const [disabledServers, setDisabledServers] = useState<readonly string[] | undefined>(
+    refused?.card.press.ask.agent.disabledServers,
   );
+
+  const { data: newAgentServersOff = NONE_OFF } = useQuery({
+    ...appStateQuery,
+    select: selectNewAgentServersOff,
+  });
 
   // The mode the chip's Permissions row picked, a refused card's as it was pressed; none for the member's Default permissions.
   const [pickedMode, pickMode] = useState<AgentPermissionMode | undefined>(
@@ -443,7 +454,7 @@ export function NewTaskComposer({
 
   // Note that no agent has started, so the popover offers no Built in section.
   const servers: AgentServersControl = {
-    disabled: disabledServers,
+    disabled: disabledServers ?? newAgentServersOff,
     onSwitch: setDisabledServers,
     onOpenSettings: () => openSettings({ page: SETTINGS_VIEW.INTEGRATIONS }),
   };
@@ -714,7 +725,7 @@ export function NewTaskComposer({
         prompt,
         attachments,
         choice: pickedModel,
-        disabledServers,
+        ...(disabledServers === undefined ? undefined : { disabledServers }),
         ...(pickedMode === undefined ? undefined : { permissionMode: pickedMode }),
       },
     };
@@ -750,7 +761,7 @@ export function NewTaskComposer({
         prompt: "",
         attachments: [],
         choice: pickedModel,
-        disabledServers,
+        ...(disabledServers === undefined ? undefined : { disabledServers }),
         ...(pickedMode === undefined ? undefined : { permissionMode: pickedMode }),
       },
     };

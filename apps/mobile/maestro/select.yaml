@@ -35,6 +35,9 @@ env:
 - tapOn: "Select"
 - waitForAnimationToEnd
 - assertVisible: "Done"
+# With none chosen, the bar says so and leads with Select all, as Mail's does.
+- assertVisible: "Select items"
+- assertVisible: "Select all"
 - takeScreenshot: select-none
 # A tap on a row ticks it rather than opening it. Note that the two rows are
 # the list's first, since the bar of acts at the foot, dimmed until a row is

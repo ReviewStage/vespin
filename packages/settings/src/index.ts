@@ -97,6 +97,12 @@ export {
 } from "./machine-commands.js";
 
 export {
+  isNewAgentServersOffJson,
+  newAgentServersOffFrom,
+  newAgentServersOffJsonOf,
+} from "./new-agent-servers.js";
+
+export {
   isOlderOnboardingSurveyJson,
   isOnboardingSurveyJson,
   type OnboardingSurvey,

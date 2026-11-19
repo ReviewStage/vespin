@@ -44,6 +44,7 @@ export {
   selectMachineCommands,
   selectMirrors,
   selectNetwork,
+  selectNewAgentServersOff,
   selectNotifications,
   selectPortForwarding,
   selectRefusedAgents,

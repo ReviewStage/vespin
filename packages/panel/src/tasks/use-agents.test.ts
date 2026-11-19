@@ -414,7 +414,8 @@ test("a draft asks nothing of the service, one per plan, until its first message
 
   let failed: Failure | undefined;
   await act(async () => {
-    failed = await tab.control().startPrompt(draft, prompt, choice, []);
+    // Every server switched back on is still sent, so the account's choice for new agents does not stand in for it.
+    failed = await tab.control().startPrompt(draft, prompt, choice, [], []);
   });
   assert.equal(failed?.text, "The agent could not be started.");
   assert.equal(tab.control().draft?.id, draft, "a send that did not start keeps the draft");
@@ -431,7 +432,7 @@ test("a draft asks nothing of the service, one per plan, until its first message
   });
   assert.equal(failed, undefined);
   assert.deepEqual(startPayloads(tab.asked), [
-    { taskId: TASK, idempotencyKey: draft, prompt, ...choice },
+    { taskId: TASK, idempotencyKey: draft, prompt, disabledServers: [], ...choice },
     {
       taskId: TASK,
       idempotencyKey: draft,
@@ -551,7 +552,6 @@ test("a draft's words outlast a relaunch, the plan opening on its draft again un
     prompt,
     attachments: [],
     choice: undefined,
-    disabledServers: [],
   });
   act(() => after.control().onDiscardDraft(draft));
   assert.equal(after.control().draft, undefined);
@@ -768,10 +768,11 @@ test("a fork's × lets the fork go and leaves an ordinary draft with its words a
   });
 });
 
-test("a fork's draft with words outlasts a relaunch still a fork, under the same key, and its × keeps the words as an ordinary draft's", async () => {
+test("a fork's draft with words outlasts a relaunch still a fork, under the same key, and its × keeps the words as an ordinary draft's, on its source's servers", async () => {
   const MESSAGE = "4f1e2d3c-5b6a-4978-8a1b-2c3d4e5f6a7b";
   const fork = { agentId: AGENT, messageId: MESSAGE, opening: "Done." };
-  const before = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED] });
+  const source = { ...STARTED, disabledServers: [INTEGRATION_PROVIDER.NOTION] };
+  const before = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [source] });
   await before.mount();
   let draft = "";
   act(() => {
@@ -780,14 +781,13 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
   act(() => before.control().onDraftHeld((now) => ({ ...now, text: "Try the queue" })));
   relaunch();
 
-  const after = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED] });
+  const after = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [source] });
   await after.mount();
   assert.deepEqual(after.control().draft, {
     id: draft,
     prompt: "Try the queue",
     attachments: [],
     choice: undefined,
-    disabledServers: [],
     fork,
   });
   act(() => after.control().onDropFork());
@@ -797,11 +797,11 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
     prompt: "Try the queue, then retry",
     attachments: [],
     choice: undefined,
-    disabledServers: [],
+    disabledServers: [INTEGRATION_PROVIDER.NOTION],
   });
   relaunch();
 
-  const again = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED] });
+  const again = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [source] });
   await again.mount();
   assert.equal(again.control().draft?.fork, undefined, "a fork let go stays let go");
   assert.equal(again.control().draft?.prompt, "Try the queue, then retry");

@@ -1,4 +1,4 @@
-// form-rows.tsx -- the rows a sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker.
+// form-rows.tsx -- the rows a sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker; and the words on a page written whole, such as a description's.
 
 import {
   Button,
@@ -39,11 +39,12 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
 const WORDS_LINES = { min: 4, max: 12 } as const;
 
-/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, or a row holding one line kept from sight such as a key or a token, as a password field keeps it. */
+/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, a row holding one line kept from sight such as a key or a token, as a password field keeps it, or a page of its own, growing with no bound as Mail's message body does, such as a description's Markdown. */
 export const WORDS_LOOK = {
   ROW: "row",
   LINE: "line",
   SECRET: "secret",
+  PAGE: "page",
 } as const;
 
 type WordsLook = (typeof WORDS_LOOK)[keyof typeof WORDS_LOOK];
@@ -78,7 +79,8 @@ type WordsFieldProps = {
 /**
  * The words a sheet sends, as a row of the system's own multi-line field on
  * the surface: a few lines tall before anything is typed, growing with its
- * words. The field keeps its
+ * words; or, on a page of its own, the field alone on the page's ground,
+ * growing with no bound while the page scrolls. The field keeps its
  * own words, as a composer's does, and hands each change to its holder,
  * taking the holder's back only where they moved apart from what was typed.
  */
@@ -154,6 +156,10 @@ export function WordsField({
   const bounds = {
     [WORDS_LOOK.ROW]: [lineLimit(WORDS_LINES), listRowBackground(colors.RAISED)],
     [WORDS_LOOK.LINE]: [listRowBackground(colors.RAISED)],
+    [WORDS_LOOK.PAGE]: [
+      lineLimit(),
+      frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+    ],
   }[look];
 
   return (

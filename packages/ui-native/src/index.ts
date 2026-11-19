@@ -164,6 +164,8 @@ export { MachineAskSheet } from "./machine-ask-sheet.js";
 
 export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
 
+export { MarkdownEditor } from "./markdown-editor.js";
+
 export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
 
 export { MarkdownPage } from "./markdown-page.js";
@@ -317,6 +319,9 @@ export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 export {
   askForName,
   askForWords,
+  askToChoose,
+  type ChoiceAct,
+  type ChoiceAsk,
   type NameAsk,
   shareWords,
   WORDS_KIND,

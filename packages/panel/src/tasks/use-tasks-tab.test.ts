@@ -4903,7 +4903,6 @@ test("closing a draft holding words lets it go at once, and its toast's Undo ope
     prompt,
     attachments: [notes],
     choice,
-    disabledServers: [],
   });
   assert.deepEqual(tab.control().mainTabs.tab, draftTab(draft.id), "and its tab is shown again");
   assert.deepEqual(payloadsOf(tab, ACT_KIND.AGENTS_START), [], "nothing is started");

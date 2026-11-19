@@ -104,6 +104,7 @@ export interface AccountPreferencesWrite {
   /** The intros the write dismisses, as the JSON list of their ids, stored as their union with what stood. */
   introsSeen?: string;
   githubWakesOff?: string;
+  newAgentServersOff?: string;
   inbox?: boolean;
   agent?: ModelChoice;
   chaptersModel?: ChaptersPick;
@@ -130,6 +131,7 @@ const PREFERENCE_COLUMNS = {
   onboardingSurvey: accountPreference.onboardingSurvey,
   introsSeen: accountPreference.introsSeen,
   githubWakesOff: accountPreference.githubWakesOff,
+  newAgentServersOff: accountPreference.newAgentServersOff,
   inbox: accountPreference.inbox,
   agentModel: accountPreference.agentModel,
   agentEffort: accountPreference.agentEffort,
@@ -155,6 +157,7 @@ const PreferenceRowSchema = Schema.Struct({
   onboardingSurvey: Schema.NullOr(Schema.String),
   introsSeen: Schema.NullOr(Schema.String),
   githubWakesOff: Schema.NullOr(Schema.String),
+  newAgentServersOff: Schema.NullOr(Schema.String),
   inbox: Schema.NullOr(Schema.Boolean),
   agentModel: Schema.NullOr(Schema.String),
   agentEffort: Schema.NullOr(Schema.String),
@@ -195,6 +198,7 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
         ...(row.onboardingSurvey ? { onboardingSurvey: row.onboardingSurvey } : undefined),
         ...(introsSeen === undefined ? undefined : { introsSeen }),
         ...(row.githubWakesOff ? { githubWakesOff: row.githubWakesOff } : undefined),
+        ...(row.newAgentServersOff ? { newAgentServersOff: row.newAgentServersOff } : undefined),
         ...(row.inbox === null ? undefined : { inbox: row.inbox }),
       }) ?? {},
     agent: storedAgentChoice(row),
@@ -335,6 +339,7 @@ const PreferenceWriteSchema = Schema.Struct({
   onboardingSurvey: Schema.optionalKey(Schema.String),
   introsSeen: Schema.optionalKey(Schema.String),
   githubWakesOff: Schema.optionalKey(Schema.String),
+  newAgentServersOff: Schema.optionalKey(Schema.String),
   inbox: Schema.optionalKey(Schema.Boolean),
   agent: Schema.optionalKey(
     Schema.Struct({
@@ -380,6 +385,9 @@ function writtenColumns(write: PreferenceWrite) {
       : { onboardingSurvey: write.onboardingSurvey }),
     ...(write.introsSeen === undefined ? undefined : { introsSeen: write.introsSeen }),
     ...(write.githubWakesOff === undefined ? undefined : { githubWakesOff: write.githubWakesOff }),
+    ...(write.newAgentServersOff === undefined
+      ? undefined
+      : { newAgentServersOff: write.newAgentServersOff }),
     ...(write.inbox === undefined ? undefined : { inbox: write.inbox }),
     ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
     ...(write.updatedAt === undefined ? undefined : { updatedAt: write.updatedAt }),
@@ -483,6 +491,9 @@ export function writeAccountPreferences(
       ...(write.githubWakesOff === undefined
         ? undefined
         : { githubWakesOff: write.githubWakesOff }),
+      ...(write.newAgentServersOff === undefined
+        ? undefined
+        : { newAgentServersOff: write.newAgentServersOff }),
       ...(write.inbox === undefined ? undefined : { inbox: write.inbox }),
       ...(write.agent === undefined ? undefined : { agent: write.agent }),
       ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),

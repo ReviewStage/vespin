@@ -367,7 +367,6 @@ test("Return starts the task without planning, Untitled, on the repository last 
     prompt: "Make the sidebar keep its folds.",
     attachments: [],
     choice: undefined,
-    disabledServers: [],
   });
   assert.ok(idempotencyKey, "the agent's start carries the card's key");
 });
