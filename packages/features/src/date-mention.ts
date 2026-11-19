@@ -33,6 +33,8 @@ import { distanceText } from "./time-format.js";
  */
 
 const LOCALE = "en-US";
+const DATE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+const MAX_DATE_FORMATTERS = 64;
 
 /** A day as a date mention spells it. */
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u;
@@ -521,9 +523,23 @@ function offsetZone(moment: string): string {
   return `${time[6]}${time[7]}:${time[8]}`;
 }
 
+function dateFormatter(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  if (options.timeZone === undefined) return new Intl.DateTimeFormat(LOCALE, options);
+  const key = JSON.stringify(options);
+  const cached = DATE_FORMATTERS.get(key);
+
+  if (cached !== undefined) return cached;
+  const formatter = new Intl.DateTimeFormat(LOCALE, options);
+
+  if (DATE_FORMATTERS.size >= MAX_DATE_FORMATTERS) DATE_FORMATTERS.clear();
+  DATE_FORMATTERS.set(key, formatter);
+
+  return formatter;
+}
+
 /** A day in words, set in UTC since a day names no zone. */
 function dayWords(day: Day, options: Intl.DateTimeFormatOptions): string {
-  return new Intl.DateTimeFormat(LOCALE, { ...options, timeZone: "UTC" }).format(utcOf(day));
+  return dateFormatter({ ...options, timeZone: "UTC" }).format(utcOf(day));
 }
 
 /** A time in words as `zone` reads it, its zone's short name after it where asked. */
@@ -536,7 +552,7 @@ function timeWords(moment: string, zone: string, named: boolean): string {
 
   if (named) options.timeZoneName = "short";
 
-  return new Intl.DateTimeFormat(LOCALE, options).format(Date.parse(moment));
+  return dateFormatter(options).format(Date.parse(moment));
 }
 
 /** Whether two moments fall on one day as `zone` reads them. */
