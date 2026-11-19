@@ -2792,22 +2792,14 @@ export function useTasksTab(input: {
           return;
         }
 
-        // A thread on no task stands under its agent, so it opens that agent's own page.
-        if (home.taskId === null) {
-          const where = workspaceOfSlug(viewed.workspaces, home.workspaceId);
-          const step = where === undefined ? home.workspaceId : stepOf(where);
-          linkArrive(() => openAgentPage(home.agentId, step), NOTHING);
-
-          return;
-        }
-
         const found = {
           kind: LINK_DESTINATION.INBOX_ITEM,
           agentId: home.agentId,
           itemId: place.itemId,
         };
 
-        openInboxItemOn(home.workspaceId, found, home.taskId);
+        // Note that a thread on no task opens in the Inbox by its id alone, as its agent holds it there.
+        openInboxItemOn(home.workspaceId, found, home.taskId ?? undefined);
       });
     });
   };

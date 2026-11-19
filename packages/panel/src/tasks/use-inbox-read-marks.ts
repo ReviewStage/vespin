@@ -1,6 +1,7 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   acknowledgedOnOpen,
+  type InboxAnyHolder,
   type InboxListed,
   isUnread,
   settledOnRead,
@@ -279,7 +280,7 @@ export function useNodOnOpen({
   readerId,
   control,
 }: {
-  shown: InboxListed | undefined;
+  shown: InboxListed<InboxAnyHolder> | undefined;
   readerId: string | undefined;
   control: Pick<TaskInboxControl, "drawn" | "failed" | "draftOf" | "onAcknowledge">;
 }): void {
