@@ -82,6 +82,7 @@ import {
   ilike,
   inArray,
   isNotNull,
+  isNull,
   notInArray,
   or,
   type SQL,
@@ -89,6 +90,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Clock, Duration, Effect } from "effect";
+import { TASKLESS_LIVE, tasklessLiveParam } from "../../agents/taskless-reads.js";
 import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { instantParam } from "../../sync/live-param.js";
 import type { SyncMoved } from "../../sync/live-query.js";
@@ -312,6 +314,23 @@ function liveAgentOf(userId: string, since: Date): SQL {
 }
 
 /**
+ * The agents the account's list follows live: those of its live tasks
+ * (`liveAgentOf`), and, where `taskless`, every agent on no task, as a
+ * Manager is, unarchived or archived at or after `since`, so its own page
+ * and its chips read where it stands as a task's agent's do.
+ */
+function listedAgentOf(userId: string, since: Date, taskless: boolean): SQL {
+  const onNoTask = and(
+    isNull(agentTable.taskId),
+    or(isNull(agentTable.archivedAt), gte(agentTable.archivedAt, since)),
+  );
+
+  return (
+    (taskless ? or(liveAgentOf(userId, since), onNoTask) : liveAgentOf(userId, since)) ?? sql`false`
+  );
+}
+
+/**
  * The issues the tasks linked: none, since a plan links none. A released
  * desktop still follows the statement and decodes its rows, so it stands,
  * answering no rows.
@@ -338,9 +357,10 @@ function issuesStatement() {
  * mark alone and a released desktop reads one only for an agent on no task;
  * and that the Mac's last beat is not read,
  * because a beat wakes nothing (`deviceSync`) and a window judges a Mac by
- * its own presence read.
+ * its own presence read. An agent on no task is read only where `taskless`,
+ * for a build that reads a null `taskId` (`tasklessLiveParam`).
  */
-function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
+function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = false) {
   const latest = latestTurnOf(agentTable.conversationId, "latest_turn");
 
   return liveRowsStatement(
@@ -438,8 +458,12 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         .leftJoinLateral(latest, sql`true`)
         .where(
           // An agent on a task is listed only where the account reaches the task too, as a read of it by its id is;
-          // an agent on no task stays off the list for now, since a read that follows it names no client to gate on.
-          and(agentVisibleTo(userId), isNotNull(agentTable.taskId), narrowed),
+          // one on no task only for a build that reads it, since an older one fails its whole answer on a null task.
+          and(
+            agentVisibleTo(userId),
+            taskless ? undefined : isNotNull(agentTable.taskId),
+            narrowed,
+          ),
         ),
   );
 }
@@ -626,7 +650,10 @@ const TASK_LIST_TABLES = [
  * each request and answers beside the rows. A task or an agent that leaves
  * the set by a write, its own row's or a pin's, is answered gone; one that
  * only ages out logs nothing, and the reader lets it go itself at the
- * `liveSince` answered (`standsLive`).
+ * `liveSince` answered (`standsLive`). Beside them it holds every agent on
+ * no task the account sees, unarchived or archived since `liveSince`, for a
+ * build that reads one (`tasklessLiveParam`), which it binds from the
+ * headers the build names itself in.
  *
  * Beside them, every answer carries the workspaces in which the account
  * reaches any task (`workspacesWithTasks`), on the tasks' own rule, so a
@@ -636,16 +663,18 @@ const TASK_LIST_TABLES = [
 export const tasksRead = bindLiveRead(TASK_LIST_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
-  serve: () =>
+  serve: (_params, _query, request) =>
     Effect.map(Clock.currentTimeMillis, (now) => ({
       liveSince: String(now - TASK_LIVE_WINDOW_MILLIS),
+      taskless: tasklessLiveParam(request),
     })),
-  statements: ({ userId, liveSince }) => {
+  statements: ({ userId, liveSince, taskless }) => {
     const since = instantParam(liveSince);
+    const carried = taskless === TASKLESS_LIVE.CARRIED;
 
     return {
       tasks: tasksStatement(userId, liveTaskOf(userId, since)),
-      agents: agentsStatement(userId, liveAgentOf(userId, since)),
+      agents: agentsStatement(userId, listedAgentOf(userId, since, carried), carried),
       issues: issuesStatement(),
     };
   },
@@ -656,8 +685,9 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
       tasks: [taskSync, { table: taskPinSync, column: taskPin.taskId }],
       agents: [agentSync, { table: agentPinSync, column: agentPin.agentId }],
     },
-    statements: ({ userId, liveSince }, moved) => {
+    statements: ({ userId, liveSince, taskless }, moved) => {
       const since = instantParam(liveSince);
+      const carried = taskless === TASKLESS_LIVE.CARRIED;
 
       return {
         tasks: tasksStatement(
@@ -666,7 +696,8 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
         ),
         agents: agentsStatement(
           userId,
-          and(liveAgentOf(userId, since), movedAgents(moved)) ?? sql`false`,
+          and(listedAgentOf(userId, since, carried), movedAgents(moved)) ?? sql`false`,
+          carried,
         ),
         issues: issuesStatement(),
       };

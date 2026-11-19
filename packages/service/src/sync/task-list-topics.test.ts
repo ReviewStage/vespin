@@ -22,6 +22,7 @@ import { HOST_UPDATE } from "@repo/features/device-agent-wire";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
+import { TASKLESS_LIVE } from "../agents/taskless-reads.js";
 import { TURN_ORIGIN } from "../core.js";
 import { tasksRead } from "../live/reads/tasks.js";
 
@@ -65,7 +66,12 @@ const wakesTheTaskList = <A, E, R>(
   userId: string,
 ) =>
   Effect.gen(function* () {
-    const woken = yield* tasksRead.topics({ userId, liveSince: "0" });
+    const woken = yield* tasksRead.topics({
+      userId,
+      liveSince: "0",
+      taskless: TASKLESS_LIVE.LEFT_OUT,
+    });
+
     const fired = yield* expectTopicsFire(write, topics);
     assert.ok(
       wokenBy(topics, woken),
@@ -203,12 +209,18 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
 
         yield* wakesTheTaskList(joinWorkspace(teamId, userId), notified, userId);
         assert.ok(
-          wokenBy([team], yield* tasksRead.topics({ userId, liveSince: "0" })),
+          wokenBy(
+            [team],
+            yield* tasksRead.topics({ userId, liveSince: "0", taskless: TASKLESS_LIVE.LEFT_OUT }),
+          ),
           "the joined team wakes it",
         );
         yield* wakesTheTaskList(leaveWorkspace(teamId, userId), notified, userId);
         assert.ok(
-          !wokenBy([team], yield* tasksRead.topics({ userId, liveSince: "0" })),
+          !wokenBy(
+            [team],
+            yield* tasksRead.topics({ userId, liveSince: "0", taskless: TASKLESS_LIVE.LEFT_OUT }),
+          ),
           "the team left wakes none",
         );
       }),
