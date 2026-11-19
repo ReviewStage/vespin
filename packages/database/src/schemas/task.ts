@@ -162,6 +162,7 @@ export const task = pgTable(
     readThrough: timestamptz("read_through"),
   },
   (table) => [
+    index("task_name_trgm").using("gin", table.name.op("gin_trgm_ops")),
     // The task list reads one account's tasks, newest started first.
     index("task_user_created").on(table.userId, table.createdAt),
     // A workspace's tasks, newest started first.

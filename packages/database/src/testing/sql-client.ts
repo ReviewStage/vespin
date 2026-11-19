@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { PgliteClient } from "@effect/sql-pglite";
 import { PGlite } from "@electric-sql/pglite";
+import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import * as PgliteDrizzle from "drizzle-orm/effect-pglite";
 import { Duration, Effect, Layer, ManagedRuntime, Redacted, Stream } from "effect";
 import type * as SqlClient from "effect/sql/SqlClient";
@@ -62,7 +63,7 @@ export const MIGRATED_PGLITE_ENVIRONMENT = {
 let migratedDataDirectory: Promise<Blob> | undefined;
 
 async function migrateFreshPglite(): Promise<PGlite> {
-  const client = new PGlite();
+  const client = new PGlite({ extensions: { pg_trgm } });
   const migrationRuntime = ManagedRuntime.make(sqlClientOverPglite(client));
 
   try {
@@ -107,7 +108,7 @@ export async function openMigratedPglite(): Promise<PGlite> {
   }
 
   if (migratedDataDirectory !== undefined) {
-    return new PGlite({ loadDataDir: await migratedDataDirectory });
+    return new PGlite({ extensions: { pg_trgm }, loadDataDir: await migratedDataDirectory });
   }
 
   const first = migrateFreshPglite();
@@ -162,7 +163,7 @@ const pgliteSqlClient = pgliteSqlClientOver(openMigratedPglite);
  * migrated, so only an in-process database can stand in for a fresh one.
  */
 export const unmigratedPgliteSqlClient: Layer.Layer<DatabaseServices, SqlError> =
-  pgliteSqlClientOver(async () => new PGlite());
+  pgliteSqlClientOver(async () => new PGlite({ extensions: { pg_trgm } }));
 
 /**
  * The pool ends before the clone drops: the pool's finalizer is registered
