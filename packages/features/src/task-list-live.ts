@@ -297,14 +297,22 @@ export function standsLive(
  * for a released desktop that follows them, and which this build keeps
  * none of; beside them, the workspaces holding any task it reaches. It holds
  * the live tasks alone (`standsLive`), as of the instant the service binds
- * (`liveSince`), and their agents. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * (`liveSince`), and their agents. Every agent on no task the account sees
+ * stands beside them, unarchived or archived since `liveSince`, carried only
+ * to a build that reads a null `taskId` (`HOSTED_API_VERSION` 6 on), which
+ * the service binds as `taskless` from the headers the build names itself
+ * in. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
 export const TASK_LIST_READ = liveRead({
   name: "tasks",
   path: HOSTED_SERVICE_PATH.LIVE_TASKS,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, liveSince: LIVE_PARAM.SERVED },
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    liveSince: LIVE_PARAM.SERVED,
+    taskless: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.DELTA,
   parts: {
     tasks: liveRows({
