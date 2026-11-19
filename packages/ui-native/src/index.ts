@@ -291,8 +291,6 @@ export {
   WorkspaceRow,
 } from "./settings-form.js";
 
-export { SkeletonRegion } from "./skeleton.js";
-
 export {
   type BarAction,
   type BarFootItem,
@@ -337,13 +335,6 @@ export {
   type WordsAsk,
   type WordsKind,
 } from "./system-asks.js";
-
-export {
-  TASK_SKELETON_ROW,
-  TaskHeadSkeleton,
-  TaskSectionsSkeleton,
-  type TaskSkeletonSection,
-} from "./task-page-skeleton.js";
 
 export {
   AGENT_ROW_STATE,
