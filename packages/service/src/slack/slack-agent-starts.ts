@@ -1,9 +1,13 @@
 /**
- * slack-agent-starts.ts -- a member's @mention of our Slack bot, or a direct message to it, starts a coding agent as them or reaches the agent its thread speaks for, and every settled turn bound for Slack is posted there.
+ * slack-agent-starts.ts -- a member's @mention of our Slack bot, or a direct message to it, starts a coding agent as them or reaches the agent its thread speaks for, as does any reply in an agent's thread, and every settled turn bound for Slack is posted there.
  *
  * Our Slack route hands each event Slack sent here
- * (`slack-events-app.ts`): an `app_mention` in a channel, or a `message.im`
- * a member wrote to the bot directly. A bot's message, a message's edit or
+ * (`slack-events-app.ts`): an `app_mention` in a channel, a `message.im`
+ * a member wrote to the bot directly, or a `message` replying in a thread
+ * of a public or private channel, which is heard only where that thread
+ * speaks for an agent (below). Such a reply that names the bot is dropped
+ * unread, because Slack sends it as an `app_mention` too, under another
+ * event id, which acts on it once. A bot's message, a message's edit or
  * any subtype but a file share, and Slack's own retry of an event
  * (`x-slack-retry-num`) are dropped unread, and the work runs once the answer has left, inside
  * Slack's three seconds. Every event heard writes one fixed line, its kind
@@ -14,7 +18,9 @@
  * through a Slack account a member connected themselves (`SlackWorkspaceBot.memberOf`),
  * or else by the email Slack holds for them (`users.info`), which is then kept.
  * Where none holds them as a member, the bot says so in the thread and
- * starts nothing. Every call to Slack is made on the token of the workspace
+ * starts nothing; a reply that named the bot nowhere is let go quietly
+ * instead, since people who are not members talk in a thread too, as is
+ * one in a thread no agent's, which starts nothing. Every call to Slack is made on the token of the workspace
  * it acts for (`SlackBot.forWorkspace`), and one made before a workspace is
  * found on the first connected to the team that holds one; where none
  * does, nothing can answer, and the event is dropped with a fixed line.
@@ -28,7 +34,8 @@
  * may reply there; anyone else is told so and nothing is posted.
  *
  * A message in a thread that speaks for an agent (`slack_agent_thread`), one
- * it was started from or its automation run's result was sent in, is sent to
+ * it was started from or its automation run's result was sent in, whether
+ * it names the bot or not, is sent to
  * that agent as the writer's own message (`steer.ts`), the agent brought
  * back first where it stands archived, as a chat tool reopens a
  * conversation, and the thread becomes the agent's current one once the
@@ -233,6 +240,11 @@ const FILES_ALONE = "(The member sent the attached files without words.)";
 /** The conversation type a direct message to the bot arrives in. */
 const SLACK_IM = "im";
 
+/** The conversation types a reply in an agent's thread is heard in without a mention: a public channel and a private one. */
+const SLACK_THREAD_CHANNEL = { PUBLIC: "channel", PRIVATE: "group" } as const;
+
+const SLACK_THREAD_CHANNELS: ReadonlySet<string> = new Set(Object.values(SLACK_THREAD_CHANNEL));
+
 /** Slack's prefix for a direct conversation's id, where an `app_mention` would repeat the `message.im` beside it. */
 const DIRECT_CHANNEL_PREFIX = "D";
 
@@ -309,7 +321,8 @@ const SLACK_REPLY_GUIDE = [
 
 /** What each later message in the thread reminds the agent of, so the rule rides with the message it bears on rather than piling up. */
 const SLACK_REPLY_REMINDER =
-  "That thread sees only what you send there with `send_slack_message`, as its description says; your final message is not posted.";
+  "That thread sees only what you send there with `send_slack_message`, as its description says; your final message is not posted. " +
+  "You hear every reply in that thread, not only those that mention you: answer only where you add something, and stay out where people in the thread are talking to each other.";
 
 /** The event callback as far as it is read: the team, Slack's id for the event, the bot's own user, and the message. */
 const EventCallbackSchema = Schema.Struct({
@@ -366,6 +379,8 @@ interface SlackAddressed {
   readonly text: string;
   /** The files the message shared that may be read: an image of any type Slack names one, or a PDF within its bound; none where it shared none. */
   readonly files: readonly SharedFile[];
+  /** Whether the message is a reply in a channel thread that names the bot nowhere, heard only where an agent's thread holds it. */
+  readonly overheard: boolean;
 }
 
 /** Where the bot answers: the thread a message stands in, or the one it starts. */
@@ -389,6 +404,7 @@ const SLACK_DROP = {
   SUBTYPE: "subtype",
   FROM_BOT: "from_bot",
   EMPTY: "empty",
+  MENTIONED: "mentioned",
 } as const;
 
 type SlackDrop = (typeof SLACK_DROP)[keyof typeof SLACK_DROP];
@@ -473,8 +489,24 @@ function addressedOf(callback: EventCallback): SlackAddressed | SlackDrop {
     return SLACK_DROP.DIRECT_MENTION;
   }
 
-  if (kind !== SLACK_HEARD.APP_MENTION && kind !== SLACK_HEARD.DIRECT_MESSAGE) {
+  // A reply in a channel's thread is heard without a mention, for an agent's thread to take.
+  const overheard =
+    kind === SLACK_HEARD.CHANNEL_MESSAGE &&
+    event.thread_ts !== undefined &&
+    event.channel_type !== undefined &&
+    SLACK_THREAD_CHANNELS.has(event.channel_type);
+
+  if (kind !== SLACK_HEARD.APP_MENTION && kind !== SLACK_HEARD.DIRECT_MESSAGE && !overheard) {
     return SLACK_DROP.NOT_ADDRESSED;
+  }
+
+  // Note that a reply naming the bot also arrives as an `app_mention` under another event id, which acts on it; one whose bot is unknown cannot be told apart, so it is left to that too.
+  if (
+    overheard &&
+    (botUserId === undefined ||
+      [...(event.text ?? "").matchAll(USER_MENTION)].some(([, id]) => id === botUserId))
+  ) {
+    return SLACK_DROP.MENTIONED;
   }
 
   if (event.subtype !== undefined && event.subtype !== SLACK_FILE_SHARE) return SLACK_DROP.SUBTYPE;
@@ -497,6 +529,7 @@ function addressedOf(callback: EventCallback): SlackAddressed | SlackDrop {
     threadTs: event.thread_ts,
     text,
     files,
+    overheard,
   };
 }
 
@@ -890,7 +923,10 @@ const sendToAgent = Effect.fnUntraced(function* (
   );
 
   if (Option.isNone(agent)) {
-    yield* bot.reply(addressed.channel, threadOf(addressed), plainReply("That agent is gone."));
+    // Note that a reply overheard among people talking in the thread is let go quietly.
+    if (!addressed.overheard) {
+      yield* bot.reply(addressed.channel, threadOf(addressed), plainReply("That agent is gone."));
+    }
 
     return;
   }
@@ -1173,8 +1209,11 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
       if (!bot.connected) return;
       const member = yield* memberIn(bot, email, organizationId, addressed);
 
+      // Note that a non-member's reply overheard in the thread is dropped quietly, because people who are not members talk there too.
       if (Option.isNone(member)) {
-        yield* bot.reply(addressed.channel, thread, plainReply(SLACK_REPLY.NO_MEMBER));
+        if (!addressed.overheard) {
+          yield* bot.reply(addressed.channel, thread, plainReply(SLACK_REPLY.NO_MEMBER));
+        }
 
         return;
       }
@@ -1184,6 +1223,9 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
       return;
     }
   }
+
+  // A reply overheard in a thread no agent's is left alone: only a mention or a DM starts an agent.
+  if (addressed.overheard) return;
 
   // Note that a workspace holding no token starts nothing, because its bot could neither read the message's thread and files nor answer.
   for (const { organizationId, bot } of bots) {

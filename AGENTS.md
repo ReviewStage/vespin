@@ -137,7 +137,8 @@ component, or add the component or variant there.
   traces. And a workspace environment variable, which the workspace's owners
   and admins set, may reach that workspace's cloud agents: their sandbox's
   environment, the model, and the agent's transcript and traces. And a Slack message a member addresses to Vespin's Slack bot (an
-  @Vespin mention or a DM), with the earlier messages of the Slack thread it
+  @Vespin mention or a DM), or writes as a reply in a channel thread an agent
+  was started from or posts to, with the earlier messages of the Slack thread it
   stands in, may reach the agent it starts or is sent to: that agent's task,
   transcript and traces. And a Slack message the bot can read, in any channel it
   is in, private ones included, may reach an agent of the workspace that
