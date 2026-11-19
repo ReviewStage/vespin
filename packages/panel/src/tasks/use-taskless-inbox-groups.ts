@@ -44,6 +44,11 @@ function answeredAgents(
   return reads.flatMap(({ data }) => (data === undefined || "failure" in data ? [] : [data.agent]));
 }
 
+/** Whether any of the reads has not answered yet. Note that it answers a boolean, so its holder is drawn again only as it flips. */
+function anyPending(reads: readonly { readonly isPending: boolean }[]): boolean {
+  return reads.some((read) => read.isPending);
+}
+
 /** Whether two namings of an agent say the same, so its holder, and every row drawn of it, stays as it was. */
 function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
   return (
@@ -58,7 +63,7 @@ function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
 /** The agents on no task the Inbox lists, and where the account's feed they are told in stands. */
 export interface TasklessInboxGroups {
   readonly groups: readonly InboxGroup<InboxAgentHolder>[];
-  /** Whether the feed has not answered yet, so an agent's items may still be on their way. */
+  /** Whether the feed, or the read naming an agent it holds items of, has not answered yet, so an agent's items may still be on their way. */
   readonly pending: boolean;
   /** Whether the feed refused, so the list offers to read it again whether or not a task holds items. */
   readonly failed: boolean;
@@ -93,6 +98,12 @@ export function useTasklessInboxGroups(
     combine: answeredAgents,
   });
 
+  // Note that an agent being named lists nothing yet, so a thread of its that a link opens waits on it rather than reading as missing.
+  const naming = useQueries({
+    queries: unlisted.map((agentId) => agentPageQueryOptions(agentId)),
+    combine: anyPending,
+  });
+
   // The holders named last, by agent, so an agent named the same is held by the very holder it was.
   const kept = useRef(new Map<string, InboxHolderAgent>());
 
@@ -125,5 +136,5 @@ export function useTasklessInboxGroups(
     });
   }, [fed, workspaceId, byId, pages, models]);
 
-  return { groups, pending: feed.isPending, failed: feed.isError };
+  return { groups, pending: feed.isPending || naming, failed: feed.isError };
 }

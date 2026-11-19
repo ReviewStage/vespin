@@ -2468,7 +2468,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   );
 });
 
-test("a Vespin link to an Inbox thread on no task opens its agent's own page", async () => {
+test("a Vespin link to an Inbox thread on no task opens the thread in the Inbox, by its id alone", async () => {
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "notes" } },
     {
@@ -2491,9 +2491,10 @@ test("a Vespin link to an Inbox thread on no task opens its agent's own page", a
   );
   await settle();
 
-  assert.equal(tab.control().agentView.agentId, AGENT_ID);
-  assert.equal(inboxNow().open, false);
-  assert.equal(landed, true, "the link says it landed once the page stands");
+  assert.equal(tab.control().agentView.agentId, undefined);
+  assert.equal(inboxNow().open, true);
+  assert.deepEqual(inboxNow().chosen, { itemId: ITEM_ID, opened: true });
+  assert.equal(landed, true, "the link says it landed once the Inbox stands");
 });
 
 test.each([

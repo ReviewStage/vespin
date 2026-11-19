@@ -46,7 +46,12 @@ import {
   useInboxDrafts,
   withoutPicks,
 } from "../composer-drafts.js";
-import { holderInboxQuery, holderInboxRetryMutation, inboxItemsQuery } from "../live-reads.js";
+import {
+  holderInboxQuery,
+  holderInboxRetryMutation,
+  inboxItemsQuery,
+  inboxItemsRetryMutation,
+} from "../live-reads.js";
 import type { PictureReader } from "../picture-query.js";
 import { useSendQueue } from "../send-queue.js";
 
@@ -375,14 +380,20 @@ function undeliveredOf(reply: QueuedReply, taskId: string | null, why: string): 
 
 interface Held {
   readonly taskId: string | undefined;
+  /** The agent on no task whose items are held, where no task is. */
+  readonly agentId: string | undefined;
   readonly items: readonly InboxItem[];
   /** Whether the items are a read's, the feed's or the holder's own, rather than nothing yet. */
   readonly drawn: boolean;
 }
 
 /** The holder's items as its reads first stand: those read already, so a holder drawn again draws them in its first frame. */
-function fresh(taskId: string | undefined, read: readonly InboxItem[] | undefined): Held {
-  return { taskId, items: read ?? [], drawn: read !== undefined };
+function fresh(
+  taskId: string | undefined,
+  agentId: string | undefined,
+  read: readonly InboxItem[] | undefined,
+): Held {
+  return { taskId, agentId, items: read ?? [], drawn: read !== undefined };
 }
 
 const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
@@ -390,13 +401,19 @@ const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 /**
  * The plan's items as the account's feed holds them, whole; none where the
  * feed has not answered, or holds nothing of the plan, whose own read may
- * still hold a settled item past the feed's bound.
+ * still hold a settled item past the feed's bound. Where no plan is named,
+ * the items of `agentId`, an agent on no task, which only the feed holds.
  */
 function fedItemsOf(
   fed: AppInboxItems | undefined,
   taskId: string | undefined,
+  agentId: string | undefined,
 ): readonly InboxItem[] | undefined {
-  return fed === undefined || taskId === undefined ? undefined : fed[INBOX_SCOPE_KIND.TASK][taskId];
+  if (fed === undefined) return undefined;
+
+  if (taskId !== undefined) return fed[INBOX_SCOPE_KIND.TASK][taskId];
+
+  return agentId === undefined ? undefined : fed.agents?.[agentId];
 }
 
 /** An Inbox's pictures as its cards read them: by the item, as the scope the window keeps them under, and the attachment. */
@@ -529,6 +546,8 @@ export function useTaskInbox(input: Parameters<typeof useHeldTaskInbox>[0]): Tas
 export function useHeldTaskInbox(input: {
   /** The task whose inbox is held, under which its cards keep their drafts. */
   taskId: string | undefined;
+  /** The agent on no task whose threads are held where no task is, read from the account's feed alone, its cards keeping their drafts under no task. */
+  agentId?: string | undefined;
   /** Whether the window shows the tasks. */
   shown: boolean;
   /** Whether this Inbox is the one on screen, which says what lands in it (`inbox-arrivals.ts`); none where it is not. */
@@ -548,6 +567,8 @@ export function useHeldTaskInbox(input: {
   };
 }): HeldTaskInboxControl {
   const { taskId, shown, waiting, readerId, agents } = input;
+  // Note that an agent on no task has no read of its own, so the feed stands for it.
+  const agentId = taskId === undefined ? input.agentId : undefined;
 
   // A task with no agent, standing or archived, has no Inbox tab and nothing
   // to read, unless an item waits on it, which an agent this window has not
@@ -560,19 +581,25 @@ export function useHeldTaskInbox(input: {
   // Note that Try again moves with the holder alone, as the read's own did, since a render builds its key anew.
   const holderId = holderKey?.id;
 
+  const { mutate: retryFeed } = useMutation(inboxItemsRetryMutation());
+  const feedHolds = agentId !== undefined;
+
+  // Note that an agent on no task is read again through the feed, which alone holds its threads.
   const onRetry = useCallback(() => {
     if (holderId !== undefined) retryHolder({ kind: INBOX_SCOPE_KIND.TASK, id: holderId });
-  }, [retryHolder, holderId]);
+    else if (feedHolds) retryFeed();
+  }, [retryHolder, holderId, feedHolds, retryFeed]);
 
   const feed = useQuery(inboxItemsQuery());
-  const fed = fedItemsOf(feed.data, taskId);
+  const fed = fedItemsOf(feed.data, taskId, agentId);
   // The holder's own read stands in for the feed's once it answered, since it holds what the feed leaves out.
   const pushed = holder.data ?? fed;
-  const read = holder.isSuccess;
-  const failed = holder.isError;
-  const [held, setHeld] = useState<Held>(() => fresh(taskId, pushed));
+  const byFeed = agentId !== undefined && shown;
+  const read = holder.isSuccess || (byFeed && feed.isSuccess);
+  const failed = holder.isError || (byFeed && feed.isError);
+  const [held, setHeld] = useState<Held>(() => fresh(taskId, agentId, pushed));
 
-  if (held.taskId !== taskId) setHeld(fresh(taskId, pushed));
+  if (held.taskId !== taskId || held.agentId !== agentId) setHeld(fresh(taskId, agentId, pushed));
   useInboxArrivals(
     { taskId: held.taskId, items: held.items, read: held.drawn },
     input.onScreen === true,
@@ -615,7 +642,7 @@ export function useHeldTaskInbox(input: {
   // Note that a holder neither read holds any more, as after a sign-out, is let go with its items, so nothing of the last account stands drawn.
   useEffect(() => {
     if (pushed === undefined) {
-      setHeld((was) => (was.drawn ? fresh(was.taskId, undefined) : was));
+      setHeld((was) => (was.drawn ? fresh(was.taskId, was.agentId, undefined) : was));
 
       return;
     }

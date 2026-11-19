@@ -629,7 +629,7 @@ test("each row names its task on its first line with its time at that line's end
   assert.deepEqual(lines(), expected);
 });
 
-test("a thread on no task names its agent on its first line where a task's thread names the task, and its press opens the agent rather than the item", async () => {
+test("a thread on no task names its agent on its first line where a task's thread names the task, and its press opens the thread beside the list, led by its agent", async () => {
   const manager = {
     ...AGENT,
     id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
@@ -660,8 +660,19 @@ test("a thread on no task names its agent on its first line where a task's threa
   act(() => rowNamed(page, "Cut the release?").click());
   await settle();
 
-  assert.deepEqual(asked.openedAgents, [manager.id]);
-  assert.equal(page.querySelector(".inbox-subject"), null);
+  assert.deepEqual(asked.openedAgents, [], "the thread opens, not its agent's page");
+  assert.equal(paneTitle(page), "Cut the release?");
+
+  const crumbs = [
+    ...page.querySelectorAll<HTMLButtonElement>('.inbox-view-items nav[aria-label="Path"] button'),
+  ];
+
+  assert.deepEqual(
+    crumbs.map((crumb) => crumb.textContent),
+    ["Release manager"],
+  );
+  act(() => crumbs[0]?.click());
+  assert.deepEqual(asked.openedAgents, [manager.id], "its crumb opens the agent's own page");
 });
 
 test("the list is resized from its edge between its bounds, and keeps its width across a relaunch", async () => {
