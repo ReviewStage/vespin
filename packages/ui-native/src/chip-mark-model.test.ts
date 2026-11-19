@@ -1,6 +1,8 @@
 // chip-mark-model.test.ts -- a chip leads with its entity's own mark where the app holds it, as the panel's does, and with its kind's glyph where it does not.
 
 import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { LINK_SITE } from "@repo/features/link-site";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { describe, expect, it } from "vitest";
@@ -38,6 +40,25 @@ describe("a chip's mark", () => {
       kind: CHIP_MARK.TILE,
       workspace: RELAY,
     });
+  });
+
+  // Note that the regression this catches is a link to an integration's page, a Notion page's say, drawn with the link's globe, as the panel never draws it.
+  it("is a link's provider's mark where the app holds one, and the link's glyph for a site it holds none of", () => {
+    const page = "https://example.com/page";
+
+    expect(
+      chipMarkOf(
+        { kind: ENTITY_KIND.LINK, provider: INTEGRATION_PROVIDER.NOTION, url: page },
+        HELD,
+      ),
+    ).toEqual({ kind: CHIP_MARK.PROVIDER, provider: INTEGRATION_PROVIDER.NOTION });
+    expect(chipMarkOf({ kind: ENTITY_KIND.LINK, site: LINK_SITE.GMAIL, url: page }, HELD)).toEqual({
+      kind: CHIP_MARK.PROVIDER,
+      provider: INTEGRATION_PROVIDER.GMAIL,
+    });
+    expect(
+      chipMarkOf({ kind: ENTITY_KIND.LINK, site: LINK_SITE.YOUTUBE, url: page }, HELD),
+    ).toBeUndefined();
   });
 
   it("is none, leaving its kind's glyph, where the app holds nothing of it or the kind wears no mark of its own", () => {
