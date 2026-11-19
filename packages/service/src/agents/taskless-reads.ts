@@ -18,3 +18,16 @@ export function readsTasklessAgents(request: Request): boolean {
 
   return client !== undefined && client.apiVersion >= TASKLESS_AGENTS_API_VERSION;
 }
+
+/** Whether a live read carries what stands on no task, as a param the service binds from the build asking (`LIVE_PARAM.SERVED`), since a param is text. */
+export const TASKLESS_LIVE = {
+  CARRIED: "carried",
+  LEFT_OUT: "leftOut",
+} as const;
+
+/** Whether a live read carries what stands on no task to the build asking (`readsTasklessAgents`), as the param it binds. */
+export function tasklessLiveParam(
+  request: Request,
+): (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] {
+  return readsTasklessAgents(request) ? TASKLESS_LIVE.CARRIED : TASKLESS_LIVE.LEFT_OUT;
+}

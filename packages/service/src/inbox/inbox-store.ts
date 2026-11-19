@@ -1762,18 +1762,40 @@ function itemsLiveStatements(readerId: string, read: SQL | undefined) {
  * carries `channelId`, the item's workspace in its place, because a desktop
  * from before the inbox's channels were removed decodes a stamp without it
  * as no stamp: the key goes with the minimum supported desktop version.
+ * An item on no task is carried only where `taskless`, for a build that
+ * reads one.
  */
-export function accountItemsLiveStatements(userId: string, since: Date, settledSince: Date) {
-  return accountItemsOf(userId, settledSince, sql`true`, gte(inboxItem.updatedAt, since));
+export function accountItemsLiveStatements(
+  userId: string,
+  since: Date,
+  settledSince: Date,
+  taskless: boolean,
+) {
+  return accountItemsOf(
+    { userId, settledSince, taskless },
+    sql`true`,
+    gte(inboxItem.updatedAt, since),
+  );
+}
+
+/** Whose items an account-wide read carries: the reader's, settled ones since `settledSince`, and those on no task only where `taskless`. */
+interface AccountItemsReader {
+  readonly userId: string;
+  readonly settledSince: Date;
+  readonly taskless: boolean;
 }
 
 /** The account's items `narrowed` keeps, as `accountItemsLiveStatements` reads them, those `changed` keeps among them whole. */
-function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, changed: SQL) {
+function accountItemsOf(
+  { userId, settledSince, taskless }: AccountItemsReader,
+  narrowed: SQL,
+  changed: SQL,
+) {
   const carried = and(
     // Every item the account may read, as its read of what waits names them (`accountWaiting`).
     itemVisibleTo(userId),
-    // Note that an item on no task is left out for now, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task, and a live read is not told the build reading it.
-    isNotNull(inboxItem.taskId),
+    // Note that an item on no task is carried only where the build reads one, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task.
+    taskless ? undefined : isNotNull(inboxItem.taskId),
     // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
     or(
       eq(inboxItem.status, INBOX_STATUS.OPEN),
@@ -1788,8 +1810,7 @@ function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, chang
       ordered: false,
       columns: {
         id: inboxItem.id,
-        // Note that the wire reads an item on no task as null, though none stands on none yet.
-        taskId: sql<string | null>`${inboxItem.taskId}`,
+        taskId: inboxItem.taskId,
         agentId: inboxItem.agentId,
         revision: inboxItem.revision,
         version: inboxItem.version,
@@ -1853,8 +1874,13 @@ function movedItems(moved: SyncMoved): SQL {
  * moved item whole with its thread's messages and files, which the reader
  * takes in place of what it holds of the item.
  */
-export function accountItemsDeltaStatements(userId: string, settledSince: Date, moved: SyncMoved) {
-  return accountItemsOf(userId, settledSince, movedItems(moved), sql`true`);
+export function accountItemsDeltaStatements(
+  userId: string,
+  settledSince: Date,
+  taskless: boolean,
+  moved: SyncMoved,
+) {
+  return accountItemsOf({ userId, settledSince, taskless }, movedItems(moved), sql`true`);
 }
 
 /** One plan's inbox written for Neon Realtime, as `taskInboxItems` reads it. */

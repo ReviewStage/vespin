@@ -29,6 +29,7 @@ import {
 import { INBOX_ASK } from "@repo/features/inbox-wire";
 import { DateTime, Duration, Effect, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
+import { TASKLESS_LIVE } from "../agents/taskless-reads.js";
 import {
   markInboxItemRead,
   postInboxMessage,
@@ -116,7 +117,10 @@ const wakes = <A, E, R>(
 /** The four reads of the world's inbox, as the member follows them. */
 const inboxReadsOf = (world: InboxWorld, userId: string) => ({
   account: [accountInboxRead, { userId, repositoryless: "" }] as const,
-  items: [inboxItemsRead, { userId, since: "0", settledSince: "0" }] as const,
+  items: [
+    inboxItemsRead,
+    { userId, since: "0", settledSince: "0", taskless: TASKLESS_LIVE.LEFT_OUT },
+  ] as const,
   task: [taskInboxRead, { userId, id: world.taskId }] as const,
   agent: [agentInboxRead, { userId, id: world.agentId }] as const,
 });
