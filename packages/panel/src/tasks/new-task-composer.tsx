@@ -68,12 +68,11 @@ import { heldUpdateOver, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { useRepositoryDefault } from "./repository-default.js";
 import { keptSkills } from "./repository-skills.js";
-import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "./runs-on.js";
+import { NewTaskRunsOnChip, newTaskRunsOn, useDevicesRead, useNewTaskRunsOn } from "./runs-on.js";
 import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
-import { MODELS_READ } from "./use-agents.js";
 import type { AgentAsk, NewTaskPress, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
 import { useTaskSections } from "./use-pin-writes.js";
 import type { TasksControl } from "./use-tasks-tab.js";
@@ -526,24 +525,13 @@ export function NewTaskComposer({
   }, [runsOnStands]);
   const devices = (runsOnStands ? newTask.devices : undefined) ?? NO_DEVICES;
   const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
-  // Start is held until a read made since the card opened lands, where the member's last pick is a
-  // device, since a start before then would name none. Note that a pick of the cloud, every member's
-  // with no device among them, holds nothing, because a start before the read runs in the cloud as
-  // the pick would after it; that a list read before the card opened does not count, because it may
-  // be one read before a device was added, and a failed read leaves it standing; and that a read is
-  // told by the generation it took, never by its list, which a read listing the same devices hands
-  // back as it was.
-  const { modelsRead } = newTask;
-  const [readAsOpened] = useState(modelsRead.generation);
-  const readSinceOpened = modelsRead.generation > readAsOpened;
-  const [devicesLanded, setDevicesLanded] = useState(false);
 
-  if (!devicesLanded && readSinceOpened && modelsRead.state === MODELS_READ.READ) {
-    setDevicesLanded(true);
-  }
+  // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
+  const { unread: devicesUnread, failed: devicesFailed } = useDevicesRead(
+    newTask.modelsRead,
+    runsOnStands && keptDevice,
+  );
 
-  const devicesUnread = runsOnStands && keptDevice && !devicesLanded;
-  const devicesFailed = devicesUnread && readSinceOpened && modelsRead.state === MODELS_READ.FAILED;
   // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
   const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
   const { repository: picked, judged, drop } = repositoryDefault;
