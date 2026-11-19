@@ -34,9 +34,14 @@ import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
+  GITHUB_APP_WITH_TOKENS,
+  GITHUB_FIXTURE_MEMBER,
   githubReaching,
   type InstallationFixture,
+  memberRepositoryJson,
   openGithubUser,
+  openTokenMember,
+  type SentToGitHub,
 } from "../../testing/github-app-fake.js";
 import { scriptedHarnessLayer } from "../../testing/native-harness-fake.js";
 import {
@@ -86,7 +91,7 @@ const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 15 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 16 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -289,6 +294,46 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           opened.map((message) => message.conversationId),
           [agent.conversationId],
         );
+      }),
+  );
+
+  it.effect(
+    "a Start on no task naming a repository beside its own that only the member's own token reaches, which its checkout could not mint, is refused and starts nothing",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openTokenMember();
+        yield* connectAgentApiKeys(owner);
+        const workspaceId = yield* openWorkspace(owner);
+        const installation = INSTALLATIONS[installationsConnected++];
+        assert.ok(installation);
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+        const docs = { owner: RELAY.owner, name: "Docs" } as const;
+
+        // The member's own token reaches the docs, which the workspace's installation does not.
+        const tokenReach = (sent: SentToGitHub) =>
+          sent.headers.get("authorization") === `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}` &&
+          new URL(sent.url).pathname === `/repos/${docs.owner}/${docs.name}`
+            ? Response.json(memberRepositoryJson(docs, true))
+            : undefined;
+
+        const github = githubReaching(INSTALLATIONS, GITHUB_APP_WITH_TOKENS, {}, tokenReach);
+        const { opened, agentSessions } = fakeAgentSessions();
+
+        const refused = yield* Effect.result(
+          startAgent(agentSessions, owner, {
+            taskId: null,
+            workspaceId,
+            repository: RELAY_REPOSITORY,
+            extraRepositories: [`${docs.owner}/${docs.name}`],
+            prompt: TASK,
+            idempotencyKey: randomUUID(),
+            choice: undefined,
+          }).pipe(Effect.provide(Layer.mergeAll(github.layer, catalog))),
+        );
+
+        assert.ok(Result.isFailure(refused));
+        assert.equal(refused.failure, HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
+        assert.equal(opened.length, 0);
       }),
   );
 
