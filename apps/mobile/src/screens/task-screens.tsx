@@ -2199,10 +2199,15 @@ function OverviewAgents({
   const { task } = overview;
   const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
 
-  const tree = agentTree(
-    overview.agents,
-    (line) => line.agent,
-    (agentId) => opened.has(agentId),
+  // Note that the tree is made anew only as its agents or their folds move, so the page's other redraws hand `RowForEach` the same rows rather than resetting them.
+  const tree = useMemo(
+    () =>
+      agentTree(
+        overview.agents,
+        (line) => line.agent,
+        (agentId) => opened.has(agentId),
+      ),
+    [overview.agents, opened],
   );
 
   const toggle = (agentId: string) =>
@@ -2542,8 +2547,21 @@ function OverviewComments({
   const retry = useTaskCommentsRetry(taskId);
   const settle = useCommentSettle(taskId);
   const [resolvedShown, setResolvedShown] = useState(false);
-  const open = threads.filter(threadOpen);
-  const resolved = threads.filter((thread) => !threadOpen(thread));
+
+  // Note that the threads are split only as they or the resolved toggle move, so the minute's tick hands `RowForEach` the same rows rather than resetting them, a swipe left open among them.
+  const { open, resolved, listed } = useMemo(() => {
+    const openThreads = threads.filter(threadOpen);
+    const resolvedThreads = threads.filter((thread) => !threadOpen(thread));
+
+    // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its row or its thread leaves it.
+    return {
+      open: openThreads,
+      resolved: resolvedThreads,
+      listed: resolvedShown && resolvedThreads.length > 0 ? resolvedThreads : openThreads,
+    };
+  }, [threads, resolvedShown]);
+
+  const showingResolved = listed === resolved && resolved.length > 0;
 
   if (retry !== undefined) {
     return (
@@ -2552,10 +2570,6 @@ function OverviewComments({
       </ListSection>
     );
   }
-
-  // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its row or its thread leaves it.
-  const showingResolved = resolvedShown && resolved.length > 0;
-  const listed = showingResolved ? resolved : open;
 
   if (open.length === 0 && resolved.length === 0) return null;
 
