@@ -144,6 +144,7 @@ import {
   TaskRow,
   TaskSectionsSkeleton,
   type TaskSkeletonSection,
+  UNASSIGNED_UNDER,
   useColors,
   useMinute,
   useRowAsker,
@@ -1356,6 +1357,7 @@ function standingMenus(
         {
           label: NO_ASSIGNEE_WORDS,
           symbol: GLYPH.UNASSIGNED,
+          under: UNASSIGNED_UNDER,
           on: assigneeId === undefined,
           onPress: () => overview.setAssignee(task.id, null),
         },

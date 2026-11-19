@@ -1,3 +1,10 @@
+import {
+  UNASSIGNED_MARK,
+  UNASSIGNED_MARK_BOX,
+  UNASSIGNED_MARK_LINE_WIDTH,
+  UNASSIGNED_RING_PATH_LENGTH,
+  UNASSIGNED_SEAT_OPACITY,
+} from "@repo/brand/task-status-marks";
 import { identityHue, identityLetter } from "@repo/features/workspace-tile";
 import { type ReactNode, useState, useSyncExternalStore } from "react";
 import { UserIcon } from "../../icons/lucide-glyphs.js";
@@ -336,6 +343,10 @@ export function Avatar(props: AvatarProps): React.JSX.Element {
   return <AvatarDisc key={props.src ?? ""} {...props} />;
 }
 
+/** No one's mark's parts, as `@repo/brand`'s table holds them: the dashed ring, and the seat's head and shoulders. */
+const [RING] = UNASSIGNED_MARK.RING;
+const [HEAD, SHOULDERS] = UNASSIGNED_MARK.SEAT;
+
 /** No one, an empty seat in a dashed outline of the disc's box at `size`, named Unassigned to a reader unless the words already stand beside it. */
 export function UnassignedAvatar({
   size = AVATAR_SIZE.ROW,
@@ -354,27 +365,31 @@ export function UnassignedAvatar({
     >
       <svg
         className="ui-avatar-unassigned absolute inset-0 size-full"
-        viewBox="0 0 16 16"
+        viewBox={`0 0 ${UNASSIGNED_MARK_BOX} ${UNASSIGNED_MARK_BOX}`}
         aria-hidden="true"
       >
-        {/* Note that the ring is held a hairline on its circle itself, because `vector-effect` is not inherited from the outline around it; its eight long dashes are laid evenly round it (`pathLength`) with round ends, so it is never read as the backlog's shorter-dashed status ring. */}
+        {/* Note that the ring is held a hairline on its circle itself, because `vector-effect` is not inherited from the outline around it; its eight long dashes are laid evenly round it (`pathLength`) with round ends, so it is never read as the backlog's shorter-dashed status ring. Its geometry is `@repo/brand`'s one table, which the iOS app's symbols are cut from too. */}
         <circle
           className="ui-avatar-unassigned-ring"
-          cx="8"
-          cy="8"
-          r="7.3"
-          pathLength="40"
+          cx={String(RING.cx)}
+          cy={String(RING.cy)}
+          r={String(RING.r)}
+          pathLength={String(UNASSIGNED_RING_PATH_LENGTH)}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.25"
-          strokeDasharray="3.2 1.8"
+          strokeWidth={String(UNASSIGNED_MARK_LINE_WIDTH)}
+          strokeDasharray={RING.dash.join(" ")}
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
         />
         {/* The seat is filled rather than traced, so it holds at a row's smallest size, and fainter than the ring, so the outline leads. The shoulders are the arc of a circle beneath, closed by the bottom of the seat's own 5.4 circle inside the ring, where the two cross. */}
-        <g className="ui-avatar-unassigned-seat" fill="currentColor" opacity="0.62">
-          <circle cx="8" cy="6.6" r="2.1" />
-          <path d="M4.158 11.795A5.2 5.2 0 0 1 11.842 11.795A5.4 5.4 0 0 1 4.158 11.795Z" />
+        <g
+          className="ui-avatar-unassigned-seat"
+          fill="currentColor"
+          opacity={String(UNASSIGNED_SEAT_OPACITY)}
+        >
+          <circle cx={String(HEAD.cx)} cy={String(HEAD.cy)} r={String(HEAD.r)} />
+          <path d={SHOULDERS.d} />
         </g>
       </svg>
     </ShadcnAvatar>

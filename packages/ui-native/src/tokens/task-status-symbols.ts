@@ -25,3 +25,10 @@ export const TASK_PRIORITY_SYMBOL = {
 export const TASK_PRIORITY_BARS_SYMBOL = "TaskPriorityBars";
 
 export const TASK_PRIORITY_UNLIT_OPACITY = 0.25;
+
+export const UNASSIGNED_SYMBOL = {
+  RING: "UnassignedRing",
+  SEAT: "UnassignedSeat",
+} as const;
+
+export const UNASSIGNED_SEAT_OPACITY = 0.62;

@@ -123,3 +123,45 @@ export const TASK_PRIORITY_MARK = {
   MEDIUM: bars(2),
   LOW: bars(1),
 };
+
+/** The square no one's mark (`@repo/ui`'s `UnassignedAvatar`) is drawn on, a face's. */
+export const UNASSIGNED_MARK_BOX = 16;
+
+/** How wide its dashed ring is stroked. */
+export const UNASSIGNED_MARK_LINE_WIDTH = 1.25;
+
+/** How strongly its seat is drawn against its ring, so the outline leads. */
+export const UNASSIGNED_SEAT_OPACITY = 0.62;
+
+/** How long the ring's path counts as, which its dashes are measured along, so eight fall evenly round it. */
+export const UNASSIGNED_RING_PATH_LENGTH = 40;
+
+/**
+ * No one, where a place says who is on something and nobody is: a ring of
+ * eight long dashes, so it is never read as the backlog's shorter-dashed
+ * status ring, and inside it a seat, a head over shoulders filled rather
+ * than traced so it holds at a row's smallest size. The ring's dashes are
+ * measured along `UNASSIGNED_RING_PATH_LENGTH`, as the panel's SVG lays
+ * them. The iOS app draws each as a symbol of its own, the seat faint
+ * under the ring.
+ */
+export const UNASSIGNED_MARK = {
+  RING: [
+    {
+      role: TASK_MARK_ROLE.LINE,
+      element: TASK_MARK_ELEMENT.CIRCLE,
+      cx: 8,
+      cy: 8,
+      r: 7.3,
+      dash: [3.2, 1.8],
+    },
+  ],
+  SEAT: [
+    { role: TASK_MARK_ROLE.FILL, element: TASK_MARK_ELEMENT.CIRCLE, cx: 8, cy: 6.6, r: 2.1 },
+    {
+      role: TASK_MARK_ROLE.FILL,
+      element: TASK_MARK_ELEMENT.PATH,
+      d: "M4.158 11.795A5.2 5.2 0 0 1 11.842 11.795A5.4 5.4 0 0 1 4.158 11.795Z",
+    },
+  ],
+};
