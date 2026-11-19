@@ -22,9 +22,9 @@
  * itself; its seconds are kept by the lease that hears the close.
  */
 
-import { agentTaskId, readAgentRouting, readVisibleAgent } from "@repo/database/models/agent-store";
+import { readAgentRouting, readVisibleAgent } from "@repo/database/models/agent-store";
 import { listRecentMessages } from "@repo/database/models/message-reads";
-import { readTaskHeader } from "@repo/database/models/task-store";
+import { readTaskHeader, type TaskHeader } from "@repo/database/models/task-store";
 import { deleteVoiceCall, insertVoiceCall } from "@repo/database/models/voice-calls";
 import { Clock, Effect, Option } from "effect";
 import { openAiKeyMiddleware } from "../accounts/openai-key-middleware.js";
@@ -83,9 +83,11 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
         listRecentMessages(agent.userId, agent.conversationId, CODER_TOOL_SET, VOICE_CONTEXT.READ),
       );
 
-      const task = yield* hostedStoreOrUnavailable(
-        readTaskHeader(context.userId, agentTaskId(agent)),
-      );
+      // Note that an agent on no task, a Manager among them, is called with no task name.
+      const task =
+        agent.taskId === null
+          ? Option.none<TaskHeader>()
+          : yield* hostedStoreOrUnavailable(readTaskHeader(context.userId, agent.taskId));
 
       const instructions = voiceInstructions({
         agent,
