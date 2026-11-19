@@ -1411,11 +1411,20 @@ export function useAgents(input: {
       return;
     }
 
+    // Note that a fork restored with no servers of its own ran on its source's, so the draft left keeps those rather than the account's choice for new agents.
+    const { fork } = draft;
+
+    const source =
+      fork === undefined ? undefined : standing?.find((agent) => agent.id === fork.agentId);
+
+    const disabledServers =
+      draft.disabledServers ?? (fork === undefined ? undefined : (source?.disabledServers ?? []));
+
     moveWords(taskId, draft.id, undefined);
     withDraft(taskId, {
       id: draft.id,
       choice: draft.choice,
-      disabledServers: draft.disabledServers,
+      ...serversOf(disabledServers),
       ...runsOnOf(draft.runsOn),
       ...pickedModeOf(draft.permissionMode),
     });
