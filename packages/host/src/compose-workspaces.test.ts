@@ -937,6 +937,28 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a photo fetch that went unanswered at launch is asked again on the follows' waits, with no move of the workspaces",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([]);
+      service.memberships = [PERSONAL, { ...ACME, photoVersion: "v1" }];
+      service.photos[ACME.id] = { contentType: WORKSPACE_PHOTO_TYPE.PNG, base64: "iVBORw0KGgo=" };
+      service.photosUnanswered = 2;
+      const { call, pushed, settled } = yield* subject(service);
+
+      yield* call("TASKS_REFRESH", undefined);
+      yield* settled;
+      yield* TestClock.adjust(Duration.seconds(2));
+      yield* TestClock.adjust(Duration.seconds(4));
+      yield* settled;
+
+      assert.deepEqual(heldPhotos(pushed).at(-1), {
+        [ACME.id]: { rows: { version: "v1", url: "data:image/png;base64,iVBORw0KGgo=" } },
+      });
+    }),
+);
+
 /** Each workspace's pending invitations the host told the windows, the latest last. */
 function heldInvitations(pushed: readonly (readonly [string, WireValue])[]): WireValue[] {
   return toldOn(pushed, LIVE_READ.WORKSPACE_INVITATIONS);

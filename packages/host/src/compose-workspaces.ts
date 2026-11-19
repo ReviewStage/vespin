@@ -76,6 +76,7 @@ import {
   isExperiment,
 } from "@repo/settings";
 import { declaredWrite, type EntityPool } from "@repo/sync";
+import { cappedExponential } from "@repo/wire/effect";
 import {
   Clock,
   Duration,
@@ -85,6 +86,7 @@ import {
   FiberMap,
   Option,
   Predicate,
+  Schedule,
   Scope,
   Stream,
 } from "effect";
@@ -105,7 +107,7 @@ import { heldFetch } from "./held-fetch.js";
 import { ActRefused, type HostActTable, liveTold } from "./host-acts.js";
 import type { HostKernel } from "./host-kernel.js";
 import type { KeptContent } from "./kept-content.js";
-import { FOLLOW_BACKOFF, LIVE_GONE, LiveBroken } from "./live-follow.js";
+import { FOLLOW_BACKOFF, FOLLOW_RESEAL, LIVE_GONE, LiveBroken } from "./live-follow.js";
 import type { RunMode } from "./run-mode.js";
 import { type TokenRepositoryWrites, tokenRepositoryWrites } from "./token-repository-writes.js";
 import type { WindowFocus } from "./window-focus.js";
@@ -142,6 +144,17 @@ const GITHUB_READ_EVERY = Duration.minutes(1);
 
 /** A GitHub page asked behind a closed gate, or of a service that did not answer, which opens nothing. */
 const GITHUB_PAGE_UNANSWERED = { failure: TASK_CALL_FAILURE.UNANSWERED } as const;
+
+/**
+ * How a workspace's photo is asked again after a fetch that did not land: on
+ * the follows' doubling waits, for about a minute, before it waits for the
+ * workspaces' next move. Note that a launch's first fetch can go out under a
+ * token the service has stopped taking, before the account's renewal lands,
+ * and the workspaces may not move again for the whole session.
+ */
+const PHOTO_ASKED_AGAIN = cappedExponential(FOLLOW_RESEAL.FIRST, FOLLOW_RESEAL.LONGEST).pipe(
+  Schedule.upTo({ duration: Duration.minutes(1) }),
+);
 
 /** A workspace call behind a closed gate, which never reaches the service. */
 const WORKSPACE_UNANSWERED = { failure: WORKSPACE_CALL_FAILURE.UNANSWERED } as const;
@@ -399,10 +412,23 @@ function workspacePhotos({ dependencies, served, gate }: WorkspacesReach) {
       kernel.emit(GATEWAY_EVENT.WORKSPACE_PHOTOS_CHANGED, carried(photos));
     };
 
-    /** `workspaceId`'s photo at `version` fetched and laid; nothing is laid where it did not land. */
+    /** Whether a photo's fetch is done asking: it landed, the workspace holds none, or its version is no longer the one asked for. */
+    const photoSettled =
+      (workspaceId: string, version: string) => (photo: WorkspaceCallResult<unknown>) =>
+        photo.ok ||
+        photo.failure === WORKSPACE_CALL_FAILURE.NOT_FOUND ||
+        photosAsked.get(workspaceId) !== version ||
+        !gate();
+
+    /** `workspaceId`'s photo at `version` fetched and laid, asked again a while where it did not land (`PHOTO_ASKED_AGAIN`); nothing is laid where it never did. */
     const photoFetched = (workspaceId: string, version: string) =>
       Effect.gen(function* () {
-        const photo = yield* served(client.workspaces.photo(workspaceId));
+        const photo = yield* served(client.workspaces.photo(workspaceId)).pipe(
+          Effect.repeat({
+            schedule: PHOTO_ASKED_AGAIN,
+            until: photoSettled(workspaceId, version),
+          }),
+        );
 
         if (photosAsked.get(workspaceId) === version) photosAsked.delete(workspaceId);
 
