@@ -336,7 +336,7 @@ function AgentComposerBar({
   /** Scrolls the transcript to the call waiting; none where no row draws one. */
   readonly onShowWaiting: (() => void) | undefined;
   readonly addMenu: ComposerMenu;
-  /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
+  /** The newest refusal over the field, a send's, a dictation's, or one of the page's menu or its +, as `AgentComposerArea` picks it. */
   readonly note: string | undefined;
   /** Talk, or the call's presses while a call into this agent stands; none while calls are not offered. */
   readonly call: ComposerCall | undefined;
@@ -349,8 +349,6 @@ function AgentComposerBar({
   /** Dictate before Send, and its strip while a dictation stands. */
   readonly dictation: ComposerDictation;
 }) {
-  // Note that the newest refusal stands, a send's or one the page or a dictation said, so an older one never hides why the last act did not go.
-  const said = useNewestNote([composer.note, note]);
   const { banner, waiting } = approvals;
   // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
@@ -364,7 +362,7 @@ function AgentComposerBar({
     composer.attached.length === 0 &&
     composer.skills === undefined &&
     otherCall === undefined &&
-    said === undefined ? undefined : (
+    note === undefined ? undefined : (
       <>
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
@@ -382,7 +380,7 @@ function AgentComposerBar({
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
-        {said === undefined ? null : <AskNote words={said} />}
+        {note === undefined ? null : <AskNote words={note} />}
       </>
     );
 
@@ -466,8 +464,8 @@ function AgentComposerArea({
 }) {
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
   const dictated = useDictation(composer.words, composer.onWords);
-  // Note that a dictation's refusal and the page's stand by which was said last.
-  const said = useNewestNote([dictated.note, note]);
+  // Note that one pick holds the newest refusal, a send's, a dictation's or the page's, so an older one never hides why the last act did not go.
+  const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
   }, [editMessage, composer.editMessage]);
