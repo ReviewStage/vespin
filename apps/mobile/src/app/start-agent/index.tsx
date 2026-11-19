@@ -1,5 +1,6 @@
-// index.tsx -- New agent on the task the route's `task` names, as a sheet over its page, filled in from a suggestion where `suggestedBy` and `button` name one.
+// index.tsx -- New agent on the task the route's `task` names, as a sheet over its page, filled in from a suggestion where `suggestedBy` and `button` name one, or a fork of the agent `forkOf` names at its message `at`, whose opening words `opening` quotes.
 
+import type { AgentFork } from "@repo/features/agent-fork-model";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
@@ -14,7 +15,17 @@ export default function StartAgentRoute() {
     task = "",
     suggestedBy,
     button,
-  } = useLocalSearchParams<{ task: string; suggestedBy?: string; button?: string }>();
+    forkOf,
+    at,
+    opening = "",
+  } = useLocalSearchParams<{
+    task: string;
+    suggestedBy?: string;
+    button?: string;
+    forkOf?: string;
+    at?: string;
+    opening?: string;
+  }>();
 
   const read = useOpenedSuggestion({ suggestedBy, button });
   // Note that New agent opens only on a new agent's suggestion, so a link naming a message's suggestion never sends it under Start.
@@ -23,17 +34,33 @@ export default function StartAgentRoute() {
   const suggester = useShownAgent(suggestedBy ?? "");
   // The suggestion as first read, held while the sheet stands, so a send that lands or a refetch never draws it anew.
   const [held, setHeld] = useState<OpenedSuggestion | undefined>(undefined);
+  // Note that a fork starts on its source's model, so its page is drawn once the source is read, its choice seeded from it.
+  const source = useShownAgent(forkOf ?? "");
+
+  const fork: AgentFork | undefined =
+    forkOf === undefined || at === undefined
+      ? undefined
+      : { agentId: forkOf, messageId: at, opening };
 
   if (held === undefined && opened !== undefined) setHeld(opened);
 
   const shown = held ?? opened;
 
-  // Note that the sheet is drawn anew once, as the suggestion is first read, so its words and model start from it.
+  // Note that the sheet is drawn anew once, as the suggestion or the fork's source is first read, so its words and model start from it.
   return (
     <NewAgentScreen
-      key={shown === undefined ? "draft" : "suggested"}
+      key={
+        fork !== undefined
+          ? source === undefined
+            ? "fork"
+            : "fork-read"
+          : shown === undefined
+            ? "draft"
+            : "suggested"
+      }
       taskId={suggester?.taskId ?? task}
-      opened={shown}
+      opened={fork === undefined ? shown : undefined}
+      fork={fork}
     />
   );
 }

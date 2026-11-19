@@ -72,11 +72,18 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
-export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
+export {
+  Composer,
+  ComposerFoot,
+  type ComposerMenu,
+  type ComposerSaving,
+  type ComposerSendAs,
+} from "./composer.js";
 
 export {
   type AttachedPicture,
   AttachedPictures,
+  EditingLine,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -121,7 +128,7 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
-export { type Keeping, KeepingProvider } from "./held-menu.js";
+export { type HeldAct, type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 
@@ -151,6 +158,8 @@ export {
 
 export {
   ListRow,
+  type LongPressGroup,
+  LongPressMenu,
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
@@ -196,6 +205,8 @@ export { SwitchRow } from "./option-rows.js";
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
 export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
+
+export { PersonHead } from "./person-head.js";
 
 export { PictureSet, type SetPicture } from "./picture-set.js";
 
@@ -252,6 +263,8 @@ export { ScreenFailure } from "./screen-failure.js";
 
 export { SealedPage } from "./sealed-page.js";
 
+export { sectionGlyphColor, sectionInk } from "./section-ink.js";
+
 export {
   AccountHead,
   AccountRow,
@@ -262,6 +275,7 @@ export {
   FORM_SPACING,
   FollowerRow,
   type FormSpacing,
+  LOADING_ROW_LOOK,
   LoadingRow,
   MemberRow,
   type MemberRowAct,
@@ -283,8 +297,6 @@ export {
   WorkspacePickRows,
   WorkspaceRow,
 } from "./settings-form.js";
-
-export { SkeletonRegion } from "./skeleton.js";
 
 export {
   type BarAction,
@@ -333,13 +345,6 @@ export {
 } from "./system-asks.js";
 
 export {
-  TASK_SKELETON_ROW,
-  TaskHeadSkeleton,
-  TaskSectionsSkeleton,
-  type TaskSkeletonSection,
-} from "./task-page-skeleton.js";
-
-export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
@@ -384,6 +389,7 @@ export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
   AgentTranscript,
+  type MessageItem,
   type OlderPages,
   type TranscriptReveal,
 } from "./transcript.js";

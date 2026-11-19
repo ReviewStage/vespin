@@ -9,6 +9,7 @@ import {
   ProgressView,
   ScrollView,
   TextField,
+  type TextFieldRef,
   type TextFieldSelection,
   Toggle,
   useNativeState,
@@ -149,6 +150,8 @@ type ComposerProps = {
   readonly sendable?: boolean | undefined;
   /** Called with the words typed once Send is pressed; Send stands disabled where none is given. */
   readonly onSend?: ((words: string) => void) | undefined;
+  /** What Send stands for while the field is empty and `sendable`, where that is an act of its own rather than a message, such as a notice's Got it: its glyph on the same round and its name; Send's own once a word is typed. */
+  readonly sendAs?: ComposerSendAs | undefined;
   /** Opens what the + adds, such as a picture; the + is not drawn where neither this nor `addMenu` is given. */
   readonly onAdd?: (() => void) | undefined;
   /** What the + opens as a menu in place of `onAdd`'s one act, such as an agent's Photos, Permissions, and Fast. */
@@ -167,6 +170,8 @@ type ComposerProps = {
   readonly saving?: ComposerSaving | undefined;
   /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
   readonly autoFocus?: boolean | undefined;
+  /** Asks the field to take the keyboard, its caret after its words, each time the count moves, as Edit does once it lays a message's words in; none where nothing asks. */
+  readonly focusAsk?: number | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
@@ -176,6 +181,12 @@ type ComposerProps = {
   /** The names a flow finds the field and the + by, where its holder names its own. */
   readonly testIds?: { readonly field: string; readonly add: string } | undefined;
 };
+
+/** An act Send stands for while the field is empty, as the panel's empty Send reads Got it on a notice. */
+export interface ComposerSendAs {
+  readonly label: string;
+  readonly symbol: Glyph;
+}
 
 /** What Send does while the field holds a queued message's words being edited. */
 export interface ComposerSaving {
@@ -229,16 +240,24 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
  * while a turn runs, and the system's spinner once it is pressed, and else
  * Talk where the composer calls its agent, the waveform on the same circle,
  * as ChatGPT's composer offers voice, so the first word turns it into Send.
+ * Where the empty field's Send stands for an act of its own (`sendAs`), such
+ * as a notice's Got it, the round wears that act's glyph and name until a
+ * word is typed.
  */
 function SendButton({
   empty,
+  typed,
   onSend,
+  sendAs,
   onStop,
   stopping,
   onTalk,
 }: {
   readonly empty: boolean;
+  /** Whether the field holds words, which make the round Send whatever it stood for while empty. */
+  readonly typed: boolean;
   readonly onSend: (() => void) | undefined;
+  readonly sendAs: ComposerSendAs | undefined;
   readonly onStop: (() => void) | undefined;
   readonly stopping: boolean;
   readonly onTalk: (() => void) | undefined;
@@ -282,6 +301,7 @@ function SendButton({
   }
 
   const sendable = !empty && onSend !== undefined;
+  const act = typed ? undefined : sendAs;
 
   return (
     <Button
@@ -289,10 +309,14 @@ function SendButton({
       modifiers={[
         ...(sendable ? roundModifiers(colors) : idleRoundModifiers(colors, round)),
         disabled(!sendable),
-        accessibilityLabel("Send"),
+        accessibilityLabel(act?.label ?? "Send"),
       ]}
     >
-      <Image {...glyphImage(GLYPH.SEND)} size={sendSize} modifiers={roundMark(round)} />
+      <Image
+        {...glyphImage(act?.symbol ?? GLYPH.SEND)}
+        size={sendSize}
+        modifiers={roundMark(round)}
+      />
     </Button>
   );
 }
@@ -403,6 +427,7 @@ function ComposerPieces(props: ComposerProps) {
     onWords,
     sendable = false,
     onSend,
+    sendAs,
     onAdd,
     addMenu,
     call,
@@ -414,6 +439,9 @@ function ComposerPieces(props: ComposerProps) {
   } = props;
 
   const text = useNativeState(held ?? "");
+  const field = useRef<TextFieldRef>(null);
+  const { focusAsk } = props;
+
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
   const [opened] = useState(() => (held ?? "").length);
   const caret = useNativeState<TextFieldSelection>({ start: opened, end: opened });
@@ -426,6 +454,16 @@ function ComposerPieces(props: ComposerProps) {
     shown.current = held;
     text.set(held);
   }, [held, text]);
+
+  // Note that the field takes the keyboard once its holder's words have landed in it, after the effect above lays them in, so the caret stands after them.
+  useEffect(() => {
+    if (focusAsk === undefined || focusAsk === 0) return;
+    const end = shown.current.length;
+    void field.current
+      ?.focus()
+      .then(() => field.current?.setSelection(end, end))
+      .catch(() => undefined);
+  }, [focusAsk]);
 
   // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
@@ -458,6 +496,7 @@ function ComposerPieces(props: ComposerProps) {
     <>
       {tools === undefined ? <AddPress menu={addMenu} onAdd={onAdd} /> : null}
       <TextField
+        ref={field}
         text={text}
         placeholder={placeholder}
         axis="vertical"
@@ -483,7 +522,9 @@ function ComposerPieces(props: ComposerProps) {
       {props.saving === undefined ? (
         <SendButton
           empty={empty}
+          typed={words.trim() !== ""}
           onSend={send}
+          sendAs={sendAs}
           onStop={onStop}
           stopping={stopping}
           onTalk={call?.kind === COMPOSER_CALL.TALK ? call.onTalk : undefined}

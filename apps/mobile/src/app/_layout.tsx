@@ -45,7 +45,7 @@ import { VoiceCallProvider } from "../voice-call.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
-// The splash stands until the screens first draw (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
+// The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
 holdSplash();
 
 // Note that the root layout evaluates after every module it imports, so this is when the bundle's eager modules have run.
@@ -175,14 +175,10 @@ function screenLayout({
  * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
-  // Note that the account is known only once the host's first reading lands, which a launch spends on the Inbox's skeleton rather than the sign-in screen, since nearly every launch is signed in: only the host's own word that nobody is stands sign-in, and only its word that someone is starts what needs an account.
-  const { data: account } = useQuery({
+  const { data: signedIn = false } = useQuery({
     ...appStateQuery,
-    select: (state) => state.account.status,
+    select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
   });
-
-  const signedIn = account === ACCOUNT_STATUS.SIGNED_IN;
-  const shown = signedIn || account === undefined;
 
   const { data: updateNeeded = false } = useQuery({
     ...appStateQuery,
@@ -199,8 +195,8 @@ function GuardedScreens() {
   useNoticeForAccount();
   useShareSheet(updateNeeded);
   useHostConnectLink(signedIn && !updateNeeded);
-  const app = shown && !updateNeeded;
-  const gate = useSetupGate(signedIn && !updateNeeded);
+  const app = signedIn && !updateNeeded;
+  const gate = useSetupGate(app);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -300,7 +296,7 @@ function GuardedScreens() {
             options={{ presentation: sheetPresentation, title: "Codex plan" }}
           />
         </Stack.Protected>
-        <Stack.Protected guard={!shown && !updateNeeded}>
+        <Stack.Protected guard={!signedIn && !updateNeeded}>
           <Stack.Screen name="sign-in" />
         </Stack.Protected>
         <Stack.Protected guard={updateNeeded}>

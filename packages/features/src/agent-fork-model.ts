@@ -1,5 +1,5 @@
 /**
- * fork-model.ts -- a coding agent forked at one of its messages: the fork a draft holds, what its chip quotes of the message, the choice it starts on, the Start a forked draft sends, and where each message was forked to.
+ * agent-fork-model.ts -- a coding agent forked at one of its messages: the fork a draft holds, what its chip quotes of the message, the choice it starts on, the Start a forked draft sends, and where each message was forked to.
  *
  * A fork is a new agent on the same plan handed the source's transcript up
  * to and including one of the source's own messages
@@ -19,13 +19,12 @@
  * source on its whole transcript, its chip naming the source alone.
  */
 
-import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
-import type { AgentAttachment, AgentRunsOnRequest, AgentSummary } from "@repo/features/agent-wire";
-import type { ModelChoice } from "@repo/features/models-wire";
-import { cardTitle } from "@repo/features/plain-words";
-import type { ACT_KIND } from "@repo/host/acts";
-import type { PortActPayload } from "@repo/host/contract";
-import { choiceRequest } from "./agent-model.js";
+import type { AgentPermissionMode } from "./agent-approval-wire.js";
+import type { AgentStartParams } from "./agent-view.js";
+import type { AgentAttachment, AgentRunsOnRequest, AgentSummary } from "./agent-wire.js";
+import { choiceRequest } from "./model-effort.js";
+import type { ModelChoice } from "./models-wire.js";
+import { cardTitle } from "./plain-words.js";
 
 /** The words the fork's action, chip, and trail are drawn with. */
 export const FORK_WORDS = {
@@ -78,7 +77,7 @@ const START_STAGE_WORDS = {
 const COPY_STAGE_MS = 3_000;
 
 /** A Start as the draft's send asks it, the plan left for the caller to name. */
-export type ForkStart = Omit<PortActPayload<typeof ACT_KIND.AGENTS_START>, "taskId">;
+export type ForkStart = Omit<AgentStartParams, "taskId">;
 
 /**
  * A message's opening words as the fork's chip quotes them: its first line

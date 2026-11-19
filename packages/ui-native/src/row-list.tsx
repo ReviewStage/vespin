@@ -44,6 +44,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { searchTokens } from "@repo/features/search-tokens";
+import type { TaskSectionIconColor } from "@repo/features/task-section-wire";
 import { Predicate } from "effect";
 import {
   createContext,
@@ -55,11 +56,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { useColorScheme } from "react-native";
 import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink, sideMargins } from "./interactions.js";
+import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
@@ -69,6 +72,7 @@ import {
   RowSearchedContext,
   RowSelectedContext,
 } from "./row-open.js";
+import { sectionInk } from "./section-ink.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -274,6 +278,7 @@ export function RowList({
   children,
 }: RowListProps) {
   const colors = useColors();
+  const reduceMotion = useReduceMotion();
   const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
   // Note that a page's grouped list stands in the reading column too, as a plain one does.
@@ -346,6 +351,8 @@ export function RowList({
         ...(choosing === undefined || onChooseStart !== undefined
           ? []
           : [environment("editMode", "active")]),
+        // Note that Select mode comes and goes on the system's spring, its checks sliding in beside the rows as Mail's do rather than standing there at once; with Reduce Motion on they stand at once, as the system's own lists do.
+        ...(reduceMotion ? [] : [animation(Animation.default, chooses)]),
       ]}
     >
       <ListLookContext value={look}>
@@ -409,6 +416,8 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
   readonly glyph?: Glyph | undefined;
+  /** The color a section's member chose its glyph in, which it wears as the panel's sidebar draws it; the muted ink where none. */
+  readonly glyphColor?: TaskSectionIconColor | undefined;
   /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
   readonly emoji?: string | undefined;
   /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
@@ -433,6 +442,8 @@ type ListSectionProps = {
   readonly more?: SectionWordsAct | undefined;
   /** An act on the whole section in words at the header's end, as Edit edits a task's description, as Notes' and Reminders' sections end; none where the section offers none. */
   readonly act?: SectionWordsAct | undefined;
+  /** What a long press on its header offers, as the panel's right-click on a sidebar section's header offers it, such as Rename or Mark all as read; none where it offers nothing. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
   readonly children: ReactNode;
 };
 
@@ -484,6 +495,7 @@ function GroupHeader({
   progress,
   mark,
   glyph,
+  glyphColor,
   emoji,
   repository,
   folded,
@@ -493,11 +505,13 @@ function GroupHeader({
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
   readonly glyph: Glyph | undefined;
+  readonly glyphColor: TaskSectionIconColor | undefined;
   readonly emoji: string | undefined;
   readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
@@ -531,7 +545,7 @@ function GroupHeader({
         <Image
           {...glyphImage(glyph)}
           size={glyphSize}
-          color={colors.TEXT_MUTED}
+          color={glyphColor === undefined ? colors.TEXT_MUTED : sectionInk(glyphColor, dark)}
           modifiers={[accessibilityHidden()]}
         />
       )}
@@ -687,7 +701,9 @@ function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
  * section stands as its header alone rather than a list of add rows. A
  * header given `more` ends in a Show all that opens every row of a section
  * the list cut short, as Mail's search sections do, and one given `act`,
- * where it has no Show all, ends in the act's words, such as Edit. Its rows fold away and
+ * where it has no Show all, ends in the act's words, such as Edit. A header
+ * given `menu` opens it on a long press (`LongPressMenu`), as the panel's
+ * right-click on a sidebar section's header does. Its rows fold away and
  * come back with the system's quick ease, or at once where the reader
  * reduces motion. Note that SwiftUI's own `Section(isExpanded:)` is not used,
  * because it folds only in a sidebar list, where the system draws its own
@@ -699,6 +715,7 @@ export function ListSection({
   progress,
   mark,
   glyph,
+  glyphColor,
   emoji,
   repository,
   foldable = false,
@@ -710,6 +727,7 @@ export function ListSection({
   add,
   more,
   act,
+  menu = [],
   children,
 }: ListSectionProps) {
   const [own, setOwn] = useState(false);
@@ -733,6 +751,7 @@ export function ListSection({
         progress={progress}
         mark={mark}
         glyph={glyph}
+        glyphColor={glyphColor}
         emoji={emoji}
         repository={repository}
         folded={foldable ? folded : undefined}
@@ -757,11 +776,15 @@ export function ListSection({
       </Button>
     );
 
+  // Note that the long press holds the header's title, never its +, Show all or Edit, which take their own presses.
+  const pressed =
+    pressable === undefined ? undefined : <LongPressMenu groups={menu}>{pressable}</LongPressMenu>;
+
   const dropped =
-    pressable === undefined || onDropLink === undefined ? (
-      pressable
+    pressed === undefined || onDropLink === undefined ? (
+      pressed
     ) : (
-      <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
+      <HStack modifiers={[dropLink(onDropLink)]}>{pressed}</HStack>
     );
 
   // Note that a lone + stands over the header's trailing end rather than beside it, so its 44 pt target lays out nothing and the header keeps its title's height, as a section with no + does; a press is taken across the whole of the overlay's own frame, where a target padded back to its glyph's height answered only inside it. The header keeps the +'s width clear at its end, so a long title or count at a large text size wraps before it rather than running under it. A section with words beside its +, such as Show all, stands them in a row after the header, since their width is the words'.

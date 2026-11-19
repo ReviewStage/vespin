@@ -24,8 +24,11 @@ import {
   type TaskSections,
   type TaskSectionWrite,
 } from "./task-section-wire.js";
-import { entryFor } from "./task-section-writes.js";
+import { applySectionWrite, entryFor } from "./task-section-writes.js";
 import type { TaskSummary } from "./task-wire.js";
+
+/** What the notice says once a section was deleted, its Undo beside it. */
+export const SECTION_DELETED = "Section deleted";
 
 /** What a task's menu calls its move into one of the member's sections. */
 export const MOVE_TO_SECTION = "Move to section";
@@ -244,6 +247,45 @@ export function restoreWrites(
   }
 
   return writes;
+}
+
+/**
+ * The writes an Undo of deleting `section` asks, read against the sections
+ * as they stood before, `before`, and as they stand now, `current`: the
+ * section made again under its id, stood back at its place among its
+ * workspace's, and its rows put back in it in their order. A row put in
+ * another section since stays there, since that was chosen anew. Note that
+ * each row is given a position, as `placeAllWrites` gives one, because rows
+ * put back together are stamped in the same instant.
+ */
+export function undeleteWrites(
+  before: TaskSections,
+  current: TaskSections,
+  section: TaskSection,
+  now: number,
+): TaskSectionWrite[] {
+  const { id, workspaceId, title, icon } = section;
+
+  const made: TaskSectionWrite = {
+    kind: TASK_SECTION_WRITE.CREATE,
+    id,
+    workspaceId,
+    title,
+    ...(icon === undefined ? undefined : { icon }),
+  };
+
+  const remade = applySectionWrite(current, made, now);
+  const was = workspaceSections(before, workspaceId).findIndex((each) => each.id === id);
+  const order = workspaceSections(remade, workspaceId);
+  const from = order.findIndex((each) => each.id === id);
+  const at = Math.min(Math.max(was, 0), order.length - 1);
+  const moved = from === at ? [] : sectionMoveWrites(order, from, at);
+
+  const taskIds = sectionOrder(before, id)
+    .map((entry) => entry.taskId)
+    .filter((taskId) => sectionOfTask(current, taskId) === undefined);
+
+  return [made, ...moved, ...placeAllWrites(remade, taskIds, id, now)];
 }
 
 /** The writes that take `taskIds` out of every section, as a section's Remove tasks from section asks. */
