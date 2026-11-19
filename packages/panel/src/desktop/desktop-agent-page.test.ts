@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 
 /**
- * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them. Synthetic throughout.
+ * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; and a `/` in its box lists the skills of its own repository. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
+import { AGENT_RUNTIME, AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -15,6 +15,11 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
+import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
+import type { TasksSkillsParams } from "@repo/features/tasks-view";
+import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
+import { experimentsOn } from "@repo/settings/testing";
 import {
   createMemoryHistory,
   createRootRoute,
@@ -22,11 +27,21 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
+import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
+import { appBridge } from "../app-bridge.js";
 import { RoutedExitsProvider } from "../places/routed-exits.js";
-import { handInboxItems } from "../testing/app-state.js";
+import {
+  type AnyAct,
+  FAKE_ANSWER,
+  type FakeActAnswer,
+  fakeActs,
+  fakeActsAnswer,
+} from "../testing/app-bridge.js";
+import { handInboxItems, handState } from "../testing/app-state.js";
+import { editorBundleLanded, installEditorLayout, typeInComposer } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { ACME } from "../testing/desktop-inbox.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
@@ -109,7 +124,12 @@ function agentRouter(
   });
 }
 
-beforeEach(installScrollIntoView);
+beforeAll(() => Effect.runPromise(editorBundleLanded));
+
+beforeEach(() => {
+  installScrollIntoView();
+  installEditorLayout();
+});
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
@@ -158,4 +178,64 @@ test("an agent on no task docks the threads it posted over its box, counted from
   act(() => press.click());
   await settleQueries();
   assert.equal(history.location.pathname, `/acme/inbox/${OLDER.id}`);
+});
+
+test("a / in an agent on no task's box lists the skills of its own workspace and repository", async () => {
+  handState(experimentsOn(EXPERIMENT.SKILLS));
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const asked: TasksSkillsParams[] = [];
+  const previous = fakeActsAnswer();
+  fakeActs({
+    ...appBridge(),
+    act: (request: AnyAct): Promise<FakeActAnswer> => {
+      if (request.kind !== ACT_KIND.TASKS_SKILLS) return previous(request);
+      asked.push(request.payload);
+
+      const release = {
+        name: "release",
+        description: "Use to cut a release.",
+        source: TASK_SKILL_SOURCE.REPOSITORY,
+        path: ".agents/skills/release/SKILL.md",
+      };
+
+      return Promise.resolve({
+        status: FAKE_ANSWER.DONE,
+        value: { skills: { repository: "acme/relay", branch: "main", skills: [release] } },
+      });
+    },
+  });
+  const manager = { ...MANAGER, repository: "acme/relay", runtime: AGENT_RUNTIME.CLAUDE_CODE };
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [manager] });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(
+          RoutedExitsProvider,
+          null,
+          createElement(RouterProvider, { router: agentRouter(history, tasks) }),
+        ),
+      ),
+    ),
+  );
+  await settleQueries();
+
+  typeInComposer(container, "/");
+  await settleQueries();
+
+  const options = [...document.querySelectorAll('[role="listbox"] [role="option"]')].map(
+    (row) => row.textContent ?? "",
+  );
+
+  assert.ok(
+    options.some((row) => row.includes("release")),
+    "it lists the repository's skill",
+  );
+  assert.deepEqual(asked, [{ workspaceId: ACME.id, repository: "acme/relay" }]);
 });
