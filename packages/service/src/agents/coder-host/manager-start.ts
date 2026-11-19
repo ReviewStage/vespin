@@ -5,10 +5,10 @@
  * started by the account that asks, which owns it: it stands in the
  * workspace the request names, which that account must be a member of, and
  * works in the repositories it names, the first its checkout. Its name is
- * its title from the start, so no model is asked to name it. Its first turn
- * is opened with `MANAGER_OPENING` in the prompt's place, which the
- * conversation shows as its creator's first line, and its instructions
- * (`managerInstructions`) say what an introduction covers. A workspace the
+ * its title from the start, so no model is asked to name it. It starts
+ * blank, handed nothing, so making it opens no session and sends no line:
+ * its creator's first words open its first turn, and its instructions
+ * (`managerInstructions`) have it introduce itself in that first reply. A workspace the
  * account is not in reads as none before its experiments are read, so no
  * outsider learns whether one has Managers on; one with the experiment off
  * is refused as not permitted. Everything else, the retry under its key
@@ -31,9 +31,6 @@ import type { AgentSessions, TypedTurn } from "../sessions/agent-sessions.js";
 import { experimentOnIn } from "../workspace-experiment-on.js";
 import { type RequestedStart, type StartServices, startAgent } from "./start.js";
 import { summaryOf } from "./stop.js";
-
-/** The words a Manager's first turn opens on, said as its creator's first line. */
-export const MANAGER_OPENING = "Introduce yourself.";
 
 /** Makes the account's Manager as the request asks, or answers the one a retry under its key already made. */
 export const startManager = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -62,7 +59,8 @@ export const startManager = /* @__PURE__ */ Effect.fnUntraced(function* (
     workspaceId,
     repository,
     extraRepositories,
-    prompt: MANAGER_OPENING,
+    prompt: undefined,
+    blank: true,
     idempotencyKey: request.idempotencyKey,
     choice: { model: request.model, effort: request.effort },
     runsOn: request.runsOn,
