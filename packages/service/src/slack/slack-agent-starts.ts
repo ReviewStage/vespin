@@ -26,7 +26,7 @@
  * does, nothing can answer, and the event is dropped with a fixed line.
  *
  * A reply in the Slack thread of a DM the bot wrote a member about an inbox
- * thread (`threadDmAt`) is posted on that thread as the member's own reply,
+ * thread, as it did before it left Slack to the agents (`threadDmAt`), is posted on that thread as the member's own reply,
  * as one in the app is (`messageAsMember`), keyed by Slack's event id, and
  * the agent, brought back first where it stands archived, hears it as a
  * thread message; the bot reacts with 👀. Only the
@@ -34,7 +34,8 @@
  * may reply there; anyone else is told so and nothing is posted.
  *
  * A message in a thread that speaks for an agent (`slack_agent_thread`), one
- * it was started from or its automation run's result was sent in, whether
+ * it was started from, its automation run's result was sent in, or it posted
+ * to itself (`send_slack_message`), whether
  * it names the bot or not, is sent to
  * that agent as the writer's own message (`steer.ts`), the agent brought
  * back first where it stands archived, as a chat tool reopens a
@@ -94,9 +95,11 @@
  * (`send_slack_message`, `slack-message-tool.ts`): a turn that finished well
  * posts none of its words, and only one that failed, was stopped, or hit its
  * plan's usage limit is said so, with the agent's link, since the agent
- * cannot say that itself. Either way the pictures, recordings, and sound
- * clips the agent showed with `show_media` in that turn are then shared as
- * files under the thread (`SlackWorkspaceBot.upload`). A turn of an agent started
+ * cannot say that itself; a picture it showed is shared there only where
+ * it sends one itself (`send_slack_message`'s `files`). A run's result DM
+ * shares the pictures, recordings, and sound clips the agent showed with
+ * `show_media` in that turn as files under it (`SlackWorkspaceBot.upload`).
+ * A turn of an agent started
  * from Slack that finished well then
  * archives the agent under the rule an automation's "Mark finished runs Done"
  * archives by (`archiveFinishedAgents`), so one with a pull request or an
@@ -1299,7 +1302,7 @@ function turnNotice(turn: SettledAgentTurn): Option.Option<SlackMessageContent> 
   return Option.none();
 }
 
-/** The pictures, recordings, and sound clips the turn's `show_media` and `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
+/** The pictures, recordings, and sound clips the turn's `show_media` and `show_image` calls kept beside the transcript, in the order shown, each under its caption, which a run's result DM shares; one not kept is left out. */
 const shownUploads = Effect.fnUntraced(function* (
   conversationId: string,
   journal: StoredUIMessage,
@@ -1394,9 +1397,9 @@ const turnPlace = Effect.fnUntraced(function* (agent: Agent, turnId: string) {
 
 /**
  * Posts the settled turn once where it belongs (`turnPlace`): a run's
- * result, or in a thread only a turn that did not finish well, with the
- * agent's link, and the pictures it showed shared after it. A run's result
- * DM is kept as the agent's current thread, with this turn posted in it, so
+ * result, with the pictures the turn showed shared after it, or in a
+ * thread only a turn that did not finish well, with the agent's link. A
+ * run's result DM is kept as the agent's current thread, with this turn posted in it, so
  * a reply there reaches the agent and what it sends lands there.
  * An agent started from Slack is then archived where the turn finished
  * well; any other, an automation's among them, is left to its own rule. A
@@ -1441,11 +1444,11 @@ export function postTurnToSlack(
     const words = newest === undefined ? undefined : lastSaid(newest.message);
     const link = yield* agentLink(turn.userId, agent.value.organizationId, agent.value.id);
 
-    const uploads =
-      newest === undefined ? [] : yield* shownUploads(turn.conversationId, newest.message);
-
     if ("run" in place.value) {
       const { userId, organizationId, automationName } = place.value.run;
+
+      const uploads =
+        newest === undefined ? [] : yield* shownUploads(turn.conversationId, newest.message);
 
       const dm = yield* bot.dm(userId, runResultContent(automationName, link, turn, words));
 
@@ -1479,8 +1482,6 @@ export function postTurnToSlack(
         ],
       });
     }
-
-    yield* bot.upload(channelId, threadTs, uploads);
 
     if (turn.status === TURN_STATUS.SETTLED && (yield* isSlackStartedAgent(agent.value.id))) {
       yield* archivedWhenFinished(bot, agent.value);

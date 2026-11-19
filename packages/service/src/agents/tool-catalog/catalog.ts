@@ -316,13 +316,15 @@ function served<const Name extends string>(
 type AgentToolRun = (
   call: AgentCall,
   input: UnparsedWireValue,
+  sandbox: InboxSandboxDoor,
 ) => Effect.Effect<WorkspaceMcpToolResult, never, WorkspaceMcpServices>;
 
 /**
  * A tool about the workspace's agents and tasks, run as the agent the
  * conversation is, under the call's key: a message or a start keyed on it,
  * which reach the agents' sessions as the deployment acting for this agent's
- * starter. Note that the agent is the standing's own row, read once for the
+ * starter, with the door to its sandbox, where a tool reads a file the agent
+ * names by its path. Note that the agent is the standing's own row, read once for the
  * call, and that an agent whose row is gone is refused before its key is read.
  */
 function agentTool<const Name extends string>(
@@ -330,7 +332,7 @@ function agentTool<const Name extends string>(
   run: AgentToolRun,
   options?: Served,
 ) {
-  const door: Door = (admitted, input, { seams, callKey, standing }) => {
+  const door: Door = (admitted, input, { seams, callKey, standing, sandbox }) => {
     if (Option.isNone(standing.agent)) {
       return Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT));
     }
@@ -352,7 +354,7 @@ function agentTool<const Name extends string>(
         summaryModel: seams.summaryModel,
       };
 
-      return yield* run(call, input);
+      return yield* run(call, input, sandbox);
     });
   };
 

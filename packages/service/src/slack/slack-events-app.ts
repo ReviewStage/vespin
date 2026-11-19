@@ -359,10 +359,11 @@ function pressedDm(press: BlockActions): SlackMessage | undefined {
 
 /**
  * A press of an option, a do ask's button, or a Submit of the options
- * ticked, answered as the member who pressed it, and the DM
- * rewritten past the answer: the answer taken says what was answered
- * through the hand-off's own settling of the item's DMs, and one already
- * taken, or an ask no longer open, is said here. Nothing where the item,
+ * ticked, answered as the member who pressed it, and the pressed DM
+ * rewritten past the answer: an answer taken now or before says what was
+ * answered, and an ask no longer open says where it stands. Only the DM
+ * pressed is rewritten, since the bot writes no new thread DMs and rewrites
+ * none on its own. Nothing where the item,
  * the member, or the option is not found.
  */
 const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockActions) {
@@ -393,7 +394,6 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
       attachments: [],
       answers,
     },
-    { messageId: choice.ask, line },
   ).pipe(
     Effect.map(Option.some),
     Effect.catchIf(
@@ -407,17 +407,24 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
   if (Option.isNone(answered) || dm === undefined) return;
   const { item, outcome } = answered.value;
 
-  if (outcome === INBOX_ASK_ANSWER.TAKEN) return;
   const message = (item.thread ?? []).find((each) => each.id === choice.ask);
-  const status = message?.ask?.status;
+
+  // Note that an ask the read thread no longer holds leaves its DM as it stands, because its words are not at hand to draw again.
+  if (message === undefined) return;
+  const status = message.ask?.status;
 
   // A refused answer to an ask still open leaves the DM's buttons standing.
   if (outcome === INBOX_ASK_ANSWER.REFUSED && status === INBOX_ASK_STATUS.OPEN) return;
-  const said = outcome === INBOX_ASK_ANSWER.REPEATED ? line : settledLine(status);
+
+  const said =
+    outcome === INBOX_ASK_ANSWER.TAKEN || outcome === INBOX_ASK_ANSWER.REPEATED
+      ? line
+      : settledLine(status);
+
   yield* rewriteThreadDm(
     dm,
     choice.item,
-    { id: choice.ask, text: message?.text ?? "", ask: message?.ask },
+    { id: choice.ask, text: message.text, ask: message.ask },
     said,
   );
 });

@@ -12,9 +12,16 @@ import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { Effect, Option } from "effect";
 import { AGENT_CALLER } from "../agents/agent-tools.js";
+import type { InboxSandboxDoor } from "../agents/coder-host/inbox-image.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import { runReadSlack } from "./slack-agent-tools.js";
-import { SlackBot, SlackBotFailure, type SlackWebApi, slackBotOver } from "./slack-bot.js";
+import {
+  SlackBot,
+  SlackBotFailure,
+  type SlackFileTransfer,
+  type SlackWebApi,
+  slackBotOver,
+} from "./slack-bot.js";
 import { runSendSlackMessage } from "./slack-message-tool.js";
 import { SLACK_REACH_REFUSAL } from "./slack-reach.js";
 
@@ -31,6 +38,72 @@ const MEMBER_SLACK_ID = "U0001";
 
 /** A channel the bot is in. */
 const CHANNEL = "C0001";
+
+/** A sandbox the agent keeps nothing in, which a message that shares no file never opens. */
+const noSandbox: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
+
+/** A one-pixel PNG, as an agent takes a screenshot of what it rendered. */
+const PNG = new Uint8Array(
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
+
+/** A sandbox holding the PNG at `shots/settings.png` under its checkout, and nothing else. */
+const sandboxWithShot: InboxSandboxDoor = () =>
+  Promise.resolve({
+    checkout: "/workspace/repository",
+    readFile: ({ path }) =>
+      Promise.resolve(
+        path === "/workspace/repository/shots/settings.png"
+          ? new ReadableStream<Uint8Array>({
+              start: (controller) => {
+                controller.enqueue(PNG);
+                controller.close();
+              },
+            })
+          : null,
+      ),
+  });
+
+/** One Web API call the fake Slack was handed. */
+interface SlackCall {
+  readonly method: string;
+  readonly args: Readonly<Record<string, string>>;
+}
+
+/** A Slack whose team the bot reads, which finds the member by their email, posts every message in their DM at one timestamp, and hands every file an upload address, writing each call down. */
+function postingSlack(calls: SlackCall[]): SlackWebApi {
+  return (method, args) => {
+    calls.push({ method, args });
+
+    switch (method) {
+      case "auth.test":
+        return Effect.succeed({ ok: true, team_id: "T0001", team: "Team", user_id: "UBOT" });
+      case "users.lookupByEmail":
+        return Effect.succeed({ ok: true, user: { id: MEMBER_SLACK_ID } });
+      case "chat.postMessage":
+        return Effect.succeed({ ok: true, channel: "D0001", ts: "1700000000.000100" });
+      case "files.getUploadURLExternal":
+        return Effect.succeed({
+          ok: true,
+          upload_url: `https://files.slack.com/upload/v1/${args.filename}`,
+          file_id: "F0001",
+        });
+      default:
+        return Effect.succeed({ ok: true });
+    }
+  };
+}
+
+/** Slack's upload addresses, writing down each file's bytes as sent to its address. */
+function fakeFiles(sent: { url: string; bytes: Uint8Array }[]): SlackFileTransfer {
+  return {
+    send: (url, bytes) => Effect.sync(() => void sent.push({ url, bytes })),
+    read: () => Effect.die("no file is read"),
+  };
+}
 
 /** A Slack whose team holds one channel the bot is in, with one message from another member. */
 const slackWithChannel: SlackWebApi = (method) => {
@@ -101,12 +174,41 @@ it.layer(getTestDB())("an agent's Slack tools as the bot", (it) => {
       const sent = yield* runSendSlackMessage(
         { caller },
         { text: "Hello.", channel: CHANNEL },
+        noSandbox,
       ).pipe(Effect.provideService(SlackBot, slackBotOver(undefined)));
 
       assert.deepEqual(sent, {
         status: ACTION_RESULT_STATUS.REJECTED,
         reason: SLACK_REACH_REFUSAL.NOT_CONNECTED,
       });
+    }),
+  );
+
+  it.effect("a DM's file from the agent's sandbox is shared under the message it sent", () =>
+    Effect.gen(function* () {
+      const caller = yield* openAgent(true);
+      const calls: SlackCall[] = [];
+      const sent: { url: string; bytes: Uint8Array }[] = [];
+
+      const answer = yield* runSendSlackMessage(
+        { caller },
+        {
+          text: "Here's the new settings page.",
+          member: caller.agent.userId,
+          files: ["shots/settings.png"],
+        },
+        sandboxWithShot,
+      ).pipe(Effect.provideService(SlackBot, slackBotOver(postingSlack(calls), fakeFiles(sent))));
+
+      assert.equal(answer.status, ACTION_RESULT_STATUS.ACCEPTED);
+      assert.deepEqual(sent, [
+        { url: "https://files.slack.com/upload/v1/settings.png", bytes: PNG },
+      ]);
+      const shared = calls.find((call) => call.method === "files.completeUploadExternal");
+      assert.deepEqual(
+        [shared?.args.channel_id, shared?.args.thread_ts],
+        ["D0001", "1700000000.000100"],
+      );
     }),
   );
 

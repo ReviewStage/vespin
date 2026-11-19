@@ -504,6 +504,16 @@ export type NewSlackAgentThread = SlackAgentThread & {
 /** A message in a Slack thread the bot marks: the thread it stands in, and its own timestamp. */
 export type SlackThreadMessageAt = SlackThread & { readonly ts: string };
 
+/**
+ * When a thread the agent posted to stands active until a member writes in
+ * it: never, so it reaches the agent but is no current thread a turn's
+ * notice or an unplaced message goes to. Note that a member's message makes
+ * it current as it does any thread (`touchSlackAgentThread`), and that this
+ * is Postgres's own `-infinity` rather than a date, because any date is one
+ * a clock may stand at.
+ */
+const NOT_YET_ACTIVE = sql`'-infinity'::timestamptz`;
+
 const insertAgentThread = SqlSchema.void({
   Request: Schema.Struct({
     organizationId: Schema.String,
@@ -532,7 +542,7 @@ const insertAgentThread = SqlSchema.void({
           startTs: row.startTs,
           workingTs: row.workingTs,
           createdAt: row.now,
-          activeAt: row.now,
+          activeAt: row.origin === SLACK_THREAD_ORIGIN.AGENT_POST ? NOT_YET_ACTIVE : row.now,
         })
         .onConflictDoNothing(),
     ),
@@ -630,7 +640,12 @@ const claimThreadTurn = SqlSchema.findOneOption({
                 threadTs: slackAgentThread.threadTs,
               })
               .from(slackAgentThread)
-              .where(eq(slackAgentThread.agentId, agentId))
+              .where(
+                and(
+                  eq(slackAgentThread.agentId, agentId),
+                  sql`${slackAgentThread.activeAt} > ${NOT_YET_ACTIVE}`,
+                ),
+              )
               .orderBy(desc(slackAgentThread.activeAt), desc(slackAgentThread.threadTs))
               .limit(1)})`,
             sql`not exists (${db
@@ -661,7 +676,12 @@ const findCurrentThread = SqlSchema.findOneOption({
           threadTs: slackAgentThread.threadTs,
         })
         .from(slackAgentThread)
-        .where(eq(slackAgentThread.agentId, agentId))
+        .where(
+          and(
+            eq(slackAgentThread.agentId, agentId),
+            sql`${slackAgentThread.activeAt} > ${NOT_YET_ACTIVE}`,
+          ),
+        )
         .orderBy(desc(slackAgentThread.activeAt), desc(slackAgentThread.threadTs))
         .limit(1),
     ),
@@ -1108,9 +1128,11 @@ export function slackStartRepository(
 }
 
 /**
- * Keeps the thread as one that speaks for the agent, made its current one,
- * with where it came from and the turn already posted in it where its first
- * message posted one; a thread already kept keeps its first agent.
+ * Keeps the thread as one that speaks for the agent, made its current one
+ * but where the agent posted there itself, which stands current only once a
+ * member writes in it, with where it came from and the turn already posted
+ * in it where its first message posted one; a thread already kept keeps its
+ * first agent.
  */
 export function recordSlackAgentThread(thread: NewSlackAgentThread): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
@@ -1153,7 +1175,7 @@ export function claimSlackThreadTurn(
   return claimThreadTurn({ agentId, turnId });
 }
 
-/** The agent's current thread, the one kept, moved, or written in latest, as a turn is posted in; nothing for an agent no thread speaks for. */
+/** The agent's current thread, the one kept, moved, or written in latest, as a turn is posted in; nothing for an agent no thread speaks for, or only threads it posted to that no member has written in. */
 export function currentSlackThread(agentId: string): TaskStoreEffect<Option.Option<SlackThread>> {
   return findCurrentThread({ agentId });
 }
