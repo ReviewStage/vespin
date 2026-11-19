@@ -1,5 +1,5 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { type Agent, agentTaskId, fillAgentTitle } from "@repo/database/models/agent-store";
+import { type Agent, fillAgentTitle } from "@repo/database/models/agent-store";
 import {
   listMessagesPast,
   listRecentMessages,
@@ -441,8 +441,9 @@ function titledWithTask(
   const written = Effect.gen(function* () {
     const filled = yield* fillAgentTitle(userId, agent.id, title);
 
-    if (!filled) return;
-    yield* nameUntitledTask(userId, agentTaskId(agent), title);
+    // An agent on no task has none to name.
+    if (!filled || agent.taskId === null) return;
+    yield* nameUntitledTask(userId, agent.taskId, title);
   });
 
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(written));

@@ -182,7 +182,7 @@ const HARNESS = {
   },
 } as const;
 
-/** A coding agent on the harness given, a runner's bearer recorded for it, and the developer's lines awaiting their turns. */
+/** A coding agent on the harness given, on a task or in the task's workspace on none, a runner's bearer recorded for it, and the developer's lines awaiting their turns. */
 const agentOn = (
   harness: {
     readonly model: string;
@@ -190,6 +190,7 @@ const agentOn = (
     readonly payer: AgentPayer;
   },
   lines: readonly string[],
+  onTask = true,
 ) =>
   Effect.gen(function* () {
     const db = yield* Database;
@@ -198,7 +199,7 @@ const agentOn = (
     const task = yield* startTask(userId, { name: "Teammate invitations" });
 
     const started = yield* createAgent(userId, {
-      taskId: task.id,
+      ...(onTask ? { taskId: task.id } : { taskId: null, workspaceId: task.workspaceId }),
       idempotencyKey: randomUUID(),
       model: harness.model,
       effort: "high",
@@ -386,6 +387,22 @@ function drawn(part: StoredUIMessage["parts"][number]): readonly WireValue[] {
 }
 
 it.layer(SUITE)("the runner events route", (it) => {
+  it.effect("an agent on no task's turn lands and settles as one on a task does", () =>
+    Effect.gen(function* () {
+      const post = yield* standing;
+      const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Introduce yourself."], false);
+
+      const posted = yield* post(agent.bearer, workflowTurn(agent.lineId));
+      const { turns } = yield* transcriptOf(agent.target.conversationId);
+
+      assert.deepEqual(posted.body, { applied: 15, sequence: 14 });
+      assert.deepEqual(
+        turns.map((turn) => turn.status),
+        [TURN_STATUS.SETTLED],
+      );
+    }),
+  );
+
   it.effect(
     "P00's workflow turn lands as one turn: the line it took, each call settled, the words, and its cost",
     () =>

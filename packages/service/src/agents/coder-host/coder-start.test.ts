@@ -77,7 +77,7 @@ const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 12 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 13 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -276,6 +276,49 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           ],
           [ask.taskId, workspaceId, RELAY_REPOSITORY, TASK, null],
         );
+        assert.deepEqual(
+          opened.map((message) => message.conversationId),
+          [agent.conversationId],
+        );
+      }),
+  );
+
+  it.effect(
+    "a Start on no task opens one agent in the workspace on the repository it names, handed the prompt, a retry under its key opens nothing again, and an account outside the workspace starts nothing",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const outsider = yield* openGithubUser();
+        yield* connectAgentApiKeys(outsider);
+        yield* openWorkspace(outsider);
+        const { opened, agentSessions } = fakeAgentSessions();
+
+        const ask: StartAsk = {
+          taskId: null,
+          workspaceId,
+          repository: RELAY_REPOSITORY,
+          prompt: TASK,
+          idempotencyKey: randomUUID(),
+          choice: undefined,
+        };
+
+        const first = yield* startAgent(agentSessions, owner, ask).pipe(Effect.provide(services));
+        const again = yield* startAgent(agentSessions, owner, ask).pipe(Effect.provide(services));
+
+        const refused = yield* Effect.result(
+          startAgent(agentSessions, outsider, { ...ask, idempotencyKey: randomUUID() }).pipe(
+            Effect.provide(services),
+          ),
+        );
+
+        const agent = Option.getOrThrow(yield* readAgent(owner, first.agent.id));
+        assert.deepEqual(
+          [agent.taskId, agent.organizationId, agent.repository, agent.prompt],
+          [null, workspaceId, RELAY_REPOSITORY, TASK],
+        );
+        assert.deepEqual([again.created, again.agent.id], [false, first.agent.id]);
+        assert.ok(Result.isFailure(refused));
+        assert.equal(refused.failure, HOSTED_REFUSAL.NOT_FOUND);
         assert.deepEqual(
           opened.map((message) => message.conversationId),
           [agent.conversationId],

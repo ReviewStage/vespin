@@ -101,6 +101,7 @@ import { TaskAgentUnstopped } from "./task-store.js";
 import {
   agentReachableBy,
   agentVisibleTo,
+  isWorkspaceMember,
   reachableTask,
   taskReachableBy,
 } from "./workspace-store.js";
@@ -290,8 +291,9 @@ export type AgentBriefText =
   | { readonly descriptionSnapshot: null; readonly prompt: string }
   | { readonly descriptionSnapshot: null; readonly prompt: null };
 
-/** Where a Start puts the agent: on a task, whose workspace it joins and whose text or the developer's prompt it is handed. */
-export type AgentPlace = AgentBriefText & { readonly taskId: string };
+/** Where a Start puts the agent: on a task, whose workspace it joins and whose text or the developer's prompt it is handed, or on no task, in a workspace the Start names, handed the prompt alone. */
+export type AgentPlace = AgentBriefText &
+  ({ readonly taskId: string } | { readonly taskId: null; readonly workspaceId: string });
 
 /** A Start: where it goes, the request's own key, what to run on, what the agent is handed, and the repository as it stands now. */
 export type NewAgent = AgentPlace & {
@@ -684,7 +686,7 @@ const insertAgent = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
     conversationId: Schema.String,
-    taskId: Schema.String,
+    taskId: Schema.NullOr(Schema.String),
     organizationId: Schema.String,
     automationId: Schema.NullOr(Schema.String),
     automationOrigin: AutomationOriginColumnSchema,
@@ -2318,13 +2320,15 @@ const deleteConversationRow = SqlSchema.void({
 });
 
 /**
- * Starts an agent on a task of the account's workspace: a `coding_agent`
+ * Starts an agent on a task of the account's workspace, or on no task in a
+ * workspace the account is a member of: a `coding_agent`
  * conversation of the account's and the row that binds it to the task, with
  * the description text or the prompt, the repository, the automation whose run
  * started it with that run, and the account's own agent whose `start_agent`
  * started it, as handed, always a coder. A Start whose key the account has
  * already used answers the agent that Start made, whatever else the retry
- * carries, and writes nothing. Nothing where the account reaches no such task.
+ * carries, and writes nothing. Nothing where the account reaches no such
+ * task, or for no task, is no member of the workspace.
  */
 export function createAgent(
   userId: string,
@@ -2333,7 +2337,13 @@ export function createAgent(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
-        const reached = yield* lockReachableTask({ userId, taskId: started.taskId });
+        // Note that an agent on no task is gated by its workspace's membership alone, as it is read (`agentVisibleTo`).
+        const reached =
+          started.taskId === null
+            ? (yield* isWorkspaceMember(userId, started.workspaceId))
+              ? Option.some({ organizationId: started.workspaceId })
+              : Option.none()
+            : yield* lockReachableTask({ userId, taskId: started.taskId });
 
         if (Option.isNone(reached)) return Option.none();
 
