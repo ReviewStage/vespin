@@ -530,8 +530,12 @@ function useComposerParts(props: ComposerProps): ComposerParts {
               leading: FIELD_LEADING,
             }),
           }),
-          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
-          frame({ minHeight: PRESS_SIZE }),
+          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so SwiftUI sizes its text view at that one width as its words change, rather than asking its ideal width too.
+          frame({
+            minHeight: PRESS_SIZE,
+            maxWidth: Number.POSITIVE_INFINITY,
+            alignment: "leading",
+          }),
           accessibilityIdentifier(testIds?.field ?? "composer-field"),
         ]}
       />
@@ -649,9 +653,12 @@ export function ComposerFoot(props: ComposerProps) {
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
-  const pieces = (
+  // Note that a field over a row of controls stands alone in the glass's column, at its width, with no row of its own around it to size it again.
+  const pieces = rowed ? (
+    parts.field
+  ) : (
     <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
-      {rowed ? parts.field : <RowPieces parts={parts} />}
+      <RowPieces parts={parts} />
     </HStack>
   );
 
