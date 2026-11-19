@@ -133,9 +133,9 @@ const SUB_TASKS_HIDDEN = "Sub-tasks hidden";
 /**
  * What a row's act means, which sets the color its swipe stands on: one
  * that marks a row read or unread, sets a reminder, finishes something
- * (Resolve, Mark done), pins, or takes something away, and the rest. In a
- * long press menu only a destructive act reads apart, in the system's red;
- * the rest stand in the menu's ink. Copper is kept for what wants the
+ * (Resolve, Mark done), pins, archives, or deletes, and the rest. In a long
+ * press menu only a destructive act, a delete, reads apart, in the system's
+ * red; the rest stand in the menu's ink. Copper is kept for what wants the
  * reader, so no act is drawn in it.
  */
 export const ROW_ACTION_TONE = {
@@ -145,14 +145,16 @@ export const ROW_ACTION_TONE = {
   REMIND: "remind",
   DONE: "done",
   PIN: "pin",
+  ARCHIVE: "archive",
 } as const;
 
 export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TONE];
 
 /**
  * The system color each act's swipe stands on, its glyph in white, as Mail
- * colors its swipes on iOS 26: Read and Unread blue, Remind Me purple, Flag
- * orange (a pin here), Trash red, and More gray; Mail has no act that
+ * colors its swipes on iOS 26: Read and Unread blue, Remind Me and Archive
+ * purple, Flag orange (a pin here), Trash red, and More gray, so red is kept
+ * for a delete. Remind me and Archive never share a list. Mail has no act that
  * finishes a thread, so Resolve and Mark done take green, as Reminders
  * marks one complete. This one table sets every list's swipe colors.
  */
@@ -163,6 +165,7 @@ const SWIPE_FILL = {
   [ROW_ACTION_TONE.REMIND]: SYSTEM_COLOR.PURPLE,
   [ROW_ACTION_TONE.DONE]: SYSTEM_COLOR.GREEN,
   [ROW_ACTION_TONE.PIN]: SYSTEM_COLOR.ORANGE,
+  [ROW_ACTION_TONE.ARCHIVE]: SYSTEM_COLOR.PURPLE,
 } as const satisfies Record<RowActionTone, SystemColor>;
 
 export type RowAction = {
@@ -458,17 +461,23 @@ export function rowPlacement(
   ];
 }
 
-/** Whether a full swipe from an edge runs its first act: never where that act is destructive, such as Archive, which then waits for its button's tap, nor where it is a menu. */
+/** The tones of acts that ask before they run, which a full swipe never runs, so they wait for their button's tap. */
+const ASKS_FIRST: ReadonlySet<RowActionTone> = new Set([
+  ROW_ACTION_TONE.DESTRUCTIVE,
+  ROW_ACTION_TONE.ARCHIVE,
+]);
+
+/** Whether a full swipe from an edge runs its first act: never where that act asks first, such as Archive or a delete, nor where it is a menu. */
 function fullSwipes(swipes: readonly RowSwipe[]): boolean {
   const first = swipes[0];
 
-  return first !== undefined && !isSubmenu(first) && first.tone !== ROW_ACTION_TONE.DESTRUCTIVE;
+  return first !== undefined && !isSubmenu(first) && !ASKS_FIRST.has(first.tone);
 }
 
 /**
  * A swipe's piece behind the row: an act's button, or a menu's, filled with
- * the system color its meaning takes (`SWIPE_FILL`). Note that an act that
- * takes something away fills red without the destructive role, because
+ * the system color its meaning takes (`SWIPE_FILL`). Note that a delete
+ * fills red without the destructive role, because
  * SwiftUI takes a row out of its list the moment a destructive swipe is
  * pressed, before an act that asks first, such as Archive, hears its answer,
  * so a Cancel left the row gone under its section's count.

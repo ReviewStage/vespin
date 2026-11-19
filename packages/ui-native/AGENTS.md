@@ -287,8 +287,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   by name. Status tones stand on the status marks alone: a task's ring,
   and a pull request's state. A swipe act stands on iOS's own system color
   for what it means, its glyph in white, as Mail colors its swipes: mark
-  read or unread blue, Remind me purple, pin orange (Mail's Flag), Resolve
-  and Mark done green, what takes something away red, and the rest gray
+  read or unread blue, Remind me and Archive purple, pin orange (Mail's
+  Flag), Resolve and Mark done green, a delete red, and the rest gray
   (Mail's More). The act's `ROW_ACTION_TONE` names its meaning, and
   `SWIPE_FILL` in `list-row.tsx` is the one table of each meaning's color,
   over `SYSTEM_COLOR`'s light, dark and Increase Contrast values.

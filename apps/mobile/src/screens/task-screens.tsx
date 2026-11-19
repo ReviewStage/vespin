@@ -1594,7 +1594,7 @@ function agentSwipes(
     {
       label: WORDS.ARCHIVE,
       symbol: GLYPH.ARCHIVE,
-      tone: ROW_ACTION_TONE.DESTRUCTIVE,
+      tone: ROW_ACTION_TONE.ARCHIVE,
       onPress: () => onArchive(agent.id),
     },
   ];
