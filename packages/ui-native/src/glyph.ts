@@ -204,6 +204,10 @@ export const GLYPH = {
   RETRY: lucide(LUCIDE_SYMBOL.ROTATE_CW),
   RESTORE: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
   HISTORY: lucide(LUCIDE_SYMBOL.ROTATE_CCW_CLOCK),
+  // A message's acts, as the panel's message actions draw them: Edit a line of the member's, Rewind conversation to here, and Fork to new agent.
+  EDIT_MESSAGE: lucide(LUCIDE_SYMBOL.PENCIL),
+  REWIND: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
+  FORK: lucide(LUCIDE_SYMBOL.SPLIT),
   UPDATE: lucide(LUCIDE_SYMBOL.CIRCLE_ARROW_UP),
   RUN: lucide(LUCIDE_SYMBOL.PLAY),
   // A sound clip's play and pause, as the panel's audio player draws them.
@@ -235,6 +239,8 @@ export const GLYPH = {
   NEXT_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
   // iOS's own: Share is the system's act, a sheet closes with the system's round ✕ (its close role, as Calendar and Reminders close one), a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  // Select text is the system's act on a held message, as Messages and ChatGPT draw it.
+  SELECT_TEXT: system("selection.pin.in.out"),
   CLOSE: system("xmark"),
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
@@ -335,8 +341,8 @@ function lucideAssetName(glyph: string): string {
  * picker's first, for a name the app's catalog holds no glyph of, such as
  * one newer than the app's Lucide, or no icon, since a sidebar row always
  * leads with a glyph, and for an emoji, which `sectionEmoji` draws in the
- * glyph's place. Note that a glyph's color is left to the panel, which alone
- * draws it.
+ * glyph's place. Its chosen color is `sectionGlyphColor`'s, which the header
+ * draws it in.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;

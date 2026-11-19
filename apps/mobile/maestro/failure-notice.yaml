@@ -149,7 +149,7 @@ appId: dev.vespin.ios
 - assertVisible: "Describe the task"
 - inputText: "Write the invite reminder email."
 - hideKeyboard
-- tapOn: "Start"
+- tapOn: "Send"
 - assertNotVisible: "Describe the task"
 - assertVisible: "Try again"
 - waitForAnimationToEnd

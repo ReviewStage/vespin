@@ -44,19 +44,25 @@ export const IOS_APP_LINK_COMPONENTS: readonly AppLinkComponent[] = [
   },
   { "/": "/*/task/*/inbox/*", comment: "A thread on a task's Inbox." },
   { "/": "/*/agent/*/inbox/*", comment: "A thread on an agent's Inbox." },
+  { "/": "/*/agent/*/page/*", comment: "A page an older link names under its agent." },
   {
     "/": "/*/agent/*/*",
     exclude: true,
-    comment: "An agent's pages, workers, changes, and messages, which the web draws.",
+    comment: "An agent's workers, changes, and messages, which the web draws.",
   },
   { "/": "/*/agent/*", comment: "An agent, under its task or its workspace." },
+  { "/": "/*/task/*/page/*", comment: "A page an agent showed on a task." },
   {
     "/": "/*/task/*/*",
     exclude: true,
-    comment: "A task's pages, versions, and comments, which the web draws.",
+    comment: "A task's versions, which the web draws.",
   },
   { "/": "/*/task/*", comment: "A task." },
   { "/": "/*/tasks", comment: "The task list." },
+  {
+    "/": "/*/person/*",
+    comment: "A person's page in a workspace, or one of their machines on it.",
+  },
   { "/": "/*/inbox", comment: "The Inbox." },
   { "/": "/*/inbox/*", comment: "A thread, or a task's threads, on the Inbox." },
 ];
@@ -66,10 +72,16 @@ const IOS_ROUTE = {
   INBOX: "/inbox",
   TASKS: "/tasks",
   AGENT: "/tasks/agent",
+  /** A page an agent showed on a task, opened whole. */
+  PAGE: "/tasks/page",
+  /** A page under its agent's route, as an older link names it. */
+  AGENT_PAGE: "page",
   COMMENTS: "/tasks/comments",
   PULL_REQUEST: "pull",
   /** A pull request by its workspace, its repository, and its number, under Tasks. */
   REPOSITORY_PULL_REQUEST: "/tasks/pull",
+  /** A person's page in the workspace the phone works in. */
+  PERSON: "/tasks/person",
 } as const;
 
 /** A place the app draws a screen for, which always has a route of the app's. */
@@ -81,7 +93,9 @@ type IosRoutedPlace = Extract<
       | typeof LINK_DESTINATION.INBOX_ITEM
       | typeof LINK_DESTINATION.BOARD
       | typeof LINK_DESTINATION.TASK
-      | typeof LINK_DESTINATION.AGENT;
+      | typeof LINK_DESTINATION.PAGE
+      | typeof LINK_DESTINATION.AGENT
+      | typeof LINK_DESTINATION.PERSON;
   }
 >;
 
@@ -103,6 +117,29 @@ function taskRoute(taskId: string, workspace: string | undefined): string {
     : route;
 }
 
+/** The queries a page's route names its task by, or its page under an agent's route, and the version it opens at. */
+const IOS_PAGE_PARAM = { TASK: "task", PAGE: "page" } as const;
+
+/**
+ * The app's route for a page an agent showed, as a link names it: under its
+ * task, or under its agent, as an older link does. Note that a link names
+ * no version, so the page's screen opens at the newest the task's pages
+ * hold.
+ */
+function iosPageRoute(
+  place: Extract<LinkDestination, { readonly kind: typeof LINK_DESTINATION.PAGE }>,
+): string {
+  if ("agentId" in place) {
+    const query = new URLSearchParams({ [IOS_PAGE_PARAM.PAGE]: place.pageId });
+
+    return `${iosAgentRoute(place.agentId)}/${IOS_ROUTE.AGENT_PAGE}?${query}`;
+  }
+
+  const query = new URLSearchParams({ [IOS_PAGE_PARAM.TASK]: place.taskId });
+
+  return `${IOS_ROUTE.PAGE}/${encodeURIComponent(place.pageId)}?${query}`;
+}
+
 /**
  * The app's route for a place it draws, or none for a place it leaves to the
  * web. A task is routed as the link names it, by id or by number, for the
@@ -122,8 +159,12 @@ export function iosAppRouteOf(place: LinkDestination, workspace?: string): strin
       return IOS_ROUTE.TASKS;
     case LINK_DESTINATION.TASK:
       return taskRoute(place.taskId, workspace);
+    case LINK_DESTINATION.PAGE:
+      return iosPageRoute(place);
     case LINK_DESTINATION.AGENT:
       return iosAgentRoute(place.agentId);
+    case LINK_DESTINATION.PERSON:
+      return iosPersonRoute(place.userId);
     default:
       return undefined;
   }
@@ -140,6 +181,16 @@ export function iosHostConnectCode(address: string): string | undefined {
   const read = readShownLink(address);
 
   return read === undefined || "workspace" in read ? undefined : read.place.code;
+}
+
+/**
+ * The app's route for a person's page, by their account id: who they are in
+ * the workspace the phone works in, and what of theirs it holds. Note that a
+ * link to one of their machines opens their page, since the phone draws no
+ * machine of its own.
+ */
+function iosPersonRoute(userId: string): string {
+  return `${IOS_ROUTE.PERSON}/${encodeURIComponent(userId)}`;
 }
 
 /** The app's route for an agent's page: its transcript and its composer. */

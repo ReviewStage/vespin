@@ -301,6 +301,7 @@ import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 import {
   coderTurnMessage,
   handedValue,
+  heldNativeTurnHanded,
   readNativeTurnHanded,
   readPendingTurnHanded,
   recordNativeTurnHanded,
@@ -1663,10 +1664,11 @@ export const runnerSessions = <
 
     /**
      * Whether the message must open the harness's session afresh, its
-     * conversation replayed into it: the workspace's experiments its session
+     * conversation replayed into it: the agent moved to another place since
+     * its last turn (`move.ts`), or the workspace's experiments its session
      * opened on (`native_handed`) are no longer the ones standing, since a
      * resumed Claude Code or Codex session keeps the instructions it opened
-     * with until it compacts. Never while a turn runs, which goes on with what
+     * with, which name its place and its experiments, until it compacts. Never while a turn runs, which goes on with what
      * it has, the change caught by the next message after it; never for a
      * session opened before its experiments were kept; and never on a read of
      * them that failed, which says nothing of whether they changed, while a
@@ -1684,9 +1686,11 @@ export const runnerSessions = <
         const target = { userId, conversationId: agent.conversationId };
         const pending = yield* readPendingTurnHanded(target, agent.id);
 
-        const opened = (
-          Option.isSome(pending) ? pending.value : yield* readNativeTurnHanded(target)
-        ).experiments;
+        const handed = Option.isSome(pending) ? pending.value : yield* readNativeTurnHanded(target);
+
+        // Note that a move opens afresh too, since the session's instructions name the place it left.
+        if (handed.moved !== undefined) return true;
+        const opened = handed.experiments;
 
         if (opened === undefined) return false;
         // Note that a read that failed is no change, since restarting on it would open a session with every experiment off.
@@ -1777,6 +1781,22 @@ export const runnerSessions = <
       );
 
     /**
+     * Whether the agent moved to another place since its session last took a
+     * line (`move.ts`), as the line still waiting for its runner will have
+     * handed it or, with none waiting, its conversation's row keeps it. Note
+     * that a read that failed fails, since a launch that resumed the old
+     * session on it would hand the agent the place it left.
+     */
+    const movedSinceSession = (agent: Agent) =>
+      Effect.gen(function* () {
+        const target = { userId, conversationId: agent.conversationId };
+        const pending = yield* readPendingTurnHanded(target, agent.id);
+        const handed = Option.isSome(pending) ? pending.value : yield* heldNativeTurnHanded(target);
+
+        return handed.moved !== undefined;
+      });
+
+    /**
      * The session a launch resumes, the one decision every launch, the line
      * a send queues for one, and a warm call ask. The harness
      * resumes from the store whenever it holds any entry of the session, and
@@ -1790,7 +1810,9 @@ export const runnerSessions = <
      * the store never comes to hold a tail it would load alone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
      * Start copied a transcript the store holds from its first entry, cut
-     * where the Start cut it.
+     * where the Start cut it. An agent moved to another place since its last
+     * turn (`move.ts`) resumes none: its session's instructions name the
+     * place it left, so the fresh session is handed its steps (`replay`).
      * Whether the place was made anew is read only where it decides the
      * session, so a launch prepared beside its place's resume waits on that
      * resume only there.
@@ -1801,13 +1823,15 @@ export const runnerSessions = <
       created: Effect.Effect<boolean, CE, CR>,
     ) =>
       Effect.gen(function* () {
+        const { conversationId } = agent;
+
+        // A move since the last turn opens afresh, its conversation replayed, since the session's instructions name the place it left.
+        if (yield* movedSinceSession(agent)) return { replay: true } satisfies ResumedSession;
         const routing = yield* readAgentRouting(userId, agent.id);
 
         const own = Option.getOrUndefined(
           Option.flatMapNullishOr(routing, (read) => read.nativeSession),
         );
-
-        const { conversationId } = agent;
 
         if (own !== undefined) {
           if (yield* holdsSession(userId, conversationId, own)) {
@@ -2130,7 +2154,7 @@ export const runnerSessions = <
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
         const turnRunning = turn?.status === TURN_STATUS.RUNNING;
-        // A session the harness could not resume, or opened on experiments since changed, is opened
+        // A session the harness could not resume, or opened at a place or on experiments since changed, is opened
         // afresh, on the same place, its conversation replayed into it: its harness's session is let
         // go before anything is handed, so every launch past here, the turn's delivery's among them,
         // resumes none, and the first line, its replay ahead of it, is composed once.
@@ -2869,7 +2893,9 @@ export const runnerSessions = <
             const first = messageLine(message, layout);
 
             if (layout.linesRead) {
-              const opened = yield* openedLine(agent, sessionId, first, true);
+              // Note that an agent moved since its last turn is handed its steps, as every launch after a move resumes none.
+              const replayed = yield* movedSinceSession(agent);
+              const opened = yield* openedLine(agent, sessionId, first, true, replayed);
               yield* queued(agent, ANY_LAUNCH, [opened.line], {
                 files: first.files,
                 handed: opened.handed,

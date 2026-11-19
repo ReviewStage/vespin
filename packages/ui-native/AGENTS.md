@@ -37,11 +37,12 @@ builds a control of its own.
   such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField` (its `SECRET` look the system's secure field, for a key or
   a token pasted), `AttachRow`, and `MenuPickRow` for a form's words,
-  pictures and choices, `ComposeSheet` for a sheet that starts work (its
-  words filling the page, and the + and `MenuChip` capsule menus over the
-  keyboard, each the system's own glass button in a `DockRow` with no bar
-  around them, each capsule led by the panel's glyph or a model's harness
-  mark),
+  pictures and choices, `StartPage` for a page that starts work, as a new
+  conversation starts in Messages, ChatGPT and Claude (an empty page over
+  the agent page's own `Composer`, docked on the keyboard, with the + and
+  the `MenuChip` capsule menus in a row under its field inside the same
+  glass, so the keyboard never covers them, each capsule led by the
+  panel's glyph or a model's harness mark),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
   face),
@@ -57,7 +58,10 @@ builds a control of its own.
   `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
   for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
-  `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
+  `WorkingMark`, the panel's own two pixels chasing round a 3×3 grid on the
+  one 200 ms beat every mark shares (`working-beat.ts`), held mid-lap where
+  the reader reduces motion, wherever an agent is at work, the system's
+  spinner kept for a read in flight, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of the
   system's Liquid Glass (`BAR_GLASS`, SwiftUI's `glassEffect`), `GlassDock` the screen that pins one
@@ -72,7 +76,9 @@ builds a control of its own.
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
   Deny and Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
-  Delete), its `AttachedPictures`, and an `AskNote`.
+  Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  holds a sent message's words to send in its place (the panel's Edit, the field
+  taking the keyboard through `focusAsk`), and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
@@ -80,8 +86,19 @@ builds a control of its own.
   file. A long press on a picture, a recording, a file's chip, or a message
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
-  the picture viewer's share button holding the same, and Copy message on a
-  message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
+  the picture viewer's share button holding the same, and on a message's
+  words Copy message, Copy link where it has an address, Select text (the
+  system's text view in a sheet, held by `KeepingProvider`) and Share, a
+  sent line's menu headed by its time (`MessageMenu`), as Messages and
+  ChatGPT head one; an agent's finished turn ends on a standing row of the
+  panel's glyphs, Copy, Copy link and Share, with a ⋯ for what else it
+  offers (`TurnActs`), since a phone has no hover to show the panel's; the
+  app answers them through `KeepingProvider`. A
+  mention's chip, which stands inside a line of words where no SwiftUI menu
+  can wrap it, is held for the system's sheet of Open link and Copy link
+  instead, as the panel's link menu offers them, a popover from the chip in
+  a regular window, its hold a little shorter than the system's so it wins
+  over a message's own. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with
@@ -140,11 +157,15 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its status
-  ring, its name, set in semibold while it has news with no unread dot, and
-  at its end a thread that needs you, a failed agent, one at work, or its
-  pull request, then its key; its priority stands on the task's own
-  Priority chip, not the row), and `AgentRow` an agent
+  thread, with no task, in two), `TaskRow` a task on one line, as the
+  panel's sidebar row draws it (its status ring, or a parent's fold chevron
+  in the ring's place, as the panel's row stands it with no hover; its name,
+  set in semibold while it has news with no unread dot; and at its end the
+  stop sign of a blocked task, a thread that needs you, its sub-tasks as a
+  ring and "2/5", one mark for its agents, the face of who is on it where
+  that is someone other than the reader or the dashed mark where no one is,
+  and when it last moved; a search's finds end in its key; its priority
+  stands on the task's own Priority chip, not the row), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
   developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
@@ -172,19 +193,29 @@ builds a control of its own.
 
 ## Vespin's look
 
-Denser and quieter than iOS's defaults, with a muted palette and plain rows
-(the developer, Nov 10, 2026), on iOS's own
-navigation, tab bar, swipes, menus, sheets and glass.
+Quieter than iOS's defaults, with a muted palette and plain rows (the
+developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
+18, 2026), on iOS's own navigation, tab bar, swipes, menus, sheets and glass.
 
-- **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
-  text style, never a fixed size: a row's title 15 pt (`subheadline`),
-  semibold while unread and regular once read, over a 13 pt muted line
-  (`footnote`); a time 12 pt (`caption`); a group header 13 pt muted; a
-  screen's title 17 pt semibold, inline in its bar; and a page's heading,
-  a thread's or a task's title, 20 pt semibold (`title3`, the style nearest
-  21). React Native's words, Markdown's, take `PROSE_SIZE`, 15 pt, which
-  React Native scales by the reader's setting. The navigation bar's words are
-  the system's fixed sizes (`BAR_TITLE`), as its own titles stand.
+- **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`) is iOS's standard text
+  styles, read as Mail, Settings and Messages read at the default Dynamic
+  Type size, each role a text style and never a fixed size: a row's title,
+  a Settings row's words, a message's words and the composer's in the body
+  style (17 pt), semibold while unread and regular once read, over a muted
+  line in the subheadline style (15 pt); a time, a tag and a group header in
+  the footnote style (13 pt); a line that leads a row, such as an Inbox
+  thread's task line, the row's largest words, in the headline style (17 pt
+  semibold) with its time at that line's end, and the title under it in the
+  subheadline style in the ink (`ROW_SUBJECT`) over its muted preview, both
+  flush with its ring, as Mail's sender leads its subject; a screen's title
+  in the headline style, inline in its bar; and a page's heading, a
+  thread's or a task's title, in title 3 (20 pt) semibold. React Native's
+  words, a transcript's and Markdown's, take the same styles' sizes
+  (`PROSE_SIZE`, the body's, and `ROLE_SIZE`), which React Native scales by
+  the reader's setting. A height, an inset, or a mark beside words follows
+  the text rather than assuming a size (`ROW_INSET.VERTICAL` stands a row of
+  one line 44 pt tall, as iOS's rows stand). The navigation bar's words and
+  the tab bar are the system's own (`BAR_TITLE`), as its titles stand.
 - **Inline titles, no large titles.** A tab's root shows its name small and
   inline. A split view's list keeps its title small and inline too, since
   its bar also holds the switcher, ⋯ and the sidebar button, and its search
@@ -220,9 +251,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   screen's title keeps its place beside it, as the App Store's photo does), whose menu, the
   system's own (`Menu` in `Section`s, as Notion's), holds each workspace by
   its photo, read from a file (`MenuPhoto`), or its letter tile in its hue,
-  the chosen one checked as a `Toggle`, then New workspace and Workspace
-  settings, in the panel's groups and words (`workspaceMenuGroups`), and last
-  the account by its photo and name opening Settings, in every window; the account's
+  the chosen one checked as a `Toggle`, then New workspace, then the chosen
+  workspace's Manage in a section its name heads, and last the account by its
+  photo as Settings, every row one line at the default size, in every window; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. Settings opens from the switcher's menu and
@@ -236,7 +267,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, at 9 pt the strongest mark a row carries as
-  Mail's is, a 14 pt leading mark in an 18 pt column (the
+  Mail's is, a 16 pt leading mark in a 20 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
@@ -263,16 +294,31 @@ navigation, tab bar, swipes, menus, sheets and glass.
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
-  empty section stands as its header alone rather than a list of add rows.
+  empty section stands as its header alone rather than a list of add rows;
+  a long press on one given a `menu` opens it, as the panel's right-click
+  on the sidebar's same header does.
+- **Long press** opens one menu everywhere, `LongPressMenu`: SwiftUI's own
+  context menu, its groups in the panel's order and words, set apart by
+  dividers, red where an act takes something away, lifting a preview where
+  the system's apps lift one. A row draws it through `RowFrame`, a section's
+  header through `ListSection`'s `menu`, and held SwiftUI or React Native
+  views through `HeldSwiftMenu` and `HeldMenu`, so wherever the panel opens
+  a right-click menu the app opens the same menu on a long press.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and
   the Inbox count, a picked option or a switch that is on, and a filled
   `Button`. Everything else stands in the ink: an ask's words on a row,
-  links, bar buttons, swipe actions, a bordered or plain button, and a
-  row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
-  asks for copper by name. Status tones stand on the status marks alone: a
-  task's ring, and a pull request's state.
+  links, bar buttons, a bordered or plain button, and a row that acts,
+  such as New agent. `Screen` tints in `TEXT`, so a piece asks for copper
+  by name. Status tones stand on the status marks alone: a task's ring,
+  and a pull request's state. A swipe act stands on iOS's own system color
+  for what it means, its glyph in white, as Mail colors its swipes: mark
+  read or unread blue, Remind me and Archive purple, pin orange (Mail's
+  Flag), Resolve and Mark done green, a delete red, and the rest gray
+  (Mail's More). The act's `ROW_ACTION_TONE` names its meaning, and
+  `SWIPE_FILL` in `list-row.tsx` is the one table of each meaning's color,
+  over `SYSTEM_COLOR`'s light, dark and Increase Contrast values.
 - **Scopes and capsules.** A list's scopes are the system's segmented
   control under its title, as Mail and the App Store switch a list's views;
   in a split view's 320 pt list column, which cuts the segments' words
@@ -280,14 +326,16 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`SCOPE_LOOK.MENU`). A list with rows stands them as its first row
   (`RowList`'s `scopes`), so they scroll away with the rows as Mail's
   categories do; one listing nothing stands them over its empty state
-  (`ScopePicker`), so another scope is one tap away. `Chip` is a capsule an act or a choice stands in, such as a
+  (`ScopePicker`), so another scope is one tap away. The Inbox stands its
+  scopes in its ⋯ menu instead, the one shown checked over its other acts,
+  as Mail's filter does, the checked one saying which is shown. `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do.
   `Chip`, a field's chip that opens a menu, and `FollowingChip` are the
   system's own small bordered capsule; a field's chip that only says stands
   on `SURFACE` inside a hairline, since a bordered button reads as pressable.
-- **Grouped forms** (`SettingsForm` and the sheets that start work, pick
+- **Grouped forms** (`SettingsForm` and the sheets that pick
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet

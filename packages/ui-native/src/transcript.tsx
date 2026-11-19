@@ -30,10 +30,10 @@ import { FileChip } from "./file-chip.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
-import { CopyWordsMenu } from "./held-menu.js";
+import { CopyWordsMenu, type HeldAct, MessageMenu, TurnActs } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
-import { IntegrationMark } from "./marks.js";
+import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
@@ -41,7 +41,7 @@ import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, ROLE_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -137,6 +137,8 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
+  turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   said: {
@@ -212,6 +214,21 @@ function bubbleWordsWidth(column: number): number {
   return Math.floor(rowWidth(column) * BUBBLE_SHARE) - BUBBLE_PADDING * 2;
 }
 
+/**
+ * The working mark among the transcript's React Native views, in a host of
+ * its own the mark's size, as the panel stands its mark in a running call's
+ * row; hidden from VoiceOver, since its row says it is working.
+ */
+function TranscriptWorkingMark() {
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <InlineHost matchContents>
+        <WorkingMark />
+      </InlineHost>
+    </View>
+  );
+}
+
 /** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well; heard in its row's value rather than apart. */
 function StandingMark({
   running,
@@ -223,8 +240,7 @@ function StandingMark({
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  if (running)
-    return <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />;
+  if (running) return <TranscriptWorkingMark />;
 
   if (!failed) return null;
 
@@ -250,7 +266,7 @@ function BodyBlock({
 }) {
   return (
     <View style={[styles.block, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}>
-      <Text style={[styles.blockTitle, { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }]}>
+      <Text style={[styles.blockTitle, { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }]}>
         {title}
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -258,7 +274,7 @@ function BodyBlock({
           selectable
           style={[
             styles.blockText,
-            { fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_BODY },
+            { fontFamily: MONOSPACE_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_BODY },
           ]}
         >
           {text}
@@ -353,7 +369,7 @@ function CallRow({
             style={{
               flexShrink: 0,
               maxWidth: "70%",
-              fontSize: TEXT_SIZE.FOOTNOTE,
+              fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT_MUTED,
             }}
           >
@@ -368,7 +384,7 @@ function CallRow({
             >
               <Text
                 numberOfLines={lines}
-                style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_BODY, fontWeight: "500" }}
+                style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_BODY, fontWeight: "500" }}
               >
                 {chip}
               </Text>
@@ -379,7 +395,7 @@ function CallRow({
               numberOfLines={lines}
               style={{
                 flexShrink: 1,
-                fontSize: line.code ? TEXT_SIZE.CAPTION : TEXT_SIZE.FOOTNOTE,
+                fontSize: line.code ? ROLE_SIZE.TIME : ROLE_SIZE.ROW_LINE,
                 fontFamily: line.code ? MONOSPACE_FONT : undefined,
                 color: line.code ? colors.TEXT_BODY : colors.TEXT_MUTED,
               }}
@@ -391,7 +407,7 @@ function CallRow({
         {item.runOn === undefined ? null : (
           <Text
             numberOfLines={lines}
-            style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
+            style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
           >
             {item.runOn}
           </Text>
@@ -469,7 +485,7 @@ function OriginFrom({
         };
 
   return (
-    <Text {...actions} style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+    <Text {...actions} style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
       {parts.map(({ lead, words, after, address }, at) => (
         <Fragment key={at}>
           {at === 0 ? null : " · "}
@@ -515,7 +531,7 @@ function OriginBody({ body }: { readonly body: string }) {
           style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
-        <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+        <Text style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
           {WEBHOOK_BODY.LABEL}
         </Text>
       </Press>
@@ -563,7 +579,7 @@ function FoldRow({
         />
         <Text
           numberOfLines={large ? undefined : 1}
-          style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
+          style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
         >
           {item.summary}
         </Text>
@@ -598,6 +614,10 @@ interface RowDrawing {
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
   readonly onOpenAddress: (address: string) => void;
+  /** A message's address on vespin.dev by its id, which its Copy link copies; none where messages have none. */
+  readonly messageLink?: ((messageId: string) => string | undefined) | undefined;
+  /** What a sent line's long press or a finished turn's ⋯ offers past copying and sharing it, in the panel's order, such as Edit, Rewind conversation to here, and Fork to new agent; none where messages offer nothing more. */
+  readonly messageMore?: ((item: MessageItem) => readonly HeldAct[]) | undefined;
   /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
@@ -611,6 +631,12 @@ interface RowDrawing {
   /** Hands the transcript a call's row as it stands and as it goes, so a reader sent to the call lands on it. */
   readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
 }
+
+/** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
+export type MessageItem = Extract<
+  TranscriptItem,
+  { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.FOOT }
+>;
 
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
@@ -701,7 +727,7 @@ function TranscriptRow({
           ]}
         >
           {item.stamp === undefined ? null : (
-            <Text style={[styles.stamp, { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }]}>
+            <Text style={[styles.stamp, { fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }]}>
               {item.stamp}
             </Text>
           )}
@@ -711,7 +737,7 @@ function TranscriptRow({
           {item.sender === undefined || item.joinsAbove ? null : (
             <Text
               accessibilityRole="header"
-              style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}
+              style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: colors.TEXT }}
             >
               {item.sender}
             </Text>
@@ -743,7 +769,14 @@ function TranscriptRow({
           {/* Note that a line of files alone draws no empty bubble under them. */}
           {item.words.trim() === "" &&
           (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
-            <CopyWordsMenu words={item.words} width={rowWidth(drawing.column)}>
+            <MessageMenu
+              words={item.words}
+              at={item.at}
+              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
+              link={drawing.messageLink?.(item.place.row)}
+              more={drawing.messageMore?.(item)}
+              width={rowWidth(drawing.column)}
+            >
               <View style={styles.saidHeld}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
                   <Markdown
@@ -755,29 +788,34 @@ function TranscriptRow({
                   />
                 </View>
               </View>
-            </CopyWordsMenu>
+            </MessageMenu>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:
+      // Note that a finished turn ends on how long it worked, then the acts on its words, standing rather than on a hover, as ChatGPT's row stands under its reply.
       return (
         <View style={[styles.row, { paddingBottom: SPACE.ROW }]}>
-          <Text selectable style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
+          <Text selectable style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
             {item.words}
           </Text>
+          <View style={styles.turnActs}>
+            <TurnActs
+              words={item.copy}
+              link={drawing.messageLink?.(item.place.message)}
+              more={drawing.messageMore?.(item)}
+            />
+          </View>
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
-      // Note that an agent held for an answer says so in the attention ink with no spinner, since it waits on the reader rather than working.
+      // Note that the line is words alone, as the panel's Working line is, its mark left to the rows of what runs; and that an agent held for an answer says so in the attention ink, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
-          {item.waiting === true ? null : (
-            <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />
-          )}
           <Text
             style={{
-              fontSize: TEXT_SIZE.FOOTNOTE,
+              fontSize: ROLE_SIZE.ROW_LINE,
               color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
             }}
           >
@@ -843,7 +881,7 @@ function TranscriptRow({
                 onRetry={retryOf(drawing, shown.id)}
               />
               {shown.caption === "" ? null : (
-                <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+                <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
                   {shown.caption}
                 </Text>
               )}
@@ -873,11 +911,11 @@ function TranscriptRow({
             <View style={{ flex: 1, gap: 2 }}>
               <Text
                 numberOfLines={large ? undefined : 2}
-                style={{ fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "500", color: colors.TEXT }}
+                style={{ fontSize: ROLE_SIZE.ROW_TITLE, fontWeight: "500", color: colors.TEXT }}
               >
                 {item.title}
               </Text>
-              <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+              <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
                 {PAGE_WORD}
               </Text>
             </View>
@@ -997,7 +1035,7 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
 
   return (
     <View style={styles.older}>
-      <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+      <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
         {OLDER_WORDS.FAILED}
       </Text>
       <InlineHost matchContents>

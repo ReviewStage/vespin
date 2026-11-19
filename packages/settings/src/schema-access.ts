@@ -76,6 +76,7 @@ export const ACCOUNT_PREFERENCE_FIELDS = [
   APP_SETTING_SCHEMA.onboardingSurvey.field,
   APP_SETTING_SCHEMA.introsSeen.field,
   APP_SETTING_SCHEMA.githubWakesOff.field,
+  APP_SETTING_SCHEMA.newAgentServersOff.field,
   APP_SETTING_SCHEMA.inbox.field,
 ] as const satisfies readonly AppSettingField[];
 
@@ -98,7 +99,7 @@ const ACCOUNT_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(ACCOUNT_PREFER
 
 const SHARED_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(SHARED_PREFERENCE_FIELDS);
 
-/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, how a new agent's actions are approved, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, which voice a call speaks with, whether a notification is posted, what it answered in setup's survey, which intros it has seen, which GitHub activity no longer wakes its agents, and whether its Inbox is on. */
+/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, how a new agent's actions are approved, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, which voice a call speaks with, whether a notification is posted, what it answered in setup's survey, which intros it has seen, which GitHub activity no longer wakes its agents, which MCP servers its new agents start switched off, and whether its Inbox is on. */
 const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.linkOpen.field,
   APP_SETTING_SCHEMA.pullRequestOpen.field,
@@ -115,6 +116,7 @@ const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.onboardingSurvey.field,
   APP_SETTING_SCHEMA.introsSeen.field,
   APP_SETTING_SCHEMA.githubWakesOff.field,
+  APP_SETTING_SCHEMA.newAgentServersOff.field,
   APP_SETTING_SCHEMA.inbox.field,
 ] as const satisfies readonly AccountPreferenceField[];
 

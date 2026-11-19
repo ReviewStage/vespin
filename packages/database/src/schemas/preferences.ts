@@ -132,6 +132,13 @@ export const accountPreference = pgTable("account_preference", {
    */
   githubWakesOff: text("github_wakes_off"),
   /**
+   * Which of the account's MCP servers its new agents start switched off, as
+   * the JSON list of their connection names (`@repo/settings`'s
+   * `new-agent-servers.ts`); null, as an empty list, switches none off. A
+   * part of the snapshot of its own, as the link choice is.
+   */
+  newAgentServersOff: text("new_agent_servers_off"),
+  /**
    * Whether the account keeps an Inbox (`@repo/settings`'s `inbox`): off,
    * its agents are offered no thread to post and its windows draw no Inbox;
    * null until the account chooses, which reads as on. A part of the

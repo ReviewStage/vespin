@@ -1,5 +1,12 @@
+import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
+import { Context } from "effect";
 import { describe, expect, it } from "vitest";
-import { answerKeeper, shareAppState } from "./app-state-reads.js";
+import type { AppStateSnapshot } from "./app-state.js";
+import { answerKeeper, selectInboxHoldings, shareAppState } from "./app-state-reads.js";
+import { AppStateStore, initialAppState } from "./client/app-state-store.js";
+import { runModeFor } from "./run-mode.js";
 
 describe("shareAppState", () => {
   it("answers a reader's changed slice with the document's own nodes, not copies of them", () => {
@@ -59,5 +66,65 @@ describe("answerKeeper", () => {
     expect(same).toBe(first);
     expect(moved.rows.map(({ id }) => id)).toEqual(["a", "c"]);
     expect(moved.rows[0]).toBe(first.rows[0]);
+  });
+});
+
+describe("selectInboxHoldings", () => {
+  const RUN = {
+    launch: { captureOutput: undefined, profile: "idle", captureMode: false, fixtureMode: false },
+    runMode: runModeFor({ capture: false, fixture: false }),
+    appVersion: "1.2.3",
+    packaged: true,
+    platform: "ios",
+  } as const;
+
+  /** An open thread posted once and last changed at `updatedAt`. */
+  const thread = (id: string, updatedAt: number): InboxItem => ({
+    id,
+    agentId: "agent-1",
+    key: id,
+    revision: 1,
+    version: INBOX_WIRE_VERSION,
+    title: id,
+    needsReply: false,
+    status: INBOX_STATUS.OPEN,
+    postedAt: 1,
+    updatedAt,
+  });
+
+  /** A launch's document with the feed's rows by task, whether they're the phone's kept ones, and the tasks the account's read named. */
+  const documentWith = (
+    byTask: Readonly<Record<string, readonly InboxItem[]>>,
+    kept: boolean,
+    named: readonly { readonly taskId: string }[],
+  ): AppStateSnapshot => {
+    const launched = new AppStateStore(initialAppState(RUN, true, []), Context.empty()).snapshot();
+
+    return {
+      ...launched,
+      window: { fullScreen: false },
+      [LIVE_READ.INBOX_ITEMS]: {
+        rows: { [INBOX_SCOPE_KIND.TASK]: byTask },
+        ...(kept ? { kept: true } : undefined),
+      },
+      inbox: {
+        ...launched.inbox,
+        tasks: named.map(({ taskId }) => ({ taskId, items: 1, updatedAt: 1 })),
+      },
+    };
+  };
+
+  const byTask = {
+    older: [thread("a", 100)],
+    newer: [thread("b", 50), thread("c", 300)],
+  };
+
+  const taskIdsOf = (document: AppStateSnapshot) =>
+    selectInboxHoldings(document).tasks.map(({ taskId }) => taskId);
+
+  it("holds the kept rows' own tasks, the latest changed first, until the account's read names its tasks", () => {
+    expect(taskIdsOf(documentWith(byTask, true, []))).toEqual(["newer", "older"]);
+    expect(taskIdsOf(documentWith(byTask, true, [{ taskId: "older" }]))).toEqual(["older"]);
+    expect(taskIdsOf(documentWith(byTask, false, []))).toEqual([]);
   });
 });

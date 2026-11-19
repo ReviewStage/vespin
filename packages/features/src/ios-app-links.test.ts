@@ -41,11 +41,14 @@ describe("a vespin.dev link", () => {
     ["/acme/task/task-1/inbox/item-1", "/inbox/item-1"],
     ["/acme/tasks", "/tasks"],
     ["/acme/task/42", "/tasks/42?workspace=acme"],
-    ["/acme/task/task-1/page/page-1", undefined],
+    ["/acme/task/task-1/page/page-1", "/tasks/page/page-1?task=task-1"],
+    ["/acme/task/task-1/version/3", undefined],
     ["/acme/agent/agent-1", "/tasks/agent/agent-1"],
     ["/acme/task/task-1/agent/agent-1", "/tasks/agent/agent-1"],
-    ["/acme/agent/agent-1/page/page-1", undefined],
+    ["/acme/agent/agent-1/page/page-1", "/tasks/agent/agent-1/page?page=page-1"],
     ["/acme/task/task-1/agent/agent-1/changes", undefined],
+    ["/acme/person/user-1", "/tasks/person/user-1"],
+    ["/acme/person/user-1#machine-device-1", "/tasks/person/user-1"],
     ["/acme/settings", undefined],
   ])("%s opens in the app at %s, and only then", (path, route) => {
     const read = readLink(`https://vespin.dev${path}`);
@@ -116,6 +119,7 @@ describe("the tab bar on a route", () => {
     ["/tasks/agent/agent-1/page", false],
     ["/tasks/page/page-1", false],
     ["/tasks/comments/thread-1", true],
+    ["/tasks/person/user-1", false],
     ["/search", false],
   ])("on %s hidden is %s", (pathname, hidden) => {
     expect(iosRouteHidesTabs(pathname)).toBe(hidden);

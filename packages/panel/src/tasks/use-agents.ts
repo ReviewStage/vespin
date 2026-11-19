@@ -1,8 +1,10 @@
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
+import { type AgentFork, continueFork, forkStart } from "@repo/features/agent-fork-model";
 import {
   ARCHIVE_NOT_READY,
   CLEAR_FAILED,
   DELETE_FAILED,
+  MOVE_FAILED,
   STOP_FAILED,
   STOP_NOTHING_YET,
 } from "@repo/features/agent-refusal-words";
@@ -16,6 +18,7 @@ import {
   CONTEXT_WINDOW,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
+import { choiceRequest } from "@repo/features/model-effort";
 import type {
   CatalogModel,
   MacOffer,
@@ -88,7 +91,6 @@ import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approva
 import {
   archivedManyWords,
   archiveWords,
-  choiceRequest,
   continueFailureNote,
   RENAME_FAILED,
   RETRY_FAILED,
@@ -102,7 +104,6 @@ import {
   agentPageQueryOptions,
   repositorySkillsQueryOptions,
 } from "./agent-reads.js";
-import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
 import { type HeldUpdate, heldUpdateOver } from "./refused-send.js";
 import { keptSkills } from "./repository-skills.js";
 import type { SkillSource } from "./skill-picker.js";
@@ -429,7 +430,7 @@ export interface AgentsControl {
     prompt: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
-    disabledServers?: readonly string[],
+    disabledServers?: readonly string[] | undefined,
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
@@ -443,7 +444,7 @@ export interface AgentsControl {
   startBlank: (
     draftId: string,
     choice: ModelChoice | undefined,
-    disabledServers: readonly string[],
+    disabledServers: readonly string[] | undefined,
     runsOn: AgentRunsOnRequest | undefined,
     permissionMode: AgentPermissionMode | undefined,
     call: CallWhenStarted,
@@ -461,7 +462,7 @@ export interface AgentsControl {
     words: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
-    disabledServers?: readonly string[],
+    disabledServers?: readonly string[] | undefined,
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
@@ -478,7 +479,7 @@ export interface AgentsControl {
     words: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
-    disabledServers?: readonly string[],
+    disabledServers?: readonly string[] | undefined,
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
@@ -504,6 +505,8 @@ export interface AgentsControl {
   onUnsend: MessageUnsender;
   /** Starts one agent's harness on a fresh session in the same agent (`/clear`), answering whether the service did; a refusal is said in a toast. */
   onClear: (agentId: string) => Promise<boolean>;
+  /** Moves one agent to another place in the same agent (`coder-host/move.ts`), answering whether the service did; a refusal is said in a toast. */
+  onMove: (agentId: string, runsOn: AgentRunsOnRequest) => Promise<boolean>;
   /** Sends one agent a message under the key the composer made. */
   onMessage: MessageSender;
   /**
@@ -577,7 +580,8 @@ export interface AgentDraft {
   readonly prompt: string;
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
-  readonly disabledServers: readonly string[];
+  /** The MCP servers its + menu switched off; none until switched, when it starts on the account's choice for new agents (`selectNewAgentServersOff`). */
+  readonly disabledServers?: readonly string[] | undefined;
   readonly fork?: AgentFork | undefined;
   /** The suggestion in another agent's reply it was opened from, which it is sent through; none for any other draft. */
   readonly suggestion?: DraftSuggestion | undefined;
@@ -616,7 +620,7 @@ function taskDraft(
     prompt: kept?.text ?? "",
     attachments: kept?.attachments ?? [],
     choice: held?.choice,
-    disabledServers: held?.disabledServers ?? [],
+    ...serversOf(held?.disabledServers),
     // Note that a fork is kept with the words too, so a relaunch keeps the draft a fork.
     ...forkOf(held === undefined ? kept?.place.fork : held.fork),
     ...suggestionOf(held === undefined ? kept?.place.suggestion : held.suggestion),
@@ -632,7 +636,7 @@ export interface HandedDraft {
   readonly prompt: string;
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
-  readonly disabledServers: readonly string[];
+  readonly disabledServers?: readonly string[] | undefined;
   readonly permissionMode?: AgentPermissionMode | undefined;
   readonly refused: StartFailure;
 }
@@ -654,6 +658,13 @@ function pickedModeOf(permissionMode: AgentPermissionMode | undefined): {
   readonly permissionMode?: AgentPermissionMode;
 } {
   return permissionMode === undefined ? {} : { permissionMode };
+}
+
+/** A draft's switched-off servers as an optional key, absent where none were switched. */
+function serversOf(disabledServers: readonly string[] | undefined): {
+  readonly disabledServers?: readonly string[];
+} {
+  return disabledServers === undefined ? {} : { disabledServers };
 }
 
 /** A draft's place as an optional key, absent where none was picked. */
@@ -689,7 +700,7 @@ function choicesOf(draft: AgentDraft): DraftChoices {
   return {
     id,
     choice,
-    disabledServers,
+    ...serversOf(disabledServers),
     ...forkOf(fork),
     ...suggestionOf(suggestion),
     ...runsOnOf(runsOn),
@@ -710,7 +721,7 @@ export function holdsNothing(draft: AgentDraft): boolean {
     draft.fork === undefined &&
     draft.suggestion === undefined &&
     draft.choice === undefined &&
-    draft.disabledServers.length === 0 &&
+    draft.disabledServers === undefined &&
     draft.runsOn === undefined &&
     draft.permissionMode === undefined &&
     draft.refused === undefined
@@ -900,6 +911,7 @@ export function useAgents(input: {
   const { mutateAsync: sendRewind } = useMutation(actMutation(ACT_KIND.AGENTS_REWIND));
   const { mutate: sendUnsend } = useMutation(actMutation(ACT_KIND.AGENTS_UNSEND));
   const { mutateAsync: sendClear } = useMutation(actMutation(ACT_KIND.AGENTS_CLEAR));
+  const { mutateAsync: sendMove } = useMutation(actMutation(ACT_KIND.AGENTS_MOVE));
 
   const { mutateAsync: sendMessage } = useMutation(
     sendMutation(ACT_KIND.AGENTS_MESSAGE, () => SENTRY_SEND_SPAN.AGENT_SEND),
@@ -1260,7 +1272,7 @@ export function useAgents(input: {
     const id = mintKey();
 
     if (taskId !== undefined) {
-      withDraft(taskId, { id, choice: undefined, disabledServers: [] });
+      withDraft(taskId, { id, choice: undefined });
     }
 
     return id;
@@ -1388,7 +1400,7 @@ export function useAgents(input: {
       }));
     }
 
-    withDraft(taskId, { id, choice, disabledServers: [], suggestion });
+    withDraft(taskId, { id, choice, suggestion });
 
     return id;
   };
@@ -1403,11 +1415,20 @@ export function useAgents(input: {
       return;
     }
 
+    // Note that a fork restored with no servers of its own ran on its source's, so the draft left keeps those rather than the account's choice for new agents.
+    const { fork } = draft;
+
+    const source =
+      fork === undefined ? undefined : standing?.find((agent) => agent.id === fork.agentId);
+
+    const disabledServers =
+      draft.disabledServers ?? (fork === undefined ? undefined : (source?.disabledServers ?? []));
+
     moveWords(taskId, draft.id, undefined);
     withDraft(taskId, {
       id: draft.id,
       choice: draft.choice,
-      disabledServers: draft.disabledServers,
+      ...serversOf(disabledServers),
       ...runsOnOf(draft.runsOn),
       ...pickedModeOf(draft.permissionMode),
     });
@@ -1542,17 +1563,18 @@ export function useAgents(input: {
     prompt: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
-    disabledServers: readonly string[] = [],
+    disabledServers?: readonly string[] | undefined,
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
     if (taskId === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
 
+    // Note that servers switched in the + menu are sent even where none is left off, so the account's choice for new agents does not stand in for them.
     const answer = await askStart(taskId, {
       idempotencyKey: draftId,
       prompt,
       ...(attachments.length === 0 ? undefined : { attachments }),
-      ...(disabledServers.length === 0 ? undefined : { disabledServers }),
+      ...serversOf(disabledServers),
       ...(choice === undefined ? undefined : choiceRequest(choice)),
       ...runsOnOf(runsOn),
       ...pickedModeOf(permissionMode),
@@ -1569,7 +1591,7 @@ export function useAgents(input: {
   const startBlank = async (
     draftId: string,
     choice: ModelChoice | undefined,
-    disabledServers: readonly string[],
+    disabledServers: readonly string[] | undefined,
     runsOn: AgentRunsOnRequest | undefined,
     permissionMode: AgentPermissionMode | undefined,
     call: CallWhenStarted,
@@ -1585,7 +1607,7 @@ export function useAgents(input: {
     const answer = await askStart(taskId, {
       idempotencyKey: crypto.randomUUID(),
       blank: true,
-      ...(disabledServers.length === 0 ? undefined : { disabledServers }),
+      ...serversOf(disabledServers),
       ...(choice === undefined ? undefined : choiceRequest(choice)),
       ...runsOnOf(runsOn),
       ...pickedModeOf(permissionMode),
@@ -1612,7 +1634,7 @@ export function useAgents(input: {
     words: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
-    disabledServers: readonly string[] = [],
+    disabledServers?: readonly string[] | undefined,
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
@@ -1649,7 +1671,7 @@ export function useAgents(input: {
     words: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
-    disabledServers: readonly string[] = [],
+    disabledServers?: readonly string[] | undefined,
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
@@ -1748,6 +1770,19 @@ export function useAgents(input: {
     if (!("failure" in answer)) return true;
     failed(CLEAR_FAILED, {
       surface: FAILURE_SURFACE.AGENT_CLEAR,
+      cause: answer,
+      about: { agentId },
+    });
+
+    return false;
+  };
+
+  const onMove = async (agentId: string, runsOn: AgentRunsOnRequest): Promise<boolean> => {
+    const answer = await sendMove({ agentId, runsOn }).catch(agentUnreached);
+
+    if (!("failure" in answer)) return true;
+    failed(MOVE_FAILED, {
+      surface: FAILURE_SURFACE.AGENT_MOVE,
       cause: answer,
       about: { agentId },
     });
@@ -2060,6 +2095,7 @@ export function useAgents(input: {
     onRewind,
     onUnsend,
     onClear,
+    onMove,
     onMessage,
     onRetry,
     onChoose,

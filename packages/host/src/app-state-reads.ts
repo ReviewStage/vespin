@@ -35,6 +35,7 @@ import {
   type HostCapability,
   NO_EXPERIMENTS,
   NO_WORKSPACE_EXPERIMENTS,
+  newAgentServersOffFrom,
   type WorkspaceExperiment,
   type WorkspaceExperimentChoices,
   workspaceExperimentChoicesFrom,
@@ -249,6 +250,10 @@ export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwa
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
 export const selectVoiceCall = (state: AppStateSnapshot) => state.voiceCall;
 
+/** The apps the account let in over MCP, the command-line tool's sign-in among them, as the host follows them for it; none until read. */
+export const selectMcpClients = (accountId: string) => (state: AppStateSnapshot) =>
+  state[LIVE_READ.MCP_CLIENTS][accountId];
+
 /** What a window shows may be behind for: this machine offline, the service not answering, or live updates catching up, the machine's own network first, since nothing else can be read without it. */
 export const LIVE_MARK = {
   MAC_OFFLINE: "mac-offline",
@@ -309,6 +314,10 @@ export const selectAppSettingsView = (state: AppStateSnapshot): AppSettingsView 
 /** Whether the account keeps an Inbox (`@repo/settings`'s `inbox`): every window draws it but the account's that turned it off; signed out, or before the settings are read, it stands. */
 export const selectInboxOn = (state: AppStateSnapshot): boolean =>
   state.settings?.stored.inbox !== false;
+
+/** The MCP servers a new agent starts switched off (`@repo/settings`'s `newAgentServersOff`); signed out, or before the settings are read, none. */
+export const selectNewAgentServersOff = (state: AppStateSnapshot): readonly string[] =>
+  newAgentServersOffFrom(state.settings?.stored.newAgentServersOff);
 
 /** Every experiment the account chose as its store holds them, a workspace experiment's old choice among them; signed out, every one is off. Read only to combine with a workspace's (`workspace-experiments.ts`). */
 export const selectStoredExperimentChoices = (state: AppStateSnapshot): ExperimentChoices =>
@@ -585,16 +594,38 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxR
   return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.TASK]));
 }
 
-/** What the Inbox groups its holders by of the document: the account's feed, each task's items by the task's id, and the tasks the host says hold items. */
+/** What the Inbox groups its holders by of the document: the account's feed, each task's items by the task's id, and the tasks holding items, the task whose item changed latest first. */
 export interface InboxHoldings {
   readonly read: InboxReads;
-  readonly tasks: AppStateSnapshot["inbox"]["tasks"];
+  readonly tasks: readonly { readonly taskId: string }[];
 }
 
-/** What the Inbox groups its holders by (`InboxHoldings`), as a `select`, made anew only as the feed or the host's read of what waits moves. */
+/** The tasks the feed's items are on, the task whose item changed latest first, as the account's read of what waits lists them. */
+function tasksOfFeed(read: InboxReads): readonly { readonly taskId: string }[] {
+  return [...read]
+    .flatMap(([taskId, items]) =>
+      items.length === 0
+        ? []
+        : [{ taskId, updatedAt: Math.max(...items.map((item) => item.updatedAt)) }],
+    )
+    .sort((one, other) => other.updatedAt - one.updatedAt);
+}
+
+/**
+ * What the Inbox groups its holders by (`InboxHoldings`), as a `select`,
+ * made anew only as the feed or the host's read of what waits moves. Note
+ * that while the feed's rows are still the ones the phone kept and that read
+ * has named no task yet, the tasks are the kept rows' own, since that read
+ * keeps nothing on the phone and answers only over the network, so a launch
+ * draws its kept rows at once rather than after a round trip.
+ */
 export const selectInboxHoldings = memoizedSelect(
   (state: AppStateSnapshot) => [state[LIVE_READ.INBOX_ITEMS], state.inbox.tasks],
-  (feed, tasks): InboxHoldings => ({ read: feedReads(feed), tasks }),
+  (feed, tasks): InboxHoldings => {
+    const read = feedReads(feed);
+
+    return { read, tasks: feed.kept === true && tasks.length === 0 ? tasksOfFeed(read) : tasks };
+  },
 );
 
 /**

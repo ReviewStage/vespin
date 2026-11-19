@@ -396,12 +396,14 @@
      ink its description and metadata already wear. Only its mark,
      the leading glyph its words already say, and its attachments fade.
      Its fill, which says it is open or in hand, and its acts stay as they
-     are. */
+     are. Note that a task's status mark keeps its ink, because its tone is
+     what it says: a done task wears the one green it wears everywhere else
+     (`task-marks.css`), as the tasks page's settled row draws it. */
   .ui-list-row[data-muted="true"] :is(.ui-list-row-title, .ui-list-row-lead[data-at="above"]) {
     color: var(--ui-color-text-muted);
   }
 
-  .ui-list-row[data-muted="true"] .ui-list-row-leading,
+  .ui-list-row[data-muted="true"] .ui-list-row-leading:not(:has(.ui-task-status-mark)),
   .ui-list-row[data-muted="true"] .ui-list-row-attachments {
     opacity: 0.45;
   }

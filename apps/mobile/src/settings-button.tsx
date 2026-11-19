@@ -21,6 +21,8 @@ export const SETTINGS_ROUTE = {
   CLOUD_ENVIRONMENT: "/settings/cloud-environment",
   /** A secret variable's value, typed for the `name` and `workspaceId` it is pushed with, as a sheet over Cloud environment. */
   VARIABLE_VALUE: "/variable-value",
+  /** The GitHub of the workspace the app works in: what it reaches, and the install that adds more, as Settings › Workspace's GitHub row opens it. */
+  GITHUB: "/settings/github",
   INTEGRATIONS: "/settings/integrations",
   /** One connection's own page, by the `connection` it is pushed with, as a connected row of Integrations opens it. */
   INTEGRATION: "/settings/integration",
@@ -28,6 +30,12 @@ export const SETTINGS_ROUTE = {
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
   MCP: "/settings/mcp",
+  /** One app the account let in over MCP, by the `client` it is pushed with, as a row of MCP & CLI opens it. */
+  MCP_APP: "/settings/mcp-app",
+  /** A member of the workspace the app works in, by the `userId` it is pushed with, as a row of Workspace's Members opens it. */
+  MEMBER: "/settings/member",
+  /** A pending invitation of the workspace the app works in, by the `invitation` id it is pushed with, as a row of Workspace's Invitations opens it. */
+  INVITATION: "/settings/invitation",
   /** Notifications: how this phone's pushes fare, when it takes them, and iOS's own notification settings. */
   NOTIFICATIONS: "/settings/notifications",
   MEMORY: "/settings/memory",
@@ -40,7 +48,7 @@ export const SETTINGS_ROUTE = {
   SKILL: "/settings/skill",
   /** Add skill's paste. */
   SKILL_ADD: "/settings/skill-add",
-  /** The workspace the app works in, as the workspace switcher's Workspace settings opens it. */
+  /** The workspace the app works in, as the workspace switcher's Manage opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;
 
@@ -72,7 +80,6 @@ export function useSettingsAccount(): BarAccount | undefined {
   return {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
-    address: account.email,
     label: SETTINGS,
     onPress: () => open(),
   };

@@ -73,18 +73,17 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
 export {
-  type ChipMenu,
-  type ChipMenuGroup,
-  ComposeSheet,
-  MENU_CHIP_LOOK,
-  MenuChip,
-} from "./compose-sheet.js";
-
-export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
+  Composer,
+  ComposerFoot,
+  type ComposerMenu,
+  type ComposerSaving,
+  type ComposerSendAs,
+} from "./composer.js";
 
 export {
   type AttachedPicture,
   AttachedPictures,
+  EditingLine,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -128,7 +127,7 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
-export { type Keeping, KeepingProvider } from "./held-menu.js";
+export { type HeldAct, type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 
@@ -158,6 +157,8 @@ export {
 
 export {
   ListRow,
+  type LongPressGroup,
+  LongPressMenu,
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
@@ -171,6 +172,8 @@ export {
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
 export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
+
+export { MarkdownEditor } from "./markdown-editor.js";
 
 export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
 
@@ -194,11 +197,15 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute, useToday } from "./minute.js";
 
+export { type ModeChoice, ModelChoiceSheet, type ModelOption } from "./model-choice-sheet.js";
+
 export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
 export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
+
+export { PersonHead } from "./person-head.js";
 
 export { PictureSet, type SetPicture } from "./picture-set.js";
 
@@ -255,6 +262,8 @@ export { ScreenFailure } from "./screen-failure.js";
 
 export { SealedPage } from "./sealed-page.js";
 
+export { sectionGlyphColor, sectionInk } from "./section-ink.js";
+
 export {
   AccountHead,
   AccountRow,
@@ -265,6 +274,7 @@ export {
   FORM_SPACING,
   FollowerRow,
   type FormSpacing,
+  LOADING_ROW_LOOK,
   LoadingRow,
   MemberRow,
   type MemberRowAct,
@@ -303,6 +313,14 @@ export {
 } from "./split-view.js";
 
 export {
+  type ChipMenu,
+  type ChipMenuGroup,
+  MENU_CHIP_LOOK,
+  MenuChip,
+  StartPage,
+} from "./start-page.js";
+
+export {
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
   STATUS_MARK_SYMBOL,
@@ -313,6 +331,9 @@ export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 export {
   askForName,
   askForWords,
+  askToChoose,
+  type ChoiceAct,
+  type ChoiceAsk,
   type NameAsk,
   shareWords,
   WORDS_KIND,
@@ -366,6 +387,7 @@ export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
   AgentTranscript,
+  type MessageItem,
   type OlderPages,
   type TranscriptReveal,
 } from "./transcript.js";

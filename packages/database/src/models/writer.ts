@@ -49,6 +49,8 @@ import {
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import {
+  AGENT_MOVED_PART,
+  type AgentMovedMark,
   COMPACTED_PART,
   CONNECTION_LOST_PART,
   type ConnectionLostNotice,
@@ -698,6 +700,16 @@ export interface StoreWriter {
    */
   markSessionCleared(
     target: ConversationTarget,
+  ): Write<Result.Result<void, typeof NO_CONVERSATION>>;
+  /**
+   * Writes the mark where a coding agent moved to another place in the same
+   * agent (`coder-host/move.ts`): one finished row of no turn's, after every
+   * row written before it, so the transcript draws it between what the agent
+   * did at the place it left and what it does at the new one.
+   */
+  markAgentMoved(
+    target: ConversationTarget,
+    places: Omit<AgentMovedMark, "at">,
   ): Write<Result.Result<void, typeof NO_CONVERSATION>>;
 }
 
@@ -2109,6 +2121,26 @@ const sessionCleared = /* @__PURE__ */ Effect.fnUntraced(function* (
       role: MESSAGE_ROLE.ASSISTANT,
       metadata: MODEL_AUTHORED,
       parts: [{ type: SESSION_CLEARED_PART, data: { at: context.now.getTime() } }],
+    },
+    finishedAt: context.now,
+  });
+});
+
+/** The mark of an agent moved, as `markAgentMoved` says. */
+const agentMoved = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  places: Omit<AgentMovedMark, "at">,
+): Effect.fn.Return<void, StoreFailure, DatabaseServices> {
+  const id = randomUUID();
+  const mark: AgentMovedMark = { at: context.now.getTime(), ...places };
+  yield* insertMessage(context, {
+    clientId: id,
+    turnId: undefined,
+    message: {
+      id,
+      role: MESSAGE_ROLE.ASSISTANT,
+      metadata: MODEL_AUTHORED,
+      parts: [{ type: AGENT_MOVED_PART, data: mark }],
     },
     finishedAt: context.now,
   });
@@ -3537,6 +3569,10 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
       ),
     markSessionCleared: (target) =>
       underConversation(target, (context) => Effect.map(sessionCleared(context), Result.succeed)),
+    markAgentMoved: (target, places) =>
+      underConversation(target, (context) =>
+        Effect.map(agentMoved(context, places), Result.succeed),
+      ),
   };
 
   return Effect.flatMap(toolsRefusingUnknownOutcome(tools), (refusing) =>

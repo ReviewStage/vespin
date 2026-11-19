@@ -1,24 +1,31 @@
-# settings-workspace-github.yaml -- Settings › Workspace's GitHub on the Inbox fixture: the workspace's owner sees GitHub's row, connected and counting the repositories agents reach, with Add repositories at its end.
+# settings-workspace-github.yaml -- Settings › Workspace's GitHub on the Inbox fixture: the workspace's owner sees GitHub's row, naming the account and counting the repositories agents reach, which opens GitHub's own page: Connected, each repository, and Add repositories… out to GitHub.
 #
 # Launched on the host's Inbox fixture, whose account owns its own
-# workspace, which reaches two repositories (`@repo/host/fixture-inbox`'s
-# `REPOSITORIES`), so the row stands connected and no server is reached.
-# Add repositories opens GitHub's install page in the authentication sheet,
-# which a fixture run has no address for, so the flow shoots the row alone.
+# workspace, which reaches two repositories of ada's
+# (`@repo/host/fixture-inbox`'s `REPOSITORIES`), so the row stands
+# connected and no server is reached. Add repositories… opens GitHub's
+# install page in the authentication sheet, which a fixture run has no
+# address for, so the flow shoots the page alone.
 appId: dev.vespin.ios
 ---
 - launchApp:
     clearState: true
     arguments:
-      fixture: inbox
+      fixture: "inbox"
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Workspace settings"
+- tapOn: "Manage"
 - waitForAnimationToEnd
 - scrollUntilVisible:
-    element: "Add repositories"
-- assertVisible: "Connected · 2 repositories"
+    element: "GitHub"
 - takeScreenshot: settings-workspace-github
+- tapOn: "GitHub"
+- waitForAnimationToEnd
+- assertVisible: "Connected"
+- assertVisible: "ada/relay"
+- assertVisible: "ada/ledger"
+- assertVisible: "Add repositories…"
+- takeScreenshot: settings-workspace-github-page

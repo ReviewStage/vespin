@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { test } from "vitest";
-import { forkStart, forksOf, messageOpening, startingWords } from "./fork-model.js";
+import { forkStart, forksOf, messageOpening, startingWords } from "./agent-fork-model.js";
+import { AGENT_STATUS, type AgentSummary } from "./agent-wire.js";
 
 /**
- * fork-model.test.ts -- what a fork's chip quotes of the message, the Start
+ * agent-fork-model.test.ts -- what a fork's chip quotes of the message, the Start
  * a forked draft sends, and where each of an agent's messages was forked
  * to, read off the task's agents.
  */
@@ -40,7 +40,7 @@ test("the chip quotes a message's first line as plain words, a few of them, endi
   assert.equal(messageOpening("Done.\n\nThe tests pass."), "Done.");
 });
 
-test("a forked draft's send is from the source at its message, under the draft's key, its words and files as a note, the servers even where none is off, the choice only where one was made; an empty box forks alone", () => {
+test("a forked draft's send is from the source at its message, under the draft's key, its words and files as a note, the servers switched even where none is off and none where none were switched, the choice only where one was made; an empty box forks alone", () => {
   const fork = { agentId: SOURCE, messageId: AT, opening: "Done." };
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
   const base = { draftId: "draft-1", fork, disabledServers: [] };
@@ -77,6 +77,11 @@ test("a forked draft's send is from the source at its message, under the draft's
     attachments: [notes],
     disabledServers: [],
   });
+  // A draft whose servers were never switched names none, so the agent runs on its source's.
+  assert.deepEqual(
+    forkStart({ draftId: "draft-1", fork, words: "", attachments: [], choice: undefined }),
+    { idempotencyKey: "draft-1", from },
+  );
 });
 
 test("where each of an agent's messages was forked to is read off the task's agents in the order started, archived ones among them, a continue and another source's forks left out", () => {

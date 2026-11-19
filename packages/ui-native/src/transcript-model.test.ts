@@ -452,6 +452,51 @@ describe("transcriptItems", () => {
     expect(turn(false)).toEqual([TRANSCRIPT_ITEM.WORDS]);
     expect(turn(true)).toEqual(["Written reply", TRANSCRIPT_ITEM.FOOT]);
   });
+  it.each([
+    {
+      name: "each stretch of its words and none of its calls",
+      before: [],
+      parts: [
+        { type: "text", text: "Running the tests." },
+        {
+          type: "tool-bash",
+          toolCallId: "run",
+          state: "output-available",
+          input: { command: "pnpm test" },
+          output: { stdout: "ok" },
+        },
+        { type: "text", text: "They pass." },
+      ],
+      copy: "Running the tests.\n\nThey pass.",
+    },
+    {
+      name: "its words folded closed, as a call's delegated turn folds them",
+      before: [
+        {
+          id: "ask",
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text", text: "Run the tests." }],
+          metadata: {
+            author: MESSAGE_AUTHOR.DEVELOPER,
+            channel: MESSAGE_CHANNEL.VOICE,
+            voice_session_id: "call-1",
+            delegation_id: "delegation-1",
+          },
+        },
+      ],
+      parts: [{ type: "text", text: "Two tests failed." }],
+      copy: "Two tests failed.",
+    },
+  ])("hands a finished turn's foot the turn's words to copy: $name", ({ before, parts, copy }) => {
+    const items = transcriptItems(
+      [...before, { id: "work", role: MESSAGE_ROLE.ASSISTANT, parts, startedAt: 0, finishedAt: 1 }],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    const foot = items.find((item) => item.kind === TRANSCRIPT_ITEM.FOOT);
+
+    expect(foot?.kind === TRANSCRIPT_ITEM.FOOT ? foot.copy : undefined).toBe(copy);
+  });
 });
 
 describe("withWaitingLine", () => {

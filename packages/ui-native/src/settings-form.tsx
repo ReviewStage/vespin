@@ -1,7 +1,6 @@
 // settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a script read whole, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
-  Circle,
   ContextMenu,
   Form,
   HStack,
@@ -15,7 +14,6 @@ import {
   Text,
   Toggle,
   VStack,
-  ZStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -37,7 +35,6 @@ import {
   listSectionSpacing,
   menuIndicator,
   menuStyle,
-  multilineTextAlignment,
   padding,
   resizable,
   scrollContentBackground,
@@ -51,6 +48,7 @@ import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
+import { LongPressMenu, ROW_ACTION_TONE } from "./list-row.js";
 import { Avatar, HarnessMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -248,8 +246,8 @@ function PressedRow({
 
 /**
  * The form a settings screen is: its sections (`ListSection`) of the rows
- * below, under their small muted headers, every row's words in the denser
- * scale's 15 pt. Note that it stands on the sidebar's ground with each row
+ * below, under their small muted headers, every row's words in the row
+ * title's style, as iOS's Settings reads. Note that it stands on the sidebar's ground with each row
  * on the surface, as the panel's settings cards stand on its page, rather
  * than on the system's grouped grays. A drag on it lowers the keyboard at
  * once, as a composing sheet's words otherwise keep it standing over the
@@ -538,13 +536,43 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
   );
 }
 
+/** How a row still waiting stands: the bare spinner alone, as a group's rows while they are read, or beside words the person must read, as a sign-in that waits on them. */
+export const LOADING_ROW_LOOK = {
+  BARE: "bare",
+  SAID: "said",
+} as const;
+
+type LoadingRowLook = (typeof LOADING_ROW_LOOK)[keyof typeof LOADING_ROW_LOOK];
+
 /**
- * A group's rows while they are read: the system's small spinner beside the
- * read's words in the muted ink, as Settings stands one in a group still
- * filling, so a header never stands over nothing.
+ * A group's rows while they are read: the system's small spinner centered
+ * in the row, as Settings stands one in a group still filling, so a header
+ * never stands over nothing, with no words beside it (the developer, Nov 18,
+ * 2026); VoiceOver hears `words`. Where they tell the person what happens,
+ * such as a sign-in waiting on them, they stand beside it in the muted ink
+ * (`LOADING_ROW_LOOK.SAID`).
  */
-export function LoadingRow({ words }: { readonly words: string }) {
+export function LoadingRow({
+  words,
+  look = LOADING_ROW_LOOK.BARE,
+}: {
+  readonly words: string;
+  readonly look?: LoadingRowLook | undefined;
+}) {
   const colors = useColors();
+
+  if (look === LOADING_ROW_LOOK.BARE) {
+    return (
+      <ProgressView
+        modifiers={[
+          frame({ maxWidth: Number.POSITIVE_INFINITY }),
+          tint(colors.TEXT_MUTED),
+          accessibilityLabel(words),
+          listRowBackground(colors.RAISED),
+        ]}
+      />
+    );
+  }
 
   return (
     <HStack spacing={SPACE.ROW} modifiers={[listRowBackground(colors.RAISED)]}>
@@ -721,7 +749,7 @@ export type PickOption = {
   readonly label: string;
   /** What picking it does, in the muted ink under its name, such as a permission mode's; none for none. */
   readonly hint?: string | undefined;
-  /** The panel's glyph the option leads with in a menu, such as a permission mode's; none for none. */
+  /** The panel's glyph the option leads with, in a menu or a row of `PickRows`, such as a permission mode's; none for none. */
   readonly symbol?: Glyph | undefined;
 };
 
@@ -785,7 +813,13 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             listRowBackground(colors.RAISED),
           ]}
         >
-          <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+          >
+            {option.symbol === undefined ? null : (
+              <Image {...glyphImage(option.symbol)} color={colors.TEXT_MUTED} />
+            )}
             <VStack alignment="leading" spacing={2}>
               <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
               {option.hint === undefined ? null : (
@@ -952,96 +986,64 @@ export interface MenuRowAct {
   readonly onPress: () => void;
 }
 
-/** One thing a member's menu does to them. */
+/** One thing a connection's menu does, such as an integration's Disconnect. */
 export type MemberRowAct = MenuRowAct;
 
 type MemberRowProps = {
   readonly name: string;
-  readonly email: string;
+  /** The line under their name: their address, or You on the reader's own row. */
+  readonly line: string;
   readonly picture?: string | undefined;
-  /** Their role, in the words the panel says it: Owner, Admin, Member; none for an address invited, whose line says it. */
-  readonly role?: string | undefined;
-  /** Whether they are an address invited rather than a member, which a person mark leads in place of a face, since an address has no photo and its letters would read as someone's. */
-  readonly invited?: boolean | undefined;
-  /** The badge beside the reader's own name, such as "You"; none on anyone else's row. */
-  readonly badge?: string | undefined;
-  /** What the reader may do to them; a row with none takes no press. */
-  readonly acts: readonly MemberRowAct[];
+  /** Their role, in the words the panel says it: Owner, Admin, Member. */
+  readonly role: string;
+  /** Opens the member's own page, where what the reader may do to them stands. */
+  readonly onOpen: () => void;
 };
 
 /**
- * A member of a workspace: their photo or letters, their name with the
- * reader's own badge, their address, and their role at the end in the muted
- * ink. Where the reader may act on them, a press opens the system's menu of
- * those acts, as a contact's row opens one.
+ * A member of a workspace, as iOS Settings lists a family member: their
+ * photo or letters, their name over a line in the muted ink, their role at
+ * the end as the row's value, and the chevron, the whole row one press that
+ * opens their page, where what the reader may do to them stands as rows.
  */
-export function MemberRow({ name, email, picture, role, invited, badge, acts }: MemberRowProps) {
+export function MemberRow({ name, line, picture, role, onOpen }: MemberRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
-  const face = (
-    <HStack spacing={SPACE.ROW}>
-      {invited === true ? (
-        <ZStack modifiers={[frame({ width: faceSize, height: faceSize }), accessibilityHidden()]}>
-          <Circle modifiers={[foregroundStyle(colors.GROUPED)]} />
-          <Image {...glyphImage(GLYPH.PERSON)} color={colors.TEXT_MUTED} />
-        </ZStack>
-      ) : (
-        <Avatar name={name} picture={picture} size={faceSize} />
-      )}
-      <WordsAndEnd
-        words={
-          <VStack alignment="leading" spacing={1}>
-            {/* Note that a row holding acts is a menu's label, which centers a wrapped line, so its lines keep to their leading edge, as Settings' subtitles do. */}
-            <Text
-              modifiers={[
-                foregroundStyle(colors.TEXT),
-                alignmentGuide("listRowSeparatorLeading", 0),
-                multilineTextAlignment("leading"),
-              ]}
-            >
-              {badge === undefined ? name : `${name} · ${badge}`}
-            </Text>
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                foregroundStyle(colors.TEXT_MUTED),
-                multilineTextAlignment("leading"),
-              ]}
-            >
-              {email}
-            </Text>
-          </VStack>
-        }
-        end={
-          role === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>
-        }
-      />
-      {/* Note that a row a press opens a menu on ends in the system's up-and-down chevron, as a menu picker's value does, so the reader knows it acts. */}
-      {acts.length === 0 ? null : (
-        <Image
-          {...glyphImage(GLYPH.MENU_OPENS)}
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(GOES_INK)]}
-        />
-      )}
-    </HStack>
-  );
-
-  if (acts.length === 0) {
-    return <VStack modifiers={[listRowBackground(colors.RAISED)]}>{face}</VStack>;
-  }
-
   return (
-    <Menu
-      label={face}
-      modifiers={[
-        listRowBackground(colors.RAISED),
-        accessibilityLabel(badge === undefined ? name : `${name}, ${badge}`),
-        ...spokenValue(email, role),
-      ]}
-    >
-      <RowActs acts={acts} />
-    </Menu>
+    <PressedRow label={name} value={[line, role]} onPress={onOpen}>
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+      >
+        <Avatar name={name} picture={picture} size={faceSize} />
+        <WordsAndEnd
+          words={
+            <VStack alignment="leading" spacing={1}>
+              {/* Note that the separator starts at the words, not the face, as every row of the form starts it. */}
+              <Text
+                modifiers={[
+                  foregroundStyle(colors.TEXT),
+                  alignmentGuide("listRowSeparatorLeading", 0),
+                ]}
+              >
+                {name}
+              </Text>
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                  foregroundStyle(colors.TEXT_MUTED),
+                ]}
+              >
+                {line}
+              </Text>
+            </VStack>
+          }
+          end={<Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>}
+        />
+        <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+      </HStack>
+    </PressedRow>
   );
 }
 
@@ -1119,7 +1121,7 @@ type MenuRowProps = {
  * A thing a sheet lists, such as one of an agent's ports: its glyph, its
  * name with a line under it, and a value at its end, each but the name in
  * the muted ink. Where it offers anything, a press opens the system's menu
- * of what it offers, as `MemberRow`'s does; VoiceOver hears it by its name,
+ * of what it offers, as a contact's row opens one; VoiceOver hears it by its name,
  * then its line and its value.
  */
 export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
@@ -1252,11 +1254,7 @@ export function NoteRow({
       )}
       {lines}
       <Spacer />
-      {pressed !== undefined ? (
-        <GoesMark goes={PUSH_ROW_GOES.PAGE} />
-      ) : remove === undefined ? null : (
-        <RowMoreMenu acts={[{ ...remove, symbol: NOTE_REMOVE.SYMBOL, destructive: true }]} />
-      )}
+      {pressed === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
     </HStack>
   );
 
@@ -1274,25 +1272,35 @@ export function NoteRow({
     return <HStack modifiers={placed}>{drawn}</HStack>;
   }
 
-  const removeAct =
-    remove === undefined ? undefined : (
-      <SwiftUIButton
-        {...actContent(remove.label, NOTE_REMOVE.SYMBOL)}
-        role={NOTE_REMOVE.ROLE}
-        onPress={remove.onPress}
-      />
-    );
-
   const menu = (
-    <ContextMenu>
-      <ContextMenu.Items>
-        {edit === undefined ? null : (
-          <SwiftUIButton {...actContent(edit.label, NOTE_EDIT_SYMBOL)} onPress={edit.onPress} />
-        )}
-        {removeAct}
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
-    </ContextMenu>
+    <LongPressMenu
+      groups={[
+        [
+          ...(edit === undefined
+            ? []
+            : [
+                {
+                  label: edit.label,
+                  symbol: NOTE_EDIT_SYMBOL,
+                  tone: ROW_ACTION_TONE.NEUTRAL,
+                  onPress: edit.onPress,
+                },
+              ]),
+          ...(remove === undefined
+            ? []
+            : [
+                {
+                  label: remove.label,
+                  symbol: NOTE_REMOVE.SYMBOL,
+                  tone: ROW_ACTION_TONE.DESTRUCTIVE,
+                  onPress: remove.onPress,
+                },
+              ]),
+        ],
+      ]}
+    >
+      {drawn}
+    </LongPressMenu>
   );
 
   if (remove === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
@@ -1366,8 +1374,10 @@ type ConnectionRowProps = {
     | undefined;
   /** The rest of what it offers, in the menu a long press opens, a destructive one also behind a swipe from the trailing edge. */
   readonly menu?: readonly MemberRowAct[] | undefined;
-  /** Opens the connection's own page, as iOS Settings opens an account from its row: the whole row one press ending in the chevron, its acts on that page rather than at its end. */
+  /** Opens the connection's own page, as iOS Settings opens an account from its row: the whole row one press ending in the chevron, its acts on that page rather than at its end; or, with `goes` out, leaves the app to connect it, ending in the arrow out. */
   readonly onOpen?: (() => void) | undefined;
+  /** Where `onOpen` goes: a page of Settings, the chevron, or out of the app, such as a provider's sign-in, the arrow out. */
+  readonly goes?: PushRowGoes | undefined;
 };
 
 /**
@@ -1381,9 +1391,19 @@ type ConnectionRowProps = {
  * a destructive one, such as Disconnect, behind a swipe too, which a full
  * swipe never runs, since it asks first. A connection with a page of its
  * own (`onOpen`) is one press ending in the chevron instead, its acts on
- * that page.
+ * that page, and one to connect is one press ending in the arrow out
+ * (`goes`), which opens the provider's sign-in, as "Add Account" stands in
+ * iOS Settings, rather than a button inside the row.
  */
-export function ConnectionRow({ name, mark, lines, act, menu = [], onOpen }: ConnectionRowProps) {
+export function ConnectionRow({
+  name,
+  mark,
+  lines,
+  act,
+  menu = [],
+  onOpen,
+  goes = PUSH_ROW_GOES.PAGE,
+}: ConnectionRowProps) {
   const colors = useColors();
   const markSize = useScaledSize(CONNECTION_MARK_SIZE);
   const said = lines.map((line) => line.text).join(", ");
@@ -1428,7 +1448,7 @@ export function ConnectionRow({ name, mark, lines, act, menu = [], onOpen }: Con
         }
         end={
           onOpen !== undefined ? (
-            <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+            <GoesMark goes={goes} />
           ) : act === undefined ? (
             menu.length > 0 ? (
               <RowMoreMenu acts={menu} />

@@ -13,8 +13,19 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { type AgentPartCut, WHOLE_PART, type WholePartRead } from "@repo/features/agent-parts";
-import { ARCHIVE_FAILED, PIN_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
-import { type AgentPageAnswerView, TRANSCRIPT_KIND } from "@repo/features/agent-view";
+import {
+  ARCHIVE_FAILED,
+  ARCHIVE_NOT_READY,
+  DELETE_FAILED,
+  PIN_FAILED,
+  RENAME_FAILED,
+  STOP_FAILED,
+} from "@repo/features/agent-refusal-words";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentPageAnswerView,
+  TRANSCRIPT_KIND,
+} from "@repo/features/agent-view";
 import {
   type AgentPullRequest,
   type AgentStatus,
@@ -193,10 +204,12 @@ export function useHeldAgentStep(agentId: string, status: AgentStatus): string |
   }, [messages, status]);
 }
 
-/** An agent row's acts, as the panel's row menu offers them: Stop while it works, Archive, once asked, and Pin or Unpin, each buzzing as it lands or is refused. */
+/** An agent row's acts, as the panel's row menu offers them: Stop while it works, Rename, Archive and Permanently delete, each once asked, and Pin or Unpin, each buzzing as it lands or is refused. */
 export function useAgentRowActs(): {
   readonly stop: (agentId: string) => void;
+  readonly rename: (agentId: string, title: string) => void;
   readonly archive: (agentId: string) => void;
+  readonly remove: (agentId: string) => void;
   readonly pin: (agentId: string, pinned: boolean) => void;
 } {
   const acts = useHostActs();
@@ -212,10 +225,34 @@ export function useAgentRowActs(): {
           went: BUZZ.SUCCESS,
         });
       },
+      rename: (agentId, title) => {
+        write(() => acts[ACT_KIND.AGENTS_RENAME]({ agentId, title }), {
+          refused: (answer) => ("failure" in answer ? RENAME_FAILED : undefined),
+          unanswered: RENAME_FAILED,
+          // Note that the name is its agent's subject, so a later Rename holds off a stale Try again.
+          subject: { kind: WRITE_SUBJECT.AGENT_NAME, id: agentId },
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
       archive: (agentId) => {
         write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }), {
           refused: (answer) => ("failure" in answer ? ARCHIVE_FAILED : undefined),
           unanswered: ARCHIVE_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+      remove: (agentId) => {
+        write(() => acts[ACT_KIND.AGENTS_DELETE]({ agentId }), {
+          // Note that an agent still starting its turn cannot be deleted yet, which the panel says in its own words.
+          refused: (answer) =>
+            "failure" in answer
+              ? answer.failure === AGENT_CALL_FAILURE.AGENT_NOT_READY
+                ? ARCHIVE_NOT_READY
+                : DELETE_FAILED
+              : undefined,
+          unanswered: DELETE_FAILED,
           retry: true,
           went: BUZZ.SUCCESS,
         });
@@ -557,7 +594,11 @@ export interface PageHtml {
 }
 
 /** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
-export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageHtml {
+export function usePageHtml(
+  taskId: string | undefined,
+  pageId: string,
+  version: number | undefined,
+): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
   // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
@@ -567,7 +608,7 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
     let current = true;
     setRead({ reading: true });
 
-    if (taskId === undefined) return;
+    if (taskId === undefined || version === undefined) return;
     acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, version }).then(
       (answer) => {
         if (!current) return;

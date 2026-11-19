@@ -67,11 +67,9 @@ function platformOf(host: HostLine): DevicePlatform {
   return host.platform ?? DEVICE_PLATFORM.LINUX;
 }
 
-/** The line under a machine's name: where it stands, then what it is, as the panel's line reads. */
+/** The quiet line under a machine's name: where it stands, such as Online, its platform standing above it on a line of its own rather than joined to it. */
 function machineLine(host: HostLine, now: number): string {
-  const standing = MACHINE_STANDING_WORDS[hostStanding(host, now)];
-
-  return `${standing} · ${DEVICE_PLATFORM_NAME[platformOf(host)]}`;
+  return MACHINE_STANDING_WORDS[hostStanding(host, now)];
 }
 
 /** What Remove asks, and for a machine that reads offline the command that removes it by hand. */
@@ -147,6 +145,7 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
                   key={host.id}
                   symbol={PLATFORM_SYMBOL[platformOf(host)]}
                   words={label}
+                  detail={DEVICE_PLATFORM_NAME[platformOf(host)]}
                   line={machineLine(host, now)}
                   remove={{
                     label: MACHINES_WORDS.REMOVE,

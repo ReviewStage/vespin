@@ -1354,6 +1354,30 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   };
 
   it.effect(
+    "a Start naming no servers starts on those its account switched off for new agents, and one naming its own, none among them, keeps them",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask } = yield* openTask({});
+        yield* writeAccountPreferences(owner, {
+          newAgentServersOff: `["${INTEGRATION_PROVIDER.POSTHOG}"]`,
+        });
+
+        const started = (servers: { readonly disabledServers?: readonly string[] }) =>
+          Effect.map(
+            ask(startAs(owner, task.id, { idempotencyKey: randomUUID(), ...servers })),
+            (answer) =>
+              readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).agent
+                .disabledServers ?? [],
+          );
+
+        assert.deepEqual(
+          [yield* started({}), yield* started({ disabledServers: [] })],
+          [[INTEGRATION_PROVIDER.POSTHOG], []],
+        );
+      }),
+  );
+
+  it.effect(
     "a note beside a source is written after the replay as the developer's with its files, and the first turn's servers are read from the note, never the replay",
     () =>
       Effect.gen(function* () {

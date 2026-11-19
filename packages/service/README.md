@@ -450,8 +450,9 @@ and its manifest (https://docs.slack.dev/reference/app-manifest/) holds:
 - `settings.event_subscriptions.request_url`:
   `https://<deployment>/api/slack/events`, which Slack verifies with its
   `url_verification` challenge, and the bot events `app_mention`,
-  `message.im`, `reaction_added`, `app_uninstalled`, `tokens_revoked`, and
-  `app_home_opened`
+  `message.im`, `message.channels`, `message.groups`, `reaction_added`,
+  `app_uninstalled`, `tokens_revoked`, and `app_home_opened`, where the two
+  channel `message` events carry replies in an agent's thread that name no bot
   (https://docs.slack.dev/reference/events/).
 - `settings.interactivity`: `is_enabled` set to `true`, which Slack requires
   with any interactivity setting, and `request_url` the same

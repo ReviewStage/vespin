@@ -105,7 +105,7 @@ function PreviewHeading({ words }: { readonly words: string }) {
   );
 }
 
-/** A preview's 13 pt line in an ink, the muted one where none is given. */
+/** A preview's line, in the row line's style, in an ink, the muted one where none is given. */
 function PreviewLine({
   words,
   ink,

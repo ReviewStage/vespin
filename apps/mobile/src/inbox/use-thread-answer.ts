@@ -40,7 +40,12 @@ import {
   inboxThreadSend,
   withChoice,
 } from "@repo/features/inbox-draft";
-import { awaitsNod, type InboxListed, knownAsk } from "@repo/features/inbox-list-model";
+import {
+  acknowledgedOnOpen,
+  awaitsNod,
+  type InboxListed,
+  knownAsk,
+} from "@repo/features/inbox-list-model";
 import { INBOX_PUSH_PRESS, type InboxPushPress } from "@repo/features/inbox-push-wire";
 import {
   INBOX_ASK,
@@ -84,7 +89,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { replyLetGo, replyPressed } from "../reply-drawn.js";
@@ -374,9 +379,9 @@ export interface ThreadAnswer {
   readonly send: (pressed?: InboxDraft) => void;
   /** Resolves the thread without an answer, with Undo once it went. */
   readonly resolve: () => void;
-  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, the box empty, and no Got it out, so a press takes it away at once until the host draws the thread settled. */
+  /** Whether the box's Send reads Got it, as the panel's does: a notice open, asking nothing, that opening did not settle (`acknowledgedOnOpen`), the box empty, and no Got it out, so a press takes it away at once until the host draws the thread settled. */
   readonly nods: boolean;
-  /** Settles the notice with Got it, messaging nobody, with Undo once it went. */
+  /** Settles the notice with Got it, messaging nobody, with Undo once it went; the empty box's Send. */
   readonly acknowledge: () => void;
   /** Whether the box's next send starts a new thread with the thread's agent, as the panel's "Send as a new thread to" asks. */
   readonly asNew: boolean;
@@ -391,10 +396,15 @@ const starting = new Set<string>();
 /**
  * The box of the thread `listed` stands for: its draft, and its Send, Got
  * it, Resolve, and the start of a new thread with its agent, which
- * `onStarted` opens.
+ * `onStarted` opens. Opening the reader's own notice acknowledges it, as
+ * the panel's open does (`useNodOnOpen`): once for each revision each time
+ * it is shown, messaging nobody and offering no Undo, since opening was the
+ * nod, and never while the box holds words or pictures, which stay a reply
+ * to send.
  */
 export function useThreadAnswer(
   listed: InboxListed,
+  readerId: string | undefined,
   onStarted?: (itemId: string) => void,
 ): ThreadAnswer {
   const acts = useHostActs();
@@ -519,8 +529,8 @@ export function useThreadAnswer(
     );
   };
 
-  // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
-  const acknowledge = () => {
+  // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands. Note that a nod sent on opening buzzes nothing and offers no Undo, as the panel's open nod does, since no person pressed for it.
+  const nod = (opened: boolean) => {
     if (threads.read().get(itemId)?.nodding !== undefined) return;
     const key = randomUUID();
     let taken = false;
@@ -550,14 +560,35 @@ export function useThreadAnswer(
         inPlace: (words) => {
           if (ours()) hold(itemId, (was) => ({ ...was, note: words }));
         },
-        went: BUZZ.SUCCESS,
+        went: opened ? undefined : BUZZ.SUCCESS,
       },
     ).then((went) => {
       if (ours()) hold(itemId, (was) => ({ ...was, nodding: undefined }));
 
-      if (went && taken) settled([{ item, key }], SETTLE.ACKNOWLEDGE);
+      if (went && taken && !opened) settled([{ item, key }], SETTLE.ACKNOWLEDGE);
     });
   };
+
+  const acknowledge = () => nod(false);
+  const settlesOnOpen = acknowledgedOnOpen(item, readerId);
+  const empty = draft.note.trim() === "" && draft.attachments.length === 0;
+
+  // Opening the reader's own notice acknowledges it, once for each revision shown, as the panel's open does.
+  const noddedOn = useRef<{ readonly id: string; readonly revision: number } | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    // Note that nothing is settled until the reader is known, so a teammate's notice is never acknowledged.
+    if (readerId === undefined) return;
+    const was = noddedOn.current;
+
+    if (was !== undefined && was.id === itemId && was.revision === item.revision) return;
+    noddedOn.current = { id: itemId, revision: item.revision };
+
+    // Note that a notice opened while its box holds a draft is left waiting until it is opened again, so a box emptied of its draft never settles it under the reader's hands.
+    if (settlesOnOpen && empty) nod(true);
+  }, [itemId, item.revision, readerId, settlesOnOpen]);
 
   const setAsNew = useCallback(
     (on: boolean) => hold(itemId, (was) => ({ ...was, asNew: on, note: undefined })),
@@ -644,12 +675,7 @@ export function useThreadAnswer(
       unreadableNumber(thread, draft) !== undefined || inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
-    nods:
-      !asNew &&
-      nodding === undefined &&
-      awaitsNod(item) &&
-      draft.note.trim() === "" &&
-      draft.attachments.length === 0,
+    nods: !asNew && nodding === undefined && awaitsNod(item) && !settlesOnOpen && empty,
     acknowledge,
     asNew,
     setAsNew,

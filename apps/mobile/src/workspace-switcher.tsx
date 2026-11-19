@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace and Workspace settings, then the account opening Settings.
+// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the system's menu of every workspace, New workspace, the chosen workspace's Manage under its name, then the account opening Settings.
 
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -96,7 +96,6 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const signedIn = account !== undefined;
   const accountName = account?.name;
   const accountPicture = account?.picture;
-  const accountAddress = account?.address;
 
   // Note that a system menu draws only an image file it reads as it opens, so each picture it leads a row with is kept as a file first.
   const addresses = useMemo(() => {
@@ -132,7 +131,6 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
             name: accountName ?? "",
             picture: accountPicture,
             menuPhoto: accountMenuPhoto,
-            address: accountAddress,
             onPress: () => openSettings(),
           }
         : undefined,
@@ -147,7 +145,6 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     signedIn,
     accountName,
     accountPicture,
-    accountAddress,
     openSettings,
     router,
     pictures,

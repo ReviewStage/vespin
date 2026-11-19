@@ -60,24 +60,34 @@ const ON_STUDIO: AgentSummary = {
   mac: { name: "Studio", deviceId: STUDIO },
 };
 
-/** Every Stop and continue the menu asked, in order. */
-let continued: { agentId: string; runsOn?: AgentRunsOnRequest | undefined; stop?: true }[] = [];
+/** Every Stop, move, and continue onto a new agent the menu asked, in order. */
+let continued: {
+  agentId: string;
+  runsOn?: AgentRunsOnRequest | undefined;
+  stop?: true;
+  newAgent?: true;
+}[] = [];
 
 afterEach(() => {
   continued = [];
   document.body.innerHTML = "";
 });
 
-/** The control of the agent's task, listing it, which continues into `continued`. */
+/** The control of the agent's task, listing it, which moves and continues into `continued`. */
 function controlOf(agent: AgentSummary, overrides: Partial<AgentsControl> = {}): AgentsControl {
   return agentsControl({
     agents: [agent],
     agentIds: [agent.id],
     macs: MACS,
-    continueAgent: (agentId, _note, _attachments, runsOn) => {
-      continued.push({ agentId, runsOn });
+    continueAgent: (agentId) => {
+      continued.push({ agentId, newAgent: true });
 
       return Promise.resolve(undefined);
+    },
+    onMove: (agentId, runsOn) => {
+      continued.push({ agentId, runsOn });
+
+      return Promise.resolve(true);
     },
     onStop: (agentId) => {
       continued.push({ agentId, stop: true });
@@ -135,7 +145,7 @@ function moveTo(entries: readonly MenuEntry[]) {
   return entry !== undefined && "items" in entry ? entry : undefined;
 }
 
-test("an agent at rest in the cloud moves to each of the member's devices, one not ready dimmed and saying why, and a pick continues it there", async () => {
+test("an agent at rest in the cloud moves to each of the member's devices, one not ready dimmed and saying why, and a pick moves the same agent there", async () => {
   const entry =
     moveTo(await menuOf(AT_REST, controlOf(AT_REST))) ?? assert.fail("Move to is offered");
 
@@ -218,18 +228,16 @@ test("an agent still writing is stopped before it moves, each place saying so, a
   assert.deepEqual(continued, []);
 });
 
-test("Move to is offered nowhere where no Continue is offered, or while Move agents is off", async () => {
+test("Move to is offered nowhere for an agent of another task's, an archived one, or while Move agents is off", async () => {
   const otherTasks = controlOf(AT_REST, { agents: [] });
-  const noStart = controlOf(AT_REST, { continueAgent: undefined });
   const archived = { ...AT_REST, archivedAt: 2 };
 
   assert.deepEqual(
     [
       moveTo(await menuOf(AT_REST, otherTasks)),
-      moveTo(await menuOf(AT_REST, noStart)),
       moveTo(await menuOf(archived, controlOf(archived))),
       moveTo(await menuOf(AT_REST, controlOf(AT_REST), experimentsOn())),
     ],
-    [undefined, undefined, undefined, undefined],
+    [undefined, undefined, undefined],
   );
 });

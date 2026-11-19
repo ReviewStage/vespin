@@ -27,6 +27,7 @@ import {
   turnStretches,
   wholeCallOf,
 } from "@repo/features/agent-parts";
+import { editsInPlace, REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import { usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
@@ -63,6 +64,7 @@ import {
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
+import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
@@ -130,7 +132,6 @@ import {
   delegatedTurnsOf,
   isAgentTurn,
   isVoiceLine,
-  spokenLineOf,
 } from "@repo/features/voice-call-lines";
 import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { replyFromWords } from "@repo/features/words";
@@ -156,6 +157,7 @@ import {
   MESSAGE_LINE_INSET,
   MessageHead,
   MessageLine,
+  MovedLine,
   NewSessionLine,
   OneLine,
   STATUS_TONE,
@@ -184,6 +186,7 @@ import {
   type SuggestedBy,
   type WireValue,
 } from "@repo/wire";
+import type { AgentMovedMark } from "@repo/wire/ui-messages";
 import { useQuery } from "@tanstack/react-query";
 import { WebhookIcon, ZapIcon } from "lucide-react";
 import {
@@ -232,6 +235,7 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
+import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
@@ -351,7 +355,7 @@ import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
 import { OutOfMemoryOffer } from "./out-of-memory-offer.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
-import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
+import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { type SentLine as RailSentLine, sentLineOf } from "./sent-lines.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
@@ -1311,6 +1315,21 @@ function ToolPartView({
   );
 }
 
+/** Where the agent moved, naming the Mac it moved to as the reader's machines call it: This Mac where it is the one the window runs on, else the name it had as the agent moved, else "a Mac". */
+function AgentMovedLine({ mark }: { mark: AgentMovedMark }): React.JSX.Element {
+  const thisMac = useThisMac();
+  const { deviceId, name } = mark.to;
+
+  const to =
+    deviceId === undefined
+      ? undefined
+      : isThisMac({ deviceId, name: name ?? "" }, thisMac)
+        ? THIS_MAC
+        : (name ?? "a Mac");
+
+  return <MovedLine to={to} />;
+}
+
 /** One part of the agent's turn, drawn by its kind. */
 function AgentPartView({
   part,
@@ -1333,6 +1352,8 @@ function AgentPartView({
       return <CompactedLine notice={part.notice} />;
     case AGENT_PART.SESSION_CLEARED:
       return <NewSessionLine />;
+    case AGENT_PART.AGENT_MOVED:
+      return <AgentMovedLine mark={part.mark} />;
     case AGENT_PART.GOAL:
       return <GoalNoticeView notice={part.notice} />;
     case AGENT_PART.TEXT:
@@ -1926,8 +1947,6 @@ export function AgentMessage({
 }): ReactNode {
   const words = messageWords(message);
   const forkOffered = useForkOffered();
-  // Note that a line the caller said aloud on a call is drawn as a typed one, but offers no Edit, since it stands as it was said.
-  const spoken = spokenLineOf(message) !== undefined;
   const sending = useLineSending(message.id);
   const marked = useLineMarked(message.id);
   const status = useLineStatus(message.id);
@@ -2077,12 +2096,7 @@ export function AgentMessage({
                 words={shown}
                 copyable={shown !== ""}
                 messageId={message.id}
-                // Note that a comment's or a Slack message's line is drawn from what it carries rather than its words, so it is written again nowhere, as GitHub's is not, and a line said on a call stands as it was said.
-                rewind={
-                  shown === "" || comment !== undefined || slack !== undefined || spoken
-                    ? undefined
-                    : REWIND_ACTION.EDIT
-                }
+                rewind={editsInPlace(message, shown) ? REWIND_ACTION.EDIT : undefined}
               />
             }
           />
@@ -2402,6 +2416,33 @@ function sameHeldPiece(a: AgentMessageProps, b: AgentMessageProps): boolean {
 
 /** A transcript's message, drawn again only where `sameMessageDraw` says it changed. */
 const SteadyAgentMessage = memo(AgentMessage, sameMessageDraw);
+
+/**
+ * A message of another agent's transcript, as the replay card of a
+ * transcript carried whole draws it (`replay-card.tsx`): as this transcript
+ * draws its own, under whoever sent it, and offering no fork.
+ */
+function SourceMessage({
+  message,
+  readerId,
+}: {
+  message: AgentTranscriptMessage;
+  readerId: string | undefined;
+}): ReactNode {
+  const { members, former } = useMemberDirectory();
+
+  return (
+    <AgentMessage
+      message={message}
+      description={false}
+      lead={AGENT_LEAD}
+      moving={false}
+      delegation={undefined}
+      sender={messageSender(message, readerId, members, former)}
+      forkable={false}
+    />
+  );
+}
 
 /** The door that brings a message whose row is not drawn into view, handing its row to `then` once drawn; false where no row draws it. */
 type MessageBringer = (messageId: string, then: (row: HTMLElement) => void) => boolean;
@@ -4382,6 +4423,8 @@ function AgentTabBody({
           target: cards?.target,
           onOpenTarget,
           openGitHub,
+          shown,
+          message: (message) => <SourceMessage message={message} readerId={control.me} />,
         })}
         endPress={
           pressed ? (

@@ -2,15 +2,20 @@
 
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
+import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
+  ActionSheetIOS,
+  type ActionSheetIOSOptions,
   ActivityIndicator,
+  findNodeHandle,
+  type HostInstance,
   Image,
   ScrollView,
   type ScrollViewInstance,
@@ -29,7 +34,7 @@ import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
 import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
-import { HeldMenu, useKeptActs, useQuickLook } from "./held-menu.js";
+import { HeldMenu, useKeeping, useKeptActs, useQuickLook } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { KEPT_KIND, type Kept } from "./keep-model.js";
 import {
@@ -58,7 +63,7 @@ import {
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /**
@@ -107,7 +112,7 @@ const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.MACHINE]: GLYPH.MAC,
 };
 
-/** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
+/** Each heading level's size and weight, a step above the body's words, never past a page's own heading. */
 const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
   1: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
   2: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
@@ -199,14 +204,14 @@ const styles = StyleSheet.create({
   fade: { position: "absolute", top: 0, bottom: 0, width: EDGE_FADE, pointerEvents: "none" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
+  // Note that a chip is the panel's pill (`InlineRef`'s `PILL`): a rounded fill with no edge, a little more room after its name than before its mark, and no height past the line's words, so no edge of it is cut where the line holds it.
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    borderWidth: StyleSheet.hairlineWidth,
+    gap: 4,
     borderRadius: RADIUS.TAG,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
+    paddingLeft: 4,
+    paddingRight: 6,
   },
   picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
@@ -292,6 +297,55 @@ function chipHeard(chip: MarkdownChip, drawing: Drawing): string {
   return standingLook(chip, drawing)?.heard ?? chip.heard;
 }
 
+/** How long a finger rests on a chip before its menu opens, a little short of the system's own hold, so a chip held in a message opens its own menu rather than the message's. */
+const CHIP_HOLD_MS = 350;
+
+/** The chip menu's buttons, in the order the system's sheet stands them. */
+const CHIP_MENU_BUTTON = { OPEN: 0, COPY: 1, CANCEL: 2 } as const;
+
+/** What closes the chip's menu with nothing done, as every system sheet names it. */
+const CHIP_MENU_CANCEL = "Cancel";
+
+/**
+ * A chip's long press, as the panel's right-click on a link offers it
+ * (`link-menu.tsx`): Open link, where a press on it would open it, and Copy
+ * link, its address as written, in the system's own sheet under the chip's
+ * name, a popover from the chip in a regular window. None for a chip that
+ * goes nowhere, or where no app copies.
+ */
+function useChipHold(
+  name: string,
+  target: LinkTarget,
+  onOpen: (() => void) | undefined,
+  anchor: RefObject<HostInstance | null>,
+): (() => void) | undefined {
+  const keeping = useKeeping();
+
+  if (target.kind === LINK_TARGET.NONE || onOpen === undefined || keeping === undefined) {
+    return undefined;
+  }
+
+  const { href } = target;
+
+  return () => {
+    const sheet: ActionSheetIOSOptions = {
+      title: name,
+      options: [LINK_MENU_WORDS.OPEN, LINK_MENU_WORDS.COPY, CHIP_MENU_CANCEL],
+      cancelButtonIndex: CHIP_MENU_BUTTON.CANCEL,
+    };
+
+    // Note that a regular window's sheet stands as a popover from the chip, which it is anchored to once laid out.
+    const node = anchor.current === null ? null : findNodeHandle(anchor.current);
+    const anchored: ActionSheetIOSOptions = node === null ? sheet : { ...sheet, anchor: node };
+
+    ActionSheetIOS.showActionSheetWithOptions(anchored, (index) => {
+      if (index === CHIP_MENU_BUTTON.OPEN) onOpen();
+
+      if (index === CHIP_MENU_BUTTON.COPY) keeping.copyWords(href);
+    });
+  };
+}
+
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   switch (target.kind) {
     case LINK_TARGET.PLACE:
@@ -302,7 +356,7 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
-/** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
+/** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere, and held for Open link and Copy link (`useChipHold`). */
 function MentionChip({
   chip,
   drawing,
@@ -312,9 +366,12 @@ function MentionChip({
 }) {
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
-  const size = TEXT_SIZE.FOOTNOTE;
+  const size = ROLE_SIZE.ROW_LINE;
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
+  const name = standing?.name ?? chip.name;
+  const anchor = useRef<HostInstance | null>(null);
+  const onHold = useChipHold(name, chip.target, onPress, anchor);
 
   // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
   const mark =
@@ -325,7 +382,10 @@ function MentionChip({
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
       <Press
+        ref={anchor}
         onPress={onPress}
+        onLongPress={onHold}
+        delayLongPress={CHIP_HOLD_MS}
         disabled={onPress === undefined}
         accessibilityRole={onPress === undefined ? "text" : "link"}
         accessibilityLabel={heard}
@@ -333,8 +393,7 @@ function MentionChip({
           styles.chip,
           {
             maxWidth: drawing.lineWidth,
-            backgroundColor: colors.WELL,
-            borderColor: colors.CHIP_EDGE,
+            backgroundColor: colors.FILL_STRONG,
           },
         ]}
       >
@@ -351,7 +410,7 @@ function MentionChip({
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
         >
-          {standing?.name ?? chip.name}
+          {name}
         </Text>
       </Press>
     </View>
@@ -375,7 +434,7 @@ function SuggestionChip({
   readonly drawing: Drawing;
 }) {
   const { colors, fontScale } = drawing;
-  const size = TEXT_SIZE.FOOTNOTE;
+  const size = ROLE_SIZE.ROW_LINE;
   const offered = look.look === SUGGESTION_LOOK.OFFERED;
 
   return (
@@ -388,8 +447,7 @@ function SuggestionChip({
           styles.chip,
           {
             maxWidth: drawing.lineWidth,
-            backgroundColor: colors.WELL,
-            borderColor: colors.CHIP_EDGE,
+            backgroundColor: colors.FILL_STRONG,
           },
         ]}
       >
@@ -471,7 +529,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         <Text
           style={{
             fontFamily: MONOSPACE_FONT,
-            fontSize: TEXT_SIZE.FOOTNOTE,
+            fontSize: ROLE_SIZE.ROW_LINE,
             backgroundColor: colors.WELL,
           }}
         >
@@ -992,7 +1050,7 @@ function TableView({
                     runs={cell}
                     drawing={drawing}
                     style={{
-                      fontSize: TEXT_SIZE.FOOTNOTE,
+                      fontSize: ROLE_SIZE.ROW_LINE,
                       textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
                       ...(rowAt === 0 && { fontWeight: "600", color: colors.TEXT }),
                     }}
@@ -1020,7 +1078,7 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
       <SidewaysScroll ground={colors.WELL} lines={styles.wellLines}>
         <Text
           selectable
-          style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT }}
+          style={{ fontFamily: MONOSPACE_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT }}
         >
           {text}
         </Text>

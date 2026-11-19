@@ -1,26 +1,32 @@
-// type.ts -- the type scale: each role's Dynamic Type text style for SwiftUI, and the sizes React Native draws words at, both scaling with the reader's setting.
+// type.ts -- the type scale, iOS's standard text styles: each role's Dynamic Type text style for SwiftUI, and the sizes React Native draws words at, both scaling with the reader's setting.
 
 /**
- * The denser scale every screen reads in, each role by the system's text
- * style whose Large size it is drawn at, so Dynamic Type scales it and no
- * piece sets a size of its own: a row's title at 15 pt over a 13 pt muted
- * line, its time at 12, a group's header at 13, a screen's title at 17
- * semibold, and a page's heading at 20 semibold, the style nearest 21.
+ * iOS's standard scale, as Mail, Settings and Messages read (the developer,
+ * Nov 18, 2026), each role by the system's text style, so Dynamic Type
+ * scales it and no piece sets a size of its own: a row's title in the body
+ * style over a muted subheadline line, or a headline leading a subheadline
+ * subject, as Mail's sender leads its subject; its time and a group's
+ * header in the footnote style; a screen's title in the headline style; and
+ * a page's heading in title 3.
  */
 export const TYPE_ROLE = {
-  /** A row's title, and a message's words. */
-  ROW_TITLE: "subheadline",
-  /** The muted line under a row's title, a card's detail, and a chip's words. */
-  ROW_LINE: "footnote",
-  /** A row's time, a tag, and a page's path. */
-  TIME: "caption",
-  /** A list's group header. */
+  /** A line that leads a row, such as an Inbox thread's first line, its task's name: the row's largest words, in the headline style, 17 pt semibold, as Mail names a message's sender over its subject. */
+  ROW_LEAD: "headline",
+  /** A row's title under the line that leads it, such as an Inbox thread's under its task's name: the subheadline style, 15 pt, in the ink, as Mail's subject stands under its sender. */
+  ROW_SUBJECT: "subheadline",
+  /** A row's title, a Settings row's words, and a message's words: the body style, 17 pt at the default size. */
+  ROW_TITLE: "body",
+  /** The muted line under a row's title, a card's detail, and a chip's words: the subheadline style, 15 pt. */
+  ROW_LINE: "subheadline",
+  /** A row's time, a tag, and a page's path: the footnote style, 13 pt. */
+  TIME: "footnote",
+  /** A list's group header: the footnote style, 13 pt. */
   GROUP_HEADER: "footnote",
   /** A screen's own title, inline in its bar. */
   SCREEN_TITLE: "headline",
   /** A page's heading under its bar: a thread's or a task's title. */
   PAGE_HEADING: "title3",
-  /** A wide window's sidebar row's name, at the body's 17 pt, as Mail names its mailboxes, larger than a list's rows since a sidebar names places. */
+  /** A wide window's sidebar row's name, in the body style, as Mail names its mailboxes. */
   SIDEBAR_TITLE: "body",
 } as const;
 
@@ -36,8 +42,20 @@ export const TEXT_SIZE = {
   CAPTION: 12,
 } as const;
 
-/** The size a message's words are drawn at in React Native: the row title's, as the denser scale reads. */
-export const PROSE_SIZE = TEXT_SIZE.SUBHEADLINE;
+/** The size a message's words are drawn at in React Native: the body style's, as Messages draws a message. */
+export const PROSE_SIZE = TEXT_SIZE.BODY;
+
+/**
+ * The sizes React Native draws each role's words at, at the default Dynamic
+ * Type size, for words SwiftUI does not draw, such as a transcript's rows:
+ * the same text styles as `TYPE_ROLE`, which React Native scales by the
+ * reader's setting.
+ */
+export const ROLE_SIZE = {
+  ROW_TITLE: TEXT_SIZE.BODY,
+  ROW_LINE: TEXT_SIZE.SUBHEADLINE,
+  TIME: TEXT_SIZE.FOOTNOTE,
+} as const;
 
 /**
  * The navigation bar's words, which the system draws at a fixed size whatever

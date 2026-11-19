@@ -60,6 +60,7 @@ import {
   MACHINE_COMMAND_MODE_LABEL,
   MACHINE_COMMANDS_LABEL,
 } from "./machine-commands.js";
+import { isNewAgentServersOffJson } from "./new-agent-servers.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
 import {
   isPermissionMode,
@@ -662,6 +663,23 @@ export const APP_SETTING_SCHEMA = {
     // Nothing to run per write: the service reads it as a delivery arrives and as an agent's session starts.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     guard: isGitHubWakesOffJson,
+  }),
+  /*
+   * Which of the account's MCP servers its new agents start switched off, as
+   * the JSON list of their connection names (`new-agent-servers.ts`);
+   * nothing stored reads as every server on. An account preference riding a
+   * part of the snapshot of its own, since the service reads it as an agent
+   * starts; drawn by Settings › Agents' MCP servers row under New agents
+   * (`new-agent-servers-row.tsx`), the agent box's own servers popover.
+   */
+  newAgentServersOff: hiddenSetting({
+    field: "newAgentServersOff",
+    id: APP_SETTING_ID.NEW_AGENT_SERVERS_OFF,
+    page: SETTINGS_PAGE.AGENTS,
+    order: 950,
+    // Nothing to run per write: the service reads it as an agent starts, and the composer as a draft opens.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    guard: isNewAgentServersOffJson,
   }),
   /*
    * Whether the account keeps an Inbox: on, as it always was, the agents on

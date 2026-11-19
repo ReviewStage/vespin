@@ -7,7 +7,7 @@ import { GLYPH, glyphSymbol } from "./glyph.js";
 import { InlineHost } from "./inline-host.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { TEXT_SIZE } from "./tokens/type.js";
+import { ROLE_SIZE } from "./tokens/type.js";
 
 /** What reads a file again, as the app's other failures name it. */
 const TRY_AGAIN = "Try again";
@@ -58,7 +58,7 @@ export function MediaFailed({
           tintColor={colors.TEXT_MUTED}
         />
         <Text
-          style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED, textAlign: "center" }}
+          style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED, textAlign: "center" }}
         >
           {line}
         </Text>

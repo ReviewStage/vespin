@@ -288,6 +288,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_REWIND: "agents.rewind",
   /** One agent's harness started on a fresh session in the same agent, its transcript kept (`/clear`, `coder-host/clear.ts`). */
   AGENTS_CLEAR: "agents.clear",
+  /** One agent moved between the cloud and one of the member's devices in the same agent, its transcript kept (`coder-host/move.ts`). */
+  AGENTS_MOVE: "agents.move",
   /** An agent's failed first launch booted again, from its Retry (`coder-host/boot.ts`). */
   AGENTS_BOOT: "agents.boot",
   /** An agent's chat said shown, at once and then every minute while it stays shown, which holds its sandbox and keeps it warm for the next message, or said hidden as it stops being, which lets go (`use-warm-agent.ts`). */
@@ -1152,6 +1154,7 @@ export const PORT_ACT_USE = {
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,
   AGENTS_CLEAR: ACT_USE.WRITE,
+  AGENTS_MOVE: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
   AGENTS_UNSEND: ACT_USE.WRITE,

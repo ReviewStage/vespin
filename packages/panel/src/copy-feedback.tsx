@@ -9,6 +9,7 @@
  * instead.
  */
 
+import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { appPlatform } from "./app-platform.js";
@@ -16,8 +17,8 @@ import { useToast } from "./toast.js";
 
 /** What every item that copies an app link is called, wherever it stands, and what its toast says once the clipboard took it. */
 export const LINK_COPY = {
-  LABEL: "Copy link",
-  COPIED: "Link copied",
+  LABEL: LINK_MENU_WORDS.COPY,
+  COPIED: LINK_MENU_WORDS.COPIED,
 } as const;
 
 /** What a copy's toast says when the clipboard refused it. */

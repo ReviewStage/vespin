@@ -74,7 +74,6 @@ import {
   RowForEach,
   RowList,
   type RowSubmenu,
-  SCOPE_LOOK,
   type Scope,
   Screen,
   SplitView,
@@ -149,6 +148,9 @@ const MORE = { label: "More", symbol: GLYPH.MORE } as const;
 
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
+
+/** What a dimmed bar act does when pressed, which the system never lets happen. */
+const doNothing = (): void => undefined;
 
 /** What a video or a sound clip the words draw in place is heard as, where the words give it no alt. */
 const PLAYED_LABEL = {
@@ -366,7 +368,7 @@ function InboxRowView({
           {
             label: RESOLVE,
             symbol: GLYPH.RESOLVED,
-            tone: ROW_ACTION_TONE.NEUTRAL,
+            tone: ROW_ACTION_TONE.DONE,
             onPress: () => onResolve(item),
           } as const,
         ]
@@ -396,7 +398,7 @@ function InboxRowView({
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
           symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-          tone: ROW_ACTION_TONE.NEUTRAL,
+          tone: ROW_ACTION_TONE.READ,
           onPress: () => onMark(item.id, !unread),
         },
       ]}
@@ -421,14 +423,8 @@ function InboxRowView({
   );
 }
 
-/**
- * An Inbox item's row, drawn again only where its props moved. Note that
- * every delivery to the Inbox drew every row again, a list off screen's
- * among them, which held the JS thread under a working agent's posts; its
- * props keep their identity while its own thread stands (the item, the
- * task's words it says, and the acts' and the menus' hooks), so a row is now
- * drawn again only where its thread or those words moved.
- */
+// Note that a row's props keep their identity while its thread stands, because
+// a delivery to the Inbox otherwise draws every row again and holds the JS thread.
 const InboxRow = memo(InboxRowView);
 
 /**
@@ -510,15 +506,26 @@ function scopePills(
   }));
 }
 
-/** The Inbox's ⋯ menu: Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
+/** The scopes as the ⋯ menu's checked choices, each worded with its count as its pill was, the one shown checked, as Mail's menu checks its filter. */
+function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
+  return scopes.map((scope) => ({
+    id: scope.label,
+    label: scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`,
+    on: scope.selected,
+    onPress: scope.onPress,
+  }));
+}
+
+/** The Inbox's ⋯ menu: its scopes, the one shown checked, then Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
 function moreMenu(
+  scopes: readonly Scope[],
   unread: readonly string[],
   markAll: (itemIds: readonly string[]) => void,
   select: { readonly listed: boolean; readonly onSelect: () => void },
 ): BarMenu {
   return {
     ...MORE,
-    choices: [],
+    choices: scopeChoices(scopes),
     actions: [
       {
         label: SELECTION_WORDS.SELECT,
@@ -598,7 +605,7 @@ function chosenActs(
  * takes only its own items as children.
  */
 function toolbarMenuActions(menu: BarMenu) {
-  return menu.actions.map((action) => (
+  const actions = menu.actions.map((action) => (
     <Stack.Toolbar.MenuAction
       key={action.label}
       {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
@@ -610,6 +617,24 @@ function toolbarMenuActions(menu: BarMenu) {
       {action.label}
     </Stack.Toolbar.MenuAction>
   ));
+
+  if (menu.choices.length === 0) return actions;
+
+  // Note that the choices stand as one inline section over the acts, each checked as the system checks a menu's picked item, as Mail's filter menu stands its choices over its other acts.
+  return [
+    <Stack.Toolbar.Menu key={SCOPE_LABEL} inline>
+      {menu.choices.map((choice) => (
+        <Stack.Toolbar.MenuAction
+          key={choice.id ?? choice.label}
+          isOn={choice.on}
+          onPress={choice.onPress}
+        >
+          {choice.label}
+        </Stack.Toolbar.MenuAction>
+      ))}
+    </Stack.Toolbar.Menu>,
+    ...actions,
+  ];
 }
 
 /** The name an agent is called by, as the panel names it, and the harness its model runs in, whose mark its tile wears, as the task list's collections hold it; the unlisted name and no harness before the agent is listed. */
@@ -624,11 +649,6 @@ function useAgentLabel(agentId: string): {
     : { name: agentNameOf(agent), harness: providerOf(agent.model) };
 }
 
-/**
- * Where a thread stands: a compact window's pushed screen, whose stack's bar
- * names the path and which draws its own Remind me sheet, or a split view's
- * detail, which opens the sheet its screen draws outside the split view.
- */
 /** The threads either side of an open one, in the order it steps through, which it hands on with each step; none at an end. */
 type ThreadSteps = {
   readonly order: readonly string[];
@@ -636,6 +656,12 @@ type ThreadSteps = {
   readonly next?: string | undefined;
 };
 
+/**
+ * Where a thread stands: a compact window's pushed screen, whose stack's bar
+ * names the thread and holds the path in its ⋯ menu, and which draws its own
+ * Remind me sheet, or a split view's detail, which opens the sheet its screen
+ * draws outside the split view.
+ */
 type ThreadPlace =
   | { readonly inStack: true; readonly steps: ThreadSteps }
   | {
@@ -689,7 +715,7 @@ function ThreadDetail({
 
   const memberFace = useMemberFaces(holder.task.workspaceId);
 
-  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
+  // What happened to the thread, its members named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
   const events = useMemo(
     () =>
       inboxThreadEventsShown(item, {
@@ -777,7 +803,7 @@ function ThreadDetail({
 
   const navigation = useNavigation();
 
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front, read when the start answers rather than when it was sent, since the reader may have switched tabs or pushed a page over it meanwhile: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
+  // A thread the box started opens in this one's place only while this one is in front when the start answers, since the reader may have switched tabs or pushed a page over it meanwhile, and a covered screen stays mounted.
   const openStarted = (id: string) => {
     if (!shown.current || !navigation.isFocused()) return;
 
@@ -796,7 +822,7 @@ function ThreadDetail({
   const focused = useIsFocused();
   useStandFrontSteps(place.inStack ? place.steps : {}, stepTo, place.inStack && focused);
 
-  const answer = useThreadAnswer(listed, openStarted);
+  const answer = useThreadAnswer(listed, readerId, openStarted);
   const remind = useRemind();
   const inboxActs = useInboxActs();
   const keeping = useKeeping();
@@ -1112,7 +1138,7 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
   const scopes = scopePills(show, choose, listing.counts);
   const selecting = useInboxChoosing();
 
-  const menu = moreMenu(listing.unread, acts.markAll, {
+  const menu = moreMenu(scopes, listing.unread, acts.markAll, {
     listed: listing.listed.length > 0,
     onSelect: selecting.start,
   });
@@ -1131,11 +1157,13 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
           onChoose: selecting.choose,
         } satisfies RowChoosing,
         title:
-          pickedItems.length === 0 ? SELECTION_WORDS.SELECT : selectedWords(pickedItems.length),
+          pickedItems.length === 0
+            ? SELECTION_WORDS.SELECT_ITEMS
+            : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
-        // Note that Select all takes every thread listed, and Select none lets them go once all are chosen, as Mail's edit bar leads with them.
+        // Note that Select all takes every thread listed, and Deselect all lets them go once all are chosen, as Mail's edit bar leads with them.
         all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
-          ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
+          ? { label: SELECTION_WORDS.DESELECT_ALL, onPress: () => selecting.choose([]) }
           : {
               label: SELECTION_WORDS.SELECT_ALL,
               // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
@@ -1153,7 +1181,6 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
     setSearch,
     listing,
     acts,
-    scopes,
     menu,
     remind,
     choosing,
@@ -1161,30 +1188,18 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
   };
 }
 
-// A compact window: the list under its scopes' segmented control, the account's photo
-// opening Settings and the workspace switcher beside it at the bar's leading
-// edge, and its search and its ⋯ menu as round
-// glass buttons at its trailing one, each row pushing its thread as the Stack's
-// next screen.
+// A compact window: the list, the account's photo opening Settings and the
+// workspace switcher beside it at the bar's leading edge, and its search and
+// its ⋯ menu, which holds the scopes, as round glass buttons at its trailing
+// one, each row pushing its thread as the Stack's next screen.
 function InboxStackList(held: InboxHeld) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
 
-  const {
-    show,
-    choose,
-    search,
-    setSearch,
-    listing,
-    acts,
-    scopes,
-    menu,
-    remind,
-    choosing,
-    chooseStart,
-  } = useInboxScreen(held);
+  const { show, choose, search, setSearch, listing, acts, menu, remind, choosing, chooseStart } =
+    useInboxScreen(held);
 
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
@@ -1241,13 +1256,9 @@ function InboxStackList(held: InboxHeld) {
           {/* Note that the acts stand side by side between two flexible spaces, so iOS 26 draws them in one glass capsule centered over the foot, as Files and Mail group their edit bar's acts, never a glass circle each spread across it. */}
           <Stack.Toolbar.Spacer />
           {choosing.acts.map((act) =>
-            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
-            isBarMenu(act) ? (
-              <Stack.Toolbar.Menu
-                key={act.label}
-                accessibilityLabel={act.label}
-                disabled={act.disabled === true}
-              >
+            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
+            isBarMenu(act) && act.disabled !== true ? (
+              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1256,7 +1267,7 @@ function InboxStackList(held: InboxHeld) {
                 key={act.label}
                 accessibilityLabel={act.label}
                 disabled={act.disabled === true}
-                onPress={act.onPress}
+                onPress={isBarMenu(act) ? doNothing : act.onPress}
               >
                 {act.symbol === undefined ? null : (
                   <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
@@ -1270,7 +1281,6 @@ function InboxStackList(held: InboxHeld) {
       <Screen>
         {/* Note that the list stands even with no thread, its empty state its one row, so a pull still reads the Inbox again. */}
         <InboxRows
-          scopes={{ label: SCOPE_LABEL, scopes }}
           look={LIST_LOOK.PLAIN}
           listed={listing.listed}
           readerId={listing.readerId}
@@ -1320,19 +1330,8 @@ function InboxSplitScreen({
   readonly select: (id: string) => void;
   readonly held: InboxHeld;
 }) {
-  const {
-    show,
-    choose,
-    search,
-    setSearch,
-    listing,
-    acts,
-    scopes,
-    menu,
-    remind,
-    choosing,
-    chooseStart,
-  } = useInboxScreen(held, selected);
+  const { show, choose, search, setSearch, listing, acts, menu, remind, choosing, chooseStart } =
+    useInboxScreen(held, selected);
 
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
@@ -1348,7 +1347,6 @@ function InboxSplitScreen({
 
   const rows = (
     <InboxRows
-      scopes={{ label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
       look={LIST_LOOK.PLAIN}
       listed={listing.listed}
       readerId={listing.readerId}
@@ -1377,7 +1375,6 @@ function InboxSplitScreen({
 
   const list = {
     chosen: selected !== undefined,
-    // Note that the list stands its scopes as its first row, so they scroll away with the rows, over its empty state too, which stands as its one row.
     view: rows,
     // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:

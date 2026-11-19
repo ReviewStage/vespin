@@ -17,7 +17,7 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -44,13 +44,14 @@ import {
   type BarSubtitle,
   BUTTON_LOOK,
   CallCardRow,
+  COMPOSER_CALL,
   Composer,
   type ComposerCall,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
   drawnCallIds,
-  FOOTER_TONE,
+  EditingLine,
   FORM_SPACING,
   footerToneOf,
   GLYPH,
@@ -59,14 +60,14 @@ import {
   glyphSymbol,
   HeldCallBanner,
   ListSection,
-  MenuPickRow,
+  LoadingRow,
   MenuRow,
   type MenuRowAct,
+  ModelChoiceSheet,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
   PERMISSION_MODE_GLYPH,
-  PickRows,
   QueuedLines,
   Screen,
   SettingsForm,
@@ -116,6 +117,7 @@ import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
@@ -137,7 +139,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
-import { PageScreen } from "./page-screens.js";
+import { openedVersion, PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
@@ -187,8 +189,8 @@ const OPTIONS_WORDS = {
   EFFORT: "Effort",
   FAST: "Fast",
   DONE: "Done",
-  READING_SERVERS: "Reading your MCP servers",
   NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
+  READING_SERVERS: "Reading your MCP servers",
   MORE_SERVERS: "Connect another in Settings.",
 } as const;
 
@@ -210,6 +212,23 @@ function useAgentAddress(
       : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
+}
+
+/**
+ * A message's address on vespin.dev under its agent, as the panel's Copy
+ * link names one (`agentMessagePlace`), by the message's id; none before the
+ * agent's workspace is known.
+ */
+function useMessageLink(
+  agentId: string,
+  workspaceId: string | undefined,
+): ((messageId: string) => string | undefined) | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const step = linkWorkspaceStep(workspaceId, workspaces);
+
+  if (step === undefined) return undefined;
+
+  return (messageId) => linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step);
 }
 
 /** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
@@ -310,6 +329,7 @@ function AgentComposerBar({
   const head =
     !denies &&
     banner === undefined &&
+    composer.cancelMessageEdit === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
     otherCall === undefined &&
@@ -324,6 +344,9 @@ function AgentComposerBar({
             empty={composer.skills.empty}
             onPick={composer.skills.pick}
           />
+        )}
+        {composer.cancelMessageEdit === undefined ? null : (
+          <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
@@ -359,6 +382,7 @@ function AgentComposerBar({
         />
       ),
     saving: composer.saving,
+    focusAsk: composer.focusAsk,
   };
 
   return <Composer {...props} />;
@@ -577,6 +601,7 @@ function AgentConversation({
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
+  const messageLink = useMessageLink(id, shown?.workspaceId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -694,10 +719,9 @@ function AgentConversation({
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 
-  const openOptions =
-    agent === undefined
-      ? undefined
-      : () => router.push({ pathname: "/agent-model", params: { agent: id } });
+  // Note that Options stands as the page's own sheet beside it, as its asks do, so the model chip, the + menu and ⋯ all open the one sheet.
+  const [optionsShown, setOptionsShown] = useState(false);
+  const openOptions = agent === undefined ? undefined : () => setOptionsShown(true);
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
@@ -753,7 +777,6 @@ function AgentConversation({
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
-  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
   const taskId = shown?.taskId;
@@ -764,10 +787,20 @@ function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
+  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || openOptions !== undefined;
   const talk = useAgentTalk(id, shown?.taskId);
   const otherCall = useStandingCallCard(id);
+
+  const messageActs = useMessageActs({
+    agentId: id,
+    agent: shown,
+    transcript,
+    readerId,
+    composer,
+    calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
+  });
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
@@ -838,6 +871,8 @@ function AgentConversation({
       onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
+      messageLink={messageLink}
+      messageMore={messageActs.more}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
         const key = keyOf(item.url);
@@ -851,6 +886,13 @@ function AgentConversation({
 
   const asks = (
     <>
+      <AgentOptionsSheet
+        agentId={id}
+        pick={pick}
+        mode={mode}
+        presented={optionsShown}
+        onDismiss={() => setOptionsShown(false)}
+      />
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
           pullRequestKey={merging}
@@ -860,6 +902,8 @@ function AgentConversation({
       )}
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk destructive {...composer.removing} />
+      <ConfirmAsk destructive {...composer.sendingEdit} />
+      <ConfirmAsk destructive {...messageActs.reverting} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
@@ -1051,7 +1095,7 @@ export function AgentPageScreen() {
     title: string;
   }>();
 
-  return <AgentPage agentId={id} pageId={page} version={Number(version)} title={title} />;
+  return <AgentPage agentId={id} pageId={page} version={openedVersion(version)} title={title} />;
 }
 
 /** A page the agent showed, by the agent, the page, and its version. */
@@ -1063,7 +1107,7 @@ function AgentPage({
 }: {
   readonly agentId: string;
   readonly pageId: string;
-  readonly version: number;
+  readonly version: number | undefined;
   readonly title: string;
 }) {
   const agent = useFollowedAgent(agentId);
@@ -1081,112 +1125,99 @@ function AgentPage({
 
 /**
  * The agent's options, as the panel's model chip and + menu change them, in
- * a sheet over its page, each change sent at once and drawn on the agent as
- * it is asked, one the service refused reading back and saying why under its
- * section: its model, effort, and Fast, which take effect from its next
- * step, the models New agent offers that its harness runs and the efforts
- * the model lists, Fast only where the model has a fast version; its
- * permission mode, each with what it does, where its harness takes one,
- * which takes effect from its next turn; and the connected MCP servers it is
- * handed, each with its switch, a server connected in Settings. Its checkmark closes
- * it.
+ * the model sheet over its page (`ModelChoiceSheet`), each change sent at
+ * once and drawn on the agent as it is asked, one the service refused reading
+ * back and saying why under its section: its model, among the models New
+ * agent offers that its harness runs, each under its harness's mark, its
+ * effort right under it, and Fast where the model has a fast version, which
+ * take effect from its next step; its permission mode, each with its glyph
+ * and what it does, where its harness takes one, which takes effect from its
+ * next turn; and the connected MCP servers it is handed, each with its
+ * switch, a server connected in Settings. Done closes it.
  */
-export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
-  const colors = useColors();
-  const router = useRouter();
-  const pick = useAgentModelPick(agentId);
-  const mode = useAgentMode(agentId);
+function AgentOptionsSheet({
+  agentId,
+  pick,
+  mode,
+  presented,
+  onDismiss,
+}: {
+  readonly agentId: string;
+  /** The page's own model and mode, so a change from the sheet or the composer's + menu clears the one refusal and counts as the one latest change. */
+  readonly pick: AgentModelPick;
+  readonly mode: AgentMode | undefined;
+  readonly presented: boolean;
+  readonly onDismiss: () => void;
+}) {
   const servers = useAgentServers(agentId);
 
+  // Note that the footer says nothing while the servers are read, since a read under way shows no words.
   const serversFooter =
     servers.note ??
     (!servers.read
-      ? OPTIONS_WORDS.READING_SERVERS
+      ? undefined
       : servers.servers.length === 0
         ? OPTIONS_WORDS.NO_SERVERS
         : OPTIONS_WORDS.MORE_SERVERS);
 
-  return (
-    <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: OPTIONS_WORDS.TITLE,
-          headerTintColor: colors.TEXT,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
-        }}
-      />
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          icon={glyphSymbol(GLYPH.CONFIRM)}
-          variant="done"
-          tintColor={colors.ACCENT}
-          accessibilityLabel={OPTIONS_WORDS.DONE}
-          onPress={() => router.back()}
-        />
-      </Stack.Toolbar>
-      <Screen>
-        <SettingsForm spacing={FORM_SPACING.COMPACT}>
-          <ListSection footer={pick.note} footerTone={FOOTER_TONE.FAILURE}>
-            <MenuPickRow
-              label={OPTIONS_WORDS.MODEL}
-              options={pick.models}
-              picked={pick.model}
-              onPick={pick.pickModel}
-            />
-            {pick.efforts.length <= 1 ? null : (
-              <MenuPickRow
-                label={OPTIONS_WORDS.EFFORT}
-                options={pick.efforts}
-                picked={pick.effort}
-                onPick={pick.pickEffort}
-              />
-            )}
-            {pick.fast === undefined ? null : (
-              <SwitchRow
-                label={OPTIONS_WORDS.FAST}
-                on={pick.fast.on}
-                onSwitch={pick.fast.toggle}
-                testId="options-fast"
-              />
-            )}
-          </ListSection>
-          {mode === undefined ? null : (
-            <ListSection
-              title={PERMISSION_MODE_WORDS.GROUP}
-              footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
-              footerTone={footerToneOf(mode.note)}
-            >
-              <PickRows
-                options={mode.modes}
-                picked={mode.mode}
-                onPick={(picked) => {
-                  const chosen = mode.modes.find((option) => option.id === picked);
+  const models = pick.models.flatMap((option) => {
+    const provider = providerOf(option.id);
 
-                  if (chosen !== undefined) mode.choose(chosen.id);
-                }}
-              />
-            </ListSection>
-          )}
-          <ListSection
-            title={MCP_SERVER_LABEL.many}
-            footer={serversFooter}
-            footerTone={footerToneOf(servers.note)}
-          >
-            {servers.servers.map((server) => (
-              <SwitchRow
-                key={server.connection}
-                label={server.name}
-                on={server.on}
-                onSwitch={(on) => servers.toggle(server.connection, on)}
-              />
-            ))}
-          </ListSection>
-        </SettingsForm>
-      </Screen>
-    </>
+    return provider === undefined ? [] : [{ ...option, provider }];
+  });
+
+  return (
+    <ModelChoiceSheet
+      presented={presented}
+      onDismiss={onDismiss}
+      models={models}
+      model={pick.model}
+      onModel={pick.pickModel}
+      efforts={pick.efforts}
+      effort={pick.effort}
+      onEffort={pick.pickEffort}
+      fast={pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle }}
+      note={pick.note}
+      mode={
+        mode === undefined
+          ? undefined
+          : {
+              title: PERMISSION_MODE_WORDS.QUESTION,
+              options: mode.modes.map((option) => ({
+                ...option,
+                symbol: PERMISSION_MODE_GLYPH[option.id],
+              })),
+              picked: mode.mode,
+              onPick: (picked) => {
+                const chosen = mode.modes.find((option) => option.id === picked);
+
+                if (chosen !== undefined) mode.choose(chosen.id);
+              },
+              footer: PERMISSION_MODE_WORDS.APPLIES,
+              note: mode.note,
+            }
+      }
+    >
+      <ListSection
+        title={MCP_SERVER_LABEL.many}
+        footer={serversFooter}
+        footerTone={footerToneOf(servers.note)}
+      >
+        {/* Note that the servers stand as the bare spinner while they are read, so an unread list never reads as an empty one. */}
+        {servers.read ? (
+          servers.servers.map((server) => (
+            <SwitchRow
+              key={server.connection}
+              label={server.name}
+              on={server.on}
+              onSwitch={(on) => servers.toggle(server.connection, on)}
+            />
+          ))
+        ) : (
+          <LoadingRow words={OPTIONS_WORDS.READING_SERVERS} />
+        )}
+      </ListSection>
+    </ModelChoiceSheet>
   );
 }
 

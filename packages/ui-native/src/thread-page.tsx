@@ -14,10 +14,12 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  Animation,
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  animation,
   defaultScrollAnchorForRole,
   disabled,
   font,
@@ -34,7 +36,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { useAccessibilitySize } from "./accessibility.js";
+import { useAccessibilitySize, useReduceMotion } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
@@ -197,7 +199,7 @@ type ThreadPageProps = {
   readonly foot?: ReactNode | undefined;
 };
 
-/** A thread's heading under its bar: its path where it heads the page, its title in 20 pt semibold, or the words it stands on quoted in the body's muted size and cut to two lines, and how it ended under it, 13 pt muted, once it is settled. */
+/** A thread's heading under its bar: its path where it heads the page, its title in the page heading's style, semibold, or the words it stands on quoted in the row title's style, muted and cut to two lines, and how it ended under it in the row line's style, muted, once it is settled. */
 function ThreadHead({
   title,
   quoted = false,
@@ -354,7 +356,7 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
 /** What a sent answer's mark is heard as: it went ahead with what was asked, or held back. */
 const STAMP_HEARD = { AHEAD: "Went ahead", HELD: "Held back" } as const;
 
-/** A sent answer's stamp under its writer's name, where its words start: its mark and its words, 13 pt. */
+/** A sent answer's stamp under its writer's name, where its words start: its mark and its words, in the row line's style. */
 function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["stamp"]> }) {
   const colors = useColors();
 
@@ -492,7 +494,7 @@ function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["
   );
 }
 
-/** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time where it leads its run, and under them its words and files. */
+/** One message, flat on the page: the writer's face or tile, name in the row line's style, semibold, and time where it leads its run, and under them its words and files. */
 function MessageView({
   message,
   head,
@@ -651,6 +653,7 @@ export function ThreadPage(props: ThreadPageProps) {
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
+  const reduceMotion = useReduceMotion();
 
   // Note that the path heading the page wraps, so its words stand uncut, while the bar's keeps to one line.
   const pathTitle = (
@@ -677,6 +680,8 @@ export function ThreadPage(props: ThreadPageProps) {
               frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
               frame({ maxWidth: Number.POSITIVE_INFINITY }),
               padding({ bottom: SPACE.PAGE + footRoom }),
+              // Note that a message landing, a reply's included, comes in on the system's default spring, as Messages' bubbles do, and the ask's card it answered steps away on the same one, since it goes as the reply lands; with Reduce Motion on they stand at once.
+              ...(reduceMotion ? [] : [animation(Animation.default, messages.length)]),
             ]}
           >
             <ThreadHead

@@ -760,7 +760,8 @@ export function inboxGroups(
  * which Addressed to never narrows; Open, every
  * thread the reader is not done with, a question not yet answered, a notice
  * not yet opened, or a thread they have not read since it changed or marked
- * unread, bar a withdrawn ask they left alone, which Addressed to then narrows; All, every item, open and
+ * unread, bar a withdrawn ask they left alone and a question they followed
+ * up on until its agent posts again, which Addressed to then narrows; All, every item, open and
  * settled; or Reminders, the items the reader set a reminder on, which the other three
  * leave out until they come back. Note that Open keeps the value To do was kept by, so a scope
  * kept before it reads as Open. Note too that no scope asks where the
@@ -1229,7 +1230,8 @@ export function isDone(item: InboxItem): boolean {
  * Whether a scope lists the item: Questions every question whose ask waits
  * on the reader (`threadNeedsReader`) but for those with a reminder, a
  * notice never; Open every
- * thread the reader is not done with (`isDone`), one still open, one
+ * thread the reader is not done with (`isDone`) but one that is its agent's
+ * turn (`inboxAgentsTurn`), which comes back with the agent's next post, one still open, one
  * answered since they last read it, or one closed without an answer that
  * they marked unread or that was written on since it closed, as a mail
  * app's inbox keeps what is unread; and All all of them, each leaving out what the
@@ -1244,7 +1246,7 @@ function showsItem(show: InboxShow, item: InboxItem, readerId: string | undefine
     case INBOX_SHOW.NEEDS_ME:
       return threadNeedsReader(item, readerId) && !hasReminder(item);
     case INBOX_SHOW.OPEN:
-      return !isDone(item) && !hasReminder(item);
+      return !isDone(item) && !inboxAgentsTurn(item) && !hasReminder(item);
     case INBOX_SHOW.ALL:
       return !hasReminder(item);
     case INBOX_SHOW.REMINDERS:

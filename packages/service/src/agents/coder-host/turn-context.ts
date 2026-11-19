@@ -28,6 +28,7 @@ import type { StoredMemory } from "@repo/database/models/memory-store";
 import type { StoredTask } from "@repo/database/models/task-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
+import { shellQuoted } from "@repo/features/shell-quote";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
 import { Schema } from "effect";
 import { openThreadsText } from "../../tasks/comment-tools.js";
@@ -57,12 +58,36 @@ const SandboxResizedSchema = Schema.Struct({ memoryGb: Schema.Number, fromGb: Sc
 
 export type SandboxResized = typeof SandboxResizedSchema.Type;
 
+/** A place an agent ran at, as its move tells it: one of the developer's Macs, by the name it had where it is known, or the cloud. */
+const MovedSideSchema = Schema.Struct({
+  onMac: Schema.Boolean,
+  name: Schema.optionalKey(Schema.String),
+});
+
+/**
+ * A move of the agent to another place since its last turn (`move.ts`),
+ * its next turn told of it once: the place it left and the place it runs at
+ * now, the checkout path its earlier tool results name where the new
+ * place's stands elsewhere, and the branch its work was copied to where the
+ * place it left was the cloud.
+ */
+const AgentMovedSchema = Schema.Struct({
+  from: MovedSideSchema,
+  to: MovedSideSchema,
+  movedFrom: Schema.optionalKey(Schema.String),
+  copiedBranch: Schema.optionalKey(Schema.String),
+});
+
+export type AgentMoved = typeof AgentMovedSchema.Type;
+
 export const TurnHandedSchema = Schema.Struct({
   task: Schema.optionalKey(Schema.String),
   /** Whether the session's last turn was spoken, which a compaction leaves standing, so the next turn says the spoken words no longer hold. */
   spoken: Schema.optionalKey(Schema.Boolean),
   /** A change of the workspace's sandbox size its sandbox was stopped for since its last turn, which its next turn's message tells it of once (`sandboxStoppedForSize`). */
   resized: Schema.optionalKey(SandboxResizedSchema),
+  /** A move of the agent to another place since its last turn, which opens the next message's session afresh (`runner-sessions.ts`) and is told in its message once (`movedWords`). */
+  moved: Schema.optionalKey(AgentMovedSchema),
   /** The workspace's experiments the session's instructions and tools were composed on as it opened, which a message arriving after they changed opens a fresh session for (`runner-sessions.ts`); none for a session opened before they were kept, which takes up the ones standing. */
   experiments: Schema.optionalKey(
     Schema.Struct({
@@ -82,16 +107,20 @@ export const TurnHandedSchema = Schema.Struct({
 
 export type TurnHanded = typeof TurnHandedSchema.Type;
 
-/** What a session opened afresh has handed: nothing, but a change of its sandbox's size the agent is still to be told of, which outlives the session it was kept for. */
+/** What a session opened afresh has handed: nothing, but a change of its sandbox's size or a move the agent is still to be told of, which outlives the session it was kept for. */
 export function handedToFreshSession(handed: TurnHanded): TurnHanded {
-  return handed.resized === undefined ? {} : { resized: handed.resized };
+  return {
+    ...(handed.resized === undefined ? undefined : { resized: handed.resized }),
+    ...(handed.moved === undefined ? undefined : { moved: handed.moved }),
+  };
 }
 
-/** What a session has handed once its history was compacted: only the last turn's kind, since a summary may have dropped the rest, the experiments it opened on, which a compaction leaves its instructions on, and a change of its sandbox's size it is still to be told of. */
+/** What a session has handed once its history was compacted: only the last turn's kind, since a summary may have dropped the rest, the experiments it opened on, which a compaction leaves its instructions on, and a change of its sandbox's size or a move it is still to be told of. */
 export function handedAfterCompaction(handed: TurnHanded): TurnHanded {
   return {
     ...(handed.spoken === true ? { spoken: true } : undefined),
     ...(handed.resized === undefined ? undefined : { resized: handed.resized }),
+    ...(handed.moved === undefined ? undefined : { moved: handed.moved }),
     ...(handed.experiments === undefined ? undefined : { experiments: handed.experiments }),
   };
 }
@@ -191,6 +220,36 @@ export function memoriesWithLead(memories: readonly StoredMemory[]): string {
   const lines = memories.map((memory) => `- ${memory.id}: ${JSON.stringify(memory.text)}`);
 
   return [TURN_MESSAGE_LEAD.MEMORIES, ...lines].join("\n");
+}
+
+/** A place a move names: the cloud, or the developer's Mac, by its name where it is known. */
+function sideWords(side: AgentMoved["from"]): string {
+  if (!side.onMac) return "the cloud";
+
+  return side.name === undefined ? "the developer's Mac" : `the developer's Mac \`${side.name}\``;
+}
+
+/**
+ * What the agent's turn is told of a move to another place since its last
+ * turn: where it runs now, that its earlier tool results name the old
+ * checkout's paths where the new one stands elsewhere, and where its work
+ * stands: copied to a branch for it to fetch where it left the cloud, or
+ * only what it pushed where it left a Mac, whose folder stays there.
+ */
+export function movedWords(moved: AgentMoved): string {
+  const paths =
+    moved.movedFrom === undefined
+      ? ""
+      : ` Your earlier tool results name paths under \`${moved.movedFrom}\`, the old checkout: read them as the same paths under your checkout now, which your instructions name, and work there alone.`;
+
+  const work =
+    moved.copiedBranch !== undefined
+      ? ` Your checkout there, what you had not committed or pushed included, was copied to the branch \`${moved.copiedBranch}\`: fetch it (\`git fetch origin ${shellQuoted(moved.copiedBranch)}\`) and bring it onto your branch (\`git merge --ff-only FETCH_HEAD\`, or a plain merge where your branch moved on) before you go on.`
+      : moved.from.onMac
+        ? " Only what you pushed from there comes along: anything you had not pushed stays in your folder on that Mac, so fetch your branch and redo what is missing."
+        : " Your checkout there could not be copied, so fetch your branch and redo what you had not pushed.";
+
+  return `You moved from ${sideWords(moved.from)} to ${sideWords(moved.to)} since your last turn, as the developer asked.${paths}${work}`;
 }
 
 /**

@@ -15,6 +15,7 @@ import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type { DescriptionMention } from "@repo/features/mention-link";
+import { choiceRequest } from "@repo/features/model-effort";
 import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -45,7 +46,7 @@ import {
   selectListedTasks,
 } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
-import { startFailureNote as agentStartFailureNote, choiceRequest } from "./agent-model.js";
+import { startFailureNote as agentStartFailureNote } from "./agent-model.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
 import type { RepositoryChooser } from "./repository-chip.js";
@@ -100,7 +101,8 @@ export interface NewTaskAgent {
   readonly prompt: string;
   readonly attachments: readonly AgentAttachment[];
   readonly choice: ModelChoice | undefined;
-  readonly disabledServers: readonly string[];
+  /** The servers its + menu switched off; none where it switched none, when the agent starts on the account's choice for new agents. */
+  readonly disabledServers?: readonly string[] | undefined;
   /** The mode the agent starts in, as the chip's Permissions row picked it; none for the member's Default permissions. */
   readonly permissionMode?: AgentPermissionMode | undefined;
   /** Talk's call into the agent, which starts it blank, handed nothing, and opens on it once it lands; none for a start on words. */
@@ -114,7 +116,8 @@ function agentRequest(handed: NewTaskAgent) {
     ...(handed.talk === undefined ? { prompt: handed.prompt } : { blank: true }),
     ...(handed.attachments.length === 0 ? undefined : { attachments: handed.attachments }),
     ...(handed.choice === undefined ? undefined : choiceRequest(handed.choice)),
-    ...(handed.disabledServers.length === 0
+    // Note that servers switched are sent even where none is left off, so the account's choice for new agents does not stand in for them.
+    ...(handed.disabledServers === undefined
       ? undefined
       : { disabledServers: handed.disabledServers }),
     ...(handed.permissionMode === undefined

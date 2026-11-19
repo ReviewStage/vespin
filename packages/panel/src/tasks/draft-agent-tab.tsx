@@ -1,12 +1,15 @@
+import { forkChoice, startingWords } from "@repo/features/agent-fork-model";
 import { AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
 import { rejectedFailure } from "@repo/features/failure-remedy";
 import type { MacOffer } from "@repo/features/models-wire";
 import { useSecond } from "@repo/ui";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useAsyncAction } from "@repo/ui/use-async-action";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { ConversationLead } from "../ai-elements/conversation.js";
+import { appStateQuery, selectNewAgentServersOff } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS } from "./agent-composer.js";
@@ -16,7 +19,6 @@ import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectAgentBanner } from "./connect-agent-banner.js";
 import { ForkChip, SuggestionChip } from "./fork-action.js";
-import { forkChoice, startingWords } from "./fork-model.js";
 import { NewTaskRunsOnChip, useStartRunsOn } from "./runs-on.js";
 import type { AgentComposerControl, ComposerNote } from "./use-agent-composer.js";
 import type { AgentDraft, AgentsControl } from "./use-agents.js";
@@ -88,6 +90,9 @@ import { WorkingLine } from "./working-time.js";
  * shows the default this tab read and its Retry names none.
  */
 
+/** No server switched off, as a draft stands before the account's settings are read. */
+const NONE_OFF: readonly string[] = [];
+
 /** A draft has nothing to stop, so its box's Stop answers nothing. */
 const NOTHING_TO_STOP = () => Promise.resolve(false);
 
@@ -133,6 +138,13 @@ export function DraftAgentTab({
   const shownNote = starting.refusal ?? draft.refused;
   // The account's default as the host holds it, which the chip names until the developer makes a choice of their own.
   const fallback = useAgentDefault().choice;
+
+  // The servers a draft its + menu never switched starts with: the account's choice for new agents.
+  const { data: newAgentServersOff = NONE_OFF } = useQuery({
+    ...appStateQuery,
+    select: selectNewAgentServersOff,
+  });
+
   // Note that the control is read through a ref, because the panel hands a
   // new one on every render and an answer lands on whichever is current.
   const latest = useRef(control);
@@ -141,6 +153,10 @@ export function DraftAgentTab({
   const { fork, suggestion } = draft;
   const listed = [...(control.agents ?? []), ...(control.archived ?? [])];
   const source = fork === undefined ? undefined : listed.find((agent) => agent.id === fork.agentId);
+
+  // A fork or a continue its + menu never switched runs on its source's servers, as the service starts it; any other draft, on the account's choice for new agents.
+  const unswitchedServers =
+    fork === undefined ? newAgentServersOff : (source?.disabledServers ?? NONE_OFF);
 
   const suggester =
     suggestion === undefined ? undefined : listed.find((agent) => agent.id === suggestion.agentId);
@@ -324,7 +340,7 @@ export function DraftAgentTab({
           usage={undefined}
           mode={mode}
           servers={{
-            disabled: draft.disabledServers,
+            disabled: draft.disabledServers ?? unswitchedServers,
             onSwitch: (next) => control.onDraftChange({ disabledServers: next }),
             onOpenSettings: control.onOpenIntegrations,
           }}

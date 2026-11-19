@@ -1,4 +1,4 @@
-// compose-sheet.tsx -- a sheet that starts work, as Mail's compose stands one: its words filling the page under what they start in, and the + with a row of capsule menus pinned above the keyboard.
+// start-page.tsx -- a page that starts work, as Messages, ChatGPT and Claude start a conversation: an empty page with what the start is about at its head, and the agent page's composer on the keyboard, the + and the capsules saying where and how the work starts in a row under its field.
 
 import {
   Divider,
@@ -17,7 +17,6 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityIdentifier,
-  accessibilityLabel,
   accessibilityRemoveTraits,
   buttonStyle,
   controlSize,
@@ -37,37 +36,33 @@ import {
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { useAnnounced, useScaledSize } from "./accessibility.js";
-import { ADD_LABEL, AddMenuItems, type ComposerMenu } from "./composer.js";
+import { COMPOSER_CALL } from "./call.js";
+import { Composer, type ComposerMenu } from "./composer.js";
 import {
   type AttachedPicture,
   AttachedPictures,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
-import { WORDS_LOOK, WordsField } from "./form-rows.js";
-import { DockRow, GlassDock, useDockRoom } from "./glass-bar.js";
+import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, PickOption } from "./glyph-label.js";
-import { dropPictures } from "./interactions.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
-import { HarnessMark } from "./marks.js";
+import { HarnessMark, RepositoryPicture } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** How far apart the capsules in the dock's row stand, as the glass buttons over Notes' keyboard stand apart. */
-const CHIP_SPACING = SPACE.TIGHT * 2;
-
 /**
- * Where a capsule menu stands: in a compose sheet's dock over the keyboard,
- * as the system's own glass button, one layer, as Notes' and Reminders'
- * controls over the keyboard stand; or on the page among the words, such as
- * the task a new one is related to, as the system's small bordered capsule,
- * since glass is for the controls over content, never the content itself.
+ * Where a capsule menu stands: in a composer's row under its field, where
+ * a start says where and how it runs, as the system's small capsule with no
+ * glass of its own, since the composer's glass is the one layer there; or
+ * on the page, such as the task a new one is related to, as the system's
+ * small bordered capsule.
  */
 export const MENU_CHIP_LOOK = {
-  DOCK: "dock",
+  COMPOSER: "composer",
   PAGE: "page",
 } as const;
 
@@ -86,10 +81,19 @@ export type ChipMenu = {
   readonly submenus?: readonly BarMenu[] | undefined;
 };
 
-/** What leads a capsule's words: the panel's glyph for what it picks, or, for a model, the mark of the harness its agent runs in, as the panel's model chip leads with it. */
+/** What leads a capsule's words: the panel's glyph for what it picks; for a model, the mark of the harness its agent runs in, as the panel's model chip leads with it; or, for a repository, its owner's picture, as the panel's repository chip leads with it. */
 type ChipLead =
-  | { readonly symbol?: Glyph | undefined; readonly harness?: undefined }
-  | { readonly harness: ModelProvider; readonly symbol?: undefined };
+  | {
+      readonly symbol?: Glyph | undefined;
+      readonly harness?: undefined;
+      readonly repository?: undefined;
+    }
+  | {
+      readonly harness: ModelProvider;
+      readonly symbol?: undefined;
+      readonly repository?: undefined;
+    }
+  | { readonly repository: string; readonly symbol?: undefined; readonly harness?: undefined };
 
 type MenuChipProps = ChipLead & {
   /** What is picked, as the capsule says it: a repository, a model and its effort, where an agent runs. */
@@ -98,18 +102,38 @@ type MenuChipProps = ChipLead & {
   readonly testId?: string | undefined;
 } & (
     | {
-        readonly look: typeof MENU_CHIP_LOOK.DOCK;
+        readonly look: typeof MENU_CHIP_LOOK.COMPOSER;
         /** What the capsule opens; none where what it says can't be changed here, such as a sub-task's repository, which its tree holds, drawn as the system draws a control it holds still. */
         readonly menu?: ChipMenu | undefined;
+        readonly onOpen?: undefined;
       }
-    | { readonly look?: typeof MENU_CHIP_LOOK.PAGE | undefined; readonly menu: ChipMenu }
+    | {
+        readonly look: typeof MENU_CHIP_LOOK.COMPOSER;
+        /** Opens what the capsule picks in, such as a sheet of the models, on a tap, in place of a menu. */
+        readonly onOpen: () => void;
+        readonly menu?: undefined;
+      }
+    | {
+        readonly look?: typeof MENU_CHIP_LOOK.PAGE | undefined;
+        readonly menu: ChipMenu;
+        readonly onOpen?: undefined;
+      }
   );
 
 /** The capsule's words, what leads them before them, in the capsule's small type. */
-function ChipLabel({ label, symbol, harness }: ChipLead & { readonly label: string }) {
+function ChipLabel({ label, symbol, harness, repository }: ChipLead & { readonly label: string }) {
   const markSize = useScaledSize(MARK_SIZE.FACE);
   const type = font({ textStyle: TYPE_ROLE.ROW_TITLE });
   const words = <Text modifiers={[type, lineLimit(1)]}>{label}</Text>;
+
+  if (repository !== undefined) {
+    return (
+      <HStack spacing={SPACE.TIGHT + 2}>
+        <RepositoryPicture repository={repository} size={markSize} />
+        {words}
+      </HStack>
+    );
+  }
 
   if (harness !== undefined) {
     return (
@@ -130,21 +154,24 @@ function ChipLabel({ label, symbol, harness }: ChipLead & { readonly label: stri
   );
 }
 
-/** The system's button style a capsule stands in, by where it stands: its own glass over the keyboard, a bordered capsule on the page. */
+/** The system's button style a capsule stands in, by where it stands: a plain capsule on the composer's glass, a bordered capsule on the page. */
 function chipStyle(look: MenuChipLook): readonly ModifierConfig[] {
-  return look === MENU_CHIP_LOOK.DOCK
-    ? [buttonStyle("glass"), SwiftModifiers.buttonBorderShape("capsule"), controlSize("large")]
+  return look === MENU_CHIP_LOOK.COMPOSER
+    ? [buttonStyle("borderless"), controlSize("small")]
     : [buttonStyle("bordered"), SwiftModifiers.buttonBorderShape("capsule"), controlSize("small")];
 }
 
 /**
  * A choice among many as one of the system's capsules, opening its menu on
  * a press, as Mail's and Notes' compose stand one: it says what is picked,
- * after the panel's glyph for it (or a model's harness mark), with the
+ * after the panel's glyph for it (or a model's harness mark, or a
+ * repository's owner's picture), with the
  * system's chevron after it, and its menu checks the one on in each group,
- * under the group's heading, then its acts and the menus within it. In the
- * dock it is the system's glass button, one layer with no bar around it; on
- * the page, the small bordered capsule. Drawn in the ink, never the accent.
+ * under the group's heading, then its acts and the menus within it. In a
+ * composer's row it stands plain on the composer's glass; on the page, as
+ * the small bordered capsule. One that picks in a sheet of its own, such as
+ * the models', opens it on a tap (`onOpen`) rather than a menu. Drawn in
+ * the ink, never the accent.
  */
 export function MenuChip(props: MenuChipProps) {
   const colors = useColors();
@@ -152,6 +179,24 @@ export function MenuChip(props: MenuChipProps) {
   const look = props.look ?? MENU_CHIP_LOOK.PAGE;
   const content = <ChipLabel label={label} {...leadOf(props)} />;
   const found = testId === undefined ? [] : [accessibilityIdentifier(testId)];
+
+  // Note that a capsule that opens a sheet of its own stands as the same capsule, its up-and-down chevron after its words as a menu's stands.
+  if (props.onOpen !== undefined) {
+    return (
+      <SwiftUIButton
+        onPress={props.onOpen}
+        modifiers={[...chipStyle(look), tint(colors.TEXT), ...found]}
+      >
+        <HStack spacing={SPACE.TIGHT}>
+          {content}
+          <Image
+            {...glyphImage(GLYPH.MENU_OPENS)}
+            modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE })]}
+          />
+        </HStack>
+      </SwiftUIButton>
+    );
+  }
 
   // Note that a capsule that can't be changed here stands as the same glass button held still, so the row's capsules keep one height and one look, and is heard as words rather than a button, as the field it reads is.
   if (menu === undefined) {
@@ -239,34 +284,33 @@ function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
 
 /** What leads a capsule's words, as its props name it. */
 function leadOf(props: ChipLead): ChipLead {
+  if (props.repository !== undefined) return { repository: props.repository };
+
   return props.harness === undefined ? { symbol: props.symbol } : { harness: props.harness };
 }
 
-/** The words a compose sheet sends, as its holder keeps them. */
-export type ComposeWords = {
-  /** What the page says before anything is typed: "Describe the task". */
+/** The words a start sends, as its holder keeps them. */
+export type StartWords = {
+  /** What the field says before anything is typed: "Describe the task". */
   readonly placeholder: string;
   readonly words: string;
   readonly onWords: (words: string) => void;
-  /** The name a flow finds the field by. */
-  readonly testId: string;
   /** Takes words pasted long enough to come as a file, answering whether it did; they paste as words where none is given. */
   readonly onLongPaste?: ((words: string) => boolean) | undefined;
 };
 
-/** What the sheet's + adds: a menu of what it offers, or its one act, such as a picture, and the name a flow finds it by. */
-export type ComposeAdd = {
+/** What the composer's + adds: a menu of what it offers, or its one act, such as a picture. */
+export type StartAdd = {
   readonly menu?: ComposerMenu | undefined;
   readonly onAdd?: (() => void) | undefined;
-  readonly testId: string;
 };
 
-type ComposeSheetProps = {
-  /** The line over the words, such as who suggested them; none for a draft of the member's own. */
+type StartPageProps = {
+  /** The line at the page's head, such as who suggested the words; none for a draft of the member's own. */
   readonly title?: string | undefined;
-  /** What stands over the words, such as the task the new one is related to, as capsules. */
+  /** What stands at the page's head, such as the task the new one is related to, as capsules. */
   readonly head?: ReactNode;
-  readonly words: ComposeWords;
+  readonly words: StartWords;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills?:
     | {
@@ -277,23 +321,29 @@ type ComposeSheetProps = {
     | undefined;
   readonly pictures: readonly AttachedPicture[];
   readonly onDetach: (id: string) => void;
-  /** Called with the file addresses of pictures dropped on the sheet, on an iPad; it takes no drop where none is given. */
+  /** Called with the file addresses of pictures dropped on the page, on an iPad; it takes no drop where none is given. */
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
-  /** What a start, the picker, or a read said, each its own line under the words. */
+  /** What a start, the picker, or a read said, each its own line over the field. */
   readonly notes: readonly string[];
-  readonly add: ComposeAdd;
-  /** The capsules in the bar's row after the +, such as Repository, Model · Effort, and Runs on. */
+  readonly add: StartAdd;
+  /** The capsules after the + under the field, such as Repository, Model · Effort, and Machine. */
   readonly chips: ReactNode;
+  /** Whether Start may be pressed now: there is something to start on, and no start is out. */
+  readonly ready: boolean;
+  readonly onStart: () => void;
+  /** Talk in Start's place while the field holds nothing, as an agent's composer offers it; none where the page offers no Talk. */
+  readonly onTalk?: (() => void) | undefined;
+  /** The names a flow finds the field and the + by. */
+  readonly testIds: { readonly field: string; readonly add: string };
 };
 
 /**
- * What a start, the picker, or a read said, in the muted line under the
- * words, as the panel's composer says it. Note that VoiceOver is told it at
+ * What a start, the picker, or a read said, in the muted line over the
+ * field, as the panel's composer says it. Note that VoiceOver is told it at
  * once, since it stands because something did not go, such as a refused
- * start, and the reader pressed Start in the sheet's bar, far from where it
- * appears.
+ * start.
  */
-function ComposeNote({ words }: { readonly words: string }) {
+function StartNote({ words }: { readonly words: string }) {
   const colors = useColors();
   useAnnounced(words, true);
 
@@ -304,11 +354,9 @@ function ComposeNote({ words }: { readonly words: string }) {
   );
 }
 
-/** The sheet's page: the line over the words, what heads them, the words, the skills a `/` offers, the pictures attached, and the notes, clear of the bar at its foot, taking a drop of pictures. */
-function ComposePage(props: ComposeSheetProps) {
+/** The page over the composer: empty, as a new conversation's is, but for the line naming who suggested the words and what the start is about, such as the task it is related to; a tap on it lowers the keyboard. */
+function StartHead({ title, head }: Pick<StartPageProps, "title" | "head">) {
   const colors = useColors();
-  const room = useDockRoom();
-  const { title, head, words, skills, pictures, onDetach, notes, onDropPictures } = props;
   const muted = [font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)];
 
   return (
@@ -319,29 +367,11 @@ function ComposePage(props: ComposeSheetProps) {
           spacing={SPACE.ROW}
           modifiers={[
             frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-            padding({ horizontal: SPACE.EDGE, top: SPACE.ROW, bottom: room + SPACE.ROW }),
-            // Note that the page takes a drop of pictures as the bar does, so one dropped on the words or the pictures attached is attached too.
-            ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
+            padding({ horizontal: SPACE.EDGE, top: SPACE.ROW }),
           ]}
         >
           {title === undefined ? null : <Text modifiers={muted}>{title}</Text>}
           {head}
-          <WordsField
-            placeholder={words.placeholder}
-            words={words.words}
-            onWords={words.onWords}
-            onLongPaste={words.onLongPaste}
-            autoFocus
-            testId={words.testId}
-            look={WORDS_LOOK.PAGE}
-          />
-          {skills === undefined ? null : (
-            <SkillSuggestions skills={skills.skills} empty={skills.empty} onPick={skills.onPick} />
-          )}
-          <AttachedPictures pictures={pictures} onDetach={onDetach} />
-          {notes.map((note) => (
-            <ComposeNote key={note} words={note} />
-          ))}
         </VStack>
       </ScrollView>
     </Host>
@@ -349,74 +379,54 @@ function ComposePage(props: ComposeSheetProps) {
 }
 
 /**
- * The sheet's +, as the system's round glass button over the keyboard, as
- * Messages' + stands: one act, such as attaching a picture, or the system's
- * menu of what it adds (Photos, then a relation to another task), its acts,
- * the menus within it, then its switches.
+ * A page that starts work, as Messages, ChatGPT and Claude start a new
+ * conversation: an empty page, what the start is about at its head, and the
+ * agent page's own composer docked on the keyboard, the same glass with
+ * Send, or Talk while it holds nothing, at its end. Under its field, inside
+ * the same glass, stand the + and the capsules saying where and how the work
+ * starts (`MenuChip` in its composer look), so the keyboard, or the bar iOS
+ * stands over it, never covers them. The skills a `/` offers, the pictures
+ * attached, and what a start said stand over the field, as they do on an
+ * agent's page. The page's own bar holds its close.
  */
-function ComposeAddPress({ add }: { readonly add: ComposeAdd }) {
-  const colors = useColors();
+export function StartPage(props: StartPageProps) {
+  const { words, skills, pictures, onDetach, notes, add, chips, ready, onStart, onTalk } = props;
 
-  const style = [
-    buttonStyle("glass"),
-    SwiftModifiers.buttonBorderShape("circle"),
-    controlSize("large"),
-    tint(colors.TEXT),
-    accessibilityLabel(ADD_LABEL),
-    accessibilityIdentifier(add.testId),
-  ];
-
-  const glyph = <Image {...glyphImage(GLYPH.ADD)} />;
-  const { menu } = add;
-
-  if (menu === undefined) {
-    return add.onAdd === undefined ? null : (
-      <SwiftUIButton onPress={add.onAdd} modifiers={style}>
-        {glyph}
-      </SwiftUIButton>
+  const head =
+    skills === undefined && pictures.length === 0 && notes.length === 0 ? undefined : (
+      <>
+        {skills === undefined ? null : (
+          <SkillSuggestions skills={skills.skills} empty={skills.empty} onPick={skills.onPick} />
+        )}
+        <AttachedPictures pictures={pictures} onDetach={onDetach} />
+        {notes.map((note) => (
+          <StartNote key={note} words={note} />
+        ))}
+      </>
     );
-  }
-
-  return (
-    <Menu label={glyph} modifiers={[...style, menuIndicator("hidden")]}>
-      <AddMenuItems menu={menu} />
-    </Menu>
-  );
-}
-
-/**
- * A sheet that starts work, as Mail's and Messages' compose stand: the
- * words fill the page on the sheet's own ground, with no card around them,
- * under the line naming who suggested them and what heads them, such as
- * the task the new one is related to; the skills a `/` offers, the pictures
- * attached and what a start said follow them. Pinned above the keyboard,
- * with no bar around them, stand the + and, after it, a row of capsule
- * menus (`MenuChip` in its dock look) saying where and how the work starts,
- * each the system's own glass button, as Notes' and Reminders' controls
- * over the keyboard stand; the row scrolls sideways where it outruns the
- * window. The sheet's own bar holds Cancel and Start.
- */
-export function ComposeSheet(props: ComposeSheetProps) {
-  const { add, chips, onDropPictures } = props;
 
   return (
     <GlassDock
       bar={
-        <DockRow modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}>
-          <ComposeAddPress add={add} />
-          <ScrollView axes="horizontal" showsIndicators={false}>
-            {/* Note that the row stands in a little from the scroller's top and foot, so each capsule's glass draws whole rather than cut by the scroller's edge. */}
-            <HStack
-              spacing={CHIP_SPACING}
-              modifiers={[padding({ vertical: SPACE.TIGHT, trailing: SPACE.ROW })]}
-            >
-              {chips}
-            </HStack>
-          </ScrollView>
-        </DockRow>
+        <Composer
+          placeholder={words.placeholder}
+          words={words.words}
+          onWords={words.onWords}
+          onLongPaste={words.onLongPaste}
+          sendable={ready}
+          onSend={ready ? onStart : undefined}
+          addMenu={add.menu}
+          onAdd={add.onAdd}
+          call={onTalk === undefined ? undefined : { kind: COMPOSER_CALL.TALK, onTalk }}
+          head={head}
+          tools={chips}
+          autoFocus
+          onDropPictures={props.onDropPictures}
+          testIds={props.testIds}
+        />
       }
     >
-      <ComposePage {...props} />
+      <StartHead title={props.title} head={props.head} />
     </GlassDock>
   );
 }

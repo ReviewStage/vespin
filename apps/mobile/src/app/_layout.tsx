@@ -29,6 +29,7 @@ import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
 import { useKeeping } from "../keeping.js";
+import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
@@ -46,6 +47,9 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 // The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
 holdSplash();
+
+// Note that the root layout evaluates after every module it imports, so this is when the bundle's eager modules have run.
+noteLaunchPhase(LAUNCH_PHASE.EVALUATED);
 
 /**
  * The navigators' theme: react-navigation's own for the color scheme, its
@@ -75,10 +79,10 @@ const SHEET_ROUTE = {
   SETTINGS: "settings",
   START_TASK: "start-task",
   START_AGENT: "start-agent",
-  AGENT_MODEL: "agent-model",
   AGENT_PORTS: "agent-ports",
   TASK_RELATION: "task-relation",
   MOVE_TASK: "move-task",
+  EDIT_DESCRIPTION: "edit-description",
   TASK_FOLLOWING: "task-following",
   ADD_FOLLOWER: "add-follower",
   NEW_WORKSPACE: "new-workspace",
@@ -91,7 +95,14 @@ const SHEET_ROUTE = {
 const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
-const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
+const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set([
+  "modal",
+  "formSheet",
+  "fullScreenModal",
+]);
+
+/** The pages that start work, which open over the whole window as a new conversation does, rather than as a sheet. */
+const START_PAGE: ReadonlySet<string> = new Set([SHEET_ROUTE.START_TASK, SHEET_ROUTE.START_AGENT]);
 
 /** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useFocusShown` hears the sheet's own focus. */
 function SheetNoticeLayer({ children }: { readonly children: ReactNode }) {
@@ -126,7 +137,10 @@ function screenLayout({
     children
   );
 
-  const lifted = LIFTED_SHEETS.has(route.name) && options.sheetAllowedDetents === undefined;
+  const lifted =
+    LIFTED_SHEETS.has(route.name) &&
+    !START_PAGE.has(route.name) &&
+    options.sheetAllowedDetents === undefined;
 
   return lifted ? <ElevatedGround>{placed}</ElevatedGround> : placed;
 }
@@ -224,18 +238,14 @@ function GuardedScreens() {
             name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
+          {/* Note that New task and New agent open over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, their composer docked on the keyboard. */}
           <Stack.Screen
             name={SHEET_ROUTE.START_TASK}
-            options={{ presentation: sheetPresentation, title: "New task" }}
+            options={{ presentation: "fullScreenModal", title: "New task" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.START_AGENT}
-            options={{ presentation: sheetPresentation, title: "New agent" }}
-          />
-          {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
-          <Stack.Screen
-            name={SHEET_ROUTE.AGENT_MODEL}
-            options={{ presentation: sheetPresentation, title: "Options" }}
+            options={{ presentation: "fullScreenModal", title: "New agent" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.AGENT_PORTS}
@@ -248,6 +258,11 @@ function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.MOVE_TASK}
             options={{ ...shortSheet, title: "Move to workspace" }}
+          />
+          {/* Note that Edit description opens whole and can't be swiped away while it holds words not saved (`useKeptWords`), as GitHub's issue editor stands. */}
+          <Stack.Screen
+            name={SHEET_ROUTE.EDIT_DESCRIPTION}
+            options={{ presentation: sheetPresentation, title: "Edit description" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.TASK_FOLLOWING}
