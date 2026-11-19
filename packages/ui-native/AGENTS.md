@@ -70,8 +70,13 @@ builds a control of its own.
   field at a SwiftUI column's foot in the system's own glass, where no React
   Native bar can stand, such as a split view's detail. Its round button is
   Send, or, with nothing typed, Stop while an agent works; its + is one act
-  or a native menu (`ComposerMenu`: an agent's Photos, Options, permission
-  mode, and Fast); and its head, inside the same glass, holds an agent's
+  or a native menu (`ComposerMenu`: an agent's Photos and MCP servers, as
+  the desktop's + holds them); where it holds capsules it stands as the
+  desktop composer does, its field on top, two lines tall once a word is
+  typed, and under it one row of the + and the capsules saying where the
+  message runs, then at its end the model chip (`trailing`, whose sheet
+  holds the model, effort, Fast and the permission mode, each once) and
+  Send; and its head, inside the same glass, holds an agent's
   `DeniesWaiting` (that a message sent now denies the call waiting, a press
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
@@ -238,8 +243,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
   where it stands and its model muted under the name ("Working · Opus 5.5"):
-  the stack's own title over UIKit's own subtitle (`StackSubtitle`), with
-  Options in its ⋯. A page opened from a split view's detail, such as a
+  the stack's own title over UIKit's own subtitle (`StackSubtitle`), a
+  press on it opening the model sheet. A page opened from a split view's detail, such as a
   task's agent, its pull request, or a thread's task, is pushed on the
   tab's own stack over the whole window, as a compact window pushes it,
   never inside the detail's column.
