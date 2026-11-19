@@ -62,11 +62,12 @@ const UNCLEAR_LINE =
  * What a Manager is told in place of its reply's, its threads', and an
  * unclear request's lines: its page is a chat, whose every message from it
  * is a `send_to_user` call, so its plain text and its other calls are never
- * shown; and, where it posts threads, that a thread is kept for the asks a
- * chat cannot hold, since every post is a notification.
+ * shown, and it writes there as a coworker on Slack, in several short
+ * messages; and, where it posts threads, that a thread is kept for the asks
+ * a chat cannot hold, since every post is a notification.
  */
 function chatLine(posts: boolean): string {
-  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there.`;
+  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack: several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
 
   return posts
     ? `${chat} Post a thread with \`${INBOX_TOOLS.POST.name}\` only for a decision with options or a to-do, since every post reaches people as a notification.`
