@@ -45,7 +45,7 @@ import { openInSafari } from "../open-link.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
 import { DISCARD_CHANGES_WORDS, useKeptWords } from "../use-kept-words.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** What the sheet says, in the panel's words where it has them. */
 const WORDS = {
@@ -269,6 +269,8 @@ function DescriptionEditor({
       {
         // Note that a conflict is a save that did not go too, settled in place by the developer's choice rather than in the notice.
         refused: (answer) => refusalOf(live.current, answer, readerId),
+        // Note that a save is the description's newest write, so a refused restore's or Undo's Try again sent before it sends nothing over it.
+        subject: { kind: WRITE_SUBJECT.TASK_DESCRIPTION, id: task.id },
         went: BUZZ.SUCCESS,
         inPlace: (words, said) => {
           refusal = words;
