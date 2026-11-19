@@ -3,6 +3,7 @@ import {
   ARCHIVE_NOT_READY,
   CLEAR_FAILED,
   DELETE_FAILED,
+  MOVE_FAILED,
   STOP_FAILED,
   STOP_NOTHING_YET,
 } from "@repo/features/agent-refusal-words";
@@ -504,6 +505,8 @@ export interface AgentsControl {
   onUnsend: MessageUnsender;
   /** Starts one agent's harness on a fresh session in the same agent (`/clear`), answering whether the service did; a refusal is said in a toast. */
   onClear: (agentId: string) => Promise<boolean>;
+  /** Moves one agent to another place in the same agent (`coder-host/move.ts`), answering whether the service did; a refusal is said in a toast. */
+  onMove: (agentId: string, runsOn: AgentRunsOnRequest) => Promise<boolean>;
   /** Sends one agent a message under the key the composer made. */
   onMessage: MessageSender;
   /**
@@ -908,6 +911,7 @@ export function useAgents(input: {
   const { mutateAsync: sendRewind } = useMutation(actMutation(ACT_KIND.AGENTS_REWIND));
   const { mutate: sendUnsend } = useMutation(actMutation(ACT_KIND.AGENTS_UNSEND));
   const { mutateAsync: sendClear } = useMutation(actMutation(ACT_KIND.AGENTS_CLEAR));
+  const { mutateAsync: sendMove } = useMutation(actMutation(ACT_KIND.AGENTS_MOVE));
 
   const { mutateAsync: sendMessage } = useMutation(
     sendMutation(ACT_KIND.AGENTS_MESSAGE, () => SENTRY_SEND_SPAN.AGENT_SEND),
@@ -1773,6 +1777,19 @@ export function useAgents(input: {
     return false;
   };
 
+  const onMove = async (agentId: string, runsOn: AgentRunsOnRequest): Promise<boolean> => {
+    const answer = await sendMove({ agentId, runsOn }).catch(agentUnreached);
+
+    if (!("failure" in answer)) return true;
+    failed(MOVE_FAILED, {
+      surface: FAILURE_SURFACE.AGENT_MOVE,
+      cause: answer,
+      about: { agentId },
+    });
+
+    return false;
+  };
+
   // Note that a message that opens the agent's sandbox anew while its image is prepared is
   // taken at once, its relaunch waiting on the image in the service, so it is asked once.
   // A send that never reached the host fails, so the box takes its words back.
@@ -2078,6 +2095,7 @@ export function useAgents(input: {
     onRewind,
     onUnsend,
     onClear,
+    onMove,
     onMessage,
     onRetry,
     onChoose,

@@ -63,6 +63,7 @@ import {
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
+import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
@@ -156,6 +157,7 @@ import {
   MESSAGE_LINE_INSET,
   MessageHead,
   MessageLine,
+  MovedLine,
   NewSessionLine,
   OneLine,
   STATUS_TONE,
@@ -184,6 +186,7 @@ import {
   type SuggestedBy,
   type WireValue,
 } from "@repo/wire";
+import type { AgentMovedMark } from "@repo/wire/ui-messages";
 import { useQuery } from "@tanstack/react-query";
 import { WebhookIcon, ZapIcon } from "lucide-react";
 import {
@@ -232,6 +235,7 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
+import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
@@ -1311,6 +1315,21 @@ function ToolPartView({
   );
 }
 
+/** Where the agent moved, naming the Mac it moved to as the reader's machines call it: This Mac where it is the one the window runs on, else the name it had as the agent moved, else "a Mac". */
+function AgentMovedLine({ mark }: { mark: AgentMovedMark }): React.JSX.Element {
+  const thisMac = useThisMac();
+  const { deviceId, name } = mark.to;
+
+  const to =
+    deviceId === undefined
+      ? undefined
+      : isThisMac({ deviceId, name: name ?? "" }, thisMac)
+        ? THIS_MAC
+        : (name ?? "a Mac");
+
+  return <MovedLine to={to} />;
+}
+
 /** One part of the agent's turn, drawn by its kind. */
 function AgentPartView({
   part,
@@ -1333,6 +1352,8 @@ function AgentPartView({
       return <CompactedLine notice={part.notice} />;
     case AGENT_PART.SESSION_CLEARED:
       return <NewSessionLine />;
+    case AGENT_PART.AGENT_MOVED:
+      return <AgentMovedLine mark={part.mark} />;
     case AGENT_PART.GOAL:
       return <GoalNoticeView notice={part.notice} />;
     case AGENT_PART.TEXT:

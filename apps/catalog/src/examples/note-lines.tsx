@@ -3,6 +3,7 @@ import {
   CompactedLine,
   INLINE_REF_LOOK,
   InlineRef,
+  MovedLine,
   NewSessionLine,
   NOTE_LINE_LOOK,
   NoteLine,
@@ -18,7 +19,7 @@ import { CatalogSection } from "../section";
  * transcript's quiet line, selectable, and its trail led by a glyph and
  * naming the agents that continued it, wrapping in a narrow column; and
  * the trails a coding agent's session leaves: compacted, with and without
- * the tokens it held, and started afresh.
+ * the tokens it held, started afresh, and moved to a Mac or the cloud.
  */
 
 /** Nothing happens on a press: the catalog opens nowhere. */
@@ -78,11 +79,16 @@ function NoteLines(): React.JSX.Element {
           </NoteLine>
         </div>
       </CatalogSection>
-      <CatalogSection id="note-line-session" title="A session compacted, and started afresh">
+      <CatalogSection
+        id="note-line-session"
+        title="A session compacted, started afresh, and moved between machines"
+      >
         <div className="catalog-narrow">
           <CompactedLine notice={{ tokensBefore: 148_000 }} />
           <CompactedLine notice={{ tokensBefore: null }} />
           <NewSessionLine />
+          <MovedLine to="This Mac" />
+          <MovedLine to={undefined} />
         </div>
       </CatalogSection>
     </>

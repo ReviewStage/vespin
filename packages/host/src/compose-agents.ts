@@ -248,6 +248,7 @@ export type AgentClient = Pick<
   | "stop"
   | "rewind"
   | "clear"
+  | "move"
   | "warm"
   | "runAction"
   | "stopRunAction"
@@ -1256,6 +1257,7 @@ function composed(
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
     AGENTS_REWIND: declaredWrite(dependencies.pool, rewound),
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
+    AGENTS_MOVE: ({ agentId, runsOn }) => asked(client.move(agentId, runsOn)),
     AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
     AGENTS_WARM: ({ agentId, chat, holder }) =>
       asked(

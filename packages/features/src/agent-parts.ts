@@ -21,6 +21,9 @@ import {
   type WireValue,
 } from "@repo/wire";
 import {
+  AGENT_MOVED_PART,
+  type AgentMovedMark,
+  AgentMovedMarkSchema,
   COMPACTED_PART,
   CONNECTION_LOST_PART,
   type CompactedNotice,
@@ -78,6 +81,8 @@ export const AGENT_PART = {
   COMPACTED: COMPACTED_PART,
   /** Where the agent's harness was started on a fresh session (`/clear`). */
   SESSION_CLEARED: SESSION_CLEARED_PART,
+  /** Where the agent moved between the cloud and one of its starter's Macs in the same agent. */
+  AGENT_MOVED: AGENT_MOVED_PART,
   /** Where the agent's goal moved: set, judged, paused, resumed, or ended. */
   GOAL: GOAL_PART,
   TEXT: "text",
@@ -130,6 +135,7 @@ export type AgentPart =
   | { readonly kind: typeof AGENT_PART.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
   | { readonly kind: typeof AGENT_PART.COMPACTED; readonly notice: CompactedNotice }
   | { readonly kind: typeof AGENT_PART.SESSION_CLEARED }
+  | { readonly kind: typeof AGENT_PART.AGENT_MOVED; readonly mark: AgentMovedMark }
   | { readonly kind: typeof AGENT_PART.GOAL; readonly notice: GoalNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
@@ -200,6 +206,14 @@ export function agentPart(part: WireValue): AgentPart {
   }
 
   if (part.type === AGENT_PART.SESSION_CLEARED) return { kind: AGENT_PART.SESSION_CLEARED };
+
+  if (part.type === AGENT_PART.AGENT_MOVED) {
+    const mark = Schema.decodeUnknownOption(AgentMovedMarkSchema)(part.data);
+
+    return Option.isSome(mark)
+      ? { kind: AGENT_PART.AGENT_MOVED, mark: mark.value }
+      : { kind: AGENT_PART.OTHER };
+  }
 
   if (part.type === AGENT_PART.GOAL) {
     const notice = Schema.decodeUnknownOption(GoalNoticeSchema)(part.data);
@@ -646,6 +660,7 @@ const AGENT_READING: RowReading<AgentPart> = {
       part.kind === AGENT_PART.CONNECTION_LOST ||
       part.kind === AGENT_PART.COMPACTED ||
       part.kind === AGENT_PART.SESSION_CLEARED ||
+      part.kind === AGENT_PART.AGENT_MOVED ||
       part.kind === AGENT_PART.GOAL
     ) {
       return ROW_PART.NOTICE;
