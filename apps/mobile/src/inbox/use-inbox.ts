@@ -9,7 +9,11 @@
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
 
-import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentCallFailure,
+  INBOX_SCOPE_KIND,
+} from "@repo/features/agent-view";
 import { sizeLabel } from "@repo/features/attachment-model";
 import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
 import {
@@ -523,10 +527,21 @@ function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
-/** How one Got it a read mark sent answered: taken, passed over as settled first by someone else, which is what the mark asked, or not taken. */
-const NOD_WENT = { TAKEN: "taken", SETTLED: "settled", REFUSED: "refused" } as const;
+/** How one Got it a read mark sent was answered: taken; passed over as settled first by someone else, which is what the mark asked; or left open because the agent changed the thread first. */
+const NOD_WENT = { TAKEN: "taken", SETTLED: "settled", CHANGED: "changed" } as const;
 
-type NodWent = (typeof NOD_WENT)[keyof typeof NOD_WENT];
+/** A Got it's answer, or why none came: the host's failure, or no answer at all. */
+type NodWent = (typeof NOD_WENT)[keyof typeof NOD_WENT] | NodUnanswered;
+
+/** Why a Got it came back with no answer the service gave. */
+interface NodUnanswered {
+  readonly failure: AgentCallFailure;
+}
+
+/** Whether a Got it came back with no answer, so its Try again may send it again. */
+function unanswered(went: NodWent | undefined): went is NodUnanswered {
+  return Predicate.isObject(went);
+}
 
 /**
  * The Inbox's own acts, as the panel's sends them: a thread marked read or
@@ -573,13 +588,15 @@ export function useInboxActs(): {
       );
 
       if (keyed.length === 0) return;
-      let went: readonly NodWent[] = [];
-      const taken = () => keyed.filter((_, at) => went[at] === NOD_WENT.TAKEN);
-      const refusedCount = () => went.filter((each) => each === NOD_WENT.REFUSED).length;
+      // Note that Try again sends again only the nods no answer reached, under the same keys, so none goes twice; one the agent changed first was answered and never takes.
+      let pending = keyed;
+      let taken: readonly SettledThread[] = [];
+      let changed = 0;
+      let failure: AgentCallFailure | undefined;
       write(
         () =>
           Promise.all(
-            keyed.map(({ item, key }) =>
+            pending.map(({ item, key }) =>
               Promise.resolve(
                 acts[ACT_KIND.AGENTS_INBOX_ANSWER]({
                   itemId: item.id,
@@ -590,36 +607,41 @@ export function useInboxActs(): {
               ).then(
                 (answer): NodWent =>
                   "failure" in answer
-                    ? NOD_WENT.REFUSED
+                    ? { failure: answer.failure }
                     : answer.taken
                       ? NOD_WENT.TAKEN
                       : answer.item.status === INBOX_STATUS.OPEN
-                        ? NOD_WENT.REFUSED
+                        ? NOD_WENT.CHANGED
                         : NOD_WENT.SETTLED,
-                (): NodWent => NOD_WENT.REFUSED,
+                (): NodWent => ({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
               ),
             ),
           ).then((answers) => {
-            went = answers;
+            taken = [...taken, ...pending.filter((_, at) => answers[at] === NOD_WENT.TAKEN)];
+            changed += answers.filter((answer) => answer === NOD_WENT.CHANGED).length;
+            failure = answers.find(unanswered)?.failure;
+            pending = pending.filter((_, at) => unanswered(answers[at]));
 
             return answers;
           }),
         {
-          // Note that a mark none of whose nods went says so; one where some went says how many in the notice that offers their Undo.
-          refused: () =>
-            taken().length > 0 || refusedCount() === 0
-              ? undefined
-              : keyed.length === 1
-                ? NOT_ACKNOWLEDGED
-                : acknowledgedNote(0, refusedCount()),
-          done: () => {
-            const nodded = taken();
+          // Note that a nod no answer reached says why and offers Try again, the Undo coming once they go, since the one notice draws Try again or Undo, never both; one the agent changed first says so, in the Undo's notice where others went.
+          refused: () => {
+            if (pending.length === 0 && (changed === 0 || taken.length > 0)) return undefined;
 
-            if (nodded.length === 0) return;
+            if (keyed.length === 1) {
+              return failure === undefined ? NOT_ACKNOWLEDGED : refusedWords(failure);
+            }
+
+            return acknowledgedNote(taken.length, pending.length + changed);
+          },
+          retry: () => pending.length > 0,
+          done: () => {
+            if (taken.length === 0) return;
             settled(
-              nodded,
+              taken,
               SETTLE.ACKNOWLEDGE,
-              refusedCount() === 0 ? undefined : acknowledgedNote(nodded.length, refusedCount()),
+              changed === 0 ? undefined : acknowledgedNote(taken.length, changed),
             );
           },
         },
