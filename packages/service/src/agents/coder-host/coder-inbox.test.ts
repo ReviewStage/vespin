@@ -935,14 +935,19 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal((yield* post(agent, drawing, sandbox)).status, ACTION_RESULT_STATUS.ACCEPTED);
         const [item] = yield* agentInboxItems(agent);
         const [message] = item?.thread ?? [];
-        const file = message?.files?.[0];
+        const [, address] = /!\[[^\]]*\]\(<?([^\s)>]+)/u.exec(message?.text ?? "") ?? [];
+        const named = inboxAttachmentOf(address ?? "");
 
-        assert.match(message?.text ?? "", /\/agent\/[0-9a-f-]{36}\/inbox\//u);
+        assert.ok(address?.includes(`/agent/${agent.agentId}/inbox/`), address ?? "no picture");
+        assert.deepEqual(named, {
+          itemId: item?.id,
+          attachmentId: message?.files?.[0]?.attachmentId,
+        });
 
         const kept = yield* readInboxAttachment(
           agent.userId,
-          item?.id ?? "",
-          file?.attachmentId ?? "",
+          named?.itemId ?? "",
+          named?.attachmentId ?? "",
         );
 
         assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
