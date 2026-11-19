@@ -135,9 +135,9 @@ export const slackAgentThread = pgTable(
     /** The agent's latest turn whose outcome was posted in the thread; null before the first. */
     postedTurnId: text("posted_turn_id"),
     createdAt: timestamptz("created_at").notNull(),
-    /** Where the thread came from: a member's message that started the agent, or its run's result DM. */
+    /** Where the thread came from: a member's message that started the agent, its run's result DM, or a message the agent sent there itself. */
     origin: text("origin").$type<SlackThreadOrigin>().notNull().default(SLACK_THREAD_ORIGIN.START),
-    /** When the thread last became its agent's current one, kept for it or written in by a member; a settled turn is posted in the agent's latest. */
+    /** When the thread last became its agent's current one, kept for it or written in by a member; a settled turn is posted in the agent's latest. The epoch for a thread the agent posted to that no member has written in yet, which is never current. */
     activeAt: timestamptz("active_at").notNull().defaultNow(),
     /** The timestamp of the member's message that started the agent, which shows where its work ended (merged, asleep); null for a run's result DM, and for a thread kept before it was recorded. */
     startTs: text("start_ts"),

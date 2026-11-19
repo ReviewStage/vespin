@@ -70,7 +70,6 @@ import {
 import { logStoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
 import { pushThreadSettled } from "../push/inbox-pushes.js";
-import { settleThreadDms } from "../slack/thread-dms.js";
 import {
   acknowledgeInboxItem,
   answerInboxAsk,
@@ -129,12 +128,6 @@ const retitled = (seams: InboxTitleSeams, item: InboxItem, text: string) =>
     if (Option.isNone(title)) return;
     yield* retitleInboxThread(item.id, item.title, title.value);
   });
-
-/** What a press in a Slack DM says in that DM once its answer is taken: the message whose ask it answered, and the line naming the option chosen. */
-interface SlackChosen {
-  readonly messageId: string;
-  readonly line: string;
-}
 
 /** Whether a hand-off was refused because the agent's session has ended for good, so no message will ever reach it. */
 function retiredRefusal(refusal: HostedRefusal): boolean {
@@ -228,7 +221,6 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
     readonly attachments: readonly AgentAttachment[];
   },
   counted: Effect.Effect<void, never, DatabaseServices>,
-  chosen?: SlackChosen,
 ) {
   const { text, clientKey, attachments } = message;
 
@@ -257,7 +249,6 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
   // Counted only once the hand-off stands, since a failed one withdraws the answer above.
   yield* counted;
-  yield* afterResponse("an answered thread's Slack DM", settleThreadDms(itemId, chosen));
   yield* settledForAgent(agentId, itemId);
 });
 
@@ -370,8 +361,7 @@ const inboxFilesRefused = /* @__PURE__ */ Effect.fnUntraced(function* (
  *
  * Exported for a caller with no request of its own: our Slack route
  * (`slack/slack-events-app.ts`), which answers a press in a DM as the
- * member it maps the presser to, and names the line that DM says once the
- * answer is taken (`chosen`); and the member MCP server
+ * member it maps the presser to; and the member MCP server
  * (`member-mcp/inbox.ts`), which answers as the member an outside agent
  * acts for.
  */
@@ -385,7 +375,6 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     readonly attachments: readonly AgentAttachment[];
     readonly answers: InboxAnswers;
   },
-  chosen?: SlackChosen,
 ) {
   const { text, clientKey, attachments, answers } = sent;
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
@@ -449,7 +438,6 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     item.agentId,
     { text: message, clientKey, attachments },
     counted,
-    chosen,
   );
 
   return { item, outcome, ...writtenIn };
@@ -555,10 +543,8 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   const { txid, ...taken } = written;
   const writtenIn = txid === undefined ? {} : { txid };
-  const dmSettled = afterResponse("a closed thread's Slack DM", settleThreadDms(itemId));
 
   if (!taken.needsReply && !noted) {
-    yield* dmSettled;
     yield* settledForAgent(taken.agentId, itemId);
 
     return { item: taken, taken: true, ...writtenIn };
@@ -598,7 +584,6 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
   }
 
-  yield* dmSettled;
   yield* settledForAgent(taken.agentId, itemId);
 
   return { item: taken, taken: true, ...writtenIn };
