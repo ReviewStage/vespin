@@ -18,10 +18,10 @@ committed copy from them, and what those copies are.
   which `@repo/ui`'s `TaskStatusMark` and `TaskPriorityMark` draw as SVG too.
 
 Regenerate the generated files (under `src/generated/`, `assets/`, and
-`@repo/ui`'s `src/tokens/geist.css`, `brand.css`, `identity.css`, and
+`@repo/ui`'s `src/tokens/geist.css`, `brand.css`, `identity.css`, `file-icon.css`, and
 `motion-tokens.css`,
 and `@repo/ui-native`'s `src/tokens/brand-colors.ts`, `identity-hues.ts`,
-`lucide-symbols.ts`, and `task-status-symbols.ts`)
+`lucide-symbols.ts`, `file-icon-inks.ts`, and `task-status-symbols.ts`)
 from the sources rather than hand-editing; `pnpm --filter @repo/brand check`
 reports drift when run by hand, and `scripts/repository-checks.sh` runs the
 surface generator's half of it.

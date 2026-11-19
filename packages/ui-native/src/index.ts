@@ -251,6 +251,8 @@ export { ScreenFailure } from "./screen-failure.js";
 
 export { SealedPage } from "./sealed-page.js";
 
+export { sectionGlyphColor, sectionInk } from "./section-ink.js";
+
 export {
   AccountHead,
   AccountRow,

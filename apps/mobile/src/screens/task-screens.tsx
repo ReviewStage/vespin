@@ -136,6 +136,7 @@ import {
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
+  sectionGlyphColor,
   TASK_SKELETON_ROW,
   TaskHead,
   TaskHeadSkeleton,
@@ -949,6 +950,9 @@ function GroupSection({
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      glyphColor={
+        group.kind === TASK_TREE_GROUP.SECTION ? sectionGlyphColor(group.icon) : undefined
+      }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
