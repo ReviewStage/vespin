@@ -8,7 +8,9 @@
  * one `TASKS_START`, which makes the task and starts its agent together, as
  * Home's composer does, the pictures attached going with its words as the
  * panel's attachments do, and in the relation picked, as New task's rows
- * start one. A start names a model only
+ * start one. Fast, the panel's switch, moves the pick onto its model's fast
+ * version or back, offered only where the catalog lists one, and a pick of
+ * another model keeps the speed where that model has it. A start names a model only
  * where one was picked, so an untouched sheet starts on the account's
  * default at the moment it goes, as the panel's does. A read that could not
  * be read before it listed anything says so, in the panel's words, with Try
@@ -32,9 +34,11 @@ import {
   type CatalogModel,
   type MacOffer,
   MODEL_SPEED,
+  MODEL_SPEED_SUFFIX,
   type ModelChoice,
   type ModelsAnswer,
   modelSpeedOf,
+  standardModelIdOf,
 } from "@repo/features/models-wire";
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { TASK_CREATE_RELATION_KIND, type TaskCreateRelation } from "@repo/features/task-wire";
@@ -102,8 +106,12 @@ export interface ModelPick {
   readonly shown: ModelChoice | undefined;
   /** What a start names: the pick, or none where nothing was picked. */
   readonly picked: ModelChoice | undefined;
+  /** The model shown, by its standard version's id, as the models are listed; none before the default is read. */
+  readonly model: string | undefined;
   readonly pickModel: (model: string) => void;
   readonly pickEffort: (effort: string) => void;
+  /** Fast: whether the pick is its model's fast version, and the switch; none where the catalog lists no fast version of it. */
+  readonly fast: { readonly on: boolean; readonly toggle: () => void } | undefined;
   /** The devices that may run an agent, where the account may run one on its own device; none otherwise. */
   readonly devices: readonly MacOffer[];
   /** Why the models could not be read, where they listed nothing; none while they read or were read. */
@@ -127,6 +135,16 @@ export function modelOptions(catalog: readonly CatalogModel[]): readonly PickOpt
       ? [{ id: model.id, label: modelLabel(model.id, catalog) }]
       : [],
   );
+}
+
+/** The catalog id a pick of a model names: its version at the speed `running` is, where the catalog offers one, else the model's own. */
+export function atSpeed(offered: readonly CatalogModel[], model: string, running: string): string {
+  const speed = modelSpeedOf(running);
+
+  if (speed === MODEL_SPEED.STANDARD) return model;
+  const version = `${model}${MODEL_SPEED_SUFFIX[speed]}`;
+
+  return offered.some(({ id }) => id === version) ? version : model;
 }
 
 /** The efforts a picker offers for the model, as the catalog lists them; none before a model is known. */
@@ -191,20 +209,39 @@ export function useModelPick(seed?: ModelChoice): ModelPick {
   const catalog = read?.models ?? NO_MODELS;
   const shown = picked ?? fallback;
   const models = useMemo(() => modelOptions(catalog), [catalog]);
+  const model = shown === undefined ? undefined : standardModelIdOf(shown.model);
+
+  const fastId =
+    model === undefined ? undefined : `${model}${MODEL_SPEED_SUFFIX[MODEL_SPEED.FAST]}`;
+
+  // Note that a move between models or speeds keeps the effort where the new one lists it, else the nearest it lists, as the panel's menu does.
+  const pickAt = (id: string) => {
+    const effort = effortFor(effortsOf(catalog, id), shown?.effort);
+
+    if (effort !== undefined) setPicked({ model: id, effort });
+  };
 
   return {
     models,
     efforts: effortOptions(catalog, shown?.model),
     shown,
     picked,
-    pickModel: (model) => {
-      const effort = effortFor(effortsOf(catalog, model), shown?.effort);
-
-      if (effort !== undefined) setPicked({ model, effort });
-    },
+    model,
+    pickModel: (picked) =>
+      pickAt(shown === undefined ? picked : atSpeed(catalog, picked, shown.model)),
     pickEffort: (effort) => {
       if (shown !== undefined) setPicked({ model: shown.model, effort });
     },
+    fast:
+      shown === undefined ||
+      model === undefined ||
+      fastId === undefined ||
+      !catalog.some(({ id }) => id === fastId)
+        ? undefined
+        : {
+            on: shown.model === fastId,
+            toggle: () => pickAt(shown.model === fastId ? model : fastId),
+          },
     // Note that a device still setting itself up takes no agent, so it is not offered.
     devices: (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined),
     failed: held?.failed === true && read === undefined ? MODELS_READ_FAILED : undefined,
