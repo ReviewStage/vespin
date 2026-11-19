@@ -3,12 +3,9 @@
 import NetInfo from "@react-native-community/netinfo";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
+import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
-import {
-  type TaskListCollections,
-  type TaskListFollowing,
-  taskListFollowing,
-} from "@repo/host/task-list-following";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { type Collection, useLiveQuery } from "@tanstack/react-db";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Effect } from "effect";
@@ -25,11 +22,10 @@ import {
 import { AppState, Platform } from "react-native";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
 import { noteHostStarting, noteHostStood } from "../launch-phases.js";
-import { HostFailedScreen } from "../screens/host-failed.js";
+import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
-import { type HostCount, type HostToCome, hostToCome } from "./host-to-come.js";
 import {
   launchFixtureProfile,
   launchInboxOff,
@@ -54,23 +50,19 @@ const UNVERSIONED = "0.0.0";
 /** The app's version, as the host and the share sheet name it to the service. */
 export const APP_VERSION = Constants.expoConfig?.version ?? UNVERSIONED;
 
-export type { HostCount };
+/** How a screen counts a moment of the panel's surface vocabulary, such as a surface opened, through the host's bridge. */
+export type HostCount = AppBridge["recordSurfaceEvent"];
 
-/**
- * One start of the host, as the screens are handed it from the first frame:
- * the client its document is followed into, the task list's collections,
- * and the host to come, whose acts, follows and counts wait for it to stand.
- */
-interface Launching {
-  readonly client: QueryClient;
-  readonly taskList: TaskListFollowing;
-  readonly host: HostToCome;
-}
-
-/** A start of the host not yet begun: an empty client, the task list's collections, and the host to come. */
-function launching(): Launching {
-  return { client: new QueryClient(), taskList: taskListFollowing(), host: hostToCome() };
-}
+/** Where the host's start stands: not yet answered, standing with its document in a client and its task list in collections, its act port, and its counts, or failed. */
+type Standing =
+  | {
+      readonly client: QueryClient;
+      readonly taskList: TaskListCollections;
+      readonly acts: ActPortClient;
+      readonly follow: HostFollow;
+      readonly count: HostCount;
+    }
+  | { readonly failed: true };
 
 /** The act port the screens act through, once the host stands. */
 const HostActs = createContext<ActPortClient | undefined>(undefined);
@@ -218,33 +210,35 @@ function launchOptions(): MobileHostStartOptions {
 }
 
 /**
- * Starts the host once, and draws the screens at once over its client,
- * which its document is followed into as it stands, so a launch shows its
- * screens, the Inbox saying it reads until its first reading, rather than the
- * splash while the host starts; the launch splash goes a frame after the
- * screens first draw (`splash.ts`). What the screens act, follow, and count
- * through meanwhile waits for the host (`hostToCome`). A host that cannot
- * stand is said on the console, reported to Sentry, refuses what waited, and
- * is shown in the screens' place with Try again, which starts it again over
- * a client of its own; a host that stands but refuses its first read is
- * said on the console too, and the screens stand over the empty client,
- * which the next delivery fills. The host is drained as the tree unmounts,
- * which on a device is the app ending.
+ * Starts the host once, follows its document into a Query client of the
+ * app's own, and draws the screens once the first reading is in it, so no
+ * screen draws an empty document first; the launch splash stands until then
+ * (`splash.ts`). A host that cannot stand is said on
+ * the console, reported to Sentry, and shown in the screens' place with Try again, which starts it
+ * again, rather than drawing an empty Inbox over nothing; a host that stands
+ * but refuses its first read is said on the console too, and the screens
+ * draw over the empty client, which the next delivery fills. Until the host
+ * stands, the brand's ground stands in the screens' place, under the splash,
+ * so no frame shows the window's own black in dark mode, as an empty tree
+ * once did. The host is drained as the tree
+ * unmounts, which on a device is the app ending.
  */
 export function HostProvider({ children }: { readonly children: ReactNode }) {
   useEffect(() => followQueryLifecycle(AppState, Platform, NetInfo.addEventListener), []);
-  // Each press of Try again starts the host anew, over a client and collections of its own.
-  const [current, setCurrent] = useState(launching);
-  const [failed, setFailed] = useState(false);
+  const [standing, setStanding] = useState<Standing | undefined>(undefined);
+  // Each press of Try again starts the host anew.
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
     let started: StandingMobileHost | undefined;
     let stopFollowing: (() => void) | undefined;
+    setStanding(undefined);
     noteHostStarting();
     startMobileHost(launchOptions()).then(
       async (host) => {
         started = host;
-        const following = followAppStateInto(host.bridge, current.client, current.taskList);
+        const client = new QueryClient();
+        const following = followAppStateInto(host.bridge, client);
         stopFollowing = following.stop;
 
         try {
@@ -258,7 +252,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
 
         if (live) {
           noteHostStood();
-          current.host.stand({
+          setStanding({
+            client,
+            taskList: following.taskList,
             acts: host.acts,
             follow: host.follow,
             count: host.bridge.recordSurfaceEvent,
@@ -269,11 +265,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         console.error("The app's host could not start.", cause);
         reportHostFailure(cause);
 
-        // Note that only the start still standing refuses what waits on it, so one an unmount left behind never refuses a press meant for the next.
-        if (live) {
-          current.host.fail(cause);
-          setFailed(true);
-        }
+        if (live) setStanding({ failed: true });
       },
     );
 
@@ -282,27 +274,22 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
       stopFollowing?.();
       void started?.close();
     };
-  }, [current]);
-  // Note that the splash goes a frame after the screens first draw, the host's start or not, so it never stands over a launch longer than its own first frame.
-  useEffect(() => releaseSplashAfterFrame(), []);
+  }, [attempt]);
+  // Note that the splash stands over the launch until the screens, or the failure in their place, first draw, so no blank screen shows while the host starts.
+  useEffect(() => (standing === undefined ? undefined : releaseSplashAfterFrame()), [standing]);
 
-  if (failed) {
-    return (
-      <HostFailedScreen
-        onRetry={() => {
-          setFailed(false);
-          setCurrent(launching());
-        }}
-      />
-    );
+  if (standing === undefined) return <HostStartingScreen />;
+
+  if ("failed" in standing) {
+    return <HostFailedScreen onRetry={() => setAttempt((count) => count + 1)} />;
   }
 
   return (
-    <QueryClientProvider client={current.client}>
-      <HostActs.Provider value={current.host.acts}>
-        <HostFollows.Provider value={current.host.follow}>
-          <HostCounts.Provider value={current.host.count}>
-            <TaskListCollectionsContext.Provider value={current.taskList.collections}>
+    <QueryClientProvider client={standing.client}>
+      <HostActs.Provider value={standing.acts}>
+        <HostFollows.Provider value={standing.follow}>
+          <HostCounts.Provider value={standing.count}>
+            <TaskListCollectionsContext.Provider value={standing.taskList}>
               {children}
             </TaskListCollectionsContext.Provider>
           </HostCounts.Provider>
