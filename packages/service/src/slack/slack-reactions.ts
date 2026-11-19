@@ -3,9 +3,8 @@
  *
  * Our Slack route hands each `reaction_added` event here
  * (`slack-events-app.ts`). One is heard only where it is 👍 or 👎 (any skin
- * tone), a member added it, never the bot itself, whose own status
- * reactions (`STATUS_EMOJI`, `slack-agent-starts.ts`) land on members'
- * messages, and it is on a message the bot posted (`item_user`), an agent's
+ * tone), a member added it, never the bot itself, whose reactions an
+ * agent adds with `react_slack` land on members' messages, and it is on a message the bot posted (`item_user`), an agent's
  * own `send_slack_message` among them. The message is then read on the bot's
  * token for its words and the thread it stands in
  * (`SlackWorkspaceBot.message`), and that thread must speak for an agent
