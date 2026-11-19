@@ -197,7 +197,7 @@ type ThreadPageProps = {
   readonly foot?: ReactNode | undefined;
 };
 
-/** A thread's heading under its bar: its path where it heads the page, its title in 20 pt semibold, or the words it stands on quoted in the body's muted size and cut to two lines, and how it ended under it, 13 pt muted, once it is settled. */
+/** A thread's heading under its bar: its path where it heads the page, its title in the page heading's style, semibold, or the words it stands on quoted in the row title's style, muted and cut to two lines, and how it ended under it in the row line's style, muted, once it is settled. */
 function ThreadHead({
   title,
   quoted = false,
@@ -354,7 +354,7 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
 /** What a sent answer's mark is heard as: it went ahead with what was asked, or held back. */
 const STAMP_HEARD = { AHEAD: "Went ahead", HELD: "Held back" } as const;
 
-/** A sent answer's stamp under its writer's name, where its words start: its mark and its words, 13 pt. */
+/** A sent answer's stamp under its writer's name, where its words start: its mark and its words, in the row line's style. */
 function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["stamp"]> }) {
   const colors = useColors();
 
@@ -492,7 +492,7 @@ function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["
   );
 }
 
-/** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time where it leads its run, and under them its words and files. */
+/** One message, flat on the page: the writer's face or tile, name in the row line's style, semibold, and time where it leads its run, and under them its words and files. */
 function MessageView({
   message,
   head,

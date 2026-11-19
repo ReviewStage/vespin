@@ -41,7 +41,7 @@ type ProviderButtonProps = {
 };
 
 /**
- * One provider's way in, quiet as the denser look's buttons stand: the
+ * One provider's way in, quiet as the app's other buttons stand: the
  * system's large bordered capsule across its column, its words in the ink
  * with GitHub's mark, so the provider's mark is what tells the two apart and
  * no copper is spent on a choice the page itself is for. The system draws

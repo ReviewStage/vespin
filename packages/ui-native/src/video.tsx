@@ -28,7 +28,7 @@ import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
+import { ROLE_SIZE, TYPE_ROLE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
 const CANNOT_PLAY = "This video can't play here.";
@@ -249,7 +249,7 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
             {failed ? null : <ActivityIndicator color={colors.TEXT_MUTED} />}
             {failed ? (
               <Text
-                style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
+                style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
                 accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
               >
                 {CANNOT_PLAY}
@@ -264,7 +264,7 @@ export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: V
               >
                 <Text
                   style={{
-                    fontSize: TEXT_SIZE.FOOTNOTE,
+                    fontSize: ROLE_SIZE.ROW_LINE,
                     fontWeight: "600",
                     color: colors.TEXT_BODY,
                   }}

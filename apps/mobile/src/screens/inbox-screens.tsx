@@ -6,6 +6,7 @@ import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
+  INBOX_LINE,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -37,7 +38,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import type { TaskSummary } from "@repo/features/task-wire";
+import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
@@ -74,9 +75,9 @@ import {
   RowForEach,
   RowList,
   type RowSubmenu,
-  SCOPE_LOOK,
   type Scope,
   Screen,
+  SkeletonRegion,
   SplitView,
   THREAD_MEDIA,
   type ThreadMedia,
@@ -96,6 +97,7 @@ import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/hos
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
+  type InboxListing,
   useInboxActs,
   useInboxListing,
   useInboxScope,
@@ -203,6 +205,8 @@ type InboxRowsProps = {
   readonly scopes?: ListScopes | undefined;
   /** What stands over the list while it lists no thread: why, and the way on. */
   readonly empty?: ReactNode | undefined;
+  /** How many skeleton rows stand in the threads' place while the feed is on its first read with none to list; none once it lists or answered. */
+  readonly skeleton?: number | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
 };
@@ -228,6 +232,7 @@ function InboxRows({
   choosing,
   scopes,
   empty,
+  skeleton,
   onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
@@ -242,19 +247,73 @@ function InboxRows({
       choosing={choosing}
       lead={<NotificationAsk />}
       scopes={scopes}
-      empty={empty}
+      empty={skeleton === undefined ? empty : undefined}
       onChooseStart={onChooseStart}
     >
-      <InboxItemRows
-        listed={listed}
-        readerId={readerId}
-        pictureOf={pictureOf}
-        onMark={onMark}
-        remindMenu={remindMenu}
-        onResolve={onResolve}
-      />
+      {skeleton === undefined ? (
+        <InboxItemRows
+          listed={listed}
+          readerId={readerId}
+          pictureOf={pictureOf}
+          onMark={onMark}
+          remindMenu={remindMenu}
+          onResolve={onResolve}
+        />
+      ) : (
+        <InboxSkeleton count={skeleton} />
+      )}
     </RowList>
   );
+}
+
+/** The words a skeleton row stands its placeholder bars in, each about as long as a thread's own, so the bars read as the rows to come. */
+const SKELETON_WORDS = {
+  TASK: "A task's name",
+  TITLE: "A thread's title, as its row stands it",
+  SUMMARY: "What the thread asks of the reader",
+} as const;
+
+/** The most skeleton rows the Inbox stands, about a phone's screen of threads, so a placeholder never reads as more than one screen. */
+const SKELETON_ROWS_MOST = 8;
+
+/**
+ * The Inbox while its feed is on its first read with no thread to list, as
+ * Mail stands its list before it reads: `count` of the Inbox's own rows,
+ * a task's line over a title and what it asks, their words standing as
+ * SwiftUI's placeholder bars (`SkeletonRegion`), so the list has its shape
+ * from the first frame and its rows take the bars' places as they land.
+ */
+function InboxSkeleton({ count }: { readonly count: number }) {
+  return (
+    <SkeletonRegion>
+      {Array.from({ length: count }, (_, at) => (
+        <ListRow
+          key={at}
+          id={String(at)}
+          title={SKELETON_WORDS.TITLE}
+          task={{ name: SKELETON_WORDS.TASK, status: TASK_STATUS.TODO }}
+          line={INBOX_LINE.SAID}
+          summary={SKELETON_WORDS.SUMMARY}
+        />
+      ))}
+    </SkeletonRegion>
+  );
+}
+
+/**
+ * How many skeleton rows the Inbox stands while its feed is on its first
+ * read and lists nothing, under no search: as many as the scope holds where
+ * that is known, up to `SKELETON_ROWS_MOST`, else that many; none once it
+ * lists a thread or the feed answered or failed.
+ */
+function skeletonRows(listing: InboxListing, show: InboxShow, search: string): number | undefined {
+  const reading =
+    listing.listed.length === 0 && listing.feed === INBOX_FEED.READING && search.trim() === "";
+
+  if (!reading) return undefined;
+  const known = listing.counts[show];
+
+  return known > 0 ? Math.min(known, SKELETON_ROWS_MOST) : SKELETON_ROWS_MOST;
 }
 
 /**
@@ -510,15 +569,31 @@ function scopePills(
   }));
 }
 
-/** The Inbox's ⋯ menu: Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
+/** The scopes as the ⋯ menu's checked choices, each worded with its count as its pill was, the one shown checked, as Mail's menu checks its filter. */
+function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
+  return scopes.map((scope) => ({
+    id: scope.label,
+    label: scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`,
+    on: scope.selected,
+    onPress: scope.onPress,
+  }));
+}
+
+/** What the bar says under its title while the list shows a scope other than Open, the one it opens on, so a list never stands narrowed or widened unsaid; nothing on Open. */
+function scopeSubtitle(show: InboxShow): string | undefined {
+  return show === INBOX_SHOW.OPEN ? undefined : INBOX_SHOW_LABEL[show];
+}
+
+/** The Inbox's ⋯ menu: its scopes, the one shown checked, then Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
 function moreMenu(
+  scopes: readonly Scope[],
   unread: readonly string[],
   markAll: (itemIds: readonly string[]) => void,
   select: { readonly listed: boolean; readonly onSelect: () => void },
 ): BarMenu {
   return {
     ...MORE,
-    choices: [],
+    choices: scopeChoices(scopes),
     actions: [
       {
         label: SELECTION_WORDS.SELECT,
@@ -598,7 +673,7 @@ function chosenActs(
  * takes only its own items as children.
  */
 function toolbarMenuActions(menu: BarMenu) {
-  return menu.actions.map((action) => (
+  const actions = menu.actions.map((action) => (
     <Stack.Toolbar.MenuAction
       key={action.label}
       {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
@@ -610,6 +685,24 @@ function toolbarMenuActions(menu: BarMenu) {
       {action.label}
     </Stack.Toolbar.MenuAction>
   ));
+
+  if (menu.choices.length === 0) return actions;
+
+  // Note that the choices stand as one inline section over the acts, each checked as the system checks a menu's picked item, as Mail's filter menu stands its choices over its other acts.
+  return [
+    <Stack.Toolbar.Menu key={SCOPE_LABEL} inline>
+      {menu.choices.map((choice) => (
+        <Stack.Toolbar.MenuAction
+          key={choice.id ?? choice.label}
+          isOn={choice.on}
+          onPress={choice.onPress}
+        >
+          {choice.label}
+        </Stack.Toolbar.MenuAction>
+      ))}
+    </Stack.Toolbar.Menu>,
+    ...actions,
+  ];
 }
 
 /** The name an agent is called by, as the panel names it, and the harness its model runs in, whose mark its tile wears, as the task list's collections hold it; the unlisted name and no harness before the agent is listed. */
@@ -1106,13 +1199,14 @@ type InboxHeld = {
 function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
+  const skeleton = skeletonRows(listing, show, search);
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
   const selecting = useInboxChoosing();
 
-  const menu = moreMenu(listing.unread, acts.markAll, {
+  const menu = moreMenu(scopes, listing.unread, acts.markAll, {
     listed: listing.listed.length > 0,
     onSelect: selecting.start,
   });
@@ -1152,8 +1246,9 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
-    scopes,
+    subtitle: scopeSubtitle(show),
     menu,
     remind,
     choosing,
@@ -1161,11 +1256,10 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
   };
 }
 
-// A compact window: the list under its scopes' segmented control, the account's photo
-// opening Settings and the workspace switcher beside it at the bar's leading
-// edge, and its search and its ⋯ menu as round
-// glass buttons at its trailing one, each row pushing its thread as the Stack's
-// next screen.
+// A compact window: the list, the account's photo opening Settings and the
+// workspace switcher beside it at the bar's leading edge, and its search and
+// its ⋯ menu, which holds the scopes, as round glass buttons at its trailing
+// one, each row pushing its thread as the Stack's next screen.
 function InboxStackList(held: InboxHeld) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -1178,8 +1272,9 @@ function InboxStackList(held: InboxHeld) {
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
-    scopes,
+    subtitle,
     menu,
     remind,
     choosing,
@@ -1267,10 +1362,10 @@ function InboxStackList(held: InboxHeld) {
           <Stack.Toolbar.Spacer />
         </Stack.Toolbar>
       )}
-      <Screen>
+      {/* Note that the bar names a scope other than Open under its title, since the scopes stand in ⋯, so the list never stands narrowed or widened unsaid; Select mode names its count instead. */}
+      <Screen subtitle={choosing === undefined ? subtitle : undefined}>
         {/* Note that the list stands even with no thread, its empty state its one row, so a pull still reads the Inbox again. */}
         <InboxRows
-          scopes={{ label: SCOPE_LABEL, scopes }}
           look={LIST_LOOK.PLAIN}
           listed={listing.listed}
           readerId={listing.readerId}
@@ -1287,6 +1382,7 @@ function InboxStackList(held: InboxHeld) {
           onResolve={acts.resolve}
           choosing={choosing?.rows}
           onChooseStart={chooseStart}
+          skeleton={skeleton}
           empty={
             listing.listed.length === 0 ? (
               <InboxEmpty
@@ -1326,8 +1422,9 @@ function InboxSplitScreen({
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
-    scopes,
+    subtitle,
     menu,
     remind,
     choosing,
@@ -1348,7 +1445,6 @@ function InboxSplitScreen({
 
   const rows = (
     <InboxRows
-      scopes={{ label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
       look={LIST_LOOK.PLAIN}
       listed={listing.listed}
       readerId={listing.readerId}
@@ -1360,6 +1456,7 @@ function InboxSplitScreen({
       onResolve={acts.resolve}
       choosing={choosing?.rows}
       onChooseStart={chooseStart}
+      skeleton={skeleton}
       empty={
         listing.listed.length === 0 ? (
           <InboxEmpty
@@ -1377,13 +1474,13 @@ function InboxSplitScreen({
 
   const list = {
     chosen: selected !== undefined,
-    // Note that the list stands its scopes as its first row, so they scroll away with the rows, over its empty state too, which stands as its one row.
     view: rows,
     // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
         ? {
             title: INBOX_TITLE,
+            subtitle,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }

@@ -15,7 +15,9 @@ builds a control of its own.
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
-  `WordsRow` for its description), `SplitView` (a tab's list
+  `WordsRow` for its description), and its skeleton while it is read
+  (`TaskHeadSkeleton`, `TaskSectionsSkeleton`: those rows with placeholder
+  words in `SkeletonRegion`, as many as the loaded page declares), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
   `ColumnBar`: its inline title, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,
@@ -173,21 +175,29 @@ builds a control of its own.
 
 ## Vespin's look
 
-Denser and quieter than iOS's defaults, with a muted palette and plain rows
-(the developer, Nov 10, 2026), on iOS's own
-navigation, tab bar, swipes, menus, sheets and glass.
+Quieter than iOS's defaults, with a muted palette and plain rows (the
+developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
+18, 2026), on iOS's own navigation, tab bar, swipes, menus, sheets and glass.
 
-- **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
-  text style, never a fixed size: a row's title 15 pt (`subheadline`),
-  semibold while unread and regular once read, over a 13 pt muted line
-  (`footnote`); an Inbox thread's task line over its title, the row's
-  largest words, 17 pt semibold (`headline`), its time at that line's end
-  and its title and preview flush with its ring, as the panel's lead row; a time 12 pt (`caption`); a group header 13 pt muted; a
-  screen's title 17 pt semibold, inline in its bar; and a page's heading,
-  a thread's or a task's title, 20 pt semibold (`title3`, the style nearest
-  21). React Native's words, Markdown's, take `PROSE_SIZE`, 15 pt, which
-  React Native scales by the reader's setting. The navigation bar's words are
-  the system's fixed sizes (`BAR_TITLE`), as its own titles stand.
+- **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`) is iOS's standard text
+  styles, read as Mail, Settings and Messages read at the default Dynamic
+  Type size, each role a text style and never a fixed size: a row's title,
+  a Settings row's words, a message's words and the composer's in the body
+  style (17 pt), semibold while unread and regular once read, over a muted
+  line in the subheadline style (15 pt); a time, a tag and a group header in
+  the footnote style (13 pt); a line that leads a row, such as an Inbox
+  thread's task line, the row's largest words, in the headline style (17 pt
+  semibold) with its time at that line's end, and the title under it in the
+  subheadline style in the ink (`ROW_SUBJECT`) over its muted preview, both
+  flush with its ring, as Mail's sender leads its subject; a screen's title
+  in the headline style, inline in its bar; and a page's heading, a
+  thread's or a task's title, in title 3 (20 pt) semibold. React Native's
+  words, a transcript's and Markdown's, take the same styles' sizes
+  (`PROSE_SIZE`, the body's, and `ROLE_SIZE`), which React Native scales by
+  the reader's setting. A height, an inset, or a mark beside words follows
+  the text rather than assuming a size (`ROW_INSET.VERTICAL` stands a row of
+  one line 44 pt tall, as iOS's rows stand). The navigation bar's words and
+  the tab bar are the system's own (`BAR_TITLE`), as its titles stand.
 - **Inline titles, no large titles.** A tab's root shows its name small and
   inline. A split view's list keeps its title small and inline too, since
   its bar also holds the switcher, ⋯ and the sidebar button, and its search
@@ -239,7 +249,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, at 9 pt the strongest mark a row carries as
-  Mail's is, a 14 pt leading mark in an 18 pt column (the
+  Mail's is, a 16 pt leading mark in a 20 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
@@ -283,7 +293,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`SCOPE_LOOK.MENU`). A list with rows stands them as its first row
   (`RowList`'s `scopes`), so they scroll away with the rows as Mail's
   categories do; one listing nothing stands them over its empty state
-  (`ScopePicker`), so another scope is one tap away. `Chip` is a capsule an act or a choice stands in, such as a
+  (`ScopePicker`), so another scope is one tap away. The Inbox stands its
+  scopes in its ⋯ menu instead, the one shown checked over its other acts,
+  as Mail's filter does, and its bar names a scope other than the one it
+  opens on under its title (`ColumnBar`'s `subtitle`, `Screen`'s). `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do.

@@ -245,8 +245,8 @@ function PressedRow({
 
 /**
  * The form a settings screen is: its sections (`ListSection`) of the rows
- * below, under their small muted headers, every row's words in the denser
- * scale's 15 pt. Note that it stands on the sidebar's ground with each row
+ * below, under their small muted headers, every row's words in the row
+ * title's style, as iOS's Settings reads. Note that it stands on the sidebar's ground with each row
  * on the surface, as the panel's settings cards stand on its page, rather
  * than on the system's grouped grays. A drag on it lowers the keyboard at
  * once, as a composing sheet's words otherwise keep it standing over the
