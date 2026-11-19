@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 /**
- * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; and a `/` in its box lists the skills of its own repository. Synthetic throughout.
+ * desktop-agent-page.test.ts -- an agent on no task's own page: the line over its box counts the threads it posted that wait on the reader, read from the account's feed, and opens the Inbox on the oldest of them; a `/` in its box lists the skills of its own repository; and ⌘F finds in its conversation. Synthetic throughout.
  */
 
 import assert from "node:assert/strict";
@@ -19,6 +19,7 @@ import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import type { TasksSkillsParams } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import {
   createMemoryHistory,
@@ -32,6 +33,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
+import { runAppCommand } from "../app-commands.js";
 import { RoutedExitsProvider } from "../places/routed-exits.js";
 import {
   type AnyAct,
@@ -124,6 +126,33 @@ function agentRouter(
   });
 }
 
+/** The agent's page drawn where `history` stands, under `tasks`, once its reads settle: the element it is drawn in. */
+async function mountAgentPage(
+  history: ReturnType<typeof createMemoryHistory>,
+  tasks: ReturnType<typeof tasksControl>,
+): Promise<HTMLElement> {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(
+          RoutedExitsProvider,
+          null,
+          createElement(RouterProvider, { router: agentRouter(history, tasks) }),
+        ),
+      ),
+    ),
+  );
+  await act(async () => {
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+  await settleQueries();
+
+  return container;
+}
+
 beforeAll(() => Effect.runPromise(editorBundleLanded));
 
 beforeEach(() => {
@@ -146,21 +175,7 @@ test("an agent on no task docks the threads it posted over its box, counted from
   ]);
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
   const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [MANAGER] });
-  const router = agentRouter(history, tasks);
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-  act(() =>
-    root.render(
-      withQueryClient(
-        createElement(RoutedExitsProvider, null, createElement(RouterProvider, { router })),
-      ),
-    ),
-  );
-  await act(async () => {
-    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
-  });
-  await settleQueries();
+  const container = await mountAgentPage(history, tasks);
 
   const dock =
     container.querySelector<HTMLElement>(".agent-threads-dock") ??
@@ -210,21 +225,7 @@ test("a / in an agent on no task's box lists the skills of its own workspace and
   const manager = { ...MANAGER, repository: "acme/relay", runtime: AGENT_RUNTIME.CLAUDE_CODE };
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
   const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [manager] });
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-  act(() =>
-    root.render(
-      withQueryClient(
-        createElement(
-          RoutedExitsProvider,
-          null,
-          createElement(RouterProvider, { router: agentRouter(history, tasks) }),
-        ),
-      ),
-    ),
-  );
-  await settleQueries();
+  const container = await mountAgentPage(history, tasks);
 
   typeInComposer(container, "/");
   await settleQueries();
@@ -238,4 +239,23 @@ test("a / in an agent on no task's box lists the skills of its own workspace and
     "it lists the repository's skill",
   );
   assert.deepEqual(asked, [{ workspaceId: ACME.id, repository: "acme/relay" }]);
+});
+
+test("⌘F on an agent on no task's page opens the find bar over its conversation", async () => {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [MANAGER] });
+  const container = await mountAgentPage(history, tasks);
+
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.FIND), "the page offers find");
+  });
+
+  assert.ok(
+    container.querySelector('.agent-page .find-scope > .find-bar input[aria-label="Find"]'),
+    "the find bar stands over the agent's column",
+  );
 });

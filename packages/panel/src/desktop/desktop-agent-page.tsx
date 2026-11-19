@@ -16,7 +16,8 @@
  * box's skills and mentions, its members, and its links' workspace, the
  * page reads through the agent's own workspace and repository
  * (`own-agent-place.tsx`), and its copy and delete keys act on the agent,
- * as a task's column's do on its chosen tab. The agent is read from the task list where it carries it,
+ * as a task's column's do on its chosen tab. ⌘F finds in its conversation,
+ * as in a task's column, and a phone's ⋯ offers Find in its place. The agent is read from the task list where it carries it,
  * and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
@@ -53,6 +54,7 @@ import { useParams } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
+import { FindScope } from "../find-in-tab.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -69,7 +71,7 @@ import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
 import { AgentPane } from "./main-tabs.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
-import { PhoneBack, PhoneHead, PlaceMore, phoneBar } from "./phone-head.js";
+import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { taskCards } from "./side-panel.js";
 import { useTabViews } from "./strip-tabs.js";
 
@@ -271,7 +273,14 @@ function OwnAgentHead({
       }
     : undefined;
 
-  const more = <PlaceMore thing={AGENT_THING} shown={shown} groups={() => groups} />;
+  // A phone's ⋯ also stands in for ⌘F, which it has no keyboard for.
+  const more = (
+    <PlaceMore
+      thing={AGENT_THING}
+      shown={shown}
+      groups={() => (away === undefined ? groups : [...phoneFindGroups(), ...groups])}
+    />
+  );
 
   return (
     <>
@@ -324,6 +333,7 @@ function OwnAgentPage({
   const views = useTabViews();
   const label = agentName(agent, agents.models);
   const cards = taskCards({ agents, held: views.held, chosen: () => false, pages: undefined });
+  const findSubject = useMemo(() => ({ agent: agent.id }), [agent.id]);
 
   const openTarget = (target: ToolTarget) => {
     if (target.kind !== TOOL_TARGET.TASK) return;
@@ -337,7 +347,12 @@ function OwnAgentPage({
       <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
         <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label={label}>
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
-          <Fill className="desktop-task-column">
+          {/* Note that the scope stands as the column's own box, as its fill did. */}
+          <FindScope
+            className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+            active={tasks.shown}
+            subject={findSubject}
+          >
             <AgentPane
               label={label}
               tabbed={false}
@@ -353,7 +368,7 @@ function OwnAgentPage({
               cards={cards}
               threads={threads}
             />
-          </Fill>
+          </FindScope>
         </Fill>
       </div>
     </OwnAgentPlaceProvider>
