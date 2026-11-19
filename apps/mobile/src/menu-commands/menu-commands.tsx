@@ -475,7 +475,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.TOGGLE_READ:
-        if (threadId !== undefined) inbox.mark(threadId, !subject.threadUnread);
+        if (subject.thread !== undefined) inbox.mark(subject.thread, !subject.threadUnread);
         else if (task !== undefined) {
           const unread = subject.toggled.includes(MENU_COMMAND.TOGGLE_READ);
           const readMark = unread ? READ_MARK.READ : READ_MARK.UNREAD;
