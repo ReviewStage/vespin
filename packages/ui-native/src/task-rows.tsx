@@ -1,7 +1,6 @@
 // task-rows.tsx -- the rows a task's page and the Tasks list draw beside the task rows: a task's head, an agent, a related task, a group, a row that opens somewhere, and a description's words.
 
 import {
-  ContextMenu,
   HStack,
   Image,
   RNHostView,
@@ -54,10 +53,10 @@ import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import {
-  actionButton,
   FoldChevron,
   type FoldWords,
   foldActions,
+  LongPressMenu,
   ROW_ACTION_TONE,
   type RowAction,
   type RowFold,
@@ -917,8 +916,6 @@ export function WordsRow({
   hidesHtml,
   change = VERSION_CHANGE.SAME,
 }: WordsRowProps) {
-  const colors = useColors();
-
   const host = (
     <RNHostView matchContents={{ vertical: true }}>
       <View>
@@ -940,17 +937,7 @@ export function WordsRow({
     </RNHostView>
   );
 
-  const held =
-    menuActions.length === 0 ? (
-      host
-    ) : (
-      <ContextMenu>
-        <ContextMenu.Items>
-          {menuActions.map((action) => actionButton(action, colors))}
-        </ContextMenu.Items>
-        <ContextMenu.Trigger>{host}</ContextMenu.Trigger>
-      </ContextMenu>
-    );
+  const held = <LongPressMenu groups={[menuActions]}>{host}</LongPressMenu>;
 
   return (
     <HStack

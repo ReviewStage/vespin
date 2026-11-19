@@ -15,9 +15,7 @@ builds a control of its own.
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
-  `WordsRow` for its description), and its skeleton while it is read
-  (`TaskHeadSkeleton`, `TaskSectionsSkeleton`: those rows with placeholder
-  words in `SkeletonRegion`, as many as the loaded page declares), `SplitView` (a tab's list
+  `WordsRow` for its description), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
   `ColumnBar`: its inline title, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,
@@ -87,7 +85,12 @@ builds a control of its own.
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
   the picture viewer's share button holding the same, and Copy message on a
-  message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
+  message's words; the app answers them through `KeepingProvider`. A
+  mention's chip, which stands inside a line of words where no SwiftUI menu
+  can wrap it, is held for the system's sheet of Open link and Copy link
+  instead, as the panel's link menu offers them, a popover from the chip in
+  a regular window, its hold a little shorter than the system's so it wins
+  over a message's own. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with
@@ -283,7 +286,16 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
-  empty section stands as its header alone rather than a list of add rows.
+  empty section stands as its header alone rather than a list of add rows;
+  a long press on one given a `menu` opens it, as the panel's right-click
+  on the sidebar's same header does.
+- **Long press** opens one menu everywhere, `LongPressMenu`: SwiftUI's own
+  context menu, its groups in the panel's order and words, set apart by
+  dividers, red where an act takes something away, lifting a preview where
+  the system's apps lift one. A row draws it through `RowFrame`, a section's
+  header through `ListSection`'s `menu`, and held SwiftUI or React Native
+  views through `HeldSwiftMenu` and `HeldMenu`, so wherever the panel opens
+  a right-click menu the app opens the same menu on a long press.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and

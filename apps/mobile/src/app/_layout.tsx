@@ -175,7 +175,7 @@ function screenLayout({
  * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
-  // Note that the account is known only once the host's first reading lands, which a launch spends on the Inbox's skeleton rather than the sign-in screen, since nearly every launch is signed in: only the host's own word that nobody is stands sign-in, and only its word that someone is starts what needs an account.
+  // Note that the account is known only once the host's first reading lands, which a launch spends on the Inbox's spinner rather than the sign-in screen, since nearly every launch is signed in: only the host's own word that nobody is stands sign-in, and only its word that someone is starts what needs an account.
   const { data: account } = useQuery({
     ...appStateQuery,
     select: (state) => state.account.status,
