@@ -1,6 +1,7 @@
 import {
   EVERYONES,
   INBOX_SHOW,
+  type InboxAnyHolder,
   type InboxListed,
   inboxAtNow,
   inboxCounts,
@@ -158,7 +159,7 @@ export function AgentThreads({
     onClear: () => backOr(() => onChoose(undefined)),
   });
 
-  const choose = (each: InboxListed) => {
+  const choose = (each: InboxListed<InboxAnyHolder>) => {
     columns.onOpen(each.item.id);
     onChoose(each.item.id);
   };
