@@ -48,6 +48,7 @@ import {
   VOICE_EVENTS_CHANNEL,
   type VoiceCallConnected,
   type VoiceCallFailure,
+  type VoiceCallInto,
   type VoiceCallPeerEvents,
   type VoiceCallSession,
   type VoiceCallState,
@@ -75,7 +76,7 @@ export interface VoiceCall {
   /** The call standing; nothing when none does. */
   readonly call: VoiceCallState | undefined;
   /** Calls the agent, ending a call already standing first. */
-  readonly start: (into: { readonly agentId: string; readonly taskId: string }) => void;
+  readonly start: (into: VoiceCallInto) => void;
   /** Takes the press now for a call into an agent still starting, answering what calls it once it lands, or lets the press go where none did. */
   readonly startWhenStarted: () => CallWhenStarted;
   readonly end: () => void;
@@ -86,9 +87,7 @@ export interface VoiceCall {
 }
 
 /** Calls the agent a press of Talk started, once it lands; nothing where it was refused. */
-export type CallWhenStarted = (
-  into: { readonly agentId: string; readonly taskId: string } | undefined,
-) => void;
+export type CallWhenStarted = (into: VoiceCallInto | undefined) => void;
 
 /** Why a call stopped short, in the words its toast says. */
 const VOICE_CALL_NOTE: Record<VoiceCallFailure, string> = {
@@ -354,7 +353,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     }),
   );
 
-  const start = (into: { readonly agentId: string; readonly taskId: string }) => {
+  const start = (into: VoiceCallInto) => {
     if (keyMissing) return openApiKeys();
     // Note that the meters' context is made here, in the press, since Safari runs one only from a gesture; the session's connect takes it at once.
     pressed.current = pressedContext();

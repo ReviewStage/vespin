@@ -4022,7 +4022,7 @@ function AgentTabView({
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
                     {...box}
-                    talksIn={agent.taskId ?? undefined}
+                    talksIn={agent.taskId}
                     composer={composer}
                     usage={transcript.usage}
                     payer={transcript.payer}
