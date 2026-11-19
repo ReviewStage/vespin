@@ -54,6 +54,7 @@ export const PRODUCT_EVENT = {
   APP_READY: "app:ready",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
+  STANDING_DRAWN: "standing:drawn",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -76,6 +77,7 @@ export const PRODUCT_SURFACE_EVENT = {
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
   APP_READY: PRODUCT_EVENT.APP_READY,
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
+  STANDING_DRAWN: PRODUCT_EVENT.STANDING_DRAWN,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -115,6 +117,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   LAUNCH_SECONDS: "launch_seconds",
   DRAWN_MS: "drawn_ms",
   REPLY_KIND: "reply_kind",
+  STANDING_FIELD: "standing_field",
   STANDING_SECONDS: "standing_seconds",
   EVALUATED_SECONDS: "evaluated_seconds",
   ACCOUNT_SECONDS: "account_seconds",
@@ -526,6 +529,16 @@ export const PRODUCT_REPLY_KIND = {
 
 export type ProductReplyKind = (typeof PRODUCT_REPLY_KIND)[keyof typeof PRODUCT_REPLY_KIND];
 
+/** Which of a task's standing chips a press changed: its status, its priority, or who it is assigned to; never the value it took. */
+export const PRODUCT_STANDING_FIELD = {
+  STATUS: "status",
+  PRIORITY: "priority",
+  ASSIGNEE: "assignee",
+} as const;
+
+export type ProductStandingField =
+  (typeof PRODUCT_STANDING_FIELD)[keyof typeof PRODUCT_STANDING_FIELD];
+
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
@@ -549,6 +562,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: ProductDrawnMilliseconds;
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: ProductReplyKind;
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: ProductStandingField;
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS]: ProductLaunchSeconds;
@@ -597,6 +611,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: Object.values(PRODUCT_STANDING_FIELD),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
@@ -645,6 +660,10 @@ const PRODUCT_EVENT_PROPERTIES = {
   ],
   [PRODUCT_EVENT.APP_READY]: [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS],
   [PRODUCT_EVENT.REPLY_DRAWN]: [PRODUCT_EVENT_PROPERTY.DRAWN_MS, PRODUCT_EVENT_PROPERTY.REPLY_KIND],
+  [PRODUCT_EVENT.STANDING_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.DRAWN_MS,
+    PRODUCT_EVENT_PROPERTY.STANDING_FIELD,
+  ],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 
 /**
