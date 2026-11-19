@@ -13,7 +13,8 @@
 
 import { MESSAGE_ROLE } from "@repo/wire";
 import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
-import { opensTurn } from "./voice-call-lines.js";
+import { commentLineOf, slackLineOf } from "./transcript-lines.js";
+import { opensTurn, spokenLineOf } from "./voice-call-lines.js";
 import { andList, countWords, type Noun } from "./words.js";
 
 /** Which rewind a message offers: a line of the developer's its Edit, a reply its Rewind conversation to here. */
@@ -227,4 +228,20 @@ export function rewindPoints(
   }
 
   return { editable, revertsAt, followed, revertTakes, editTakes, restorable };
+}
+
+/**
+ * Whether a person's line offers Edit by what it is, beside where it stands
+ * (`rewindPoints`' `editable`): never on a comment's or a Slack message's
+ * line, drawn from what it carries rather than its words, as GitHub's is
+ * not; never on a line said aloud on a call, which stands as it was said;
+ * and never on files alone, the line's words as drawn (`shown`) empty.
+ */
+export function editsInPlace(message: AgentTranscriptMessage, shown: string): boolean {
+  return (
+    shown !== "" &&
+    commentLineOf(message) === undefined &&
+    slackLineOf(message) === undefined &&
+    spokenLineOf(message) === undefined
+  );
 }

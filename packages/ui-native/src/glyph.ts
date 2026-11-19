@@ -203,6 +203,10 @@ export const GLYPH = {
   RETRY: lucide(LUCIDE_SYMBOL.ROTATE_CW),
   RESTORE: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
   HISTORY: lucide(LUCIDE_SYMBOL.ROTATE_CCW_CLOCK),
+  // A message's acts, as the panel's message actions draw them: Edit a line of the member's, Rewind conversation to here, and Fork to new agent.
+  EDIT_MESSAGE: lucide(LUCIDE_SYMBOL.PENCIL),
+  REWIND: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
+  FORK: lucide(LUCIDE_SYMBOL.SPLIT),
   UPDATE: lucide(LUCIDE_SYMBOL.CIRCLE_ARROW_UP),
   RUN: lucide(LUCIDE_SYMBOL.PLAY),
   // A sound clip's play and pause, as the panel's audio player draws them.
