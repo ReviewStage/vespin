@@ -7,7 +7,7 @@
  * archived ones left out. It is no live read: it is read as the sidebar
  * first draws it, again every half minute while it stands and as the window
  * comes back into focus, and at once after a write from one of its rows (a
- * rename, an archive, a delete) settles, so a Manager archived elsewhere
+ * rename, an archive asked or not, a delete) settles, so a Manager archived elsewhere
  * leaves it at the next read at the latest.
  */
 
@@ -81,6 +81,8 @@ export function useWorkspaceManagers(
     return {
       ...control,
       readAgent: (agentId: string) => readAgentById(queryClient, agentId),
+      // Note that an archive asked nothing goes through `onArchive` rather than the mutation, so it reads the list again too.
+      onArchive: (...asked) => control.onArchive(...asked).finally(refresh),
       rename: { ...control.rename, options: refreshing(control.rename.options, refresh) },
       archiveAgent: refreshing(control.archiveAgent, refresh),
       archiveAgents: refreshing(control.archiveAgents, refresh),

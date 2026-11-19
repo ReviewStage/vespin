@@ -8,14 +8,15 @@
  * agent's own, its press opening its page (`/<workspace>/agent/<id>`), saying
  * nothing of where it runs (`runsOn`), chosen with no other (`choosable`),
  * and the row of the page standing open marked as the sidebar marks its open
- * task. Its head folds it as Pinned's does, kept across launches, and its +
+ * task. Its head folds it as Pinned's does, kept across launches, the open
+ * Manager's row still standing under the fold, and its +
  * opens New Manager (`new-manager-dialog.tsx`). It stands
  * only where the workspace has the Managers experiment on, and says so
  * where it holds none or could not be read; until the first answer lands
  * it stands as its head alone.
  */
 
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import { EXPERIMENT } from "@repo/settings";
@@ -88,7 +89,52 @@ export function SidebarManagers({
   const folded = folds.managersFolded;
   const shown = tasks.shown && inSight;
   const openId = tasks.agentView.agentId;
-  const drawn = (managers ?? []).filter((agent) => !folded || agent.id === openId);
+  const listedManagers = managers ?? [];
+  // The open Manager's row stands under the head while the section is folded, as Pinned's and Following's open rows do.
+  const standing = listedManagers.filter((agent) => agent.id === openId);
+
+  const rows = (drawn: readonly AgentSummary[]) => (
+    <ReplayMask>
+      <TaskRows
+        label={MANAGERS_HEAD}
+        cells={AGENT_ROW_CELLS}
+        more={more}
+        edges={TASK_ROW_EDGES.UNCHOSEN}
+        joinsWalk
+        moves
+      >
+        {drawn.map((agent) => {
+          const at = agentLastMovedAt(agent);
+
+          const subject = listedRowSubject(agent, at, {
+            models: agents.models,
+            me: tasks.me,
+            pullRequests: NO_PULL_REQUESTS,
+          });
+
+          return (
+            <AgentListRow
+              key={agent.id}
+              agent={agent}
+              agents={agents}
+              shown={shown}
+              subject={subject}
+              at={at}
+              card={<AgentCard subject={subject} models={agents.models} />}
+              pullRequest={undefined}
+              chosen={undefined}
+              more={more}
+              current={agent.id === openId}
+              runsOn={false}
+              choosable={false}
+              onPress={() => onOpen(agent.id)}
+              onOpenPullRequest={() => onOpen(agent.id)}
+            />
+          );
+        })}
+      </TaskRows>
+    </ReplayMask>
+  );
 
   return (
     <nav className="sidebar-group" aria-label={MANAGERS_HEAD} {...motionKey(MANAGERS_KEY)}>
@@ -100,6 +146,7 @@ export function SidebarManagers({
           noun: MANAGER_NOUN,
         })}
         label={MANAGERS_HEAD}
+        standing={standing.length === 0 ? undefined : rows(standing)}
         actions={
           <Tooltip label={NEW_MANAGER}>
             <IconButton
@@ -123,48 +170,7 @@ export function SidebarManagers({
         {managers?.length === 0 && !failed ? (
           <NoteLine look={NOTE_LINE_LOOK.ROWS}>No Managers yet.</NoteLine>
         ) : null}
-        {drawn.length === 0 ? null : (
-          <ReplayMask>
-            <TaskRows
-              label={MANAGERS_HEAD}
-              cells={AGENT_ROW_CELLS}
-              more={more}
-              edges={TASK_ROW_EDGES.UNCHOSEN}
-              joinsWalk
-              moves
-            >
-              {drawn.map((agent) => {
-                const at = agentLastMovedAt(agent);
-
-                const subject = listedRowSubject(agent, at, {
-                  models: agents.models,
-                  me: tasks.me,
-                  pullRequests: NO_PULL_REQUESTS,
-                });
-
-                return (
-                  <AgentListRow
-                    key={agent.id}
-                    agent={agent}
-                    agents={agents}
-                    shown={shown}
-                    subject={subject}
-                    at={at}
-                    card={<AgentCard subject={subject} models={agents.models} />}
-                    pullRequest={undefined}
-                    chosen={undefined}
-                    more={more}
-                    current={agent.id === openId}
-                    runsOn={false}
-                    choosable={false}
-                    onPress={() => onOpen(agent.id)}
-                    onOpenPullRequest={() => onOpen(agent.id)}
-                  />
-                );
-              })}
-            </TaskRows>
-          </ReplayMask>
-        )}
+        {listedManagers.length === 0 ? null : rows(listedManagers)}
       </GroupHeader>
       {newManager.dialog}
     </nav>
