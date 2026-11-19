@@ -127,6 +127,8 @@ function useRestoreVersion(
             void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq: undoTo }), {
               refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
               unanswered: VERSION_HISTORY_WORDS.UNDO_REFUSED,
+              // Note that a refused Undo offers Try again, as its words say; a newer restore of the description holds it off (`subject`).
+              retry: true,
               subject,
               went: BUZZ.SUCCESS,
             });
