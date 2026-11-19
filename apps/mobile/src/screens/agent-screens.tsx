@@ -446,7 +446,7 @@ function AgentComposerArea({
         composer={composer}
         approvals={approvals}
         onShowWaiting={onShowWaiting}
-        addMenu={agentAddMenu(composer, servers)}
+        addMenu={agentAddMenu(composer, servers, agent !== undefined)}
         note={note}
         call={call}
         otherCall={otherCall}
@@ -460,17 +460,22 @@ function AgentComposerArea({
 
 /**
  * What the composer's + opens, as the desktop composer's + does: Photos,
- * then MCP servers ›, each server the agent is handed, checked while it is
- * on, a press switching it, once they are read and where any is connected.
+ * then MCP servers ›, each server the agent is handed led by its
+ * provider's mark, checked while it is on, a press switching it, once they are read and where any is connected.
  * The model, its effort, Fast and the permission mode stand once, in the
  * model chip's sheet at the row's end, as the desktop's model chip holds
  * them.
  */
-function agentAddMenu(composer: AgentComposer, servers: AgentServers): ComposerMenu {
+function agentAddMenu(
+  composer: AgentComposer,
+  servers: AgentServers,
+  /** Whether the task list holds the agent, whose servers a switch changes; none are offered before, since a switch then changes nothing. */
+  listed: boolean,
+): ComposerMenu {
   return {
     actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
     submenus:
-      !servers.read || servers.servers.length === 0
+      !listed || !servers.read || servers.servers.length === 0
         ? []
         : [
             {
@@ -478,7 +483,7 @@ function agentAddMenu(composer: AgentComposer, servers: AgentServers): ComposerM
               symbol: GLYPH.MCP_SERVER,
               choices: servers.servers.map((server) => ({
                 label: server.name,
-                symbol: GLYPH.MCP_SERVER,
+                mark: server.provider,
                 on: server.on,
                 onPress: () => servers.toggle(server.connection, !server.on),
               })),
