@@ -1186,6 +1186,83 @@ it.layer(SUITE)("our Slack route", (it) => {
     },
   );
   it.effect(
+    "a member's 👍 on the bot's message in an agent's thread reaches that agent quoting it, and the bot's own 👍 or another emoji does not",
+    () => {
+      const calls: SlackCall[] = [];
+      const posted = "1700000007.000700";
+      const fake = fakeSlack(calls);
+
+      return Effect.gen(function* () {
+        const { owner, agent, threadTs, slackUserId } = yield* openThreadAgent(
+          CONVERSATION_RUNTIME.CLAUDE_CODE,
+          false,
+        );
+
+        // Slack's read of the one message the bot posted in the agent's thread.
+        const slack: SlackWebApi = (method, args) =>
+          method === "conversations.replies" && args.ts === posted
+            ? Effect.succeed({
+                ok: true,
+                messages: [
+                  { ts: threadTs, user: slackUserId, text: "fix the flaky test" },
+                  {
+                    ts: posted,
+                    thread_ts: threadTs,
+                    user: "UBOT",
+                    bot_id: "B0001",
+                    text: "I pinned the clock in the retry test.",
+                  },
+                ],
+              })
+            : fake(method, args);
+
+        const bot = Layer.succeed(SlackBot, slackBotOver(slack));
+
+        const reaction = (user: string, name: string) =>
+          slackEvent({
+            type: "event_callback",
+            team_id: "T0001",
+            event_id: `Ev${randomUUID()}`,
+            authorizations: [{ user_id: "UBOT" }],
+            event: {
+              type: "reaction_added",
+              user,
+              reaction: name,
+              item_user: "UBOT",
+              item: { type: "message", channel: "C0001", ts: posted },
+            },
+          });
+
+        const sent = () => HARNESS.heard.filter((heard) => heard.call === "send").length;
+        const before = sent();
+        yield* answer(bot, reaction("UBOT", "+1"));
+        yield* answer(bot, reaction(slackUserId, "tada"));
+
+        assert.equal(sent(), before);
+        yield* answer(bot, reaction(slackUserId, "+1::skin-tone-3"));
+
+        assert.equal(sent(), before + 1);
+        assert.deepEqual(HARNESS.heard.at(-1), { call: "send", account: owner });
+
+        const lines = yield* (yield* Database)
+          .select({ parts: messages.parts })
+          .from(messages)
+          .where(eq(messages.conversationId, agent.conversationId));
+
+        const said = lines.flatMap((line) =>
+          (line.parts ?? []).flatMap((part) => (part.type === "text" ? [part.text] : [])),
+        );
+
+        assert.ok(
+          said.some((words) =>
+            words.startsWith('👍 on your message: "I pinned the clock in the retry test."'),
+          ),
+        );
+      });
+    },
+  );
+
+  it.effect(
     "an uninstall of the app from a team deletes its workspace's installation and its members' Slack ids",
     () => {
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack([])));
