@@ -1,4 +1,4 @@
-import { messageWords } from "@repo/features/agent-parts";
+import { computerAppsOf, messageWords } from "@repo/features/agent-parts";
 import { REPLAY_STEP_KIND, type Replay, type ReplayStep } from "@repo/features/agent-replay";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import type {
@@ -63,7 +63,13 @@ import { pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { TranscriptAgentOn } from "../reset-credit.js";
 import { lineSender, providerOf } from "./agent-model.js";
-import { MessageFileChips, MessageFiles } from "./agent-pictures.js";
+import {
+  AgentPicturesProvider,
+  ComputerAppsProvider,
+  MessageFileChips,
+  MessageFiles,
+  useAgentPictureDoor,
+} from "./agent-pictures.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { ForkProvider } from "./fork-action.js";
@@ -76,6 +82,7 @@ import { useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
 import { useListedAgent } from "./use-workspace-agents.js";
+import { useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 
 /**
  * replay-card.tsx -- the card an agent started from another opens on: "Continued from" or "Forked from" the source agent, folded over the brief and the steps of the source's work it was handed.
@@ -526,6 +533,9 @@ type CarriedRead =
 /** What the card says where the source's transcript could not be read, as where it was deleted or the reader cannot reach it. */
 const CARRIED_UNREAD_LINE = "The source agent's transcript could not be read.";
 
+/** No messages drawn, while the source's transcript is being read or could not be. */
+const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
+
 /**
  * The source's transcript where the replay carried it whole: held while
  * the card's tab shows, and read to its start, a page at a time, since a
@@ -568,10 +578,10 @@ function useCarried(replay: Replay, place: ReplayPlace): CarriedRead | undefined
 /**
  * The source's messages a card carried whole draws in its steps' place, a
  * page at a time (`PagedRows`), each as the transcript draws it, under the
- * source rather than the card's own agent, so a reasoning's or a call's
- * body is read of the source's, and offering neither a rewind nor a fork,
- * which act on the card's own agent; a quiet line where they could not be
- * read, and nothing while they are.
+ * source rather than the card's own agent, so a picture, a computer call's
+ * app, and a reasoning's or a call's cut body are read of the source's, and
+ * offering neither a rewind nor a fork, which act on the card's own agent;
+ * a quiet line where they could not be read, and nothing while they are.
  */
 function CarriedMessages({
   agentId,
@@ -582,6 +592,11 @@ function CarriedMessages({
   read: CarriedRead;
   place: ReplayPlace;
 }): React.JSX.Element | null {
+  const pictures = useAgentPictureDoor(agentId);
+  const wholeParts = useWholePartDoor(agentId);
+  const messages = read.kind === CARRIED_READ.READ ? read.transcript.messages : NO_MESSAGES;
+  const computerApps = useMemo(() => computerAppsOf(messages), [messages]);
+
   if (read.kind === CARRIED_READ.READING) return null;
 
   if (read.kind === CARRIED_READ.UNREAD) {
@@ -592,21 +607,27 @@ function CarriedMessages({
     );
   }
 
-  const { messages } = read.transcript;
-
   return (
     <TranscriptAgentOn agentId={agentId} planId={undefined}>
-      <RewindProvider value={undefined}>
-        <ForkProvider value={undefined}>
-          <PagedRows count={messages.length} earlierLine={earlierMessagesLine}>
-            {(from) =>
-              messages
-                .slice(from)
-                .map((message) => <Fragment key={message.id}>{place.message(message)}</Fragment>)
-            }
-          </PagedRows>
-        </ForkProvider>
-      </RewindProvider>
+      <AgentPicturesProvider value={pictures}>
+        <ComputerAppsProvider value={computerApps}>
+          <WholePartsProvider value={wholeParts}>
+            <RewindProvider value={undefined}>
+              <ForkProvider value={undefined}>
+                <PagedRows count={messages.length} earlierLine={earlierMessagesLine}>
+                  {(from) =>
+                    messages
+                      .slice(from)
+                      .map((message) => (
+                        <Fragment key={message.id}>{place.message(message)}</Fragment>
+                      ))
+                  }
+                </PagedRows>
+              </ForkProvider>
+            </RewindProvider>
+          </WholePartsProvider>
+        </ComputerAppsProvider>
+      </AgentPicturesProvider>
     </TranscriptAgentOn>
   );
 }

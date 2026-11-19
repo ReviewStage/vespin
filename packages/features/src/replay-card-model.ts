@@ -299,7 +299,9 @@ function messageSteps(message: AgentTranscriptMessage): number {
  * the brief the card already draws, up to and including the one a fork
  * was cut at, led by the note the source's own first message ended on
  * where it was started from another in turn; nothing where the fork's
- * message is not among them, as where it was rewound away.
+ * message is not among them, as where it was rewound away. Note that the
+ * steps the source was itself handed are not drawn again, because they
+ * stand on the source's own card in its tab, a press of its chip away.
  */
 export function carriedTranscript(
   source: readonly AgentTranscriptMessage[],
