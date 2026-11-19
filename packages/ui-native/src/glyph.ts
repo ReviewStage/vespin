@@ -234,6 +234,8 @@ export const GLYPH = {
   NEXT_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
   // iOS's own: Share is the system's act, a sheet closes with the system's round ✕ (its close role, as Calendar and Reminders close one), a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  // Select text is the system's act on a held message, as Messages and ChatGPT draw it.
+  SELECT_TEXT: system("selection.pin.in.out"),
   CLOSE: system("xmark"),
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),

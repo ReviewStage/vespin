@@ -84,8 +84,14 @@ builds a control of its own.
   file. A long press on a picture, a recording, a file's chip, or a message
   opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
   it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
-  the picture viewer's share button holding the same, and Copy message on a
-  message's words; the app answers them through `KeepingProvider`. A
+  the picture viewer's share button holding the same, and on a message's
+  words Copy message, Copy link where it has an address, Select text (the
+  system's text view in a sheet, held by `KeepingProvider`) and Share, a
+  sent line's menu headed by its time (`MessageMenu`), as Messages and
+  ChatGPT head one; an agent's finished turn ends on a standing row of the
+  panel's glyphs, Copy, Copy link and Share, with a ⋯ for what else it
+  offers (`TurnActs`), since a phone has no hover to show the panel's; the
+  app answers them through `KeepingProvider`. A
   mention's chip, which stands inside a line of words where no SwiftUI menu
   can wrap it, is held for the system's sheet of Open link and Copy link
   instead, as the panel's link menu offers them, a popover from the chip in

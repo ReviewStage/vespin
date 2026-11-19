@@ -30,7 +30,7 @@ import { FileChip } from "./file-chip.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
-import { CopyWordsMenu } from "./held-menu.js";
+import { CopyWordsMenu, MessageMenu, TurnActs } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
@@ -137,6 +137,8 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
+  turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   said: {
@@ -612,6 +614,8 @@ interface RowDrawing {
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
   readonly onOpenAddress: (address: string) => void;
+  /** A message's address on vespin.dev by its id, which its Copy link copies; none where messages have none. */
+  readonly messageLink?: ((messageId: string) => string | undefined) | undefined;
   /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
@@ -757,7 +761,13 @@ function TranscriptRow({
           {/* Note that a line of files alone draws no empty bubble under them. */}
           {item.words.trim() === "" &&
           (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
-            <CopyWordsMenu words={item.words} width={rowWidth(drawing.column)}>
+            <MessageMenu
+              words={item.words}
+              at={item.at}
+              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
+              link={drawing.messageLink?.(item.place.row)}
+              width={rowWidth(drawing.column)}
+            >
               <View style={styles.saidHeld}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
                   <Markdown
@@ -769,17 +779,21 @@ function TranscriptRow({
                   />
                 </View>
               </View>
-            </CopyWordsMenu>
+            </MessageMenu>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:
+      // Note that a finished turn ends on how long it worked, then the acts on its words, standing rather than on a hover, as ChatGPT's row stands under its reply.
       return (
         <View style={[styles.row, { paddingBottom: SPACE.ROW }]}>
           <Text selectable style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
             {item.words}
           </Text>
+          <View style={styles.turnActs}>
+            <TurnActs words={item.copy} link={drawing.messageLink?.(item.place.message)} />
+          </View>
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:

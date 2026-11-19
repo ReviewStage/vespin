@@ -211,6 +211,23 @@ function useAgentAddress(
   return step === undefined ? undefined : linkOf(place, step);
 }
 
+/**
+ * A message's address on vespin.dev under its agent, as the panel's Copy
+ * link names one (`agentMessagePlace`), by the message's id; none before the
+ * agent's workspace is known.
+ */
+function useMessageLink(
+  agentId: string,
+  workspaceId: string | undefined,
+): ((messageId: string) => string | undefined) | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const step = linkWorkspaceStep(workspaceId, workspaces);
+
+  if (step === undefined) return undefined;
+
+  return (messageId) => linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step);
+}
+
 /** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
 function useAutomationAddress(
   automationId: string | undefined,
@@ -576,6 +593,7 @@ function AgentConversation({
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
+  const messageLink = useMessageLink(id, shown?.workspaceId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -836,6 +854,7 @@ function AgentConversation({
       onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
+      messageLink={messageLink}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
         const key = keyOf(item.url);

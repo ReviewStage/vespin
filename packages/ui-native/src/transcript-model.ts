@@ -253,7 +253,12 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly running: boolean;
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.MEDIA; readonly media: readonly ShownMedia[] }
-  | { readonly kind: typeof TRANSCRIPT_ITEM.FOOT; readonly words: string }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.FOOT;
+      readonly words: string;
+      /** The turn's words, which its row's Copy and Share take, as the panel's turn foot copies them (`messageWords`). */
+      readonly copy: string;
+    }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.WORKING;
       readonly words: string;
@@ -1053,6 +1058,8 @@ export function transcriptItems(
               depth: 0,
               kind: TRANSCRIPT_ITEM.FOOT,
               words: workedForText(startedAt, finishedAt, reading.now),
+              // Note that the copy is the turn's words whole, as the panel's foot copies them (`messageWords`), so words a closed fold holds are copied too.
+              copy: messageWords(message),
             },
           ];
 
