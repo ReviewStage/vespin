@@ -324,7 +324,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // Note that every read here draws the window's own marks, answers, and messages already, as the host draws them into each (`@repo/host`'s `inbox-collections.ts`).
   const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED);
 
-  const taskless = useTasklessInboxGroups(
+  const { groups: taskless, ...tasklessFeed } = useTasklessInboxGroups(
     tasks.workspace?.id,
     tasks.liveAgents,
     tasks.agents.models,
@@ -417,7 +417,12 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   // Note that the holdings are filtered against the task list, so until it is read they hold nothing and prove nothing.
   const listUnread = !tasks.listRead && !tasks.listFailed;
-  const reading = listUnread || holdings.some((holding) => !read.items.has(holding.taskId));
+  // Note that the account's feed is waited on though no task holds an item, since it may hold threads on no task, while an account is signed in to read it.
+  const feedUnread = tasks.signedIn && tasklessFeed.pending;
+
+  const reading =
+    listUnread || feedUnread || holdings.some((holding) => !read.items.has(holding.taskId));
+
   // An item asked for by a link or a notification that no read holds once every read has landed is
   // not there for the reader, whether it was deleted or is of a task they cannot read, and its pane
   // says so rather than standing empty.
@@ -452,8 +457,8 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   );
 
   const resolveItems = useInboxResolver();
-  // Note that a task list that failed leaves the Inbox holding nothing to read, which would otherwise say it was empty.
-  const failed = read.failed || tasks.listFailed;
+  // Note that a task list that failed leaves the Inbox holding nothing to read, which would otherwise say it was empty, and so does a feed refused where no task holds an item.
+  const failed = read.failed || tasks.listFailed || tasklessFeed.failed;
 
   const onRetry = () => {
     read.onRetry();

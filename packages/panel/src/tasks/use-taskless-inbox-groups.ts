@@ -55,17 +55,29 @@ function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
   );
 }
 
+/** The agents on no task the Inbox lists, and where the account's feed they are told in stands. */
+export interface TasklessInboxGroups {
+  readonly groups: readonly InboxGroup<InboxAgentHolder>[];
+  /** Whether the feed has not answered yet, so an agent's items may still be on their way. */
+  readonly pending: boolean;
+  /** Whether the feed refused, so the list offers to read it again whether or not a task holds items. */
+  readonly failed: boolean;
+}
+
 /**
  * Every agent on no task the feed holds items of in `workspaceId`, or in any
  * while none is named, each with its items, the agents named from `listed`
- * first and else from their own read.
+ * first and else from their own read; and where the feed stands, since a
+ * reader whose only threads stand on no task is told the feed's state by
+ * nothing else.
  */
 export function useTasklessInboxGroups(
   workspaceId: string | undefined,
   listed: readonly ListedAgent[] | undefined,
   models: readonly CatalogModel[] | undefined,
-): readonly InboxGroup<InboxAgentHolder>[] {
-  const fed = useQuery(inboxItemsQuery()).data?.agents;
+): TasklessInboxGroups {
+  const feed = useQuery(inboxItemsQuery());
+  const fed = feed.data?.agents;
   const ids = useMemo(() => Object.keys(fed ?? NO_AGENTS), [fed]);
 
   const byId = useMemo(
@@ -84,7 +96,7 @@ export function useTasklessInboxGroups(
   // The holders named last, by agent, so an agent named the same is held by the very holder it was.
   const kept = useRef(new Map<string, InboxHolderAgent>());
 
-  return useMemo(() => {
+  const groups = useMemo(() => {
     if (fed === undefined) return NO_GROUPS;
     const sources = new Map<string, NamedSource>(byId);
 
@@ -112,4 +124,6 @@ export function useTasklessInboxGroups(
       return [inboxGroup(agentHolder(agent), items)];
     });
   }, [fed, workspaceId, byId, pages, models]);
+
+  return { groups, pending: feed.isPending, failed: feed.isError };
 }
