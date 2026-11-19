@@ -22,6 +22,7 @@ import {
   alignmentGuide,
   background,
   buttonStyle,
+  disabled,
   fixedSize,
   font,
   foregroundStyle,
@@ -179,6 +180,8 @@ export type RowAction = {
   readonly detail?: string | undefined;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
+  /** Whether it stands dimmed and takes no press, its `detail` saying why, as the panel's Unfollow stands for the assignee. */
+  readonly disabled?: boolean | undefined;
 };
 
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
@@ -242,6 +245,8 @@ type RowActs = {
   readonly menuActions?: readonly RowAction[] | undefined;
   /** The long press menu's further groups, after the swipes' group, each set apart by a divider, such as a task's ways to organize it and, last, Permanently delete. */
   readonly menuGroups?: readonly RowMenuGroup[] | undefined;
+  /** The long press menu whole, in its own order, for a row whose menu follows the panel's right-click rather than leading with its swipes: each group set apart by a divider, after Open. Where given, the swipes stand behind the swipe alone, and `menuSubmenus`, `menuActions` and `menuGroups` are left out. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
   /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
   readonly preview?: ReactElement | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
@@ -328,7 +333,10 @@ export function actionButton(
       {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
-      modifiers={destructive ? [] : [tint(ink)]}
+      modifiers={[
+        ...(destructive ? [] : [tint(ink)]),
+        ...(action.disabled === true ? [disabled(true)] : []),
+      ]}
     />
   );
 }
@@ -592,6 +600,7 @@ export function RowFrame({
   menuSubmenus = [],
   menuActions = [],
   menuGroups = [],
+  menu: ordered,
   preview,
   link,
   question,
@@ -632,7 +641,11 @@ export function RowFrame({
   ];
 
   const groups = menuGroups.filter(menuGroupFilled);
-  const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
+
+  const ownGroup =
+    ordered === undefined
+      ? swiped.length + menuSubmenus.length + menuActions.length > 0
+      : ordered.some((group) => group.length > 0);
 
   // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
   if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
@@ -649,11 +662,15 @@ export function RowFrame({
 
   const menu = asking(
     <LongPressMenu
-      groups={[
-        opening,
-        [...swiped, ...menuSubmenus, ...menuActions],
-        ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
-      ]}
+      groups={
+        ordered === undefined
+          ? [
+              opening,
+              [...swiped, ...menuSubmenus, ...menuActions],
+              ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
+            ]
+          : [opening, ...ordered]
+      }
       preview={preview}
     >
       {row}

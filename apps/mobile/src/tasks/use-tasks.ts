@@ -112,8 +112,9 @@ import {
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
-import { useMemberPictures } from "../member-pictures.js";
+import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
+import { useFollowWrite } from "./use-following.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
 import { useWorkspaceRepositories } from "./use-start.js";
 
@@ -469,6 +470,14 @@ export interface TasksListing {
   readonly faceOf: (task: TaskSummary) => TaskRowFace | undefined;
   /** A member's sign-in picture by their id, which a row's face draws; none where they have none. */
   readonly pictureOf: (userId: string) => string | undefined;
+  /** The signed-in reader's account id, which a row's Follow reads its followers against; none before it is read. */
+  readonly readerId: string | undefined;
+  /** The workspace's members, the reader first, as a row's Assignee lists them. */
+  readonly members: readonly ListedMember[];
+  readonly setPriority: TaskWrites["setPriority"];
+  readonly setAssignee: TaskWrites["setAssignee"];
+  /** Follows a task, or stops, as the panel's Follow and Unfollow do. */
+  readonly follow: (taskId: string, on: boolean) => void;
   readonly setStatus: SetStatus;
   readonly workingAgents: (taskId: string) => number;
   /** Marks a task unread by hand, or read, as the panel's Mark as unread and Mark as read do. */
@@ -640,10 +649,12 @@ export function useTasksListing(search: string): ReadListing {
   const { tasks: listed, agents: listedAgents } = useListedRows();
   const taskPullRequests = useTaskListRows(useTaskListCollections().taskPullRequests);
   const { held, setStatus } = useStatusWrites(listed);
-  const { rename } = useTaskWrites();
+  const { rename, setPriority, setAssignee } = useTaskWrites();
+  const follow = useFollowWrite();
   const placing = useTaskPlacing(workspace?.id);
   const relations = useTaskRelationWrites();
   const pictureOf = useMemberPictures();
+  const members = useListedMembers(workspace?.id);
   const searching = useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
   const [keepTree] = useState(answerKeeper<TaskTree>);
@@ -730,6 +741,11 @@ export function useTasksListing(search: string): ReadListing {
       subTasksOf: (taskId: string) => counts.get(taskId),
       faceOf: (task: TaskSummary) => taskRowFace(task, readerId, soleMember),
       pictureOf: (userId: string) => pictureOf(userId),
+      readerId,
+      members,
+      setPriority,
+      setAssignee,
+      follow,
       setStatus,
       workingAgents,
       markRead,
@@ -756,6 +772,10 @@ export function useTasksListing(search: string): ReadListing {
     placing,
     relations,
     pictureOf,
+    members,
+    setPriority,
+    setAssignee,
+    follow,
   ]);
 
   return useMemo(() => ({ ...rest, found, searching }), [rest, found, searching]);
