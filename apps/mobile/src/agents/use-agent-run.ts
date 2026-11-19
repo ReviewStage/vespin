@@ -39,7 +39,7 @@ import type { ActPortClient } from "@repo/host/contract";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -105,18 +105,27 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const pressing = useRef(new Set<string>());
 
   // Note that the shells are read as the page comes to the front and after each press, and read again every few seconds only while one of its actions runs, the one state a reader waits to see change, so a page left open polls nothing.
-  const { data: shellsRead } = useQuery({
+  const { data: shellsRead, refetch: refetchShells } = useQuery({
     queryKey: shellsKey,
     enabled: offered,
-    refetchInterval: (query) =>
-      offered && focused && runningActions(shellsOf(query.state.data)).size > 0
+    // Note that a read that failed or was refused is tried again on the same beat until one answers, since nothing is offered to press until then.
+    refetchInterval: (query) => {
+      const read = shellsOf(query.state.data);
+
+      return offered && focused && (read === undefined || runningActions(read).size > 0)
         ? SHELLS_LOOK_EVERY_MS
-        : false,
+        : false;
+    },
     retry: false,
     queryFn: () => acts[ACT_KIND.TERMINAL_LIST]({ agentId }),
   });
 
   const shells = shellsOf(shellsRead);
+
+  // Note that the page coming back to the front reads the shells again, as a page left standing under another may hold a run started elsewhere since.
+  useEffect(() => {
+    if (focused && offered) void refetchShells();
+  }, [focused, offered, refetchShells]);
   const running = runningActions(shells);
   const stopped = sandboxStopped(shells);
 
@@ -174,6 +183,6 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
     return { action, runs, onPress };
   };
 
-  // Note that nothing is offered until the shells are read, since an action read as idle before then would run again rather than stop; the read every few seconds is its Try again.
+  // Note that nothing is offered until the shells are read, since an action read as idle before then would run again rather than stop; the read every few seconds until one answers is its Try again.
   return shells === undefined ? [] : actions.map(offer);
 }
