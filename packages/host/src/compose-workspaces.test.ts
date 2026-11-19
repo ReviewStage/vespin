@@ -937,6 +937,28 @@ it.effect(
     }),
 );
 
+it.effect.each([
+  { asked: "on the list's refresh", again: "TASKS_REFRESH" },
+  { asked: "as the app comes forward", again: GATEWAY_METHOD.WORKSPACES_REFRESH },
+] as const)("a photo whose fetch did not land is asked again $asked", ({ again }) =>
+  Effect.gen(function* () {
+    const service = fakeService([]);
+    service.memberships = [PERSONAL, { ...ACME, photoVersion: "v1" }];
+    service.photos[ACME.id] = { contentType: WORKSPACE_PHOTO_TYPE.PNG, base64: "iVBORw0KGgo=" };
+    service.photosUnanswered = 1;
+    const { call, pushed, settled } = yield* subject(service);
+
+    yield* call("TASKS_REFRESH", undefined);
+    yield* settled;
+    yield* again === "TASKS_REFRESH" ? call(again, undefined) : call(again);
+    yield* settled;
+
+    assert.deepEqual(heldPhotos(pushed).at(-1), {
+      [ACME.id]: { rows: { version: "v1", url: "data:image/png;base64,iVBORw0KGgo=" } },
+    });
+  }),
+);
+
 /** Each workspace's pending invitations the host told the windows, the latest last. */
 function heldInvitations(pushed: readonly (readonly [string, WireValue])[]): WireValue[] {
   return toldOn(pushed, LIVE_READ.WORKSPACE_INVITATIONS);

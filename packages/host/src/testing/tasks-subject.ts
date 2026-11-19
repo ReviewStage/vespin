@@ -322,6 +322,8 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   invitations: Record<string, WorkspaceInvitation[]>;
   /** Each workspace's photo, by its id: its type and its bytes in base64; one with none is not found. */
   photos: Record<string, { contentType: WorkspacePhotoType; base64: string }>;
+  /** How many photo fetches from now go unanswered, as one sent under a token the service has stopped taking does. */
+  photosUnanswered: number;
   /** Whether a write is refused as the account's role not allowing it. */
   notPermitted: boolean;
   /** What a Sentry disconnect answers, once `integrationsGate` lets it. */
@@ -797,6 +799,7 @@ export function fakeService(tasks: Task[]): FakeService {
     members: {},
     invitations: {},
     photos: {},
+    photosUnanswered: 0,
     notPermitted: false,
     sentryAnswer: UNANSWERED_WORKSPACE,
     slackBotAnswer: UNANSWERED_WORKSPACE,
@@ -1062,6 +1065,12 @@ export function fakeService(tasks: Task[]): FakeService {
         Effect.sync(() => {
           service.reads.push(`photo:${workspaceId}`);
           const photo = service.photos[workspaceId];
+
+          if (service.photosUnanswered > 0) {
+            service.photosUnanswered -= 1;
+
+            return UNANSWERED_WORKSPACE;
+          }
 
           return photo === undefined
             ? ({ ok: false, failure: WORKSPACE_CALL_FAILURE.NOT_FOUND } as const)
