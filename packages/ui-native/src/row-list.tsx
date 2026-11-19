@@ -274,6 +274,7 @@ export function RowList({
   children,
 }: RowListProps) {
   const colors = useColors();
+  const reduceMotion = useReduceMotion();
   const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
   // Note that a page's grouped list stands in the reading column too, as a plain one does.
@@ -346,6 +347,8 @@ export function RowList({
         ...(choosing === undefined || onChooseStart !== undefined
           ? []
           : [environment("editMode", "active")]),
+        // Note that Select mode comes and goes on the system's spring, its checks sliding in beside the rows as Mail's do rather than standing there at once; with Reduce Motion on they stand at once, as the system's own lists do.
+        ...(reduceMotion ? [] : [animation(Animation.default, chooses)]),
       ]}
     >
       <ListLookContext value={look}>
