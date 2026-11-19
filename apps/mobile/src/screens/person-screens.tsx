@@ -380,14 +380,10 @@ function PersonPage({
     );
   }
 
-  // Note that the page is said to hold nothing of theirs only once the task list and the Inbox have answered, since either may yet name something; until then an empty page says it reads.
+  // Note that the page is said to hold nothing of theirs only once the task list and the Inbox have answered, since either may yet name something; until then an empty page stands the system's bare spinner under the head.
   const empty = personPageEmpty(page) && waiting.length === 0;
 
-  const footer = !empty
-    ? undefined
-    : listRead && inboxRead
-      ? personWords(PERSON_SECTION_WORDS.NOTHING, you)
-      : `${readingWords(you ? "your tasks" : "their tasks")}…`;
+  const answered = listRead && inboxRead;
 
   const assigned = page.assigned.slice(0, PERSON_TASKS_SHOWN);
   const created = page.created.slice(0, PERSON_TASKS_SHOWN);
@@ -413,8 +409,19 @@ function PersonPage({
           onRefresh={async () => {
             await Promise.all([refresh(), refreshTasks()]);
           }}
+          empty={
+            empty && !answered ? (
+              <EmptyState
+                title={readingWords(you ? "your tasks" : "their tasks")}
+                symbol={GLYPH.TASK}
+                loading
+              />
+            ) : undefined
+          }
         >
-          <ListSection footer={footer}>
+          <ListSection
+            footer={empty && answered ? personWords(PERSON_SECTION_WORDS.NOTHING, you) : undefined}
+          >
             <PersonHead
               id={userId}
               name={name}
