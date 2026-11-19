@@ -507,6 +507,10 @@ type RelationRowProps = {
   readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
   /** Its status as a menu its ring opens, as a task's row does (`StatusRing`); none in a picker, or where the task is unknown, where the ring is its mark alone. */
   readonly statusMenu?: RowSubmenu | undefined;
+  /** Its long press menu whole, in the panel's order: a related task's Change relation and Remove relation, then the task's own menu, as its Tasks row holds it; where given, its swipes stand behind the swipe alone and `menuSubmenus` is left out. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
+  /** What its menu's acts ask first, standing by the row (`RowAsking`); none where they never ask. */
+  readonly question?: RowQuestion | undefined;
 };
 
 /** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, led by its kind's glyph where given, its swipe and long press holding what changes that. */
@@ -520,6 +524,8 @@ export function RelationRow({
   trailingActions,
   menuSubmenus,
   statusMenu,
+  menu,
+  question,
 }: RelationRowProps) {
   const colors = useColors();
 
@@ -562,6 +568,8 @@ export function RelationRow({
       row={row}
       trailingActions={trailingActions}
       menuSubmenus={menuSubmenus}
+      menu={menu}
+      question={question}
       heard={{
         label: name,
         value: [status === undefined ? undefined : TASK_STATUS_WORDS[status], relation],
