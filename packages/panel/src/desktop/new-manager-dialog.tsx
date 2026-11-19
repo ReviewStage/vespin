@@ -5,7 +5,8 @@
  * shares (`manager-wire.ts`). The card asks its name, kept as typed, since
  * no generated title ever replaces a Manager's; the repositories it works
  * in, one or more, picked from New task's own list (`RepositoriesChip`),
- * the first picked its checkout; its Machine, where it runs, New task's
+ * the first its checkout, which stands on New task's own default until a
+ * pick (`repository-default.ts`); its Machine, where it runs, New task's
  * Runs on chip on the member's last pick (`runs-on.tsx`); and its model and effort, the
  * agent box's model chip on the account's default until one is picked. It
  * asks no charter: the Manager introduces itself on its first turn. Create
@@ -46,6 +47,7 @@ import { refusedWith, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { CHIP_PLACE, RepositoriesChip } from "../tasks/repository-chip.js";
+import { useRepositoryDefault } from "../tasks/repository-default.js";
 import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "../tasks/runs-on.js";
 import { MODELS_READ } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -97,8 +99,16 @@ export function useNewManagerDialog({
   const workspaceId = tasks.workspace?.id;
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [repositories, setRepositories] = useState<readonly string[]>([]);
+  const chooser = newTask.repositoriesIn(workspaceId);
+  const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
+  // Note that the first repository stands on New task's own default until a pick, and the rest are picked.
+  const repositoryDefault = useRepositoryDefault(chooser, workspace, undefined);
+  const [picks, setPicks] = useState<readonly string[] | undefined>(undefined);
   const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
+
+  const repositories =
+    picks ?? (repositoryDefault.repository === null ? [] : [repositoryDefault.repository]);
+
   const field = useRef<HTMLInputElement | null>(null);
   // Note that one key stands for each opening, so a Create sent again after no answer makes one Manager.
   const key = useRef(crypto.randomUUID());
@@ -170,10 +180,10 @@ export function useNewManagerDialog({
   const toggle = (repository: string) => {
     const wanted = repository.toLowerCase();
 
-    setRepositories((was) =>
-      was.some((each) => each.toLowerCase() === wanted)
-        ? was.filter((each) => each.toLowerCase() !== wanted)
-        : [...was, repository],
+    setPicks(
+      repositories.some((each) => each.toLowerCase() === wanted)
+        ? repositories.filter((each) => each.toLowerCase() !== wanted)
+        : [...repositories, repository],
     );
     changed();
   };
@@ -225,8 +235,9 @@ export function useNewManagerDialog({
               width={CHIP_WIDTH.FIELD}
               describedBy={control["aria-describedby"]}
               values={repositories}
-              chooser={newTask.repositoriesIn(workspaceId)}
+              chooser={chooser}
               onToggle={toggle}
+              onListed={repositoryDefault.onListed}
             />
           )}
         </FormField>
@@ -286,7 +297,7 @@ export function useNewManagerDialog({
     ask: () => {
       key.current = crypto.randomUUID();
       setName("");
-      setRepositories([]);
+      setPicks(undefined);
       setPicked(undefined);
       // Note that the devices and the catalog are read as the card opens, so Machine and Model list them as they stand.
       newTask.readModels();

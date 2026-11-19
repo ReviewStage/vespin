@@ -649,13 +649,20 @@ export function RepositoriesChip(
     chooser: RepositoryChooser;
     /** Picks the repository, or lets it go where it is picked already. */
     onToggle: (repository: string) => void;
+    /** Hears the repositories each successful read lists, `owner/name`. */
+    onListed?: ((repositories: readonly string[]) => void) | undefined;
   },
 ): React.JSX.Element {
   const { values } = props;
   const place = useMenuPlace();
 
   const listing = useRepositoryListing(
-    { value: values[0] ?? null, chooser: props.chooser, onChoose: props.onToggle },
+    {
+      value: values[0] ?? null,
+      chooser: props.chooser,
+      onChoose: props.onToggle,
+      onListed: props.onListed,
+    },
     (pick) => pick(),
   );
 
