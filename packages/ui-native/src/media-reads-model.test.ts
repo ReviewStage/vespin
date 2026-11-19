@@ -59,4 +59,17 @@ describe("a page's media reads", () => {
     await landing;
     expect(shown.get(RECORDING)).toBe(SOURCE);
   });
+
+  it("reads one again once it was let go, as a page that dropped it asks for it again", async () => {
+    const { reads, shown, settled } = readsFailing(0);
+    const landing = settled();
+    reads.ask([RECORDING]);
+    await landing;
+    shown.delete(RECORDING);
+    reads.forget([RECORDING]);
+    const again = settled();
+    reads.ask([RECORDING]);
+    await again;
+    expect(shown.get(RECORDING)).toBe(SOURCE);
+  });
 });

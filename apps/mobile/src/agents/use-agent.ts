@@ -68,6 +68,9 @@ const AGENT_MEDIA_PREFIX = "agent";
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
 const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
 
+/** The most pictures and recordings an agent's page keeps drawn from, those its rows on screen ask for among them; the oldest beyond it are let go. */
+const MEDIA_KEPT = 24;
+
 /** What a file a member sent an agent is written under in the app's caches, beside its line's message. */
 const SENT_FILE_PREFIX = "sent";
 
@@ -401,6 +404,24 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
   }, [acts, agentId]);
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
+
+  // Note that the pictures drawn from are kept to the newest few beyond those asked for now, each a picture's bytes, and the rest let go, read again as their rows come back.
+  useEffect(() => {
+    const asked = new Set(ids);
+    const loose = [...shown.sources.keys()].filter((id) => !asked.has(id));
+    const over = shown.sources.size - MEDIA_KEPT;
+
+    if (over <= 0 || loose.length === 0) return;
+    const gone = loose.slice(0, over);
+    reads?.forget(gone);
+    setShown((held) => {
+      const sources = new Map(held.sources);
+
+      for (const id of gone) sources.delete(id);
+
+      return { agentId: held.agentId, sources };
+    });
+  }, [ids, shown, reads]);
 
   const retry = (pictureId: string) => {
     stand(pictureId, undefined);

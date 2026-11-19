@@ -89,7 +89,7 @@ import {
   StackSubtitle,
   shownFiles,
   shownMediaIds,
-  type TRANSCRIPT_ITEM,
+  TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
   type TranscriptToggles,
@@ -415,8 +415,8 @@ function AgentComposerBar({
   return <Composer {...props} />;
 }
 
-/** No pull request's card on screen yet. */
-const NONE_SHOWN: ReadonlySet<string> = new Set();
+/** No row of the transcript on screen yet. */
+const NONE_SHOWN: readonly TranscriptItem[] = [];
 
 /**
  * The agent's composer as the page's foot holds it, with the questions its
@@ -756,15 +756,24 @@ function AgentConversation({
     [workspaceId],
   );
 
-  // The pull requests whose cards stand on screen, by their pages, as the transcript tells them.
-  const [cardsShown, setCardsShown] = useState<ReadonlySet<string>>(NONE_SHOWN);
+  // The transcript's rows on screen, as it tells them, the same rows kept while the same stand.
+  const [rowsShown, setRowsShown] = useState<readonly TranscriptItem[]>(NONE_SHOWN);
 
-  const showPullRequests = useCallback(
-    (urls: readonly string[]) =>
-      setCardsShown((held) =>
-        urls.length === held.size && urls.every((url) => held.has(url)) ? held : new Set(urls),
+  const showRows = useCallback(
+    (items: readonly TranscriptItem[]) =>
+      setRowsShown((held) =>
+        items.length === held.length && items.every((item, at) => item === held[at]) ? held : items,
       ),
     [],
+  );
+
+  // The pull requests whose cards stand on screen, by their pages.
+  const cardsShown = useMemo(
+    () =>
+      new Set(
+        rowsShown.flatMap((item) => (item.kind === TRANSCRIPT_ITEM.PULL_REQUEST ? [item.url] : [])),
+      ),
+    [rowsShown],
   );
 
   // Note that only the open pull requests whose cards stand on screen are read for their Merge, so an agent that opened dozens never reads them all at once as its page opens, each a follow of its own.
@@ -850,7 +859,8 @@ function AgentConversation({
   const cuts = useMemo(() => openCuts(items), [items]);
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
-  const mediaIds = useMemo(() => shownMediaIds(items), [items]);
+  // Note that only the pictures and recordings of the rows on screen are read, so a transcript of hundreds of screenshots never holds them all as it opens.
+  const mediaIds = useMemo(() => shownMediaIds(rowsShown), [rowsShown]);
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
@@ -1055,7 +1065,7 @@ function AgentConversation({
   const transcriptView = (
     <AgentTranscript
       items={rows}
-      onPullRequestsShown={showPullRequests}
+      onRowsShown={showRows}
       reveal={reveal}
       head={null}
       empty={{
