@@ -2,7 +2,12 @@
 
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_KIND, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  AGENT_KIND,
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentSummary,
+} from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
@@ -202,7 +207,7 @@ async function mountNewManager(newTask: NewTask) {
     },
   });
 
-  const created: { idempotencyKey: string; name: string }[] = [];
+  const created: { idempotencyKey: string; name: string; runsOn: unknown }[] = [];
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_WORKSPACE_LIST]: () => Promise.resolve({ agents: [] }),
@@ -304,4 +309,28 @@ test("where the last pick is a device, Create waits on the read of the devices N
   await vi.waitFor(() =>
     assert.equal(create().disabled || create().getAttribute("aria-disabled") === "true", false),
   );
+});
+
+test("a Create sent again after its device left the list, nothing else changed, is a request of its own on the cloud", async () => {
+  window.localStorage.setItem("app.newTaskRunsOn", MAC.deviceId);
+
+  const listed = (devices: readonly MacOffer[]) =>
+    newManagerTask({ devices, modelsRead: { state: MODELS_READ.READ, generation: 1 } });
+
+  const { created, draw, press, name } = await mountNewManager(listed([MAC]));
+
+  press("New Manager");
+  act(() => draw({ ...listed([MAC]), modelsRead: { state: MODELS_READ.READ, generation: 2 } }));
+  name("Alpha");
+  press("Create Manager");
+  await vi.waitFor(() => assert.equal(created.length, 1));
+  act(() => draw({ ...listed([]), modelsRead: { state: MODELS_READ.READ, generation: 2 } }));
+  press("Create Manager");
+  await vi.waitFor(() => assert.equal(created.length, 2));
+
+  assert.deepEqual(
+    created.map((request) => request.runsOn),
+    [{ machine: AGENT_MACHINE.DEVICE, deviceId: MAC.deviceId }, { machine: AGENT_MACHINE.VERCEL }],
+  );
+  assert.notEqual(created[0]?.idempotencyKey, created[1]?.idempotencyKey);
 });
