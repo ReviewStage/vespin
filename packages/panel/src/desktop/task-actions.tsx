@@ -906,7 +906,7 @@ function TaskMenuFooter({
 
 /**
  * The question Permanently delete asks, naming the task. Deleting a task
- * removes its document and its board and clears the conversation its
+ * removes its description and clears the conversation its
  * transcript is read from, which nothing in the app brings back, so a task
  * not yet done or canceled is pointed at Mark done, which keeps
  * all of it.

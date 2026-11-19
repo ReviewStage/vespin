@@ -360,7 +360,7 @@ export function deleteTaskWords(
   name: string,
   task: Pick<TaskSummary, "status"> | undefined,
 ): StopAgentsWords {
-  const lost = `“${name}” and its board and transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+  const lost = `“${name}” and its description and transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
 
   const settled =
     task !== undefined &&
