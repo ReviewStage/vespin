@@ -428,7 +428,7 @@ function InboxRowView({
           {
             label: RESOLVE,
             symbol: GLYPH.RESOLVED,
-            tone: ROW_ACTION_TONE.NEUTRAL,
+            tone: ROW_ACTION_TONE.DONE,
             onPress: () => onResolve(item),
           } as const,
         ]
@@ -458,7 +458,7 @@ function InboxRowView({
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
           symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-          tone: ROW_ACTION_TONE.NEUTRAL,
+          tone: ROW_ACTION_TONE.READ,
           onPress: () => onMark(item.id, !unread),
         },
       ]}

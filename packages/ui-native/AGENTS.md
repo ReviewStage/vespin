@@ -282,10 +282,16 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   glyph, a count of what needs you, a reminder's time, the selected tab and
   the Inbox count, a picked option or a switch that is on, and a filled
   `Button`. Everything else stands in the ink: an ask's words on a row,
-  links, bar buttons, swipe actions, a bordered or plain button, and a
-  row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
-  asks for copper by name. Status tones stand on the status marks alone: a
-  task's ring, and a pull request's state.
+  links, bar buttons, a bordered or plain button, and a row that acts,
+  such as New agent. `Screen` tints in `TEXT`, so a piece asks for copper
+  by name. Status tones stand on the status marks alone: a task's ring,
+  and a pull request's state. A swipe act stands on iOS's own system color
+  for what it means, its glyph in white, as Mail colors its swipes: mark
+  read or unread blue, Remind me purple, pin orange (Mail's Flag), Resolve
+  and Mark done green, what takes something away red, and the rest gray
+  (Mail's More). The act's `ROW_ACTION_TONE` names its meaning, and
+  `SWIPE_FILL` in `list-row.tsx` is the one table of each meaning's color,
+  over `SYSTEM_COLOR`'s light, dark and Increase Contrast values.
 - **Scopes and capsules.** A list's scopes are the system's segmented
   control under its title, as Mail and the App Store switch a list's views;
   in a split view's 320 pt list column, which cuts the segments' words

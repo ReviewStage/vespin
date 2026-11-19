@@ -346,7 +346,7 @@ function settleSwipes(
           {
             label: WORDS.MARK_DONE,
             symbol: GLYPH.CHECK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
+            tone: ROW_ACTION_TONE.DONE,
             onPress: () => setStatus(task.id, TASK_STATUS.DONE),
           },
         ];
@@ -555,7 +555,7 @@ function rowActs(
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
         symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
-        tone: ROW_ACTION_TONE.NEUTRAL,
+        tone: ROW_ACTION_TONE.PIN,
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
@@ -2105,7 +2105,7 @@ function CommentRow({
         {
           label: open ? RESOLVE : REOPEN,
           symbol: open ? GLYPH.RESOLVED : GLYPH.RESTORE,
-          tone: ROW_ACTION_TONE.NEUTRAL,
+          tone: open ? ROW_ACTION_TONE.DONE : ROW_ACTION_TONE.NEUTRAL,
           onPress: () => onSettle(thread),
         },
       ]}
