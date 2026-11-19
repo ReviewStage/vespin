@@ -227,6 +227,7 @@ import type { InboxSandboxDoor } from "./inbox-image.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
+import { SEND_TO_USER_TOOL } from "./send-to-user-tool.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { SCHEDULE_WAKEUP_TOOL } from "./wakeup-tool.js";
 
@@ -1810,6 +1811,10 @@ test("message_agent shows the model the recorded input", async () => {
 
 test("end_turn shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "end-turn-input", END_TURN_TOOL.inputSchema);
+});
+
+test("send_to_user shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "send-to-user-input", SEND_TO_USER_TOOL.inputSchema);
 });
 
 test("send_slack_message shows the model the recorded input", async () => {

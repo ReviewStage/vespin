@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000,
+      "description": "The message, in Markdown, as people will read it in your chat: short, with mention links for what they can open."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "additionalProperties": false
+}

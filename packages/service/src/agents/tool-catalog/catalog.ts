@@ -166,6 +166,7 @@ import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
+import { runSendToUser, SEND_TO_USER_TOOL } from "../coder-host/send-to-user-tool.js";
 import { SHOW_MEDIA_TOOL } from "../coder-host/show-media.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import {
@@ -681,6 +682,8 @@ const CATALOG = [
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
   agentTool(END_TURN_TOOL, runEndTurn, { ...LOADED, gates: [TOOL_GATE.TURN_END] }),
+  // A Manager's message to its chat, the one way its words reach people.
+  agentTool(SEND_TO_USER_TOOL, runSendToUser, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
 ] as const;
 
 /** The name of a tool the catalog serves. */
