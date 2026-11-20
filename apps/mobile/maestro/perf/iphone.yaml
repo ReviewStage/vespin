@@ -1,0 +1,218 @@
+# iphone.yaml -- MEASUREMENT ONLY (chore/probe-tap-instant): three cold launches, then each tap path five times on the fixture FIXTURE names (inbox, or inbox-large for a real account's size), each timed step labeled "T:<path>".
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: ${FIXTURE}
+      perfStream: ${STREAM}
+- assertVisible: "Recorded the invite flow"
+# Cold launch to the Inbox's first thread drawn, the app stopped before each.
+- repeat:
+    times: 3
+    commands:
+      - stopApp
+      - launchApp:
+          stopApp: true
+          arguments:
+            fixture: ${FIXTURE}
+            perfStream: ${STREAM}
+          label: "T:cold-launch"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 5000
+# Inbox row to its thread.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Recorded the invite flow"
+          retryTapIfNoChange: false
+          label: "T:inbox-row"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-thread"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# The ⋯ menu.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "More"
+          retryTapIfNoChange: false
+          label: "T:more-menu"
+      - assertVisible: "Mark all as read"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - runFlow:
+          file: ../subflows/dismiss.yaml
+      - waitForAnimationToEnd:
+          timeout: 3000
+# New task.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "New task"
+          retryTapIfNoChange: false
+          label: "T:new-task"
+      - assertVisible: "Describe the task"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Cancel"
+          retryTapIfNoChange: false
+          label: "T:new-task-cancel"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# The workspace picker: open it, choose Relay (no threads, so the Inbox empties), and back to the account's own workspace.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: "workspace-switcher"
+          retryTapIfNoChange: false
+          label: "T:switcher-open"
+      - assertVisible: "Relay, 6 members"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Relay, 6 members"
+          retryTapIfNoChange: false
+          label: "T:switch-workspace"
+      - assertNotVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "workspace-switcher"
+      - assertVisible: "Ada Lovelace, Personal workspace"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Ada Lovelace, Personal workspace"
+          retryTapIfNoChange: false
+          label: "T:switch-back"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Tab switches.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: "tasks-tab"
+          retryTapIfNoChange: false
+          label: "T:tab-tasks"
+      - assertVisible: "Teammate invitations"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "inbox-tab"
+          retryTapIfNoChange: false
+          label: "T:tab-inbox"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Tasks row to its task, and its Status chip.
+- tapOn:
+    id: "tasks-tab"
+- runFlow:
+    file: ../subflows/to-row.yaml
+    env:
+      ROW: "Teammate invitations"
+- waitForAnimationToEnd:
+    timeout: 3000
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Teammate invitations"
+          retryTapIfNoChange: false
+          label: "T:tasks-row"
+      - assertVisible: "Created by .*"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-task"
+      - assertVisible: "Teammate invitations"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- waitForAnimationToEnd:
+    timeout: 3000
+- runFlow:
+    file: ../subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Status, .*"
+      DIRECTION: UP
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          text: "Status, .*"
+          retryTapIfNoChange: false
+          label: "T:status-chip-open"
+      - assertVisible: "Backlog"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Todo"
+          retryTapIfNoChange: false
+          label: "T:status-pick"
+      - assertVisible: "Status, Todo"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Status, .*"
+          retryTapIfNoChange: false
+          label: "T:status-chip-open"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Backlog"
+          retryTapIfNoChange: false
+          label: "T:status-pick"
+      - assertVisible: "Status, Backlog"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Send on an agent's page, whose turn runs, so each wait is capped.
+- launchApp:
+    arguments:
+      fixture: ${FIXTURE}
+      perfStream: ${STREAM}
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- assertVisible: "Stop"
+- waitForAnimationToEnd:
+    timeout: 3000
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          id: "composer-field"
+      - inputText: "Show the expiry too."
+      - assertVisible: "Send"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn:
+          text: "Send"
+          retryTapIfNoChange: false
+          label: "T:send"
+      - extendedWaitUntil:
+          visible: "Stop"
+          timeout: 5000
+      - waitForAnimationToEnd:
+          timeout: 2000

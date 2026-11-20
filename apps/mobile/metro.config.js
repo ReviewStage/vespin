@@ -114,10 +114,30 @@ function workspaceConfig(projectRoot, options) {
 // which is what Sentry matches a Hermes stack trace to its uploaded map by.
 // The SDK's web replay and feedback widget are left out of the bundle, and
 // no options file is read, since the app passes its options to `init`.
-module.exports = getSentryExpoConfig(__dirname, {
+const exported = getSentryExpoConfig(__dirname, {
   getDefaultConfig: workspaceConfig,
   includeWebReplay: false,
   includeWebFeedback: false,
   injectReleaseForWeb: false,
   optionsFile: false,
 });
+// MEASUREMENT ONLY (chore/probe-tap-timing): with PERF_PROFILE=1, React DevTools' hook set before any module and the profiling renderer, to find causes; without it, the production renderer, for timings.
+if (process.env.PERF_PROFILE === "1") {
+const basePolyfills = exported.serializer.getPolyfills ?? (() => []);
+exported.serializer.getPolyfills = (context) => [
+  ...basePolyfills(context),
+  path.join(__dirname, "scripts", "perf", "devtools-hook-polyfill.js"),
+];
+// MEASUREMENT ONLY: React's profiling renderer, so each fiber carries its own render time (selfBaseDuration).
+const baseResolve = exported.resolver.resolveRequest;
+exported.resolver.resolveRequest = (context, moduleName, platform) => {
+  const name =
+    moduleName === "../implementations/ReactFabric-prod"
+      ? "../implementations/ReactFabric-profiling"
+      : moduleName;
+  return baseResolve
+    ? baseResolve(context, name, platform)
+    : context.resolveRequest(context, name, platform);
+};
+}
+module.exports = exported;

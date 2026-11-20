@@ -249,3 +249,6 @@ globalThis.Response = StreamingResponse as typeof Response;
 // streams.
 // SAFETY: Expo's `fetch` takes the web's arguments and answers a `Response`; its declaration names its own narrower input and answer types.
 globalThis.fetch = streamingFetch as typeof globalThis.fetch;
+
+// MEASUREMENT ONLY: this module and everything it imports evaluated.
+globalThis.__perfMark?.("evaluated-polyfills");

@@ -368,6 +368,37 @@ const servedActPort = (
  * otherwise. The store drops a patch that says nothing new, so laying the
  * same data twice settles rather than loops.
  */
+// MEASUREMENT ONLY (the perf probe): with `-perfStream true`, an Inbox delivery every 500 ms, one holder's newest item moved, as a working agent's posts arrive.
+function streamPerfDeliveries(state: AppStateStore): void {
+  // @ts-expect-error: the probe's own launch argument.
+  const { Settings } = require("react-native");
+  const asked: unknown = Settings.get("perfStream");
+
+  if (asked !== true && asked !== "true" && asked !== 1) return;
+  let n = 0;
+  setInterval(() => {
+    const snap = state.snapshot();
+    // biome-ignore lint/suspicious/noExplicitAny: measurement only.
+    const feed: any = snap["inboxItems" as keyof typeof snap];
+    const byTask = feed?.rows?.task;
+
+    if (byTask === undefined) return;
+    const ids = Object.keys(byTask);
+    const id = ids[n++ % ids.length];
+
+    if (id === undefined) return;
+    // biome-ignore lint/suspicious/noExplicitAny: measurement only.
+    const moved = (byTask[id] as any[]).map((item, i) =>
+      i === 0 ? { ...item, updatedAt: Date.now() } : item,
+    );
+    // @ts-expect-error: measurement only.
+    state.update({
+      inboxItems: { ...feed, rows: { ...feed.rows, task: { ...byTask, [id]: moved } } },
+    });
+    (globalThis as { __perfDelivered?: number }).__perfDelivered = performance.now();
+  }, 500);
+}
+
 const stagedFixture = (
   state: AppStateStore,
   updateNeeded: boolean,
@@ -378,6 +409,7 @@ const stagedFixture = (
   Layer.effectDiscard(
     Effect.gen(function* () {
       stageFixture(state, updateNeeded, machineAsk, setupOwed, inboxOff);
+      streamPerfDeliveries(state);
       yield* publishAppStateChanges(
         state,
         () => Effect.sync(() => stageFixture(state, updateNeeded)),

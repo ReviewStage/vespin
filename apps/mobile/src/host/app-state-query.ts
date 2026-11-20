@@ -78,6 +78,8 @@ export function followAppStateInto(
     },
     {
       heard: ({ taskList: rows }) => {
+        // @ts-expect-error -- probe only.
+        globalThis.__perfMark?.("delivery", { taskList: rows !== undefined });
         if (rows !== undefined) taskList.deliver(rows);
       },
       read: (read, lists) => taskList.write(read.version, lists),

@@ -329,7 +329,11 @@ function KeptScreens() {
  * dark every bar's buttons, its search field and the keyboard it raised
  * drew light beside the dark tab bar.
  */
+// MEASUREMENT ONLY: the root layout and every screen module it imports evaluated.
+globalThis.__perfMark?.("evaluated-root-layout");
+
 export default function RootLayout() {
+  globalThis.__perfMark?.("root-layout-render");
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);

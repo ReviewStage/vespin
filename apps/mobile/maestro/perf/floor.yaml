@@ -1,0 +1,46 @@
+# floor.yaml -- MEASUREMENT ONLY: the rig's own floor on stock apps, timed as our taps are: Settings → General (a push) and back, and the Files app's ⋯ menu where it stands.
+appId: com.apple.Preferences
+---
+- launchApp:
+    appId: com.apple.Preferences
+- assertVisible: "General"
+- waitForAnimationToEnd:
+    timeout: 3000
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "General"
+          retryTapIfNoChange: false
+          label: "T:floor-settings-push"
+      - assertVisible: "About"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Settings"
+          index: 0
+          retryTapIfNoChange: false
+          label: "T:floor-settings-back"
+      - assertVisible: "General"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- launchApp:
+    appId: com.apple.DocumentsApp
+- waitForAnimationToEnd:
+    timeout: 5000
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "More"
+          optional: true
+          retryTapIfNoChange: false
+          label: "T:floor-files-more"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          point: "50%, 85%"
+          optional: true
+          retryTapIfNoChange: false
+      - waitForAnimationToEnd:
+          timeout: 3000

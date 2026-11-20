@@ -93,3 +93,6 @@ defineTask<NotificationTaskPayload>(SETTLED_PUSH_TASK, ({ data, error }) => {
 registerTaskAsync(SETTLED_PUSH_TASK).catch((cause: unknown) =>
   console.error("The settled push task was not registered.", cause),
 );
+
+// MEASUREMENT ONLY: this module and everything it imports evaluated.
+globalThis.__perfMark?.("evaluated-notification-task");
