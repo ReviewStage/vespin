@@ -29,6 +29,7 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
+import { chipSize } from "@repo/features/attachment-model";
 import { nextPictureName, pictureName } from "@repo/features/file-marker";
 import { PASTED_TEXT_BYTES, pastedFile } from "@repo/features/long-paste";
 import { encodeWithin, PICTURE_LONG_EDGE } from "@repo/features/picture-fit";
@@ -38,7 +39,7 @@ import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { type ImagePickerAsset, launchImageLibraryAsync } from "expo-image-picker";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 /** The JPEG quality a message's picture is first read at, once drawn within its long edge, as the panel's feedback form reads a screenshot. */
 const PICTURE_QUALITY = 0.8;
@@ -105,14 +106,17 @@ function isText(file: AgentAttachment): boolean {
  * a picture with the `data:` address its thumbnail draws from, and a pasted
  * text file with none, which draws as its tile.
  */
-export function attachedFiles(
-  files: readonly AgentAttachment[],
-): readonly { readonly id: string; readonly name: string; readonly address?: string }[] {
+export function attachedFiles(files: readonly AgentAttachment[]): readonly AttachedPicture[] {
   return files.map((file) =>
     isText(file)
-      ? { id: file.name, name: file.name }
+      ? { id: file.name, name: file.name, detail: fileDetail(file) }
       : { id: file.name, name: file.name, address: `data:${file.mediaType};base64,${file.data}` },
   );
+}
+
+/** What a pasted text file's chip says under its name, as the panel's chip says it: how many lines it runs to. */
+function fileDetail(file: AgentAttachment): string {
+  return chipSize({ name: file.name, mediaType: file.mediaType, url: "" }, file.data);
 }
 
 /** The next picture's name, numbered past every picture held, a pasted text file not counted. */
@@ -455,8 +459,19 @@ export function useAttachedPictures(
 
   useEffect(() => open(), []);
 
+  // Note that what the head draws is read once per change of the files, since a pasted file's lines are counted from its bytes and the composer draws again on every key.
+  const attached = useMemo(
+    () =>
+      pictures.map(({ id, file, address }) =>
+        isText(file)
+          ? { id, name: file.name, detail: fileDetail(file) }
+          : { id, name: file.name, address },
+      ),
+    [pictures],
+  );
+
   return {
-    attached: pictures.map(({ id, file, address }) => ({ id, name: file.name, address })),
+    attached,
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
     refusal: pictureRefusal(pictures, bounds),
     attach,
