@@ -1,41 +1,57 @@
 /**
- * manager-settings-dialog.tsx -- a Manager's Settings: the card its menu's Settings… opens, wherever its menu stands, which sets how it is named.
+ * manager-settings-dialog.tsx -- a Manager's Settings: New Manager's card in its edit look, which its menu's Settings… opens wherever its menu stands, to change the Manager as it stands.
  *
  * A Manager is configured in one place, so its menu offers Settings… where
- * a coder's offers Rename (`agent-actions.tsx`). The card asks its Name,
- * the agent's title, which New Manager set (`new-manager-dialog.tsx`), and
- * saves it through the agent's own rename (`AgentsControl.rename`), the
- * act a coder's Rename sends; a Save with the name unchanged sends nothing.
- * A refusal stands in the card saying why, the name typed kept for another
- * try. Its fields stand in a `Stack`, so a field added after Name, the
- * Manager's face, slots in beside it.
+ * a coder's offers Rename (`agent-actions.tsx`). The card is New Manager's
+ * own (`ManagerCard`), filled from the Manager: its Name, the agent's title;
+ * its Model and effort; and its Repositories and Machine, held as it was
+ * made, saying so, since neither changes after. Of those the client holds
+ * only the first repository, its checkout (`ListedAgent.repository`), so
+ * that is the one the card names. Save sends what changed, the name through
+ * the agent's rename (`AgentsControl.rename`), the act a coder's Rename
+ * sends, and the model and effort through the act the composer's model chip
+ * sends (`AgentsControl.onChoose`); a Save that changed nothing sends
+ * nothing. A refusal stands in the card saying why, with what was typed
+ * and picked kept for another try.
  */
 
-import { AGENT_BOUNDS, type AgentSummary } from "@repo/features/agent-wire";
+import { chooseFailureNote } from "@repo/features/agent-refusal-words";
+import type { AgentSummary } from "@repo/features/agent-wire";
+import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import {
-  DIALOG_TONE,
-  Dialog,
-  DialogActions,
-  FormField,
-  Stack,
-  TextField,
-  useConfirmDialog,
-} from "@repo/ui";
+import { useConfirmDialog } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { appPlatform } from "../app-platform.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
+import type { RepositoryChooser } from "../tasks/repository-chip.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
+import { MANAGER_CARD, ManagerCard } from "./new-manager-dialog.js";
 import { useFormDialog } from "./use-form-dialog.js";
-
-/** The card's title. */
-const MANAGER_SETTINGS = "Manager settings";
 
 /** What the card says where Save is pressed with no name. */
 const NAME_ASKED = "Name the Manager.";
+
+/** No device, while the member's devices are not read. */
+const NO_DEVICES: readonly MacOffer[] = [];
+
+/** No repository, for a Manager the client holds none of. */
+const NO_REPOSITORIES: readonly string[] = [];
+
+/** What a Manager's Settings reads of it. */
+export type ManagerSettingsSubject = Pick<
+  AgentSummary,
+  "id" | "title" | "model" | "effort" | "contextWindow" | "runtime" | "mac"
+> & {
+  /** The workspace it is in, whose repositories its card's chip names; none where the surface does not know it. */
+  readonly workspaceId?: string | undefined;
+  /** Its checkout, the first repository it works in; none where the surface does not know it. */
+  readonly repository?: string | null | undefined;
+};
 
 /** A Manager's Settings: the press that opens the card, and the card. */
 export interface ManagerSettingsAsk {
@@ -43,29 +59,85 @@ export interface ManagerSettingsAsk {
   readonly dialog: React.JSX.Element;
 }
 
+/** The choice a Manager runs on. */
+function choiceOf(agent: ManagerSettingsSubject): ModelChoice {
+  return {
+    model: agent.model,
+    effort: agent.effort,
+    ...(agent.contextWindow === undefined ? undefined : { contextWindow: agent.contextWindow }),
+  };
+}
+
+/** Whether two choices are one. */
+function sameChoice(one: ModelChoice, other: ModelChoice): boolean {
+  return (
+    one.model === other.model &&
+    one.effort === other.effort &&
+    one.contextWindow === other.contextWindow
+  );
+}
+
+/** The device a Manager on a Mac runs on, from the member's devices where they list it, else as the Manager names it; none for one in the cloud. */
+function deviceOf(
+  agent: ManagerSettingsSubject,
+  devices: readonly MacOffer[],
+): MacOffer | undefined {
+  const { mac } = agent;
+
+  if (mac?.deviceId === undefined) return undefined;
+
+  return (
+    devices.find((each) => each.deviceId === mac.deviceId) ?? {
+      deviceId: mac.deviceId,
+      name: mac.name,
+      providers: [],
+    }
+  );
+}
+
 /** The Settings card for `agent`, a Manager, saved through `agents`; the card stands only while `shown`. */
 export function useManagerSettingsDialog(
-  agent: Pick<AgentSummary, "id" | "title">,
-  agents: Pick<AgentsControl, "rename">,
+  agent: ManagerSettingsSubject,
+  agents: Pick<
+    AgentsControl,
+    "rename" | "onChoose" | "models" | "modelsFailed" | "readModels" | "macs"
+  >,
   shown: boolean,
 ): ManagerSettingsAsk {
   const [name, setName] = useState("");
+  const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
   const field = useRef<HTMLInputElement | null>(null);
-  const saving = useMutation(agents.rename.options);
+  const renaming = useMutation(agents.rename.options);
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const trimmed = name.trim();
+  const standing = choiceOf(agent);
+  const choice = picked ?? standing;
+
+  // Note that the name and the choice are sent one after the other, so a refused rename leaves the model as it stood.
+  const saving = useMutation({
+    mutationFn: async (): Promise<ActionResult> => {
+      if (trimmed !== (agent.title ?? "")) {
+        const renamed = await renaming.mutateAsync(agents.rename.ask(agent.id, trimmed));
+
+        if (agents.rename.refused(renamed)) {
+          return { status: ACTION_RESULT_STATUS.REJECTED, reason: RENAME_FAILED };
+        }
+      }
+
+      if (sameChoice(choice, standing)) return ANSWER_ACCEPTED;
+      const chosen = await agents.onChoose(agent.id, choice);
+
+      return "failure" in chosen
+        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: chooseFailureNote(chosen.failure) }
+        : ANSWER_ACCEPTED;
+    },
+  });
 
   const confirmAct = useConfirmAct(saving, {
     refusedFirst: (): ActionResult | undefined =>
       trimmed === "" ? { status: ACTION_RESULT_STATUS.REJECTED, reason: NAME_ASKED } : undefined,
-    // Note that an unchanged name sends nothing, so a Save that changed nothing lands at once.
-    send: () =>
-      trimmed === agent.title
-        ? Promise.resolve()
-        : saving.mutateAsync(agents.rename.ask(agent.id, trimmed)),
-    answered: (answer): ActionResult =>
-      agents.rename.refused(answer)
-        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: RENAME_FAILED }
-        : ANSWER_ACCEPTED,
+    send: () => saving.mutateAsync(),
+    answered: (answer: ActionResult) => answer,
     failed: refusedWith,
   });
 
@@ -77,50 +149,61 @@ export function useManagerSettingsDialog(
 
   const form = useFormDialog(confirm, trimmed !== "");
 
-  const dialog = (
-    <Dialog
-      open={form.open}
-      title={MANAGER_SETTINGS}
-      replayUnmasked
-      busy={form.settling}
-      refused={form.refusal !== undefined}
-      initialFocus={field}
-      onDismiss={form.dismiss}
-      actions={
-        <DialogActions
-          onCancel={form.dismiss}
-          act={{ verb: "Save", tone: DIALOG_TONE.PRIMARY, running: "Saving", ...form.act }}
-        />
-      }
-    >
-      <Stack>
-        <FormField label="Name" error={form.refusal}>
-          {(control) => (
-            <TextField
-              ref={field}
-              field={control}
-              spellCheck={false}
-              maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
-              value={name}
-              disabled={form.settling}
-              onEnter={form.submit}
-              onChange={(next) => {
-                setName(next);
+  // Note that a refusal alone holds the card up, so a change asks the question again rather than clearing it.
+  const changed = () => {
+    if (confirm.rejection !== undefined) confirm.ask();
+  };
 
-                // Note that a refusal alone holds the card up, so an edit asks the question again rather than clearing it.
-                if (confirm.rejection !== undefined) confirm.ask();
-              }}
-            />
-          )}
-        </FormField>
-      </Stack>
-    </Dialog>
+  const devices = agents.macs ?? NO_DEVICES;
+
+  // Note that the chip is held, so its chooser lists the workspace's repositories only to name the one it holds.
+  const chooser: RepositoryChooser = {
+    recent: NO_REPOSITORIES,
+    openGitHub: (url) => appPlatform().openWeb(url),
+    pictures: !staged,
+    scope: agent.workspaceId,
+    manages: false,
+  };
+
+  const dialog = (
+    <ManagerCard
+      look={MANAGER_CARD.EDIT}
+      form={form}
+      field={field}
+      name={{
+        value: name,
+        onChange: (next) => {
+          setName(next);
+          changed();
+        },
+      }}
+      repositories={{
+        values: agent.repository == null ? NO_REPOSITORIES : [agent.repository],
+        chooser,
+        onToggle: () => undefined,
+      }}
+      machine={{ devices, device: deviceOf(agent, devices), onChoose: () => undefined }}
+      model={{
+        choice,
+        choose: (next) => {
+          setPicked(next);
+          changed();
+        },
+        runtime: agent.runtime,
+        models: agents.models,
+        modelsFailed: agents.modelsFailed,
+        readModels: agents.readModels,
+      }}
+    />
   );
 
   return {
     ask: () => {
       setName(agent.title ?? "");
+      setPicked(undefined);
       saving.reset();
+      // Note that the catalog is read as the card opens, so Model lists it as it stands.
+      agents.readModels();
       confirm.ask();
     },
     dialog,

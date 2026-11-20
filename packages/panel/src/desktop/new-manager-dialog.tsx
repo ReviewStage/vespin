@@ -18,13 +18,15 @@
  * After that only its model and effort change, from its own box. Where the
  * member's last pick is a device, Create waits on a read of the member's
  * devices made since the card opened (`useDevicesRead`), as New task's
- * Start does, since a Create before it would name none.
+ * Start does, since a Create before it would name none. The card itself is
+ * `ManagerCard`, which a Manager's Settings draws too in its edit look
+ * (`manager-settings-dialog.tsx`), so the two never look apart.
  */
 
 import { startFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
-import type { ModelChoice } from "@repo/features/models-wire";
+import { AGENT_BOUNDS, type AgentRuntime } from "@repo/features/agent-wire";
+import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import { readFailedWords, readingWords } from "@repo/features/words";
@@ -50,7 +52,7 @@ import { askAct } from "../act.js";
 import { refusedWith, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
-import { CHIP_PLACE, RepositoriesChip } from "../tasks/repository-chip.js";
+import { CHIP_PLACE, RepositoriesChip, type RepositoryChooser } from "../tasks/repository-chip.js";
 import { useRepositoryDefault } from "../tasks/repository-default.js";
 import {
   NewTaskRunsOnChip,
@@ -59,7 +61,7 @@ import {
   useNewTaskRunsOn,
 } from "../tasks/runs-on.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useFormDialog } from "./use-form-dialog.js";
+import { type FormDialog, useFormDialog } from "./use-form-dialog.js";
 
 /** The card's title, and what its + is named. */
 export const NEW_MANAGER = "New Manager";
@@ -94,6 +96,173 @@ function sameRunsOn(one: TaskRunsOnRequest, other: TaskRunsOnRequest): boolean {
 
 function refused(reason: string): ActionResult {
   return { status: ACTION_RESULT_STATUS.REJECTED, reason };
+}
+
+/** Which card a Manager's card is: New Manager, which makes one, or a Manager's Settings, which changes one. */
+export const MANAGER_CARD = {
+  CREATE: "create",
+  EDIT: "edit",
+} as const;
+
+type ManagerCardLook = (typeof MANAGER_CARD)[keyof typeof MANAGER_CARD];
+
+/** What each card is titled and what its act says. */
+const CARD_WORDS = {
+  [MANAGER_CARD.CREATE]: {
+    title: NEW_MANAGER,
+    verb: "Create Manager",
+    running: "Creating Manager",
+  },
+  [MANAGER_CARD.EDIT]: { title: "Manager settings", verb: "Save", running: "Saving" },
+} as const satisfies Record<ManagerCardLook, { title: string; verb: string; running: string }>;
+
+/** What the Repositories and Machine rows say in a Manager's Settings, where they stand as made. */
+const FIXED_AFTER_CREATE = "Fixed once the Manager is made.";
+
+/** What a Manager's card draws its Model row from: the choice standing, how it changes, and the catalog it is picked from. */
+export interface ManagerCardModel {
+  readonly choice: ModelChoice | undefined;
+  readonly choose: (next: ModelChoice) => void;
+  /** The harness the Manager runs on, which narrows the models offered; none before it is made. */
+  readonly runtime: AgentRuntime | undefined;
+  readonly models: readonly CatalogModel[] | undefined;
+  readonly modelsFailed: boolean;
+  readonly readModels: () => void;
+  /** The account's default model's read, which the choice stands on until one is read; none where the choice is the Manager's own. */
+  readonly defaultRead?:
+    | { readonly failed: boolean; readonly retry: () => Promise<void> }
+    | undefined;
+}
+
+/**
+ * A Manager's card, New Manager's and a Manager's Settings' alike, so the
+ * two never look apart: its Name, its Repositories, its Machine, and its
+ * Model, in that order. In a Manager's Settings (`MANAGER_CARD.EDIT`) its
+ * Repositories and Machine stand as it was made, held and saying so, and its
+ * act is Save; a field added to a Manager slots in here for both.
+ */
+export function ManagerCard({
+  look,
+  form,
+  field,
+  name,
+  repositories,
+  machine,
+  model,
+}: {
+  look: ManagerCardLook;
+  form: FormDialog;
+  field: React.RefObject<HTMLInputElement | null>;
+  name: { readonly value: string; readonly onChange: (next: string) => void };
+  repositories: {
+    readonly values: readonly string[];
+    readonly chooser: RepositoryChooser;
+    readonly onToggle: (repository: string) => void;
+    readonly onListed?: ((repositories: readonly string[]) => void) | undefined;
+  };
+  machine: {
+    readonly devices: readonly MacOffer[];
+    readonly device: MacOffer | undefined;
+    readonly onChoose: (deviceId: string | undefined) => void;
+  };
+  model: ManagerCardModel;
+}): React.JSX.Element {
+  const words = CARD_WORDS[look];
+  const fixed = look === MANAGER_CARD.EDIT;
+  const { choice, defaultRead } = model;
+
+  return (
+    <Dialog
+      open={form.open}
+      title={words.title}
+      replayUnmasked
+      busy={form.settling}
+      refused={form.refusal !== undefined}
+      initialFocus={field}
+      onDismiss={form.dismiss}
+      actions={
+        <DialogActions
+          onCancel={form.dismiss}
+          act={{
+            verb: words.verb,
+            tone: DIALOG_TONE.PRIMARY,
+            running: words.running,
+            ...form.act,
+          }}
+        />
+      }
+    >
+      <Stack>
+        <FormField label="Name" error={form.refusal}>
+          {(control) => (
+            <TextField
+              ref={field}
+              field={control}
+              spellCheck={false}
+              placeholder="Release captain"
+              maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
+              value={name.value}
+              disabled={form.settling}
+              onEnter={form.submit}
+              onChange={name.onChange}
+            />
+          )}
+        </FormField>
+        <FormField label="Repositories" description={fixed ? FIXED_AFTER_CREATE : undefined}>
+          {(control) => (
+            <RepositoriesChip
+              place={CHIP_PLACE.FIELD}
+              width={CHIP_WIDTH.FIELD}
+              describedBy={control["aria-describedby"]}
+              held={fixed ? FIXED_AFTER_CREATE : undefined}
+              values={repositories.values}
+              chooser={repositories.chooser}
+              onToggle={repositories.onToggle}
+              onListed={repositories.onListed}
+            />
+          )}
+        </FormField>
+        <FormField label="Machine" description={fixed ? FIXED_AFTER_CREATE : undefined}>
+          {() => (
+            <NewTaskRunsOnChip
+              devices={machine.devices}
+              device={machine.device}
+              disabled={fixed || form.settling}
+              narrow={false}
+              look={CHIP_LOOK.FIELD}
+              width={CHIP_WIDTH.FIELD}
+              onChoose={machine.onChoose}
+            />
+          )}
+        </FormField>
+        <FormField label="Model">
+          {() =>
+            choice !== undefined ? (
+              <AgentModelChip
+                model={{ choice, note: undefined, choose: model.choose, runtime: model.runtime }}
+                models={model.models}
+                modelsFailed={model.modelsFailed}
+                readModels={model.readModels}
+                usage={undefined}
+                look={CHIP_LOOK.FIELD}
+                width={CHIP_WIDTH.FIELD}
+                startsNew={!fixed}
+              />
+            ) : defaultRead?.failed === true ? (
+              <ErrorState
+                failure={unreadShown(FAILURE_SURFACE.AGENT_DEFAULTS_READ)}
+                onRetry={() => void defaultRead.retry()}
+              >
+                {readFailedWords("your default model")}
+              </ErrorState>
+            ) : (
+              <Spinner delay label={readingWords("your default model")} />
+            )
+          }
+        </FormField>
+      </Stack>
+    </Dialog>
+  );
 }
 
 /** New Manager: the press that opens the card, and the card. */
@@ -220,108 +389,44 @@ export function useNewManagerDialog({
   };
 
   const dialog = (
-    <Dialog
-      open={form.open}
-      title={NEW_MANAGER}
-      replayUnmasked
-      busy={form.settling}
-      refused={form.refusal !== undefined}
-      initialFocus={field}
-      onDismiss={form.dismiss}
-      actions={
-        <DialogActions
-          onCancel={form.dismiss}
-          act={{
-            verb: "Create Manager",
-            tone: DIALOG_TONE.PRIMARY,
-            running: "Creating Manager",
-            ...form.act,
-          }}
-        />
-      }
-    >
-      <Stack>
-        <FormField label="Name" error={form.refusal}>
-          {(control) => (
-            <TextField
-              ref={field}
-              field={control}
-              spellCheck={false}
-              placeholder="Release captain"
-              maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
-              value={name}
-              disabled={form.settling}
-              onEnter={form.submit}
-              onChange={(next) => {
-                setName(next);
-                changed();
-              }}
-            />
-          )}
-        </FormField>
-        <FormField label="Repositories">
-          {(control) => (
-            <RepositoriesChip
-              place={CHIP_PLACE.FIELD}
-              width={CHIP_WIDTH.FIELD}
-              describedBy={control["aria-describedby"]}
-              values={repositories}
-              chooser={chooser}
-              onToggle={toggle}
-              onListed={repositoryDefault.onListed}
-            />
-          )}
-        </FormField>
-        <FormField label="Machine">
-          {() => (
-            <NewTaskRunsOnChip
-              devices={devices}
-              device={device}
-              disabled={form.settling}
-              narrow={false}
-              look={CHIP_LOOK.FIELD}
-              width={CHIP_WIDTH.FIELD}
-              onChoose={(deviceId) => {
-                chooseDevice(deviceId);
-                changed();
-              }}
-            />
-          )}
-        </FormField>
-        <FormField label="Model">
-          {() =>
-            choice !== undefined ? (
-              <AgentModelChip
-                model={{
-                  choice,
-                  note: undefined,
-                  choose: (next) => {
-                    setPicked(next);
-                    changed();
-                  },
-                }}
-                models={newTask.models}
-                modelsFailed={newTask.modelsFailed}
-                readModels={newTask.readModels}
-                usage={undefined}
-                look={CHIP_LOOK.FIELD}
-                width={CHIP_WIDTH.FIELD}
-                startsNew
-              />
-            ) : drawnDefault.failed ? (
-              <ErrorState
-                failure={unreadShown(FAILURE_SURFACE.AGENT_DEFAULTS_READ)}
-                onRetry={() => void drawnDefault.retry()}
-              >
-                {readFailedWords("your default model")}
-              </ErrorState>
-            ) : (
-              <Spinner delay label={readingWords("your default model")} />
-            )
-          }
-        </FormField>
-      </Stack>
-    </Dialog>
+    <ManagerCard
+      look={MANAGER_CARD.CREATE}
+      form={form}
+      field={field}
+      name={{
+        value: name,
+        onChange: (next) => {
+          setName(next);
+          changed();
+        },
+      }}
+      repositories={{
+        values: repositories,
+        chooser,
+        onToggle: toggle,
+        onListed: repositoryDefault.onListed,
+      }}
+      machine={{
+        devices,
+        device,
+        onChoose: (deviceId) => {
+          chooseDevice(deviceId);
+          changed();
+        },
+      }}
+      model={{
+        choice,
+        choose: (next) => {
+          setPicked(next);
+          changed();
+        },
+        runtime: undefined,
+        models: newTask.models,
+        modelsFailed: newTask.modelsFailed,
+        readModels: newTask.readModels,
+        defaultRead: drawnDefault,
+      }}
+    />
   );
 
   return {

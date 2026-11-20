@@ -3,6 +3,7 @@ import {
   AGENT_KIND,
   type AgentPullRequest,
   type AgentSummary,
+  type ListedAgent,
 } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
@@ -161,7 +162,8 @@ export function AgentListRow({
   onPress,
   onOpenPullRequest,
 }: {
-  agent: AgentSummary;
+  /** The agent, and where the list carries them its workspace and its checkout, which a Manager's Settings names. */
+  agent: AgentSummary & Partial<Pick<ListedAgent, "workspaceId" | "repository">>;
   /** The agents control its menu acts through, which gives its models and the member's devices too. */
   agents: AgentsControl;
   /** Whether the list is on screen, which its menu and its Archive's question ask on. */

@@ -46,7 +46,10 @@ import { appStateQuery, selectCapability } from "../use-app-state.js";
 import type { MenuAction, MenuEntry, MenuSubmenu } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { useAgentDelete } from "./agent-delete.js";
-import { useManagerSettingsDialog } from "./manager-settings-dialog.js";
+import {
+  type ManagerSettingsSubject,
+  useManagerSettingsDialog,
+} from "./manager-settings-dialog.js";
 import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
 
 /**
@@ -382,7 +385,11 @@ export function useAgentActions(
     | "startedBy"
     | "source"
     | "kind"
-  >,
+    | "effort"
+    | "contextWindow"
+    | "runtime"
+  > &
+    Pick<ManagerSettingsSubject, "workspaceId" | "repository">,
   agents: AgentsControl,
   input: {
     /** The agent's name as the surface draws it, which a transcript copied is headed by. */

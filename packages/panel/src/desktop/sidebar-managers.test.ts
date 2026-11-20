@@ -61,7 +61,7 @@ const MANAGER: ListedAgent = {
   id: FRONTEND,
   taskId: null,
   workspaceId: WORKSPACE.id,
-  repository: null,
+  repository: RELAY,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Frontend Manager",
@@ -102,6 +102,9 @@ const NOT_MANAGERS: readonly ListedAgent[] = [
   },
 ];
 
+/** A second model, which a Manager's Settings picks. */
+const SONNET = "anthropic/claude-sonnet-5.5";
+
 const roots: Root[] = [];
 
 beforeEach(() => {
@@ -130,6 +133,7 @@ async function mountSidebar(
   openId?: string,
   pinned: readonly string[] = [],
   renamed: AgentRenameAsk[] = [],
+  chosen: { agentId: string; model: string }[] = [],
 ): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
   writeListedTasks({
@@ -150,6 +154,25 @@ async function mountSidebar(
 
           return Promise.resolve({ agent: { ...MANAGER, title: asked.title } });
         }),
+      },
+      models: [
+        {
+          id: MANAGER.model,
+          name: "Claude Opus 5.5",
+          provider: MODEL_PROVIDER.ANTHROPIC,
+          efforts: ["high"],
+        },
+        {
+          id: SONNET,
+          name: "Claude Sonnet 5.5",
+          provider: MODEL_PROVIDER.ANTHROPIC,
+          efforts: ["high"],
+        },
+      ],
+      onChoose: (agentId, choice) => {
+        chosen.push({ agentId, model: choice.model });
+
+        return Promise.resolve({ agent: { ...MANAGER, model: choice.model } });
       },
     }),
   });
@@ -239,9 +262,10 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
 });
 
-test("a Manager's row offers Settings… in Rename's place, whose Save names the Manager", async () => {
+test("a Manager's row offers Settings… in Rename's place, New Manager's card filled from the Manager, whose Save names it and changes its model", async () => {
   const renamed: AgentRenameAsk[] = [];
-  const sidebar = await mountSidebar(true, [], undefined, [], renamed);
+  const chosen: { agentId: string; model: string }[] = [];
+  const sidebar = await mountSidebar(true, [], undefined, [], renamed, chosen);
   const list = sidebar.querySelector('nav[aria-label="Managers"]');
 
   const row =
@@ -267,10 +291,27 @@ test("a Manager's row offers Settings… in Rename's place, whose Save names the
     assert.fail("the Name field is drawn");
 
   assert.equal(field.value, "Frontend Manager");
+  assert.ok(
+    document.querySelector('[role="dialog"] [aria-disabled="true"]'),
+    "its Repositories stand held as it was made",
+  );
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, " Web ");
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+
+  const chip =
+    document.querySelector<HTMLButtonElement>('[role="dialog"] .agent-model-chip button') ??
+    assert.fail("the Model chip is drawn");
+
+  act(() => chip.click());
+
+  const sonnet =
+    [...document.querySelectorAll<HTMLElement>('[role="listbox"] [role="option"]')].find((option) =>
+      option.textContent?.includes("Sonnet 5.5"),
+    ) ?? assert.fail("the chip lists the second model");
+
+  act(() => sonnet.click());
 
   const save =
     [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
@@ -278,7 +319,8 @@ test("a Manager's row offers Settings… in Rename's place, whose Save names the
     ) ?? assert.fail("Save is drawn");
 
   act(() => save.click());
-  await vi.waitFor(() => assert.deepEqual(renamed, [{ agentId: FRONTEND, title: "Web" }]));
+  await vi.waitFor(() => assert.deepEqual(chosen, [{ agentId: FRONTEND, model: SONNET }]));
+  assert.deepEqual(renamed, [{ agentId: FRONTEND, title: "Web" }]);
 });
 
 /** A Mac the member registered, their last Runs on pick. */
