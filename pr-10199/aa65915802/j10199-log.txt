@@ -1,0 +1,12 @@
+== bundle PJTURNC2 base aa65915802
+  built aa65915802 base app Vmain4.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad27-light-frot-a3: fails 0 shots 6 
+  ipad27-frot-a3 app error lines: 4327
+ipad27-light-frot-b: fails 0 shots 1 
+  ipad27-frot-b app error lines: 2530
+ipad27-light-frot-c: fails 0 shots 8 
+  ipad27-frot-c app error lines: 5514
