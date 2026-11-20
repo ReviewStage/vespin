@@ -1,0 +1,26 @@
+# config.yaml -- how Revyl builds the iOS app for the Simulator in its cloud, so an agent without a Mac can run the app on a hosted iPhone.
+#
+# Build: `revyl build --profile preview --platform ios` from apps/mobile, run
+# with REVYL_API_KEY (Settings › Cloud environment). The recipe is
+# `scripts/simulator-build.sh`, the one ios-simulators.yml runs, on the image
+# with CI's Xcode. Run it: `revyl device start --device-model "iPhone Duo"
+# --launch-arg=-fixture --launch-arg=inbox`, the fixture the Maestro flows
+# launch on, so no account or server is reached. Proof of Changes (pr_review)
+# stays off: no Revyl build or comment runs on a pull request.
+project:
+    id: fd6a9a4e-4ab9-4109-8380-d1e4eb50aa3d
+session:
+    idle_timeout_seconds: 600
+build:
+    framework: expo
+    profiles:
+        preview:
+            ios:
+                app_id: b5b2a8c5-4a8d-4948-bf6f-df9882474c0b
+                image: ios-macos-26-xcode-27.2
+                timeout_seconds: 3600
+                setup_commands:
+                    - cd ../.. && (npm install --global pnpm@10.34.5 || corepack enable) && pnpm install --frozen-lockfile
+                build_commands:
+                    - bash scripts/simulator-build.sh "$PWD/ios/build"
+                output_path: ios/build/Build/Products/Release-iphonesimulator/Vespin.app

@@ -13,7 +13,8 @@ and `expo prebuild` generates it on every build.
 
 The app's agents run on the developer's own Mac, which has Xcode 27 and the
 simulators; the cloud sandboxes have no Xcode and see the app only through
-the macOS run below. Every command here runs from `apps/mobile`.
+the macOS run below, or on Revyl's hosted devices (In a cloud sandbox, below).
+Every command here runs from `apps/mobile`.
 
 | Command | What it does |
 | --- | --- |
@@ -54,6 +55,33 @@ installed and shot (the pods and the build together take several gigabytes),
 `xcrun simctl shutdown all` when you are done, and a cache you created
 (`~/Library/Caches/CocoaPods`, `~/Library/Developer/Xcode/DerivedData`) deleted
 with it. Touch nothing of the developer's outside the checkout.
+
+## In a cloud sandbox
+
+A cloud agent has no Xcode, so it builds and runs the app on Revyl's Macs and
+hosted iPhones. The `revyl` CLI reads its recipe from `.revyl/config.yaml`:
+`scripts/simulator-build.sh` on Revyl's Xcode 27.2 image. It signs in with the
+workspace's `REVYL_API_KEY`, and the workspace's install script puts it in
+`/usr/local/bin`; just after a sandbox starts it may not be there yet, so
+check `revyl --version` again a minute later. Every command here runs from
+`apps/mobile`.
+
+| Command | What it does |
+| --- | --- |
+| `revyl build --profile preview --platform ios` | Build a Release app for the simulator on Revyl's cloud Mac from this checkout, uncommitted edits included, and upload it (about 7 minutes) |
+| `revyl device start --platform ios --app-id b5b2a8c5-4a8d-4948-bf6f-df9882474c0b --device-model "iPhone Duo" --launch-arg=-fixture --launch-arg=inbox --no-open` | Start a hosted iPhone Duo (iOS 27.1) on the newest build of this Git branch and launch it on the Inbox fixture, as the Maestro flows do; it prints the session's ID and a viewer link. Without `--platform` and `--app-id` (the `app_id` in `.revyl/config.yaml`) it installs nothing and leaves the phone on its home screen |
+| `revyl device tap --target "<label>"` | Tap an element by its label; `--x`/`--y` tap a point |
+| `revyl device screenshot --out <file>` | One screenshot of the session |
+| `revyl device set-fold-state folded` | Fold the Duo (or `unfolded`), which no local simulator command can do |
+| `revyl device stop` | End the session; always run it when done |
+| `revyl session download <session-id> --include-full-video --no-clips --output-directory /tmp/revyl-session` | The session's recording as `video.mp4`, once it has ended; without `--output-directory` it writes into the checkout |
+
+Other launch arguments from the table above pass the same way, one
+`--launch-arg` per token. Builds and sessions spend the workspace's free Revyl
+minutes (1,200 a month). A build carries the JavaScript inside it, so build
+once per change you want to see and reuse that build for every session on it.
+Stop every session you start. Never install the Revyl GitHub App or add a
+`pr_review` block to the config: Proof of Changes stays off.
 
 ## CI
 
