@@ -1,4 +1,4 @@
-import type { ClipboardEvent, ReactNode } from "react";
+import type { ClipboardEvent, ReactNode, Ref } from "react";
 import { TrashIcon } from "../../icons/lucide-glyphs.js";
 import { inputProblem } from "../../reported-failure.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
@@ -22,6 +22,8 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * pasted whole is spread a pair to a line, and one it took never lands in
  * the field. Any other paste lands as typing does. Each line's fields are
  * named to a reader by the columns' headings, which stand once above them.
+ * The first line's name field is `firstName`'s, which a dialog holding the
+ * lines hands focus to as it opens (`Dialog`'s `initialFocus`).
  */
 
 /** One line: the key it is kept by, its name and value, and what is wrong with it or what saving it does. */
@@ -58,6 +60,7 @@ export function NameValueRows({
   secret,
   namePlaceholder,
   disabled = false,
+  firstName,
   onName,
   onValue,
   onRemove,
@@ -68,6 +71,8 @@ export function NameValueRows({
   secret: boolean;
   namePlaceholder: string;
   disabled?: boolean | undefined;
+  /** The first line's name field, where focus lands as the lines open. */
+  firstName?: Ref<HTMLInputElement> | undefined;
   onName: (key: string, name: string) => void;
   onValue: (key: string, value: string) => void;
   onRemove: (key: string) => void;
@@ -85,7 +90,7 @@ export function NameValueRows({
         <NameValueLine
           key={row.key}
           row={row}
-          first={at === 0}
+          nameRef={at === 0 ? firstName : undefined}
           secret={secret}
           namePlaceholder={namePlaceholder}
           disabled={disabled}
@@ -102,7 +107,7 @@ export function NameValueRows({
 
 function NameValueLine({
   row,
-  first,
+  nameRef,
   secret,
   namePlaceholder,
   disabled,
@@ -113,7 +118,7 @@ function NameValueLine({
   onPasteLines,
 }: {
   row: NameValueRow;
-  first: boolean;
+  nameRef: Ref<HTMLInputElement> | undefined;
   secret: boolean;
   namePlaceholder: string;
   disabled: boolean;
@@ -140,12 +145,12 @@ function NameValueLine({
         >
           {(control) => (
             <TextField
+              ref={nameRef}
               field={control}
               font={TEXT_FIELD_FONT.MONO}
               placeholder={namePlaceholder}
               autoCorrect={false}
               spellCheck={false}
-              autoFocus={first}
               disabled={disabled}
               value={row.name}
               onChange={(name) => onName(row.key, name)}

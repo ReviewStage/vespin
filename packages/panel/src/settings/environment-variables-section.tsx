@@ -93,7 +93,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { Schema } from "effect";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
 import { ActorLine, ActorRef } from "../actor-ref.js";
 import { useConfirmAct } from "../confirm-act.js";
@@ -494,6 +494,9 @@ function useEditDialog(
   // Note that a secret's field opens empty, so only a value typed into it changes it, while a config may be cleared to an empty value.
   const valueChanged = wasSecret ? value !== "" : value !== (variable.value ?? "");
   const multiline = (variable.value ?? "").includes("\n");
+  // The value's field, one line's or several's, where focus lands as the card opens.
+  const line = useRef<HTMLInputElement | null>(null);
+  const lines = useRef<HTMLTextAreaElement | null>(null);
 
   const editing = useMutation({
     mutationFn: () =>
@@ -540,6 +543,7 @@ function useEditDialog(
       title={`Edit ${variable.name}`}
       replayUnmasked
       titleReplayMasked
+      initialFocus={multiline ? lines : line}
       busy={form.settling}
       refused={form.refusal !== undefined}
       onDismiss={form.dismiss}
@@ -554,6 +558,7 @@ function useEditDialog(
       <Stack>
         {wasSecret ? (
           <SecretField
+            ref={line}
             label="Value"
             saved
             error={replayMaskedError(form.refusal)}
@@ -569,6 +574,7 @@ function useEditDialog(
                 {/* Note that a value of several lines, as a `.env` may set, is edited where its line breaks stand, since one line's field would drop them. */}
                 {multiline ? (
                   <TextArea
+                    ref={lines}
                     field={control}
                     font={TEXT_FIELD_FONT.MONO}
                     rows={3}
@@ -580,6 +586,7 @@ function useEditDialog(
                   />
                 ) : (
                   <TextField
+                    ref={line}
                     field={control}
                     font={TEXT_FIELD_FONT.MONO}
                     autoCorrect={false}
@@ -632,6 +639,8 @@ function useAddDialog(
   const queries = useQueryClient();
   const [drafts, setDrafts] = useState<readonly Draft[]>(() => [blankDraft()]);
   const [kind, setKind] = useState<Kind>(KIND.SECRET);
+  // The first line's name, where focus lands as the card opens.
+  const firstName = useRef<HTMLInputElement | null>(null);
   const secret = kind === KIND.SECRET;
   const typedNames = drafts.map((draft) => draft.name.trim());
   // Note that a named line is saved whatever its value, an empty one among them, as a `.env`'s `OPTIONAL=` sets it.
@@ -734,6 +743,7 @@ function useAddDialog(
       size={DIALOG_SIZE.WIDE}
       title={WORDS.ADD}
       replayUnmasked
+      initialFocus={firstName}
       busy={form.settling}
       refused={form.refusal !== undefined}
       onDismiss={form.dismiss}
@@ -792,6 +802,7 @@ function useAddDialog(
             secret={secret}
             namePlaceholder="NAME"
             disabled={form.settling}
+            firstName={firstName}
             onName={(key, name) => patch(key, { name })}
             onValue={(key, value) => patch(key, { value })}
             onRemove={(key) => setDrafts((now) => now.filter((draft) => draft.key !== key))}
