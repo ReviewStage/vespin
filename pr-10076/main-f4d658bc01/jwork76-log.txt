@@ -1,0 +1,12 @@
+== bundle PJjwork76 base f4d658bc01
+  built f4d658bc01 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-f10076: fails 0 shots 4 
+iphone-dark-f10076: fails 0 shots 4 
+ipad27-light-f10076: fails 0 shots 4 
+ipad27-dark-f10076: fails 0 shots 4 
+reduce motion set: 1
+iphone-reducemotion-f10076: fails 0 shots 4 
