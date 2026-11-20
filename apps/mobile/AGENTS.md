@@ -66,6 +66,16 @@ workspace's `REVYL_API_KEY`, and the workspace's install script puts it in
 check `revyl --version` again a minute later. Every command here runs from
 `apps/mobile`.
 
+Which to use: an agent on the developer's Mac builds there (above), since a
+Debug build with Metro shows each JavaScript change in seconds and the Mac has
+Xcode, every simulator, the debugger, and the Maestro flows. Revyl is for a
+cloud agent, or when the Mac is off or already has two app agents: to check a
+finished change before its pull request, with the session's recording as
+proof; to see the Duo folded and unfolded; and for any agent whose starter's
+Mac it cannot reach. Each look costs a build of about 7 minutes and spends free
+minutes, so iterate on the Mac and check on Revyl. Neither replaces
+`ios-simulators.yml` for the release screenshots.
+
 | Command | What it does |
 | --- | --- |
 | `revyl build --profile preview --platform ios` | Build a Release app for the simulator on Revyl's cloud Mac from this checkout, uncommitted edits included, and upload it (about 7 minutes) |
