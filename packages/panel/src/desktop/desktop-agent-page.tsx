@@ -390,7 +390,7 @@ function OwnAgentPage({
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
           {overview ? (
             <Fill flow={FILL_FLOW.ROW} className="manager-page">
-              <ManagerOverview />
+              <ManagerOverview tasks={tasks} manager={agent} threads={threads} />
               {/* Note that the chat's column is the find scope, so ⌘F finds in its conversation alone. */}
               <FindScope
                 className="manager-page-chat desktop-task-column flex min-h-0 flex-col"
