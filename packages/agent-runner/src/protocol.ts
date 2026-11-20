@@ -105,7 +105,8 @@ export const RUNNER_PLACE = {
  * which the service writes into the sandbox as it opens and a config line names
  * (`installedSkills`): a Claude Code local plugin, its manifest naming it,
  * whose `skills/` holds one folder per skill, `SKILL.md` and its files, and
- * which is Codex's extra skills root as it stands. Claude Code lists a
+ * which is Codex's extra skills root as it stands, and whose skills a Cursor
+ * launch links into the checkout (`cursor-skills.ts`). Claude Code lists a
  * plugin's skill as `<plugin>:<name>`.
  */
 export const INSTALLED_SKILLS = {
@@ -744,6 +745,8 @@ export const CursorConfigSchema = Schema.Struct({
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each. */
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
+  /** Where the member's installed skills are (`INSTALLED_SKILLS`), whose skills are linked into the checkout's `.agents/skills` where it is there (`cursor-skills.ts`). */
+  installedSkills: Schema.optionalKey(Schema.String),
   /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`), as a Codex launch does. */
   warm: Schema.optionalKey(Schema.Boolean),
   trace: Schema.optionalKey(RunnerTraceSchema),
