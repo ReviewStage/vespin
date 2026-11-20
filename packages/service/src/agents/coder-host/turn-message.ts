@@ -24,6 +24,7 @@ import { turnsBefore } from "@repo/database/models/message-reads";
 import { pendingRunnerHanded } from "@repo/database/models/runner-line-store";
 import { readTask } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { EXPERIMENT } from "@repo/settings";
 import type { WireValue } from "@repo/wire";
 import { Effect, Option, Result, Schema } from "effect";
@@ -41,8 +42,10 @@ import {
   movedWords,
   resizedWords,
   savedByAnotherSince,
+  TURN_REPLY,
   type TurnHanded,
   TurnHandedSchema,
+  type TurnReply,
   taskKey,
   taskWithLead,
   timeWithLead,
@@ -241,6 +244,28 @@ const memoriesOf = (agent: Agent, words: string) =>
   );
 
 /**
+ * How the agent's reply reaches the developer, which its turn's kind words
+ * follow: a Manager's by `send_to_user`, never `end_turn`, which it is not
+ * offered; another agent's by `end_turn` where the account has it on, which
+ * only a spoken turn reads, the one turn its words change on; and its last
+ * message otherwise.
+ */
+const turnReplyOf = (
+  agent: Agent,
+  turn: CoderTurn,
+): Effect.Effect<TurnReply, never, DatabaseServices> => {
+  if (agent.kind === AGENT_KIND.MANAGER) return Effect.succeed(TURN_REPLY.SEND_TO_USER);
+
+  if (turn.spoken !== true) return Effect.succeed(TURN_REPLY.LAST_MESSAGE);
+
+  return accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
+    Effect.tapError(logStoreFailure),
+    Effect.orElseSucceed(() => false),
+    Effect.map((on) => (on ? TURN_REPLY.END_TURN : TURN_REPLY.LAST_MESSAGE)),
+  );
+};
+
+/**
  * The message the agent's turn opens with after the history, and what the
  * session has handed once it is: on a spoken turn, the words for a reply
  * read aloud, and after one, the line saying they no longer hold
@@ -268,15 +293,7 @@ export function coderTurnMessage(
     const clock = { now, timeZone: zoned.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
 
-    // Note that only a spoken turn reads whether the agent ends its turns with `end_turn`, the one turn its words change on.
-    const endsTurns =
-      turn.spoken === true &&
-      (yield* accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
-        Effect.tapError(logStoreFailure),
-        Effect.orElseSucceed(() => false),
-      ));
-
-    const kind = turnKindWords(handed, turn.spoken === true, endsTurns);
+    const kind = turnKindWords(handed, turn.spoken === true, yield* turnReplyOf(agent, turn));
     const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
     const moved = handed.moved === undefined ? undefined : movedWords(handed.moved);
     const taskHanded = task === undefined ? handed.task : task.key;
