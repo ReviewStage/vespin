@@ -10,7 +10,7 @@ import { readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { staticSymbolTemplate } from "./lucide-symbols.mjs";
+import { symbolTemplate } from "./lucide-symbols.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const UI_MANIFEST = join(HERE, "..", "..", "ui", "package.json");
@@ -47,16 +47,15 @@ async function drawings() {
 }
 
 /**
- * Every Lucide glyph by its asset name but those `held` names, each as a
- * static template (`staticSymbolTemplate`), one Regular glyph rather than
- * three weights, since a third of the outlines keeps the catalog's weight
- * on the app small. The glyphs the app names itself, `held`, keep their
- * variable templates (`LUCIDE_SYMBOL_TEMPLATES`).
+ * Every Lucide glyph by its asset name but those `held` names, each as its
+ * variable template (`symbolTemplate`), three weights iOS interpolates, as
+ * the glyphs the app names stand (`LUCIDE_SYMBOL_TEMPLATES`), which `held`
+ * leaves to their committed templates.
  */
 export async function everyLucideSymbol(held = new Set()) {
   return (await drawings())
     .filter(({ name }) => !held.has(name))
-    .map(({ name, node }) => ({ name, svg: staticSymbolTemplate(node) }));
+    .map(({ name, node }) => ({ name, svg: symbolTemplate(node) }));
 }
 
 /** Every Lucide glyph's asset name, sorted, as the app's runtime list names them. */
