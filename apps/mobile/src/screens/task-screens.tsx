@@ -150,6 +150,7 @@ import {
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
+  STATUS_TONE,
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
@@ -1588,6 +1589,8 @@ function assigneeChoices(
     {
       label: NO_ASSIGNEE_WORDS,
       symbol: GLYPH.UNASSIGNED,
+      // Note that the tone puts the ring in the muted ink the chip draws it in, and the patch composes the faint seat only under a glyph given its own color.
+      tone: STATUS_TONE.NEUTRAL,
       under: UNASSIGNED_UNDER,
       on: assigneeId === undefined,
       onPress: () => setAssignee(task.id, null),
