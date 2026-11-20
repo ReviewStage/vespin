@@ -13,13 +13,15 @@ import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_CALL_FAILURE, type AgentInboxAttachmentView } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_MESSAGE_LEAD,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentTranscriptMessage,
+  agentMessageReplyLine,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import type { AppTranscript } from "./app-state.js";
 import {
   FIXTURE_PICTURE_PNG,
@@ -29,6 +31,12 @@ import {
 import { FIXTURE_PAGE } from "./fixture-stage.js";
 
 const MINUTE = 60_000;
+
+/** The teammate whose line reaches the invitations agent, one of the fixture's workspace members. */
+const TEAMMATE = { userId: "user-grace", name: "Grace Hopper" } as const;
+
+/** The agent that sends the invitations agent a message: the fixture's digest agent, by the id `fixture-inbox.ts` gives it (`AGENT.DIGEST`), which this file cannot import, since that one imports it. */
+const MESSAGING_AGENT = { id: "6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6", name: "Weekly digest email" };
 const DAY = 24 * 60 * MINUTE;
 
 /** The pictures and the recording the agent showed, by the ids the service kept them under. */
@@ -78,14 +86,37 @@ function asked(
   };
 }
 
+/** Another agent's message to this one, `at` milliseconds into the run, as `message_agent` writes it: its head naming who sent it, its words, and the line telling the agent how to answer. */
+function agentMessage(id: string, at: number, words: string): AgentTranscriptMessage {
+  return {
+    id,
+    role: MESSAGE_ROLE.USER,
+    parts: [
+      {
+        type: "text",
+        text: [
+          `${AGENT_MESSAGE_LEAD} · ${MESSAGING_AGENT.name} to you:`,
+          words,
+          agentMessageReplyLine(MESSAGING_AGENT.id),
+        ].join("\n\n"),
+      },
+    ],
+    metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
+    sentAt: at,
+    sentBy: { name: MESSAGING_AGENT.name, agent: true, agentId: MESSAGING_AGENT.id },
+  };
+}
+
 /**
  * The transcript, its instants counted from `startedAt`, its turns written
  * by `reader`, the account the fixture signs in as: the ask that began the
  * run and the agent's work on it, the dialog and its email shown and its
  * pull request opened; a second
  * ask, answered with the funnel's page and a recording of an invite
- * accepted; and a third, sent as two lines a minute apart, the agent is
- * still working on, its last call running.
+ * accepted; a teammate's line and another agent's message, which a
+ * transcript stands at its leading edge under their senders, the reader's
+ * own alone trailing; and a third ask, sent as two lines a minute apart,
+ * the agent is still working on, its last call running.
  */
 function transcriptMessages(
   startedAt: number,
@@ -245,6 +276,17 @@ function transcriptMessages(
       startedAt: startedAt + 40 * MINUTE,
       finishedAt: startedAt + 46 * MINUTE,
     },
+    asked(
+      "fixture-invites-teammate",
+      startedAt + 60 * MINUTE,
+      "The digest should count pending invites separately from members.",
+      TEAMMATE,
+    ),
+    agentMessage(
+      "fixture-invites-digest-message",
+      startedAt + 62 * MINUTE,
+      "I'm adding pending invites to the weekly digest. Does an invite keep its id when it's resent?",
+    ),
     asked(
       "fixture-invites-resend-ask",
       startedAt + 70 * MINUTE,
