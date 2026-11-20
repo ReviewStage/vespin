@@ -112,17 +112,6 @@ export function WorkedFor({
   );
 }
 
-/** When a finished turn ended, as a Manager's chat says under each of its messages in the place of how long it worked: "Today, 3:42 PM". */
-export function TurnEndedAt({ endedAt }: { endedAt: number }): ReactNode {
-  const now = useMinute();
-
-  return (
-    <NoteLine look={NOTE_LINE_LOOK.INSET} selectable data-worked="">
-      <Time at={endedAt} look={TIME_LOOK.DAY} now={now} />
-    </NoteLine>
-  );
-}
-
 /** The shimmering line a transcript ends on while its agent works, saying what it is doing and counting how long where the run's start is known. */
 export function WorkingLine({
   startedAt,
