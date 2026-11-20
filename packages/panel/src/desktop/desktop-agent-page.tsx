@@ -61,6 +61,7 @@ import { useSteadyDoor } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
+import { ManagerGlyph } from "../tasks/tab-look.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useHeldTaskInbox, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
@@ -213,7 +214,8 @@ function useOwnAgentThreads(
 }
 
 /**
- * The head of an agent on no task: its name, a right-click on which opens
+ * The head of an agent on no task: a Manager's face leading it, as a
+ * task's status leads a task's (`ManagerGlyph`), then its name, a right-click on which opens
  * its one menu and whose Rename turns it into the name's field (a
  * Manager's Settings… opens its card instead), and ⋯
  * holding the same menu; on a phone, its way back before them.
@@ -287,6 +289,11 @@ function OwnAgentHead({
     <>
       {away === undefined ? (
         <Toolbar
+          lead={
+            agent.face === undefined ? undefined : (
+              <ManagerGlyph face={agent.face} status={agent.status} />
+            )
+          }
           title={editing ? (rename.asked ?? label) : label}
           titleMenu={{ contextMenu: titleMenu.contextMenu(), keyMenu: titleMenu.keyMenu }}
           titleEdit={titleEdit}

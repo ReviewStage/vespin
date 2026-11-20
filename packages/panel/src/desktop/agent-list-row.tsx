@@ -46,7 +46,7 @@ import { changesAddressOf, useChangesPeople } from "../tasks/changes-people.js";
 import { PullRequestCard, peopleOf } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
-import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
+import { AgentGlyph, agentEndMark, ManagerGlyph } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useAgentPinWrite } from "../tasks/use-pin-writes.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
@@ -65,7 +65,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * `AGENT_ROW_CELLS`, so an agent's glyph stands in the status column at a
  * status chip's size (`TaskRowGlyph`), its name where a task's name stands,
  * and its time where a task's time stands, lining up with the task rows
- * beside it. Its glyph is its tab's (`AgentGlyph`), which gives way to the
+ * beside it. Its glyph is its tab's (`AgentGlyph`), or for a Manager its
+ * face (`ManagerGlyph`), which wears the working mark itself; the tab's glyph gives way to the
  * working mark while the agent works, and its name is masked in a screen
  * recording; its task is its card's to name. Its trailing run holds, in
  * turn: how many of its threads wait on the developer, as the sidebar's Inbox row counts them (`WaitingCount`);
@@ -249,6 +250,13 @@ export function AgentListRow({
     press.current = held instanceof HTMLButtonElement ? held : null;
   }, []);
 
+  const glyph =
+    agent.face === undefined ? (
+      <AgentGlyph agent={agent} />
+    ) : (
+      <ManagerGlyph face={agent.face} status={agent.status} />
+    );
+
   const waiting = <WaitingCount count={waits + asked} />;
 
   const working =
@@ -329,7 +337,7 @@ export function AgentListRow({
           motionKey={agent.id}
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
-          leading={<AgentGlyph agent={agent} />}
+          leading={glyph}
           title={
             editor ?? (
               <OneLine words={name}>
@@ -372,11 +380,7 @@ export function AgentListRow({
         name={name}
         cells={AGENT_ROW_CELLS}
         content={{
-          [TASK_ROW_CELL.STATUS]: (
-            <TaskRowGlyph>
-              <AgentGlyph agent={agent} />
-            </TaskRowGlyph>
-          ),
+          [TASK_ROW_CELL.STATUS]: <TaskRowGlyph>{glyph}</TaskRowGlyph>,
           [TASK_ROW_CELL.WAITING]: waiting,
           [TASK_ROW_CELL.SUB_TASKS]: working,
           [TASK_ROW_CELL.PULL_REQUESTS]: pullRequestChip,
