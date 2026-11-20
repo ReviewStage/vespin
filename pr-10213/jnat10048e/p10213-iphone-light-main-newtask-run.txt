@@ -1,0 +1,28 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fnt10213
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})...Exception in thread "main" SimctlError(message=Failed to get app binary directory for bundle dev.vespin.ios on device CE9E34B9-693F-475C-8AC7-308952029222: An error was encountered processing the command (domain=NSPOSIXErrorDomain, code=2):
+The operation couldn’t be completed. No such file or directory
+No such file or directory, cause=null)
+	at util.LocalSimulatorUtils.getAppBinaryDirectory(LocalSimulatorUtils.kt:311)
+	at util.LocalSimulatorUtils.reinstallApp(LocalSimulatorUtils.kt:260)
+	at util.LocalSimulatorUtils.clearAppState(LocalSimulatorUtils.kt:292)
+	at device.SimctlIOSDevice.clearAppState(SimctlIOSDevice.kt:80)
+	at ios.LocalIOSDevice.clearAppState(LocalIOSDevice.kt:96)
+	at maestro.drivers.IOSDriver.clearAppState$lambda$10(IOSDriver.kt:145)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.drivers.IOSDriver.clearAppState(IOSDriver.kt:144)
+	at maestro.Maestro.clearAppState$lambda$9(Maestro.kt:117)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)

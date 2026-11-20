@@ -1,0 +1,106 @@
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/list-row.tsx
+built main f51577b63f + #10048 (on main) #10094 f9f82e06fe #10213 b9e37f8c30 as 204493a13f
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 09:12:56 31669 MB
+curve 09:13:26 31622 MB
+curve 09:13:56 29477 MB
+curve 09:14:26 29349 MB
+curve 09:14:56 29068 MB
+curve 09:15:26 28936 MB
+curve 09:15:56 28895 MB
+curve 09:16:27 28776 MB
+curve 09:16:57 28775 MB
+curve 09:17:27 28710 MB
+curve 09:17:57 28701 MB
+curve 09:18:27 28693 MB
+curve 09:18:57 28447 MB
+curve 09:19:27 28251 MB
+curve 09:19:57 28071 MB
+curve 09:20:27 28631 MB
+curve 09:20:58 28583 MB
+curve 09:21:28 28547 MB
+curve 09:21:58 28511 MB
+curve 09:22:28 28411 MB
+curve 09:22:58 28263 MB
+curve 09:23:28 28123 MB
+curve 09:23:58 28088 MB
+curve 09:24:29 28021 MB
+curve 09:24:59 28003 MB
+curve 09:25:29 27953 MB
+curve 09:25:59 27866 MB
+curve 09:26:29 27855 MB
+curve 09:26:59 27822 MB
+curve 09:27:30 27814 MB
+curve 09:28:00 27702 MB
+curve 09:28:30 27687 MB
+curve 09:29:00 27637 MB
+curve 09:29:30 27648 MB
+curve 09:30:01 27635 MB
+curve 09:30:31 27524 MB
+curve 09:31:01 27483 MB
+curve 09:31:31 27474 MB
+curve 09:32:01 27420 MB
+curve 09:32:32 27303 MB
+curve 09:33:02 27204 MB
+curve 09:33:32 27123 MB
+curve 09:34:02 27106 MB
+curve 09:34:32 27066 MB
+curve 09:35:02 27010 MB
+curve 09:35:32 26907 MB
+curve 09:36:03 26693 MB
+curve 09:36:33 26627 MB
+curve 09:37:03 26184 MB
+curve 09:37:33 25743 MB
+curve 09:38:03 25615 MB
+curve 09:38:33 25298 MB
+curve 09:39:03 25161 MB
+curve 09:39:34 25152 MB
+curve 09:40:04 24724 MB
+curve 09:40:34 24580 MB
+curve 09:41:04 24457 MB
+curve 09:41:34 24323 MB
+curve 09:42:04 24150 MB
+curve 09:42:35 24058 MB
+curve 09:43:05 23942 MB
+curve 09:43:35 23877 MB
+curve 09:44:05 23857 MB
+curve 09:44:35 23786 MB
+curve 09:45:05 23762 MB
+curve 09:45:35 23643 MB
+curve 09:46:05 23598 MB
+curve 09:46:35 23566 MB
+curve 09:47:06 23492 MB
+curve 09:47:36 23476 MB
+curve 09:48:06 23492 MB
+curve 09:48:36 23475 MB
+curve 09:49:06 23445 MB
+curve 09:49:36 23421 MB
+curve 09:50:06 23289 MB
+curve 09:50:36 23150 MB
+curve 09:51:06 23124 MB
+curve 09:51:36 22964 MB
+curve 09:52:07 22914 MB
+BUILD EXIT 0 09:52:37
+sizes: Assets.car 28764264 bytes (main Vmain4 8576376), .app 123640 KB (main 102900 KB), zipped .app 47556460 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10048e.app: replacing existing signature
+p10048-iphone-tasks-light: fails 0 shots 1 
+p10048-iphone-tasks-dark: fails 0 shots 1 
+p10048-iphone-tasks-light-ax3: fails 0 shots 1 
+p10094-iphone-light: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+p10094-iphone-dark: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+p10213-iphone-light-branch: fails 0 shots 4 
+p10213-iphone-light-branch-newtask: fails 0 shots 3 
+p10213-iphone-dark-branch: fails 0 shots 4 
+p10213-iphone-dark-branch-newtask: fails 0 shots 3 
+p10213 main's build: Vmain5.app
+p10213-iphone-light-main: fails TIMEOUT (watchdog; steps 0, shots 1) 
+p10213-iphone-light-main-newtask: fails TIMEOUT (watchdog; steps 0, shots 1) 
+p10213-iphone-dark-main: fails TIMEOUT (watchdog; steps 0, shots 1) 
+p10213-iphone-dark-main-newtask: fails TIMEOUT (watchdog; steps 0, shots 1) 
