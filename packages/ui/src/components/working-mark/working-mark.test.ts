@@ -34,12 +34,12 @@ function render(element: React.ReactElement): HTMLElement {
 }
 
 test("the working mark is hidden from a reader", () => {
-  const mark = render(createElement(WorkingMark)).querySelector("svg.ui-working-mark");
+  const mark = render(createElement(WorkingMark)).querySelector(".ui-working-mark");
   assert.equal(mark?.getAttribute("aria-hidden"), "true");
 });
 
 test("a still working mark lights at least three cells, not one stacked dot", () => {
-  const dots = render(createElement(WorkingMark)).querySelectorAll<SVGElement>(
+  const dots = render(createElement(WorkingMark)).querySelectorAll<HTMLElement>(
     ".ui-working-mark-dot",
   );
 
@@ -54,24 +54,24 @@ it.effect("each pixel steps one cell on along the lap on each beat", () =>
     const mark = render(createElement(WorkingMark));
 
     const cells = () =>
-      [...mark.querySelectorAll<SVGElement>(".ui-working-mark-dot")].map(
+      [...mark.querySelectorAll<HTMLElement>(".ui-working-mark-dot")].map(
         (dot) => dot.style.transform,
       );
 
     // The lead, its tail, the trail, and its tail, resting on cells 1, 0, 5, and 4 of the lap.
     assert.deepEqual(cells(), [
-      "translate(5px, 0px)",
-      "translate(0px, 0px)",
-      "translate(5px, 10px)",
-      "translate(10px, 10px)",
+      "translate(166.667%, 0%)",
+      "translate(0%, 0%)",
+      "translate(166.667%, 333.333%)",
+      "translate(333.333%, 333.333%)",
     ]);
     yield* TestClock.adjust("200 millis");
     yield* Effect.promise(() => act(() => Promise.resolve()));
     assert.deepEqual(cells(), [
-      "translate(10px, 0px)",
-      "translate(5px, 0px)",
-      "translate(0px, 10px)",
-      "translate(5px, 10px)",
+      "translate(333.333%, 0%)",
+      "translate(166.667%, 0%)",
+      "translate(0%, 333.333%)",
+      "translate(166.667%, 333.333%)",
     ]);
   }),
 );
@@ -90,14 +90,14 @@ it.effect("a mark committed under a capture stage holds its resting frame on the
     yield* Effect.promise(() => act(() => Promise.resolve()));
     document.body.style.removeProperty("--ui-duration-fast");
     assert.deepEqual(
-      [...mark.querySelectorAll<SVGElement>(".ui-working-mark-dot")].map(
+      [...mark.querySelectorAll<HTMLElement>(".ui-working-mark-dot")].map(
         (dot) => dot.style.transform,
       ),
       [
-        "translate(5px, 0px)",
-        "translate(0px, 0px)",
-        "translate(5px, 10px)",
-        "translate(10px, 10px)",
+        "translate(166.667%, 0%)",
+        "translate(0%, 0%)",
+        "translate(166.667%, 333.333%)",
+        "translate(333.333%, 333.333%)",
       ],
     );
   }),
