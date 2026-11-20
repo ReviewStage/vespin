@@ -72,6 +72,7 @@
       {
         "group": "Guides",
         "pages": [
+          "move-to-vespin",
           "cloud-environment",
           "machines",
           "ports-and-terminal",
