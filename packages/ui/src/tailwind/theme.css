@@ -694,6 +694,16 @@
   --spacing-avatar-row: var(--ui-space-20); /* a list row's disc */
   --spacing-avatar-account: 26px; /* off-scale: the account's disc */
   --spacing-avatar-card: var(--ui-space-32); /* a card head's disc */
+  /* A chat's sender's picture beside its bubbles (`ChatBubble`'s `avatar`),
+     a card head's disc wide, and how far in from it the line under a run
+     starts its words: past the picture, the row's gap, and the bubble's own
+     inset (`MessageLine`'s `MESSAGE_LINE_INSET.AVATAR`). */
+  --spacing-chat-avatar: var(--spacing-avatar-card);
+  --spacing-chat-avatar-bubble: calc(
+    var(--spacing-chat-avatar) +
+    var(--ui-space-4) +
+    var(--ui-space-4)
+  );
   --spacing-avatar-page: var(--ui-space-48); /* a page head's disc */
   --spacing-avatar-masthead: 56px; /* off-scale: a masthead's disc */
   --spacing-avatar-portrait: var(--ui-space-64); /* a portrait's disc */

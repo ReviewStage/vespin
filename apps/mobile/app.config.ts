@@ -776,8 +776,7 @@ type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 // template, so it sizes with Dynamic Type, weighs with its text, and sits on
 // its baseline as SF Symbols do. Note that every glyph is written, not only
 // those `@repo/ui-native` names (`LUCIDE_SYMBOL`), because a section may
-// wear any glyph the panel's picker offers (`EVERY_LUCIDE_SYMBOL`); those it
-// doesn't name stand as static templates, one Regular glyph each, and are
+// wear any glyph the panel's picker offers (`EVERY_LUCIDE_SYMBOL`); they are
 // outlined here rather than committed, since all of them run to megabytes.
 const withImageSets = (config: ExpoConfig): ExpoConfig =>
   withDangerousMod(config, [
@@ -888,7 +887,7 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
-      // Note that the glyphs the app names stand as their variable templates, three weights iOS interpolates, and every other Lucide glyph a section may wear as a static one, a third of the size.
+      // Note that the glyphs the app names stand as their committed templates, and every other Lucide glyph a section may wear is outlined here, each a variable template as theirs are.
       const named = new Set(LUCIDE_SYMBOL_TEMPLATES.map(({ name }) => name));
 
       for (const { name, svg } of [

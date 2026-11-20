@@ -118,7 +118,7 @@ import { createPortal } from "react-dom";
 import { isComposingKey } from "../../composing-key.js";
 import { useDisclosure } from "../../use-disclosure.js";
 import { useStateWithRef } from "../../use-state-with-ref.js";
-import { createWait, useWait, type Wait } from "../../wait.js";
+import { createRest, useWait, type Wait } from "../../wait.js";
 import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { useTouchHold } from "../menu/touch-hold.js";
 import type { OneLineHint } from "../one-line/clipped-line.js";
@@ -246,24 +246,13 @@ function unstack(id: string): void {
 }
 
 /**
- * The window's one wait for a hint: it shows the hint once the rest has run
- * out. A rest begun on another control starts it afresh, which calls off the
- * one before.
+ * Who the window's one rest is for, by an id of theirs, so only they call
+ * it off, and the control it waits on, which a scroll is judged against.
  */
-const hintRest = createWait();
+let resting: { readonly id: string; readonly anchor: HTMLElement | undefined } | undefined;
 
-/**
- * Who the window's one wait is for, by an id of theirs, so only they call
- * the wait off, and the way to let go of the window's movements it hears
- * while it runs.
- */
-let resting: { readonly id: string; readonly unhear: () => void } | undefined;
-
-/** The window's one wait let go of: its movements no longer heard, and no one's. */
-function letGoRest(): void {
-  resting?.unhear();
-  resting = undefined;
-}
+/** The window's movements heard while a rest runs, once for the whole sweep, and the way to stop hearing them. */
+let unhear: (() => void) | undefined;
 
 /**
  * Whether a scroll on `target` moved `anchor`, a hint's control: a scroll of
@@ -275,16 +264,33 @@ function scrollMoved(target: EventTarget | null, anchor: HTMLElement | undefined
   return anchor === undefined || !(target instanceof Node) || target.contains(anchor);
 }
 
+/** The window's one rest let go of: its movements no longer heard, and no one's. */
+function letGoRest(): void {
+  unhear?.();
+  unhear = undefined;
+  resting = undefined;
+}
+
+/** The rest called off wherever it stands: let go, and its fiber ended. */
+function endRest(): void {
+  letGoRest();
+  hintRest.stop();
+}
+
 /**
- * Hears, while a wait runs, the window's movements that take a hint down
+ * Hears, while a rest runs, the window's movements that take a hint down
  * once it stands, so they call off a hint still waiting the same way: a key
- * other than a modifier held alone, a scroll that moves the hint's control,
- * `anchor`, but on a standing card, which is a card being read, and the
- * window losing the keyboard. Answers the way to stop hearing them.
+ * other than a modifier held alone, a scroll that moves the hint's control
+ * (the one the rest waits on now), but on a standing card, which is a card
+ * being read, and the window losing the keyboard. Note that these are
+ * listened to once for a sweep across controls, not once a control, because
+ * a rest begun on the next control only re-aims `resting`.
  */
-function hearRestEnders(stop: () => void, anchor: HTMLElement | undefined): () => void {
+function hearRestEnders(): void {
+  if (unhear !== undefined) return;
+
   const key = (event: KeyboardEvent) => {
-    if (!MODIFIER_KEYS.has(event.key)) stop();
+    if (!MODIFIER_KEYS.has(event.key)) endRest();
   };
 
   const scrolled = (event: Event) => {
@@ -292,19 +298,29 @@ function hearRestEnders(stop: () => void, anchor: HTMLElement | undefined): () =
 
     if (target instanceof Node && standing.some((each) => each.holds(target))) return;
 
-    if (scrollMoved(target, anchor)) stop();
+    if (scrollMoved(target, resting?.anchor)) endRest();
   };
 
   window.addEventListener("keydown", key, true);
   window.addEventListener("scroll", scrolled, true);
-  window.addEventListener("blur", stop);
+  window.addEventListener("blur", endRest);
 
-  return () => {
+  unhear = () => {
     window.removeEventListener("keydown", key, true);
     window.removeEventListener("scroll", scrolled, true);
-    window.removeEventListener("blur", stop);
+    window.removeEventListener("blur", endRest);
   };
 }
+
+/**
+ * The window's one rest for a hint: it shows the hint once the pointer has
+ * stood on one control for the whole span. A rest begun on another control
+ * only re-aims it, so a sweep across rows costs one timer.
+ */
+const hintRest = createRest<() => void>(HINT_REST, (show) => {
+  letGoRest();
+  show();
+});
 
 /** A tooltip's linger: `leave` takes it down once the linger runs out, starting it afresh, and `stop` calls it off. */
 interface Linger {
@@ -379,25 +395,16 @@ export function useHintRest(): HintRest {
 
   const stop = useCallback(() => {
     if (resting?.id !== id) return;
-    letGoRest();
-    hintRest.stop();
+    endRest();
   }, [id]);
 
   const rest = useCallback(
     (show: () => void, anchor?: HTMLElement) => {
-      letGoRest();
-      resting = { id, unhear: hearRestEnders(stop, anchor) };
-      hintRest.start(
-        Effect.andThen(
-          Effect.sleep(HINT_REST),
-          Effect.sync(() => {
-            letGoRest();
-            show();
-          }),
-        ),
-      );
+      resting = { id, anchor };
+      hearRestEnders();
+      hintRest.aim(show);
     },
-    [id, stop],
+    [id],
   );
 
   useEffect(() => stop, [stop]);

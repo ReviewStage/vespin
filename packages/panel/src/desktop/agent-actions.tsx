@@ -388,6 +388,7 @@ export function useAgentActions(
     | "effort"
     | "contextWindow"
     | "runtime"
+    | "face"
   > &
     Pick<ManagerSettingsSubject, "workspaceId" | "repository">,
   agents: AgentsControl,

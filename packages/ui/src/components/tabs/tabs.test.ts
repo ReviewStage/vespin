@@ -352,7 +352,7 @@ test("a card picked on the press is picked as the press lands, and one picked on
 
 /** The pointer resting on `target` past the hint's wait, on a faked clock. */
 function restOn(target: Element): void {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     act(() => {

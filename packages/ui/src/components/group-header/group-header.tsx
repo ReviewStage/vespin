@@ -201,7 +201,7 @@ const GIVES_WAY =
   "group-hover/head:opacity-0 group-focus-visible/lead:opacity-0 [@media(hover:none)]:opacity-0";
 
 /** A part's fade as it is brought or put away, on the hover's settle. */
-const FADE = "transition-[opacity] duration-(--ui-duration-hover) ease-plain";
+const FADE = "isolate transition-[opacity] duration-(--ui-duration-hover) ease-plain";
 
 /**
  * The head's parts. Note that the glyph and the chevron share one cell, only

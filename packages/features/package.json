@@ -210,6 +210,7 @@
     "./models-wire": "./src/models-wire.js",
     "./page-wire": "./src/page-wire.js",
     "./picture-wire": "./src/picture-wire.js",
+    "./pill-words": "./src/pill-words.js",
     "./request-body-limit": "./src/request-body-limit.js",
     "./sound-clip-wire": "./src/sound-clip-wire.js",
     "./person-page-model": "./src/person-page-model.js",

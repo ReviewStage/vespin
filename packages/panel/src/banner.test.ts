@@ -104,7 +104,7 @@ test("an archived agent's Stop the service took stays Stopping until the agent o
 });
 
 test("an archived agent's Unarchive is named Unarchiving while the service answers, shows its ring once the settle delay has passed, holds Stop meanwhile, and clears when it answers", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     let answer: () => void = () => undefined;

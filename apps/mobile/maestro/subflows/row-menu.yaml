@@ -1,12 +1,21 @@
-# row-menu.yaml -- scrolls down to the row `ROW` names (a row above is scrolled back to first), lets the list settle, and long presses it, so its menu stands with `ITEM` among its acts.
+# row-menu.yaml -- scrolls down to the row `ROW` names (a row above is scrolled back to first), lets the list settle, and long presses it, so its menu stands with `ITEM` among its acts, scrolled inside the menu until `ITEM` stands whole.
 #
 # Note that the list is let settle before the press, because a press on a row
 # still gliding is taken as the scroll's stop rather than held, and no menu
 # lifts.
+#
+# Note too that the menu is scrolled until `ITEM` shows, because on a compact
+# screen a long menu, such as a task row's, runs past the screen's foot: an
+# act below its fold, such as Unpin, still stands in the hierarchy inside the
+# screen, so Maestro asserted it and then tapped it where the menu no longer
+# draws, which put the menu away. A scroll on an act already shown does
+# nothing, as tasks.yaml's Permanently delete found (jtdel, jndel, Nov 18).
 appId: dev.vespin.ios
 ---
 - runFlow:
     file: to-row.yaml
 - longPressOn: "${ROW}"
-- assertVisible: "${ITEM}"
+- scrollUntilVisible:
+    element: "${ITEM}"
+    direction: DOWN
 - waitForAnimationToEnd

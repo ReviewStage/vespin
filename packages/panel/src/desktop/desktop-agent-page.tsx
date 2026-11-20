@@ -17,7 +17,10 @@
  * page reads through the agent's own workspace and repository
  * (`own-agent-place.tsx`), and its copy and delete keys act on the agent,
  * as a task's column's do on its chosen tab. ⌘F finds in its conversation,
- * as in a task's column, and a phone's ⋯ offers Find in its place. The agent is read from the task list where it carries it,
+ * as in a task's column, and a phone's ⋯ offers Find in its place. A
+ * Manager's page, while its workspace has Managers on, stands its chat in a
+ * column at its right instead, and in the room it leaves what the Manager is
+ * doing (`manager-overview.tsx`); a phone's keeps the chat alone. The agent is read from the task list where it carries it,
  * and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
@@ -28,7 +31,12 @@
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_BOUNDS, type ListedAgent, listedAgentOfPage } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  AGENT_KIND,
+  type ListedAgent,
+  listedAgentOfPage,
+} from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -40,6 +48,7 @@ import {
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_ELEMENT,
+  FILL_FLOW,
   Fill,
   moreLabel,
   NOT_FOUND_THING,
@@ -61,14 +70,17 @@ import { useSteadyDoor } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
+import { ManagerGlyph } from "../tasks/tab-look.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useHeldTaskInbox, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
 import { AgentPane } from "./main-tabs.js";
+import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
@@ -213,7 +225,8 @@ function useOwnAgentThreads(
 }
 
 /**
- * The head of an agent on no task: its name, a right-click on which opens
+ * The head of an agent on no task: a Manager's face leading it, as a
+ * task's status leads a task's (`ManagerGlyph`), then its name, a right-click on which opens
  * its one menu and whose Rename turns it into the name's field (a
  * Manager's Settings… opens its card instead), and ⋯
  * holding the same menu; on a phone, its way back before them.
@@ -287,6 +300,11 @@ function OwnAgentHead({
     <>
       {away === undefined ? (
         <Toolbar
+          lead={
+            agent.face === undefined ? undefined : (
+              <ManagerGlyph face={agent.face} status={agent.status} />
+            )
+          }
           title={editing ? (rename.asked ?? label) : label}
           titleMenu={{ contextMenu: titleMenu.contextMenu(), keyMenu: titleMenu.keyMenu }}
           titleEdit={titleEdit}
@@ -336,6 +354,12 @@ function OwnAgentPage({
   const cards = taskCards({ agents, held: views.held, chosen: () => false, pages: undefined });
   const findSubject = useMemo(() => ({ agent: agent.id }), [agent.id]);
 
+  // Note that a phone's page, which has a way back, keeps the chat alone, since its room holds no column beside it.
+  const overview =
+    useWorkspaceExperiment(agent.workspaceId, EXPERIMENT.MANAGERS) &&
+    agent.kind === AGENT_KIND.MANAGER &&
+    away === undefined;
+
   const openTarget = (target: ToolTarget) => {
     if (target.kind !== TOOL_TARGET.TASK) return;
 
@@ -343,33 +367,49 @@ function OwnAgentPage({
     else tasks.onShowAgent(target.task, target.agent);
   };
 
+  const pane = (
+    <AgentPane
+      label={label}
+      tabbed={false}
+      tab={agentTab(agent.id)}
+      agents={agents}
+      shown={tasks.shown}
+      views={views}
+      // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
+      onOpenDelegation={(_agent, callId, _task, status) => views.onWorkerStatus(callId, status)}
+      onOpenTarget={openTarget}
+      cards={cards}
+      threads={threads}
+    />
+  );
+
   return (
     <OwnAgentPlaceProvider place={place} readerId={tasks.me}>
       <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
         <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label={label}>
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
-          {/* Note that the scope stands as the column's own box, as its fill did. */}
-          <FindScope
-            className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-            active={tasks.shown}
-            subject={findSubject}
-          >
-            <AgentPane
-              label={label}
-              tabbed={false}
-              tab={agentTab(agent.id)}
-              agents={agents}
-              shown={tasks.shown}
-              views={views}
-              // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
-              onOpenDelegation={(_agent, callId, _task, status) =>
-                views.onWorkerStatus(callId, status)
-              }
-              onOpenTarget={openTarget}
-              cards={cards}
-              threads={threads}
-            />
-          </FindScope>
+          {overview ? (
+            <Fill flow={FILL_FLOW.ROW} className="manager-page">
+              <ManagerOverview />
+              {/* Note that the chat's column is the find scope, so ⌘F finds in its conversation alone. */}
+              <FindScope
+                className="manager-page-chat desktop-task-column flex min-h-0 flex-col"
+                active={tasks.shown}
+                subject={findSubject}
+              >
+                {pane}
+              </FindScope>
+            </Fill>
+          ) : (
+            // Note that the scope stands as the column's own box, as its fill did.
+            <FindScope
+              className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+              active={tasks.shown}
+              subject={findSubject}
+            >
+              {pane}
+            </FindScope>
+          )}
         </Fill>
       </div>
     </OwnAgentPlaceProvider>

@@ -113,6 +113,7 @@ import {
   AGENT_WORKSPACE_QUERY,
   type AgentArchiveRequest,
   type AgentChatHold,
+  type AgentFaceRequest,
   type AgentMessageRequest,
   type AgentNewestAnswer,
   type AgentOlderAnswer,
@@ -122,6 +123,7 @@ import {
   type AgentRunsOnRequest,
   type AgentServersRequest,
   type AgentStartRequest,
+  agentFaceRequestSchema,
   agentMessageRequestSchema,
   agentQueueChangeSchema,
   agentRenameRequestSchema,
@@ -1233,6 +1235,25 @@ export class HostedAgentClient {
     request: AgentPermissionModeRequest,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(agentPermissionModeRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return Effect.map(
+      hostedCall(
+        this.#hosted.agents.change,
+        { params: { id: agentId }, body: admitted },
+        { as: AGENT_NOT_FOUND_RENAMES },
+      ),
+      rowWritten,
+    );
+  }
+
+  /** Changes a Manager's face, answering it as it then stands; a face the service would refuse by shape is refused here without traveling. */
+  changeFace(
+    agentId: string,
+    request: AgentFaceRequest,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(agentFaceRequestSchema)(request));
 
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 

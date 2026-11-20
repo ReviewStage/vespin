@@ -74,6 +74,122 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.40.0 — 2026-11-20
+
+### Agents talk in Slack
+
+Agents now speak for themselves in Slack: they reply in their thread in a few
+short messages, hear plain replies there without an @mention, react to what
+you send, and share files from their work. They can post in any channel the
+Vespin bot is in, and DM you unless you turned Slack notifications off.
+
+[#9497](https://github.com/ReviewStage/vespin/pull/9497),
+[#9499](https://github.com/ReviewStage/vespin/pull/9499),
+[#9500](https://github.com/ReviewStage/vespin/pull/9500),
+[#9503](https://github.com/ReviewStage/vespin/pull/9503),
+[#9535](https://github.com/ReviewStage/vespin/pull/9535),
+[#10030](https://github.com/ReviewStage/vespin/pull/10030),
+[#10053](https://github.com/ReviewStage/vespin/pull/10053),
+[#10114](https://github.com/ReviewStage/vespin/pull/10114),
+[#10176](https://github.com/ReviewStage/vespin/pull/10176),
+[#10182](https://github.com/ReviewStage/vespin/pull/10182)
+
+### A Settings page for everything
+
+Each integration and each of the workspace's GitHub, Slack, and Sentry
+connections now has a page of its own, and settings rows open, fold, and say
+their state in plain words.
+
+[#9994](https://github.com/ReviewStage/vespin/pull/9994),
+[#9999](https://github.com/ReviewStage/vespin/pull/9999),
+[#10000](https://github.com/ReviewStage/vespin/pull/10000),
+[#10002](https://github.com/ReviewStage/vespin/pull/10002),
+[#9997](https://github.com/ReviewStage/vespin/pull/9997),
+[#9963](https://github.com/ReviewStage/vespin/pull/9963)
+
+### Improvements
+
+- You can turn off the Inbox in Settings › Preferences, and agents answer
+  in their reply instead
+  ([#9823](https://github.com/ReviewStage/vespin/pull/9823),
+  [#9832](https://github.com/ReviewStage/vespin/pull/9832),
+  [#9844](https://github.com/ReviewStage/vespin/pull/9844),
+  [#9824](https://github.com/ReviewStage/vespin/pull/9824))
+- Choose which MCP servers new agents start with in Settings › Agents
+  ([#10068](https://github.com/ReviewStage/vespin/pull/10068))
+- The Tasks board shows only top-level tasks, with a Show sub-tasks switch
+  ([#10190](https://github.com/ReviewStage/vespin/pull/10190))
+- Start a new task right in a sidebar section from its +
+  ([#9851](https://github.com/ReviewStage/vespin/pull/9851))
+- The sidebar's My tasks folds from its heading
+  ([#10188](https://github.com/ReviewStage/vespin/pull/10188))
+- Switch workspaces with ⌃1 through ⌃9
+  ([#9798](https://github.com/ReviewStage/vespin/pull/9798))
+- An agent's row says how many of its agents still work, and shows a failure
+  ([#10016](https://github.com/ReviewStage/vespin/pull/10016))
+- Agents now know your time zone on every turn
+  ([#9982](https://github.com/ReviewStage/vespin/pull/9982))
+- Refresh a Claude Code or Codex plan's usage from its ⋯ in Settings
+  ([#9791](https://github.com/ReviewStage/vespin/pull/9791),
+  [#9815](https://github.com/ReviewStage/vespin/pull/9815),
+  [#9842](https://github.com/ReviewStage/vespin/pull/9842))
+- This Mac's settings mark each permission you allowed with a green check
+  ([#10001](https://github.com/ReviewStage/vespin/pull/10001),
+  [#9996](https://github.com/ReviewStage/vespin/pull/9996))
+- Comments in a description's margin line up with the words they're on
+  ([#9979](https://github.com/ReviewStage/vespin/pull/9979))
+- A forked agent opens with its brief folded into the Forked from card
+  ([#10026](https://github.com/ReviewStage/vespin/pull/10026),
+  [#10062](https://github.com/ReviewStage/vespin/pull/10062))
+- Agents mark a task Done only once its work is truly finished
+  ([#10032](https://github.com/ReviewStage/vespin/pull/10032))
+- Calls use a newer voice and keep each speaker's words on their own line
+  ([#10175](https://github.com/ReviewStage/vespin/pull/10175),
+  [#10189](https://github.com/ReviewStage/vespin/pull/10189))
+
+### Fixes
+
+- Fixed being signed out on every device after a phone woke mid-renewal
+  ([#9961](https://github.com/ReviewStage/vespin/pull/9961),
+  [#10039](https://github.com/ReviewStage/vespin/pull/10039))
+- Fixed My tasks keeping tasks you unassigned yourself from and unfollowed
+  ([#10024](https://github.com/ReviewStage/vespin/pull/10024))
+- Fixed a thread you replied to staying in the Inbox's Open view
+  ([#10070](https://github.com/ReviewStage/vespin/pull/10070))
+- Fixed "To you" showing on Inbox rows that are all yours
+  ([#10185](https://github.com/ReviewStage/vespin/pull/10185))
+- Fixed agents started from Slack being archived after each reply
+  ([#10180](https://github.com/ReviewStage/vespin/pull/10180))
+- Fixed landscape photos looking squashed in transcripts
+  ([#10155](https://github.com/ReviewStage/vespin/pull/10155))
+- Fixed a done task's green mark fading on a muted sidebar row
+  ([#10098](https://github.com/ReviewStage/vespin/pull/10098),
+  [#10105](https://github.com/ReviewStage/vespin/pull/10105))
+- Fixed an agent's started agents popping in rather than unrolling
+  ([#9826](https://github.com/ReviewStage/vespin/pull/9826),
+  [#9822](https://github.com/ReviewStage/vespin/pull/9822))
+- Fixed a rename flashing back to the old name while it saves
+  ([#9828](https://github.com/ReviewStage/vespin/pull/9828))
+- Fixed Add variables and Edit not focusing their first field
+  ([#10240](https://github.com/ReviewStage/vespin/pull/10240))
+- Fixed Permanently delete's confirm saying a board would be deleted
+  ([#10132](https://github.com/ReviewStage/vespin/pull/10132))
+- Fixed the video player's scrubber crowding at narrow widths
+  ([#9985](https://github.com/ReviewStage/vespin/pull/9985))
+- Fixed a task's side panel and banner sitting off the pane bar's height
+  ([#9755](https://github.com/ReviewStage/vespin/pull/9755),
+  [#9797](https://github.com/ReviewStage/vespin/pull/9797))
+
+### Misc
+
+- Updated the landing page with a live replica of the app and Slack and CLI
+  ([#9117](https://github.com/ReviewStage/vespin/pull/9117),
+  [#8812](https://github.com/ReviewStage/vespin/pull/8812),
+  [#9843](https://github.com/ReviewStage/vespin/pull/9843),
+  [#10184](https://github.com/ReviewStage/vespin/pull/10184))
+- Added a Move to Vespin guide with a prompt to paste into a task
+  ([#10073](https://github.com/ReviewStage/vespin/pull/10073))
+
 ## 0.39.0 — 2026-11-17
 
 ### Starter tasks
@@ -334,6 +450,16 @@ find it in the sidebar's Following group.
 
 ![Usage-based billing, Theo Walsh's task, open on its Overview with its Following chip's popover open: You, with the laptop mark for letting agents use your machines, Theo Walsh marked Assignee, and Dana Moreno, each checked, above Let agents here use my machines switched on; beside it the sidebar's Following group lists Usage-based billing, Rotate webhook signing secrets, and Onboarding checklist above My tasks](apps/web/public/changelog/0.35.0/following.png)
 
+### Find and jump to any message sent to an agent
+
+Hover the rail down the side of an agent's transcript to see the messages sent
+to it, yours and those from teammates, other agents, automations, and GitHub.
+Click one to jump to it.
+
+[#9162](https://github.com/ReviewStage/vespin/pull/9162)
+
+![The Add teammate invitations agent's transcript with the rail down its side pointed at: beside it a stack of the messages sent to the agent, Update docs after a merge in front, with Theo Walsh's, Jordan Lee's, and your own above it, and Handle Postmark bounces, your own, and Dana Moreno's GitHub comment below](apps/web/public/changelog/0.35.0/find-and-jump-to-any-message.png)
+
 ### Improvements
 
 - Settings › Machines lists all your machines and lets you pick a default
@@ -353,8 +479,6 @@ find it in the sidebar's Following group.
   with a note ([#9207](https://github.com/ReviewStage/vespin/pull/9207))
 - Blocked commands read as not run instead of failed, and the agent carries on
   ([#9194](https://github.com/ReviewStage/vespin/pull/9194))
-- Hover the transcript's rail to preview nearby messages
-  ([#9162](https://github.com/ReviewStage/vespin/pull/9162))
 - Integration calls show the account they ran on to everyone
   ([#9300](https://github.com/ReviewStage/vespin/pull/9300))
 - Clearer rows for searches, thread reads, and browser calls

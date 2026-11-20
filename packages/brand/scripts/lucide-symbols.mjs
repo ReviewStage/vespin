@@ -17,7 +17,8 @@
 // out: an 800 by 600 board whose small row's cap line stands at 76 and
 // baseline at 146, a cap height of 70, with each weight centered in its own
 // column. The medium and large rows hold only their guides, since iOS
-// derives both scales from the small row.
+// derives both scales from the small row, save in a template of one weight,
+// which actool asks to draw it at Medium.
 const CAPLINE = 76;
 const BASELINE = 146;
 const CAP_HEIGHT = BASELINE - CAPLINE;
@@ -34,9 +35,16 @@ const WEIGHT_CENTER = { ULTRALIGHT: 265, REGULAR: 465, BLACK: 665 };
 // a bar, which asks for the large scale.
 const BOX = 24;
 const SMALL_SCALE = 0.8;
-const BOX_SIZE = CAP_HEIGHT * 1.5 * SMALL_SCALE;
-const SCALE = BOX_SIZE / BOX;
-const BOX_TOP = CAPLINE + CAP_HEIGHT / 2 - BOX_SIZE / 2;
+
+// The rows a template draws a glyph in, each by its cap line and the
+// square's size there: the small row, which a variable template draws, and
+// the medium row, at the full size the small row's derived medium stands at,
+// which a template of one weight draws, since actool asks such a template
+// for its Regular glyph at Medium.
+const ROW = {
+  SMALL: { id: "S", capline: CAPLINE, boxSize: CAP_HEIGHT * 1.5 * SMALL_SCALE },
+  MEDIUM: { id: "M", capline: CAPLINE + 200, boxSize: CAP_HEIGHT * 1.5 },
+};
 
 // Each weight's stroke, in Lucide's units, so it scales with the square:
 // Regular is Lucide's own 2, which stands as thick as SF Symbols' regular
@@ -632,28 +640,32 @@ const coordinate = (value) => {
   return Object.is(rounded, -0) ? "0" : String(rounded);
 };
 
-function pathData(commands, centerX) {
-  const left = centerX - BOX_SIZE / 2;
-  const place = ({ x, y }) => `${coordinate(left + x * SCALE)},${coordinate(BOX_TOP + y * SCALE)}`;
+function pathData(commands, centerX, row) {
+  const scale = row.boxSize / BOX;
+  const left = centerX - row.boxSize / 2;
+  const top = row.capline + CAP_HEIGHT / 2 - row.boxSize / 2;
+  const place = ({ x, y }) => `${coordinate(left + x * scale)},${coordinate(top + y * scale)}`;
 
   return commands.map(({ command, points }) => [command, ...points.map(place)].join(" ")).join(" ");
 }
 
-function weightGroup(name, paths, weight) {
+function weightGroup(name, paths, weight, row) {
   return {
     pathCommands: paths.map((commands) => commands.map(({ command }) => command).join("")),
-    svg: `<g id="${name}-S">${paths
-      .map((commands) => `<path d="${pathData(commands, WEIGHT_CENTER[weight])}"/>`)
+    svg: `<g id="${name}-${row.id}">${paths
+      .map((commands) => `<path d="${pathData(commands, WEIGHT_CENTER[weight], row)}"/>`)
       .join("")}</g>`,
   };
 }
 
-function marginGuides(name, weight) {
+function marginGuides(name, weight, row) {
   const center = WEIGHT_CENTER[weight];
+  const [left, right] = [center - row.boxSize / 2, center + row.boxSize / 2].map(coordinate);
+  const top = row.capline - 20;
 
   return [
-    `<path id="left-margin-${name}-S" d="M${coordinate(center - BOX_SIZE / 2)},56 l0,110"/>`,
-    `<path id="right-margin-${name}-S" d="M${coordinate(center + BOX_SIZE / 2)},56 l0,110"/>`,
+    `<path id="left-margin-${name}-${row.id}" d="M${left},${top} l0,110"/>`,
+    `<path id="right-margin-${name}-${row.id}" d="M${right},${top} l0,110"/>`,
   ].join("");
 }
 
@@ -663,22 +675,28 @@ const WEIGHTS = [
   ["Black", "BLACK"],
 ];
 
-/** A template's three weights, each the outlines `outlinesAt` draws at that weight's half stroke, as an SF Symbols custom symbol template. */
-function templateOf(outlinesAt) {
-  const weights = WEIGHTS.map(([name, weight]) =>
-    weightGroup(name, outlinesAt(STROKE[weight] / 2, weight), weight),
+/**
+ * A template's weights (`drawn`, all three unless named) in `row`, each the
+ * outlines `outlinesAt` draws at that weight's half stroke, as an SF Symbols
+ * custom symbol template. Note that every row's cap line and baseline stand
+ * whatever it draws, because actool refuses a template missing the small
+ * row's baseline.
+ */
+function templateOf(outlinesAt, drawn = WEIGHTS, row = ROW.SMALL) {
+  const weights = drawn.map(([name, weight]) =>
+    weightGroup(name, outlinesAt(STROKE[weight] / 2, weight), weight, row),
   );
 
-  const [ultralight, regular, black] = weights.map(({ pathCommands }) => pathCommands.join("|"));
+  const commandRuns = new Set(weights.map(({ pathCommands }) => pathCommands.join("|")));
 
-  if (ultralight !== regular || regular !== black)
+  if (commandRuns.size > 1)
     throw new Error("lucide-symbols: the weights' outlines differ in shape and cannot interpolate");
 
   const guides = [
     `<path id="Capline-S" d="M18,${CAPLINE} l800,0"/>`,
     `<path id="H-reference" stroke="none" d="M85,145.755 L87.685,145.755 L113.369,79.287 L114.052,79.287 L114.052,76 L112.148,76 L85,145.755 Z M95.693,121.536 L130.996,121.536 L130.263,119.313 L96.474,119.313 L95.693,121.536 Z M139.15,145.755 L141.787,145.755 L114.638,76 L113.466,76 L113.466,79.287 L139.15,145.755 Z"/>`,
     `<path id="Baseline-S" d="M18,${BASELINE} l800,0"/>`,
-    ...WEIGHTS.map(([name, weight]) => marginGuides(name, weight)),
+    ...drawn.map(([name, weight]) => marginGuides(name, weight, row)),
     `<path id="Capline-M" d="M18,276 l800,0"/>`,
     `<path id="Baseline-M" d="M18,346 l800,0"/>`,
     `<path id="Capline-L" d="M18,476 l800,0"/>`,
@@ -695,53 +713,6 @@ function templateOf(outlinesAt) {
   ].join("");
 }
 
-// A static template's one glyph stands in the medium row, at Regular, as
-// Xcode's static templates hold it: the square at the medium scale's one
-// and a half cap heights, centered on its cap line and baseline.
-const MEDIUM_CAPLINE = 276;
-const MEDIUM_BOX_SIZE = CAP_HEIGHT * 1.5;
-const MEDIUM_SCALE = MEDIUM_BOX_SIZE / BOX;
-const MEDIUM_BOX_TOP = MEDIUM_CAPLINE + CAP_HEIGHT / 2 - MEDIUM_BOX_SIZE / 2;
-
-/** An outline's path data placed in the medium row's square, centered on `centerX`. */
-function mediumPathData(commands, centerX) {
-  const left = centerX - MEDIUM_BOX_SIZE / 2;
-
-  const place = ({ x, y }) =>
-    `${coordinate(left + x * MEDIUM_SCALE)},${coordinate(MEDIUM_BOX_TOP + y * MEDIUM_SCALE)}`;
-
-  return commands.map(({ command, points }) => [command, ...points.map(place)].join(" ")).join(" ");
-}
-
-/**
- * A Lucide icon's node as a static SF Symbols custom symbol template: one
- * glyph, Regular at the medium scale, from which iOS derives every weight and
- * scale by scaling it, rather than three weights it interpolates. Note that
- * it is a third of a variable template's outlines, for the many glyphs only
- * a section's chosen icon may wear (`every-lucide-symbol.mjs`), where the
- * app's catalog weighs on the app's size.
- */
-export function staticSymbolTemplate(node) {
-  const center = WEIGHT_CENTER.REGULAR;
-  const paths = strokesOf(node).map((stroke) => outlineOf(stroke, STROKE.REGULAR / 2));
-
-  const guides = [
-    `<path id="Capline-M" d="M18,${MEDIUM_CAPLINE} l800,0"/>`,
-    `<path id="Baseline-M" d="M18,${MEDIUM_CAPLINE + CAP_HEIGHT} l800,0"/>`,
-    `<path id="left-margin-Regular-M" d="M${coordinate(center - MEDIUM_BOX_SIZE / 2)},256 l0,110"/>`,
-    `<path id="right-margin-Regular-M" d="M${coordinate(center + MEDIUM_BOX_SIZE / 2)},256 l0,110"/>`,
-  ].join("");
-
-  return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<svg width="800" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">`,
-    `<g id="Notes" font-family="sans-serif" font-size="13px"><rect x="0" y="0" width="800" height="600" fill="white"/><text x="18" y="376">Medium</text><text id="template-version" x="785" y="575" text-anchor="end">Template v.3.0</text></g>`,
-    `<g id="Guides" stroke="rgb(39,170,225)" stroke-width="0.5px">${guides}</g>`,
-    `<g id="Symbols"><g id="Regular-M">${paths.map((commands) => `<path d="${mediumPathData(commands, center)}"/>`).join("")}</g></g>`,
-    `</svg>`,
-  ].join("");
-}
-
 /**
  * A Lucide icon's node (`lucide-react`'s `__iconData.node`) as an SF Symbols
  * custom symbol template, version 3.0, whose three weights iOS interpolates.
@@ -750,6 +721,24 @@ export function symbolTemplate(node) {
   const strokes = strokesOf(node);
 
   return templateOf((half) => strokes.map((stroke) => outlineOf(stroke, half)));
+}
+
+/**
+ * A Lucide icon's node as a template of its Regular weight alone, drawn at
+ * Medium as actool asks of a template with one weight, every row's guides
+ * kept, for the many glyphs only a section's chosen icon may wear
+ * (`every-lucide-symbol.mjs`). Note that it holds a third of a variable
+ * template's outlines, since all of them weighed some 20 MB in the app's
+ * Assets.car, and a section's glyph is drawn at Regular.
+ */
+export function regularSymbolTemplate(node) {
+  const strokes = strokesOf(node);
+
+  return templateOf(
+    (half) => strokes.map((stroke) => outlineOf(stroke, half)),
+    WEIGHTS.filter(([, weight]) => weight === "REGULAR"),
+    ROW.MEDIUM,
+  );
 }
 
 // ---------- A task's status mark ----------

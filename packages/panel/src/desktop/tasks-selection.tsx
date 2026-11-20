@@ -225,8 +225,10 @@ export function useChosen(drawn: ReadonlySet<string>, held?: ChosenTasksStore): 
   const own = useCreateStore<ReadonlySet<string>>(new Set<string>());
   const store = held ?? own;
   const chosen = useSelector(store);
-  const selected: ReadonlySet<string> = new Set([...chosen].filter((id) => drawn.has(id)));
-  const stale = selected.size !== chosen.size;
+  const kept = [...chosen].filter((id) => drawn.has(id));
+  const stale = kept.length !== chosen.size;
+  // Note that while every row chosen is still drawn the store's own set is handed on, because each row reads it through `ListSelectionContext`, and a new one draws every row again.
+  const selected: ReadonlySet<string> = stale ? new Set(kept) : chosen;
   // Note that the rows no longer drawn are let go after the draw rather than during it, because a store's write redraws its readers.
   useEffect(() => {
     if (stale) store.setState((was) => new Set([...was].filter((id) => drawn.has(id))));

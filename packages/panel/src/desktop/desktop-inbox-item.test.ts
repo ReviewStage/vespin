@@ -2193,7 +2193,7 @@ test("a thread scrolled up offers the transcript's way back to its newest messag
   const pane = await mountThread(threadItem([askingMessage(EXPIRY_ASK)]));
   const board = boardOf(pane);
   // Note that the thread hears where it stands as each scroll settles, which the virtualizer waits a moment of no scrolling for.
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   onTestFinished(() => void vi.useRealTimers());
   scrollBoard(board, 300);
   act(() => vi.runAllTimers());

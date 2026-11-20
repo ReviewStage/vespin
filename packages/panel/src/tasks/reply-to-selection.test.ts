@@ -422,7 +422,7 @@ test("a message that did not go comes back on Edit with its quotes as blocks, an
 test("on a touch screen Reply stands under a selection once it rests, though no pointerup lets it go", async () => {
   answerPointer(true);
   const tab = await mounted();
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   tab.select(AGENT_WORDS, "Option B", "review.", false);
   assert.equal(tab.reply() === undefined, true, "a selection still being drawn is offered nothing");
@@ -471,7 +471,7 @@ test("Reply keeps the side it was offered on as the log scrolls the words toward
 
 test("with a mouse, a selection resting is offered nothing until the pointer lets it go", async () => {
   const tab = await mounted();
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   tab.select(AGENT_WORDS, "Option A", "today.", false);
   act(() => {

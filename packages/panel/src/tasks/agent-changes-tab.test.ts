@@ -2743,7 +2743,7 @@ function overToggle(): HTMLButtonElement {
 
 /** A narrow panel with the tree's toggle pressed, the pane's slide left to play out. */
 async function narrowTreeOpened(): Promise<void> {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   document.body.style.setProperty("--ui-duration-pane", `${MOTION_DURATION_MS.PANE}ms`);
   layContainersAt({ "side-panel": 300 });
   files = [changed("a.ts"), changed("b.ts")];

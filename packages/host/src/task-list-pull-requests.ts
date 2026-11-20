@@ -32,7 +32,7 @@ import type { AgentRow } from "./task-list-rows.js";
 
 /** The task list's pull requests, as its live queries hold them now. */
 export interface TaskListPullRequests {
-  /** The pull request of every agent whose row keeps one, the archived among them. */
+  /** The pull request of every agent of `agents` whose row keeps one. */
   readonly agentPullRequests: () => readonly ListedPullRequest[];
   /** Every pull request of each plan that has one, those still open first, the newest agent's first within each. */
   readonly taskPullRequests: () => readonly TaskPullRequests[];

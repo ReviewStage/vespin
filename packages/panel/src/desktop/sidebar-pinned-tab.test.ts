@@ -150,7 +150,7 @@ function leave(press: HTMLElement): void {
 const card = () => document.querySelector(".ui-tooltip-card [data-pinned-tab-card]");
 
 test("a pointer crossing a pinned agent's row asks the service nothing", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
   const press = drawPin();
   act(() => {
     press.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -303,7 +303,7 @@ describe("a pinned Pull request tab's card", () => {
   };
 
   test("is the Pull request tab's own card where one of the open task's agents opened it, read without asking the service", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
     restOn(drawPin(pin, TASK, openTask([summary])));
     await settled();
     const tabCard = document.querySelector(".ui-tooltip-card [data-pull-request-card]");
@@ -315,7 +315,7 @@ describe("a pinned Pull request tab's card", () => {
   });
 
   test("is the pin's own card, naming the pull request the task list holds without asking the service, where the task is not open", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
 
     const view = {
       tasks: {

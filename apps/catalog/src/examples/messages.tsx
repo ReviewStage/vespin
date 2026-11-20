@@ -2,6 +2,7 @@
  * messages.tsx -- a chat's bubbles in runs, and a turn of a conversation, the line over a received one naming who sent it and what they did, and the line under every one: when, then its actions, or, where a sent one did not go, Not delivered before when and a red alert beside it, flush with an agent's words where they stand on no bubble, the actions hidden until the pointer rests on the turn or the keyboard is on one of them, and on a touch screen shown by a tap on the turn.
  */
 
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import {
   AVATAR_SIZE,
   Avatar,
@@ -26,9 +27,18 @@ import {
   SubjectLine,
   Text,
 } from "@repo/ui";
+import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { CATALOG_FAILURE } from "../catalog-failure";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
+
+/** The other side's face beside its run, as a Manager's chat stands it: beside the run's last bubble, its room kept beside the others. */
+const MANAGER_AVATAR = (
+  <ManagerFace
+    face={{ character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.PURPLE }}
+    size={MANAGER_FACE_SIZE.MESSAGE}
+  />
+);
 
 /** Oct 14, 2026, 3:42 PM, on the viewer's own clock. */
 const SENT_AT = new Date(2026, 9, 14, 15, 42).getTime();
@@ -153,7 +163,7 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="chat-bubbles"
-        title="A chat's bubbles: what people sent at the right, the other side's at the left, one sender's run close, its corners tightened, one time under its last"
+        title="A chat's bubbles: what people sent at the right, the other side's at the left beside its face, one sender's run close, its corners tightened, one time under its last"
       >
         <div className="catalog-frame">
           <div className="flex flex-col gap-ui-4">
@@ -172,12 +182,17 @@ function Messages(): React.JSX.Element {
                 <ChatBubble
                   side={CHAT_SIDE.RECEIVED}
                   run={chatRunOf(index === 0, index === RUN.length - 1)}
+                  avatar={MANAGER_AVATAR}
                   beside={COPY}
                 >
                   <Text>{words}</Text>
                 </ChatBubble>
                 {index === RUN.length - 1 ? (
-                  <MessageLine align={MESSAGE_LINE_ALIGN.START} at={SENT_AT} />
+                  <MessageLine
+                    align={MESSAGE_LINE_ALIGN.START}
+                    inset={MESSAGE_LINE_INSET.AVATAR}
+                    at={SENT_AT}
+                  />
                 ) : null}
               </MessageFrame>
             ))}

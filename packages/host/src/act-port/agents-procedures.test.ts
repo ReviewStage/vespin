@@ -84,6 +84,7 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_SERVERS]: "Could not switch the agent's MCP servers on this system.",
   [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]:
     "Could not change the agent's permission mode on this system.",
+  [AGENT_ACT_KIND.AGENTS_FACE]: "Could not change the Manager's face on this system.",
   [AGENT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: "Could not answer the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
@@ -151,6 +152,7 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_RENAME: { agentId: AGENT_ID, title: "Sign-out button" },
   AGENTS_SERVERS: { agentId: AGENT_ID, disabledServers: ["linear"] },
   AGENTS_PERMISSION_MODE: { agentId: AGENT_ID, permissionMode: "ask" },
+  AGENTS_FACE: { agentId: AGENT_ID, face: { character: "cat", color: "blue" } },
   AGENTS_ANSWER_APPROVAL: {
     agentId: AGENT_ID,
     approvalId: "0b1c4a39-3b5e-4f7c-9a52-8d4f0e7c2a11",
@@ -199,6 +201,7 @@ const NOTED_ACTS = [
   "AGENTS_RENAME",
   "AGENTS_SERVERS",
   "AGENTS_PERMISSION_MODE",
+  "AGENTS_FACE",
   "AGENTS_STOP",
   "AGENTS_REWIND",
   "AGENTS_CLEAR",

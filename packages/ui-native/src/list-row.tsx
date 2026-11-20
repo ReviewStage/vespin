@@ -3,6 +3,7 @@
 import {
   Button,
   ContextMenu,
+  DisclosureGroup,
   Divider,
   HStack,
   Image,
@@ -53,7 +54,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
+import { createContext, Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
@@ -317,7 +318,7 @@ type TaskRowProps = RowActs & {
   readonly at?: number | undefined;
   /** Its key, `ACME-42`, which ends the line, where a search's finds draw it, as ⌘K's do. */
   readonly taskKey?: string | undefined;
-  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does, the chevron standing in its status mark's place. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
+  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its long press's Show or Hide sub-tasks does, the chevron being its caller's `RowDisclosure`'s. */
   readonly fold?: RowFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
@@ -471,6 +472,7 @@ export function rowPlacement(
   vertical: number = ROW_INSET.VERTICAL,
   indent = 0,
   leading: number = ROW_INSET.LEADING,
+  reach = 0,
 ) {
   return [
     listRowBackground("clear"),
@@ -483,10 +485,13 @@ export function rowPlacement(
     }),
     ...(selected
       ? [
+          // Note that a fill that reaches past the row's own frame, under what the system stands after it, is drawn on the frame padded out by that much and the padding taken back, so the row lays out as it did.
+          padding({ trailing: reach }),
           background(
             colors.SELECTED,
             SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
           ),
+          padding({ trailing: -reach }),
           listRowSeparator("hidden"),
         ]
       : []),
@@ -636,13 +641,22 @@ export function RowFrame({
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
+  const disclosed = useContext(RowDisclosedContext);
+  const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors, selected, vertical, indent, leading),
+    ...rowPlacement(
+      colors,
+      selected,
+      vertical,
+      indent,
+      leading,
+      disclosed ? SPACE.EDGE + chevronRoom : 0,
+    ),
     ...(heard === undefined
       ? []
       : [
@@ -1166,6 +1180,50 @@ function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   }
 }
 
+/** Whether a row stands as a disclosure's label, after which the system stands the disclosure's chevron. */
+const RowDisclosedContext = createContext(false);
+
+/** The room the system's disclosure chevron takes after its label, in points at the default text size, the gap before it included, measured on the iPad (j10090r2), which a selected label's fill reaches under. */
+const DISCLOSURE_CHEVRON_ROOM = 7;
+
+/**
+ * A row with the rows nested under it, folded by SwiftUI's own disclosure,
+ * as Files and Notes fold a folder: the row stands as its label, its
+ * chevron at the line's trailing edge, turning as it opens, the rows under
+ * it set in by the system and eased in and out, and VoiceOver hearing it
+ * expanded or collapsed. Its holder keeps whether it stands open, since a
+ * recycled row holds no state (`RowForEach`). Note that the label is the
+ * row's own press, which opens what the row is, so only the chevron folds.
+ */
+export function RowDisclosure({
+  open,
+  onOpenChange,
+  label,
+  children,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly label: ReactNode;
+  readonly children: ReactNode;
+}) {
+  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it; its trailing inset keeps the chevron off the column's edge, and the system sets its rows in under the parent's name. A selected label's fill reaches on under the chevron (`RowDisclosedContext`), since a view modifier here would fall on every row nested under it too.
+  return (
+    <DisclosureGroup
+      isExpanded={open}
+      onIsExpandedChange={onOpenChange}
+      modifiers={[
+        listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
+        listRowBackground("clear"),
+      ]}
+    >
+      <DisclosureGroup.Label>
+        <RowDisclosedContext value={true}>{label}</RowDisclosedContext>
+      </DisclosureGroup.Label>
+      {children}
+    </DisclosureGroup>
+  );
+}
+
 /** What a parent task's chevron is heard as, folded and open. */
 const SUB_TASK_FOLD: FoldWords = { show: "Show sub-tasks", hide: "Hide sub-tasks" };
 
@@ -1332,12 +1390,10 @@ export function useNestColumn(): number {
  * reader or the dashed mark where no one is, and how long ago it last moved.
  * Its ring stands at the list's edge, where an Inbox row's ring stands past
  * the dot's margin, so the two lists' marks and words line up. A task with
- * sub-tasks stands the panel's fold chevron in its ring's place, as the
- * panel's row stands it at rest on a screen with no hover, so every row's
- * mark keeps one column and the names one edge; its caller draws the
- * sub-tasks as rows of their own under it, a level deeper, their marks under
- * its name. Note that SwiftUI's disclosure is not used, because a press on
- * its row folds it rather than picking the row.
+ * sub-tasks stands as the label of its caller's `RowDisclosure`, whose
+ * chevron, at the line's trailing edge as Files and Notes stand theirs,
+ * folds them; the row offers Show and Hide sub-tasks in its long press too
+ * (`fold`), and says which.
  */
 export function TaskRow(props: TaskRowProps) {
   const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
@@ -1355,13 +1411,7 @@ export function TaskRow(props: TaskRowProps) {
         dot={false}
         unread={unread}
         faded={finished}
-        lead={
-          fold === undefined ? (
-            <StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />
-          ) : (
-            <FoldChevron fold={fold} words={SUB_TASK_FOLD} />
-          )
-        }
+        lead={<StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
         end={

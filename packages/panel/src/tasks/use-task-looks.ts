@@ -236,13 +236,17 @@ export function useTaskLooks(
 export function useUnreadTasks({ staged }: { staged: boolean }): (task: TaskSummary) => boolean {
   const watched = useSelector(watchedStore);
 
-  return (task) => {
-    if (staged) return false;
+  // Note that the answer stands while the plan watched does, so a list derived from it is derived again only when it moves.
+  return useCallback(
+    (task) => {
+      if (staged) return false;
 
-    if (task.markedUnread === true) return true;
+      if (task.markedUnread === true) return true;
 
-    return task.id !== watched && readsUnread(task, newestChangeOf(task));
-  };
+      return task.id !== watched && readsUnread(task, newestChangeOf(task));
+    },
+    [staged, watched],
+  );
 }
 
 /** Whether the developer marked a plan unread, and the mark a menu sets either way. */

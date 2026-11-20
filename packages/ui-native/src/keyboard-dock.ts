@@ -4,9 +4,10 @@ import { requireNativeView } from "expo";
 import type { ComponentType, ReactNode } from "react";
 import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
 
-/** What the native dock tells as the keyboard moves: how far it stands over the dock's foot, in points. */
+/** What the native dock tells as the keyboard moves: how far it stands over the dock's foot, and the bottom safe area its lift is less by, in points. */
 interface KeyboardOverlap {
   readonly overlap: number;
+  readonly inset: number;
 }
 
 /** The native dock's props: the screen's content, then its bar, which it lifts. */

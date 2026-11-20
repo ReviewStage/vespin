@@ -1488,6 +1488,15 @@ body,
   padding-inline: calc(var(--column-inset) + var(--ui-list-inset));
 }
 
+/* A Manager's chat stands in a column at its page's right
+   (`desktop-agent-page.tsx`), as wide as a conversation reads well, a
+   hairline between it and the overview in the room it leaves. */
+.manager-page > .manager-page-chat {
+  flex: none;
+  width: clamp(360px, 32%, 440px);
+  border-left: 1px solid var(--ui-color-border);
+}
+
 /* The panel's ground, named once (`--side-panel-ground`): the panel paints
    it, or its sheet does where the shell stands it on one (shell.css), and
    whatever in a tab must paint a ground of its own paints this one (a Pull

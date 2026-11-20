@@ -266,7 +266,7 @@ function startPayloads(
 // Note that the refusal raises the window's toast, whose waits stand on the test's clock.
 
 test("an ask of the models that never lands is said as failed past its bound, one that lands on models never read as failed, one that lands on models read as read, no device as none, and one refused as failed though models read before stay held", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     const { deliverModels } = handHostReads({});
@@ -309,7 +309,7 @@ test("an ask of the models that never lands is said as failed past its bound, on
 });
 
 test("an ask of the models still out when its tab closes settles nothing, so its bound passing after the window is gone throws nothing", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     handHostReads({});

@@ -675,19 +675,38 @@ export function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly Task
   );
 }
 
+/** One unarchived agent of a plan as its summary counts it (`standingFailures`). */
+type StandingAgent = Parameters<typeof standingFailures>[0][number];
+
 /**
- * One plan's agents counted, in any order, as the held read counts them: the
- * archived left out, how many are at work and how many failed with no agent
- * started since (`standingFailures`), how many pull requests they opened
- * (`pullRequestTotal`, its lines' count, `pullRequestLinesOf`), and the
- * latest settled activity of every agent, archived or not. The agents and
- * pull requests themselves are the list's `taskAgents` and
- * `taskPullRequests`.
+ * One plan's agents as its summary counts them, before the archived agents
+ * a reader holds apart from them are added (`summaryOfTally`): the
+ * unarchived as the counts read each, and the latest start and the latest
+ * settled activity of all of them, archived or not. Small, so a live query
+ * can derive it for a plan and the summary be drawn outside the query.
  */
-export function agentsSummaryOf(
+export interface AgentsTally {
+  readonly standing: readonly StandingAgent[];
+  readonly latestStart: number;
+  readonly activityAt: number;
+  readonly pullRequestTotal: number;
+}
+
+/**
+ * What a plan's archived agents add to its summary where a reader holds
+ * them apart from its other agents: the latest settled activity among them
+ * and the latest start, the two facts of an archived agent a summary reads.
+ */
+export interface ArchivedActivity {
+  readonly latestStart: number;
+  readonly activityAt: number;
+}
+
+/** One plan's agents, at least one, tallied as its summary counts them (`AgentsTally`), with the `pullRequestTotal` they opened. */
+export function agentsTallyOf(
   agents: readonly GracedAgent[],
   pullRequestTotal: number,
-): TaskAgentsSummary {
+): AgentsTally {
   const rows = agents.map((agent) => agent.row);
 
   const standing = agents.flatMap(({ row, pastGrace }) =>
@@ -704,12 +723,71 @@ export function agentsSummaryOf(
   );
 
   return {
-    total: standing.length,
-    working: standing.filter(({ status }) => WORKING_STATUSES.has(status)).length,
-    failed: standingFailures(standing, Math.max(...rows.map((row) => row.createdAt))),
-    ...(rows.length === 0 ? undefined : { activityAt: Math.max(...rows.map(activityAt)) }),
+    standing,
+    latestStart: Math.max(...rows.map((row) => row.createdAt)),
+    activityAt: Math.max(...rows.map(activityAt)),
     pullRequestTotal,
   };
+}
+
+/** What the archived agents `rows` of one plan add to its summary; none where it has none. */
+export function archivedActivityOf(rows: Iterable<AgentLiveRow>): ArchivedActivity | undefined {
+  let activity: ArchivedActivity | undefined;
+
+  for (const row of rows) {
+    activity = {
+      latestStart: Math.max(activity?.latestStart ?? row.createdAt, row.createdAt),
+      activityAt: Math.max(activity?.activityAt ?? activityAt(row), activityAt(row)),
+    };
+  }
+
+  return activity;
+}
+
+/**
+ * One plan's agents counted as the held read counts them (`agentsSummaryOf`),
+ * from those `tally` tallied and the archived ones held apart from them,
+ * which `archived` says; none where the plan has no agent.
+ */
+export function summaryOfTally(
+  tally: AgentsTally | undefined,
+  archived: ArchivedActivity | undefined,
+): TaskAgentsSummary | undefined {
+  if (tally === undefined && archived === undefined) return undefined;
+  const standing = tally?.standing ?? [];
+
+  const latest = (field: "latestStart" | "activityAt") =>
+    Math.max(
+      tally?.[field] ?? Number.NEGATIVE_INFINITY,
+      archived?.[field] ?? Number.NEGATIVE_INFINITY,
+    );
+
+  return {
+    total: standing.length,
+    working: standing.filter(({ status }) => WORKING_STATUSES.has(status)).length,
+    failed: standingFailures(standing, latest("latestStart")),
+    activityAt: latest("activityAt"),
+    pullRequestTotal: tally?.pullRequestTotal ?? 0,
+  };
+}
+
+/**
+ * One plan's agents counted, in any order, as the held read counts them: the
+ * archived left out, how many are at work and how many failed with no agent
+ * started since (`standingFailures`), how many pull requests they opened
+ * (`pullRequestTotal`, its lines' count, `pullRequestLinesOf`), and the
+ * latest settled activity of every agent, archived or not. The agents and
+ * pull requests themselves are the list's `taskAgents` and
+ * `taskPullRequests`.
+ */
+export function agentsSummaryOf(
+  agents: readonly GracedAgent[],
+  pullRequestTotal: number,
+): TaskAgentsSummary | undefined {
+  return summaryOfTally(
+    agents.length === 0 ? undefined : agentsTallyOf(agents, pullRequestTotal),
+    undefined,
+  );
 }
 
 type Origin = { readonly origin?: TaskOrigin };

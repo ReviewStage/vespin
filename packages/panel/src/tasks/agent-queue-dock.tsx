@@ -203,8 +203,12 @@ export function AgentQueueDock({
                     className="agent-queue-lead"
                     {...(movable && !edited ? { "data-queue-handle": "" } : undefined)}
                   >
-                    <GLYPH.QUEUED />
-                    <GLYPH.DRAG_HANDLE />
+                    <span className="agent-queue-glyph">
+                      <GLYPH.QUEUED />
+                    </span>
+                    <span className="agent-queue-grip">
+                      <GLYPH.DRAG_HANDLE />
+                    </span>
                   </span>
                 }
                 title={

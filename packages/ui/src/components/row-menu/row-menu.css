@@ -5,8 +5,13 @@
    room is kept whether it shows or not, so its coming and going moves
    nothing. */
 @layer components {
+  /* Note that it stands as a stacking context of its own at rest too
+     (`isolation`), because a box fading in from nothing to whole lays its
+     row out again as it stops being one, where a box always one only
+     repaints. */
   .ui-row-more {
     display: flex;
+    isolation: isolate;
     opacity: 0;
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }

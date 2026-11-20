@@ -1,4 +1,4 @@
-// app-ready.ts -- counts how long a launch in front, or a sign-in's return, took to show the Inbox, once each, on a rung, as `app:ready`.
+// app-ready.ts -- counts how long a launch, a sign-in's return, or a launch woken in the background once it came to the front, took to show the Inbox, once each, on a rung, as `app:ready`.
 
 import {
   PRODUCT_FIRST_ROWS,
@@ -22,7 +22,7 @@ import {
   launchStood,
   sinceLaunch,
 } from "./launch-phases.js";
-import { launchLeftFront } from "./launch-state.js";
+import { launchFrontAt, launchLeftFront } from "./launch-state.js";
 
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
 let counted = false;
@@ -73,13 +73,16 @@ export function noteSignedIn(): void {
  * `productLaunchSeconds`, and beside it, on the same rungs, when the launch
  * reached each of its phases (`launch-phases.ts`), and on a count's rungs
  * how many documents the host wrote before it, so a slow launch says where
- * its time went: never how many rows, which threads, or a time itself. Note that the rows the current scope lists
- * aren't asked for, since an account whose Open scope is empty would never
- * count, and that a launch that began in the background, a push or a Live
- * Activity's wake, or went there before the Inbox answered, counts nothing,
- * since its time would hold a wait nobody sat through. After a sign-in
+ * its time went: never how many rows, which threads, or a time itself.
+ * Note that the rows the current scope lists aren't asked for, since an
+ * account whose Open scope is empty would never count. A launch that began
+ * in the background, a push or a Live Activity's wake, or went there before
+ * the Inbox answered, is timed from when the app last came to the front
+ * (`launchFrontAt`), and each of its phases too, one reached while away on
+ * the first rung, since a wait from the launch would hold time nobody sat
+ * through; it's marked so (`ready_after` front). After a sign-in
  * (`noteSignedIn`) it counts once more, timed from the sign-in's return and
- * marked so (`ready_after`).
+ * marked so.
  */
 export function useAppReadyCount(shown: boolean): void {
   const count = useHostCount();
@@ -108,9 +111,13 @@ export function useAppReadyCount(shown: boolean): void {
     firstShownKept ??= keptRows;
 
     const after =
-      signedInAt === undefined ? PRODUCT_READY_AFTER.LAUNCH : PRODUCT_READY_AFTER.SIGN_IN;
+      signedInAt !== undefined
+        ? PRODUCT_READY_AFTER.SIGN_IN
+        : launchLeftFront()
+          ? PRODUCT_READY_AFTER.FRONT
+          : PRODUCT_READY_AFTER.LAUNCH;
 
-    if (after === PRODUCT_READY_AFTER.SIGN_IN ? leftSinceSignIn : launchLeftFront()) {
+    if (after === PRODUCT_READY_AFTER.SIGN_IN && leftSinceSignIn) {
       counted = true;
       stopWatching();
 
@@ -119,17 +126,31 @@ export function useAppReadyCount(shown: boolean): void {
 
     // Note that the state is read again here, since the app can go inactive after the render this effect belongs to, before its change lands.
     if (!active || AppState.currentState !== "active") return;
+    // Note that a launch timed from the front waits until the front is noted, which the launch's own watch does before this one hears the change.
+    const from = after === PRODUCT_READY_AFTER.FRONT ? launchFrontAt() : 0;
+
+    if (from === undefined) return;
     counted = true;
     stopWatching();
-    const elapsed = signedInAt === undefined ? sinceLaunch() : performance.now() - signedInAt;
+    const sinceStart = sinceLaunch();
+
+    const elapsed =
+      signedInAt === undefined
+        ? sinceStart === undefined
+          ? undefined
+          : sinceStart - from
+        : performance.now() - signedInAt;
 
     if (elapsed === undefined) return;
-    // Note that the host's start is said for a launch alone, since a sign-in's wait begins long after it.
-    const stood = after === PRODUCT_READY_AFTER.LAUNCH ? launchStood() : undefined;
 
-    // Note that each phase is said for a launch alone, as the host's start is.
-    const phase = (reachedPhase: LaunchPhase) =>
-      after === PRODUCT_READY_AFTER.LAUNCH ? launchPhaseMs(reachedPhase) : undefined;
+    // Note that the host's start and each phase are said for a launch alone, since a sign-in's wait begins long after them, and one reached before the front is the first rung.
+    const sinceFront = (ms: number | undefined) =>
+      after === PRODUCT_READY_AFTER.SIGN_IN || ms === undefined
+        ? undefined
+        : Math.max(0, ms - from);
+
+    const stood = sinceFront(launchStood()?.ms);
+    const phase = (reachedPhase: LaunchPhase) => sinceFront(launchPhaseMs(reachedPhase));
 
     const evaluated = phase(LAUNCH_PHASE.EVALUATED);
     const account = phase(LAUNCH_PHASE.ACCOUNT);
@@ -146,12 +167,10 @@ export function useAppReadyCount(shown: boolean): void {
       ...(local === undefined ? undefined : { local_seconds: productLaunchSeconds(local) }),
       ...(started === undefined ? undefined : { started_seconds: productLaunchSeconds(started) }),
       ...(inbox === undefined ? undefined : { inbox_seconds: productLaunchSeconds(inbox) }),
-      ...(after === PRODUCT_READY_AFTER.LAUNCH
-        ? { deliveries: productSessionCountBucket(launchDelivered()) }
-        : undefined),
-      ...(stood?.ms === undefined
+      ...(after === PRODUCT_READY_AFTER.SIGN_IN
         ? undefined
-        : { standing_seconds: productLaunchSeconds(stood.ms) }),
+        : { deliveries: productSessionCountBucket(launchDelivered()) }),
+      ...(stood === undefined ? undefined : { standing_seconds: productLaunchSeconds(stood) }),
       ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
       first_rows: firstShownKept ? PRODUCT_FIRST_ROWS.KEPT : PRODUCT_FIRST_ROWS.FEED,
       ready_after: after,

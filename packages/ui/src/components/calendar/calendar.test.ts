@@ -324,7 +324,7 @@ test("a step still waiting on its month is dropped once the keyboard leaves the 
 
 /** The words of the hint the pointer resting on `target` raises, past the hint's wait, on a faked clock. */
 function hintOn(target: Element): string | undefined {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     act(() => {

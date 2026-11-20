@@ -133,7 +133,7 @@ import {
   sum,
   useLiveQuery,
 } from "@tanstack/react-db";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useConnected } from "../connection.js";
@@ -165,13 +165,13 @@ import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/w
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
-import { useSteadyDoors } from "../steady-door.js";
+import { useSteadyDoors, useSteadyList } from "../steady-door.js";
 import { useTaskListCollections } from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
-import { useHeldOrder } from "../tasks/use-held-order.js";
+import { useHeldOrder, usePointerHold } from "../tasks/use-held-order.js";
 import { useFailedRuns, useListedInbox } from "../tasks/use-inbox-slices.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import {
@@ -254,6 +254,9 @@ const SETTLED_STATUSES: TaskStatus[] = [...TASK_SETTLED];
 
 /** What the Automations row's count counts, as a reader hears it after the figure. */
 const RUNNING_NOUN = "running";
+
+/** Everyone's tasks, which a workspace nobody shares lists, as one value so the list's view stands across renders. */
+const ANYONE: AssignedTo = { kind: ASSIGNED_TO.ANYONE };
 
 /**
  * The edge of the window's left column, the tasks' sidebar or Settings' page
@@ -2102,8 +2105,8 @@ function SidebarColumn({
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
   const [carrying, setCarrying] = useState(false);
-  // Whether the pointer is over the column, while which its tasks hold their places.
-  const [pointing, setPointing] = useState(false);
+  // The pointer over the column, while which its tasks hold their places.
+  const pointer = usePointerHold();
   const overlay = useFloatingSidebar(sidebar);
   useFirstUsableSpan(tasks);
   const body = useRef<HTMLDivElement>(null);
@@ -2238,7 +2241,7 @@ function SidebarColumn({
   // Only a workspace somebody shares has people to filter by, so one nobody shares lists every task.
   const { memberCount } = tasks.workspace ?? {};
   const shared = memberCount === undefined ? (reader.members?.length ?? 0) > 1 : memberCount > 1;
-  const assignedTo: AssignedTo = shared ? taskView.view.assignedTo : { kind: ASSIGNED_TO.ANYONE };
+  const assignedTo: AssignedTo = shared ? taskView.view.assignedTo : ANYONE;
 
   useTaskViewCommands({
     offered: tasks.signedIn && tasks.workspace !== undefined,
@@ -2252,10 +2255,14 @@ function SidebarColumn({
   const edge = useSidebarEdge(sidebar, sidebar.onToggle);
 
   // Note that the task asked for is current while the host opens it, as the address the window stands at already names it.
-  const current = (taskId: string) =>
-    onTasks && !standingIn && tasks.taskPlaceStands && taskId === tasks.boundFor;
+  const { taskPlaceStands, boundFor } = tasks;
 
-  const currentTask = (task: TaskSummary) => current(task.id);
+  const current = useCallback(
+    (taskId: string) => onTasks && !standingIn && taskPlaceStands && taskId === boundFor,
+    [onTasks, standingIn, taskPlaceStands, boundFor],
+  );
+
+  const currentTask = useCallback((task: TaskSummary) => current(task.id), [current]);
   const listedInbox = useListedInbox(tasks);
   // The list is the chosen workspace's; the unread marks above read every task.
   const listedTasks = useListedTasks(tasks);
@@ -2279,14 +2286,16 @@ function SidebarColumn({
   // The account's own sections stand while a workspace is listed.
   const sectionsShown = tasks.signedIn && tasks.workspace !== undefined;
 
-  const sectioned = sectionedTasks(
-    tasks.taskSections,
-    sectionsShown ? tasks.workspace?.id : undefined,
-    listedTasks.unpinned,
+  const sectionedIn = sectionsShown ? tasks.workspace?.id : undefined;
+
+  // Note that every list below is derived once per move of what it reads, so a render that moves nothing in the lists walks none of them.
+  const sectioned = useMemo(
+    () => sectionedTasks(tasks.taskSections, sectionedIn, listedTasks.unpinned),
+    [tasks.taskSections, sectionedIn, listedTasks.unpinned],
   );
 
   // A section is the reader's own choice, which the view's filters never thin, as they never thin a pin: it draws every task put in it but the settled ones.
-  const shownSections = sectioned.sections.map(sectionWithoutSettled);
+  const shownSections = useMemo(() => sectioned.sections.map(sectionWithoutSettled), [sectioned]);
 
   // Note that a child task is walked to the ancestor it stands under through every listed task, the finished ones the view hides among them.
   const everyTask = listedTasks.every;
@@ -2419,9 +2428,18 @@ function SidebarColumn({
 
   // Note that the pins are never filtered, because a pin is already the
   // reader's own choice. A task an automation's run made leaves Tasks too, once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
-  const unpinnedTasks = withoutFinishedRunTasks(
-    listedTasks.unpinned.filter((task) => !sectioned.taskIds.has(task.id)),
-    { unread, inbox: listedInbox.inbox, shown: current, pullRequests: listedPullRequests },
+  // Note that the list stands as it was while the open task or the one watched moves and no row comes or goes, as they do on each move between tasks.
+  const { inbox: waitingInbox } = listedInbox;
+
+  const unpinnedTasks = useSteadyList(
+    useMemo(
+      () =>
+        withoutFinishedRunTasks(
+          listedTasks.unpinned.filter((task) => !sectioned.taskIds.has(task.id)),
+          { unread, inbox: waitingInbox, shown: current, pullRequests: listedPullRequests },
+        ),
+      [listedTasks.unpinned, sectioned.taskIds, unread, waitingInbox, current, listedPullRequests],
+    ),
   );
 
   // Note that an archived task, which the list does not show, counts for nothing here.
@@ -2430,7 +2448,7 @@ function SidebarColumn({
   const listsTask = useListsTask(tasks.workspace?.id);
   const neverHadTasks = unlisted && !hadTasks(tasks, tasks.workspace?.id, listsTask);
   // A row names its repository as its group's header would, its owner's picture and its name, owner and all where two share a name.
-  const named = repositoriesOf(unpinnedTasks);
+  const named = useMemo(() => repositoriesOf(unpinnedTasks), [unpinnedTasks]);
 
   const repositoryOf = (task: TaskSummary) => {
     const { repository } = task;
@@ -2446,10 +2464,18 @@ function SidebarColumn({
     );
   };
 
-  const assigned = tasksAssignedTo(unpinnedTasks, assignedTo, tasks.me);
+  const { me } = tasks;
+
+  const assigned = useMemo(
+    () => tasksAssignedTo(unpinnedTasks, assignedTo, me),
+    [unpinnedTasks, assignedTo, me],
+  );
 
   // The list holds the tasks to do and in progress, newest active first; the Tasks page holds the rest.
-  const statusTasks = inActivityOrder(assigned.filter(taskListed), activityOrder);
+  const statusTasks = useMemo(
+    () => inActivityOrder(assigned.filter(taskListed), activityOrder),
+    [assigned, activityOrder],
+  );
 
   // Every unpinned task, newest active first, from which a parent's child tasks the lists leave out are stood under it (`withSubTasks`).
   const subTaskPool = useMemo(
@@ -2457,58 +2483,94 @@ function SidebarColumn({
     [listedTasks.unpinned, activityOrder],
   );
 
-  const orderView: TaskOrderView = {
-    workspaceId: tasks.workspace?.id,
-    grouping: taskView.view.grouping,
-    assignedTo,
-  };
+  const { grouping } = taskView.view;
+  const workspaceId = tasks.workspace?.id;
 
-  const placing = { grouping: orderView.grouping, pending: tasks.pendingTasks };
+  const orderView: TaskOrderView = useMemo(
+    () => ({ workspaceId, grouping, assignedTo }),
+    [workspaceId, grouping, assignedTo],
+  );
+
+  const { pendingTasks: pending, pinnedRepositories } = tasks;
+  const placing = useMemo(() => ({ grouping, pending }), [grouping, pending]);
+
+  // Note that the held order draws the list again only when one of these moves (`use-held-order.ts`).
+  const drawSections = useCallback(
+    (places: ReadonlyMap<string, TaskSummary>) => {
+      const placed = [...taskPlaces(statusTasks, places, placing).values()];
+      // Note that rows held still are ordered by the times they were first drawn with, so only a list holding none stands in the live order as it is.
+      const ordered = places.size === 0 ? placed : orderTasks(placed);
+      const held = taskSections(ordered, grouping, pinnedRepositories);
+
+      return liveSections(held, new Map(statusTasks.map((task) => [task.id, task])));
+    },
+    [statusTasks, placing, grouping, pinnedRepositories],
+  );
+
+  const placesOfSections = useCallback(
+    (_drawn: TaskSections, held: ReadonlyMap<string, TaskSummary>) =>
+      taskPlaces(statusTasks, held, placing),
+    [statusTasks, placing],
+  );
 
   // While the pointer is over the sidebar each task keeps the place it was
   // first drawn in, so one an update would sort elsewhere stays under the
   // reader's hand. Note that the hold is the pointer's and not the sidebar's
   // being in sight, because a pinned sidebar is in sight for as long as the
   // window is open, and its tasks would sort anew only at the next launch.
-  const sections = useHeldOrder(orderView, tasks.shown && overlay.inSight && pointing, {
-    sameOrder: sameTaskOrder,
-    draw: (places: ReadonlyMap<string, TaskSummary>) => {
-      const placed = [...taskPlaces(statusTasks, places, placing).values()];
-      // Note that rows held still are ordered by the times they were first drawn with, so only a list holding none stands in the live order as it is.
-      const ordered = places.size === 0 ? placed : orderTasks(placed);
-      const held = taskSections(ordered, orderView.grouping, tasks.pinnedRepositories);
-
-      return liveSections(held, new Map(statusTasks.map((task) => [task.id, task])));
-    },
-    placesOf: (_drawn, held) => taskPlaces(statusTasks, held, placing),
-  });
-
-  // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and at the top where no list draws an ancestor of it (`homedTaskRows`).
-  const pinnedOwn = pinnedHeld(pinnedSection);
-
-  // The tasks the reader follows that no list above holds stand under Following, a task drawn in one place (`followingTasks`).
-  const followed = followingTasks(unpinnedTasks, statusTasks, tasks.me);
-
-  // Then every child task the lists leave out stands under its parent where a list draws it: an open one whoever is on it, and a settled one where the view asks (`withSubTasks`).
-  const homed = withSubTasks(
-    homedTaskRows(
-      [
-        pinnedOwn,
-        ...shownSections.map((drawn) => drawn.tasks),
-        followed,
-        ...taskSectionLists(sections),
-      ],
-      everyTask,
-      1 + shownSections.length,
-    ),
-    subTaskPool,
-    taskView.view.finishedSubTasks,
+  const sections = useHeldOrder(
+    orderView,
+    tasks.shown && overlay.inSight,
+    { sameOrder: sameTaskOrder, draw: drawSections, placesOf: placesOfSections },
+    pointer,
   );
 
-  const pinnedAdopted = (homed[0] ?? []).slice(pinnedOwn.length);
-  const homedSections = shownSections.map((drawn, at) => homedSection(drawn, homed[at + 1] ?? []));
-  const homedFollowing = homed[shownSections.length + 1] ?? [];
-  const homedTasks = withTaskLists(sections, homed.slice(shownSections.length + 2));
+  // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and at the top where no list draws an ancestor of it (`homedTaskRows`).
+  const pinnedOwn = useSteadyList(pinnedHeld(pinnedSection));
+
+  // The tasks the reader follows that no list above holds stand under Following, a task drawn in one place (`followingTasks`).
+  const followed = useMemo(
+    () => followingTasks(unpinnedTasks, statusTasks, me),
+    [unpinnedTasks, statusTasks, me],
+  );
+
+  const { finishedSubTasks } = taskView.view;
+
+  // Then every child task the lists leave out stands under its parent where a list draws it: an open one whoever is on it, and a settled one where the view asks (`withSubTasks`).
+  // Note that the walk reads every task through the window's collection, which moves in place, so the listed tasks it moves with stand among what it is derived again for.
+  const { pinnedAdopted, homedSections, homedFollowing, homedTasks } = useMemo(() => {
+    const homed = withSubTasks(
+      homedTaskRows(
+        [
+          pinnedOwn,
+          ...shownSections.map((drawn) => drawn.tasks),
+          followed,
+          ...taskSectionLists(sections),
+        ],
+        everyTask,
+        1 + shownSections.length,
+      ),
+      subTaskPool,
+      finishedSubTasks,
+    );
+
+    return {
+      pinnedAdopted: (homed[0] ?? []).slice(pinnedOwn.length),
+      homedSections: shownSections.map((drawn, at) => homedSection(drawn, homed[at + 1] ?? [])),
+      homedFollowing: homed[shownSections.length + 1] ?? [],
+      homedTasks: withTaskLists(sections, homed.slice(shownSections.length + 2)),
+    };
+  }, [
+    pinnedOwn,
+    shownSections,
+    followed,
+    sections,
+    everyTask,
+    subTaskPool,
+    finishedSubTasks,
+    listedTasks.pinned,
+    listedTasks.unpinned,
+  ]);
 
   const pinnedDrawnRows = pinnedDrawn(
     pinnedSection,
@@ -2518,62 +2580,81 @@ function SidebarColumn({
     everyTask,
   );
 
+  const pinnedTasks = useSteadyList(pinnedSection.map((pin) => pin.task));
+
   // The tasks are chosen together across Pinned, the sections, and Tasks, only those the view draws staying chosen, a child task homed nowhere among those it does not.
-  const selection = useTasksSelection(
-    tasks,
-    new Set(
-      [
-        ...pinnedSection.map((pin) => pin.task),
-        ...pinnedAdopted,
-        ...homedFollowing,
-        ...homedSections.flatMap((drawn) => drawn.tasks),
-        ...taskSectionLists(homedTasks).flat(),
-      ].map((task) => task.id),
-    ),
+  const choosable = useMemo(
+    () =>
+      new Set(
+        [
+          ...pinnedTasks,
+          ...pinnedAdopted,
+          ...homedFollowing,
+          ...homedSections.flatMap((drawn) => drawn.tasks),
+          ...taskSectionLists(homedTasks).flat(),
+        ].map((task) => task.id),
+      ),
+    [pinnedTasks, pinnedAdopted, homedFollowing, homedSections, homedTasks],
   );
+
+  const selection = useTasksSelection(tasks, choosable);
 
   // The rows as the list draws them: the pinned, the followed, then each group not folded
   // away, the open row standing in its place even under a fold, so walking
   // the list still moves from it.
   const pinnedWalked = pinnedTaskRows(pinnedDrawnRows);
 
-  // The tasks the Tasks head heads, the sections' and the list's, which its fold folds together, the open one standing.
-  const tasksHeaded = [
-    ...homedSections.flatMap((drawn) => drawn.tasks),
-    ...taskSectionLists(homedTasks).flat(),
-  ];
+  // The tasks the Tasks head heads, the sections' and the list's, which its fold folds together, the open one standing,
+  // and the rows Following, the sections, and Tasks draw, derived again only as the lists, the folds, or the open task move.
+  const { tasksHeaded, listsDrawn } = useMemo(() => {
+    const headed = [
+      ...homedSections.flatMap((drawn) => drawn.tasks),
+      ...taskSectionLists(homedTasks).flat(),
+    ];
 
-  const sectionsDrawn = homedSections.flatMap(({ section, tasks: held }) =>
-    nestedRows(
-      folds.tasksFolded || folds.sectionFolded(section.id) ? held.filter(currentTask) : held,
+    const sectionsDrawn = homedSections.flatMap(({ section, tasks: held }) =>
+      nestedRows(
+        folds.tasksFolded || folds.sectionFolded(section.id) ? held.filter(currentTask) : held,
+        folds,
+        currentTask,
+        everyTask,
+      ),
+    );
+
+    const followingDrawn = nestedRows(
+      folds.followingFolded ? homedFollowing.filter(currentTask) : homedFollowing,
       folds,
       currentTask,
       everyTask,
-    ),
-  );
+    );
 
-  const pinnedShownDrawn = folds.pinnedFolded ? pinnedWalked.filter(currentTask) : pinnedWalked;
+    const tasksDrawn =
+      folds.tasksFolded && headed.length > 0
+        ? nestedRows(
+            taskSectionLists(homedTasks).flat().filter(currentTask),
+            folds,
+            currentTask,
+            everyTask,
+          )
+        : drawnTasks(homedTasks, folds, currentTask, everyTask);
 
-  const followingDrawn = nestedRows(
-    folds.followingFolded ? homedFollowing.filter(currentTask) : homedFollowing,
+    return {
+      tasksHeaded: headed,
+      listsDrawn: [...followingDrawn, ...sectionsDrawn, ...tasksDrawn],
+    };
+  }, [
+    homedSections,
+    homedTasks,
+    homedFollowing,
     folds,
     currentTask,
     everyTask,
-  );
+    listedTasks.pinned,
+    listedTasks.unpinned,
+  ]);
 
-  const drawn = [
-    ...pinnedShownDrawn,
-    ...followingDrawn,
-    ...sectionsDrawn,
-    ...(folds.tasksFolded && tasksHeaded.length > 0
-      ? nestedRows(
-          taskSectionLists(homedTasks).flat().filter(currentTask),
-          folds,
-          currentTask,
-          everyTask,
-        )
-      : drawnTasks(homedTasks, folds, currentTask, everyTask)),
-  ];
+  const pinnedShownDrawn = folds.pinnedFolded ? pinnedWalked.filter(currentTask) : pinnedWalked;
+  const drawn = [...pinnedShownDrawn, ...listsDrawn];
 
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
   const chooseOrder = drawn.map((task) => task.id);
@@ -2670,9 +2751,9 @@ function SidebarColumn({
       data-row-drop-scope=""
       inert={!overlay.inSight}
       onPin={onPressWithin}
-      onPointerEnter={() => setPointing(true)}
+      onPointerEnter={pointer.onPointerEnter}
       onPointerLeave={(event) => {
-        setPointing(false);
+        pointer.onPointerLeave();
         overlay.onPointerLeave(event);
       }}
       onKeyDown={overlay.onKeyDown}

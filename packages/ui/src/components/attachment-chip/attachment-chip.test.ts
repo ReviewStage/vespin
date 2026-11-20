@@ -86,7 +86,7 @@ function buttonNames(list: HTMLElement): (string | null)[] {
 
 /** Rests the pointer on `target` for as long as a hint waits before it shows. */
 function hover(target: Element): void {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     act(() => {

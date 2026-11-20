@@ -4,19 +4,21 @@
  * A Manager is configured in one place, so its menu offers Settings… where
  * a coder's offers Rename (`agent-actions.tsx`). The card is New Manager's
  * own (`ManagerCard`), filled from the Manager: its Name, the agent's title;
- * its Model and effort; and its Repositories and Machine, held as it was
+ * its Face, which any face may be picked for, another Manager's too; its Model and effort; and its Repositories and Machine, held as it was
  * made, saying so, since neither changes after. Of those the client holds
  * only the first repository, its checkout (`ListedAgent.repository`), so
  * that is the one the card names. Save sends what changed, the name through
  * the agent's rename (`AgentsControl.rename`), the act a coder's Rename
- * sends, and the model and effort through the act the composer's model chip
- * sends (`AgentsControl.onChoose`); a Save that changed nothing sends
- * nothing. A refusal stands in the card saying why, with what was typed
+ * sends, the face through its own act (`AgentsControl.onFace`), which the
+ * host draws at once wherever the Manager is drawn, and the model and effort
+ * through the act the composer's model chip sends (`AgentsControl.onChoose`);
+ * a Save that changed nothing sends nothing. A refusal stands in the card saying why, with what was typed
  * and picked kept for another try.
  */
 
 import { chooseFailureNote } from "@repo/features/agent-refusal-words";
 import type { AgentSummary } from "@repo/features/agent-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useConfirmDialog } from "@repo/ui";
@@ -36,6 +38,9 @@ import { useFormDialog } from "./use-form-dialog.js";
 /** What the card says where Save is pressed with no name. */
 const NAME_ASKED = "Name the Manager.";
 
+/** What the card says where the face was not saved. */
+const FACE_FAILED = "Couldn't change the Manager's face.";
+
 /** No device, while the member's devices are not read. */
 const NO_DEVICES: readonly MacOffer[] = [];
 
@@ -45,7 +50,7 @@ const NO_REPOSITORIES: readonly string[] = [];
 /** What a Manager's Settings reads of it. */
 export type ManagerSettingsSubject = Pick<
   AgentSummary,
-  "id" | "title" | "model" | "effort" | "contextWindow" | "runtime" | "mac"
+  "id" | "title" | "model" | "effort" | "contextWindow" | "runtime" | "mac" | "face"
 > & {
   /** The workspace it is in, whose repositories its card's chip names; none where the surface does not know it. */
   readonly workspaceId?: string | undefined;
@@ -77,6 +82,11 @@ function sameChoice(one: ModelChoice, other: ModelChoice): boolean {
   );
 }
 
+/** Whether two faces are one; none is no face. */
+function sameFace(one: ManagerFace | undefined, other: ManagerFace | undefined): boolean {
+  return one?.character === other?.character && one?.color === other?.color;
+}
+
 /** The device a Manager on a Mac runs on, from the member's devices where they list it, else as the Manager names it; none for one in the cloud. */
 function deviceOf(
   agent: ManagerSettingsSubject,
@@ -100,20 +110,22 @@ export function useManagerSettingsDialog(
   agent: ManagerSettingsSubject,
   agents: Pick<
     AgentsControl,
-    "rename" | "onChoose" | "models" | "modelsFailed" | "readModels" | "macs"
+    "rename" | "onChoose" | "onFace" | "models" | "modelsFailed" | "readModels" | "macs"
   >,
   shown: boolean,
 ): ManagerSettingsAsk {
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
+  const [pickedFace, setPickedFace] = useState<ManagerFace | undefined>(undefined);
   const field = useRef<HTMLInputElement | null>(null);
   const renaming = useMutation(agents.rename.options);
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const trimmed = name.trim();
   const standing = choiceOf(agent);
   const choice = picked ?? standing;
+  const face = pickedFace ?? agent.face;
 
-  // Note that the name and the choice are sent one after the other, so a refused rename leaves the model as it stood.
+  // Note that the name, the face, and the choice are sent one after the other, so a refused one leaves those after it as they stood.
   const saving = useMutation({
     mutationFn: async (): Promise<ActionResult> => {
       if (trimmed !== (agent.title ?? "")) {
@@ -122,6 +134,13 @@ export function useManagerSettingsDialog(
         if (agents.rename.refused(renamed)) {
           return { status: ACTION_RESULT_STATUS.REJECTED, reason: RENAME_FAILED };
         }
+      }
+
+      if (face !== undefined && !sameFace(face, agent.face)) {
+        const faced = await agents.onFace(agent.id, face);
+
+        if ("failure" in faced)
+          return { status: ACTION_RESULT_STATUS.REJECTED, reason: FACE_FAILED };
       }
 
       if (sameChoice(choice, standing)) return ANSWER_ACCEPTED;
@@ -177,6 +196,13 @@ export function useManagerSettingsDialog(
           changed();
         },
       }}
+      face={{
+        value: face,
+        onChange: (next) => {
+          setPickedFace(next);
+          changed();
+        },
+      }}
       repositories={{
         values: agent.repository == null ? NO_REPOSITORIES : [agent.repository],
         chooser,
@@ -201,6 +227,7 @@ export function useManagerSettingsDialog(
     ask: () => {
       setName(agent.title ?? "");
       setPicked(undefined);
+      setPickedFace(undefined);
       saving.reset();
       // Note that the catalog is read as the card opens, so Model lists it as it stands.
       agents.readModels();

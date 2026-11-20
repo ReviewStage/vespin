@@ -1101,7 +1101,7 @@ function railToggle(tab: HTMLElement): HTMLButtonElement {
 
 /** A narrow panel with the chapters read and the rail away. */
 async function narrowChapters(): Promise<HTMLElement> {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   document.body.style.setProperty("--ui-duration-pane", `${MOTION_DURATION_MS.PANE}ms`);
   layContainersAt({ "side-panel": 500 });
   const tab = await draw(controlAnswering({ chapters: answering(ready()) }));
