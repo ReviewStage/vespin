@@ -183,7 +183,7 @@ export interface TasksDisplay {
   readonly completed: CompletedWindow;
   /** Whether the pinned tasks, then the account's sections, lead the List before its groups. */
   readonly pinnedFirst: boolean;
-  /** Whether a sub-task stands beside its parent; off, it stands only under it, its parent's count saying how many there are (`withoutSubTasks`). */
+  /** Whether a sub-task stands beside its parent; off, it stands only under it, its parent's count saying how many there are (`withSubTasksShown`). */
   readonly subTasks: boolean;
   /** The properties drawn, in `TASK_PROPERTY_ORDER`. */
   readonly properties: readonly TaskProperty[];
