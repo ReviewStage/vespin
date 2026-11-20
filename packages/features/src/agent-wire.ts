@@ -23,6 +23,7 @@ import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
+import { managerFaceSchema } from "./manager-face.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -1250,6 +1251,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   title: EffectSchema.NullOr(EffectSchema.String),
   /** That the agent is a Manager, whose page opens on its greeting (`@repo/features/manager-greeting`); absent for a coder, and from a service older than it. */
   kind: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_KIND.MANAGER)),
+  /** A Manager's face (`@repo/features/manager-face`), which the service picked as it was made; absent for a coder, and from a service older than it. */
+  face: EffectSchema.optionalKey(managerFaceSchema),
   /** How far the reader read a Manager's chat (`read-mark.ts`), the service's instant; absent for a coder, and from a service older than it. */
   readThrough: EffectSchema.optionalKey(countedNumber),
   /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */

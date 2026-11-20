@@ -32,6 +32,7 @@ import {
   integrationConnectionNameSchema,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
+import { type ManagerFace, managerFaceSchema } from "@repo/features/manager-face";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type TaskStatus, taskStatusSchema } from "@repo/features/task-wire";
 import { TURN_OPEN, TURN_STATUS, TURN_TERMINAL, type WireValue, WireValueSchema } from "@repo/wire";
@@ -89,6 +90,7 @@ import { agentAutomationNameSql, agentAutomationRunSql } from "./agent-name.js";
 import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
 import { deleteConversations } from "./conversation-delete.js";
 import { settleAgentInboxItems } from "./inbox-settle.js";
+import { pickManagerFace } from "./manager-faces.js";
 import {
   type LatestTurn,
   lastSettledTurnsOfReached,
@@ -219,6 +221,8 @@ export interface Agent {
   readonly githubAccess: GitHubAccess;
   /** What the agent is: a coder; a manager; a pilot stored before Pilot was removed, which every reader treats as a coder. */
   readonly kind: AgentKind;
+  /** A Manager's face, picked as it is made (`manager-faces.ts`); null for a coder, and absent where a caller built the agent without it. */
+  readonly face?: ManagerFace | null;
   readonly createdAt: Date;
   /** Where its runner runs: a Vercel Sandbox, or its starter's Mac; a Vercel Sandbox where unsaid. */
   readonly machine?: AgentMachineKind;
@@ -393,6 +397,7 @@ const AGENT_COLUMNS = {
   author: agentTable.author,
   githubAccess: agentTable.githubAccess,
   kind: agentTable.kind,
+  face: agentTable.face,
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
@@ -437,6 +442,7 @@ const AGENT_LINE_COLUMNS = {
   author: agentTable.author,
   githubAccess: agentTable.githubAccess,
   kind: agentTable.kind,
+  face: agentTable.face,
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
@@ -544,6 +550,7 @@ const AgentRowSchema = Schema.Struct({
   author: Schema.NullOr(AuthorColumnSchema),
   githubAccess: Schema.Literals(Object.values(GITHUB_ACCESS)),
   kind: Schema.Literals(Object.values(AGENT_KIND)),
+  face: Schema.NullOr(managerFaceSchema),
   createdAt: InstantColumnSchema,
   machine: Schema.Literals(Object.values(AGENT_MACHINE)),
   deviceId: Schema.NullOr(Schema.String),
@@ -2402,6 +2409,12 @@ export function createAgent(
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         );
 
+        // Note that only a Manager wears a face, so a coder's row is written as it was.
+        const made =
+          row.kind === AGENT_KIND.MANAGER
+            ? { ...row, face: yield* pickManagerFace(row.id, organizationId) }
+            : row;
+
         // Note that an agent in one repository or none writes no row here, so its rows are as they were.
         const extras = started.extraRepositories ?? [];
 
@@ -2415,7 +2428,7 @@ export function createAgent(
           });
         }
 
-        return Option.some({ agent: row, created: true, txid });
+        return Option.some({ agent: made, created: true, txid });
       }),
     ),
   );

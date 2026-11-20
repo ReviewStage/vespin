@@ -43,6 +43,7 @@ import {
   ORDER,
 } from "./live-read.js";
 import { LIVE_USER_QUERY } from "./live-wire.js";
+import { managerFaceSchema } from "./manager-face.js";
 import { readMarkOf } from "./read-mark.js";
 import { SANDBOX_SIZE } from "./sandbox-size.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
@@ -219,6 +220,8 @@ const agentLiveRowSchema = EffectSchema.Struct({
   markedUnread: EffectSchema.optionalKey(EffectSchema.Boolean),
   /** When a Manager last sent its chat a message (`send_to_user`); null before its first and for a coder, and absent from a statement before it was carried. */
   saidAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
+  /** A Manager's face (`@repo/features/manager-face`); null for a coder, and absent from a statement before it was carried. */
+  face: EffectSchema.optionalKey(EffectSchema.NullOr(managerFaceSchema)),
   createdAt: countedNumber,
   turnId: EffectSchema.NullOr(EffectSchema.String),
   turnStatus: EffectSchema.NullOr(EffectSchema.String),
@@ -890,6 +893,9 @@ function agentSummaryOf(
     // Note that only a Manager's chat is read by a mark, so a coder's row carries none.
     ...(row.kind === AGENT_KIND.MANAGER && row.readThrough !== undefined
       ? { readThrough: row.readThrough }
+      : undefined),
+    ...(row.kind === AGENT_KIND.MANAGER && row.face !== undefined && row.face !== null
+      ? { face: row.face }
       : undefined),
     ...(row.kind === AGENT_KIND.MANAGER && row.saidAt !== undefined && row.saidAt !== null
       ? { saidAt: row.saidAt }
