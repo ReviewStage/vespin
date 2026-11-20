@@ -14,6 +14,7 @@ import {
   agentBeforeSchema,
   agentCallIdSchema,
   agentChatHoldSchema,
+  agentFaceRequestSchema,
   agentMessageRequestSchema,
   agentMessagesAnswerSchema,
   agentMoveRequestSchema,
@@ -1001,6 +1002,14 @@ export const agentPermissionModeParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentPermissionModeParams = typeof agentPermissionModeParamsSchema.Type;
+
+/** A Manager's face changed, as the window asks it: the agent and the face picked. */
+export const agentFaceParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  ...agentFaceRequestSchema.fields,
+});
+
+export type AgentFaceParams = typeof agentFaceParamsSchema.Type;
 
 /** One ask of an agent answered, as the window asks it: the agent, the ask, and the answer with a denial's words. */
 export const agentApprovalAnswerParamsSchema = EffectSchema.Struct({

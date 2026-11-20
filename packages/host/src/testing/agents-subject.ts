@@ -615,6 +615,12 @@ function fakeService() {
 
         return { agent: { ...AGENT, permissionMode: request.permissionMode } };
       }),
+    changeFace: (agentId, request) =>
+      Effect.map(changeGate, () => {
+        asked.push(`face:${agentId}:${request.face.character}:${request.face.color}`);
+
+        return { agent: { ...AGENT, face: request.face } };
+      }),
     answerApproval: (agentId, approvalId, request) =>
       Effect.map(changeGate, () => {
         asked.push(`answerApproval:${agentId}:${approvalId}:${request.answer}`);

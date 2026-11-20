@@ -102,6 +102,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
@@ -2684,7 +2685,8 @@ export function savedMemoriesAppState(
 
 /**
  * What a fixture run changed of one of its agents: its model and effort, its
- * permission mode, the servers switched off, its name, and the reader's pin.
+ * permission mode, the servers switched off, its name, the reader's pin,
+ * and a Manager's face.
  */
 export interface AgentChange {
   readonly model?: string;
@@ -2693,6 +2695,7 @@ export interface AgentChange {
   readonly disabledServers?: readonly string[];
   readonly title?: string;
   readonly pinned?: boolean;
+  readonly face?: ManagerFace;
 }
 
 /** What a fixture run changed of its agents, by agent. */
@@ -2718,6 +2721,13 @@ export function agentChangeOf(
       >;
 
       return { agentId, change: { permissionMode } };
+    }
+
+    case ACT_KIND.AGENTS_FACE: {
+      // SAFETY: the payload is the one its case's kind declares.
+      const { agentId, face } = payload as PortActPayload<typeof ACT_KIND.AGENTS_FACE>;
+
+      return { agentId, change: { face } };
     }
 
     case ACT_KIND.AGENTS_SERVERS: {
@@ -2762,10 +2772,19 @@ const CHANGED_FIELDS = [
   "permissionMode",
   "disabledServers",
   "title",
-] as const satisfies readonly Exclude<keyof AgentChange, "pinned">[];
+] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face">[];
 
-/** Whether every field of the change already stands on the agent. */
+/** Whether every field of the change already stands on the agent, a face by its character and color. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
+  const { face } = change;
+
+  if (
+    face !== undefined &&
+    (face.character !== agent.face?.character || face.color !== agent.face?.color)
+  ) {
+    return false;
+  }
+
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
     const held = agent[key];
@@ -3055,6 +3074,13 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
     return { agent: { ...held, permissionMode } };
+  },
+  [ACT_KIND.AGENTS_FACE]: ({ agentId, face }) => {
+    const held = stagedAgent(agentId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { agent: { ...held, face } };
   },
   [ACT_KIND.AGENTS_SERVERS]: ({ agentId, disabledServers }) => {
     const held = stagedAgent(agentId);

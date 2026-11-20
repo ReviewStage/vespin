@@ -14,6 +14,7 @@ import {
   type AgentArchiveParams,
   type AgentChooseParams,
   type AgentDeleteAnswerView,
+  type AgentFaceParams,
   type AgentInboxAnsweredView,
   type AgentInboxAnswerParams,
   type AgentInboxCloseParams,
@@ -243,6 +244,7 @@ export type AgentClient = Pick<
   | "choose"
   | "rename"
   | "switchServers"
+  | "changeFace"
   | "choosePermissionMode"
   | "answerApproval"
   | "changeQueue"
@@ -858,6 +860,12 @@ function composed(
     ({ agentId, ...request }) => asked(client.choosePermissionMode(agentId, request)),
   );
 
+  /** A change of a Manager's face, drawn on the agent's row at once, so every place it is drawn draws the new one. */
+  const faced = agentWrite<AgentFaceParams>(
+    (request) => () => ({ face: request.face }),
+    ({ agentId, ...request }) => asked(client.changeFace(agentId, request)),
+  );
+
   /**
    * An archive, drawn on the agent's row at once, stamped now by the member,
    * a dialog's that asked first among them. Note that an agent archived
@@ -1255,6 +1263,7 @@ function composed(
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
     AGENTS_PERMISSION_MODE: declaredWrite(dependencies.pool, moded),
+    AGENTS_FACE: declaredWrite(dependencies.pool, faced),
     // Note that an answer draws nothing on the agent's row, whose ask the service takes off as it settles, so it is asked and answered alone.
     AGENTS_ANSWER_APPROVAL: ({ agentId, approvalId, ...request }) =>
       asked(client.answerApproval(agentId, approvalId, request)),

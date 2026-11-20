@@ -6,7 +6,9 @@
  * no generated title ever replaces a Manager's; the repositories it works
  * in, one or more, picked from New task's own list (`RepositoriesChip`),
  * the first its checkout, which stands on New task's own default until a
- * pick (`repository-default.ts`); its Machine, where it runs, New task's
+ * pick (`repository-default.ts`); its Face, none picked until a press, so
+ * the service picks one no other Manager of the workspace wears unless the
+ * member picks one, which then stands whoever else wears it; its Machine, where it runs, New task's
  * Runs on chip on the member's last pick (`runs-on.tsx`); and its model and effort, the
  * agent box's model chip on the account's default until one is picked. It
  * asks no charter: the Manager introduces itself on its first turn. Create
@@ -26,6 +28,7 @@
 import { startFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import { AGENT_BOUNDS, type AgentRuntime } from "@repo/features/agent-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
@@ -44,6 +47,7 @@ import {
   TextField,
   useConfirmDialog,
 } from "@repo/ui";
+import { ManagerFacePicker } from "@repo/ui/manager-face-picker";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -116,6 +120,10 @@ const CARD_WORDS = {
   [MANAGER_CARD.EDIT]: { title: "Manager settings", verb: "Save", running: "Saving" },
 } as const satisfies Record<ManagerCardLook, { title: string; verb: string; running: string }>;
 
+/** What the Face row says in New Manager while no face is picked, where the service picks one. */
+const FACE_PICKED_FOR_YOU =
+  "One no other Manager here wears is picked for you, unless you choose one.";
+
 /** What the Repositories and Machine rows say in a Manager's Settings, where they stand as made. */
 const FIXED_AFTER_CREATE = "Fixed once the Manager is made.";
 
@@ -136,8 +144,8 @@ export interface ManagerCardModel {
 
 /**
  * A Manager's card, New Manager's and a Manager's Settings' alike, so the
- * two never look apart: its Name, its Repositories, its Machine, and its
- * Model, in that order. In a Manager's Settings (`MANAGER_CARD.EDIT`) its
+ * two never look apart: its Name, its Face, its Repositories, its Machine,
+ * and its Model, in that order. In a Manager's Settings (`MANAGER_CARD.EDIT`) its
  * Repositories and Machine stand as it was made, held and saying so, and its
  * act is Save; a field added to a Manager slots in here for both.
  */
@@ -146,6 +154,7 @@ export function ManagerCard({
   form,
   field,
   name,
+  face,
   repositories,
   machine,
   model,
@@ -154,6 +163,11 @@ export function ManagerCard({
   form: FormDialog;
   field: React.RefObject<HTMLInputElement | null>;
   name: { readonly value: string; readonly onChange: (next: string) => void };
+  /** The face standing, none until a pick at New Manager, and how a pick changes it. */
+  face: {
+    readonly value: ManagerFace | undefined;
+    readonly onChange: (next: ManagerFace) => void;
+  };
   repositories: {
     readonly values: readonly string[];
     readonly chooser: RepositoryChooser;
@@ -205,6 +219,19 @@ export function ManagerCard({
               disabled={form.settling}
               onEnter={form.submit}
               onChange={name.onChange}
+            />
+          )}
+        </FormField>
+        <FormField
+          label="Face"
+          description={face.value === undefined ? FACE_PICKED_FOR_YOU : undefined}
+        >
+          {(control) => (
+            <ManagerFacePicker
+              face={face.value}
+              disabled={form.settling}
+              describedBy={control["aria-describedby"]}
+              onChange={face.onChange}
             />
           )}
         </FormField>
@@ -289,6 +316,7 @@ export function useNewManagerDialog({
   const repositoryDefault = useRepositoryDefault(chooser, workspace, undefined);
   const [picks, setPicks] = useState<readonly string[] | undefined>(undefined);
   const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
+  const [face, setFace] = useState<ManagerFace | undefined>(undefined);
 
   const repositories =
     picks ?? (repositoryDefault.repository === null ? [] : [repositoryDefault.repository]);
@@ -337,6 +365,8 @@ export function useNewManagerDialog({
         runsOn,
         model: choice.model,
         effort: choice.effort,
+        // Note that a face is sent only once picked, so one left alone is the service's pick.
+        ...(face === undefined ? undefined : { face }),
       });
 
       if (!("agent" in answer)) return refused(createFailureWords(answer.failure));
@@ -400,6 +430,13 @@ export function useNewManagerDialog({
           changed();
         },
       }}
+      face={{
+        value: face,
+        onChange: (next) => {
+          setFace(next);
+          changed();
+        },
+      }}
       repositories={{
         values: repositories,
         chooser,
@@ -437,6 +474,7 @@ export function useNewManagerDialog({
       setName("");
       setPicks(undefined);
       setPicked(undefined);
+      setFace(undefined);
       // Note that the devices and the catalog are read as the card opens, so Machine and Model list them as they stand.
       newTask.readModels();
       confirm.ask();

@@ -18,6 +18,7 @@ import {
   CONTEXT_WINDOW,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { choiceRequest } from "@repo/features/model-effort";
 import type {
   CatalogModel,
@@ -521,6 +522,8 @@ export interface AgentsControl {
   onSwitchServers: ServersWriter;
   /** Changes one agent's permission mode from its next turn, drawn at once by the host. */
   onPermissionMode: PermissionModeWriter;
+  /** Changes a Manager's face, drawn at once by the host wherever the Manager is drawn, and taken back should the service refuse it. */
+  onFace: (agentId: string, face: ManagerFace) => Promise<AgentActAnswer>;
   /** Answers one tool call an agent holds: allow, allow for the agent, or deny with words. */
   onAnswerApproval: ApprovalAnswerWriter;
   /** Opens Settings on its Integrations page, where an MCP server is connected. */
@@ -923,6 +926,8 @@ export function useAgents(input: {
   const { mutateAsync: sendPermissionMode } = useMutation(
     actMutation(ACT_KIND.AGENTS_PERMISSION_MODE),
   );
+
+  const { mutateAsync: sendFace } = useMutation(actMutation(ACT_KIND.AGENTS_FACE));
 
   const { mutateAsync: sendApprovalAnswer } = useMutation(
     actMutation(ACT_KIND.AGENTS_ANSWER_APPROVAL),
@@ -1830,6 +1835,12 @@ export function useAgents(input: {
     [sendPermissionMode],
   );
 
+  // A change of face is drawn by the host the moment it is asked, and taken back should the service refuse it.
+  const onFace = useCallback(
+    (agentId: string, face: ManagerFace) => sendFace({ agentId, face }).catch(agentUnreached),
+    [sendFace],
+  );
+
   const onAnswerApproval = useCallback<ApprovalAnswerWriter>(
     (agentId, approvalId, request) =>
       sendApprovalAnswer({ agentId, approvalId, ...request }).catch(agentUnreached),
@@ -2115,6 +2126,7 @@ export function useAgents(input: {
     onChoose,
     onSwitchServers,
     onPermissionMode,
+    onFace,
     onAnswerApproval,
     onOpenIntegrations: () => latest.current.onOpenIntegrations(),
     me: input.me,
