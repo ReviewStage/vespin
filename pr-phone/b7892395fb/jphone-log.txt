@@ -1,0 +1,7 @@
+== bundle PJPHONE base b7892395fb
+  built b7892395fb base app Vmain4.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-phone: fails 1 shots 6 Tap on ".*Teammate invitations.*Build teammate invitations.*", Index: 0... FAILED
