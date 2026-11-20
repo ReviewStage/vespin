@@ -1,0 +1,85 @@
+built main 642359e097 + #10230 039ecc5c9b as be99a08213
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 10:34:40 22967 MB
+curve 10:35:11 22745 MB
+curve 10:35:41 20766 MB
+curve 10:36:11 20617 MB
+curve 10:36:41 20318 MB
+curve 10:37:11 20288 MB
+curve 10:37:41 20228 MB
+curve 10:38:11 20180 MB
+curve 10:38:41 20032 MB
+curve 10:39:11 19794 MB
+curve 10:39:42 19611 MB
+curve 10:40:12 19507 MB
+curve 10:40:42 20038 MB
+curve 10:41:12 19977 MB
+curve 10:41:42 19930 MB
+curve 10:42:12 19811 MB
+curve 10:42:42 19646 MB
+curve 10:43:13 19504 MB
+curve 10:43:43 19495 MB
+curve 10:44:13 19223 MB
+curve 10:44:43 19229 MB
+curve 10:45:13 19150 MB
+curve 10:45:43 19135 MB
+curve 10:46:13 19068 MB
+curve 10:46:44 19060 MB
+curve 10:47:14 19046 MB
+curve 10:47:44 19026 MB
+curve 10:48:14 19014 MB
+curve 10:48:44 18992 MB
+curve 10:49:14 18984 MB
+curve 10:49:44 18947 MB
+curve 10:50:14 18937 MB
+curve 10:50:45 18926 MB
+curve 10:51:15 18896 MB
+curve 10:51:45 18858 MB
+curve 10:52:15 18826 MB
+curve 10:52:45 18790 MB
+curve 10:53:15 18759 MB
+curve 10:53:46 18722 MB
+curve 10:54:16 18710 MB
+curve 10:54:46 18684 MB
+curve 10:55:16 18666 MB
+curve 10:55:46 18637 MB
+curve 10:56:16 18620 MB
+curve 10:56:46 18435 MB
+curve 10:57:17 18392 MB
+curve 10:57:47 18288 MB
+curve 10:58:17 18219 MB
+curve 10:58:47 17477 MB
+curve 10:59:17 17367 MB
+curve 10:59:47 17293 MB
+curve 11:00:18 17147 MB
+curve 11:00:48 17041 MB
+curve 11:01:18 16953 MB
+curve 11:01:48 16860 MB
+curve 11:02:18 16387 MB
+curve 11:02:48 16385 MB
+curve 11:03:19 16301 MB
+curve 11:03:49 16248 MB
+curve 11:04:19 16141 MB
+curve 11:04:49 16131 MB
+curve 11:05:19 16065 MB
+curve 11:05:49 15778 MB
+curve 11:06:19 15905 MB
+curve 11:06:49 15858 MB
+curve 11:07:20 15835 MB
+curve 11:07:50 15814 MB
+curve 11:08:20 15708 MB
+curve 11:08:50 15706 MB
+curve 11:09:20 15706 MB
+curve 11:09:51 15665 MB
+curve 11:10:21 15621 MB
+BUILD EXIT 0 11:10:51
+sizes: Assets.car 23809880 bytes (main Vmain4 8576376), .app 118800 KB (main 102900 KB), zipped .app 44834378 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10230.app: replacing existing signature
+p10230-ipad27-light-sidebar: fails 0 shots 3 
+p10230-ipad27-dark-sidebar: fails 0 shots 3 
+p10230 actool lines:     /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/AgentsLiveActivity/AgentsLiveActivity.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_generated_info.plist_thinned --accent-color AccentColor --compress-pngs --enable-on-demand-resources NO --standalone-icon-behavior all --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator|    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/AgentsLiveActivity/AgentsLiveActivity.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Products/Release-iphonesimulator/AgentsLiveActivity.appex --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstr
