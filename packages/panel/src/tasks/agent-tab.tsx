@@ -2007,8 +2007,8 @@ export function AgentMessage({
   // A line another agent sent is that agent's message, never the developer's bubble.
   if (agentMessageOf(message) !== undefined) return <AgentMessageRow message={message} />;
 
-  // A line the voice said on a call is the voice's, never the agent's words.
-  if (isVoiceLine(message)) return <VoiceLineRow message={message} />;
+  // A line the voice said on a call is the voice's, never the agent's words; in a Manager's chat it is one of the Manager's messages (`managerChatLines`), drawn as any.
+  if (isVoiceLine(message) && chatRuns === undefined) return <VoiceLineRow message={message} />;
   const named = sender === undefined ? null : <MessageSender actor={sender} />;
   // What GitHub said on the pull request is drawn as its card, never as the prompt the agent read.
   const github = githubLineOf(message);
