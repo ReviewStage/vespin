@@ -421,6 +421,16 @@ function taskNodes(tasks: readonly TaskSummary[], every: TasksById): TaskNode[] 
   return tree;
 }
 
+/**
+ * The tasks at the top of the tree `tasks` nest into (`taskNodes`), as a
+ * list nesting child tasks stands them: each no ancestor of which `tasks`
+ * holds, a pinned one, and the first of a loop of parents. Every other task
+ * stands under one of them.
+ */
+export function topTasks(tasks: readonly TaskSummary[], every: TasksById): TaskSummary[] {
+  return taskNodes(tasks, every).map((node) => node.task);
+}
+
 /** Whether a task or any task under it is one `standing` keeps drawn. */
 function holdsStanding(node: TaskNode, standing: (task: TaskSummary) => boolean): boolean {
   return standing(node.task) || node.children.some((child) => holdsStanding(child, standing));
