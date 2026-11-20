@@ -166,10 +166,9 @@ export interface ChatRunPlace {
   readonly closes: boolean;
 }
 
-/** A Manager's chat in runs: where each message stands in its run, by its id, and how many people wrote in it. */
+/** A Manager's chat in runs: where each message stands in its run, by its id. */
 export interface ManagerChatRuns {
   readonly places: ReadonlyMap<string, ChatRunPlace>;
-  readonly people: number;
 }
 
 /** Who sent a chat message: the Manager for its own, else the person's account, the reader's for a line of theirs still on its way. */
@@ -202,26 +201,21 @@ function continuesRun(
   return was === undefined || is === undefined || is - was <= CHAT_RUN_GAP_MS;
 }
 
-/** A Manager's chat lines (`managerChatLines`) in runs: where each stands in its run, and how many people wrote, the reader's lines still on their way counted as the reader's. */
+/** A Manager's chat lines (`managerChatLines`) in runs: where each stands in its run, the reader's lines still on their way counted as the reader's. */
 export function managerChatRuns(
   lines: readonly AgentTranscriptMessage[],
   readerId: string | undefined,
 ): ManagerChatRuns {
   const places = new Map<string, ChatRunPlace>();
-  const people = new Set<string | undefined>();
 
   lines.forEach((message, index) => {
     const before = lines[index - 1];
     const after = lines[index + 1];
-    const sender = chatSender(message, readerId);
-
-    if (!sender.manager) people.add(sender.person);
-
     places.set(message.id, {
       opens: before === undefined || !continuesRun(before, message, readerId),
       closes: after === undefined || !continuesRun(message, after, readerId),
     });
   });
 
-  return { places, people: people.size };
+  return { places };
 }

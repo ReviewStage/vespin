@@ -9,7 +9,6 @@ import {
   BUTTON_SIZE,
   CHAT_RUN,
   CHAT_SIDE,
-  CHAT_TONE,
   ChatBubble,
   CopyIcon,
   chatRunOf,
@@ -164,17 +163,12 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="chat-bubbles"
-        title="A chat's bubbles: what people sent at the right, the other side's at the left beside its face, one sender's run close, its corners tightened, one time under its last"
+        title="A chat's bubbles: the reader's at the right, the other side's at the left under its name and beside its face, one sender's run close, its corners tightened, one time under its last"
       >
         <div className="catalog-frame">
           <div className="flex flex-col gap-ui-4">
             <MessageFrame revealActionsOnTap className="ml-auto flex flex-col items-end">
-              <ChatBubble
-                side={CHAT_SIDE.SENT}
-                run={CHAT_RUN.ALONE}
-                tone={CHAT_TONE.ACCENT}
-                beside={COPY}
-              >
+              <ChatBubble side={CHAT_SIDE.SENT} run={CHAT_RUN.ALONE} beside={COPY}>
                 <Text>Is the invite flow out?</Text>
               </ChatBubble>
               <MessageLine at={SENT_AT} />
@@ -185,6 +179,9 @@ function Messages(): React.JSX.Element {
                 revealActionsOnTap
                 className="mr-auto flex flex-col items-start"
               >
+                {index === 0 ? (
+                  <MessageHead inset={MESSAGE_LINE_INSET.AVATAR} sender="Iris" />
+                ) : null}
                 <ChatBubble
                   side={CHAT_SIDE.RECEIVED}
                   run={chatRunOf(index === 0, index === RUN.length - 1)}
