@@ -10,7 +10,9 @@
 // settles, and on each frame drawn while the keyboard stands, and set on the
 // bar as a transform, which React Native's layout leaves alone. A view that
 // stops being the bar, as a page goes back with the keyboard up, is set down
-// before Fabric can draw it anew elsewhere still lifted. Note that the display
+// before Fabric can draw it anew elsewhere still lifted. The bar is the last
+// child React mounted, never a view UIKit adds of its own, such as one a
+// selection in the field stands beside it. Note that the display
 // link holds this view while it runs, so it stops as the view leaves its
 // window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
@@ -25,6 +27,12 @@
 // its soft scroll edge under the bar, as it does under its own bars: words
 // scrolling under the composer's glass fade rather than standing sharp behind
 // its placeholder and its +.
+//
+// The bar's foot pads by the bottom safe area this view tells with the
+// overlap, the same number the lift is less by, rather than by a safe area
+// React Native reads for itself: on a page presented full screen, such as
+// New task, the two differed by the home indicator's height, so the bar
+// stood that much short of the keyboard and its row of capsules under it.
 //
 // Note that the overlap is read against this view, which stands still, and
 // never against the bar it moves, which would chase its own lift. A keyboard
@@ -55,11 +63,17 @@ private let edgeLookPause: TimeInterval = 0.5
 /// How deep under the dock's content its scroll view is looked for, so a screen still reading, with no list yet, costs a layout pass little.
 private let scrollViewDepth = 8
 
+/// Whether the system's keyboard stands, as its own notices last said, kept for every dock and read and written only on the main thread, where UIKit posts them, since a dock that comes into its window after the keyboard rose, as a start page whose field takes the keyboard as it opens, heard none of them while it stood out of a window.
+nonisolated(unsafe) private var keyboardStands = false
+
 final class KeyboardDockView: ExpoView {
   let onOverlap = EventDispatcher()
 
   /// The overlap last told to JavaScript; none yet.
   private var told: CGFloat?
+
+  /// The bottom safe area last told to JavaScript, which the bar pads its foot by while the dock lifts it, so the lift and the padding are one number; none yet.
+  private var toldInset: CGFloat?
 
   /// Whether the dock is following a frame drawn, when it moves the bar without telling JavaScript.
   private var framing = false
@@ -79,6 +93,9 @@ final class KeyboardDockView: ExpoView {
 
   /// What last took the keyboard, read as the keyboard moves, whose input accessory the bar is lifted over too.
   private weak var typing: UIResponder?
+
+  /// The children React mounted, in its order: the content, then the bar. Note that the bar is read from here rather than from the view's subviews, since a view UIKit adds of its own, as a selection in the composer's field stands one, became the last subview, which the dock lifted in the bar's place, setting the composer down behind the keyboard.
+  private var mounted: [UIView] = []
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -112,6 +129,7 @@ final class KeyboardDockView: ExpoView {
 
   /// Follows the keyboard frame by frame while it stands.
   @objc private func keyboardDidShow() {
+    keyboardStands = true
     typing = FirstResponder.current()
     followFrames()
   }
@@ -125,6 +143,7 @@ final class KeyboardDockView: ExpoView {
   }
 
   @objc private func keyboardDidHide() {
+    keyboardStands = false
     frames?.invalidate()
     frames = nil
     follow()
@@ -138,18 +157,31 @@ final class KeyboardDockView: ExpoView {
     framing = false
   }
 
-  /// Follows the keyboard again as the dock comes back into a window with the keyboard already standing, as a page does when the one over it goes back; stops following as it leaves.
+  /// Follows the keyboard as the dock comes into a window with the keyboard already standing, as a page does when the one over it goes back, or a start page whose field took the keyboard as it opened; stops following as it leaves.
   override func didMoveToWindow() {
     super.didMoveToWindow()
     guard window == nil else {
       looksLeft = edgeLooks
+      // Note that the keyboard is followed frame by frame wherever it stands as the dock comes in, whether the dock lifted for it before or never heard it rise, so the suggestion strip growing over a start page's field lifts the bar with it.
+      if keyboardStands { typing = FirstResponder.current() }
       follow()
-      if (told ?? 0) > 0 { followFrames() }
+      if keyboardStands || (told ?? 0) > 0 { followFrames() }
       return
     }
     frames?.invalidate()
     frames = nil
     setDown()
+  }
+
+  override func mountChildComponentView(_ childComponentView: UIView, index: Int) {
+    super.mountChildComponentView(childComponentView, index: index)
+    mounted.insert(childComponentView, at: min(max(index, 0), mounted.count))
+    setNeedsLayout()
+  }
+
+  override func unmountChildComponentView(_ childComponentView: UIView, index: Int) {
+    mounted.removeAll { $0 === childComponentView }
+    super.unmountChildComponentView(childComponentView, index: index)
   }
 
   override func willRemoveSubview(_ subview: UIView) {
@@ -169,6 +201,12 @@ final class KeyboardDockView: ExpoView {
     follow()
   }
 
+  /// Tells JavaScript the bottom safe area again where it moves, as a page presented full screen settles into its window.
+  override func safeAreaInsetsDidChange() {
+    super.safeAreaInsetsDidChange()
+    follow()
+  }
+
   /// Stands the bar as the bottom edge element of the first scroll view the content holds, as soon as both are mounted, and again once the content's scroll view is another, such as a list drawn in place of its skeleton.
   private func standAsEdge() {
     if edgeStands() { return }
@@ -179,9 +217,9 @@ final class KeyboardDockView: ExpoView {
 
   /// Walks the content for its first scroll view and stands the bar as its edge, or looks again a moment later where there is none yet.
   private func findEdge() {
-    guard let bar = subviews.last, subviews.count > 1 else { return }
+    guard let bar = mounted.last, mounted.count > 1 else { return }
 
-    guard let scroller = subviews.dropLast().lazy.compactMap({ firstScrollView(in: $0) }).first else {
+    guard let scroller = mounted.dropLast().lazy.compactMap({ firstScrollView(in: $0) }).first else {
       lookAgainSoon()
       return
     }
@@ -198,11 +236,11 @@ final class KeyboardDockView: ExpoView {
 
   /// Whether the bar stands as the edge of a scroll view the content still holds.
   private func edgeStands() -> Bool {
-    guard let bar = subviews.last, subviews.count > 1, let held = edge.scrollView, held.window != nil else {
+    guard let bar = mounted.last, mounted.count > 1, let held = edge.scrollView, held.window != nil else {
       return false
     }
 
-    return edge.view === bar && subviews.dropLast().contains(where: { held.isDescendant(of: $0) })
+    return edge.view === bar && mounted.dropLast().contains(where: { held.isDescendant(of: $0) })
   }
 
   /// On a frame drawn, lets a scroll view the content no longer holds go and looks for its successor a moment later, without walking the content on the frame.
@@ -241,7 +279,7 @@ final class KeyboardDockView: ExpoView {
     let overlap = max(0, bounds.maxY - keyboardTop())
     let lift = max(0, overlap - safeAreaInsets.bottom)
 
-    if let bar = subviews.last, subviews.count > 1 {
+    if let bar = mounted.last, mounted.count > 1 {
       if bar !== lifted { setDown() }
       bar.transform = lift > 0 ? CGAffineTransform(translationX: 0, y: -lift) : .identity
       lifted = bar
@@ -252,10 +290,14 @@ final class KeyboardDockView: ExpoView {
 
     guard !framing else { return }
 
-    // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone.
-    if let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
+    // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone, and so is a new bottom safe area, which the bar pads its foot by.
+    let inset = safeAreaInsets.bottom
+    let insetMoved = toldInset.map { abs($0 - inset) >= overlapStep } ?? true
+
+    if !insetMoved, let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
     told = overlap
-    onOverlap(["overlap": overlap])
+    toldInset = inset
+    onOverlap(["overlap": overlap, "inset": inset])
   }
 }
 
