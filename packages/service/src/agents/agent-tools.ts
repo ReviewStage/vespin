@@ -1762,7 +1762,8 @@ function startedByNote(starter: Agent, note: string | undefined): string {
     "when you finish, with what you did, what you published, and what you need of it, and whenever " +
     "you need something from it; if your turn fails, it is told. " +
     (starter.kind === AGENT_KIND.MANAGER
-      ? `It is a Manager, and you post no threads: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you.`
+      ? `It is a Manager, and you post no threads: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you. ` +
+        `To hand it a picture, show the file with ${AGENT_TOOL.SHOW_MEDIA} and put the picture ids it answers in your message, never a sandbox path.`
       : "Post your own threads to the developer, with their pictures, as your instructions say, and " +
         "send that agent each thread's mention, so it posts none of its own on the same thing.");
 
