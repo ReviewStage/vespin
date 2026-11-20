@@ -2182,6 +2182,28 @@ it.layer(getTestDB())("a thread's addressee", (it) => {
   );
 
   it.effect(
+    "a thread addressed to a member who left waits on whoever its task falls back to, in its read and the owner's To do",
+    () =>
+      Effect.gen(function* () {
+        const { agent, workspaceId } = yield* openAgentIn;
+        const owner = agent.userId;
+        const taskId = agent.taskId ?? "";
+        const teammate = yield* openUser;
+        yield* joinWorkspace(workspaceId, teammate);
+        const addressed = yield* post(agent, { ...SETTINGS, addresseeId: teammate });
+        yield* leaveWorkspace(workspaceId, teammate);
+        const owners = yield* accountInboxPast(owner, INBOX_CURSOR_START);
+
+        const left = {
+          waitsOn: owners.items.find((each) => each.id === addressed.id)?.waitsOn,
+          toDo: owners.tasks.find((each) => each.taskId === taskId)?.toDo,
+        };
+
+        assert.deepEqual(left, { waitsOn: owner, toDo: 1 });
+      }),
+  );
+
+  it.effect(
     "a follow-up on an open ask readdresses it where it names a member, and a post addressed outside its workspace is refused",
     () =>
       Effect.gen(function* () {
