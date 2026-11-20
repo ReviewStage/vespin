@@ -1,0 +1,10 @@
+== bundle PJj10090r2 base 132e41ab4d
+  built 132e41ab4d base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-f10090: fails 0 shots 10 
+iphone-dark-f10090: fails 0 shots 10 
+ipad27-light-f10090: fails 0 shots 12 
+ipad27-dark-f10090: fails 0 shots 12 
