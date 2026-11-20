@@ -176,7 +176,7 @@ test("View options offer Shared only, on, beside Include admins, and clearing it
 
   openViewOptions(page);
   expect(menuItems().map((item) => item.label)).toEqual(["Shared only", "Include admins"]);
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   await act(async () => choose("Shared only"));
   await act(async () => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS));
 

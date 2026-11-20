@@ -105,7 +105,7 @@ function key(target: Element, name: string, shiftKey = false): void {
 }
 
 test("a closed pane stays drawn and inert through its slide out, then is let go", () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   mount();
   expect(pane()).toBeNull();
   openFromToggle();
@@ -120,7 +120,7 @@ test("a closed pane stays drawn and inert through its slide out, then is let go"
 });
 
 test("a pane opened again on its way out stays drawn, open", () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   mount();
   openFromToggle();
   press(button("Files"));

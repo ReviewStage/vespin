@@ -57,7 +57,7 @@ beforeEach(() => {
 
 /** The pointer arriving on `target` and resting there past the hint's wait, on a faked clock. */
 function restOn(target: Element): void {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     act(() => {
@@ -397,7 +397,7 @@ let mounted: string[] = [];
 
 /** The faked clock a hint waits on, and no card mounted yet. */
 function waiting(): void {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
   mounted = [];
 }
 

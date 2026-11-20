@@ -248,7 +248,7 @@ test("a workspace's row hangs its card while the pointer rests on it: its name a
   open(page.switcher());
   const row = menuItems().find((item) => labelOf(item) === "acme") ?? assert.fail("no acme row");
 
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   act(() => {
     row.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
   });

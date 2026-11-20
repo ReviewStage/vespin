@@ -441,7 +441,7 @@ test("an item with a card hangs it while the pointer rests on it, and the menu k
     }),
   );
   press(button("More"));
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   pointerMove(null, button("Ada Lovelace"));
   act(() => {
     vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);
@@ -481,7 +481,7 @@ test("a card hung from a control on an item's card is the menu's too, so a press
     }),
   );
   press(button("More"));
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   pointerMove(null, button("Ada Lovelace"));
   act(() => {
     vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);
@@ -553,7 +553,7 @@ test("Right opens a submenu on its first item, and Left or Escape closes it alon
 test("resting on one submenu's item after another's opens the second's submenu, with no press", () => {
   mount(createElement(Harness, { groups: viewGroups([]) }));
   press(button("More"));
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   mouseMove(null, button("Group by"));
   rest();
   expect(openMenu("Group by")).not.toBeNull();
@@ -601,7 +601,7 @@ test("the mouse passing slowly over another submenu's item on its way into a sub
   mount(createElement(Harness, { groups: viewGroups([]) }));
   viewMenuLaidOut();
   press(button("More"));
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   const resting = mouseMove(null, button("Group by"), { clientX: 150, clientY: 20 });
   expect(openMenu("Group by")).toBeNull();
   rest();
@@ -671,7 +671,7 @@ test("a value that stays, pressed in the second submenu the pointer opened once 
 test("a press or Right on an item whose submenu the pointer opened takes the keyboard into it", () => {
   mount(createElement(Harness, { groups: viewGroups([]) }));
   press(button("More"));
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   mouseMove(null, button("Group by"));
   rest();
   expect(openMenu("Group by")).not.toBeNull();

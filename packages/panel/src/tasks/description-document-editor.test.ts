@@ -1808,7 +1808,7 @@ test("a teammate's save reaching an open editor holding nothing unsaved is laid 
 });
 
 test("an open editor holding unsaved words keeps them as a teammate saves, saves them as a change from what it opened on, and takes the merged answer", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     const mine = `${BODY}Mine.\n`;

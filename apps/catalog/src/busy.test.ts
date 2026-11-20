@@ -39,7 +39,7 @@ beforeEach(() => {
   vi.stubGlobal("IntersectionObserver", StillObserver);
   // Note that a list bringing its lit row into view scrolls nothing here, and that only the settle delay's timer is held, so an example's own clocks run as they do.
   Element.prototype.scrollIntoView ??= () => undefined;
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 });
 
 afterEach(() => {

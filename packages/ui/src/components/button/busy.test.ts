@@ -34,7 +34,7 @@ class StillResizeObserver {
 
 beforeEach(() => {
   vi.stubGlobal("ResizeObserver", StillResizeObserver);
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 });
 
 afterEach(() => {

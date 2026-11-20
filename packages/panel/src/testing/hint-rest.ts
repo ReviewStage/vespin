@@ -16,7 +16,7 @@ import { vi } from "vitest";
 function rested(arrive: () => void): void {
   const faked = vi.isFakeTimers();
 
-  if (!faked) vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  if (!faked) vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     act(arrive);
