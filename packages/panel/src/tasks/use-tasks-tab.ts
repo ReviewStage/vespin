@@ -43,7 +43,7 @@ import type { AppInboxTask } from "@repo/host/app-state";
 import { workspaceExperimentChoices } from "@repo/host/app-state-reads";
 import { EXPERIMENT, experimentOn } from "@repo/settings";
 import type { SettingsLink } from "@repo/settings/settings-views";
-import { STATUS_TONE, useWait } from "@repo/ui";
+import { STATUS_TONE, useRest } from "@repo/ui";
 import {
   agentTab,
   changesTab,
@@ -65,7 +65,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { absurd, Effect, Predicate } from "effect";
+import { absurd, Predicate } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { askAct, sendAct, unreachedAs } from "../act.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
@@ -1465,35 +1465,24 @@ export function useTasksTab(input: {
   // The description of the task the pointer comes to rest on is held ahead of the press, by an observer of its own
   // rather than state, because a pointer crossing the sidebar must not draw the tab again at every row. Note that it is
   // held only once the pointer rests (`POINT_RESTS`), because a read started for every row crossed would push the
-  // descriptions the host keeps for the tasks open lately out of its keeping.
+  // descriptions the host keeps for the tasks open lately out of its keeping, and that a row crossed only re-aims the
+  // one rest (`useRest`), so a sweep down the sidebar forks no fiber and arms no timer at each row.
   const pointedHold = useRef<{ readonly taskId: string; readonly release: () => void } | undefined>(
     undefined,
   );
 
-  const pointRest = useWait();
+  const pointRest = useRest<string>(POINT_RESTS, (taskId) => {
+    if (pointedHold.current?.taskId === taskId) return;
+    pointedHold.current?.release();
+    const observer = new QueryObserver(queryClient, heldTaskQuery(taskId));
+    pointedHold.current = { taskId, release: observer.subscribe(() => {}) };
+  });
 
   const pointTask = useCallback(
     (taskId: string | undefined) => {
-      if (fixture !== undefined) return;
-
-      if (taskId === undefined || pointedHold.current?.taskId === taskId) {
-        pointRest.stop();
-
-        return;
-      }
-
-      pointRest.start(
-        Effect.andThen(
-          Effect.sleep(POINT_RESTS),
-          Effect.sync(() => {
-            pointedHold.current?.release();
-            const observer = new QueryObserver(queryClient, heldTaskQuery(taskId));
-            pointedHold.current = { taskId, release: observer.subscribe(() => {}) };
-          }),
-        ),
-      );
+      if (fixture === undefined) pointRest.aim(taskId);
     },
-    [fixture, queryClient, pointRest],
+    [fixture, pointRest],
   );
 
   useEffect(() => () => pointedHold.current?.release(), []);

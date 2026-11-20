@@ -28,12 +28,17 @@
  *   holds for the whole window, and `useWait` makes one a component holds
  *   and interrupts as it leaves. A family of waits, one per id, is a `Map`
  *   of them keyed by the id itself.
+ * - A rest on one of many things a pointer crosses (a sidebar's rows) is a
+ *   `Rest`, not a `Wait` restarted at every one: the pointer moving only
+ *   re-aims it, and one fiber sleeps until the last thing aimed at has
+ *   stood aimed for the whole span, so a sweep across a list forks once
+ *   rather than once a row.
  */
 
 import type { Store } from "@tanstack/react-store";
-import { Effect, Stream } from "effect";
-import { useEffect, useState } from "react";
-import { forkEffect } from "./ui-runtime.js";
+import { Clock, Context, Duration, Effect, Stream } from "effect";
+import { useEffect, useRef, useState } from "react";
+import { effectServices, forkEffect } from "./ui-runtime.js";
 
 /** Runs an Effect as a fiber of its own at an edge and answers the way to interrupt it. */
 export type ForkEffect = (effect: Effect.Effect<void>) => () => void;
@@ -73,4 +78,85 @@ export function useWait(fork?: ForkEffect): Wait {
   useEffect(() => wait.stop, [wait]);
 
   return wait;
+}
+
+/** A rest re-aimed as the pointer moves: `aim` names what it rests on now, or none to call it off. */
+export interface Rest<A> {
+  readonly aim: (subject: A | undefined) => void;
+  readonly stop: () => void;
+}
+
+/**
+ * A rest that lands `subject` once it has stood aimed at it for `span`, on
+ * `@repo/ui`'s edge, whose clock both the aim and the fiber read.
+ *
+ * Note that an aim forks nothing while the fiber sleeps: it notes the
+ * subject and the time, and the fiber, waking, sleeps again for what is
+ * left of the span from the last aim, so it lands exactly a span after the
+ * pointer came to rest. Calling it off leaves the fiber to wake and end on
+ * its own, because a pointer leaving one row is entering the next.
+ */
+export function createRest<A>(span: Duration.Input, land: (subject: A) => void): Rest<A> {
+  const spanMillis = Duration.toMillis(span);
+  let aimed: { readonly subject: A; readonly at: number } | undefined;
+  // The fork sleeping now, by its count, so only its own end lets it go, and one that ends before its fork answers leaves none.
+  let forks = 0;
+  let sleeping: number | undefined;
+  let interrupt: (() => void) | undefined;
+
+  const settle = Effect.gen(function* () {
+    for (let resting = aimed; resting !== undefined; resting = aimed) {
+      const left = resting.at + spanMillis - (yield* Clock.currentTimeMillis);
+
+      if (left <= 0) {
+        aimed = undefined;
+        land(resting.subject);
+
+        return;
+      }
+
+      yield* Effect.sleep(left);
+    }
+  });
+
+  return {
+    aim: (subject) => {
+      aimed =
+        subject === undefined
+          ? undefined
+          : {
+              subject,
+              at: Context.get(effectServices.state, Clock.Clock).currentTimeMillisUnsafe(),
+            };
+
+      if (aimed === undefined || sleeping !== undefined) return;
+      forks += 1;
+      const own = forks;
+      sleeping = own;
+      interrupt = forkEffect(
+        Effect.ensuring(
+          settle,
+          Effect.sync(() => {
+            if (sleeping === own) sleeping = undefined;
+          }),
+        ),
+      );
+    },
+    stop: () => {
+      aimed = undefined;
+      sleeping = undefined;
+      interrupt?.();
+      interrupt = undefined;
+    },
+  };
+}
+
+/** A rest a component holds, the same one across its renders, landing on its latest `land` and called off as it leaves. */
+export function useRest<A>(span: Duration.Input, land: (subject: A) => void): Rest<A> {
+  const landing = useRef(land);
+  landing.current = land;
+  const [rest] = useState(() => createRest<A>(span, (subject) => landing.current(subject)));
+  useEffect(() => rest.stop, [rest]);
+
+  return rest;
 }
