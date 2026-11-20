@@ -779,6 +779,7 @@ const outcomeOf = Effect.fnUntraced(function* (sessionsFor: SessionsForAccount, 
         yield* leaverAutomationsPaused(
           decision.automation.organizationId,
           decision.automation.userId,
+          decision.automation.id,
         );
       }
 

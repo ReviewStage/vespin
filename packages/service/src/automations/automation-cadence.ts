@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type Automation,
@@ -5,10 +6,14 @@ import {
   readAutomationToRun,
   recordAutomationRun,
   type ScheduledAutomation,
+  settleAutomationRun,
 } from "@repo/database/models/automation-store";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import { onceInstant } from "@repo/features/automation-schedule";
 import {
+  AUTOMATION_FIRING,
+  AUTOMATION_RUN_REASON,
+  AUTOMATION_RUN_STATUS,
   AUTOMATION_TRIGGER,
   automationFiringSchema,
   type ScheduleTrigger,
@@ -296,30 +301,57 @@ export const schedulesForgotten = Effect.fnUntraced(function* (
 });
 
 /**
+ * One failed run recorded for an automation turned off because its creator
+ * left, so the workspace's owners and admins are told as a failed run is
+ * told (`ownFailedAutomationRuns`): the sidebar's mark and the desktop's
+ * notice. Note that it is recorded as a "Run now" asked by nobody, since
+ * no firing made it.
+ */
+const creatorLeftRecorded = Effect.fnUntraced(function* (automation: Automation) {
+  const run = yield* recordAutomationRun(automation, {
+    dedupeKey: randomUUID(),
+    firing: { kind: AUTOMATION_FIRING.MANUAL },
+    firedAt: new Date(yield* Clock.currentTimeMillis),
+  });
+
+  if (Option.isNone(run)) return;
+  yield* settleAutomationRun(run.value.id, {
+    status: AUTOMATION_RUN_STATUS.FAILED,
+    reason: AUTOMATION_RUN_REASON.CREATOR_LEFT,
+  });
+});
+
+/**
  * Every automation the account created in the workspace turned off once
- * they are no longer in it, and each one's schedule disabled at Vercel, a
- * failure logged, since the row is off and its next firing is skipped.
+ * they are no longer in it, each one's schedule disabled at Vercel, a
+ * failure logged, since the row is off and its next firing is skipped, and
+ * a failed run recorded for each, so its owners and admins hear of it; the
+ * one whose own firing found its creator gone, `fired`, failed already.
  * Note that an automation runs as its creator, so one whose creator left
  * would otherwise fail on every firing with nobody told.
  */
 export const leaverAutomationsPaused = Effect.fnUntraced(function* (
   organizationId: string,
   userId: string,
+  fired?: string,
 ) {
   const cadence = yield* AutomationCadence;
   const paused = yield* pauseAutomationsOfLeaver(organizationId, userId);
   yield* Effect.forEach(
     paused,
     (automation) =>
-      cadence
-        .keep(automation)
-        .pipe(
-          Effect.catch((failure) =>
-            Effect.logWarning(
-              `a paused automation's schedule stands: ${failure.code ?? "unreachable"}`,
+      Effect.andThen(
+        cadence
+          .keep(automation)
+          .pipe(
+            Effect.catch((failure) =>
+              Effect.logWarning(
+                `a paused automation's schedule stands: ${failure.code ?? "unreachable"}`,
+              ),
             ),
           ),
-        ),
+        automation.id === fired ? Effect.void : creatorLeftRecorded(automation),
+      ),
     { discard: true },
   );
 });
