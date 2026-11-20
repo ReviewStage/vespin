@@ -215,3 +215,9 @@ a finished one ran minutes. Yesterday's call ran 12 minutes 41 seconds.
 ## Added in 0.36.0
 
 - **acme's cloud environment** (`sandbox-size.ts`): its sandboxes moved up to 4 vCPUs · 8 GB; its variables are `DATABASE_URL`, `POSTMARK_SERVER_TOKEN`, `SENTRY_AUTH_TOKEN`, and `STRIPE_SECRET_KEY`; every sandbox installs Postgres's and Redis's clients, the Stripe CLI, and pnpm 10.20.0, and acme/ledger and acme/relay each run their own setup (0.29.0's scripts).
+
+## Added in 0.38.0 and 0.39.0
+
+- **Resend expired invites** (`talk.ts`, 0.38.0): a third agent on Teammate invitations, on Claude Code, that Dean started by pressing Talk. On the call he asked for a Resend button on pending invites that mails a fresh link, then to keep it on the same row, then what the old link does. The voice handed each ask on, and the agent added `POST /invites/:id/resend` and the Members row's Resend, and is writing its tests.
+- **Dean's account holds an OpenAI API key** (`sk-proj-…7c2a`), which Talk and dictation run on.
+- **Dean's workspace, new** (`starters.ts`, 0.39.0): no tasks yet, GitHub connected and reaching acme's repositories, and Dean's MacBook Pro offered in Runs on, so Home offers all six starter tasks.

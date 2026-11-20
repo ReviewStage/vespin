@@ -151,6 +151,8 @@ your first words. It uses your OpenAI API key.
 [#9693](https://github.com/ReviewStage/vespin/pull/9693),
 [#9696](https://github.com/ReviewStage/vespin/pull/9696)
 
+![A voice's waveform drawn in copper dots across a dark card, swelling and fading like a spoken phrase](apps/web/public/changelog/0.38.0/talk-to-your-agents.png)
+
 ### Improvements
 
 - A task opens as you left it, on the same tab with its side panel
