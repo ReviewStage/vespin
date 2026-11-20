@@ -98,7 +98,7 @@ const NEEDS_YOU_ROWS = 3;
  * Inbox answers it; any other ask says what it wants under its title and
  * opens its thread.
  */
-function NeedsYouRow({ item, threads }: { item: InboxItem; threads: AgentThreads }): ReactNode {
+export function NeedsYouRow({ item, threads }: { item: InboxItem; threads: AgentThreads }): ReactNode {
   const directory = useMemberDirectory();
 
   const nameOf = (member: Parameters<typeof personActor>[0]) =>

@@ -12,6 +12,13 @@ import { type InboxListed, waitsOnReaderNow } from "@repo/features/inbox-list-mo
 import type { PersonAgent } from "@repo/features/person-page-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import {
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
+  ALIGN,
+  CARD_HOVER,
+  CardPress,
+  Inline,
   CARD_LOOK,
   CARD_PADDING,
   Card,
@@ -45,7 +52,13 @@ import {
   GitPullRequestIcon,
   MessageCircleQuestionIcon,
 } from "lucide-react";
-import { type ReactNode, useMemo } from "react";
+import { INBOX_ASK, type InboxItem, knownAsk, openAskOf } from "@repo/features/inbox-wire";
+import { ManagerFace, MANAGER_FACE_SIZE } from "@repo/ui/manager-face";
+import { type ReactNode, useMemo, useState } from "react";
+import { useInboxDoor } from "../places/routed-doors.js";
+import { agentName } from "../tasks/agent-model.js";
+import { AgentGlyph } from "../tasks/tab-look.js";
+import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM } from "../shell-room.js";
 import { NAMED_ORDER, useNamedTasks, useTaskListCollections } from "../task-list-collections.js";
@@ -66,6 +79,14 @@ export const COMMAND_CENTER = {
   BOARD: "board",
   FEED: "feed",
   DASHBOARD: "dashboard",
+  /** D1: the counts are the filters of the cards below. */
+  D1: "d1",
+  /** D2: one wide Waiting on you card, answered in place, then smaller cards. */
+  D2: "d2",
+  /** D3: a card to each agent, its live state on it. */
+  D3: "d3",
+  /** D4: dense, on one screen beside the open sidebar. */
+  D4: "d4",
 } as const;
 
 export type CommandCenterVariant = (typeof COMMAND_CENTER)[keyof typeof COMMAND_CENTER];
@@ -121,7 +142,10 @@ function useManaged(tasks: TasksControl, manager: ListedAgent): Managed {
         item.agentId !== undefined &&
         agentIds.has(item.agentId) &&
         waitsOnReaderNow(item, tasks.me, now),
-    ).slice(0, 3);
+    )
+      // MOCKUP: the asks first, so the dashboard shows answers in place, and no more than four.
+      .toSorted((a, b) => Number(openAskOf(b.item.thread ?? []) !== undefined) - Number(openAskOf(a.item.thread ?? []) !== undefined))
+      .slice(0, 4);
 
     return {
       agents,
@@ -412,11 +436,401 @@ function DashboardCenter({ tasks, managed }: { tasks: TasksControl; managed: Man
   );
 }
 
+/** The threads waiting, as the agent page's dock answers them: a row's press opens it in the Inbox, its buttons answer in place. */
+function useWaitingThreads(tasks: TasksControl, managed: Managed): AgentThreads {
+  const inbox = useInboxDoor(tasks);
+  const waiting = managed.waiting.map(({ item }) => item);
+
+  return {
+    waiting,
+    posted: waiting,
+    onOpen: (item) => inbox.openItem({ itemId: item.id, opened: true }),
+    // MOCKUP: an answer goes nowhere.
+    onChoose: () => undefined,
+    sending: new Set(),
+  };
+}
+
+/** The threads waiting, each on its row with its answer's buttons where its ask offers them. */
+function WaitingRows({
+  tasks,
+  managed,
+  limit,
+}: {
+  tasks: TasksControl;
+  managed: Managed;
+  limit?: number;
+}) {
+  const threads = useWaitingThreads(tasks, managed);
+
+  return (
+    <List label="Waiting on you" inset={LIST_INSET.ROW}>
+      {threads.waiting.slice(0, limit).map((item) => (
+        <NeedsYouRow key={item.id} item={item} threads={threads} />
+      ))}
+    </List>
+  );
+}
+
+/** MOCKUP: a waiting thread answered in place: an ask of up to three options as its buttons, the rest as the dock's row. */
+function AnswerRow({ item, threads }: { item: InboxItem; threads: AgentThreads }) {
+  const open = openAskOf(item.thread ?? []);
+  const ask = open === undefined ? undefined : knownAsk(open.ask);
+  const options = ask?.type === INBOX_ASK.DECIDE && ask.options.length <= 3 ? ask.options : undefined;
+
+  if (options === undefined) return <NeedsYouRow item={item} threads={threads} />;
+
+  return (
+    <ListRow
+      leading={<MessageCircleQuestionIcon aria-hidden="true" />}
+      title={item.title}
+      actions={
+        <Inline wrap={false}>
+          {options.map((option) => (
+            <Button
+              key={option.label}
+              size={BUTTON_SIZE.COMPACT}
+              variant={BUTTON_VARIANT.OUTLINE}
+              onClick={() => threads.onChoose?.(item, option.label)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </Inline>
+      }
+    />
+  );
+}
+
+/** D2's waiting threads, each answered in place where it can be. */
+function AnswerRows({ tasks, managed }: { tasks: TasksControl; managed: Managed }) {
+  const threads = useWaitingThreads(tasks, managed);
+
+  return (
+    <List label="Waiting on you" inset={LIST_INSET.ROW}>
+      {threads.waiting.map((item) => (
+        <AnswerRow key={item.id} item={item} threads={threads} />
+      ))}
+    </List>
+  );
+}
+
+/** What the D1 counts filter the cards to. */
+const SHOWN = {
+  ALL: "all",
+  WAITING: "waiting",
+  WORKING: "working",
+  PULL_REQUESTS: "pull-requests",
+  DONE: "done",
+} as const;
+
+type Shown = (typeof SHOWN)[keyof typeof SHOWN];
+
+/** One count that filters: its figure over its words, lit while the cards show what it counts. */
+function FilterFigure({
+  value,
+  words,
+  chosen,
+  onPress,
+}: {
+  value: number;
+  words: string;
+  chosen: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Card
+      look={chosen ? CARD_LOOK.RAISED : CARD_LOOK.SURFACE}
+      padding={CARD_PADDING.COMPACT}
+      hover={CARD_HOVER.WASH}
+      lit={chosen}
+    >
+      <CardPress onPress={onPress} label={`${value} ${words}`}>
+        <Stack gap={GAP.TIGHT}>
+          <Text variant={TEXT_VARIANT.TITLE}>{value}</Text>
+          <Text variant={TEXT_VARIANT.CAPTION} tone={chosen ? undefined : TEXT_TONE.MUTED}>
+            {words}
+          </Text>
+        </Stack>
+      </CardPress>
+    </Card>
+  );
+}
+
+/** D1: the counts filter the cards: pressing one shows only what it counts, pressing it again shows all. */
+function FilterDashboard({ tasks, managed }: { tasks: TasksControl; managed: Managed }) {
+  const [shown, setShown] = useState<Shown>(SHOWN.WAITING);
+  const unread = useUnreadTasks({ staged: true });
+  const working = managed.agents.filter(({ agent }) => agent.status === AGENT_STATUS.RUNNING);
+  const done = managed.tasks.filter((task) => task.status === TASK_STATUS.DONE);
+  const toggle = (next: Shown) => setShown(shown === next ? SHOWN.ALL : next);
+  const showing = (kind: Shown) => shown === SHOWN.ALL || shown === kind;
+
+  return (
+    <Stack gap={GAP.SECTION}>
+      <div className="grid grid-cols-4 gap-ui-12">
+        <FilterFigure value={managed.waiting.length} words="Waiting on you" chosen={shown === SHOWN.WAITING} onPress={() => toggle(SHOWN.WAITING)} />
+        <FilterFigure value={working.length} words="Agents working" chosen={shown === SHOWN.WORKING} onPress={() => toggle(SHOWN.WORKING)} />
+        <FilterFigure value={openPullRequests(managed)} words="Pull requests open" chosen={shown === SHOWN.PULL_REQUESTS} onPress={() => toggle(SHOWN.PULL_REQUESTS)} />
+        <FilterFigure value={done.length} words="Done this week" chosen={shown === SHOWN.DONE} onPress={() => toggle(SHOWN.DONE)} />
+      </div>
+      {showing(SHOWN.WAITING) ? (
+        <Panel title="Waiting on you">
+          <WaitingRows tasks={tasks} managed={managed} />
+        </Panel>
+      ) : null}
+      {showing(SHOWN.WORKING) ? (
+        <PersonAgentsSection title="Agents working" agents={working} tasks={tasks} pullRequests={managed.pullRequests} />
+      ) : null}
+      {showing(SHOWN.PULL_REQUESTS) ? (
+        <Panel title="Pull requests">
+          <PullRequestRows label="Pull requests" managed={managed} tasks={tasks} />
+        </Panel>
+      ) : null}
+      {showing(SHOWN.DONE) ? (
+        <Panel title="Done this week">
+          <RecentTasks tasks={tasks} label="Done" listed={done} unread={unread} onOpen={tasks.onSelect} face={false} />
+        </Panel>
+      ) : null}
+    </Stack>
+  );
+}
+
+/** D2: what waits on the reader as one wide card, answered in place, then the rest as smaller cards beside each other. */
+function AnswerFirstDashboard({ tasks, managed }: { tasks: TasksControl; managed: Managed }) {
+  const unread = useUnreadTasks({ staged: true });
+  const open = managed.tasks.filter((task) => task.status !== TASK_STATUS.DONE);
+  const done = managed.tasks.filter((task) => task.status === TASK_STATUS.DONE);
+
+  return (
+    <Stack gap={GAP.SECTION}>
+      <Panel title={`Waiting on you · ${managed.waiting.length}`}>
+        <AnswerRows tasks={tasks} managed={managed} />
+      </Panel>
+      <div className="grid grid-cols-3 items-start gap-ui-12">
+        <Panel title={`Pull requests · ${openPullRequests(managed)}`}>
+          <List label="Pull requests" inset={LIST_INSET.ROW}>
+            {managed.agents.flatMap(({ agent, task }) => {
+              const pullRequest = managed.pullRequests.get(agent.id);
+
+              return pullRequest === undefined
+                ? []
+                : [
+                    <ListRow
+                      key={agent.id}
+                      leading={<PullRequestMark pullRequest={pullRequest} />}
+                      title={`${pullRequestNumberLabel(pullRequest)} ${pullRequest.title}`}
+                      description={`Checks ${pullRequest.checks}`}
+                      onPress={() => tasks.onShowAgent(task.id, agent.id)}
+                    />,
+                  ];
+            })}
+          </List>
+        </Panel>
+        <Panel title={`Open · ${open.length}`}>
+          <RecentTasks tasks={tasks} label="Open" listed={open} unread={unread} onOpen={tasks.onSelect} face={false} />
+        </Panel>
+        <Panel title={`Done · ${done.length}`}>
+          <RecentTasks tasks={tasks} label="Done" listed={done} unread={unread} onOpen={tasks.onSelect} face={false} />
+        </Panel>
+      </div>
+    </Stack>
+  );
+}
+
+/** One agent's card: its glyph at work or at rest, its name and task, its pull request and checks, and what it waits on. */
+function AgentCard({
+  tasks,
+  managed,
+  each,
+}: {
+  tasks: TasksControl;
+  managed: Managed;
+  each: PersonAgent;
+}) {
+  const { agent, task } = each;
+  const pullRequest = managed.pullRequests.get(agent.id);
+  const threads = useWaitingThreads(tasks, managed);
+  const asks = threads.waiting.filter((item) => item.agentId === agent.id);
+  const approval = agent.pendingApprovals?.[0];
+  const standing =
+    agent.status === AGENT_STATUS.RUNNING
+      ? approval === undefined
+        ? "Working"
+        : `Waiting for approval: ${approval.title}`
+      : "Finished";
+
+  return (
+    <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.COMPACT} hover={CARD_HOVER.WASH}>
+      <Stack gap={GAP.BLOCK}>
+        <CardPress onPress={() => tasks.onShowAgent(task.id, agent.id)} label={agentName(agent, tasks.agents.models)}>
+          <Inline wrap={false} gap={GAP.CONTROL}>
+            <AgentGlyph agent={agent} />
+            <Stack gap={GAP.NONE}>
+              <Text variant={TEXT_VARIANT.LABEL}>{agentName(agent, tasks.agents.models)}</Text>
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                {task.name} · {standing} · <Time at={each.at} />
+              </Text>
+            </Stack>
+          </Inline>
+        </CardPress>
+        {pullRequest === undefined ? null : (
+          <List label="Pull request" inset={LIST_INSET.ROW}>
+            <ListRow
+              leading={<PullRequestMark pullRequest={pullRequest} />}
+              title={`${pullRequestNumberLabel(pullRequest)} ${pullRequest.title}`}
+              description={`Checks ${pullRequest.checks}`}
+              meta={<CountParts parts={linesCount(pullRequest.additions, pullRequest.deletions)} />}
+              onPress={() => tasks.onShowAgent(task.id, agent.id)}
+            />
+          </List>
+        )}
+        {asks.length === 0 ? null : (
+          <List label="Waiting on you" inset={LIST_INSET.ROW}>
+            {asks.slice(0, 2).map((item) => (
+              <NeedsYouRow key={item.id} item={item} threads={threads} />
+            ))}
+          </List>
+        )}
+      </Stack>
+    </Card>
+  );
+}
+
+/** D3: a card to each agent the Manager started, its live state on it, under a line of the Manager's own standing. */
+function AgentCardsDashboard({
+  tasks,
+  managed,
+  manager,
+}: {
+  tasks: TasksControl;
+  managed: Managed;
+  manager: ListedAgent;
+}) {
+  const unread = useUnreadTasks({ staged: true });
+  const queued = managed.tasks.filter(
+    (task) => task.status !== TASK_STATUS.DONE && !managed.agents.some((each) => each.task.id === task.id),
+  );
+  const ordered = managed.agents.toSorted(
+    (a, b) => Number(b.agent.status === AGENT_STATUS.RUNNING) - Number(a.agent.status === AGENT_STATUS.RUNNING),
+  );
+
+  return (
+    <Stack gap={GAP.SECTION}>
+      <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.COMPACT}>
+        <Inline wrap={false} gap={GAP.BLOCK}>
+          {manager.face === undefined ? null : (
+            <ManagerFace face={manager.face} size={MANAGER_FACE_SIZE.MESSAGE} />
+          )}
+          <Stack gap={GAP.NONE}>
+            <Text variant={TEXT_VARIANT.LABEL}>Waiting for its agents</Text>
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              Last turn ended <Time at={manager.settledAt ?? manager.createdAt} /> ago · {managed.waiting.length} threads waiting on you
+            </Text>
+          </Stack>
+        </Inline>
+      </Card>
+      <div className="grid grid-cols-2 items-start gap-ui-12">
+        {ordered.map((each) => (
+          <AgentCard key={each.agent.id} tasks={tasks} managed={managed} each={each} />
+        ))}
+        <Panel title="Not started yet">
+          <RecentTasks tasks={tasks} label="Not started yet" listed={queued} unread={unread} onOpen={tasks.onSelect} face={false} />
+        </Panel>
+      </div>
+    </Stack>
+  );
+}
+
+/** D4: everything on one screen beside the open sidebar: the counts on one line, then two columns of cards, each row one line. */
+function DenseDashboard({ tasks, managed }: { tasks: TasksControl; managed: Managed }) {
+  const unread = useUnreadTasks({ staged: true });
+  const working = managed.agents.filter(({ agent }) => agent.status === AGENT_STATUS.RUNNING);
+  const done = managed.tasks.filter((task) => task.status === TASK_STATUS.DONE);
+  const open = managed.tasks.filter((task) => task.status !== TASK_STATUS.DONE);
+  const figures = [
+    [managed.waiting.length, "waiting on you"],
+    [working.length, "agents working"],
+    [openPullRequests(managed), "pull requests open"],
+    [done.length, "done this week"],
+  ] as const;
+
+  return (
+    <Stack gap={GAP.BLOCK}>
+      <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.SNUG}>
+        <Inline gap={GAP.SECTION}>
+          {figures.map(([value, words]) => (
+            <Inline key={words} gap={GAP.ICON} align={ALIGN.BASELINE}>
+              <Text variant={TEXT_VARIANT.SECTION}>{value}</Text>
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>{words}</Text>
+            </Inline>
+          ))}
+        </Inline>
+      </Card>
+      <Panel title="Waiting on you">
+        <WaitingRows tasks={tasks} managed={managed} limit={3} />
+      </Panel>
+      <div className="grid grid-cols-2 items-start gap-ui-12">
+        <Stack gap={GAP.BLOCK}>
+          <Panel title="Agents">
+            <List label="Agents" inset={LIST_INSET.ROW}>
+              {managed.agents.map(({ agent, task }) => {
+                const pullRequest = managed.pullRequests.get(agent.id);
+
+                return (
+                  <ListRow
+                    key={agent.id}
+                    leading={<AgentGlyph agent={agent} />}
+                    title={agentName(agent, tasks.agents.models)}
+                    meta={pullRequest === undefined ? <Time at={agent.settledAt ?? agent.createdAt} /> : <PullRequestMark pullRequest={pullRequest} />}
+                    onPress={() => tasks.onShowAgent(task.id, agent.id)}
+                  />
+                );
+              })}
+            </List>
+          </Panel>
+          <Panel title="Pull requests">
+            <List label="Pull requests" inset={LIST_INSET.ROW}>
+              {managed.agents.flatMap(({ agent, task }) => {
+                const pullRequest = managed.pullRequests.get(agent.id);
+
+                return pullRequest === undefined
+                  ? []
+                  : [
+                      <ListRow
+                        key={agent.id}
+                        leading={<PullRequestMark pullRequest={pullRequest} />}
+                        title={`${pullRequestNumberLabel(pullRequest)} ${pullRequest.title}`}
+                        meta={<CountParts parts={linesCount(pullRequest.additions, pullRequest.deletions)} />}
+                        onPress={() => tasks.onShowAgent(task.id, agent.id)}
+                      />,
+                    ];
+              })}
+            </List>
+          </Panel>
+        </Stack>
+        <Stack gap={GAP.BLOCK}>
+          <Panel title="Open tasks">
+            <RecentTasks tasks={tasks} label="Open tasks" listed={open} unread={unread} onOpen={tasks.onSelect} face={false} />
+          </Panel>
+          <Panel title="Done this week">
+            <RecentTasks tasks={tasks} label="Done this week" listed={done} unread={unread} onOpen={tasks.onSelect} face={false} />
+          </Panel>
+        </Stack>
+      </div>
+    </Stack>
+  );
+}
+
 const TITLES = {
   [COMMAND_CENTER.TRIAGE]: "What needs you",
   [COMMAND_CENTER.BOARD]: "Its tasks",
   [COMMAND_CENTER.FEED]: "What it did",
   [COMMAND_CENTER.DASHBOARD]: "Overview",
+  [COMMAND_CENTER.D1]: "Overview",
+  [COMMAND_CENTER.D2]: "Overview",
+  [COMMAND_CENTER.D3]: "Overview",
+  [COMMAND_CENTER.D4]: "Overview",
 } as const satisfies Record<CommandCenterVariant, string>;
 
 /** The main panel of a Manager's page in the direction asked. */
@@ -439,6 +853,14 @@ export function ManagerCommandCenter({
       <FeedCenter tasks={tasks} managed={managed} />
     ) : variant === COMMAND_CENTER.DASHBOARD ? (
       <DashboardCenter tasks={tasks} managed={managed} />
+    ) : variant === COMMAND_CENTER.D1 ? (
+      <FilterDashboard tasks={tasks} managed={managed} />
+    ) : variant === COMMAND_CENTER.D2 ? (
+      <AnswerFirstDashboard tasks={tasks} managed={managed} />
+    ) : variant === COMMAND_CENTER.D3 ? (
+      <AgentCardsDashboard tasks={tasks} managed={managed} manager={manager} />
+    ) : variant === COMMAND_CENTER.D4 ? (
+      <DenseDashboard tasks={tasks} managed={managed} />
     ) : (
       <TriageCenter tasks={tasks} managed={managed} />
     );
@@ -447,12 +869,17 @@ export function ManagerCommandCenter({
     <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
       {variant === COMMAND_CENTER.BOARD ? (
         body
+      ) : variant === COMMAND_CENTER.D4 ? (
+        // MOCKUP: no page title, so it all fits on one screen.
+        <DetailPage frame={PAGE_FRAME.TOOLBAR} label="Overview" width={PAGE_WIDTH.FULL}>
+          {body}
+        </DetailPage>
       ) : (
         <DetailPage
           frame={PAGE_FRAME.PAGE}
           title={TITLES[variant]}
           description={summary}
-          width={variant === COMMAND_CENTER.DASHBOARD ? PAGE_WIDTH.FULL : undefined}
+          width={variant === COMMAND_CENTER.TRIAGE || variant === COMMAND_CENTER.FEED ? undefined : PAGE_WIDTH.FULL}
         >
           {body}
         </DetailPage>
