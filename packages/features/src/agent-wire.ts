@@ -23,6 +23,7 @@ import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
+import { managerFacePickSchema, managerFaceSchema } from "./manager-face.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -1062,6 +1063,16 @@ export const agentRenameRequestSchema = EffectSchema.Struct({
 export type AgentRenameRequest = typeof agentRenameRequestSchema.Type;
 
 /**
+ * Changing a Manager's face (PATCH), which every place it is drawn then
+ * draws; refused as invalid for a coder, which wears none. A face another
+ * Manager of the workspace wears may be picked: only the face the service
+ * picks for a new Manager steps past those worn.
+ */
+export const agentFaceRequestSchema = EffectSchema.Struct({ face: managerFacePickSchema });
+
+export type AgentFaceRequest = typeof agentFaceRequestSchema.Type;
+
+/**
  * Archiving an agent, or bringing it back (PATCH). Archiving one with a
  * turn running stops that turn first, as a Stop would, and the answer is
  * the agent as it then stands. One still starting, or with a message
@@ -1250,6 +1261,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   title: EffectSchema.NullOr(EffectSchema.String),
   /** That the agent is a Manager, whose page opens on its greeting (`@repo/features/manager-greeting`); absent for a coder, and from a service older than it. */
   kind: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_KIND.MANAGER)),
+  /** A Manager's face (`@repo/features/manager-face`), which the service picked as it was made; absent for a coder, and from a service older than it. */
+  face: EffectSchema.optionalKey(managerFaceSchema),
   /** How far the reader read a Manager's chat (`read-mark.ts`), the service's instant; absent for a coder, and from a service older than it. */
   readThrough: EffectSchema.optionalKey(countedNumber),
   /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */

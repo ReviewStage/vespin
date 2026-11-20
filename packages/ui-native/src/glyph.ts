@@ -13,6 +13,7 @@ import {
 } from "@repo/features/task-section-wire";
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
+import { EVERY_LUCIDE_SYMBOL } from "./tokens/every-lucide-symbol.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { PRODUCT_MARK_SYMBOL } from "./tokens/product-mark-symbol.js";
 import {
@@ -334,18 +335,32 @@ export function runsOnGlyph(place: {
   return place.platform === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
 }
 
+/** Every Lucide glyph the app's catalog holds a symbol set of, by its asset name. */
+const EVERY_LUCIDE: ReadonlySet<string> = new Set(EVERY_LUCIDE_SYMBOL);
+
+/** A glyph's name on the wire as its asset's name, Lucide's own component name: "arrow-down01" as "ArrowDown01", as the panel's picker spells it back (`glyphKey`). */
+function lucideAssetName(glyph: string): string {
+  return glyph.replace(/(?:^|-)([a-z0-9])/g, (_, letter: string) => letter.toUpperCase());
+}
+
 /**
  * The glyph a section leads with, as the panel's sidebar draws its icon: the
- * glyph its member chose from the picker's suggestions; the folder, the
- * picker's first, for a glyph the app's catalog doesn't hold or no icon,
- * since a sidebar row always leads with a glyph, and for an emoji, which
- * `sectionEmoji` draws in the glyph's place. Its chosen color is
- * `sectionGlyphColor`'s, which the header draws it in.
+ * Lucide glyph its member chose from the picker, any of them; the folder, the
+ * picker's first, for a name the app's catalog holds no glyph of, such as
+ * one newer than the app's Lucide, or no icon, since a sidebar row always
+ * leads with a glyph, and for an emoji, which `sectionEmoji` draws in the
+ * glyph's place. Its chosen color is `sectionGlyphColor`'s, which the header
+ * draws it in.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;
 
-  return isSectionGlyph(icon.glyph) ? SECTION_GLYPH[icon.glyph] : GLYPH.FOLDER;
+  if (isSectionGlyph(icon.glyph)) return SECTION_GLYPH[icon.glyph];
+
+  const name = lucideAssetName(icon.glyph);
+
+  // SAFETY: a name the catalog holds a symbol set of is a glyph's name, minted here as `lucide` mints the table's.
+  return EVERY_LUCIDE.has(name) ? (name as Glyph) : GLYPH.FOLDER;
 }
 
 /** The emoji a section leads with, drawn as words in its glyph's place, as the panel's sidebar draws it; none for a glyph or no icon. */
@@ -355,7 +370,7 @@ export function sectionEmoji(icon: TaskSectionIcon | undefined): string | undefi
 
 /** The glyphs the asset catalog holds, Lucide's and the task status and priority marks, rather than the system's symbols. */
 const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
-  ...Object.values(LUCIDE_SYMBOL),
+  ...EVERY_LUCIDE_SYMBOL,
   ...Object.values(TASK_STATUS_SYMBOL),
   ...Object.values(UNASSIGNED_SYMBOL),
   ...Object.values(TASK_PRIORITY_SYMBOL),

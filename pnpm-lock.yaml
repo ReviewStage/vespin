@@ -650,6 +650,9 @@ importers:
       expo:
         specifier: 'catalog:'
         version: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
+      expo-audio:
+        specifier: 58.0.12
+        version: 58.0.12(expo-asset@58.0.20)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       expo-clipboard:
         specifier: 58.0.4
         version: 58.0.4(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
@@ -1207,9 +1210,6 @@ importers:
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(redis@6.2.1)
-      '@noble/ciphers':
-        specifier: 2.3.0
-        version: 2.3.0
       '@orpc/client':
         specifier: 'catalog:'
         version: 2.0.0-beta.44
@@ -1757,6 +1757,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
+      react-kawaii:
+        specifier: 1.6.0
+        version: 1.6.0(react@19.2.8)
       recharts:
         specifier: 'catalog:'
         version: 3.11.0(@types/react@19.2.18)(react-dom@19.2.8)(react-is@19.2.8)(react@19.2.8)(redux@5.0.1)
@@ -7594,6 +7597,14 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-audio@58.0.12:
+    resolution: {integrity: sha512-PNVqGyxZET+hSQ/JfX29VPzdj+W5qo7zRSQabN4T/0+EmnnMvyPf5u6FbaGWQuerXKMvKIy7RwSc13ldaye1RA==}
+    peerDependencies:
+      expo: '*'
+      expo-asset: '*'
+      react: '*'
+      react-native: '*'
+
   expo-clipboard@58.0.4:
     resolution: {integrity: sha512-b2eEJMwdWXLTrmrkg/otsmL2OV6s9D90tytSNBsY87UswrWf6JwxcB2OaWegyUWD9XnvtBVNeVK7lej0zZh+5A==}
     peerDependencies:
@@ -9634,6 +9645,11 @@ packages:
 
   react-is@19.2.8:
     resolution: {integrity: sha512-s5un28nYxKJw5gvUHyW5PCC28CvBqLu9r3cWgzHT4Vo/5fqqkFcdRYsGcKf50WMPpjjFZS5d76fn3YCo2njKwQ==}
+
+  react-kawaii@1.6.0:
+    resolution: {integrity: sha512-cmz9zzuIEplDIPRrtW9MiQsszVZBRzFYFwfxbArskn+0qMLzTQJPq+6avkVDvvTHI9GzvnMc9HhVCwUq+KpJUg==}
+    peerDependencies:
+      react: ^17.0.0 || ^18.0.0 || ^19.0.0
 
   react-native-drawer-layout@4.2.12:
     resolution: {integrity: sha512-qYmntEctkMSodN7pnC2llV21nswImLFPHJeT3PJXSJqZdU4jzDATR8iVi66sXkrtoOLJ2+EvXxgd7sMMpV4ViA==}
@@ -16364,6 +16380,13 @@ snapshots:
       - supports-color
       - typescript
 
+  expo-audio@58.0.12(expo-asset@58.0.20)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0):
+    dependencies:
+      expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
+      expo-asset: 58.0.20(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
+      react: 19.3.0
+      react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
+
   expo-clipboard@58.0.4(expo@58.0.23)(react-native@0.88.1)(react@19.3.0):
     dependencies:
       expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
@@ -18998,6 +19021,10 @@ snapshots:
   react-is@18.3.1: {}
 
   react-is@19.2.8: {}
+
+  react-kawaii@1.6.0(react@19.2.8):
+    dependencies:
+      react: 19.2.8
 
   react-native-drawer-layout@4.2.12(react-native-gesture-handler@3.5.0)(react-native-reanimated@4.7.1)(react-native@0.88.1)(react@19.3.0):
     dependencies:

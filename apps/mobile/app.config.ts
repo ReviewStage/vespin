@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import plist, { type PlistValue } from "@expo/plist";
+import { everyLucideSymbol } from "@repo/brand/every-lucide-symbol";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { PRODUCT_MARK_SYMBOL_TEMPLATE } from "@repo/brand/product-mark-symbol";
@@ -300,7 +301,6 @@ const LIVE_ACTIVITY: AppExtension = {
   },
   SYMBOLS: [
     "Inbox",
-    "TaskStatusInProgress",
     "TaskStatusDone",
     "Split",
     "SquareCheck",
@@ -368,8 +368,10 @@ const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
 const CAMERA_USAGE = "Vespin never uses the camera: a call with an agent is audio only.";
 
 // What the system's microphone prompt says, the first time Talk calls an
-// agent (`src/voice-call.tsx`): the one use the app has for the microphone.
-const MICROPHONE_USAGE = "Vespin uses the microphone while you talk with an agent on a call.";
+// agent (`src/voice-call.tsx`) or Dictate records a message
+// (`src/use-dictation.ts`): the app's two uses for the microphone.
+const MICROPHONE_USAGE =
+  "Vespin uses the microphone while you talk with an agent on a call or dictate a message.";
 
 // The version TestFlight lists the build under, beside its number.
 const VERSION = "0.1.0";
@@ -769,14 +771,18 @@ type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
 // appearance beside its light one where it has one, each of `PICTURE_SETS`
-// as an image set of its files at their scales, and each of Lucide's
-// glyphs `@repo/ui-native` draws (`LUCIDE_SYMBOL`) as a symbol set, a custom
-// SF Symbol from the brand's outlined template, so it sizes with Dynamic
-// Type, weighs with its text, and sits on its baseline as SF Symbols do.
+// as an image set of its files at their scales, and every one of Lucide's
+// glyphs as a symbol set, a custom SF Symbol from the brand's outlined
+// template, so it sizes with Dynamic Type, weighs with its text, and sits on
+// its baseline as SF Symbols do. Note that every glyph is written, not only
+// those `@repo/ui-native` names (`LUCIDE_SYMBOL`), because a section may
+// wear any glyph the panel's picker offers (`EVERY_LUCIDE_SYMBOL`); those it
+// doesn't name stand as static templates, one Regular glyph each, and are
+// outlined here rather than committed, since all of them run to megabytes.
 const withImageSets = (config: ExpoConfig): ExpoConfig =>
   withDangerousMod(config, [
     "ios",
-    (modConfig) => {
+    async (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
       const catalog = join(IOSConfig.Paths.getSourceRoot(projectRoot), "Images.xcassets");
 
@@ -882,8 +888,12 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
+      // Note that the glyphs the app names stand as their variable templates, three weights iOS interpolates, and every other Lucide glyph a section may wear as a static one, a third of the size.
+      const named = new Set(LUCIDE_SYMBOL_TEMPLATES.map(({ name }) => name));
+
       for (const { name, svg } of [
         ...LUCIDE_SYMBOL_TEMPLATES,
+        ...(await everyLucideSymbol(named)),
         ...TASK_STATUS_SYMBOL_TEMPLATES,
         ...TASK_PRIORITY_SYMBOL_TEMPLATES,
         PRODUCT_MARK_SYMBOL_TEMPLATE,
@@ -935,9 +945,9 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         ],
       },
       // Declared exempt from US export rules, so App Store Connect stops
-      // asking on every build: the app's one cipher of its own (the host's
-      // sealed files, `keychain-cipher.ts`) protects only its own data at
-      // rest, and everything on the wire is the system's HTTPS.
+      // asking on every build: the app has no cipher of its own, keeping its
+      // tokens in the system's Keychain and its files under the system's Data
+      // Protection, and everything on the wire is the system's HTTPS.
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
       // A call into an agent keeps on with the screen locked or another app
@@ -990,6 +1000,10 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // A voice call's audio rides on WebRTC (`src/voice-call.tsx`), its
       // native module linked from the app's dependencies; the plugin writes
       // the microphone's and the camera's purpose strings and turns bitcode off.
+      // A dictated message is recorded with expo-audio (`src/use-dictation.ts`),
+      // in the foreground alone; the plugin writes the microphone's purpose
+      // string, the same as every other plugin naming it.
+      ["expo-audio", { microphonePermission: MICROPHONE_USAGE, enableBackgroundRecording: false }],
       [
         "@config-plugins/react-native-webrtc",
         { cameraPermission: CAMERA_USAGE, microphonePermission: MICROPHONE_USAGE },

@@ -5,6 +5,7 @@ import {
   PRODUCT_READY_AFTER,
   PRODUCT_SURFACE_EVENT,
   productLaunchSeconds,
+  productSessionCountBucket,
 } from "@repo/features/analytics";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +17,7 @@ import { useHostCount } from "./host/host-provider.js";
 import {
   LAUNCH_PHASE,
   type LaunchPhase,
+  launchDelivered,
   launchPhaseMs,
   launchStood,
   sinceLaunch,
@@ -69,9 +71,9 @@ export function noteSignedIn(): void {
  * commit in which the Inbox shows the feed's answer, its rows or that it
  * holds none, as `app:ready` with that time on a rung of
  * `productLaunchSeconds`, and beside it, on the same rungs, when the launch
- * reached each of its phases (`launch-phases.ts`), so a slow launch says
- * where its time went: never how many rows, which threads, or a time
- * itself. Note that the rows the current scope lists
+ * reached each of its phases (`launch-phases.ts`), and on a count's rungs
+ * how many documents the host wrote before it, so a slow launch says where
+ * its time went: never how many rows, which threads, or a time itself. Note that the rows the current scope lists
  * aren't asked for, since an account whose Open scope is empty would never
  * count, and that a launch that began in the background, a push or a Live
  * Activity's wake, or went there before the Inbox answered, counts nothing,
@@ -132,6 +134,8 @@ export function useAppReadyCount(shown: boolean): void {
     const evaluated = phase(LAUNCH_PHASE.EVALUATED);
     const account = phase(LAUNCH_PHASE.ACCOUNT);
     const local = phase(LAUNCH_PHASE.LOCAL);
+    const started = phase(LAUNCH_PHASE.STARTED);
+    const inbox = phase(LAUNCH_PHASE.INBOX);
 
     count(PRODUCT_SURFACE_EVENT.APP_READY, {
       launch_seconds: productLaunchSeconds(elapsed),
@@ -140,6 +144,11 @@ export function useAppReadyCount(shown: boolean): void {
         : { evaluated_seconds: productLaunchSeconds(evaluated) }),
       ...(account === undefined ? undefined : { account_seconds: productLaunchSeconds(account) }),
       ...(local === undefined ? undefined : { local_seconds: productLaunchSeconds(local) }),
+      ...(started === undefined ? undefined : { started_seconds: productLaunchSeconds(started) }),
+      ...(inbox === undefined ? undefined : { inbox_seconds: productLaunchSeconds(inbox) }),
+      ...(after === PRODUCT_READY_AFTER.LAUNCH
+        ? { deliveries: productSessionCountBucket(launchDelivered()) }
+        : undefined),
       ...(stood?.ms === undefined
         ? undefined
         : { standing_seconds: productLaunchSeconds(stood.ms) }),

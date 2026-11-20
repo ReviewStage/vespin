@@ -151,6 +151,8 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  // Note that a line anyone but the reader sent stands at the column's leading edge, its pictures, files and bubble with it, as the panel stands a received line at its left.
+  received: { alignItems: "flex-start" },
   // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
   turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
@@ -737,6 +739,7 @@ function TranscriptRow({
           style={[
             styles.row,
             styles.saidRow,
+            item.received ? styles.received : null,
             item.joinsAbove ? { paddingTop: RUN_GAP } : null,
             item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
           ]}
@@ -759,7 +762,7 @@ function TranscriptRow({
           )}
           {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
           <PictureSet
-            atEnd
+            atEnd={!item.received}
             pictures={(item.pictures ?? []).map((picture) => ({
               key: picture.key,
               source: picture.url ?? saidSource(drawing, picture.pictureId),
@@ -772,7 +775,7 @@ function TranscriptRow({
           {(item.files ?? []).map((file) => (
             <FileChip
               key={file.key}
-              atEnd
+              atEnd={!item.received}
               held={file.base64 !== undefined}
               name={file.name}
               mediaType={file.mediaType}
@@ -792,7 +795,7 @@ function TranscriptRow({
               more={drawing.messageMore?.(item)}
               width={rowWidth(drawing.column)}
             >
-              <View style={styles.saidHeld}>
+              <View style={[styles.saidHeld, item.received ? styles.received : null]}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
                   {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
                   <MessageWords>

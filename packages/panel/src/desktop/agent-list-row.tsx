@@ -3,6 +3,7 @@ import {
   AGENT_KIND,
   type AgentPullRequest,
   type AgentSummary,
+  type ListedAgent,
 } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
@@ -16,12 +17,16 @@ import {
 import { selectAgentPinned } from "@repo/host/app-state-reads";
 import {
   InlineEdit,
+  LIST_DENSITY,
+  LIST_ROW_CURRENT,
+  LIST_ROW_INK,
+  ListRow,
   type ListRowFold,
   type ListRowNest,
+  OneLine,
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
-  TASK_ROW_EDGES,
   TaskRow,
   type TaskRowCell,
   TaskRowGlyph,
@@ -31,7 +36,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useMemo, useRef } from "react";
+import { type ReactNode, useCallback, useMemo, useRef } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useMachineAsks } from "../machine-asks.js";
 import { failedUnderMark } from "../state-glyph.js";
@@ -48,6 +53,7 @@ import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
+import { SIDEBAR_ROW_TIME } from "./task-card.js";
 import { WaitingCount } from "./task-row-parts.js";
 import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
 
@@ -84,13 +90,11 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * stands, led by Pin, or Unpin once the reader pinned it, the reader's own
  * pin of the agent, which stands it under the sidebar's Pinned (an archived
  * agent's row offers neither, as an archived agent stands under no pin): Copy link, Rename, which turns the row's name into its field
- * until the edit ends, Archive, asking first while a teammate's agent
+ * until the edit ends, or for a Manager Settings…, the card that names it, Archive, asking first while a teammate's agent
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
- * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, unless its list
- * chooses none (`choosable`), as the sidebar's Managers do, its row then
- * keeping no gutter for a box it never draws, and a row chosen
+ * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen
  * among several offers its list's acts on every one chosen instead, under
  * how many (`agents-selection.tsx`). An archived agent's row stands settled,
  * its name in the muted ink, as a done task's does, and its menu offers
@@ -98,7 +102,22 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * the heavier weight, while its chat said something after the reader's
  * mark of it (`chatUnread`), but on the Manager's own page standing open,
  * whose chat the reader sees as it lands, and in a staged run.
+ *
+ * In the sidebar (`AGENT_ROW_LOOK.SIDEBAR`), as its Managers and Pinned
+ * draw it, the row is a sidebar task's row instead (`ListRow`, dense, in
+ * the sidebar's ink): its glyph where a task's status glyph stands, its name
+ * in the body's type, and its trailing run and time at its end as a task's
+ * marks and time stand, so it lines up with the task rows under it. Its
+ * menu, rename, and unread and current marks are the same either way.
  */
+
+/** How an agent's row is drawn: in a task list's columns (`TaskRow`), or as a sidebar task's row (`ListRow`), as the sidebar draws its Managers. */
+export const AGENT_ROW_LOOK = {
+  LIST: "list",
+  SIDEBAR: "sidebar",
+} as const;
+
+export type AgentRowLook = (typeof AGENT_ROW_LOOK)[keyof typeof AGENT_ROW_LOOK];
 
 /** The cells an agent's row draws, in a task's row's order. */
 export const AGENT_ROW_CELLS = [
@@ -153,15 +172,16 @@ export function AgentListRow({
   settled = false,
   current = false,
   runsOn = true,
-  choosable = true,
   depth,
   nest,
   fold,
   started,
+  look = AGENT_ROW_LOOK.LIST,
   onPress,
   onOpenPullRequest,
 }: {
-  agent: AgentSummary;
+  /** The agent, and where the list carries them its workspace and its checkout, which a Manager's Settings names. */
+  agent: AgentSummary & Partial<Pick<ListedAgent, "workspaceId" | "repository">>;
   /** The agents control its menu acts through, which gives its models and the member's devices too. */
   agents: AgentsControl;
   /** Whether the list is on screen, which its menu and its Archive's question ask on. */
@@ -187,8 +207,6 @@ export function AgentListRow({
   current?: boolean | undefined;
   /** Whether it says where it runs, Cloud or the device, as every list but the sidebar's Managers does; its failed mark stands either way. */
   runsOn?: boolean | undefined;
-  /** Whether its list may choose it among several, by the box in its gutter, ⌘-click, ⇧-click, and ⌘A, as every list of agents but the sidebar's Managers does. */
-  choosable?: boolean | undefined;
   /** How deep it stands nested under the agent that started it: at the top unless said. */
   depth?: number | undefined;
   /** Where it stands among the agents nested beside it, in a list that nests them; none in one that nests none. */
@@ -197,6 +215,8 @@ export function AgentListRow({
   fold?: ListRowFold | undefined;
   /** Where the agents it started stand, at every depth; none where it started none. */
   started?: StartedAgentsStanding | undefined;
+  /** How it is drawn: in a task list's columns, or as a sidebar task's row. */
+  look?: AgentRowLook | undefined;
   /** Opens the agent, as its pull request's card offers too. */
   onPress: () => void;
   onOpenPullRequest: () => void;
@@ -224,105 +244,168 @@ export function AgentListRow({
   const editing = rename?.editing === true;
   const endedByKey = useRefocusAfterEdit(editing, press);
 
-  const row = (
-    <TaskRow
-      taskId={agent.id}
-      name={name}
-      cells={AGENT_ROW_CELLS}
-      content={{
-        [TASK_ROW_CELL.STATUS]: (
-          <TaskRowGlyph>
-            <AgentGlyph agent={agent} />
-          </TaskRowGlyph>
-        ),
-        [TASK_ROW_CELL.WAITING]: <WaitingCount count={waits + asked} />,
-        [TASK_ROW_CELL.SUB_TASKS]:
-          started === undefined ? null : (
-            <WorkingCount
-              count={started.working}
-              words={startedShown(started.working, STARTED_STANDING.WORKING)}
-              label={startedHeard(started.working, STARTED_STANDING.WORKING)}
+  // Note that a sidebar row's press is handed by a callback, its item instead while it is renamed.
+  const holdPress = useCallback((held: HTMLElement | null) => {
+    press.current = held instanceof HTMLButtonElement ? held : null;
+  }, []);
+
+  const waiting = <WaitingCount count={waits + asked} />;
+
+  const working =
+    started === undefined ? null : (
+      <WorkingCount
+        count={started.working}
+        words={startedShown(started.working, STARTED_STANDING.WORKING)}
+        label={startedHeard(started.working, STARTED_STANDING.WORKING)}
+      />
+    );
+
+  const pullRequestChip =
+    pullRequest === undefined ? null : (
+      <ReplayMask>
+        <PullRequestChip
+          pullRequest={pullRequest}
+          card={
+            <PullRequestCard
+              pullRequest={pullRequest}
+              place={{ taskId: agent.taskId }}
+              lines={pullRequest}
+              files={pullRequest.changedFiles}
+              opener={people?.author ?? openerOf(pullRequest)}
+              agent={{ subject, models, onOpen: onPress }}
+              reviewers={people?.reviewers}
             />
+          }
+          onOpen={onOpenPullRequest}
+        />
+      </ReplayMask>
+    );
+
+  const runsOnMark = runsOn ? <RunsOnPlace agent={agent} devices={macs} /> : null;
+
+  const endMark =
+    agentEndMark(agent, true) ??
+    (started === undefined || started.failed === 0
+      ? null
+      : failedUnderMark(startedHeard(started.failed, STARTED_STANDING.FAILED)));
+
+  const editor = editing ? (
+    <InlineEdit
+      value={rename.asked ?? name}
+      label="Agent name"
+      maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
+      editing
+      onEnd={(edit) => {
+        endedByKey(edit.byKey);
+        rename.end(edit.value);
+      }}
+    />
+  ) : undefined;
+
+  const note = rename?.refused === true ? RENAME_FAILED : undefined;
+
+  const menu = editing
+    ? undefined
+    : chosen !== undefined
+      ? chosenRowMenu(AGENT_THING, chosen, shown)
+      : rowMenu(
+          AGENT_THING,
+          [
+            ...pinGroups(agent, pinned, onPin, actions.subject),
+            ...agentMenuGroups(rowDoors(actions.doors)),
+          ],
+          shown,
+          true,
+        );
+
+  const unread = !staged && !current && chatUnread(agent);
+  const hint = card === undefined || editing ? undefined : { Hint: RowHint, label: name };
+
+  const row =
+    look === AGENT_ROW_LOOK.SIDEBAR ? (
+      <>
+        <ListRow
+          ref={holdPress}
+          motionKey={agent.id}
+          density={LIST_DENSITY.DENSE}
+          ink={LIST_ROW_INK.SIDEBAR}
+          leading={<AgentGlyph agent={agent} />}
+          title={
+            editor ?? (
+              <OneLine words={name}>
+                <ReplayMask>{name}</ReplayMask>
+              </OneLine>
+            )
+          }
+          description={note === undefined ? undefined : <span>{note}</span>}
+          meta={
+            editing ? null : (
+              <span className={SIDEBAR_ROW_TIME}>
+                {waiting}
+                {working}
+                {pullRequestChip}
+                <ReplayMask>
+                  {runsOnMark}
+                  {endMark}
+                </ReplayMask>
+                <Time at={at} hint={false} />
+              </span>
+            )
+          }
+          current={current ? LIST_ROW_CURRENT.PAGE : undefined}
+          unread={unread}
+          muted={settled}
+          hint={hint}
+          onPress={editing ? undefined : onPress}
+          menu={menu}
+          more={more}
+          place={place}
+          depth={depth}
+          nest={nest}
+          fold={fold}
+        />
+        {actions.dialog}
+      </>
+    ) : (
+      <TaskRow
+        taskId={agent.id}
+        name={name}
+        cells={AGENT_ROW_CELLS}
+        content={{
+          [TASK_ROW_CELL.STATUS]: (
+            <TaskRowGlyph>
+              <AgentGlyph agent={agent} />
+            </TaskRowGlyph>
           ),
-        [TASK_ROW_CELL.PULL_REQUESTS]:
-          pullRequest === undefined ? null : (
+          [TASK_ROW_CELL.WAITING]: waiting,
+          [TASK_ROW_CELL.SUB_TASKS]: working,
+          [TASK_ROW_CELL.PULL_REQUESTS]: pullRequestChip,
+          [TASK_ROW_CELL.AGENTS]: (
             <ReplayMask>
-              <PullRequestChip
-                pullRequest={pullRequest}
-                card={
-                  <PullRequestCard
-                    pullRequest={pullRequest}
-                    place={{ taskId: agent.taskId }}
-                    lines={pullRequest}
-                    files={pullRequest.changedFiles}
-                    opener={people?.author ?? openerOf(pullRequest)}
-                    agent={{ subject, models, onOpen: onPress }}
-                    reviewers={people?.reviewers}
-                  />
-                }
-                onOpen={onOpenPullRequest}
-              />
+              {runsOnMark}
+              {endMark}
             </ReplayMask>
           ),
-        [TASK_ROW_CELL.AGENTS]: (
-          <ReplayMask>
-            {runsOn ? <RunsOnPlace agent={agent} devices={macs} /> : null}
-            {agentEndMark(agent, true) ??
-              (started === undefined || started.failed === 0
-                ? null
-                : failedUnderMark(startedHeard(started.failed, STARTED_STANDING.FAILED)))}
-          </ReplayMask>
-        ),
-        [TASK_ROW_CELL.UPDATED]: <Time at={at} hint={false} />,
-      }}
-      editor={
-        editing ? (
-          <InlineEdit
-            value={rename.asked ?? name}
-            label="Agent name"
-            maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
-            editing
-            onEnd={(edit) => {
-              endedByKey(edit.byKey);
-              rename.end(edit.value);
-            }}
-          />
-        ) : undefined
-      }
-      note={rename?.refused === true ? RENAME_FAILED : undefined}
-      menu={
-        editing
-          ? undefined
-          : chosen !== undefined
-            ? chosenRowMenu(AGENT_THING, chosen, shown)
-            : rowMenu(
-                AGENT_THING,
-                [
-                  ...pinGroups(agent, pinned, onPin, actions.subject),
-                  ...agentMenuGroups(rowDoors(actions.doors)),
-                ],
-                shown,
-                true,
-              )
-      }
-      more={more}
-      settled={settled}
-      unread={!staged && !current && chatUnread(agent)}
-      edges={choosable ? TASK_ROW_EDGES.LIST : TASK_ROW_EDGES.UNCHOSEN}
-      choosable={choosable}
-      current={current}
-      hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
-      onOpen={onPress}
-      pressRef={press}
-      place={place}
-      depth={depth}
-      nest={nest}
-      fold={fold}
-    >
-      {actions.dialog}
-    </TaskRow>
-  );
+          [TASK_ROW_CELL.UPDATED]: <Time at={at} hint={false} />,
+        }}
+        editor={editor}
+        note={note}
+        menu={menu}
+        more={more}
+        settled={settled}
+        unread={unread}
+        current={current}
+        hint={hint}
+        onOpen={onPress}
+        pressRef={press}
+        place={place}
+        depth={depth}
+        nest={nest}
+        fold={fold}
+      >
+        {actions.dialog}
+      </TaskRow>
+    );
 
-  // Note that the card reaches the row's hint by its options, because the row takes its hint as a component, which must stay one across renders.
   return card === undefined ? row : <RowHintOptions card={card}>{row}</RowHintOptions>;
 }

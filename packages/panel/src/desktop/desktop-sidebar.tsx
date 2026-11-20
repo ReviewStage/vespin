@@ -1,5 +1,5 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
-import type { AgentSummary } from "@repo/features/agent-wire";
+import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -1258,7 +1258,7 @@ function PinnedSection({
   const empty = rows.length === 0 && pinnedManagers.length === 0;
   const rowsShown = context.tasks.shown && context.inSight;
 
-  const managerRows = (drawn: readonly AgentSummary[]) =>
+  const managerRows = (drawn: readonly ListedAgent[]) =>
     drawn.length === 0 ? null : (
       <ManagerRows
         managers={drawn}

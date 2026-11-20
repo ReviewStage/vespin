@@ -462,9 +462,9 @@ Protection, and deletes it when you sign out. On the Mac your sign-in tokens
 are kept encrypted under a key in the macOS Keychain. On the iPhone they are
 kept in the iPhone's Keychain itself, readable after the phone's first unlock
 since it started, never synced to iCloud or moved to another device, and
-deleted when you sign out; an update moves tokens an earlier version of the
-app kept encrypted in its own files into the Keychain the first time it
-opens.
+deleted when you sign out. Earlier versions of the app kept them encrypted in
+its own files under a key in the Keychain; once the tokens moved into the
+Keychain itself, the app deletes that key.
 
 Transcripts and pictures you open are held in memory only.
 

@@ -74,16 +74,22 @@ export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-m
 
 export {
   Composer,
+  type ComposerDictation,
   ComposerFoot,
   type ComposerMenu,
   type ComposerSaving,
   type ComposerSendAs,
+  DICTATION_PHASE,
+  type DictationPhase,
 } from "./composer.js";
 
 export {
   type AttachedPicture,
   AttachedPictures,
   EditingLine,
+  type MentionSuggestion,
+  type MentionSuggestionGroup,
+  MentionSuggestions,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";

@@ -451,6 +451,7 @@ function summaryFields(
     ...(standing.runtime === undefined ? undefined : { runtime: standing.runtime }),
     title: agent.title,
     ...(agent.kind === AGENT_KIND.MANAGER ? { kind: AGENT_KIND.MANAGER } : undefined),
+    ...(agent.kind === AGENT_KIND.MANAGER && agent.face != null ? { face: agent.face } : undefined),
     // Note that only a local agent says where it runs, so a sandboxed agent's summary is as it was.
     ...(agent.machine === AGENT_MACHINE.DEVICE
       ? { machine: agent.machine }

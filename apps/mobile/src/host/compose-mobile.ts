@@ -10,7 +10,7 @@
  * app's Documents, ids from `expo-crypto`, the service at its production
  * origin unless a Preview's is built in, and the account from the desktop's
  * OAuth source signed in as the `ios` client, its consent the system's
- * authentication session and its cipher the Keychain's.
+ * authentication session and its tokens kept in the Keychain.
  *
  * The screens' acts reach the host's own procedures on the act port in this
  * process, over a channel of two ends (`@repo/host/act-port`'s `inProcessChannel`); of the
@@ -33,7 +33,7 @@ import { readerZone } from "@repo/features/date-mention";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import type { OpenTerminalSocket } from "@repo/features/relay-socket";
-import type { SecretCipher as SecretCipherSeam, TokenVault } from "@repo/host";
+import type { TokenVault } from "@repo/host";
 import { runModeFor } from "@repo/host";
 import {
   ACT_PORT_CROSSING,
@@ -80,12 +80,11 @@ import {
   issuedTokenAccountSourceLayer,
   type KeepIssuedToken,
   OAUTH_ACCOUNT_CLIENT,
-  oauthAccountSourceLayerFor,
+  oauthVaultAccountSourceLayerFor,
   PlatformRenewalWindow,
   PlatformTokenVault,
   RunMode,
   reporterLayer,
-  SecretCipher,
   ServiceOrigin,
   ShutdownSignal,
   SignInConsent,
@@ -144,10 +143,8 @@ export interface DeviceSeams {
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
   readonly onAppActiveChanged: (listener: (active: boolean) => void) => () => void;
-  /** What the account's tokens were sealed with in the settings file by builds before `tokenVault`, which opens them once to move them. */
-  readonly cipher: SecretCipherSeam;
-  /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`); a device without one seals them with `cipher`. */
-  readonly tokenVault?: TokenVault;
+  /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`). */
+  readonly tokenVault: TokenVault;
   /** When the account may renew: only while the app is in the foreground, held running through the renewal; a device without one renews whenever a call asks. */
   readonly renewalWindow?: AccountRenewalWindow;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
@@ -202,17 +199,13 @@ const report = (message: string): void => {
 
 /**
  * The account's seams, as the phone answers them: the tokens kept in the
- * Keychain (`keychain-tokens.ts`), the cipher an older build sealed them
- * with, which opens them once to move them there, and each sign-in shown in
- * the system's authentication session, which returns on the `ios` client's
- * one registered callback (`@repo/features/ios-sign-in-wire`).
+ * Keychain (`keychain-tokens.ts`), and each sign-in shown in the system's
+ * authentication session, which returns on the `ios` client's one
+ * registered callback (`@repo/features/ios-sign-in-wire`).
  */
 function accountSeams(device: DeviceSeams) {
   return Layer.mergeAll(
-    Layer.succeed(SecretCipher, device.cipher),
-    device.tokenVault === undefined
-      ? Layer.empty
-      : Layer.succeed(PlatformTokenVault, device.tokenVault),
+    Layer.succeed(PlatformTokenVault, device.tokenVault),
     device.renewalWindow === undefined
       ? Layer.empty
       : Layer.succeed(PlatformRenewalWindow, device.renewalWindow),
@@ -505,7 +498,7 @@ export function composeMobile(
       Path.layer,
       httpClient,
       Layer.provide(
-        issuedTokenAccountSourceLayer(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), {
+        issuedTokenAccountSourceLayer(oauthVaultAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), {
           keep: device.keepShareToken,
           lifetimeMs: SHARE_TOKEN_LIFETIME_MS,
         }),

@@ -81,6 +81,8 @@ export interface RecordedDayStore {
 interface QueuedEvent {
   readonly event: ProductEvent;
   readonly recorded?: RecordedDay;
+  /** Whether it already rode a batch that never reached the service, so it is not put back again. */
+  readonly retried?: boolean;
 }
 
 export interface ProductEventSenderOptions {
@@ -128,10 +130,12 @@ export interface ProductEventSenderOptions {
  * rather than becoming a refusal over the wire, and nothing observed can reach
  * a property in the first place.
  *
- * The pipeline is lossy on purpose. Any outcome — accepted, refused,
- * unreachable — drops the batch, and nothing is ever retried: counts undercount
- * on a flaky network in exchange for never retry-storming our own service
- * and never double-counting a day. {@link ProductEventSender.drop} clears the
+ * The pipeline is lossy on purpose. An answered batch, accepted or refused,
+ * is spent, and one that never reached the service is put back once for the
+ * next flush and dropped if that fails too: a phone woken in the background
+ * often sends its first batch with no network, which lost every such launch's
+ * count, while one retry at the cadence never retry-storms our own service
+ * and never double-counts a day. {@link ProductEventSender.drop} clears the
  * queue rather than flushing it, because a request in `will-quit` either
  * delays the quit or is killed mid-flight, and an instant quit is worth a
  * minute of counts. Nothing outlives a run but the day a once-a-day event was
@@ -454,7 +458,20 @@ export class ProductEventSender {
           if (fault === CALL_FAULT.NO_CREDENTIAL) {
             this.#queue.unshift(...queued);
             this.#trimQueue();
+
+            return Effect.void;
           }
+
+          if (fault !== CALL_FAULT.NETWORK) return Effect.void;
+
+          // A batch that never reached the service goes back once, ahead of
+          // what was queued since, and what already went back once is dropped.
+          this.#queue.unshift(
+            ...queued.flatMap((queuedEvent) =>
+              queuedEvent.retried === true ? [] : [{ ...queuedEvent, retried: true }],
+            ),
+          );
+          this.#trimQueue();
 
           return Effect.void;
         },

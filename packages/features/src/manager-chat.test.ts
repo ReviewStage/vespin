@@ -42,7 +42,7 @@ function drawn(messages: readonly AgentTranscriptMessage[]): [string, string[]][
   ]);
 }
 
-test("a Manager's chat keeps people's lines and each sent message as one of its own, and leaves out its other words and calls, its agents' and wakes' lines, and a turn that sent nothing", () => {
+test("a Manager's chat keeps people's lines, each sent message as one of its own, and the voice's lines on a call, and leaves out its other words and calls, its agents' and wakes' lines, and a turn that sent nothing", () => {
   const messages = [
     line("ada", { metadata: { channel: "typed" }, sentBy: { name: "Ada", userId: "u-ada" } }),
     turn("turn-1", [
@@ -64,6 +64,13 @@ test("a Manager's chat keeps people's lines and each sent message as one of its 
     line("wakeup", { metadata: { channel: "app" } }),
     turn("turn-2", [{ type: "text", text: "Nothing to say yet." }]),
     line("grace", { sentBy: { name: "Grace", userId: "u-grace" } }),
+    line("asked", {
+      metadata: { author: "developer", channel: "voice", voice_session_id: "call" },
+    }),
+    turn("said", [{ type: "text", text: "Two agents are on it." }], {
+      metadata: { author: "voice_model", channel: "voice", voice_session_id: "call" },
+      sentAt: 5_000,
+    }),
   ];
 
   assert.deepEqual(drawn(messages), [
@@ -71,7 +78,10 @@ test("a Manager's chat keeps people's lines and each sent message as one of its 
     ["turn-1", ["On it: I made the task."]],
     ["second", ["An agent is working on it."]],
     ["grace", ["grace"]],
+    ["asked", ["asked"]],
+    ["said", ["Two agents are on it."]],
   ]);
+  assert.equal(managerChatLines(messages).at(-1)?.finishedAt, 5_000);
 });
 
 test("a line that reached a turn while it ran stands between the messages it arrived between, and only the turn's last message keeps its end", () => {

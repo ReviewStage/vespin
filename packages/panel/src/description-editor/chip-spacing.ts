@@ -55,21 +55,6 @@ const TAKES_THE_SPACE = /^[.,;:!?)\]}\u2026'\u2019\u201D]$/u;
 /** Where the space laid after a chip stands while it is provisional, or null. */
 const PROVISIONAL_SPACE = new PluginKey<number | null>("chip-provisional-space");
 
-/** The closing punctuation a word ends on, which a pick leaves standing. */
-const TRAILING_CLOSING = /[.,;:!?)\]}]+$/u;
-
-/** The `@` word the caret ends: `@`, at the start of a word, then up to six words with no bracket, parenthesis, or `@` in them. */
-const AT_WORD = /(^|\s)@((?:[^\s@[\]()]+(?: [^\s@[\]()]+){0,5})?)$/u;
-
-/** The rest of an `@` word after the caret: up to a space, a bracket, a parenthesis, an `@`, or a chip read as the object character, which is no word's. */
-const AT_WORD_REST = /^[^\s@[\]()\uFFFC]*/u;
-
-/** The `@` word the caret stands in: what is typed of it after the `@`, and how many characters past the caret a pick replaces. */
-export interface AtWord {
-  readonly query: string;
-  readonly rest: number;
-}
-
 /** Whether what stands right before a place ends a word, so a chip laid there needs a space before it. */
 function endsWord(node: PmNode | null): boolean {
   if (node === null) return false;
@@ -179,14 +164,4 @@ export function chipOverSelection(state: EditorState, chip: PmNode): Transaction
   const end = laid.selection.from;
 
   return spacedChip(laid, end - chip.nodeSize, end);
-}
-
-/** The `@` word the caret stands in, read from its line's words before the caret and after it; nothing where the caret ends no `@` word. */
-export function atWordAround(before: string, after: string): AtWord | undefined {
-  const match = AT_WORD.exec(before);
-
-  if (match === null) return undefined;
-  const rest = AT_WORD_REST.exec(after)?.[0] ?? "";
-
-  return { query: match[2] ?? "", rest: rest.replace(TRAILING_CLOSING, "").length };
 }

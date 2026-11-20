@@ -32,6 +32,7 @@ import {
   integrationConnectionNameSchema,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
+import { type ManagerFace, managerFaceSchema } from "@repo/features/manager-face";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type TaskStatus, taskStatusSchema } from "@repo/features/task-wire";
 import { TURN_OPEN, TURN_STATUS, TURN_TERMINAL, type WireValue, WireValueSchema } from "@repo/wire";
@@ -89,6 +90,7 @@ import { agentAutomationNameSql, agentAutomationRunSql } from "./agent-name.js";
 import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
 import { deleteConversations } from "./conversation-delete.js";
 import { settleAgentInboxItems } from "./inbox-settle.js";
+import { pickManagerFace } from "./manager-faces.js";
 import {
   type LatestTurn,
   lastSettledTurnsOfReached,
@@ -219,6 +221,8 @@ export interface Agent {
   readonly githubAccess: GitHubAccess;
   /** What the agent is: a coder; a manager; a pilot stored before Pilot was removed, which every reader treats as a coder. */
   readonly kind: AgentKind;
+  /** A Manager's face, picked as it is made (`manager-faces.ts`); null for a coder, and absent where a caller built the agent without it. */
+  readonly face?: ManagerFace | null;
   readonly createdAt: Date;
   /** Where its runner runs: a Vercel Sandbox, or its starter's Mac; a Vercel Sandbox where unsaid. */
   readonly machine?: AgentMachineKind;
@@ -340,6 +344,8 @@ export type NewAgent = AgentPlace & {
   readonly permissionMode?: AgentPermissionMode | undefined;
   /** What the agent is; a coder where none is named. */
   readonly kind?: AgentKind | undefined;
+  /** The face a Manager's creator picked for it; the service's pick where none is named (`manager-faces.ts`), and none for a coder. */
+  readonly face?: ManagerFace | undefined;
 };
 
 /** A repository a Start names for the agent beside its own: `owner/name` as reached, and the branch its checkout is cloned at, none for its default branch. */
@@ -393,6 +399,7 @@ const AGENT_COLUMNS = {
   author: agentTable.author,
   githubAccess: agentTable.githubAccess,
   kind: agentTable.kind,
+  face: agentTable.face,
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
@@ -437,6 +444,7 @@ const AGENT_LINE_COLUMNS = {
   author: agentTable.author,
   githubAccess: agentTable.githubAccess,
   kind: agentTable.kind,
+  face: agentTable.face,
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
@@ -544,6 +552,7 @@ const AgentRowSchema = Schema.Struct({
   author: Schema.NullOr(AuthorColumnSchema),
   githubAccess: Schema.Literals(Object.values(GITHUB_ACCESS)),
   kind: Schema.Literals(Object.values(AGENT_KIND)),
+  face: Schema.NullOr(managerFaceSchema),
   createdAt: InstantColumnSchema,
   machine: Schema.Literals(Object.values(AGENT_MACHINE)),
   deviceId: Schema.NullOr(Schema.String),
@@ -822,6 +831,24 @@ const updateAgentPermissionModeRow = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ permissionMode })
         .where(reachableAgent(userId, agentId))
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
+    ),
+});
+
+/** A Manager's face changed, where the account reaches it; a coder, which wears none, is no row. */
+const updateManagerFaceRow = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    face: managerFaceSchema,
+  }),
+  Result: CommittedAgentRowSchema,
+  execute: ({ userId, agentId, face }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ face })
+        .where(and(reachableAgent(userId, agentId), eq(agentTable.kind, AGENT_KIND.MANAGER)))
         .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
@@ -2402,6 +2429,12 @@ export function createAgent(
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         );
 
+        // Note that only a Manager wears a face, so a coder's row is written as it was.
+        const made =
+          row.kind === AGENT_KIND.MANAGER
+            ? { ...row, face: yield* pickManagerFace(row.id, organizationId, started.face) }
+            : row;
+
         // Note that an agent in one repository or none writes no row here, so its rows are as they were.
         const extras = started.extraRepositories ?? [];
 
@@ -2415,7 +2448,7 @@ export function createAgent(
           });
         }
 
-        return Option.some({ agent: row, created: true, txid });
+        return Option.some({ agent: made, created: true, txid });
       }),
     ),
   );
@@ -3039,6 +3072,18 @@ export function updateAgentPermissionModeCommitted(
 ): AgentStoreEffect<Option.Option<AgentCommitted>> {
   return Effect.map(
     updateAgentPermissionModeRow({ userId, agentId, permissionMode }),
+    Option.map(({ txid, ...agent }) => ({ agent, txid })),
+  );
+}
+
+/** A Manager's face set to the one a member picked, worn by another Manager of its workspace or not; nothing for a coder or an agent out of the account's reach. */
+export function updateManagerFaceCommitted(
+  userId: string,
+  agentId: string,
+  face: ManagerFace,
+): AgentStoreEffect<Option.Option<AgentCommitted>> {
+  return Effect.map(
+    updateManagerFaceRow({ userId, agentId, face }),
     Option.map(({ txid, ...agent }) => ({ agent, txid })),
   );
 }

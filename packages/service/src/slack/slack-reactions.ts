@@ -3,9 +3,9 @@
  *
  * Our Slack route hands each `reaction_added` event here
  * (`slack-events-app.ts`). One is heard only where it is 👍 or 👎 (any skin
- * tone), a member added it, never the bot itself, whose reactions an
- * agent adds with `react_slack` land on members' messages, and it is on a message the bot posted (`item_user`), an agent's
- * own `send_slack_message` among them. The message is then read on the bot's
+ * tone), a member added it, never the bot itself (an agent's
+ * `react_slack`), and it is on a message the bot posted (`item_user`), an
+ * agent's own `send_slack_message` among them. The message is then read on the bot's
  * token for its words and the thread it stands in
  * (`SlackWorkspaceBot.message`), and that thread must speak for an agent
  * (`slack_agent_thread`), whatever kept it: a start, a run's result, or the
@@ -47,10 +47,8 @@ import { afterResponse } from "../http/after-response.js";
 import { memberIn } from "./slack-agent-starts.js";
 import { SlackBot } from "./slack-bot.js";
 
-/** The event read: a reaction added to an item. */
 const SLACK_REACTION_ADDED = "reaction_added";
 
-/** The kind of item a reaction is heard on: a message. */
 const SLACK_MESSAGE_ITEM = "message";
 
 /** The feedback a reaction gives, as the agent reads it. */

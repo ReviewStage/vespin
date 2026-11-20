@@ -3,11 +3,19 @@
  *
  * One JSON POST to `/live/sessions` with the session and the transport
  * (https://developers.openai.com/api/docs/guides/voice-webrtc?api=live): the
- * model, the instructions, client delegation, because the agent behind the
- * call is its backend and nothing else may act, no storage, the voice,
- * standby, and the panel's data channel cut down to what the panel does with
- * it; and the panel's SDP offer as a `webrtc` transport. No `audio.format`,
- * because WebRTC negotiates its own.
+ * model, the instructions, the startup history, client delegation, because
+ * the agent behind the call is its backend and nothing else may act, no
+ * storage, the voice, standby, and the panel's data channel cut down to what
+ * the panel does with it; and the panel's SDP offer as a `webrtc` transport.
+ * No `audio.format`, because WebRTC negotiates its own.
+ *
+ * The startup history is `session.input`
+ * (https://developers.openai.com/api/docs/guides/live-conversations#seed-a-session-with-prior-conversation):
+ * text messages, each one text part, a user's as `input_text` and an
+ * assistant's as `output_text`, within OpenAI's bounds of 128 messages and
+ * 8,192 tokens together (`LIVE_INPUT`). OpenAI refuses a session past either
+ * bound rather than cutting it (live-tested on `gpt-live-1.1`, Nov 19, 2026),
+ * so the history is fitted to them before it is sent (`voice-instructions.ts`).
  *
  * Standby
  * (https://developers.openai.com/api/docs/guides/live-conversations#managing-idle-sessions)
@@ -31,7 +39,7 @@
  * delegation or a transcript. OpenAI answers the session's id, which the
  * sideband attaches by, and the SDP answer. The key is revealed into the
  * bearer header alone. Nothing of the exchange is logged here, since the
- * offer and the instructions carry the agent's words; a failure carries the
+ * offer and the history carry the agent's words; a failure carries the
  * status OpenAI answered and nothing it said.
  */
 
@@ -56,6 +64,40 @@ export const LIVE_SESSION = {
   /** The seconds with no transcript after which inference pauses (5 to 60): past a breath, so a silent call bills at the paused rate soon. */
   IDLE_TIMEOUT_S: 10,
 } as const;
+
+/**
+ * OpenAI's bounds on a session's startup history, `session.input`
+ * (https://developers.openai.com/api/docs/guides/live-conversations#seed-a-session-with-prior-conversation):
+ * at most 128 messages and 8,192 tokens together. What a message's framing
+ * counts toward those tokens is not documented; it was measured on
+ * `gpt-live-1.1` (Nov 19, 2026), where one message holds 8,188 tokens of
+ * text, and 128 messages hold 60 each but not 61: 4 a message.
+ */
+export const LIVE_INPUT = {
+  MAX_MESSAGES: 128,
+  MAX_TOKENS: 8_192,
+  MESSAGE_FRAME_TOKENS: 4,
+} as const;
+
+/** The roles a startup message may take that the history uses: the caller's side and the voice's. */
+export const LIVE_INPUT_ROLE = {
+  USER: "user",
+  ASSISTANT: "assistant",
+} as const;
+
+export type LiveInputRole = (typeof LIVE_INPUT_ROLE)[keyof typeof LIVE_INPUT_ROLE];
+
+/** The content part each role's text goes in. */
+const LIVE_INPUT_CONTENT = {
+  [LIVE_INPUT_ROLE.USER]: "input_text",
+  [LIVE_INPUT_ROLE.ASSISTANT]: "output_text",
+} as const;
+
+/** One message of the startup history: its role and its one text part. */
+export interface LiveInputMessage {
+  readonly role: LiveInputRole;
+  readonly text: string;
+}
 
 /** How long OpenAI is given to create the session before the call is answered as failed: inside the panel's held wait for the route. */
 const CREATE_TIMEOUT = Duration.seconds(20);
@@ -93,6 +135,8 @@ export interface LiveSessionInput {
   readonly offer: string;
   readonly voice: LiveVoice;
   readonly instructions: string;
+  /** Oldest first, within `LIVE_INPUT`. */
+  readonly history: readonly LiveInputMessage[];
 }
 
 /** The body `POST /v1/live/sessions` takes: the session and the panel's SDP offer. */
@@ -101,6 +145,11 @@ function sessionBody(input: LiveSessionInput) {
     session: {
       model: LIVE_SESSION.MODEL,
       instructions: input.instructions,
+      input: input.history.map((message) => ({
+        type: "message",
+        role: message.role,
+        content: [{ type: LIVE_INPUT_CONTENT[message.role], text: message.text }],
+      })),
       delegation: { type: LIVE_SESSION.DELEGATION },
       store: false,
       audio: { output: { voice: input.voice } },

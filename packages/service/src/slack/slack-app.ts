@@ -20,9 +20,7 @@ import { text } from "../core.js";
 /** The variables our Slack app is read from; a blank value is absent. */
 export const SLACK_APP_ENVIRONMENT = {
   CLIENT_ID: "SLACK_APP_CLIENT_ID",
-  /** Exchanges an install's code for the workspace's bot token. */
   CLIENT_SECRET: "SLACK_APP_CLIENT_SECRET",
-  /** Signs every request Slack sends us. */
   SIGNING_SECRET: "SLACK_APP_SIGNING_SECRET",
 } as const;
 

@@ -1,0 +1,20 @@
+/* manager-face.css -- the gentle bob a Manager's face makes while it works.
+
+   The body rises a little and settles, once each 1.6s, the working mark's
+   own lap, so the face and the mark beside it keep one time. It is an
+   endless loop held by --ui-loop-motion, so its period may be a literal
+   (docs/DESIGN.md), and reduced motion and a capture run hold it at rest,
+   its first frame. */
+
+@layer components {
+  .ui-manager-face[data-working] .ui-manager-face-body {
+    animation: ui-manager-face-bob 0.8s ease-in-out infinite alternate;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  @keyframes ui-manager-face-bob {
+    to {
+      translate: 0 -8%;
+    }
+  }
+}

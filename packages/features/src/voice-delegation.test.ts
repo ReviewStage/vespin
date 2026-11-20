@@ -274,20 +274,59 @@ it.effect("a caller's fragment that started before the voice's line grows the ca
   }),
 );
 
-it.effect("a late fragment after a long silence opens a line of its own", () =>
+it.effect(
+  "a fragment that overlaps or touches the other speaker's open line grows its own, and a turn change opens a line of its own",
+  () =>
+    Effect.gen(function* () {
+      // The spans GPT-Live gave a call where the voice's backchannel cut the caller's sentence.
+      const outputs = yield* wordsOutOf([
+        said("Mintlify", 7200, 7400),
+        voiced("mm.", 7200, 7400),
+        said(" though", 7400, 7600),
+        voiced("Yeah, Mintlify's building the docs preview.", 8200, 11_200),
+      ]);
+
+      assert.deepEqual(outputs, [
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify"),
+        record(VOICE_SPEAKER.VOICE, "line_2", "mm."),
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify though"),
+        record(VOICE_SPEAKER.VOICE, "line_3", "Yeah, Mintlify's building the docs preview."),
+      ]);
+    }),
+);
+
+it.effect("the session going idle ends the open line, and the next words open their own", () =>
   Effect.gen(function* () {
     const outputs = yield* wordsOutOf([
-      said("Hold on.", 0, 100),
-      voiced("Sure.", 10_000, 10_400),
-      said("Ship it.", 4_000, 4_600),
+      said("Run the tests.", 0, 900),
+      { from: VOICE_INPUT.LIVE, body: { type: "session.paused", event_id: "event_paused" } },
+      said(" Also the lint.", 1500, 2000),
     ]);
 
     assert.deepEqual(outputs, [
-      record(VOICE_SPEAKER.CALLER, "line_1", "Hold on."),
-      record(VOICE_SPEAKER.VOICE, "line_2", "Sure."),
-      record(VOICE_SPEAKER.CALLER, "line_3", "Ship it."),
+      record(VOICE_SPEAKER.CALLER, "line_1", "Run the tests."),
+      record(VOICE_SPEAKER.CALLER, "line_2", "Also the lint."),
     ]);
   }),
+);
+
+it.effect(
+  "the caller's words that woke the session open a line of their own though they come after the voice's answer",
+  () =>
+    Effect.gen(function* () {
+      const outputs = yield* wordsOutOf([
+        said("Run the tests.", 0, 1000),
+        { from: VOICE_INPUT.LIVE, body: { type: "session.paused", event_id: "event_paused" } },
+        voiced("Sure.", 12_000, 12_200),
+        said("Also the lint.", 11_000, 11_800),
+      ]);
+
+      assert.deepEqual(outputs, [
+        record(VOICE_SPEAKER.CALLER, "line_1", "Run the tests."),
+        record(VOICE_SPEAKER.VOICE, "line_2", "Sure."),
+        record(VOICE_SPEAKER.CALLER, "line_3", "Also the lint."),
+      ]);
+    }),
 );
 
 it.effect(

@@ -27,8 +27,8 @@
  * that agent's. It is no current thread of the agent's until a member
  * writes in it. Nothing else posts to Slack for the agent: no thread of
  * its inbox and no picture it showed, and a thread hears of its turn only
- * that it failed or was stopped (`slack-agent-starts.ts`'s
- * `postTurnToSlack`).
+ * that it failed, was stopped, or hit its plan's usage limit
+ * (`slack-agent-starts.ts`'s `postTurnToSlack`).
  */
 
 import { posix } from "node:path";
@@ -339,7 +339,6 @@ export function runSendSlackMessage(
       yield* reach.bot.upload(message.channel, thread, files.success);
       const link = yield* reach.bot.permalink(message.channel, message.ts);
 
-      // Note that the answer names where it went, so the agent can reply or react to it later.
       const answer: WireRecord = {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         channelId: message.channel,

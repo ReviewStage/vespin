@@ -4,8 +4,9 @@
 // (`AgentsActivityAttributes`). The compact and minimal presentations say
 // how many are working. The expanded one and the Lock Screen list up to
 // three, each with its title, a timer from its turn's start, and Stop
-// (`StopAgentIntent`). The count stands by the panel's status mark in the
-// working blue, and copper (`Attention`) marks only what wants the member:
+// (`StopAgentIntent`). The count stands by the panel's working mark while
+// agents work, and by its done mark once none does, in the working blue or
+// the done green, and copper (`Attention`) marks only what wants the member:
 // the asks waiting, the compact presentation's Inbox glyph, and the keyline
 // while one waits. A tap opens the Inbox while an ask waits, else the newest
 // running agent. The colors are the brand's, written into this target's
@@ -34,11 +35,12 @@ struct AgentsLiveActivity: Widget {
     } dynamicIsland: { context in
       let state = context.state
       return DynamicIsland {
+        // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
         DynamicIslandExpandedRegion(.leading) {
-          CountLabel(state: state).padding(.leading, 4)
+          CountLabel(state: state).padding(.leading, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          WaitingLabel(state: state).padding(.trailing, 4)
+          WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.bottom) {
           // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
@@ -92,7 +94,7 @@ struct ActivityContentView: View {
   }
 }
 
-/// How many agents are working, or that they all finished, by the panel's status mark, in the working blue or the done green.
+/// How many agents are working, or that they all finished, by the panel's working mark or its done mark, in the working blue or the done green.
 struct CountLabel: View {
   let state: AgentsActivityAttributes.ContentState
 
@@ -100,7 +102,7 @@ struct CountLabel: View {
     Label {
       Text(state.countText).contentTransition(.numericText(value: Double(state.running)))
     } icon: {
-      Image(state.mark)
+      StateMark(state: state)
     }
     .font(.subheadline.weight(.semibold))
     .monospacedDigit()
@@ -149,7 +151,8 @@ struct AgentRow: View {
   let agent: AgentsActivityAttributes.Agent
 
   var body: some View {
-    HStack(spacing: 10) {
+    // Note that the circle's gap from the timer is this spacing and the target's whole extra width, 18 points, as it was while the circle stood centered in its target.
+    HStack(spacing: 10 - (StopTarget.width - StopTarget.mark) / 2) {
       // Note that the row opens its agent's page everywhere but on Stop, which a link around it would swallow.
       Link(destination: AgentsActivityAttributes.ContentState.route(agent: agent.id)) {
         HStack(spacing: 4) {
@@ -178,7 +181,8 @@ struct AgentRow: View {
             }
           }
           // Note that the target is wider and taller than the circle, but gives its height back to the row, so three rows still fit the expanded island; it reaches halfway into the gap between rows, never into the next row's Stop.
-          .frame(width: StopTarget.width, height: StopTarget.height)
+          // Note that the circle stands at the target's trailing edge, so it lines up with the header's trailing edge, and the target's extra width reaches toward the title instead.
+          .frame(width: StopTarget.width, height: StopTarget.height, alignment: .trailing)
           .contentShape(Rectangle())
           .padding(.vertical, (StopTarget.mark - StopTarget.height) / 2)
       }
@@ -195,7 +199,7 @@ enum StopTarget {
   static let height: CGFloat = mark + AgentList.spacing
 }
 
-/// How far the expanded island's rows stand in from its sides, in points, clear of the curve of its corners.
+/// How far the expanded island's header and rows stand in from its sides, in points, clear of the curve of its corners.
 enum ExpandedInset {
   static let side: CGFloat = 8
 }
@@ -208,8 +212,67 @@ struct CompactMark: View {
     if state.waiting > 0 {
       Image("Inbox").foregroundStyle(Color("Attention"))
     } else {
-      Image(state.mark).foregroundStyle(state.tone)
+      StateMark(state: state).foregroundStyle(state.tone)
     }
+  }
+}
+
+/// Where the agents stand, as the panel marks it: its working mark while any works, its done mark once none does.
+struct StateMark: View {
+  let state: AgentsActivityAttributes.ContentState
+
+  var body: some View {
+    if state.running > 0 {
+      WorkingMark()
+    } else {
+      Image("TaskStatusDone")
+    }
+  }
+}
+
+/// The panel's working mark (`@repo/ui`'s `WorkingMark`): eight 3 pt cells
+/// lapped round a 3×3 grid 2 pt apart in a 16 pt side, faint, and two
+/// chasers each with a fainter tail, in the ink around it. Note that it
+/// stands on the panel's resting frame, mid-lap, which lights four cells
+/// and reads as working, since a Live Activity is drawn once for each
+/// update rather than frame by frame, as the app holds its own mark still
+/// where the reader reduces motion.
+struct WorkingMark: View {
+  private static let cell: CGFloat = 3
+  private static let pitch: CGFloat = 5
+  private static let side: CGFloat = 16
+  private static let inset = (Self.side - (2 * Self.pitch + Self.cell)) / 2
+
+  /// The cells of the track, column and row, in the order the chasers lap them.
+  private static let track: [(column: Int, row: Int)] = [
+    (0, 0), (1, 0), (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 1),
+  ]
+
+  /// The chasers and their tails on the resting frame: the track cell each stands on, and how strong it stands.
+  private static let dots: [(cell: Int, shade: Double)] = [(1, 1), (0, 0.6), (5, 1), (4, 0.6)]
+
+  var body: some View {
+    ZStack(alignment: .topLeading) {
+      ForEach(Self.track.indices, id: \.self) { index in
+        square(index).opacity(0.3)
+      }
+      ForEach(Self.dots.indices, id: \.self) { index in
+        square(Self.dots[index].cell).opacity(Self.dots[index].shade)
+      }
+    }
+    .frame(width: Self.side, height: Self.side, alignment: .topLeading)
+    .accessibilityHidden(true)
+  }
+
+  /// The rounded square on the track cell at `index`.
+  private func square(_ index: Int) -> some View {
+    let place = Self.track[index]
+
+    return RoundedRectangle(cornerRadius: Self.cell / 4)
+      .frame(width: Self.cell, height: Self.cell)
+      .offset(
+        x: Self.inset + CGFloat(place.column) * Self.pitch,
+        y: Self.inset + CGFloat(place.row) * Self.pitch)
   }
 }
 
@@ -233,9 +296,6 @@ extension AgentsActivityAttributes.ContentState {
 
   /// How many asks need the member, in the panel's words (`NEEDS_YOU` in `@repo/features/inbox-list-model`): "1 needs you", "3 need you".
   var waitingText: String { "\(waiting) \(waiting == 1 ? "needs" : "need") you" }
-
-  /// The panel's own status mark, from its asset catalog: in progress while agents work, done once none does.
-  var mark: String { running > 0 ? "TaskStatusInProgress" : "TaskStatusDone" }
 
   /// The count's tone: the working blue, or the done green once none works. Copper is left for what needs the member.
   var tone: Color { Color(running > 0 ? "Working" : "Complete") }

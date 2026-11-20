@@ -122,8 +122,8 @@ take, so no session is handed off. Its consent is the system's
 authentication session (`src/host/auth-session.ts`, under
 `@repo/credentials`' `authSessionConsent`), which catches the sign-in's
 HTTPS callback on `vespin.dev` through the `webcredentials:` associated
-domain, and its tokens are sealed in the settings file under a key the
-Keychain keeps (`src/host/keychain-cipher.ts`). The
+domain, and its tokens are kept in the Keychain itself
+(`src/host/keychain-tokens.ts`). The
 root layout stands the tabs and Settings behind the account and the
 sign-in screen in front of them otherwise. A `vespin.dev` link the app
 draws is routed by `src/app/+native-intent.tsx` through

@@ -8,6 +8,8 @@ import {
   Menu,
   ProgressView,
   ScrollView,
+  Spacer,
+  Text,
   TextField,
   type TextFieldRef,
   type TextFieldSelection,
@@ -180,9 +182,143 @@ type ComposerProps = {
   readonly tools?: ReactNode;
   /** What stands at the end of the row under the field before Send, such as the model chip, as the desktop composer stands its model picker at its foot's end; none on a thread's composer. */
   readonly trailing?: ReactNode;
+  /** Dictate, just before Send at the row's end, and the strip the row becomes while a dictation records, as the desktop composer's (`dictation-strip.tsx`); none where the composer takes none. */
+  readonly dictation?: ComposerDictation | undefined;
   /** The names a flow finds the field and the + by, where its holder names its own. */
   readonly testIds?: { readonly field: string; readonly add: string } | undefined;
 };
+
+/** Where a dictation stands: none under way, its voice recording, or its clip being heard as words. */
+export const DICTATION_PHASE = {
+  IDLE: "idle",
+  RECORDING: "recording",
+  TRANSCRIBING: "transcribing",
+} as const;
+
+export type DictationPhase = (typeof DICTATION_PHASE)[keyof typeof DICTATION_PHASE];
+
+/** A composer's dictation, as the desktop's box offers it: where it stands, when its recording began, and its three presses. */
+export interface ComposerDictation {
+  readonly phase: DictationPhase;
+  /** When the recording began, which the strip's clock counts from; none while nothing records. */
+  readonly startedAt: number | undefined;
+  /** Opens the microphone and starts recording. */
+  readonly onStart: () => void;
+  /** Drops the recording unsent, as the desktop strip's ✕ does. */
+  readonly onCancel: () => void;
+  /** Sends the recording to be heard as words, as the strip's ✓ does. */
+  readonly onFinish: () => void;
+}
+
+/** The desktop's words for a dictation's presses and its wait (`dictation-strip.tsx`). */
+const DICTATION_WORDS = {
+  DICTATE: "Dictate",
+  CANCEL: "Cancel",
+  FINISH: "Done",
+  TRANSCRIBING: "Transcribing",
+} as const;
+
+/** How often the strip's clock counts on, in milliseconds. */
+const CLOCK_TICK_MS = 1_000;
+
+/** How long a recording has run, as the strip says it: minutes and seconds, "0:07". */
+function clockWords(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1_000));
+
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** The strip's clock: how long the recording has run, counting on each second while it stands. */
+function DictationClock({ startedAt }: { readonly startedAt: number | undefined }) {
+  const colors = useColors();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+
+    return () => clearInterval(tick);
+  }, []);
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE }),
+        SwiftModifiers.monospacedDigit(),
+        foregroundStyle(colors.TEXT_MUTED),
+      ]}
+    >
+      {clockWords(startedAt === undefined ? 0 : now - startedAt)}
+    </Text>
+  );
+}
+
+/** One of the dictation's presses: its glyph alone at a press's size, in the muted ink, heard by its words. */
+function DictationPress({
+  glyph,
+  label,
+  onPress,
+}: {
+  readonly glyph: Glyph;
+  readonly label: string;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.LEAD + 2);
+
+  return (
+    <Button
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("borderless"),
+        accessibilityLabel(label),
+        accessibilityIdentifier(`dictation-${label.toLowerCase()}`),
+      ]}
+    >
+      <Image {...glyphImage(glyph)} size={size} color={colors.TEXT_MUTED} modifiers={PRESS_FRAME} />
+    </Button>
+  );
+}
+
+/**
+ * The row under the field while a dictation stands, as the desktop's strip
+ * stands at its box's foot: ✕, which drops the recording, how long it has
+ * run, and ✓, which sends it to be heard; and, once sent, that it is being
+ * heard, under the system's spinner, until the words land in the field.
+ */
+function DictationStrip({ dictation }: { readonly dictation: ComposerDictation }) {
+  const colors = useColors();
+
+  if (dictation.phase === DICTATION_PHASE.TRANSCRIBING) {
+    return (
+      <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
+        <ProgressView modifiers={[...PRESS_FRAME, tint(colors.TEXT_MUTED)]} />
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {DICTATION_WORDS.TRANSCRIBING}
+        </Text>
+        <Spacer />
+      </HStack>
+    );
+  }
+
+  return (
+    <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
+      <DictationPress
+        glyph={GLYPH.REMOVE}
+        label={DICTATION_WORDS.CANCEL}
+        onPress={dictation.onCancel}
+      />
+      <DictationClock startedAt={dictation.startedAt} />
+      <Spacer />
+      <DictationPress
+        glyph={GLYPH.CHECK}
+        label={DICTATION_WORDS.FINISH}
+        onPress={dictation.onFinish}
+      />
+    </HStack>
+  );
+}
 
 /** An act Send stands for while the field is empty, as the panel's empty Send reads Got it on a notice. */
 export interface ComposerSendAs {
@@ -494,8 +630,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const empty = words.trim() === "" && !sendable;
   const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
   const rowed = stacked(props);
-  // Note that a field over a row of controls opens to two lines once a word is typed, as the desktop composer's does, so what is typed has room before it grows.
-  const height = rowed && words !== "" ? lineLimit({ min: 2, max: lines }) : lineLimit(lines);
+  // Note that the field stands one line until its words wrap, then grows to its most. The limit is a range, because `@expo/ui` draws a range and a bare limit down two branches, and a switch between them made the field anew, dropping the keyboard.
+  const height = lineLimit({ min: 1, max: lines });
 
   const send =
     onSend === undefined
@@ -589,7 +725,12 @@ function ComposerRow({
   readonly props: ComposerProps;
   readonly parts: ComposerParts;
 }) {
-  const { addMenu, onAdd, tools, trailing, testIds } = props;
+  const { addMenu, onAdd, tools, trailing, testIds, dictation } = props;
+
+  // Note that a dictation under way stands its strip in the row's place, as the desktop's strip stands in its box's foot.
+  if (dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE) {
+    return <DictationStrip dictation={dictation} />;
+  }
 
   return (
     <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
@@ -600,6 +741,13 @@ function ComposerRow({
         </HStack>
       </ScrollView>
       {trailing}
+      {dictation === undefined ? null : (
+        <DictationPress
+          glyph={GLYPH.DICTATE}
+          label={DICTATION_WORDS.DICTATE}
+          onPress={dictation.onStart}
+        />
+      )}
       {parts.call}
       {parts.send}
     </HStack>
@@ -624,7 +772,8 @@ export function Composer(props: ComposerProps) {
 
   return (
     <GlassBar
-      field
+      // Note that a field over a row of controls stands on the glass alone, as the desktop's box stands its field and its row on one ground, with no filled box of ours behind the words.
+      field={!rowed}
       head={props.head}
       foot={rowed ? <ComposerRow props={props} parts={parts} /> : undefined}
       above={props.above}

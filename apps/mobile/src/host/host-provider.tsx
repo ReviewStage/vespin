@@ -21,7 +21,12 @@ import {
 } from "react";
 import { AppState, Platform } from "react-native";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
-import { noteHostStarting, noteHostStood } from "../launch-phases.js";
+import {
+  LAUNCH_PHASE,
+  noteHostStarting,
+  noteHostStood,
+  noteLaunchPhase,
+} from "../launch-phases.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
@@ -237,6 +242,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     startMobileHost(launchOptions()).then(
       async (host) => {
         started = host;
+        noteLaunchPhase(LAUNCH_PHASE.STARTED);
         const client = new QueryClient();
         const following = followAppStateInto(host.bridge, client);
         stopFollowing = following.stop;

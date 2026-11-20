@@ -207,9 +207,11 @@ env:
 # The model, its effort, Fast and the permission mode stand once, in the
 # model chip's sheet at the end of the composer's row, as the desktop's
 # model chip holds them; ⋯ no longer offers Options. Note that the menu is
-# let go first, by a tap on the transcript's top.
+# let go first, by a tap on the transcript at the window's leading edge,
+# since on the iPhone the menu, which drops from ⋯ at the trailing edge,
+# reaches the middle of its top, where a tap opened Copy transcript.
 - tapOn:
-    point: "50%, 25%"
+    point: "4%, 50%"
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn:

@@ -1,11 +1,11 @@
-// launch-phases.ts -- how long a launch took to reach each of its phases, the bundle evaluated, the account read, the local copy opened and the host stood, for `app:ready` to count beside its own time.
+// launch-phases.ts -- how long a launch took to reach each of its phases, the bundle evaluated, the account read, the local copy opened, the host composed and stood, and the Inbox first grouped, and how many documents it took, for `app:ready` to count beside its own time.
 
 /** React Native's own startup marks, which its `performance` holds beside the web's and its types leave out. */
 interface StartupPerformance {
   readonly rnStartupTiming?: { readonly startTime?: number | null };
 }
 
-/** A launch's phases before its host stands, in the order a launch reaches them. */
+/** A launch's phases, in the order a launch reaches them. */
 export const LAUNCH_PHASE = {
   /** The root layout's module evaluated, so the bundle's eager modules have run. */
   EVALUATED: "evaluated",
@@ -13,6 +13,10 @@ export const LAUNCH_PHASE = {
   ACCOUNT: "account",
   /** The host's local copy first opened. */
   LOCAL: "local",
+  /** The host composed, before its first document is read. */
+  STARTED: "started",
+  /** The Inbox's holders first grouped from a document (`useInboxGroupsIn`). */
+  INBOX: "inbox",
 } as const;
 
 export type LaunchPhase = (typeof LAUNCH_PHASE)[keyof typeof LAUNCH_PHASE];
@@ -22,6 +26,9 @@ let stood: { readonly ms: number | undefined } | undefined;
 
 /** How long after the launch's start each phase was first reached; a phase not yet reached is absent. */
 const reached = new Map<LaunchPhase, number | undefined>();
+
+/** How many documents the host wrote into the screens' client since it started. */
+let delivered = 0;
 
 /**
  * The time since React Native's own start of this launch, in milliseconds, or
@@ -44,8 +51,21 @@ export function sinceLaunch(): number | undefined {
 /** Notes that the host starts, clearing what an earlier start noted, the bundle's evaluation aside. */
 export function noteHostStarting(): void {
   stood = undefined;
+  delivered = 0;
   reached.delete(LAUNCH_PHASE.ACCOUNT);
   reached.delete(LAUNCH_PHASE.LOCAL);
+  reached.delete(LAUNCH_PHASE.STARTED);
+  reached.delete(LAUNCH_PHASE.INBOX);
+}
+
+/** Notes that the host wrote one more document into the screens' client. */
+export function noteDelivered(): void {
+  delivered += 1;
+}
+
+/** How many documents the host wrote into the screens' client since it started. */
+export function launchDelivered(): number {
+  return delivered;
 }
 
 /** Notes that the launch reached `phase`, the first time alone, so a later read or open of the same thing moves nothing. */

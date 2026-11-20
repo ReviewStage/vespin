@@ -1,3 +1,4 @@
+import { atWordAround } from "@repo/features/at-word";
 import {
   INLINE_MARK,
   INLINE_SPAN,
@@ -45,13 +46,7 @@ import {
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
-import {
-  atWordAround,
-  chipOverSelection,
-  chipSpacing,
-  spacedChip,
-  typedAtChipSpace,
-} from "./chip-spacing.js";
+import { chipOverSelection, chipSpacing, spacedChip, typedAtChipSpace } from "./chip-spacing.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,

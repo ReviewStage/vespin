@@ -7,7 +7,11 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 import { Image as Photo, PixelRatio, Text, useColorScheme, View } from "react-native";
 import { CHIP_MARK, type ChipMark, type ChipMarkOf } from "./chip-mark-model.js";
 import { type Glyph, glyphSymbol } from "./glyph.js";
-import { INTEGRATION_MARK_ASSET, INTEGRATION_MARK_TEMPLATE } from "./integration-marks.js";
+import {
+  INTEGRATION_MARK_ASSET,
+  INTEGRATION_MARK_TEMPLATE,
+  LINK_SITE_MARK_ASSET,
+} from "./integration-marks.js";
 import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./marks.js";
 import { type BrandColors, toneColor } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
@@ -112,6 +116,28 @@ function PictureOverLetters({
 /** The share of a face or tile its one letter stands at, as `Avatar`'s and `WorkspaceTile`'s. */
 const LETTER_SCALE = 0.5;
 
+/** A provider's or a site's mark from the asset catalog, the desktop's own vector, a template mark in the muted ink. */
+function ProviderMarkImage({
+  asset,
+  template,
+  size,
+  colors,
+}: {
+  readonly asset: string;
+  readonly template: boolean;
+  readonly size: number;
+  readonly colors: BrandColors;
+}) {
+  return (
+    <Photo
+      source={{ uri: asset }}
+      style={{ width: size, height: size, tintColor: template ? colors.TEXT_MUTED : undefined }}
+      resizeMode="contain"
+      accessibilityElementsHidden
+    />
+  );
+}
+
 /** A chip's mark at `size` points, as the panel's chip draws its entity's. */
 export function ChipMarkView({
   mark,
@@ -153,15 +179,20 @@ export function ChipMarkView({
       );
     case CHIP_MARK.PROVIDER:
       return (
-        <Photo
-          source={{ uri: INTEGRATION_MARK_ASSET[mark.provider] }}
-          style={{
-            width: size,
-            height: size,
-            tintColor: INTEGRATION_MARK_TEMPLATE.has(mark.provider) ? colors.TEXT_MUTED : undefined,
-          }}
-          resizeMode="contain"
-          accessibilityElementsHidden
+        <ProviderMarkImage
+          asset={INTEGRATION_MARK_ASSET[mark.provider]}
+          template={INTEGRATION_MARK_TEMPLATE.has(mark.provider)}
+          size={size}
+          colors={colors}
+        />
+      );
+    case CHIP_MARK.SITE:
+      return (
+        <ProviderMarkImage
+          asset={LINK_SITE_MARK_ASSET[mark.site]}
+          template={INTEGRATION_MARK_TEMPLATE.has(mark.site)}
+          size={size}
+          colors={colors}
         />
       );
     case CHIP_MARK.TILE:

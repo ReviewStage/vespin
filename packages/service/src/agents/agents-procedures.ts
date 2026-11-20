@@ -58,6 +58,7 @@ import { runtimeChoiceRefusal } from "@repo/features/agent-runtime-models";
 import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
+  AGENT_KIND,
   AGENT_LIST_ARCHIVED,
   AGENT_MACHINE,
   type AgentPullRequest,
@@ -508,6 +509,9 @@ export function agentsProcedures(
      * as a `model` line at once (`runnerChoiceApplied`). A permission mode,
      * set only by a member who controls the agent and one that asks only on
      * Claude Code, reaches it from its next turn, which the answer says.
+     * A face, a Manager's alone and refused as invalid for a coder, is
+     * drawn wherever the Manager is from the write on, worn by another
+     * Manager of the workspace or not.
      */
     change: signedIn.change.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
@@ -558,6 +562,20 @@ export function agentsProcedures(
         return yield* committedAgent(
           userId,
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { disabledServers })),
+        );
+      }
+
+      if ("face" in body) {
+        // Note that only a Manager wears a face, so a coder asked for one is refused rather than not found.
+        if (agent.kind !== AGENT_KIND.MANAGER) {
+          return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+        }
+
+        const { face } = body;
+
+        return yield* committedAgent(
+          userId,
+          yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { face })),
         );
       }
 

@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, the skills a `/` offers, and the line saying the field holds a sent message's words to send in its place.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, and the line saying the field holds a sent message's words to send in its place.
 
 import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -12,7 +12,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { GLYPH, glyphImage } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { AvatarPhoto } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -32,24 +32,41 @@ function detachWords(name: string): string {
   return `Remove ${name}`;
 }
 
-/** One file attached to the message, by the name the message carries it under ("Picture 1", "Pasted text 1.txt"): a picture with the address its thumbnail draws from, such as a `data:` address of its bytes, or a long paste taken as a text file, which has none. */
+/** One file attached to the message, by the name the message carries it under ("Picture 1", "Pasted text 1.txt"): a picture with the address its thumbnail draws from, such as a `data:` address of its bytes, or a long paste taken as a text file, which has none and says what it holds under its name instead ("12 lines"). */
 export type AttachedPicture = {
   readonly id: string;
   readonly name: string;
   readonly address?: string | undefined;
+  readonly detail?: string | undefined;
 };
+
+/** How wide a file's chip stands at most, its name cut short past it, as the panel's chip cuts a long name. */
+const FILE_CHIP_WIDTH = 200;
 
 /** Does nothing, for a thumbnail's load and failure, which the composer has no use for: its own bytes are drawn, and the × stands either way. */
 function ignore() {}
 
-/** A pasted text file's tile, a thumbnail's size: the document glyph on the well. */
-function TextFileTile() {
+/** A pasted text file's chip, as tall as a thumbnail, as the panel's chip draws a file: the document glyph, then its name over what it holds ("12 lines"), on the well, room left at its trailing corner for its ×. */
+function TextFileChip({
+  name,
+  detail,
+}: {
+  readonly name: string;
+  readonly detail?: string | undefined;
+}) {
   const colors = useColors();
 
   return (
-    <ZStack
+    <HStack
+      spacing={SPACE.TIGHT * 2}
       modifiers={[
-        frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE }),
+        SwiftModifiers.padding({ leading: SPACE.ROW, trailing: SPACE.ROW + DETACH_MARK * 2 }),
+        frame({
+          minHeight: THUMBNAIL.SIZE,
+          maxHeight: THUMBNAIL.SIZE,
+          maxWidth: FILE_CHIP_WIDTH,
+          alignment: "leading",
+        }),
         SwiftModifiers.background(
           colors.WELL,
           SwiftModifiers.shapes.roundedRectangle({ cornerRadius: THUMBNAIL.CORNER }),
@@ -57,13 +74,36 @@ function TextFileTile() {
       ]}
     >
       <Image {...glyphImage(GLYPH.FILE_TEXT)} size={MARK_SIZE.LEAD} color={colors.TEXT_MUTED} />
-    </ZStack>
+      <VStack alignment="leading" spacing={0}>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT),
+            lineLimit(1),
+          ]}
+        >
+          {name}
+        </Text>
+        {detail === undefined ? null : (
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.TIME }),
+              foregroundStyle(colors.TEXT_MUTED),
+              lineLimit(1),
+            ]}
+          >
+            {detail}
+          </Text>
+        )}
+      </VStack>
+    </HStack>
   );
 }
 
 /**
  * The files attached to the message as a row of thumbnails, a pasted text
- * file as a tile of the same size, scrolling sideways where they outrun the
+ * file as a chip as tall, by its name and how many lines it runs to, as the
+ * panel's chip says a file, scrolling sideways where they outrun the
  * bar, as Messages and the panel show what a message carries before it
  * goes. Note that only the × in a thumbnail's corner takes the file off, so
  * a press meant to look at a picture never removes it; VoiceOver hears each
@@ -88,10 +128,14 @@ export function AttachedPictures({
           <ZStack
             key={picture.id}
             alignment="topTrailing"
-            modifiers={[frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE })]}
+            modifiers={
+              picture.address === undefined
+                ? []
+                : [frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE })]
+            }
           >
             {picture.address === undefined ? (
-              <TextFileTile />
+              <TextFileChip name={picture.name} detail={picture.detail} />
             ) : (
               <AvatarPhoto
                 address={picture.address}
@@ -135,6 +179,156 @@ const SUGGESTIONS_SHOWN = 4;
 const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
 
 /**
+ * One row a composer's head offers over the field, as a `/` offers a skill
+ * and an `@` a mention: its glyph, its words, and a muted line after them,
+ * the row's whole width taking the press. Note that at an accessibility
+ * size its words wrap rather than cut.
+ */
+function SuggestionRow({
+  glyph,
+  title,
+  detail,
+  onPress,
+}: {
+  readonly glyph: Glyph;
+  readonly title: string;
+  readonly detail?: string | undefined;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  const large = useAccessibilitySize();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const lines = large ? [] : [lineLimit(1)];
+
+  return (
+    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(title)]}>
+      {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the row's words still picks it. */}
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[
+          frame({
+            minHeight: SUGGESTION_HEIGHT,
+            maxWidth: Number.POSITIVE_INFINITY,
+            alignment: "leading",
+          }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        <Image {...glyphImage(glyph)} size={size} color={colors.TEXT_MUTED} />
+        <VStack alignment="leading" spacing={1}>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
+              foregroundStyle(colors.TEXT),
+              ...lines,
+            ]}
+          >
+            {title}
+          </Text>
+          {detail === undefined || detail === "" ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                ...lines,
+              ]}
+            >
+              {detail}
+            </Text>
+          )}
+        </VStack>
+      </HStack>
+    </Button>
+  );
+}
+
+/** One thing an `@` offers: its id, its kind's glyph, the name it goes under, and what its row says after the name. */
+export type MentionSuggestion = {
+  readonly id: string;
+  readonly glyph: Glyph;
+  readonly name: string;
+  readonly detail?: string | undefined;
+};
+
+/** A group of what an `@` offers, under the panel's heading, each row led by its kind's glyph, since Suggested holds several kinds. */
+export type MentionSuggestionGroup = {
+  readonly title: string;
+  readonly rows: readonly MentionSuggestion[];
+};
+
+/**
+ * What an `@` being typed offers, as the panel's mention picker groups it:
+ * each group under its small muted heading, its rows led by their kind's
+ * glyph, a person's "You" or address and a task's key after the name, and
+ * the row picked written into the message; what stands where nothing
+ * matches said in the muted ink. It stands over the field inside the
+ * composer's glass, as the skills a `/` offers do, and scrolls past a few
+ * rows, so the field stays in sight over the keyboard.
+ */
+export function MentionSuggestions({
+  groups,
+  empty,
+  onPick,
+}: {
+  readonly groups: readonly MentionSuggestionGroup[];
+  /** What stands where nothing is offered, such as no result matching. */
+  readonly empty: string | undefined;
+  readonly onPick: (group: string, id: string) => void;
+}) {
+  const colors = useColors();
+  const large = useAccessibilitySize();
+
+  if (groups.length === 0) {
+    if (empty === undefined) return null;
+
+    return (
+      <Text
+        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+      >
+        {empty}
+      </Text>
+    );
+  }
+
+  const shown = groups.reduce((count, group) => count + group.rows.length, 0);
+
+  const rows = (
+    <VStack alignment="leading" spacing={SPACE.TIGHT}>
+      {groups.map((group) => (
+        <VStack key={group.title} alignment="leading" spacing={0}>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
+              foregroundStyle(colors.TEXT_MUTED),
+              SwiftModifiers.accessibilityAddTraits(["isHeader"]),
+            ]}
+          >
+            {group.title}
+          </Text>
+          {group.rows.map((row) => (
+            <SuggestionRow
+              key={row.id}
+              glyph={row.glyph}
+              title={row.name}
+              detail={row.detail}
+              onPress={() => onPick(group.title, row.id)}
+            />
+          ))}
+        </VStack>
+      ))}
+    </VStack>
+  );
+
+  if (large || shown <= SUGGESTIONS_SHOWN) return rows;
+
+  return (
+    <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
+      {rows}
+    </ScrollView>
+  );
+}
+
+/**
  * The skills a `/` being typed offers, as a list over the field inside the
  * composer's glass, right above the keyboard, as Messages offers its
  * suggestions: each its `/name` and a muted line of what it is for, written
@@ -153,10 +347,8 @@ export function SkillSuggestions({
   readonly onPick: (name: string) => void;
 }) {
   const colors = useColors();
+  // Note that at an accessibility size the list stands whole, since four rows of a fixed height showed about two.
   const large = useAccessibilitySize();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-  // Note that at an accessibility size a skill's name and what it is for wrap rather than cut, and the list stands whole, since four rows of a fixed height showed about two.
-  const lines = large ? undefined : 1;
 
   if (skills.length === 0) {
     if (empty === undefined) return null;
@@ -173,48 +365,13 @@ export function SkillSuggestions({
   const rows = (
     <VStack alignment="leading" spacing={0}>
       {skills.map((skill) => (
-        <Button
+        <SuggestionRow
           key={skill.name}
+          glyph={GLYPH.SKILL}
+          title={skill.word}
+          detail={skill.detail}
           onPress={() => onPick(skill.name)}
-          modifiers={[buttonStyle("plain"), accessibilityLabel(skill.word)]}
-        >
-          {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the skill's words still picks it. */}
-          <HStack
-            spacing={SPACE.ROW}
-            modifiers={[
-              frame({
-                minHeight: SUGGESTION_HEIGHT,
-                maxWidth: Number.POSITIVE_INFINITY,
-                alignment: "leading",
-              }),
-              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-            ]}
-          >
-            <Image {...glyphImage(GLYPH.SKILL)} size={glyph} color={colors.TEXT_MUTED} />
-            <VStack alignment="leading" spacing={1}>
-              <Text
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
-                  foregroundStyle(colors.TEXT),
-                  ...(lines === undefined ? [] : [lineLimit(lines)]),
-                ]}
-              >
-                {skill.word}
-              </Text>
-              {skill.detail === "" ? null : (
-                <Text
-                  modifiers={[
-                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                    foregroundStyle(colors.TEXT_MUTED),
-                    ...(lines === undefined ? [] : [lineLimit(lines)]),
-                  ]}
-                >
-                  {skill.detail}
-                </Text>
-              )}
-            </VStack>
-          </HStack>
-        </Button>
+        />
       ))}
     </VStack>
   );

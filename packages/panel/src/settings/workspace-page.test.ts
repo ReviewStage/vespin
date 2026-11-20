@@ -620,12 +620,10 @@ beforeEach(() => {
 
       return quietHold();
     },
-    // Note that the token repositories' read waits where the test holds it, as one still out on the wire.
+    // Note that every follow of the token repositories waits where the test holds them, as one read still out on the wire, because opening GitHub's page follows them again.
     [ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW]: (input) => {
       sent.push({ kind: ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW, payload: input });
-      const held = tokenReadHeld;
-      tokenReadHeld = undefined;
-      void (held ?? Promise.resolve()).then(() => layTokenRepositories(input.workspaceId));
+      void (tokenReadHeld ?? Promise.resolve()).then(() => layTokenRepositories(input.workspaceId));
 
       return quietHold();
     },

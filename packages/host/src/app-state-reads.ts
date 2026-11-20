@@ -24,7 +24,7 @@ import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { TaskSummary } from "@repo/features/task-wire";
 import type { TaskListParts } from "@repo/features/tasks-view";
-import { HOST_LIVE } from "@repo/features/tasks-view";
+import { HOST_LIVE, TASKS_READ } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
 import {
   type AccountExperiment,
@@ -669,12 +669,17 @@ export type InboxFeed = (typeof INBOX_FEED)[keyof typeof INBOX_FEED];
  * Where the account's feed of every Inbox thread stands, as a `select`: on
  * its first read until it answers, which an Inbox says rather than standing
  * empty, refused where that read failed, and answered once it holds rows,
- * a later failure leaving the rows it held standing.
+ * a later failure leaving the rows it held standing. Note that rows held
+ * while the task list is still being read or drawn read as the first read
+ * still, since the Inbox groups its threads under the list's tasks
+ * (`inboxGroupsIn`), and would stand empty until the list is drawn.
  */
 export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
   const feed = state[LIVE_READ.INBOX_ITEMS];
+  const { listStatus } = state.tasks;
+  const listing = listStatus === TASKS_READ.IDLE || listStatus === TASKS_READ.READING;
 
-  if (feed.rows !== undefined) return INBOX_FEED.ANSWERED;
+  if (feed.rows !== undefined) return listing ? INBOX_FEED.READING : INBOX_FEED.ANSWERED;
 
   return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
 }

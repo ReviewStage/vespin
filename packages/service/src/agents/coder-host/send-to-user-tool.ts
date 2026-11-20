@@ -7,7 +7,8 @@
  * calls alone. The call stores nothing of its own: its input stays in the
  * transcript as every call's does, where the panel reads it as the
  * Manager's message. So this door only holds the input to its bound and
- * refuses what is not one, or a caller that is no Manager.
+ * refuses what is not one, a caller that is no Manager, or a send on a
+ * spoken turn, whose reply is its plain text the voice says.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -20,6 +21,7 @@ import { Clock, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
+import { readNativeTurnHanded } from "./turn-message.js";
 
 /** The most characters one message may spell. */
 const SEND_TO_USER_CHARS = 8_000;
@@ -30,6 +32,7 @@ const SEND_TO_USER_REFUSAL = {
   TOO_LONG: (length: number) =>
     `Not sent: text is ${length} characters, over the ${SEND_TO_USER_CHARS} one message may spell; say it shorter, or in two messages.`,
   NOT_MANAGER: "Not sent: only a Manager sends to its chat.",
+  SPOKEN: "You're on a call: answer in plain text; the voice will say it.",
 } as const;
 
 const SEND_TO_USER_INPUT = Schema.Struct({
@@ -68,7 +71,16 @@ function readSend(input: UnparsedWireValue): Result.Result<void, string> {
   return Result.fail(SEND_TO_USER_REFUSAL.UNREADABLE);
 }
 
-/** One call of `send_to_user`: taken where its input holds to its bound and a Manager calls it, refused with why otherwise. */
+/** The Manager's last word stamped as now, and the call taken; a stamp that fails is logged and the message still taken, since it stands in the transcript whatever the row says. */
+const stampedSaid = (managerId: string, answer: WireRecord) =>
+  Clock.currentTimeMillis.pipe(
+    Effect.flatMap((now) => stampAgentSaid(managerId, new Date(now))),
+    Effect.tapError(logStoreFailure),
+    Effect.ignore,
+    Effect.as(answer),
+  );
+
+/** One call of `send_to_user`: taken where its input holds to its bound and a Manager calls it on a typed turn, refused with why otherwise. */
 export function runSendToUser(
   call: AgentCall,
   input: UnparsedWireValue,
@@ -84,12 +96,14 @@ export function runSendToUser(
   }
 
   const answer: WireRecord = { status: ACTION_RESULT_STATUS.ACCEPTED };
+  const target = { userId: manager.userId, conversationId: manager.conversationId };
 
-  // Note that a stamp that fails is logged and the message still taken, since it stands in the transcript whatever the row says.
-  return Clock.currentTimeMillis.pipe(
-    Effect.flatMap((now) => stampAgentSaid(manager.id, new Date(now))),
-    Effect.tapError(logStoreFailure),
-    Effect.ignore,
-    Effect.as(answer),
+  // Note that a spoken turn's reply is its plain text, which the voice says, so it sends nothing (`turn-context.ts`).
+  return readNativeTurnHanded(target).pipe(
+    Effect.flatMap((handed) =>
+      handed.spoken === true
+        ? Effect.succeed(agentToolRejected(SEND_TO_USER_REFUSAL.SPOKEN))
+        : stampedSaid(manager.id, answer),
+    ),
   );
 }

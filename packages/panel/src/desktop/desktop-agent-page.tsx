@@ -214,7 +214,8 @@ function useOwnAgentThreads(
 
 /**
  * The head of an agent on no task: its name, a right-click on which opens
- * its one menu and whose Rename turns it into the name's field, and ⋯
+ * its one menu and whose Rename turns it into the name's field (a
+ * Manager's Settings… opens its card instead), and ⋯
  * holding the same menu; on a phone, its way back before them.
  */
 function OwnAgentHead({

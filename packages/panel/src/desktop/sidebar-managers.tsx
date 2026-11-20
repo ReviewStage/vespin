@@ -18,7 +18,7 @@
  * its head alone.
  */
 
-import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
+import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import type { TaskAgentPin } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
@@ -26,12 +26,12 @@ import {
   BUTTON_SIZE,
   GroupHeader,
   IconButton,
+  LIST_DENSITY,
+  List,
   motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
   PlusIcon,
-  TASK_ROW_EDGES,
-  TaskRows,
   Tooltip,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -42,7 +42,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pinnedManagersOf, useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
-import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
 import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
@@ -57,14 +57,14 @@ const MANAGER_NOUN: CountNoun = { one: "manager", many: "managers" };
 const MANAGERS_KEY = "managers";
 
 /** No Manager pinned, the same array every render. */
-const NO_MANAGERS: readonly AgentSummary[] = [];
+const NO_MANAGERS: readonly ListedAgent[] = [];
 
 /** No pull request, which a Manager's row never names, since a Manager opens none of its own. */
 const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
 /** The Managers the reader pinned, as Pinned draws them, and the agents control their rows act through. */
 export interface PinnedManagers {
-  readonly managers: readonly AgentSummary[];
+  readonly managers: readonly ListedAgent[];
   readonly agents: AgentsControl;
 }
 
@@ -109,7 +109,7 @@ export function ManagerRows({
   shown,
   onOpen,
 }: {
-  managers: readonly AgentSummary[];
+  managers: readonly ListedAgent[];
   agents: AgentsControl;
   tasks: TasksControl;
   /** Whether the rows are in sight, which their menus ask on. */
@@ -121,14 +121,7 @@ export function ManagerRows({
 
   return (
     <ReplayMask>
-      <TaskRows
-        label={MANAGERS_HEAD}
-        cells={AGENT_ROW_CELLS}
-        more={more}
-        edges={TASK_ROW_EDGES.UNCHOSEN}
-        joinsWalk
-        moves
-      >
+      <List label={MANAGERS_HEAD} density={LIST_DENSITY.DENSE} joinsWalk moves>
         {managers.map((agent) => {
           const at = agentLastMovedAt(agent);
 
@@ -152,13 +145,13 @@ export function ManagerRows({
               more={more}
               current={agent.id === openId}
               runsOn={false}
-              choosable={false}
+              look={AGENT_ROW_LOOK.SIDEBAR}
               onPress={() => onOpen(agent.id)}
               onOpenPullRequest={() => onOpen(agent.id)}
             />
           );
         })}
-      </TaskRows>
+      </List>
     </ReplayMask>
   );
 }
@@ -189,7 +182,7 @@ export function SidebarManagers({
   // The open Manager's row stands under the head while the section is folded, as Pinned's and Following's open rows do.
   const standing = listedManagers.filter((agent) => agent.id === openId);
 
-  const rows = (drawn: readonly AgentSummary[]) => (
+  const rows = (drawn: readonly ListedAgent[]) => (
     <ManagerRows managers={drawn} agents={agents} tasks={tasks} shown={shown} onOpen={onOpen} />
   );
 
