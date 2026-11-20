@@ -1,0 +1,14 @@
+== bundle PJj10094r base 2f17497503
+  built 2f17497503 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fnobody10094: fails 1 shots 2 Assert that "Ledger rounding" is visible... FAILED
+iphone-light-fassign10094: fails 0 shots 1 
+iphone-dark-fnobody10094: fails 1 shots 2 Assert that "Ledger rounding" is visible... FAILED
+iphone-dark-fassign10094: fails 0 shots 1 
+ipad27-light-fnobody10094: fails 1 shots 1 Tap on id: tasks-tab... FAILED
+ipad27-light-fassign10094: fails 1 shots 1 Tap on id: tasks-tab... FAILED
+ipad27-dark-fnobody10094: fails 1 shots 1 Tap on id: tasks-tab... FAILED
+ipad27-dark-fassign10094: fails 1 shots 1 Tap on id: tasks-tab... FAILED

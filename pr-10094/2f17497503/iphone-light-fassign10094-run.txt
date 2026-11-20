@@ -1,0 +1,17 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fassign10094
+Set orientation PORTRAIT... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on id: tasks-tab... COMPLETED
+Assert that "Launch checklist" is visible... COMPLETED
+Tap on "Launch checklist"... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Scrolling UP until "Assignee, .*" is visible with speed 40, visibility percentage 100%, timeout 10000 ms, with centering disabled... COMPLETED
+Tap on "Assignee, .*"... COMPLETED
+Assert that "No assignee" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot task-assignee-menu... COMPLETED
