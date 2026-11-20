@@ -1,10 +1,10 @@
-== bundle PJj10137b base fd33798c30
-  built fd33798c30 base app Vmain5.app ()
+== bundle PJj10137b base f4d658bc01
+  built f4d658bc01 base app Vmain5.app ()
   install 0
   typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
   export 0
   signed 0
-iphone-light-f10137: fails 2 shots 2   Tap on "More"... FAILED
-iphone-dark-f10137: fails 2 shots 2   Tap on "More"... FAILED
-ipad27-light-f10137: fails 2 shots 2   Tap on "More"... FAILED
-ipad27-dark-f10137: fails 2 shots 2   Tap on "More"... FAILED
+iphone-light-f10137: fails 0 shots 7 
+iphone-dark-f10137: fails 0 shots 8 
+ipad27-light-f10137: fails 2 shots 7   Hide Keyboard... FAILED
+ipad27-dark-f10137: fails 2 shots 7   Hide Keyboard... FAILED
