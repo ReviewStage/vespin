@@ -663,22 +663,27 @@ const WEIGHTS = [
   ["Black", "BLACK"],
 ];
 
-/** A template's three weights, each the outlines `outlinesAt` draws at that weight's half stroke, as an SF Symbols custom symbol template. */
-function templateOf(outlinesAt) {
-  const weights = WEIGHTS.map(([name, weight]) =>
+/**
+ * A template's weights (`drawn`, all three unless named), each the outlines
+ * `outlinesAt` draws at that weight's half stroke, as an SF Symbols custom
+ * symbol template. Note that every guide of the small row stands whatever
+ * weights it draws, because actool refuses a template missing one.
+ */
+function templateOf(outlinesAt, drawn = WEIGHTS) {
+  const weights = drawn.map(([name, weight]) =>
     weightGroup(name, outlinesAt(STROKE[weight] / 2, weight), weight),
   );
 
-  const [ultralight, regular, black] = weights.map(({ pathCommands }) => pathCommands.join("|"));
+  const commandRuns = new Set(weights.map(({ pathCommands }) => pathCommands.join("|")));
 
-  if (ultralight !== regular || regular !== black)
+  if (commandRuns.size > 1)
     throw new Error("lucide-symbols: the weights' outlines differ in shape and cannot interpolate");
 
   const guides = [
     `<path id="Capline-S" d="M18,${CAPLINE} l800,0"/>`,
     `<path id="H-reference" stroke="none" d="M85,145.755 L87.685,145.755 L113.369,79.287 L114.052,79.287 L114.052,76 L112.148,76 L85,145.755 Z M95.693,121.536 L130.996,121.536 L130.263,119.313 L96.474,119.313 L95.693,121.536 Z M139.15,145.755 L141.787,145.755 L114.638,76 L113.466,76 L113.466,79.287 L139.15,145.755 Z"/>`,
     `<path id="Baseline-S" d="M18,${BASELINE} l800,0"/>`,
-    ...WEIGHTS.map(([name, weight]) => marginGuides(name, weight)),
+    ...drawn.map(([name, weight]) => marginGuides(name, weight)),
     `<path id="Capline-M" d="M18,276 l800,0"/>`,
     `<path id="Baseline-M" d="M18,346 l800,0"/>`,
     `<path id="Capline-L" d="M18,476 l800,0"/>`,
@@ -703,6 +708,22 @@ export function symbolTemplate(node) {
   const strokes = strokesOf(node);
 
   return templateOf((half) => strokes.map((stroke) => outlineOf(stroke, half)));
+}
+
+/**
+ * A Lucide icon's node as a template of its Regular weight alone, the small
+ * row's guides kept, for the many glyphs only a section's chosen icon may
+ * wear (`every-lucide-symbol.mjs`). Note that it holds a third of a variable
+ * template's outlines, since all of them weighed some 20 MB in the app's
+ * Assets.car, and a section's glyph is drawn at Regular.
+ */
+export function regularSymbolTemplate(node) {
+  const strokes = strokesOf(node);
+
+  return templateOf(
+    (half) => strokes.map((stroke) => outlineOf(stroke, half)),
+    WEIGHTS.filter(([, weight]) => weight === "REGULAR"),
+  );
 }
 
 // ---------- A task's status mark ----------
