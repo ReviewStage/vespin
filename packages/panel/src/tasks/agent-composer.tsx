@@ -24,7 +24,7 @@ import {
 import { EXPERIMENT } from "@repo/settings";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
-import type { Actor } from "@repo/ui/actor-model";
+import { type Actor, actorName } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { absurd } from "effect";
@@ -101,7 +101,9 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * whatever the agent is doing: one size, the same chips, no hint under it,
  * and one placeholder asking for a follow up, since a started agent's
  * conversation opens on its description or task, because the tab's glyph and the transcript's "Working…"
- * line already say where the agent stands. The one thing that follows the agent's state is
+ * line already say where the agent stands. On a teammate's agent the
+ * placeholder names whose it is ("Message Dana’s agent"), since a message
+ * there runs on their plan. The one thing that follows the agent's state is
  * the button at the card's right, the way every chat draws it: Send while
  * there are words or files, Stop while there are neither and a turn runs,
  * which is the one Stop the tab has, and while there are neither and the
@@ -199,6 +201,11 @@ export const PLACEHOLDER = {
   FIRST: "Ask to make changes",
   FOLLOW_UP: "Send a follow-up",
 } as const;
+
+/** What a teammate's agent's box says it takes, naming whose the agent is, since a message to it runs on their plan. */
+function teammatePlaceholder(owner: Actor): string {
+  return `Message ${actorName(owner, { possessive: true })} agent`;
+}
 
 /** What a box other than an agent's own asks for, calls its field, and calls its round button, and the chord its button's hint names. */
 export interface ComposerWords {
@@ -499,7 +506,12 @@ export function AgentComposer({
     // Note that a closed box asks for nothing, since it takes nothing.
     placeholder: closed
       ? ""
-      : (wording?.placeholder ?? (followsUp ? PLACEHOLDER.FOLLOW_UP : PLACEHOLDER.FIRST)),
+      : (wording?.placeholder ??
+        (owner !== undefined
+          ? teammatePlaceholder(owner)
+          : followsUp
+            ? PLACEHOLDER.FOLLOW_UP
+            : PLACEHOLDER.FIRST)),
     label: wording?.label ?? "Message to the agent",
     maxLength,
     held,
