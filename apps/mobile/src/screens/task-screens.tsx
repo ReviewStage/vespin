@@ -792,11 +792,14 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
 export function TaskListRow({
   task,
   listing,
+  depth = 0,
   fold,
   keyed,
 }: {
   readonly task: TaskSummary;
   readonly listing: TasksListing;
+  /** How deep it stands under its parents, which sets it in, since a disclosure's rows take no inset of the system's. */
+  readonly depth?: number;
   readonly fold?: RowFold | undefined;
   readonly keyed: boolean;
 }) {
@@ -814,6 +817,7 @@ export function TaskListRow({
       finished={taskFinished(task)}
       needsYou={look.needsYou}
       agents={look.agents}
+      depth={depth}
       blocked={task.blocked === true}
       subTasks={listing.subTasksOf(task.id)}
       {...rowFace(listing.faceOf(task), listing.pictureOf)}
@@ -1029,7 +1033,7 @@ function TaskBranchRows({
   const { task } = branch.row;
 
   if (branch.branches.length === 0) {
-    return <TaskListRow task={task} listing={listing} keyed={false} />;
+    return <TaskListRow task={task} listing={listing} depth={branch.row.depth} keyed={false} />;
   }
 
   const open = parents.opened.has(task.id);
@@ -1045,6 +1049,7 @@ function TaskBranchRows({
         <TaskListRow
           task={task}
           listing={listing}
+          depth={branch.row.depth}
           keyed={false}
           fold={{ open, onToggle: toggle }}
         />
