@@ -102,7 +102,7 @@ function WorkingDots({
                   dotRefs.current[index] = cell;
                 }
           }
-          className={`ui-working-mark-dot absolute rounded-[25%] bg-current${tail ? " opacity-60" : ""}`}
+          className={`ui-working-mark-dot absolute rounded-avatar-tile bg-current${tail ? " opacity-60" : ""}`}
           data-dot={dot}
           style={{ ...cellStyle(0, 0), transform: cellTransform(restsOn) }}
         />
@@ -141,7 +141,7 @@ export function WorkingMark(): React.JSX.Element {
       {TRACK.map(([column, row], index) => (
         <span
           key={index}
-          className="ui-working-mark-track absolute rounded-[25%] bg-current opacity-30"
+          className="ui-working-mark-track absolute rounded-avatar-tile bg-current opacity-30"
           style={cellStyle(column, row)}
         />
       ))}
