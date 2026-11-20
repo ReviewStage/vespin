@@ -1,0 +1,8 @@
+== bundle PJjfnprobe base f51577b63f
+  built f51577b63f base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-ffnprobe: fails 1 shots 5 Assert that "The task could not be unpinned\..*" is visible... FAILED
+iphone-dark-ffnprobe: fails 1 shots 5 Assert that "The task could not be unpinned\..*" is visible... FAILED
