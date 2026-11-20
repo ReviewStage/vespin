@@ -63,13 +63,14 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
-  foldedTaskRows,
   NO_REPOSITORY_KEY,
   TASK_ROW_FACE,
   TASK_TREE_GROUP,
+  type TaskBranch,
   type TaskRowFace,
   type TaskTree,
   type TaskTreeGroup,
+  taskBranches,
 } from "@repo/features/task-tree-model";
 import {
   TASK_PRIORITY_ORDER,
@@ -138,6 +139,7 @@ import {
   ROW_ACTION_TONE,
   type RowAction,
   type RowAsker,
+  RowDisclosure,
   type RowFold,
   RowForEach,
   RowList,
@@ -780,9 +782,9 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
 }
 
 /**
- * One task's row, as the panel's sidebar draws it, set in by how deep it
- * stands and its fold standing in its status mark's place where it has
- * sub-tasks: the one row every list of tasks draws, the Search tab's among
+ * One task's row, as the panel's sidebar draws it, the label of its
+ * sub-tasks' disclosure where it has any, which says its fold in its long
+ * press: the one row every list of tasks draws, the Search tab's among
  * them. Its key ends the line only where `keyed` asks, as a search's finds
  * do, ⌘K's among them; a list of tasks leaves it out, as the panel's sidebar
  * does.
@@ -790,13 +792,11 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
 export function TaskListRow({
   task,
   listing,
-  depth = 0,
   fold,
   keyed,
 }: {
   readonly task: TaskSummary;
   readonly listing: TasksListing;
-  readonly depth?: number;
   readonly fold?: RowFold | undefined;
   readonly keyed: boolean;
 }) {
@@ -819,7 +819,6 @@ export function TaskListRow({
       {...rowFace(listing.faceOf(task), listing.pictureOf)}
       at={look.at}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
-      depth={depth}
       {...rowActs(task, look.unread, listing, asks, openRelation)}
       statusMenu={statusSubmenu(task, asks.setStatus)}
       preview={taskPreview(task, listing)}
@@ -997,7 +996,7 @@ function groupParents(hold: TreeHold, group: string): OpenedParents {
   };
 }
 
-/** A group's rows, a task's sub-tasks folded under it, each parent opened and shut by its chevron. */
+/** A group's rows, a task's sub-tasks folded under it by SwiftUI's own disclosure, each parent opened and shut by its chevron or its long press. */
 function FoldedRows({
   rows,
   listing,
@@ -1007,29 +1006,59 @@ function FoldedRows({
   readonly listing: TasksListing;
   readonly parents: OpenedParents;
 }) {
-  const { opened, toggle } = parents;
+  const branches = useMemo(() => taskBranches(rows), [rows]);
 
-  const folded = useMemo(
-    () => foldedTaskRows(rows, (taskId) => opened.has(taskId)),
-    [rows, opened],
+  // Note that only the group's top rows are recycled, since a parent's sub-tasks stand inside its disclosure.
+  return (
+    <RowForEach data={branches} keyOf={(branch) => branch.row.task.id}>
+      {(branch) => <TaskBranchRows branch={branch} listing={listing} parents={parents} />}
+    </RowForEach>
   );
+}
+
+/** One task's row and, where it has sub-tasks, the rows under it inside its disclosure, which the system sets in and folds. */
+function TaskBranchRows({
+  branch,
+  listing,
+  parents,
+}: {
+  readonly branch: TaskBranch;
+  readonly listing: TasksListing;
+  readonly parents: OpenedParents;
+}) {
+  const { task } = branch.row;
+
+  if (branch.branches.length === 0) {
+    return <TaskListRow task={task} listing={listing} keyed={false} />;
+  }
+
+  const open = parents.opened.has(task.id);
+  const toggle = () => parents.toggle(task.id);
 
   return (
-    <RowForEach data={folded} keyOf={(row) => row.task.id}>
-      {(row) => (
+    <RowDisclosure
+      open={open}
+      onOpenChange={(asked) => {
+        if (asked !== open) toggle();
+      }}
+      label={
         <TaskListRow
-          task={row.task}
+          task={task}
           listing={listing}
-          depth={row.depth}
           keyed={false}
-          fold={
-            row.open === undefined
-              ? undefined
-              : { open: row.open, onToggle: () => toggle(row.task.id) }
-          }
+          fold={{ open, onToggle: toggle }}
         />
-      )}
-    </RowForEach>
+      }
+    >
+      {branch.branches.map((under) => (
+        <TaskBranchRows
+          key={under.row.task.id}
+          branch={under}
+          listing={listing}
+          parents={parents}
+        />
+      ))}
+    </RowDisclosure>
   );
 }
 

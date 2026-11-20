@@ -317,27 +317,31 @@ export function taskRowFace(
   return { kind: TASK_ROW_FACE.PERSON, userId: assignee.userId, name: assignee.name };
 }
 
+/** A row of a group with the rows nested under it, each a branch of its own, as a list folds them under it. */
+export interface TaskBranch {
+  readonly row: DrawnTaskRow;
+  readonly branches: readonly TaskBranch[];
+}
+
 /**
- * A group's rows as the phone draws them under its folds: each parent row
- * open where `opened` says so and shut otherwise, and every row under a
- * shut one, however deep, left out, so a list draws each row it keeps as a
- * row of its own and can recycle them.
+ * A group's rows as the phone nests them under SwiftUI's disclosure: each
+ * row at the group's top a branch, holding the rows under it, however deep,
+ * as branches of its own, in the order the group stands them. Note that a
+ * row stands under the nearest row above it that stands shallower.
  */
-export function foldedTaskRows(
-  rows: readonly DrawnTaskRow[],
-  opened: (taskId: string) => boolean,
-): readonly DrawnTaskRow[] {
-  const shown: DrawnTaskRow[] = [];
-  let shutAt: number | undefined;
+export function taskBranches(rows: readonly DrawnTaskRow[]): readonly TaskBranch[] {
+  const top: { row: DrawnTaskRow; branches: TaskBranch[] }[] = [];
+  const path: { row: DrawnTaskRow; branches: TaskBranch[] }[] = [];
 
   for (const row of rows) {
-    // Note that a row under a shut parent stands deeper than it, and the first row back at its depth or above ends the fold.
-    if (shutAt !== undefined && row.depth > shutAt) continue;
+    while (path.length > 0 && (path.at(-1)?.row.depth ?? 0) >= row.depth) path.pop();
+    const branch = { row, branches: [] };
+    const parent = path.at(-1);
 
-    const open = row.open === undefined ? undefined : opened(row.task.id);
-    shown.push({ ...row, open });
-    shutAt = open === false ? row.depth : undefined;
+    if (parent === undefined) top.push(branch);
+    else parent.branches.push(branch);
+    path.push(branch);
   }
 
-  return shown;
+  return top;
 }

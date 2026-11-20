@@ -8,7 +8,7 @@ builds a control of its own.
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow` (a
-  task on one line, its sub-tasks folded under the panel's chevron), each
+  task on one line, its sub-tasks folded under SwiftUI's own disclosure), each
   row's acts behind a swipe from either edge, a full swipe running the
   first, and in its long press menu, which lifts the row's preview
   (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
@@ -169,14 +169,16 @@ builds a control of its own.
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
   thread, with no task, in two), `TaskRow` a task on one line, as the
-  panel's sidebar row draws it (its status ring, or a parent's fold chevron
-  in the ring's place, as the panel's row stands it with no hover; its name,
+  panel's sidebar row draws it (its status ring; its name,
   set in semibold while it has news with no unread dot; and at its end the
   stop sign of a blocked task, a thread that needs you, its sub-tasks as a
   ring and "2/5", one mark for its agents, the face of who is on it where
   that is someone other than the reader or the dashed mark where no one is,
   and when it last moved; a search's finds end in its key; its priority
-  stands on the task's own Priority chip, not the row), and `AgentRow` an agent
+  stands on the task's own Priority chip, not the row; a parent stands as the
+  label of `RowDisclosure`, SwiftUI's own `DisclosureGroup`, whose chevron at
+  the line's trailing edge folds its sub-tasks, as Files and Notes fold a
+  folder), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
   developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
