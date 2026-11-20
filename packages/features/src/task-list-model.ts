@@ -375,15 +375,6 @@ function heldAncestor(
   return undefined;
 }
 
-/** Whether a task has an ancestor `held` holds (`heldAncestor`), so it can stand under it rather than beside it; never a pinned one, which stands on its own. */
-export function hasHeldAncestor(
-  task: TaskSummary,
-  held: ReadonlySet<string>,
-  every: TasksById,
-): boolean {
-  return heldAncestor(task, (taskId) => held.has(taskId), every) !== undefined;
-}
-
 /** The task a task stands under where `tasks` holds it: its nearest ancestor `tasks` holds (`heldAncestor`). */
 function parentIn(
   task: TaskSummary,
@@ -428,6 +419,16 @@ function taskNodes(tasks: readonly TaskSummary[], every: TasksById): TaskNode[] 
   for (const task of tasks) if (!reached.has(task.id)) tree.push(node(task));
 
   return tree;
+}
+
+/**
+ * The tasks at the top of the tree `tasks` nest into (`taskNodes`), as a
+ * list nesting child tasks stands them: each no ancestor of which `tasks`
+ * holds, a pinned one, and the first of a loop of parents. Every other task
+ * stands under one of them.
+ */
+export function topTasks(tasks: readonly TaskSummary[], every: TasksById): TaskSummary[] {
+  return taskNodes(tasks, every).map((node) => node.task);
 }
 
 /** Whether a task or any task under it is one `standing` keeps drawn. */

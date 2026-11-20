@@ -1,9 +1,9 @@
 import {
-  hasHeldAncestor,
   repositoryParts,
   TASK_ORDER,
   tasksById,
   taskTime,
+  topTasks,
 } from "@repo/features/task-list-model";
 import {
   DESCRIPTION_ACTOR,
@@ -232,14 +232,14 @@ export function keptTasksDisplay(kept: KeptTasksDisplay, initial: TasksDisplay):
   };
 }
 
-/** The List until its reader changes it: by status from the work under way, the most pressing first, nothing settled, every sub-task beside its parent, the pins and sections leading, each row drawing all but its creator, its assignee saying who is on it. */
+/** The List until its reader changes it: by status from the work under way, the most pressing first, nothing settled, only the tasks at the top, each parent's row counting its sub-tasks, the pins and sections leading, each row drawing all but its creator, its assignee saying who is on it. */
 export const DEFAULT_LIST_DISPLAY: TasksDisplay = {
   grouping: TASKS_GROUPING.STATUS,
   order: TASKS_ORDER.PRIORITY,
   emptyGroups: false,
   completed: COMPLETED_WINDOW.NONE,
   pinnedFirst: true,
-  subTasks: true,
+  subTasks: false,
   properties: TASK_PROPERTY_ORDER.filter((property) => property !== TASK_PROPERTY.CREATOR),
 };
 
@@ -559,28 +559,30 @@ function standingTasks(
     }
   }
 
-  return display.subTasks ? { standing, older } : withoutSubTasks({ standing, older }, tasks);
+  return { standing, older };
 }
 
 /**
- * The standing tasks less each sub-task an ancestor of which stands too,
- * so it stands under that ancestor's card alone, and the older less each
- * one an ancestor of which stands or is older, so "+ N older" counts only
- * what showing them draws. A sub-task whose every ancestor the filter or
- * the window leaves out stands on its own, as a pinned one does, as the
- * sidebar stands a child task where no parent of it stands (`withSubTasks`).
+ * The tasks that stand as the display lays out sub-tasks: all of them where
+ * it shows sub-tasks; else those at the top of the tree the standing nest
+ * into, as the sidebar nests them (`topTasks`), so a sub-task stands only
+ * under its standing ancestor, and the older at the top of the tree they
+ * nest into beside the standing, so "+ N older" counts only what showing
+ * them draws. A sub-task whose every ancestor the filter or the window
+ * leaves out stands on its own, as a pinned one does.
  */
-function withoutSubTasks(
+function withSubTasksShown(
   { standing, older }: StandingTasks,
   every: readonly TaskSummary[],
+  display: TasksDisplay,
 ): StandingTasks {
+  if (display.subTasks) return { standing, older };
   const byId = tasksById(every);
-  const shown = new Set(standing.map(taskIdOf));
-  const kept = new Set([...shown, ...older.map(taskIdOf)]);
+  const olderIds = new Set(older.map(taskIdOf));
 
   return {
-    standing: standing.filter((task) => !hasHeldAncestor(task, shown, byId)),
-    older: older.filter((task) => !hasHeldAncestor(task, kept, byId)),
+    standing: topTasks(standing, byId),
+    older: topTasks([...standing, ...older], byId).filter((task) => olderIds.has(task.id)),
   };
 }
 
@@ -787,7 +789,9 @@ function groupedBy(
 /**
  * The List's groups: where the display leads with them, the pinned tasks
  * first, in the order handed, then each of the account's sections, in its
- * own order, then the rest under the grouping chosen. Every group holds only
+ * own order, then the rest under the grouping chosen, a sub-task among them
+ * under its parent alone where the display hides sub-tasks
+ * (`withSubTasksShown`). Every group holds only
  * the tasks that stand (`standingTasks`), and a task stands in one group
  * alone: a pin before its section, a section before its grouping's group.
  * Pinned left with no task is not drawn, though every section is, so a row
@@ -820,7 +824,8 @@ export function tasksListGroups(
     now: number;
   },
 ): readonly TasksGroup[] {
-  const { standing, older } = standingTasks(tasks, filter, display, now);
+  const stood = standingTasks(tasks, filter, display, now);
+  const { standing } = stood;
   const groups: TasksGroup[] = [];
   const placed = new Set<string>();
 
@@ -847,7 +852,9 @@ export function tasksListGroups(
     }
   }
 
-  const rest = standing.filter((task) => !placed.has(task.id));
+  // Note that a pin or a section takes its tasks before sub-tasks fold under their parents, so one the member put there stands there, as in the sidebar.
+  const folded = withSubTasksShown(stood, tasks, display);
+  const rest = folded.standing.filter((task) => !placed.has(task.id));
 
   const context = {
     filter,
@@ -858,7 +865,7 @@ export function tasksListGroups(
     members,
   };
 
-  return [...groups, ...groupedBy({ standing: rest, older }, context)];
+  return [...groups, ...groupedBy({ standing: rest, older: folded.older }, context)];
 }
 
 /**
@@ -891,7 +898,7 @@ export function tasksBoardColumns(
 ): readonly TasksGroup[] {
   const grouping = boardGrouping(display.grouping);
 
-  return groupedBy(standingTasks(tasks, filter, display, now), {
+  return groupedBy(withSubTasksShown(standingTasks(tasks, filter, display, now), tasks, display), {
     filter,
     display: { ...display, grouping },
     statusOrder: TASK_STATUS_ORDER,

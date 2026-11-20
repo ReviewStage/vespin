@@ -114,8 +114,8 @@ import type { SettledPages } from "./use-settled-pages.js";
  * groupings a dragged card can be sent, and by a person only in a shared
  * workspace; then the switches, the pins and
  * sections leading the List, empty groups, and Show sub-tasks, each
- * sub-task beside its parent, which the Board starts with off, so a parent
- * stands alone, its card counting its sub-tasks; Show completed, which of the
+ * sub-task beside its parent, which both views start with off, so a parent
+ * stands alone, its row or card counting its sub-tasks; Show completed, which of the
  * Done and Canceled tasks stand by when each was finished; then the
  * properties a row or a card draws; and Reset view while the view is not the
  * one it started as. A settled group the window leaves older tasks out of

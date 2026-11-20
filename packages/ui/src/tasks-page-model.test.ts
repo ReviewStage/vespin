@@ -299,11 +299,11 @@ test("each order runs a group's tasks its own way, a tie falling to the latest a
   expect(run(TASKS_ORDER.NAME)).toEqual(["Alpha", "Beta", "Gamma"]);
 });
 
-test("the List leads with the pins, then each section, one the view leaves empty among them, a task in one group alone, and every group holds only the tasks that stand", () => {
+test("the List leads with the pins, then each section, one the view leaves empty among them, a sub-task put there among them, a task in one group alone, and every group holds only the tasks that stand", () => {
   const tasks = [
     task("Pinned", { status: TASK_STATUS.TODO }),
     task("Pinned and shipped", { status: TASK_STATUS.DONE }),
-    task("Sectioned", { status: TASK_STATUS.TODO }),
+    task("Sectioned", { status: TASK_STATUS.TODO, parent: "Loose" }),
     task("Loose", { status: TASK_STATUS.TODO }),
   ];
 
@@ -333,7 +333,7 @@ test("the List leads with the pins, then each section, one the view leaves empty
   expect(groups(false)).toEqual([
     [
       ["status", "todo"],
-      ["Pinned", "Sectioned", "Loose"],
+      ["Pinned", "Loose"],
     ],
   ]);
 });
@@ -377,7 +377,7 @@ test("the Board stands a column for every status at first, empty ones too, the s
   ]);
 });
 
-test("the Board at first stands a sub-task only under its parent, alone where the filter leaves every ancestor out, and none in the older count; Show sub-tasks stands each beside it", () => {
+test("the Board and the List at first stand a sub-task only under its parent, alone where the filter leaves every ancestor out, and none in the older count, a loop of parents by its first; Show sub-tasks stands each beside it", () => {
   const tasks = [
     task("Invites", { status: TASK_STATUS.IN_PROGRESS, assignee: MAYA }),
     task("Invite email", { status: TASK_STATUS.TODO, parent: "Invites", assignee: DEAN }),
@@ -389,8 +389,12 @@ test("the Board at first stands a sub-task only under its parent, alone where th
     }),
   ];
 
-  const board = (display: Partial<TasksDisplay>, filter: TasksFilter = NO_TASKS_FILTER) =>
-    tasksBoardColumns(tasks, {
+  const board = (
+    display: Partial<TasksDisplay>,
+    filter: TasksFilter = NO_TASKS_FILTER,
+    shown: readonly TaskSummary[] = tasks,
+  ) =>
+    tasksBoardColumns(shown, {
       filter,
       display: { ...DEFAULT_BOARD_DISPLAY, emptyGroups: false, ...display },
       readerId: DEAN,
@@ -404,6 +408,14 @@ test("the Board at first stands a sub-task only under its parent, alone where th
   expect(
     drawn(board({}, toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.ASSIGNEE, DEAN))),
   ).toEqual([[["status", "todo"], ["Invite email"]]]);
+
+  // Note that a loop of parents, which nothing writes, still stands its first task, as the sidebar's tree does.
+  const loop = [
+    task("Loop one", { status: TASK_STATUS.TODO, parent: "Loop two" }),
+    task("Loop two", { status: TASK_STATUS.TODO, parent: "Loop one" }),
+  ];
+
+  expect(drawn(board({}, NO_TASKS_FILTER, loop))).toEqual([[["status", "todo"], ["Loop one"]]]);
   expect(drawn(board({ subTasks: true }))).toEqual([
     [
       ["status", "todo"],
