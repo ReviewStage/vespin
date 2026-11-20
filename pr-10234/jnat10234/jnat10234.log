@@ -1,0 +1,89 @@
+Auto-merging apps/mobile/AGENTS.md
+built main a292edc2d9 + #10234 287a63dafb as 7e95c475ec
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 11:18:48 15172 MB
+curve 11:19:18 15066 MB
+curve 11:19:48 13072 MB
+curve 11:20:19 12834 MB
+curve 11:20:49 12475 MB
+curve 11:21:19 12310 MB
+curve 11:21:49 12260 MB
+curve 11:22:19 12247 MB
+curve 11:22:49 12196 MB
+curve 11:23:19 11879 MB
+curve 11:23:49 11697 MB
+curve 11:24:19 12220 MB
+curve 11:24:50 12134 MB
+curve 11:25:20 12082 MB
+curve 11:25:50 12043 MB
+curve 11:26:20 11939 MB
+curve 11:26:50 11871 MB
+curve 11:27:20 11747 MB
+curve 11:27:50 11544 MB
+curve 11:28:21 11508 MB
+curve 11:28:51 11462 MB
+curve 11:29:21 11453 MB
+curve 11:29:51 11424 MB
+curve 11:30:21 11417 MB
+curve 11:30:51 11412 MB
+curve 11:31:21 11404 MB
+curve 11:31:52 11365 MB
+curve 11:32:22 11353 MB
+curve 11:32:52 11325 MB
+curve 11:33:22 11316 MB
+curve 11:33:53 11289 MB
+curve 11:34:23 15963 MB
+curve 11:34:53 15950 MB
+curve 11:35:23 15742 MB
+curve 11:35:53 15727 MB
+curve 11:36:23 15715 MB
+curve 11:36:53 15690 MB
+curve 11:37:24 15670 MB
+curve 11:37:54 15640 MB
+curve 11:38:24 15595 MB
+curve 11:38:54 15583 MB
+curve 11:39:24 15440 MB
+curve 11:39:54 15438 MB
+curve 11:40:24 15388 MB
+curve 11:40:55 15348 MB
+curve 11:41:25 15231 MB
+curve 11:41:55 15207 MB
+curve 11:42:25 15155 MB
+curve 11:42:55 15030 MB
+curve 11:43:25 14898 MB
+curve 11:43:56 14384 MB
+curve 11:44:26 14191 MB
+curve 11:44:56 14108 MB
+curve 11:45:26 13961 MB
+curve 11:45:57 13861 MB
+curve 11:46:27 13808 MB
+curve 11:46:57 13755 MB
+curve 11:47:27 13434 MB
+curve 11:47:57 13418 MB
+curve 11:48:27 13366 MB
+curve 11:48:58 13280 MB
+curve 11:49:28 13173 MB
+curve 11:49:58 13124 MB
+curve 11:50:28 13089 MB
+curve 11:50:58 13060 MB
+curve 11:51:29 13146 MB
+curve 11:51:59 13111 MB
+curve 11:52:29 13050 MB
+curve 11:52:59 12956 MB
+curve 11:53:29 12647 MB
+curve 11:54:00 12854 MB
+curve 11:54:30 12858 MB
+curve 11:55:00 12799 MB
+curve 11:55:30 12749 MB
+BUILD EXIT 0 11:56:00
+sizes: Assets.car 28744456 bytes (main Vmain4 8576376), .app 123724 KB (main 102900 KB), zipped .app 47585986 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10234.app: replacing existing signature
+p10234-iphone-light-pill-field: fails 1 shots 2 Assert that "Mention Ada for @Ad" is visible... FAILED
+p10234-iphone-dark-pill-field: fails 1 shots 2 Assert that "Mention Ada for @Ad" is visible... FAILED
+p10234-ipad27-light-pill-field: fails 1 shots 2 Assert that "Mention Ada for @Ad" is visible... FAILED
+p10234-ipad27-dark-pill-field: fails 1 shots 2 Assert that "Mention Ada for @Ad" is visible... FAILED
