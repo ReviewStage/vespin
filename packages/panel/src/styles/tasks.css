@@ -1730,17 +1730,22 @@ summary button[data-tool-agent-ref]:focus-visible {
   display: inline-flex;
 }
 /* Note that the row sizes only a glyph that is its leading mark itself, so the two inside this one take the same size. */
-.agent-queue-lead > svg {
+.agent-queue-glyph,
+.agent-queue-grip {
+  display: inline-flex;
+}
+.agent-queue-lead svg {
   width: var(--ui-control-icon);
   height: var(--ui-control-icon);
 }
-.agent-queue-lead > :last-child,
-li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :first-child,
-[data-lifted] .agent-queue-lead[data-queue-handle] > :first-child {
+/* Note that the rightmost part of each selector below is a class, so a hover on any other list's row invalidates nothing. */
+.agent-queue-grip,
+li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue-glyph,
+[data-lifted] .agent-queue-lead[data-queue-handle] .agent-queue-glyph {
   display: none;
 }
-li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-child,
-[data-lifted] .agent-queue-lead[data-queue-handle] > :last-child {
+li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue-grip,
+[data-lifted] .agent-queue-lead[data-queue-handle] .agent-queue-grip {
   display: inline-flex;
   cursor: grab;
 }
