@@ -11,12 +11,12 @@
  * whose token is not held, or will not open, is written nothing, and the
  * token is never logged or kept past the handle.
  *
- * Writing to a member
- * finds their Slack user id the first time and keeps it: through a Slack
- * account they connected themselves under Settings › Integrations, whose own
- * token `auth.test` answers their user id and team for, the first in the
- * bot's team taken; else by their email (`users.lookupByEmail`), a miss
- * kept and asked again only after `SLACK_MEMBER_MISS_LIFETIME`. A member
+ * Writing to a member finds their Slack user id the first time and keeps
+ * it: through a Slack account they connected themselves under Settings ›
+ * Integrations, whose own token `auth.test` answers their user id and team
+ * for, the first in the bot's team taken; else by their email
+ * (`users.lookupByEmail`), a miss kept and asked again only after
+ * `SLACK_MEMBER_MISS_LIFETIME`. A member
  * with no match is written nothing.
  *
  * A member who writes to the bot is found by the id kept for them, else
@@ -38,10 +38,10 @@
  * to the bound its caller names.
  *
  * `dm`, `update`, those reads, replies, joins, and leaves, and the files
- * are best-effort: whatever fails, Slack, Connect, the token, or the store, is logged
- * by a fixed line and Slack's own error code, never Slack's words or the
- * token, and answers nothing. Note that neither is to be
- * yielded inside a transaction, because each waits on Slack.
+ * are best-effort: whatever fails, Slack, Connect, the token, or the store,
+ * is logged by a fixed line and Slack's own error code, never Slack's words
+ * or the token, and answers nothing. Note that none is to be yielded inside
+ * a transaction, because each waits on Slack.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";

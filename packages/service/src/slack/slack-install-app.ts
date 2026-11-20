@@ -14,19 +14,20 @@
  * replayed, unknown, or expired installs nothing; the account must still be
  * an owner or admin of its workspace, or it lands as not permitted. Slack's
  * `error` lands as not completed: `access_denied` where the person canceled,
- * the one code Slack's guide names for the redirect; any other, such as
- * whatever an install sent to the Slack workspace's admins for approval
- * carries, which Slack does not document, is logged by its code. Nothing on the address is trusted on its own: the
- * code is exchanged at Slack (`oauth.v2.access`) under our client, with the
- * same `redirect_uri`, for the bot token, and `auth.test` on that token
- * answers the bot's own id, as Bolt's installer reads it. An install into a
- * whole Enterprise Grid org names no team, and is refused as not completed.
+ * the one code Slack's guide names for the redirect; any other, an install
+ * sent to the Slack workspace's admins for approval among them, is
+ * undocumented and logged by its code. Nothing on the address is trusted on
+ * its own: the code is exchanged at Slack (`oauth.v2.access`) under our
+ * client, with the same `redirect_uri`, for the bot token, and `auth.test` on
+ * that token answers the bot's own id, as Bolt's installer reads it. An
+ * install into a whole Enterprise Grid org names no team, and is refused as
+ * not completed.
  *
  * Slack's guide asks nothing of who approves the install beyond Slack's own
- * check that they may install apps in that Slack workspace, so neither do
- * we: the member who began it must still manage the workspace, and the
- * team is then linked to the workspace (`linkSlackInstallation`) and the bot token sealed beside it
- * (`saveSlackBotToken`), in one transaction.
+ * check that they may install apps in that Slack workspace, so neither do we:
+ * the member who began it must still manage the workspace, and the team is
+ * then linked to the workspace (`linkSlackInstallation`) and the bot token
+ * sealed beside it (`saveSlackBotToken`), in one transaction.
  *
  * The token and the code are used here and sealed or dropped; neither is
  * logged, and a failure is logged by Slack's error code alone. Whatever
