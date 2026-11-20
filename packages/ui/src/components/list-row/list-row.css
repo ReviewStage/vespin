@@ -414,6 +414,7 @@
      still reaches it, and a screen with no hover draws it at rest. */
   @media (hover: hover) {
     .ui-list-row[data-latent="true"] {
+      isolation: isolate;
       opacity: 0;
       transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
     }
@@ -632,6 +633,7 @@
     grid-column: more;
     margin-inline-start: var(--ui-control-gap);
     padding-inline-end: var(--ui-list-row-acts-inset);
+    isolation: isolate;
     opacity: 0;
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
@@ -682,8 +684,14 @@
   }
 
   /* A row that goes deeper wears its chevron at its end, shown while the
-     row is reached for or open, its room kept so nothing moves as it shows. */
+     row is reached for or open, its room kept so nothing moves as it shows.
+     Note that whatever fades on hover stands as a stacking context of
+     its own at rest too (`isolation`), because a box fading from whole
+     (`opacity: 1`) becomes one and lays its row out again, and its list
+     with it, where a box already one only repaints. A box already
+     positioned, transformed, or z-ordered in its grid is one already. */
   .ui-list-row-chevron {
+    isolation: isolate;
     opacity: 0;
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
@@ -753,7 +761,12 @@
     margin-block-start: var(--ui-list-row-inset-block);
   }
 
+  /* Note that the end and the acts keep a transform at rest and in hand
+     alike, a step or none (`translateX(0)`), never `none`, because a box
+     taking or losing a transform lays its row out again, and its list with
+     it, where a step and opacity alone only repaint. */
   .ui-list-row[data-actions="hover"] .ui-list-row-end {
+    transform: translateX(0);
     transition:
       opacity var(--ui-duration-hover) var(--ui-motion-exit),
       transform var(--ui-duration-fast) var(--ui-spring-fast);
@@ -769,12 +782,12 @@
     .ui-list-row-actions {
     opacity: 1;
     pointer-events: auto;
-    transform: none;
+    transform: translateX(0);
   }
 
   /* Note that a row offering no acts keeps its end, since nothing steps in
      for it. */
-  .ui-list-row[data-actions="hover"]:has(.ui-list-row-actions):is(
+  .ui-list-row[data-actions="hover"]:has(> .ui-list-row-actions):is(
     :has(:focus-visible),
     [data-menu-open="true"]
   ) .ui-list-row-end {
@@ -782,7 +795,7 @@
     transform: translateX(calc(-1 * var(--ui-list-row-step)));
   }
 
-  .ui-list-row[data-actions="hover"]:has(.ui-list-row-actions):is(
+  .ui-list-row[data-actions="hover"]:has(> .ui-list-row-actions):is(
       :has(:focus-visible),
       [data-menu-open="true"]
     )
@@ -795,23 +808,23 @@
     .ui-list-row[data-actions="hover"]:hover .ui-list-row-actions {
       opacity: 1;
       pointer-events: auto;
-      transform: none;
+      transform: translateX(0);
     }
 
     /* Note that a row whose only act is its ⋯ steps its end aside for it
        too, held, focused or its menu open, since there the ⋯ stands in its
        end's place (below). */
     .ui-list-row[data-actions="hover"]:is(
-        :has(.ui-list-row-actions):hover,
-        :has(.ui-list-row-more):is(:hover, :has(:focus-visible), [data-menu-open="true"])
+        :has(> .ui-list-row-actions):hover,
+        :has(> .ui-list-row-more):is(:hover, :has(:focus-visible), [data-menu-open="true"])
       ) .ui-list-row-end {
       opacity: 0;
       transform: translateX(calc(-1 * var(--ui-list-row-step)));
     }
 
     .ui-list-row[data-actions="hover"]:is(
-        :has(.ui-list-row-actions):hover,
-        :has(.ui-list-row-more):is(:hover, :has(:focus-visible), [data-menu-open="true"])
+        :has(> .ui-list-row-actions):hover,
+        :has(> .ui-list-row-more):is(:hover, :has(:focus-visible), [data-menu-open="true"])
       )
       .ui-list-row-meta {
       visibility: hidden;
@@ -827,11 +840,15 @@
      a title is cut wherever its row narrows. At rest each keeps its place
      but takes no room, standing out of the row's flow in its end's place
      (`position: absolute`, its grid area its containing block), so its
-     buttons stand where they will show. Its ⋯ is one of them, with acts or
-     without: it comes in last, in its end's place, and keeps no track of
-     its own, so a row whose only act is its ⋯ ends its metadata where a row
-     with acts does, and the times of a list stand in one column at the
-     row's end inset. Note that the acts stand clear of the ⋯ by its width
+     buttons stand where they will show. Its ⋯ comes in last, in its end's
+     place, and keeps no track of its own, so a row whose only act is its ⋯
+     ends its metadata where a row with acts does, and the times of a list
+     stand in one column at the row's end inset. Note that the ⋯ stands out
+     of the row's flow in hand too, over its end's place or clear of its
+     acts, because a box coming into the flow lays its row out again, and
+     its list with it, where its fading in only repaints; only a row with
+     neither an end nor acts brings it in, since there nothing else keeps
+     its room. The acts stand clear of the ⋯ by its width
      (`--ui-list-row-more-size`, its button's) and the gap between them,
      because they are two boxes in one track. A screen with no hover keeps
      the ⋯ in its own track beside the end, where it is always shown and
@@ -851,7 +868,7 @@
       --ui-list-row-more-size: var(--ui-space-24);
     }
 
-    .ui-list-row[data-actions="hover"]:has(.ui-list-row-actions + .ui-list-row-more) {
+    .ui-list-row[data-actions="hover"]:has(> .ui-list-row-actions + .ui-list-row-more) {
       --ui-list-row-acts-clear: calc(
         var(--ui-list-row-acts-inset) +
         var(--ui-list-row-more-size) +
@@ -864,6 +881,7 @@
     }
 
     .ui-list-row[data-actions="hover"] .ui-list-row-more {
+      position: absolute;
       grid-column: end;
       justify-self: end;
       margin-inline: 0 var(--ui-list-row-acts-inset);
@@ -875,8 +893,29 @@
     }
 
     .ui-list-row[data-actions="hover"]:not(:hover, :has(:focus-visible), [data-menu-open="true"])
-      :is(.ui-list-row-actions, .ui-list-row-more) {
+      .ui-list-row-actions {
       position: absolute;
+    }
+
+    /* Note that a lead line's ⋯ stands in the row's flow instead, since
+       it stands on the name's baseline (above), which a box out of the
+       flow has none of, and gives its width back by its start margin, so
+       it still takes no room. */
+    .ui-list-row[data-actions="hover"][data-meta="title"][data-lead="above"]:has(
+        > .ui-list-row-actions,
+        .ui-list-row-end
+      ) .ui-list-row-more {
+      position: static;
+      margin-inline-start: calc(-1 * var(--ui-list-row-more-size));
+    }
+
+    .ui-list-row[data-actions="hover"]:not(:has(> .ui-list-row-actions, .ui-list-row-end)):is(
+        :hover,
+        :has(:focus-visible),
+        [data-menu-open="true"]
+      )
+      .ui-list-row-more {
+      position: static;
     }
   }
 
@@ -888,16 +927,16 @@
     .ui-list-row[data-actions="hover"][data-current="true"] .ui-list-row-actions {
       opacity: 1;
       pointer-events: auto;
-      transform: none;
+      transform: translateX(0);
     }
 
-    .ui-list-row[data-actions="hover"][data-current="true"]:has(.ui-list-row-actions)
+    .ui-list-row[data-actions="hover"][data-current="true"]:has(> .ui-list-row-actions)
       .ui-list-row-end {
       opacity: 0;
       transform: translateX(calc(-1 * var(--ui-list-row-step)));
     }
 
-    .ui-list-row[data-actions="hover"][data-current="true"]:has(.ui-list-row-actions)
+    .ui-list-row[data-actions="hover"][data-current="true"]:has(> .ui-list-row-actions)
       .ui-list-row-meta {
       visibility: hidden;
     }
@@ -935,15 +974,16 @@
     margin-block-start: var(--ui-list-row-inset-block);
   }
 
-  .ui-list-row:has(.ui-list-row-fold) .ui-list-row-leading {
+  .ui-list-row:has(> .ui-list-row-fold) .ui-list-row-leading {
+    isolation: isolate;
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
-  .ui-list-row:is(:hover, :has(.ui-list-row-fold:focus-visible)) .ui-list-row-fold {
+  .ui-list-row:is(:hover, :has(> .ui-list-row-fold:focus-visible)) .ui-list-row-fold {
     opacity: 1;
   }
 
-  .ui-list-row:has(.ui-list-row-fold):is(:hover, :has(.ui-list-row-fold:focus-visible))
+  .ui-list-row:has(> .ui-list-row-fold):is(:hover, :has(> .ui-list-row-fold:focus-visible))
     .ui-list-row-leading {
     opacity: 0;
   }
@@ -953,7 +993,7 @@
       opacity: 1;
     }
 
-    .ui-list-row:has(.ui-list-row-fold) .ui-list-row-leading {
+    .ui-list-row:has(> .ui-list-row-fold) .ui-list-row-leading {
       opacity: 0;
     }
   }
