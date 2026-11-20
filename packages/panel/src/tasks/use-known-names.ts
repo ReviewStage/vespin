@@ -2,6 +2,7 @@ import type { AgentStatus, ListedAgent } from "@repo/features/agent-wire";
 import type { Entity, KnownNames } from "@repo/features/entity-kind";
 import type { LinkDestination } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -471,6 +472,11 @@ export function useWordTargets(): ReadonlyMap<string, string> {
  */
 export function useTaskStatus(taskId: string | undefined): TaskStatus | undefined {
   return useTaskListRow(useTaskListCollections().tasks, taskId)?.status;
+}
+
+/** The face of the Manager the window lists by `agentId`, which a chip naming it wears (`@repo/features/manager-face`); none for a coder, and where it lists no such agent. */
+export function useAgentFace(agentId: string): ManagerFace | undefined {
+  return useTaskListRow(useTaskListCollections().agents, agentId)?.face;
 }
 
 /** The status of the agent the window lists by `agentId`; none where it lists no such agent. */
