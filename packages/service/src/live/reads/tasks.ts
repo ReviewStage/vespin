@@ -357,6 +357,8 @@ function issuesStatement() {
  * from its row in `agent_sandbox`, on its agent's topic. Note that its read mark is the reader's look at a
  * Manager's chat (`agent_read`), else its start, beside the instant it last
  * said something there (`said_at`), and never marked unread by hand;
+ * that a Manager carries the face it wears (`face`), which a coder's row
+ * holds none of;
  * and that the Mac's last beat is not read,
  * because a beat wakes nothing (`deviceSync`) and a window judges a Mac by
  * its own presence read. An agent on no task is read only where `taskless`,
@@ -378,6 +380,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`, taskless = f
         contextWindow: sql<string | null>`${agentTable.contextWindow}`,
         title: agentTable.title,
         kind: agentTable.kind,
+        face: agentTable.face,
         brief: sql<
           AgentRow["brief"]
         >`case when ${agentTable.prompt} is not null then ${AGENT_BRIEF.PROMPT} when ${agentTable.descriptionSnapshot} is not null then ${AGENT_BRIEF.DESCRIPTION} else ${AGENT_BRIEF.BLANK} end`,

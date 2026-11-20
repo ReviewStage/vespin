@@ -8,7 +8,16 @@
  * spelling. The characters are those of React Kawaii's set whose face still
  * reads at a sidebar row's 20px on the dark theme: a big, flat body with the
  * face in its middle, never a small figure or a split one.
+ *
+ * The service picks a new Manager's face and keeps it on the agent's row,
+ * and every read carries it as `managerFaceSchema` decodes it: a word this
+ * build does not know reads as the set's first, so a service that offers
+ * one more character or color than a desktop knows still answers that
+ * desktop its Managers, drawn in a face it can draw.
  */
+
+import { literalsReadingUnknown } from "@repo/wire";
+import { Schema as EffectSchema } from "effect";
 
 /** Which character a Manager's face is. */
 export const MANAGER_FACE_CHARACTER = {
@@ -40,3 +49,12 @@ export interface ManagerFace {
   readonly character: ManagerFaceCharacter;
   readonly color: ManagerFaceColor;
 }
+
+/** A Manager's face as the agent's row keeps it and every read carries it. */
+export const managerFaceSchema = EffectSchema.Struct({
+  character: literalsReadingUnknown(
+    Object.values(MANAGER_FACE_CHARACTER),
+    MANAGER_FACE_CHARACTER.GHOST,
+  ),
+  color: literalsReadingUnknown(Object.values(MANAGER_FACE_COLOR), MANAGER_FACE_COLOR.YELLOW),
+});

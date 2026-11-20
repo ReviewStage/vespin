@@ -1024,7 +1024,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "a Manager on no task reads as a Manager with its sandbox for a build that reads one, and stays off an older build's list",
+    "a Manager on no task reads as a Manager with its face and sandbox for a build that reads one, and stays off an older build's list",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -1059,6 +1059,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
             each.id,
             each.taskId,
             each.kind,
+            each.face,
             each.sandbox,
           ]),
           [
@@ -1066,6 +1067,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
               agent.id,
               null,
               AGENT_KIND.MANAGER,
+              agent.face,
               { state: SANDBOX_STATE.BOOTING, stateAt: NOW, runsUntil: null },
             ],
           ],
