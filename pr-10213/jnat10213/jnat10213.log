@@ -1,0 +1,80 @@
+built main ebfd53996b + #10213 d2e26463d4 as e9cb9d7c9d
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 12:50:03 17533 MB
+curve 12:50:33 17517 MB
+curve 12:51:03 15800 MB
+curve 12:51:33 15472 MB
+curve 12:52:03 15363 MB
+curve 12:52:34 15088 MB
+curve 12:53:04 15064 MB
+curve 12:53:34 15059 MB
+curve 12:54:04 14998 MB
+curve 12:54:34 14987 MB
+curve 12:55:04 12957 MB
+curve 12:55:35 12596 MB
+curve 12:56:05 12355 MB
+curve 12:56:35 12230 MB
+curve 12:57:05 12067 MB
+curve 12:57:35 12002 MB
+curve 12:58:05 11892 MB
+curve 12:58:36 11746 MB
+curve 12:59:06 11632 MB
+curve 12:59:36 11560 MB
+curve 13:00:06 11508 MB
+curve 13:00:37 15859 MB
+curve 13:01:07 15840 MB
+curve 13:01:37 15755 MB
+curve 13:02:07 15606 MB
+curve 13:02:37 14920 MB
+curve 13:03:07 14857 MB
+curve 13:03:37 14820 MB
+curve 13:04:08 14752 MB
+curve 13:04:38 14680 MB
+curve 13:05:08 14675 MB
+curve 13:05:38 14639 MB
+curve 13:06:08 14610 MB
+curve 13:06:38 14592 MB
+curve 13:07:09 14432 MB
+curve 13:07:39 14407 MB
+curve 13:08:09 14376 MB
+curve 13:08:39 14379 MB
+curve 13:09:09 14320 MB
+curve 13:09:39 14260 MB
+curve 13:10:10 14230 MB
+curve 13:10:40 14187 MB
+curve 13:11:10 14040 MB
+curve 13:11:40 13991 MB
+curve 13:12:10 13343 MB
+curve 13:12:40 13214 MB
+curve 13:13:11 13111 MB
+curve 13:13:41 13044 MB
+curve 13:14:11 12966 MB
+curve 13:14:41 12812 MB
+curve 13:15:11 12730 MB
+curve 13:15:41 12607 MB
+curve 13:16:11 12585 MB
+curve 13:16:42 12480 MB
+curve 13:17:12 12268 MB
+curve 13:17:42 12151 MB
+curve 13:18:12 12108 MB
+curve 13:18:42 12063 MB
+curve 13:19:12 12094 MB
+curve 13:19:43 11717 MB
+curve 13:20:13 11700 MB
+curve 13:20:43 11669 MB
+curve 13:21:13 11555 MB
+curve 13:21:43 11553 MB
+curve 13:22:13 11547 MB
+curve 13:22:43 11493 MB
+BUILD EXIT 0 13:23:14
+sizes: Assets.car 28744456 bytes (main Vmain4 8576376), .app 123620 KB (main 102900 KB), zipped .app 47548682 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10213.app: replacing existing signature
+p10213-iphone-light-branch: fails 0 shots 4 
+p10213-iphone-light-branch-newtask: fails 0 shots 3 
+p10213-iphone-dark-branch: fails 0 shots 4 
+p10213-iphone-dark-branch-newtask: fails 0 shots 3 

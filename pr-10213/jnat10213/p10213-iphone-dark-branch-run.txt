@@ -1,0 +1,20 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fsel10213
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Tap on id: composer-field... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Input text Check the resend flow... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot typed... COMPLETED
+Long press on id: composer-field... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot long-press... COMPLETED
+Tap on (Optional) "Select All"... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot select-all... COMPLETED
+Swipe from (50%, 30%) to (50%, 31%) in 2000 ms... COMPLETED
+Take screenshot select-all-2s... COMPLETED
