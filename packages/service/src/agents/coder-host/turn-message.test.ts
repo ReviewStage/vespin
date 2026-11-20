@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { writeAccountTimeZone } from "@repo/database/models/account-time-zone";
-import { type Agent, createAgent } from "@repo/database/models/agent-store";
+import { type Agent, createAgent, recordNativeHanded } from "@repo/database/models/agent-store";
 import type { DescriptionWriter } from "@repo/database/models/description-revisions";
 import { tallyMemoryRecalls } from "@repo/database/models/memory-recall-store";
 import { type MemoryOutcome, rememberMemory } from "@repo/database/models/memory-store";
@@ -14,7 +14,7 @@ import {
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
-import { AGENT_PAYER } from "@repo/features/agent-wire";
+import { AGENT_KIND, AGENT_PAYER } from "@repo/features/agent-wire";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { RUN_STATUS, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
@@ -23,12 +23,15 @@ import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { ACTION_RESULT_STATUS, RUN_EVENT, TURN_ORIGIN, unparsedWire } from "../../core.js";
 import { saveNotes } from "../../tasks/description-notes.js";
+import { fakeAgentSessions } from "../../testing/agents-app-support.js";
 import { openGithubUser } from "../../testing/github-app-fake.js";
 import { added } from "../../testing/task-contents.js";
+import { AGENT_CALLER } from "../agent-tools.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { SESSION_TURN } from "../sessions/agent-sessions.js";
 import { runAgentEditDescription } from "./agent-doors.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
+import { runSendToUser } from "./send-to-user-tool.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import {
   handedAfterCompaction,
@@ -51,7 +54,9 @@ import { coderTurnMessage } from "./turn-message.js";
  * its own notes; and an agent's first turn alone, with Memory on, is handed
  * the memories of its own workspace its task's words find; and a turn whose
  * request names no zone reads the developer's day in the zone their account
- * keeps, and in UTC, said to be so, only where it keeps none. Synthetic
+ * keeps, and in UTC, said to be so, only where it keeps none; and a
+ * Manager's spoken turn is told to answer in plain text, and its
+ * `send_to_user` refused, until the typed turn after it. Synthetic
  * accounts, tasks, and words throughout.
  */
 
@@ -156,6 +161,56 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         assert.ok(!next.text?.includes("This turn is"), next.text ?? "");
         const compacted = yield* typedOn(handedAfterCompaction({ spoken: true }));
         assert.ok(compacted.text?.startsWith("This turn is typed"), compacted.text ?? "");
+      }),
+  );
+
+  it.effect(
+    "a Manager's spoken turn answers in its plain text, its send_to_user refused, and the typed turn after it goes back to send_to_user",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* openAgent;
+        const agent: Agent = { ...opened.agent, kind: AGENT_KIND.MANAGER };
+
+        const turnOn = (spoken: boolean, handed: TurnHanded) =>
+          coderTurnMessage(
+            opened.admitted,
+            agent,
+            { kind: SESSION_TURN.TYPED, turnId: undefined, spoken },
+            handed,
+            TURN_STARTS_AT,
+          );
+
+        // A send as the runner leaves the session's row once the turn's message is composed.
+        const sentOn = (handed: TurnHanded) =>
+          Effect.gen(function* () {
+            yield* recordNativeHanded(opened.admitted.target, handed);
+            const agentSessions = fakeAgentSessions().agentSessions("deployment");
+
+            return yield* runSendToUser(
+              {
+                caller: { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: true },
+                agentSessions,
+                agentSessionsAs: () => agentSessions,
+                writer: storeWriter({ tools: CODER_TOOL_SET }),
+                clientKey: randomUUID(),
+              },
+              unparsedWire({ text: "The invite email is sent." }),
+            );
+          });
+
+        const spoken = yield* turnOn(true, {});
+        const spokenText = spoken.text ?? "";
+        assert.ok(spokenText.includes("do not call `send_to_user` this turn"), spokenText);
+        assert.ok(!spokenText.includes("end_turn"), spokenText);
+        assert.deepEqual(yield* sentOn(spoken.handed), {
+          status: ACTION_RESULT_STATUS.REJECTED,
+          reason: "You're on a call: answer in plain text; the voice will say it.",
+        });
+
+        const typed = yield* turnOn(false, spoken.handed);
+        const typedText = typed.text ?? "";
+        assert.ok(typedText.includes("only `send_to_user` reaches people again"), typedText);
+        assert.deepEqual(yield* sentOn(typed.handed), { status: ACTION_RESULT_STATUS.ACCEPTED });
       }),
   );
 
