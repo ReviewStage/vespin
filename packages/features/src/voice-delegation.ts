@@ -11,27 +11,27 @@
  * id the loop derives from the event its first fragment came in (`lineId`),
  * since GPT-Live's deltas carry no item id and no event ends an utterance:
  * only a fragment and its interval on the session's timeline. An utterance
- * is one speaker's run of fragments. The caller's ends where a delegation
- * takes the caller's words, or once the caller has been silent for more than
- * `SILENCE_SPLIT_MS`, which a fragment of either speaker's can show
- * (`splitBefore`), or once the voice says something of substance over it
- * (`ofSubstance`); the voice's backchannels never end it, since they cut one
- * sentence of the caller's into many (Charles, Nov 19). The voice's ends
- * where the caller starts a line, or after that silence of its own. What the
- * voice says while the caller's line is open is held as one line of the
- * voice's, which takes no row until the caller's line ends, so it stands
- * after it, and grows on from there as the voice goes on. A fragment that
- * started before the other speaker's open utterance did is a late one, as
- * the caller's transcript lags the audio, and grows its own speaker's last
- * line instead. A line is recorded as it opens, or as a held one is let go,
- * so the rows stand in the order they open, and again each time a fragment
- * grows it, under the same id, with the span it was said over and the event
- * it took last, which the service writes in place, so the stored lines are
- * all a later holder of the call needs to go on from. A held line is stored
- * nowhere, so as the lease is about to hand the call over it is recorded,
- * ending the caller's line as a delegation does, and the voice's words are
- * recorded as said from then on (`VOICE_INPUT.LEASE`): nothing the next
- * holder must start from is held.
+ * is one speaker's run of fragments, ended only by what the session or the
+ * call says, never by a timer of the loop's own (Charles, Nov 19). The
+ * caller's ends where a delegation takes the caller's words, where the voice
+ * says something of substance over it (`ofSubstance`), or where the session
+ * goes idle into standby (`session.paused`), GPT-Live's own word for a long
+ * silence; the voice's backchannels never end it, since they cut one
+ * sentence of the caller's into many. The voice's ends where the caller
+ * starts a line, or where the session goes idle. What the voice says while
+ * the caller's line is open is held as one line of the voice's, which takes
+ * no row until the caller's line ends, so it stands after it, and grows on
+ * from there as the voice goes on. A fragment that started before the other
+ * speaker's open utterance did is a late one, as the caller's transcript
+ * lags the audio, and grows its own speaker's last line instead. A line is
+ * recorded as it opens, or as a held one is let go, so the rows stand in the
+ * order they open, and again each time a fragment grows it, under the same
+ * id, with the span it was said over and the event it took last, which the
+ * service writes in place, so the stored lines are all a later holder of the
+ * call needs to go on from. A held line is stored nowhere, so as the lease
+ * is about to hand the call over it is recorded, ending the caller's line as
+ * a delegation does, and the voice's words are recorded as said from then on
+ * (`VOICE_INPUT.LEASE`): nothing the next holder must start from is held.
  *
  * A delegation hands the agent the caller's lines since the one before it,
  * by their ids, so the service starts the turn on the rows already written
@@ -71,6 +71,8 @@ export const LIVE_SERVER_EVENT = {
   INPUT_TRANSCRIPT_DELTA: "session.input_transcript.delta",
   OUTPUT_TRANSCRIPT_DELTA: "session.output_transcript.delta",
   DELEGATION_CREATED: "session.delegation.created",
+  /** The session gone idle into standby, after its idle timeout with no transcript: the call's long silence. */
+  PAUSED: "session.paused",
   CLOSED: "session.closed",
 } as const;
 
@@ -93,9 +95,6 @@ const LIVE_APPEND_MAX_BYTES = 500;
 
 /** How many commentary appends one reply is said in at most: its opening, about 250 words of English, never the whole of a long reply. */
 const REPLY_MAX_APPENDS = 4;
-
-/** The longest silence on the session's timeline inside one speaker's line; a longer one starts a new line, so a long monologue reads as paragraphs. */
-const SILENCE_SPLIT_MS = 3000;
 
 /** The most words a sentence of the voice's said over the caller holds and still reads as a backchannel ("mm.", "yes, that's right", "sounds good to me"); a longer one is an interjection of substance. */
 const BACKCHANNEL_MAX_WORDS = 4;
@@ -227,6 +226,7 @@ const liveServerEventSchema = Schema.Union([
     type: Schema.Literal(LIVE_SERVER_EVENT.DELEGATION_CREATED),
     delegation: Schema.Struct({ id: Schema.String }),
   }),
+  Schema.Struct({ type: Schema.Literal(LIVE_SERVER_EVENT.PAUSED) }),
   Schema.Struct({ type: Schema.Literal(LIVE_SERVER_EVENT.CLOSED) }),
 ]);
 
@@ -467,20 +467,6 @@ function laterEnd(standing: number | undefined, given: number | undefined): numb
 }
 
 /**
- * Whether a line ends before a fragment of its speaker's, or, for the
- * caller's open line, of the voice's, starting then: where a silence longer
- * than `SILENCE_SPLIT_MS` came since the line's last fragment ended. This is
- * the one rule that ends a line by time, so a bound on how long a line may
- * grow belongs here too; the one that ends the caller's line by what the
- * voice says over it is `ofSubstance`.
- */
-function splitBefore(line: Line | undefined, startMs: number | undefined): boolean {
-  return (
-    line?.endMs !== undefined && startMs !== undefined && startMs - line.endMs > SILENCE_SPLIT_MS
-  );
-}
-
-/**
  * Whether what the voice said over the caller's open line has something of
  * substance in it: a sentence, finished or not, of more words than a
  * backchannel holds. OpenAI's account of GPT-Live: "'mm hmm,' or 'okay'
@@ -529,14 +515,13 @@ function openedLine(
 /**
  * Where a fragment goes: nowhere where its speaker's stored line took it
  * already (`replayed`); for the voice's while the caller's line is open and
- * the fragment is not late, into the voice's held line, recorded nothing,
- * unless the caller has been silent past the split, which ends the caller's
- * line first; onto its speaker's growing line where no long silence came
- * before the fragment, while that line is open or where the other speaker's
- * line is open and began after the fragment did, as a late one; or a new
- * line otherwise, which closes the other speaker's open line unless the
- * fragment is late. Every line it grows or opens outside the held one is
- * recorded.
+ * the fragment is not late, into the voice's held line, recorded nothing
+ * until it says something of substance (`ofSubstance`), which ends the
+ * caller's line; onto its speaker's growing line while that line is open or
+ * where the other speaker's line is open and began after the fragment did,
+ * as a late one; or a new line otherwise, which closes the other speaker's
+ * open line unless the fragment is late. Every line it grows or opens
+ * outside the held one is recorded.
  */
 function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
   const speaker = SPEAKER_OF_DELTA[delta.type];
@@ -565,20 +550,13 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
   const late =
     other?.startMs !== undefined && delta.start_ms !== undefined && delta.start_ms < other.startMs;
 
-  // Note that the voice speaking over the caller's open line ends it only once the caller has been silent past the split.
+  // Note that the voice speaking over the caller's open line ends it only once it says something of substance.
   if (
     state.holding &&
     speaker === VOICE_SPEAKER.VOICE &&
     state.open === VOICE_SPEAKER.CALLER &&
     !late
   ) {
-    if (splitBefore(other, delta.start_ms)) {
-      const [closed, closing] = closedOpen(state);
-      const [next, outputs] = heardFragment(closed, delta);
-
-      return [next, [...closing, ...outputs]];
-    }
-
     const held =
       state.held === undefined
         ? openedLine(state, speaker, delta, endMs)
@@ -590,8 +568,7 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
     return [{ ...state, held }, []];
   }
 
-  const silent = splitBefore(own, delta.start_ms);
-  const grows = own !== undefined && !silent && (state.open === speaker || late);
+  const grows = own !== undefined && (state.open === speaker || late);
 
   if (grows) {
     const [kept, outputs] = recorded(grown(own, delta, endMs));
@@ -658,6 +635,17 @@ function delegated(state: VoiceState, delegationId: string): Step {
   ];
 }
 
+/**
+ * The session gone idle: the call's long silence, which GPT-Live itself
+ * says, ends every line, the caller's open one and the voice's held one let
+ * go after it, so the next words of either speaker open a line of their own.
+ */
+function paused(state: VoiceState): Step {
+  const [closed, closing] = closedOpen(state);
+
+  return [{ ...closed, open: null }, closing];
+}
+
 function heardLive(state: VoiceState, event: LiveServerEvent): Step {
   switch (event.type) {
     case LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA:
@@ -665,6 +653,8 @@ function heardLive(state: VoiceState, event: LiveServerEvent): Step {
       return heardFragment(state, event);
     case LIVE_SERVER_EVENT.DELEGATION_CREATED:
       return delegated(state, event.delegation.id);
+    case LIVE_SERVER_EVENT.PAUSED:
+      return paused(state);
     case LIVE_SERVER_EVENT.CLOSED:
       return [state, []];
   }

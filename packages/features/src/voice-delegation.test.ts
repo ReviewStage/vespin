@@ -234,17 +234,16 @@ it.effect(
       const outputs = yield* wordsOutOf([
         said("What's left", 0, 400),
         said(" on the task?", 400, 900),
-        voiced("Only the", 1200, 2500),
-        voiced(" docs.", 4000, 4400),
-        said("Then write them.", 4600, 5000),
+        voiced("Only the docs", 1200, 1500),
+        voiced(" are left on it.", 1500, 1800),
+        said("Then write them.", 2400, 3000),
         delegation("item_1"),
       ]);
 
       assert.deepEqual(outputs, [
         record(VOICE_SPEAKER.CALLER, "line_1", "What's left"),
         record(VOICE_SPEAKER.CALLER, "line_1", "What's left on the task?"),
-        record(VOICE_SPEAKER.VOICE, "line_2", "Only the"),
-        record(VOICE_SPEAKER.VOICE, "line_2", "Only the docs."),
+        record(VOICE_SPEAKER.VOICE, "line_2", "Only the docs are left on it."),
         record(VOICE_SPEAKER.CALLER, "line_3", "Then write them."),
         {
           kind: VOICE_OUTPUT.SEND,
@@ -333,34 +332,35 @@ it.effect("a caller's fragment that started before the voice's line grows the ca
   Effect.gen(function* () {
     const outputs = yield* wordsOutOf([
       said("Is the build", 0, 500),
-      voiced("It is", 4000, 4300),
+      voiced("It is green, and every check passed.", 1200, 1800),
       said(" green?", 500, 900),
-      voiced(" green.", 4300, 4600),
     ]);
 
     assert.deepEqual(outputs, [
       record(VOICE_SPEAKER.CALLER, "line_1", "Is the build"),
-      record(VOICE_SPEAKER.VOICE, "line_2", "It is"),
+      record(VOICE_SPEAKER.VOICE, "line_2", "It is green, and every check passed."),
       record(VOICE_SPEAKER.CALLER, "line_1", "Is the build green?"),
-      record(VOICE_SPEAKER.VOICE, "line_2", "It is green."),
     ]);
   }),
 );
 
-it.effect("a late fragment after a long silence opens a line of its own", () =>
-  Effect.gen(function* () {
-    const outputs = yield* wordsOutOf([
-      said("Hold on.", 0, 100),
-      voiced("Sure.", 10_000, 10_400),
-      said("Ship it.", 4_000, 4_600),
-    ]);
+it.effect(
+  "the session going idle ends the caller's line, the voice's held line recorded after it, and the next words open a line",
+  () =>
+    Effect.gen(function* () {
+      const outputs = yield* wordsOutOf([
+        said("Run the tests.", 0, 900),
+        voiced("Sure.", 1000, 1300),
+        { from: VOICE_INPUT.LIVE, body: { type: "session.paused", event_id: "event_paused" } },
+        said("Also the lint.", 15_000, 15_800),
+      ]);
 
-    assert.deepEqual(outputs, [
-      record(VOICE_SPEAKER.CALLER, "line_1", "Hold on."),
-      record(VOICE_SPEAKER.VOICE, "line_2", "Sure."),
-      record(VOICE_SPEAKER.CALLER, "line_3", "Ship it."),
-    ]);
-  }),
+      assert.deepEqual(outputs, [
+        record(VOICE_SPEAKER.CALLER, "line_1", "Run the tests."),
+        record(VOICE_SPEAKER.VOICE, "line_2", "Sure."),
+        record(VOICE_SPEAKER.CALLER, "line_3", "Also the lint."),
+      ]);
+    }),
 );
 
 it.effect(

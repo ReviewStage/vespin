@@ -176,8 +176,8 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
           yield* Deferred.await(ready);
           yield* session.say(caller, fragment("What's left", 0, 400));
           yield* session.say(caller, fragment(" on the task?", 400, 900));
-          yield* session.say(voice, fragment("Only the docs.", 4000, 4600));
-          yield* session.say(caller, fragment("Then write them.", 5200, 5800));
+          yield* session.say(voice, fragment("Only the docs are left on it.", 1200, 1800));
+          yield* session.say(caller, fragment("Then write them.", 2400, 3000));
           yield* session.say(LIVE_SERVER_EVENT.DELEGATION_CREATED, {
             delegation: { id: "item_1" },
           });
@@ -194,8 +194,8 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
 
         assert.deepEqual(yield* storedLines(agentId, call.id), [
           { role: "user", words: "What's left on the task?", span: [0, 900] },
-          { role: "assistant", words: "Only the docs.", span: [4000, 4600] },
-          { role: "user", words: "Then write them.", span: [5200, 5800] },
+          { role: "assistant", words: "Only the docs are left on it.", span: [1200, 1800] },
+          { role: "user", words: "Then write them.", span: [2400, 3000] },
         ]);
       }).pipe(Effect.provide(world)),
   );
@@ -249,7 +249,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
           );
           yield* session.say(
             LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA,
-            fragment("Sure, what should happen to the old ones?", 4200, 4800),
+            fragment("Sure, what should happen to the old ones?", 1200, 1800),
           );
 
           // Note that the title is asked off the loop, so the case reads the rows until it lands.
