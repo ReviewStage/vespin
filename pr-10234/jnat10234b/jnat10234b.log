@@ -1,0 +1,87 @@
+Auto-merging apps/mobile/AGENTS.md
+built main e9a7784c56 + #10234 d04023e699 as 7e5ac223b8
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 14:25:18 19358 MB
+curve 14:25:48 19291 MB
+curve 14:26:18 17116 MB
+curve 14:26:48 16759 MB
+curve 14:27:19 16775 MB
+curve 14:27:49 16755 MB
+curve 14:28:19 16654 MB
+curve 14:28:49 16625 MB
+curve 14:29:19 16556 MB
+curve 14:29:49 16155 MB
+curve 14:30:19 16077 MB
+curve 14:30:49 16696 MB
+curve 14:31:20 16634 MB
+curve 14:31:50 16578 MB
+curve 14:32:20 16540 MB
+curve 14:32:50 16420 MB
+curve 14:33:20 16352 MB
+curve 14:33:50 16178 MB
+curve 14:34:21 16063 MB
+curve 14:34:51 16015 MB
+curve 14:35:21 15937 MB
+curve 14:35:51 15925 MB
+curve 14:36:22 15901 MB
+curve 14:36:52 15833 MB
+curve 14:37:22 15789 MB
+curve 14:37:52 15771 MB
+curve 14:38:22 15865 MB
+curve 14:38:52 15852 MB
+curve 14:39:23 15836 MB
+curve 14:39:53 15832 MB
+curve 14:40:23 15816 MB
+curve 14:40:53 15800 MB
+curve 14:41:23 15790 MB
+curve 14:41:53 15754 MB
+curve 14:42:24 15730 MB
+curve 14:42:54 15661 MB
+curve 14:43:24 15534 MB
+curve 14:43:54 15507 MB
+curve 14:44:24 15474 MB
+curve 14:44:54 15440 MB
+curve 14:45:25 15411 MB
+curve 14:45:55 15367 MB
+curve 14:46:25 15330 MB
+curve 14:46:55 15287 MB
+curve 14:47:25 15229 MB
+curve 14:47:55 15084 MB
+curve 14:48:26 14702 MB
+curve 14:48:56 14545 MB
+curve 14:49:26 14445 MB
+curve 14:49:56 14412 MB
+curve 14:50:26 14323 MB
+curve 14:50:57 14126 MB
+curve 14:51:27 14059 MB
+curve 14:51:57 13934 MB
+curve 14:52:27 13964 MB
+curve 14:52:57 13865 MB
+curve 14:53:27 13839 MB
+curve 14:53:57 13721 MB
+curve 14:54:28 13709 MB
+curve 14:54:58 13687 MB
+curve 14:55:28 13657 MB
+curve 14:55:58 13534 MB
+curve 14:56:28 13453 MB
+curve 14:56:58 13370 MB
+curve 14:57:29 13334 MB
+curve 14:57:59 13298 MB
+curve 14:58:29 13183 MB
+curve 14:58:59 13168 MB
+curve 14:59:29 13158 MB
+curve 14:59:59 13149 MB
+curve 15:00:30 13105 MB
+curve 15:01:00 13047 MB
+BUILD EXIT 0 15:01:30
+sizes: Assets.car 28744456 bytes (main Vmain4 8576376), .app 123736 KB (main 102900 KB), zipped .app 47590829 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10234b.app: replacing existing signature
+p10234-iphone-light-pill-field: fails 0 shots 3 
+p10234-iphone-dark-pill-field: fails 0 shots 3 
+p10234-ipad27-light-pill-field: fails 0 shots 3 
+p10234-ipad27-dark-pill-field: fails 0 shots 3 
