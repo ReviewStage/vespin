@@ -7,7 +7,13 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { TASK_STATUS } from "@repo/features/task-wire";
+import {
+  agentPullRequestsOfLiveRows,
+  type TaskListLiveRows,
+  taskAgentsOfLiveRows,
+  taskListOfLiveRows,
+} from "@repo/features/task-list-live";
+import { type ListedPullRequest, TASK_STATUS } from "@repo/features/task-wire";
 import type { TaskListParts } from "@repo/features/tasks-view";
 import { type EntityPool, entityPool } from "@repo/sync";
 import { TURN_STATUS } from "@repo/wire";
@@ -17,6 +23,7 @@ import { taskListDelivery } from "./app-state.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
+import { taskListMoved } from "./task-list-moved.js";
 import { agentListRow, planListRow } from "./testing/task-list-rows.js";
 
 const INVITES = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
@@ -278,6 +285,120 @@ it.effect(
             ?.list.tasks.map((plan) => plan.id)
             .toSorted(),
           stays.map((plan) => plan.id).toSorted(),
+        );
+      }),
+    ),
+);
+
+it.effect(
+  "an account of thousands whose agents are mostly archived draws every agent, every task's agents in brief, and every agent's pull request as the held read does, before and after agents move into and out of their archive",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
+        });
+
+        // Note that this test takes a few seconds, since its point is the size of the developer's account: 3,200 tasks, 200 with no agent, and 5,400 agents, 82% of them archived.
+        const plans = Array.from({ length: 3_200 }, (_, at) => ({
+          ...planListRow(`task-${at}`, `Task ${at}`),
+          createdAt: at,
+        }));
+
+        // Some agents fail, some never ran a turn and wait on their starting grace, some opened a pull request, and some were started from another; two start at each instant.
+        const agents = Array.from({ length: 5_400 }, (_, at) => ({
+          ...agentListRow(`task-${(at * 7) % 3_000}`, Math.floor(at / 2)),
+          id: `agent-${at}`,
+          title: `Agent ${at}`,
+          ...(at % 97 === 0
+            ? undefined
+            : {
+                turnId: `turn-${at}`,
+                turnStatus: at % 13 === 0 ? TURN_STATUS.FAILED : TURN_STATUS.SETTLED,
+                queuedAt: at,
+                startedAt: at,
+                settledAt: at + 1 + (at % 11) * 1_000,
+              }),
+          ...(at % 50 < 41 ? { archivedAt: at + 2 } : undefined),
+          ...(at % 3 === 0 ? { published: openPullRequest(at) } : undefined),
+          ...(at % 10 === 0 && at > 0
+            ? { startedFrom: { agentId: `agent-${at - 10}`, steps: 1, totalSteps: 1 } }
+            : undefined),
+        }));
+
+        const byAgent = (listed: readonly ListedPullRequest[] | undefined) =>
+          listed?.toSorted((a, b) => (a.agentId < b.agentId ? -1 : 1));
+
+        // What the held read answers for `rows` at this instant, every agent's grace still to end.
+        const drawsAsHeld = (rows: TaskListLiveRows) => {
+          const drawn = drawings.at(-1);
+          assert.deepEqual(drawn?.taskAgents, taskAgentsOfLiveRows(rows, 0));
+          assert.deepEqual(drawn?.list.tasks, taskListOfLiveRows(rows, 0).tasks);
+          assert.deepEqual(
+            byAgent(drawn?.agentPullRequests),
+            byAgent(agentPullRequestsOfLiveRows(rows)),
+          );
+        };
+
+        yield* collections.answer({ tasks: plans, agents }, undefined, undefined);
+        drawsAsHeld({ tasks: plans, agents });
+        const before = drawings.at(-1);
+
+        // One agent is brought back, one archived, one renamed in its archive, and one started from an archived agent.
+        const [restored, archived, renamed] = [agents[1], agents[45], agents[2]];
+        assert.ok(restored !== undefined && archived !== undefined && renamed !== undefined);
+
+        const moved = [
+          { ...restored, archivedAt: null },
+          { ...archived, archivedAt: 9_000 },
+          { ...renamed, title: "Renamed in its archive" },
+          {
+            ...agentListRow("task-7", 9_000),
+            id: "agent-continued",
+            startedFrom: { agentId: "agent-3", steps: 1, totalSteps: 1 },
+          },
+        ];
+
+        yield* collections.answer(
+          { tasks: [], agents: moved },
+          { past: "1", next: "2", gone: [] },
+          undefined,
+        );
+        yield* TestClock.adjust(DRAW_TICK);
+        const after = drawings.at(-1);
+
+        const movedRows = new Map(moved.map((row) => [row.id, row]));
+
+        drawsAsHeld({
+          tasks: plans,
+          agents: [
+            ...agents.map((row) => movedRows.get(row.id) ?? row),
+            ...moved.filter((row) => row.id === "agent-continued"),
+          ],
+        });
+
+        // The drawing after is told what moved since the one before, the agent continued from among them, rather than walked whole.
+        assert.ok(before !== undefined && after !== undefined);
+
+        const drawnAt = (drawn: LiveTaskList) => ({
+          tasks: drawn.list.tasks,
+          taskAgents: drawn.taskAgents,
+        });
+
+        const told = taskListMoved(drawnAt(before), drawnAt(after));
+        assert.equal(told.whole, false);
+        assert.deepEqual(
+          [
+            ...new Set(told.whole ? [] : told.agents.map((move) => (move.now ?? move.was)?.id)),
+          ].toSorted(),
+          ["agent-1", "agent-2", "agent-3", "agent-45", "agent-continued"],
         );
       }),
     ),

@@ -26,6 +26,13 @@
  * ended grace reaches, and every other is the object drawn before, whatever
  * the account's size.
  *
+ * An archived agent, most of an account's, is held apart from the live
+ * queries (`task-list-archived.ts`), drawn once and the very object until
+ * its row moves, and merged back into the agents and their pull requests the
+ * list draws, so every reader takes them as before; the agents started from
+ * another, the archived among them, stand in a drawn collection of their
+ * own, which the continuations stand on.
+ *
  * A write to one row, a plan's or an agent's, is a write the pool draws over
  * it at once (`compose-tasks.ts` and `compose-agents.ts` declare them),
  * standing until the list carries its transaction, or taken back where the
@@ -55,7 +62,12 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { agentGraceEnd, standsLive, type TaskListLiveRows } from "@repo/features/task-list-live";
+import {
+  agentGraceEnd,
+  type ContinuedBy,
+  standsLive,
+  type TaskListLiveRows,
+} from "@repo/features/task-list-live";
 import type {
   ListedPullRequest,
   TaskAgentPin,
@@ -80,8 +92,10 @@ import {
 import { Deferred, Effect, FiberSet, Option, Schema, type Scope } from "effect";
 import { drawnRows } from "./drawn-rows.js";
 import { KEPT_LIST } from "./kept-lists.js";
+import { keyedListLog } from "./list-moves.js";
 import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
+import { archivedAgents, heldApart, mergedByStart } from "./task-list-archived.js";
 import { taskListContinuations } from "./task-list-continuations.js";
 import { taskListPullRequests } from "./task-list-pull-requests.js";
 import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
@@ -227,6 +241,36 @@ function agedOut(
   return left;
 }
 
+/** `live` and then `apart`, as one list. */
+function concatenated<Value>(live: readonly Value[], apart: readonly Value[]): readonly Value[] {
+  return apart.length === 0 ? live : [...live, ...apart];
+}
+
+/**
+ * `merge`, answering the very list it answered last for as long as both
+ * lists it is handed are the very ones it was handed then, and each list it
+ * builds logged with what moved by `keyOf` (`keyedListLog`), so a reader of
+ * two is told what moved between them as it is of a live query's.
+ */
+function merged<Value>(
+  merge: (live: readonly Value[], apart: readonly Value[]) => readonly Value[],
+  keyOf: (value: Value) => string,
+): (live: readonly Value[], apart: readonly Value[]) => readonly Value[] {
+  const logged = keyedListLog(keyOf);
+
+  let last:
+    | { live: readonly Value[]; apart: readonly Value[]; merged: readonly Value[] }
+    | undefined;
+
+  return (live, apart) => {
+    if (last?.live !== live || last.apart !== apart) {
+      last = { live, apart, merged: logged(merge(live, apart)) };
+    }
+
+    return last.merged;
+  };
+}
+
 /** The account's task list, empty until its follow first answers. */
 export function taskListCollections(
   dependencies: TaskListDependencies,
@@ -263,9 +307,32 @@ export function taskListCollections(
     // Note that only the list's own follow stands on these kinds, so the pool redraws them for a write the member made, or its answer taken in the list's place: at once, so a press never waits a tick.
     const redraw = () => Effect.suspend(() => ticks.drawn);
 
-    // The plans and agents as the list draws them, for its live queries to stand on, written only for the keys that moved.
+    // The plans and agents as the list draws them, for its live queries to stand on, written only for the keys that moved: the agents but the archived held apart (`task-list-archived.ts`), and apart from them every agent started from another, the archived among them, which the continuations stand on.
     const drawnPlans = yield* drawnRows<PlanRow>(PLAN.key);
     const drawnAgents = yield* drawnRows<AgentRow>(AGENT.key);
+    const drawnStarted = yield* drawnRows<AgentRow>(AGENT.key);
+    const continuations = yield* taskListContinuations(drawnStarted.collection);
+    /** The agents started from each agent, by its id, as the continuations last changed. */
+    const continuedBy = new Map<string, ContinuedBy>();
+    const archived = archivedAgents((agentId) => continuedBy.get(agentId));
+
+    const continuedMoves = continuations.subscribeChanges((changes) => {
+      const moved = new Set<string>();
+
+      for (const change of changes) {
+        const { agentId } = change.value;
+
+        if (agentId === undefined) continue;
+        moved.add(agentId);
+
+        if (change.type === "delete") continuedBy.delete(agentId);
+        else continuedBy.set(agentId, change.value.continuedBy);
+      }
+
+      archived.continued(moved);
+    });
+
+    yield* Effect.addFinalizer(() => Effect.sync(() => continuedMoves.unsubscribe()));
 
     // Note that a plan the follow does not hold is drawn as its cold read left it, where one did.
     const plansDrawn = (keys: readonly string[]) => {
@@ -298,6 +365,8 @@ export function taskListCollections(
 
     // Note that an agent the follow does not hold is drawn as its cold read left it, where one did.
     const agentsDrawn = (keys: readonly string[]) => {
+      const rows = new Map(keys.map((key) => [key, agents.row(key) ?? coldAgents.row(key)]));
+
       for (const key of keys) {
         const taskId = agents.row(key)?.taskId ?? undefined;
         const was = taskOfAgent.get(key);
@@ -317,7 +386,18 @@ export function taskListCollections(
         agentsOfTask.set(taskId, (agentsOfTask.get(taskId) ?? new Set()).add(key));
       }
 
-      drawnAgents.drawn(keys, (key) => agents.row(key) ?? coldAgents.row(key));
+      // Note that an agent moving into or out of its archive moves between the live queries and the agents held apart, which each draw it where it now stands.
+      drawnAgents.drawn(keys, (key) => {
+        const row = rows.get(key);
+
+        return row === undefined || heldApart(row) ? undefined : row;
+      });
+      drawnStarted.drawn(keys, (key) => {
+        const row = rows.get(key);
+
+        return row?.startedFrom == null ? undefined : row;
+      });
+      archived.drawn(keys, (key) => rows.get(key));
     };
 
     const agentsRedraw: PoolRead<AgentRow>["redraw"] = (keys) =>
@@ -391,7 +471,6 @@ export function taskListCollections(
     );
 
     const pullRequests = yield* taskListPullRequests(drawnAgents.collection);
-    const continuations = yield* taskListContinuations(drawnAgents.collection);
 
     const tasks = yield* taskListTasks({
       plans: drawnPlans.collection,
@@ -400,6 +479,7 @@ export function taskListCollections(
       pullRequests: pullRequests.byTask,
       agentsByTask: pullRequests.agentsByTask,
       continuations,
+      archived: { activityOf: archived.activityOf, moved: archived.activityMoved },
     });
 
     /**
@@ -434,6 +514,9 @@ export function taskListCollections(
 
     /** The list as last drawn, one object for as long as its plans are. */
     let list: TaskListAnswer | undefined;
+    /** The agents and their pull requests as last drawn, each one list for as long as both lists it merges are. */
+    const taskAgents = merged(mergedByStart<ListedAgent>, (agent) => agent.id);
+    const agentPullRequests = merged(concatenated<ListedPullRequest>, (listed) => listed.agentId);
 
     /** Draws the list as it stands now, what every standing write drew among it, the graces ended by `at` written first, and arms the next grace's end. */
     const drawn: Effect.Effect<void> = yield* drawnAtEdges((at) => {
@@ -445,10 +528,13 @@ export function taskListCollections(
 
       dependencies.draw({
         list,
-        taskAgents: tasks.taskAgents(),
+        taskAgents: taskAgents(tasks.taskAgents(), archived.taskAgents()),
         taskAgentPins: tasks.taskAgentPins(),
         taskPullRequests: pullRequests.taskPullRequests(),
-        agentPullRequests: pullRequests.agentPullRequests(),
+        agentPullRequests: agentPullRequests(
+          pullRequests.agentPullRequests(),
+          archived.agentPullRequests(),
+        ),
         pendingTasks: plans.pending(),
       });
 

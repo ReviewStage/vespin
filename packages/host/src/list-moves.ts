@@ -81,6 +81,48 @@ export function listMoveLog<Value>(): ListMoveLog<Value> {
   };
 }
 
+/**
+ * A log of one list built anew outside a live query, each drawing of unique
+ * keys (`keyOf`) logged with what moved since the one before by a walk of
+ * both: each value that came, went, or is another object under its key, and
+ * whether a key came, went, or moved past another. Answers the drawing
+ * before, the very array, where nothing moved, so a reader holding it reads
+ * no change.
+ */
+export function keyedListLog<Value>(
+  keyOf: (value: Value) => string,
+): (list: readonly Value[]) => readonly Value[] {
+  const log = listMoveLog<Value>();
+  let drawn: readonly Value[] | undefined;
+  let byKey = new Map<string, Value>();
+
+  return (list) => {
+    const now = new Map<string, Value>();
+    const moved = new Map<string, ListMove<Value>>();
+    let reordered = drawn?.length !== list.length;
+
+    for (const [at, value] of list.entries()) {
+      const key = keyOf(value);
+      const was = byKey.get(key);
+      const before = drawn?.[at];
+      now.set(key, value);
+
+      if (was !== value) moved.set(key, { was, now: value });
+
+      reordered ||= before === undefined || keyOf(before) !== key;
+    }
+
+    for (const [key, was] of byKey) if (!now.has(key)) moved.set(key, { was, now: undefined });
+
+    if (drawn !== undefined && moved.size === 0 && !reordered) return drawn;
+    drawn = list;
+    byKey = now;
+    log.drawn(list, moved, reordered);
+
+    return list;
+  };
+}
+
 /** Ties `list`, laid anew from the drawing `drawn`, to that drawing, so it is told what moved as `drawn` is; nothing where `drawn` is no drawing. */
 export function drawnAs(
   list: readonly unknown[] | undefined,
