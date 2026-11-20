@@ -1,0 +1,85 @@
+built main b8d213759f + #10230 039ecc5c9b as 55e2c4a03c
+install 0
+fixture patch: True
+experiments patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 13:41:39 24157 MB
+curve 13:42:09 24123 MB
+curve 13:42:39 22030 MB
+curve 13:43:09 21650 MB
+curve 13:43:39 21636 MB
+curve 13:44:09 21603 MB
+curve 13:44:39 21588 MB
+curve 13:45:09 21512 MB
+curve 13:45:40 21493 MB
+curve 13:46:10 21449 MB
+curve 13:46:40 21348 MB
+curve 13:47:10 20929 MB
+curve 13:47:40 21579 MB
+curve 13:48:10 21537 MB
+curve 13:48:40 21499 MB
+curve 13:49:11 21470 MB
+curve 13:49:41 21356 MB
+curve 13:50:11 21199 MB
+curve 13:50:41 20798 MB
+curve 13:51:11 20707 MB
+curve 13:51:41 20620 MB
+curve 13:52:11 20548 MB
+curve 13:52:41 20484 MB
+curve 13:53:11 20434 MB
+curve 13:53:42 20376 MB
+curve 13:54:12 20305 MB
+curve 13:54:42 20274 MB
+curve 13:55:12 20304 MB
+curve 13:55:42 20279 MB
+curve 13:56:12 22332 MB
+curve 13:56:42 22291 MB
+curve 13:57:12 22266 MB
+curve 13:57:42 22230 MB
+curve 13:58:13 22212 MB
+curve 13:58:43 22191 MB
+curve 13:59:13 22166 MB
+curve 13:59:43 22134 MB
+curve 14:00:13 22106 MB
+curve 14:00:43 22079 MB
+curve 14:01:13 22040 MB
+curve 14:01:43 22024 MB
+curve 14:02:14 21975 MB
+curve 14:02:44 21940 MB
+curve 14:03:14 21863 MB
+curve 14:03:44 21598 MB
+curve 14:04:14 21378 MB
+curve 14:04:44 20860 MB
+curve 14:05:14 20716 MB
+curve 14:05:44 20520 MB
+curve 14:06:14 20484 MB
+curve 14:06:45 20381 MB
+curve 14:07:15 20258 MB
+curve 14:07:45 20194 MB
+curve 14:08:15 20148 MB
+curve 14:08:45 20062 MB
+curve 14:09:15 19945 MB
+curve 14:09:45 19895 MB
+curve 14:10:16 19876 MB
+curve 14:10:46 19848 MB
+curve 14:11:16 19848 MB
+curve 14:11:46 19811 MB
+curve 14:12:16 19792 MB
+curve 14:12:46 19757 MB
+curve 14:13:17 19642 MB
+curve 14:13:47 19629 MB
+curve 14:14:17 19615 MB
+curve 14:14:47 19602 MB
+curve 14:15:17 19564 MB
+curve 14:15:47 19475 MB
+BUILD EXIT 0 14:16:17
+sizes: Assets.car 23809880 bytes (main Vmain4 8576376), .app 118796 KB (main 102900 KB), zipped .app 44834573 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10230b.app: replacing existing signature
+p10230-iphone-tasks-light: fails 0 shots 1 
+p10230-iphone-tasks-dark: fails 0 shots 1 
+p10230-iphone-tasks-light-ax3: fails 0 shots 1 
+p10230-ipad27-tasks-light: fails 0 shots 1 
+p10230 actool lines: /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/AgentsLiveActivity/AgentsLiveActivity.xcassets: warning: Accent color ‘AccentColor’ is not present in any asset catalogs.|/Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/NotificationContent/NotificationContent.xcassets: warning: Accent color ‘AccentColor’ is not present in any asset catalogs.|
