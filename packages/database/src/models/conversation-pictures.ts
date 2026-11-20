@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   CONVERSATION_PICTURE_BOUNDS,
   type ConversationMediaType,
@@ -11,12 +12,15 @@ import {
   type PlayableVideoType,
   playableVideoTypeSchema,
 } from "@repo/features/video-signature";
-import { and, eq, inArray, sum } from "drizzle-orm";
+import { and, eq, exists, inArray, sql, sum } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database } from "../core/query.js";
+import { Database, queryBuilder } from "../core/query.js";
+import { agentTable } from "../schemas/agent.js";
 import { attachment, servedColumns } from "../schemas/attachment.js";
+import { messages } from "../schemas/storage.js";
 import type { TaskStoreEffect } from "./task-store.js";
+import { agentVisibleTo } from "./workspace-store.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
@@ -32,7 +36,9 @@ import type { ConversationTarget } from "./writer.js";
  * counts; a picture that would take it past them is not kept, and the
  * caller names it as not kept. A read names the conversation beside the
  * picture, so whoever reads has settled first that the reader may read
- * that conversation, as every transcript read does.
+ * that conversation, as every transcript read does; the one read by the
+ * picture's id alone, a copy of what an agent showed
+ * (`readShownAgentPicture`), settles that itself.
  */
 
 /** A picture to keep, or a video shown as one: its bytes, the type they were sniffed to be, the size their header states, and a recording's MP4 copy where its sandbox made one. */
@@ -289,4 +295,80 @@ export function readServedConversationPicture(
   playable: PlayableVideoType,
 ): TaskStoreEffect<Option.Option<ServedPicture>> {
   return findServedPicture({ conversationId, id, playable });
+}
+
+/** A picture an agent showed, as a copy of it is made: its type, its bytes, and a recording's or a clip's copy for a phone where one is kept. */
+export type ShownAgentPicture = typeof ShownAgentPictureSchema.Type;
+
+const ShownAgentPictureSchema = Schema.Struct({
+  contentType: conversationMediaTypeSchema,
+  bytes: Schema.Uint8Array,
+  mp4Bytes: Schema.NullOr(Schema.Uint8Array),
+});
+
+/**
+ * Whether the conversation of the picture under the id holds a `show_media`
+ * call that answered it, as its stored part names a kept picture by id
+ * (`show-media.ts`).
+ */
+function shownByShowMedia(pictureId: string) {
+  const part = [
+    { type: `tool-${AGENT_TOOL.SHOW_MEDIA}`, output: { pictures: [{ id: pictureId }] } },
+  ];
+
+  return exists(
+    queryBuilder
+      .select({ one: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.conversationId, attachment.conversationId),
+          sql`${messages.parts} @> ${JSON.stringify(part)}::jsonb`,
+        ),
+      ),
+  );
+}
+
+const findShownAgentPicture = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    organizationId: Schema.String,
+    pictureId: Schema.String,
+  }),
+  Result: ShownAgentPictureSchema,
+  execute: ({ userId, organizationId, pictureId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          contentType: attachment.contentType,
+          bytes: attachment.bytes,
+          mp4Bytes: attachment.mp4Bytes,
+        })
+        .from(attachment)
+        .innerJoin(agentTable, eq(agentTable.conversationId, attachment.conversationId))
+        .where(
+          and(
+            eq(attachment.id, pictureId),
+            eq(agentTable.organizationId, organizationId),
+            agentVisibleTo(userId),
+            shownByShowMedia(pictureId),
+          ),
+        ),
+    ),
+});
+
+/**
+ * The picture, recording, or clip under the id, which `pictureId` must
+ * spell as a UUID, where an agent of the workspace the account may read
+ * (`agentVisibleTo`) showed it with `show_media` in its own transcript;
+ * nothing otherwise. Note that every other picture beside a transcript
+ * (a browser's screenshot, a Mac's window, a file a line handed the agent)
+ * reads as none, because each is kept on terms of its own that a copy
+ * elsewhere would break.
+ */
+export function readShownAgentPicture(
+  reader: { readonly userId: string; readonly organizationId: string },
+  pictureId: string,
+): TaskStoreEffect<Option.Option<ShownAgentPicture>> {
+  return findShownAgentPicture({ ...reader, pictureId });
 }

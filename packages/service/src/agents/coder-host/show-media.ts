@@ -87,7 +87,8 @@ export const SHOW_MEDIA_TOOL = {
     "no model hears sound, so its caption says what it holds. " +
     `Each is a PNG, JPEG, or WebP of at most ${INBOX_BOUNDS.MAX_IMAGE_BYTES / 1_000_000} MB, or a WebM or MP4 video or a WAV, MP3, M4A, AAC, or Ogg sound clip of at most ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB. ` +
     "Never show a picture of a secret. A Markdown image in your reply shows nothing; this is the one " +
-    "way to show a picture, a recording, or a sound clip in your transcript.",
+    "way to show a picture, a recording, or a sound clip in your transcript. " +
+    `It answers each file's id, which ${AGENT_TOOL.POST_THREAD} draws in place of a path, so another agent of your workspace you hand the id to may draw it in its own thread.`,
   inputSchema: SHOW_MEDIA_INPUT,
 } as const;
 
