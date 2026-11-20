@@ -439,10 +439,26 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       });
     }
 
+    /**
+     * Whether this run's launch is counted yet. Note that we count it on the
+     * first arm rather than at launch alone, because a launch whose settings
+     * read failed, as one woken in the background may, learns usage data is
+     * on only later, and would otherwise never be counted.
+     */
+    let launchCounted = false;
+
+    const armCounting = (): void => {
+      productEvents.arm();
+
+      if (launchCounted) return;
+      launchCounted = true;
+      productEvents.record(PRODUCT_EVENT.APP_LAUNCH, { app_version: identity.appVersion });
+    };
+
     const sideEffects = hostSettingSideEffects({
       shareUsageData: (on) =>
         Effect.sync(() => {
-          if (on) productEvents.arm();
+          if (on) armCounting();
           else productEvents.disarm();
         }),
     });
@@ -645,7 +661,8 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       link: (next) => Effect.asVoid(late.set(next)),
       lifetime: Effect.gen(function* () {
         // Armed only where the developer shares usage data; a write of the
-        // switch arms or disarms it from then on (`settings-side-effects.ts`).
+        // switch arms or disarms it from then on (`settings-side-effects.ts`),
+        // and the first arm counts the launch, however late it comes.
         const sharesUsageData = yield* Effect.map(
           Effect.orElseSucceed(store.snapshot(), () => undefined),
           (snapshot) => snapshot?.stored.usageData === true,
@@ -653,9 +670,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
 
         yield* startedAndStopped(
           Effect.sync(() => {
-            if (!sharesUsageData) return;
-            productEvents.arm();
-            productEvents.record(PRODUCT_EVENT.APP_LAUNCH, { app_version: identity.appVersion });
+            if (sharesUsageData) armCounting();
           }),
           productEvents.drop,
         );
