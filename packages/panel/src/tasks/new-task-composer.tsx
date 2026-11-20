@@ -8,7 +8,6 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { TaskSection } from "@repo/features/task-section-wire";
 import { REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import { TASK_CREATE_RELATION_KIND, type TaskCreateRelationKind } from "@repo/features/task-wire";
-import { workspaceReaches } from "@repo/features/tasks-model";
 import { TERM } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -67,13 +66,13 @@ import {
 import { NoRepositoriesBanner } from "./no-repositories-banner.js";
 import { heldUpdateOver, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
+import { useRepositoryDefault } from "./repository-default.js";
 import { keptSkills } from "./repository-skills.js";
-import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "./runs-on.js";
+import { NewTaskRunsOnChip, newTaskRunsOn, useDevicesRead, useNewTaskRunsOn } from "./runs-on.js";
 import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
-import { MODELS_READ } from "./use-agents.js";
 import type { AgentAsk, NewTaskPress, NewTaskRefusal, NewTaskStart } from "./use-new-task.js";
 import { useTaskSections } from "./use-pin-writes.js";
 import type { TasksControl } from "./use-tasks-tab.js";
@@ -259,9 +258,6 @@ const DEVICES_UNREAD: Failure = {
 /** The servers a card switches off as it opens: none, as an agent started with none named runs with every one on. */
 const NONE_OFF: readonly string[] = [];
 
-/** The repositories a card's default passes over as it opens: none, until a read leaves one out. */
-const NONE_DROPPED: readonly string[] = [];
-
 /** The devices Runs on offers before a read lists any: none, so it offers Cloud alone. */
 const NO_DEVICES: readonly MacOffer[] = [];
 
@@ -300,11 +296,6 @@ function sameServers(a: readonly string[] | undefined, b: readonly string[] | un
   if (a === undefined || b === undefined) return a === b;
 
   return a.length === b.length && a.every((server) => b.includes(server));
-}
-
-/** Whether two names are one repository, as GitHub spells it or not. */
-function sameRepository(a: string, b: string): boolean {
-  return a.toLowerCase() === b.toLowerCase();
 }
 
 /** A card's draft place: its purpose's, in its workspace, none before the workspaces are read. */
@@ -398,13 +389,20 @@ export function NewTaskComposer({
   // A card opened on a tree's relation starts on the other task's repository, which it keeps once the relation is removed.
   const presetRelation = newTask.preset?.relation;
 
-  const [chosen, setChosen] = useState<string | null | undefined>(
+  const repositories = newTask.repositoriesIn(workspaceId);
+  const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
+
+  const repositoryDefault = useRepositoryDefault(
+    repositories,
+    workspace,
     refused !== undefined
       ? refused.card.repository
       : presetRelation !== undefined && treeKind(presetRelation.kind)
         ? presetRelation.task.repository
         : newTask.preset?.repository,
   );
+
+  const { chosen, choose: setChosen } = repositoryDefault;
 
   const [choice, pickedModel, choose] = useDefaultChoice(refused?.card.choice);
 
@@ -513,9 +511,6 @@ export function NewTaskComposer({
   }, []);
   // The last agent press's key and what it asked, until a start lands.
   const pressed = useRef<NewTaskPress | undefined>(refused?.card.press);
-  const repositories = newTask.repositoriesIn(workspaceId);
-  const workspace = newTask.workspaces.find((each) => each.id === workspaceId);
-
   // Task relation offers the tasks of the card's workspace, in the sidebar's order.
   const relatable = useNamedTasks(newTask.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
 
@@ -530,85 +525,16 @@ export function NewTaskComposer({
   }, [runsOnStands]);
   const devices = (runsOnStands ? newTask.devices : undefined) ?? NO_DEVICES;
   const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
-  // Start is held until a read made since the card opened lands, where the member's last pick is a
-  // device, since a start before then would name none. Note that a pick of the cloud, every member's
-  // with no device among them, holds nothing, because a start before the read runs in the cloud as
-  // the pick would after it; that a list read before the card opened does not count, because it may
-  // be one read before a device was added, and a failed read leaves it standing; and that a read is
-  // told by the generation it took, never by its list, which a read listing the same devices hands
-  // back as it was.
-  const { modelsRead } = newTask;
-  const [readAsOpened] = useState(modelsRead.generation);
-  const readSinceOpened = modelsRead.generation > readAsOpened;
-  const [devicesLanded, setDevicesLanded] = useState(false);
 
-  if (!devicesLanded && readSinceOpened && modelsRead.state === MODELS_READ.READ) {
-    setDevicesLanded(true);
-  }
-
-  const devicesUnread = runsOnStands && keptDevice && !devicesLanded;
-  const devicesFailed = devicesUnread && readSinceOpened && modelsRead.state === MODELS_READ.FAILED;
-  // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
-  const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
-  // The repositories the chip's last read listed, an App's and a member's token's alike.
-  const [listed, setListed] = useState<readonly string[] | undefined>(undefined);
-  // The repositories a read did not list, which the default passes over from then on.
-  const [dropped, setDropped] = useState<readonly string[]>(NONE_DROPPED);
-  // A repository picked in one workspace is none of another's,
-  // so the owner's switch, as Home's, lets it go, in the render that brings it; the scope first
-  // resolving keeps a pick made before the workspaces were read.
-  const [scope, setScope] = useState(repositories.scope);
-
-  if (repositories.scope !== scope) {
-    setListed(undefined);
-
-    if (scope !== undefined) {
-      setChosen(undefined);
-      setDropped(NONE_DROPPED);
-    }
-
-    setScope(repositories.scope);
-  }
-
-  const isListed = (name: string) =>
-    listed === undefined || listed.some((each) => sameRepository(each, name));
-
-  const kept = (name: string) => !dropped.some((each) => sameRepository(each, name));
-
-  // Note that a null chosen is No repository picked, and an undefined one is no pick yet, which
-  // falls to the newest recent repository still kept, then to the first the read lists.
-  const fallback =
-    repositories.recent.find((each) => kept(each) && isListed(each)) ?? listed?.find(kept) ?? null;
-
-  const candidate = chosen === undefined ? fallback : chosen;
-  // A pick, a preset, or the recent default a read does not list is dropped, so a later read
-  // listing it does not bring it back and the default falls to the next; a read made before the
-  // workspace resolved, or for the one before a switch still under way, judges none.
-  const judged = repositories.scope !== undefined && repositories.scope === scope;
-
-  const drop = (name: string) => {
-    setDropped((was) => (was.some((each) => sameRepository(each, name)) ? was : [...was, name]));
-    setChosen(undefined);
-  };
-
-  const unlisted = [candidate, ...repositories.recent].filter(
-    (each): each is string => each !== null && kept(each) && !isListed(each),
+  // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
+  const { unread: devicesUnread, failed: devicesFailed } = useDevicesRead(
+    newTask.modelsRead,
+    runsOnStands && keptDevice,
   );
 
-  if (judged && unlisted.length > 0) {
-    setDropped([...dropped, ...unlisted]);
-
-    if (chosen !== undefined && chosen !== null) setChosen(undefined);
-  }
-
-  // Note that a repository is not started on before the read lands unless
-  // the workspace's GitHub reaches it, because the service would refuse it.
-  const picked =
-    candidate !== null &&
-    (!isListed(candidate) ||
-      (listed === undefined && workspace !== undefined && !workspaceReaches(workspace, candidate)))
-      ? null
-      : candidate;
+  // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
+  const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
+  const { repository: picked, judged, drop } = repositoryDefault;
 
   // A tree's two tasks work in one repository, the other task's, which the chip is held to.
   const repository = treeRelation === undefined ? picked : treeRelation.task.repository;
@@ -810,7 +736,7 @@ export function NewTaskComposer({
       onChoose={setChosen}
       onUnreached={judged && repository !== null ? () => drop(repository) : undefined}
       onClear={tree ? undefined : () => setChosen(null)}
-      onListed={setListed}
+      onListed={repositoryDefault.onListed}
       pending={!tree && chosen !== null && repository === null}
       held={tree ? REPOSITORY_HELD : undefined}
     />

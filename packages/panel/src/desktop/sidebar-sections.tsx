@@ -9,16 +9,16 @@ import {
   type TaskSections,
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
-import { applySectionWrite } from "@repo/features/task-section-writes";
 import {
   type DrawnSection,
-  placeAllWrites,
   placeWrites,
   REMOVE_FROM_SECTION,
   restoreWrites,
+  SECTION_DELETED,
   sectionMoveWrites,
   sectionOfTask,
   sectionOrder,
+  undeleteWrites,
   unplaceAllWrites,
   workspaceSections,
 } from "@repo/features/task-sections-model";
@@ -120,9 +120,6 @@ const SECTION_HANDLE = ".ui-group-header-head";
 /** Why a blank title was not kept. */
 const TITLE_ASKED = "Name the section.";
 
-/** What the toast says once a section is deleted. */
-const SECTION_DELETED = "Section deleted";
-
 /** What opens a section's head with its icon's picker open, on its menu: Change icon where it wears one, Add icon where it wears none. */
 const ICON_ACT = { CHANGE: "Change icon", ADD: "Add icon" } as const;
 
@@ -207,45 +204,6 @@ function movedNote(count: number, title: string | null): string {
   }
 
   return count === 1 ? `Moved to ${title}` : `${countWords(count, TERM.TASK)} moved to ${title}`;
-}
-
-/**
- * The writes an Undo of deleting `section` asks, read against the sections
- * as they stood before, `before`, and as they stand now, `current`: the
- * section made again under its id, stood back at its place among its
- * workspace's, and its rows put back in it in their order. A row put in
- * another section since stays there, since that was chosen anew. Note that
- * each row is given a position, as `placeAllWrites` gives one, because rows
- * put back together are stamped in the same instant.
- */
-function undeleteWrites(
-  before: TaskSections,
-  current: TaskSections,
-  section: TaskSection,
-  now: number,
-): TaskSectionWrite[] {
-  const { id, workspaceId, title, icon } = section;
-
-  const made: TaskSectionWrite = {
-    kind: TASK_SECTION_WRITE.CREATE,
-    id,
-    workspaceId,
-    title,
-    ...(icon === undefined ? undefined : { icon }),
-  };
-
-  const remade = applySectionWrite(current, made, now);
-  const was = workspaceSections(before, workspaceId).findIndex((each) => each.id === id);
-  const order = workspaceSections(remade, workspaceId);
-  const from = order.findIndex((each) => each.id === id);
-  const at = Math.min(Math.max(was, 0), order.length - 1);
-  const moved = from === at ? [] : sectionMoveWrites(order, from, at);
-
-  const taskIds = sectionOrder(before, id)
-    .map((entry) => entry.taskId)
-    .filter((taskId) => sectionOfTask(current, taskId) === undefined);
-
-  return [made, ...moved, ...placeAllWrites(remade, taskIds, id, now)];
 }
 
 /** How a section's write is sent: the caller's `onWriteSections`, behind the act it rides. */

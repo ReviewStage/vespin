@@ -18,6 +18,19 @@ import path from "node:path";
 import { withoutAccessTokens } from "@repo/features/sentry-breadcrumbs";
 import { app, type BrowserWindow } from "electron";
 
+/**
+ * Chromium's notice that a resize observer's callback resized a box an
+ * observer watches nearer the root, whose report it holds to the next frame.
+ *
+ * Note that it is dropped, because no observer of ours loops: the boxes
+ * resized are written by the virtualizers we drive, TanStack Virtual
+ * measuring a log's row and writing its block's height, and `@pierre/diffs`
+ * measuring a diff's lines, as each is built to, and the observers left to
+ * the next frame (the agent rail's, the transcript rail's, a diff view's own)
+ * only schedule a read. Every resize of a log's rows would print it.
+ */
+const DEFERRED_RESIZE_NOTICE = "ResizeObserver loop completed with undelivered notifications";
+
 /** A window opening, as Electron's `app` announces it. */
 type WindowOpened = (event: Electron.Event, window: BrowserWindow) => void;
 
@@ -41,6 +54,8 @@ function reportErrorsOf(
   const contents = window.webContents;
   contents.on("console-message", (details) => {
     if (details.level !== "error" || !reporting()) return;
+
+    if (details.message.includes(DEFERRED_RESIZE_NOTICE)) return;
     const page = documentName(contents.getURL());
 
     const crumb = withoutAccessTokens({

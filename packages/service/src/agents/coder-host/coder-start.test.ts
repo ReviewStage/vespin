@@ -8,18 +8,23 @@ import { readAgent, readAgentByKey } from "@repo/database/models/agent-store";
 import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { recordWorkspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
+import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { BOOT_FAILURE, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
-import { AGENT_KIND } from "@repo/features/agent-wire";
+import { AGENT_KIND, AGENT_MACHINE, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
+import { managerGreeting } from "@repo/features/manager-greeting";
+import type { ManagerCreateRequest } from "@repo/features/manager-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { memorySandbox } from "@repo/sandbox/testing";
+import { EXPERIMENT } from "@repo/settings";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Predicate, Result } from "effect";
 import { TestClock } from "effect/testing";
@@ -30,10 +35,16 @@ import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
+  GITHUB_APP_WITH_TOKENS,
+  GITHUB_FIXTURE_MEMBER,
   githubReaching,
   type InstallationFixture,
+  memberRepositoryJson,
   openGithubUser,
+  openTokenMember,
+  type SentToGitHub,
 } from "../../testing/github-app-fake.js";
+import { scriptedHarnessLayer } from "../../testing/native-harness-fake.js";
 import {
   type AgentSessions,
   MACHINE_UP,
@@ -48,7 +59,11 @@ import {
 } from "../sessions/agent-sessions.js";
 import { WorkspaceDriveFills } from "../workspace-drive.js";
 import { WorkspaceDriveBuilds } from "../workspace-drive-builds.js";
+import { managerInstructions } from "./instructions.js";
+import { startManager } from "./manager-start.js";
+import { changeAgentQueue } from "./queue-change.js";
 import { type StartAsk, startAgent } from "./start.js";
+import { STEER_OUTCOME, steerMemberWords } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /** The attributes an error reporter is handed beside the failure it reports. */
@@ -77,7 +92,7 @@ const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 12 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 16 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -279,6 +294,215 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         assert.deepEqual(
           opened.map((message) => message.conversationId),
           [agent.conversationId],
+        );
+      }),
+  );
+
+  it.effect(
+    "a Start on no task naming a repository beside its own that only the member's own token reaches, which its checkout could not mint, is refused and starts nothing",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openTokenMember();
+        yield* connectAgentApiKeys(owner);
+        const workspaceId = yield* openWorkspace(owner);
+        const installation = INSTALLATIONS[installationsConnected++];
+        assert.ok(installation);
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+        const docs = { owner: RELAY.owner, name: "Docs" } as const;
+
+        // The member's own token reaches the docs, which the workspace's installation does not.
+        const tokenReach = (sent: SentToGitHub) =>
+          sent.headers.get("authorization") === `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}` &&
+          new URL(sent.url).pathname === `/repos/${docs.owner}/${docs.name}`
+            ? Response.json(memberRepositoryJson(docs, true))
+            : undefined;
+
+        const github = githubReaching(INSTALLATIONS, GITHUB_APP_WITH_TOKENS, {}, tokenReach);
+        const { opened, agentSessions } = fakeAgentSessions();
+
+        const refused = yield* Effect.result(
+          startAgent(agentSessions, owner, {
+            taskId: null,
+            workspaceId,
+            repository: RELAY_REPOSITORY,
+            extraRepositories: [`${docs.owner}/${docs.name}`],
+            prompt: TASK,
+            idempotencyKey: randomUUID(),
+            choice: undefined,
+          }).pipe(Effect.provide(Layer.mergeAll(github.layer, catalog))),
+        );
+
+        assert.ok(Result.isFailure(refused));
+        assert.equal(refused.failure, HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
+        assert.equal(opened.length, 0);
+      }),
+  );
+
+  it.effect(
+    "a Start on no task opens one agent in the workspace on the repository it names, handed the prompt, a retry under its key opens nothing again, and an account outside the workspace starts nothing",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const outsider = yield* openGithubUser();
+        yield* connectAgentApiKeys(outsider);
+        yield* openWorkspace(outsider);
+        const { opened, agentSessions } = fakeAgentSessions();
+
+        const ask: StartAsk = {
+          taskId: null,
+          workspaceId,
+          repository: RELAY_REPOSITORY,
+          prompt: TASK,
+          idempotencyKey: randomUUID(),
+          choice: undefined,
+        };
+
+        const first = yield* startAgent(agentSessions, owner, ask).pipe(Effect.provide(services));
+        const again = yield* startAgent(agentSessions, owner, ask).pipe(Effect.provide(services));
+
+        const refused = yield* Effect.result(
+          startAgent(agentSessions, outsider, { ...ask, idempotencyKey: randomUUID() }).pipe(
+            Effect.provide(services),
+          ),
+        );
+
+        const agent = Option.getOrThrow(yield* readAgent(owner, first.agent.id));
+        assert.deepEqual(
+          [agent.taskId, agent.organizationId, agent.repository, agent.prompt],
+          [null, workspaceId, RELAY_REPOSITORY, TASK],
+        );
+        assert.deepEqual([again.created, again.agent.id], [false, first.agent.id]);
+        assert.ok(Result.isFailure(refused));
+        assert.equal(refused.failure, HOSTED_REFUSAL.NOT_FOUND);
+        assert.deepEqual(
+          opened.map((message) => message.conversationId),
+          [agent.conversationId],
+        );
+      }),
+  );
+
+  it.effect(
+    "an agent started on no task takes its member's later message and a message queued behind it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const { agentSessions, sessions } = fakeAgentSessions();
+
+        const started = yield* startAgent(agentSessions, owner, {
+          taskId: null,
+          workspaceId,
+          repository: RELAY_REPOSITORY,
+          prompt: TASK,
+          idempotencyKey: randomUUID(),
+          choice: undefined,
+        }).pipe(Effect.provide(services));
+
+        const agent = Option.getOrThrow(yield* readAgent(owner, started.agent.id));
+
+        const harness = Layer.mergeAll(
+          services,
+          keptAfterResponse().layer,
+          scriptedHarnessLayer(() => sessions),
+        );
+
+        const writer = storeWriter({ tools: CODER_TOOL_SET });
+
+        const sent = yield* steerMemberWords(writer, owner, agent, {
+          text: "Then run the tests",
+          clientKey: randomUUID(),
+        }).pipe(Effect.provide(harness));
+
+        const queue = yield* changeAgentQueue(owner, agent, {
+          change: QUEUE_CHANGE.ADD,
+          id: randomUUID(),
+          text: "And open a pull request",
+        }).pipe(Effect.provide(harness));
+
+        assert.notEqual(sent.outcome, STEER_OUTCOME.REPEATED);
+        assert.deepEqual(
+          queue.messages.map((message) => message.text),
+          ["And open a pull request"],
+        );
+      }),
+  );
+
+  it.effect(
+    "a Manager is made on no task as its creator's, named as asked, wearing the face picked, and handed nothing, so it opens no session and sends no line, told the greeting its page opens on, only where its workspace has Managers on, and an account outside the workspace makes none",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const outsider = yield* openGithubUser();
+        yield* connectAgentApiKeys(outsider);
+        yield* openWorkspace(outsider);
+        const { opened, agentSessions } = fakeAgentSessions();
+
+        const request: ManagerCreateRequest = {
+          idempotencyKey: randomUUID(),
+          workspaceId,
+          name: "Billing",
+          repositories: [RELAY_REPOSITORY],
+          runsOn: { machine: AGENT_MACHINE.VERCEL },
+          model: AGENT_DEFAULT_CHOICE.model,
+          effort: "high",
+          face: { character: MANAGER_FACE_CHARACTER.CAT, color: MANAGER_FACE_COLOR.PEACH },
+        };
+
+        const made = (userId: string) =>
+          Effect.result(
+            startManager(agentSessions, userId, request).pipe(Effect.provide(services)),
+          );
+
+        const off = yield* made(owner);
+        yield* setWorkspaceExperiment({
+          organizationId: workspaceId,
+          experiment: EXPERIMENT.MANAGERS,
+          on: true,
+          by: owner,
+        });
+        const outside = yield* made(outsider);
+        const started = yield* made(owner);
+
+        assert.ok(Result.isFailure(off));
+        assert.equal(off.failure, HOSTED_REFUSAL.NOT_PERMITTED);
+        assert.ok(Result.isFailure(outside));
+        assert.equal(outside.failure, HOSTED_REFUSAL.NOT_FOUND);
+        assert.ok(Result.isSuccess(started));
+        const agent = Option.getOrThrow(yield* readAgent(owner, started.success.agent.id));
+        assert.deepEqual(
+          [
+            agent.kind,
+            agent.taskId,
+            agent.organizationId,
+            agent.userId,
+            agent.title,
+            agent.prompt,
+            agent.face,
+          ],
+          [
+            AGENT_KIND.MANAGER,
+            null,
+            workspaceId,
+            owner,
+            "Billing",
+            null,
+            { character: MANAGER_FACE_CHARACTER.CAT, color: MANAGER_FACE_COLOR.PEACH },
+          ],
+        );
+        assert.deepEqual(opened, [], "making a Manager opens no session");
+
+        const db = yield* Database;
+
+        const lines = yield* db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(eq(messages.conversationId, agent.conversationId));
+
+        assert.deepEqual(lines, [], "making a Manager sends no line");
+        assert.ok(
+          managerInstructions({ name: "Billing", deviceId: null }).includes(
+            managerGreeting("Billing"),
+          ),
+          "the Manager is told the greeting its page opens on",
         );
       }),
   );

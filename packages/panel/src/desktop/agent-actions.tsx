@@ -1,4 +1,6 @@
+import type { AgentFork } from "@repo/features/agent-fork-model";
 import {
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_SOURCE,
   type AgentAttachment,
@@ -33,7 +35,6 @@ import {
 } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
 import type { SuggestDoor } from "../tasks/fork-action.js";
-import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import type { HeldAction } from "../tasks/terminal-held.js";
@@ -45,6 +46,10 @@ import { appStateQuery, selectCapability } from "../use-app-state.js";
 import type { MenuAction, MenuEntry, MenuSubmenu } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { useAgentDelete } from "./agent-delete.js";
+import {
+  type ManagerSettingsSubject,
+  useManagerSettingsDialog,
+} from "./manager-settings-dialog.js";
 import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
 
 /**
@@ -56,7 +61,9 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * last and alone: Copy link and Copy transcript ›, Concise or Full, read
  * whole from the service; Rename, which opens its name's field where the
  * surface draws its name, while neither it nor what it stands under is
- * archived (its tab keeps Pin tab among its tab's keeping); Show terminal,
+ * archived (its tab keeps Pin tab among its tab's keeping), or for a
+ * Manager, Settings…, its one card to configure it, on the same terms
+ * (`manager-settings-dialog.tsx`); Show terminal,
  * where the platform runs one, and none for an archived agent, whose sandbox
  * takes no shell, which for a local agent opens the Mac's own Terminal in
  * its worktree instead of the relayed tab; Open in Slack, for an agent
@@ -94,6 +101,8 @@ export interface AgentMenuDoors {
   onCopy?: ((copy: TranscriptCopy) => void) | undefined;
   /** Opens the agent's name's field where the surface draws its name. */
   onRename?: (() => void) | undefined;
+  /** Opens the agent's Settings card, a Manager's, which names it in Rename's place (`manager-settings-dialog.tsx`). */
+  onSettings?: (() => void) | undefined;
   /** Opens the agent's own Terminal tab in the side panel, adding no shell. */
   onOpenTerminal?: (() => void) | undefined;
   /** Shows the cloud agent's Local tab viewed last in the side panel, opening no new terminal. */
@@ -118,7 +127,7 @@ export interface AgentMenuDoors {
  * The agent's menu, built once for every surface that draws it, in the
  * groups every menu of the window keeps: Copy link, Open in new tab in a
  * browser, and the transcript's two
- * copies; Rename; Show terminal,
+ * copies; Rename, or Settings… for a Manager; Show terminal,
  * Show browser and Run › where a phone offers them, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
  * Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
@@ -129,7 +138,7 @@ export interface AgentMenuDoors {
  * order.
  */
 export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
-  const { links, onCopy, onRename, onOpenTerminal, onOpenLocal } = doors;
+  const { links, onCopy, onRename, onSettings, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack, run } = doors;
   const { moveTo, archive, deletion, subject } = doors;
@@ -167,6 +176,9 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
 
   const named: MenuEntry[] = [
     ...(onRename === undefined ? [] : [commandAction(PANEL_COMMAND.RENAME, onRename, subject)]),
+    ...(onSettings === undefined
+      ? []
+      : [commandAction(PANEL_COMMAND.SETTINGS, onSettings, subject)]),
   ];
 
   const opened: MenuEntry[] = [
@@ -203,6 +215,7 @@ export type AgentDoors = Pick<
   AgentMenuDoors,
   | "onCopy"
   | "onRename"
+  | "onSettings"
   | "onOpenTerminal"
   | "onOpenLocal"
   | "onOpenBrowser"
@@ -371,7 +384,12 @@ export function useAgentActions(
     | "mac"
     | "startedBy"
     | "source"
-  >,
+    | "kind"
+    | "effort"
+    | "contextWindow"
+    | "runtime"
+  > &
+    Pick<ManagerSettingsSubject, "workspaceId" | "repository">,
   agents: AgentsControl,
   input: {
     /** The agent's name as the surface draws it, which a transcript copied is headed by. */
@@ -402,7 +420,10 @@ export function useAgentActions(
   const moveTo = useMoveToEntry(agent, agents);
   // Note that an Unarchive stands while what the agent stands under is archived, and it is not
   // renamed then; an archived agent's tab on its task is renamed as a live one's is.
-  const renamable = agents.onUnarchive === undefined;
+  // Note that a Manager is named from its Settings card, its one place to configure it, so it offers no Rename.
+  const manager = agent.kind === AGENT_KIND.MANAGER;
+  const renamable = agents.onUnarchive === undefined && !manager;
+  const settings = useManagerSettingsDialog(agent, agents, shown);
   const { onOpenTerminal, onOpenLocal } = terminals;
 
   const macTerminal =
@@ -431,6 +452,7 @@ export function useAgentActions(
     doors: {
       onCopy: copied(read),
       onRename: renamable ? rename.begin : undefined,
+      onSettings: manager && agents.onUnarchive === undefined ? settings.ask : undefined,
       // Note that an archived agent's sandbox takes no shell, so it offers no terminal.
       onOpenTerminal: agent.archivedAt !== undefined ? undefined : terminal,
       // Note that only a cloud agent has a mirror, so an agent on a Mac offers no Local tab.
@@ -457,6 +479,7 @@ export function useAgentActions(
       <>
         {archive.dialog}
         {deletion.dialog}
+        {manager ? settings.dialog : null}
       </>
     ),
   };

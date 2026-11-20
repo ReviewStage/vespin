@@ -240,6 +240,21 @@ export const IDENTITY = {
   ON: "#ffffff",
 };
 
+// A Manager's face (@repo/ui's ManagerFace): the soft fills a React Kawaii
+// character's body is drawn in, one to each of @repo/features/manager-face's
+// MANAGER_FACE_COLOR. The character's own features are drawn near black, so
+// each fill is light enough to hold them, a touch deeper on the light ground
+// so the body's edge still shows on white. Each is its light fill, then its
+// dark.
+export const MANAGER_FACE = {
+  YELLOW: ["#f9c74f", "#ffd882"],
+  GREEN: ["#8fd47a", "#a6e191"],
+  BLUE: ["#6cc4f5", "#83d1fb"],
+  PINK: ["#f78fcb", "#fda7dc"],
+  PURPLE: ["#b08cff", "#c5a6ff"],
+  PEACH: ["#ff9a6c", "#ffb08a"],
+};
+
 // A file's type icon in the file tree's own palette (`@pierre/trees`), which
 // its shadow root keeps to itself, said again for a file drawn outside the
 // tree, and the colors a sidebar section's glyph may wear (the panel's

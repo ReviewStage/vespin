@@ -72,7 +72,6 @@ const READING_TASK = readingWords("the task");
 /** What the page says where the task's blocks could not be read, beside Try again. */
 const TASK_UNREAD = readFailedWords("the task");
 
-/** What a failed read offers. */
 const TRY_AGAIN = "Try again";
 
 /** Whether a route's word names one of the four kinds. */

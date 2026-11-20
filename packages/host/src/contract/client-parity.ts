@@ -91,11 +91,11 @@ const IOS = {
   AGENT_TAB_DOT: byDesign(
     "An agent's unseen dot marks the desktop's and the web's tab strip, which the phone has none of; a failed run reaches the phone as a push, and a running one as its Live Activity",
   ),
-  RUN_ON_MAC_STANDING: byDesign(
-    "Whether run_on_mac is on for an agent is the desktop's Runs on card's to say, about the Mac its commands would run on",
+  TOOLS_RETRY: notYet(
+    "iOS's Machine chip reads the agent's tools again as its page opens again rather than offering Try again",
   ),
   AGENT_SESSION: notYet(
-    "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
+    "iOS's agent page leaves a fresh session and a restart of the agent's machine to the desktop and the web for now",
   ),
   AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
   COPY_PICTURE: byDesign(
@@ -110,7 +110,9 @@ const IOS = {
   ),
   DESKTOP_ONLY: byDesign("A desktop-only platform concern, refused by the iOS host"),
   DESK_TOOLS: byDesign("iOS v1 leaves the terminal and the live view to the desktop and the web"),
-  DICTATION: byDesign("iOS uses the keyboard's own dictation"),
+  DICTATION: byDesign(
+    "iOS asks for and opens the microphone itself, through iOS's own prompt and its own recorder, rather than the desktop's",
+  ),
   CALL_WINDOW: byDesign(
     "iOS floats no window over other apps; a call keeps on with the screen locked, and its way back stands over the tab bar",
   ),
@@ -143,6 +145,7 @@ const IOS = {
   MENTION_MACHINES: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no machine is offered to mention",
   ),
+  MANAGERS: notYet("iOS lists no Managers yet, so it makes none"),
   MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   BILLING: byDesign("iOS v1 leaves billing to the desktop and the web"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
@@ -241,7 +244,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.SOUND_RENAME]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_REMOVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_CHOOSE]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: panel(IOS.DICTATION),
+  [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: EVERYWHERE,
   [PORT_ACT_KIND.VOICE_OPEN]: EVERYWHERE,
   [PORT_ACT_KIND.ACCOUNT_ACTIVE]: panel(IOS.PRESENCE),
   [PORT_ACT_KIND.PUSH_DEVICE_REGISTER]: PHONE_ONLY,
@@ -255,7 +258,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_MODELS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DEFAULT_WRITE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: panel(IOS.RUN_ON_MAC_STANDING),
+  [PORT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.HOSTS_FOLLOW]: EVERYWHERE,
@@ -281,6 +284,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_LIST]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATIONS),
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_CREATE_MANAGER]: panel(IOS.MANAGERS),
   [PORT_ACT_KIND.AGENTS_MESSAGES]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: EVERYWHERE,
@@ -294,7 +298,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_QUEUE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_STOP]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_REWIND]: panel(IOS.AGENT_SESSION),
+  [PORT_ACT_KIND.AGENTS_REWIND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_MOVE]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
@@ -310,6 +314,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_RUN_ACTION_STOP]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_ARCHIVE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PIN]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_MARK_READ]: panel(IOS.MANAGERS),
   [PORT_ACT_KIND.AGENTS_DELETE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENT_TAB_DOT),
   [PORT_ACT_KIND.AGENTS_SEEN]: panel(IOS.AGENT_TAB_DOT),
@@ -319,8 +324,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW]: panel(IOS.AGENT_PULL_REQUEST_CARD),
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_RETRY]: panel(IOS.AGENT_PULL_REQUEST_CARD),
   [PORT_ACT_KIND.AGENTS_TURN_CHANGES]: panel(IOS.DIFF),
-  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: panel(IOS.RUN_ON_MAC_STANDING),
-  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: panel(IOS.RUN_ON_MAC_STANDING),
+  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: panel(IOS.TOOLS_RETRY),
   [PORT_ACT_KIND.AGENTS_GITHUB_IMAGE]: panel(IOS.DIFF),
 
   [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: EVERYWHERE,

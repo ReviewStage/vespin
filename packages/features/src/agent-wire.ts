@@ -23,6 +23,7 @@ import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
+import { managerFacePickSchema, managerFaceSchema } from "./manager-face.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -234,11 +235,15 @@ export type NativeAgentRuntime = (typeof NATIVE_AGENT_RUNTIMES)[number];
 
 /**
  * What kind of agent a row is: a coder, which every agent started on work is;
- * or a pilot, which a row from before Pilot was removed may still hold, and
- * which every reader treats as a coder. Nothing writes a pilot now.
+ * a manager, which works across a workspace's tasks rather than on one; or a
+ * pilot, which a row from before Pilot was removed may still hold, and which
+ * every reader treats as a coder. Nothing writes a pilot now. The kind
+ * leaves the service only as a Manager's summary says it (`kind`), and in
+ * its counted events.
  */
 export const AGENT_KIND = {
   CODER: "coder",
+  MANAGER: "manager",
   PILOT: "pilot",
 } as const;
 
@@ -1058,6 +1063,16 @@ export const agentRenameRequestSchema = EffectSchema.Struct({
 export type AgentRenameRequest = typeof agentRenameRequestSchema.Type;
 
 /**
+ * Changing a Manager's face (PATCH), which every place it is drawn then
+ * draws; refused as invalid for a coder, which wears none. A face another
+ * Manager of the workspace wears may be picked: only the face the service
+ * picks for a new Manager steps past those worn.
+ */
+export const agentFaceRequestSchema = EffectSchema.Struct({ face: managerFacePickSchema });
+
+export type AgentFaceRequest = typeof agentFaceRequestSchema.Type;
+
+/**
  * Archiving an agent, or bringing it back (PATCH). Archiving one with a
  * turn running stops that turn first, as a Stop would, and the answer is
  * the agent as it then stands. One still starting, or with a message
@@ -1093,10 +1108,10 @@ export const agentPinRequestSchema = EffectSchema.Struct({
 export type AgentPinRequest = typeof agentPinRequestSchema.Type;
 
 /**
- * Moving the asking member's own read mark of an agent with no task (PATCH),
- * which a released desktop still sends. Every agent stands on a task, read
- * through its task's mark alone, so the service changes nothing and answers
- * the agent as it stands.
+ * Moving the asking member's own read mark of a Manager's chat (PATCH): a
+ * look reads it through the service's now, never back, and a mark by hand
+ * changes nothing. A coder's mark moves too, though nothing reads it. The
+ * answer is the agent as it then stands.
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
 
@@ -1230,7 +1245,7 @@ export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
  */
 export const agentSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  taskId: wireUuidSchema,
+  taskId: EffectSchema.NullOr(wireUuidSchema),
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -1244,6 +1259,14 @@ export const agentSummarySchema = EffectSchema.Struct({
   runtime: EffectSchema.optionalKey(EffectSchema.Literals(NATIVE_AGENT_RUNTIMES)),
   /** The agent's title as its tab shows it; null until one is generated, and after a rename cleared it, when the tab shows the model's name. */
   title: EffectSchema.NullOr(EffectSchema.String),
+  /** That the agent is a Manager, whose page opens on its greeting (`@repo/features/manager-greeting`); absent for a coder, and from a service older than it. */
+  kind: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_KIND.MANAGER)),
+  /** A Manager's face (`@repo/features/manager-face`), which the service picked as it was made; absent for a coder, and from a service older than it. */
+  face: EffectSchema.optionalKey(managerFaceSchema),
+  /** How far the reader read a Manager's chat (`read-mark.ts`), the service's instant; absent for a coder, and from a service older than it. */
+  readThrough: EffectSchema.optionalKey(countedNumber),
+  /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */
+  saidAt: EffectSchema.optionalKey(countedNumber),
   /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
   machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
   /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */
@@ -2134,7 +2157,7 @@ export type PullRequestReviewTeam = typeof reviewTeamSchema.Type;
 /** The agent whose pull request one of a stack is: its id, and its task's. */
 const stackAgentSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  taskId: wireUuidSchema,
+  taskId: EffectSchema.NullOr(wireUuidSchema),
 });
 
 /**

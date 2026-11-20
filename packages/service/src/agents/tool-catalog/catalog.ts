@@ -5,7 +5,7 @@
  * subagents; what touches the app reaches the agent as a tool of our MCP
  * server (`../workspace-mcp/app.ts`), and this catalog is that server's
  * every tool. Each is declared once here: the name, the description, and
- * the input schema its tool file declares; the gate it stands behind, if
+ * the input schema its tool file declares; the gates it stands behind, if
  * any (`gates.ts`); whether Claude Code loads it from the first turn; the
  * door it runs through (`../coder-host/inbox-door.ts` for the inbox, the
  * agent tools' own runs for the workspace's agents, tasks, automations, and
@@ -166,6 +166,7 @@ import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
+import { runSendToUser, SEND_TO_USER_TOOL } from "../coder-host/send-to-user-tool.js";
 import { SHOW_MEDIA_TOOL } from "../coder-host/show-media.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import {
@@ -264,8 +265,8 @@ export interface CatalogTool<Name extends string = string> {
   readonly description: string;
   /** The input schema as JSON Schema, emitted from the tool file's own. */
   readonly inputSchema: object;
-  /** The gate the tool stands behind; a tool with none is offered every agent. */
-  readonly gate?: ToolGate;
+  /** The gates the tool stands behind, each of which must open to the agent; a tool with none is offered every agent. */
+  readonly gates?: readonly ToolGate[];
   /**
    * Whether Claude Code lists it in its prompt from the first turn rather
    * than deferring it behind its tool search, where the first call of each
@@ -295,7 +296,7 @@ interface ToolSpec<Name extends string> {
 /** What of a tool the catalog declares beside its spec and its door. */
 type Served = Pick<
   CatalogTool,
-  "gate" | "alwaysLoad" | "content" | "watched" | "refused" | "variant"
+  "gates" | "alwaysLoad" | "content" | "watched" | "refused" | "variant"
 >;
 
 function served<const Name extends string>(
@@ -316,13 +317,15 @@ function served<const Name extends string>(
 type AgentToolRun = (
   call: AgentCall,
   input: UnparsedWireValue,
+  sandbox: InboxSandboxDoor,
 ) => Effect.Effect<WorkspaceMcpToolResult, never, WorkspaceMcpServices>;
 
 /**
  * A tool about the workspace's agents and tasks, run as the agent the
  * conversation is, under the call's key: a message or a start keyed on it,
  * which reach the agents' sessions as the deployment acting for this agent's
- * starter. Note that the agent is the standing's own row, read once for the
+ * starter, with the door to its sandbox, where a tool reads a file the agent
+ * names by its path. Note that the agent is the standing's own row, read once for the
  * call, and that an agent whose row is gone is refused before its key is read.
  */
 function agentTool<const Name extends string>(
@@ -330,7 +333,7 @@ function agentTool<const Name extends string>(
   run: AgentToolRun,
   options?: Served,
 ) {
-  const door: Door = (admitted, input, { seams, callKey, standing }) => {
+  const door: Door = (admitted, input, { seams, callKey, standing, sandbox }) => {
     if (Option.isNone(standing.agent)) {
       return Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT));
     }
@@ -352,7 +355,7 @@ function agentTool<const Name extends string>(
         summaryModel: seams.summaryModel,
       };
 
-      return yield* run(call, input);
+      return yield* run(call, input, sandbox);
     });
   };
 
@@ -538,14 +541,17 @@ function portTool<const Name extends string>(
     return run({ userId, agentId: id }, input);
   };
 
-  return served(spec, door, { gate: TOOL_GATE.SANDBOX });
+  return served(spec, door, { gates: [TOOL_GATE.SANDBOX] });
 }
 
 /** Loaded from the first turn (`CatalogTool`'s `alwaysLoad`). */
 const LOADED: Served = { alwaysLoad: true };
 
 /** Loaded from the first turn, behind the starter's Inbox. */
-const INBOX_LOADED: Served = { ...LOADED, gate: TOOL_GATE.INBOX };
+const INBOX_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX] };
+
+/** Loaded from the first turn, behind the starter's Inbox, and closed to an agent a Manager started, which reaches people through it. */
+const OWN_THREADS_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX, TOOL_GATE.UNMANAGED] };
 
 /** Every tool served, in the order `tools/list` names them. */
 const CATALOG = [
@@ -554,7 +560,7 @@ const CATALOG = [
     INBOX_TOOLS.POST,
     (admitted, input, { sandbox }) =>
       runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox }),
-    INBOX_LOADED,
+    OWN_THREADS_LOADED,
   ),
   served(
     INBOX_TOOLS.LIST,
@@ -567,17 +573,17 @@ const CATALOG = [
   served(
     INBOX_TOOLS.WITHDRAW,
     (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
-    INBOX_LOADED,
+    OWN_THREADS_LOADED,
   ),
   // The pull request, the description, and pages and pictures.
   served(OPEN_PULL_REQUEST_TOOL, (admitted, input) => runAgentOpenPullRequest(admitted, input), {
-    gate: TOOL_GATE.REPOSITORY,
+    gates: [TOOL_GATE.REPOSITORY],
     alwaysLoad: true,
   }),
   served(
     EDIT_DESCRIPTION_TOOL,
     (admitted, input, { sandbox }) => runTurnCappedEditDescription(admitted, input, sandbox),
-    { gate: TOOL_GATE.DESCRIPTIONS, alwaysLoad: true },
+    { gates: [TOOL_GATE.DESCRIPTIONS], alwaysLoad: true },
   ),
   // Note that a look stands on no gate, because it shows a thread's pictures as much as a description's, and every workspace has threads.
   served(
@@ -599,7 +605,7 @@ const CATALOG = [
   served(
     CODER_SHOW_PAGE_TOOL,
     (admitted, input, { sandbox }) => runAgentShowPage(admitted, input, sandbox),
-    LOADED,
+    { ...LOADED, gates: [TOOL_GATE.TASK] },
   ),
   agentTool(READ_PAGE_TOOL, runReadPage),
   // The workspace's agents.
@@ -610,7 +616,7 @@ const CATALOG = [
   agentTool(READ_AGENT_CHANGES_TOOL, runReadAgentChanges),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
   agentTool(ADD_SUGGESTION_TOOL, runAddSuggestion, {
-    gate: TOOL_GATE.REPLY_BUTTONS,
+    gates: [TOOL_GATE.TASK, TOOL_GATE.REPLY_BUTTONS],
     alwaysLoad: true,
   }),
   agentTool(UPDATE_AGENT_TOOL, runUpdateAgent),
@@ -638,10 +644,10 @@ const CATALOG = [
   agentTool(DELETE_AUTOMATION_TOOL, runDeleteAutomation),
   agentTool(RUN_AUTOMATION_TOOL, runRunAutomation),
   // The workspace's shared memory.
-  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gate: TOOL_GATE.MEMORY }),
-  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, gate: TOOL_GATE.MEMORY }),
-  agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gate: TOOL_GATE.MEMORY }),
-  agentTool(FORGET_MEMORY_TOOL, runAgentForget, { gate: TOOL_GATE.MEMORY }),
+  agentTool(SAVE_MEMORY_TOOL, runAgentRemember, { ...LOADED, gates: [TOOL_GATE.MEMORY] }),
+  agentTool(SEARCH_MEMORY_TOOL, runAgentRecall, { ...LOADED, gates: [TOOL_GATE.MEMORY] }),
+  agentTool(LIST_MEMORIES_TOOL, runAgentListMemories, { gates: [TOOL_GATE.MEMORY] }),
+  agentTool(FORGET_MEMORY_TOOL, runAgentForget, { gates: [TOOL_GATE.MEMORY] }),
   // The description's comments.
   commentTool(READ_COMMENTS_TOOL),
   commentTool(REPLY_TO_COMMENT_TOOL),
@@ -655,7 +661,7 @@ const CATALOG = [
     COMPUTER_TOOL,
     (admitted, input, { sandbox }) => runComputerTool(admitted.target, input, sandbox),
     {
-      gate: TOOL_GATE.COMPUTER_USE,
+      gates: [TOOL_GATE.COMPUTER_USE],
       content: computerContent,
       watched: (result) => computerWatched(unparsedWire(result)),
       refused: machineCommandNotRun,
@@ -663,7 +669,7 @@ const CATALOG = [
   ),
   // The agent's browser.
   served(BROWSER_TOOL, runAgentBrowser, {
-    gate: TOOL_GATE.SANDBOX,
+    gates: [TOOL_GATE.TASK, TOOL_GATE.SANDBOX],
     content: browserContent,
     refused: browserNotRun,
   }),
@@ -678,7 +684,9 @@ const CATALOG = [
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
-  agentTool(END_TURN_TOOL, runEndTurn, { ...LOADED, gate: TOOL_GATE.TURN_END }),
+  agentTool(END_TURN_TOOL, runEndTurn, { ...LOADED, gates: [TOOL_GATE.TURN_END] }),
+  // A Manager's message to its chat, the one way its words reach people.
+  agentTool(SEND_TO_USER_TOOL, runSendToUser, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
 ] as const;
 
 /** The name of a tool the catalog serves. */
@@ -696,11 +704,16 @@ export function isServedTool(name: string): name is ServedTool {
   return SERVED_NAMES.has(name);
 }
 
-/** Whether the agent is offered the tool: one behind no gate always, and a gated one where its gate is open to the agent. */
-export function offers(standing: AgentStanding, tool: ServedTool): boolean {
-  const gate = TOOL_CATALOG.get(tool)?.gate;
+/** The first of the tool's gates shut to the agent; none where every one opens, or the tool stands behind none. */
+function shutGate(tool: CatalogTool, standing: AgentStanding): ToolGate | undefined {
+  return tool.gates?.find((gate) => !standing.open.has(gate));
+}
 
-  return gate === undefined || standing.open.has(gate);
+/** Whether the agent is offered the tool: one behind no gate always, and a gated one where each of its gates is open to the agent. */
+export function offers(standing: AgentStanding, tool: ServedTool): boolean {
+  const served = TOOL_CATALOG.get(tool);
+
+  return served === undefined || shutGate(served, standing) === undefined;
 }
 
 /**
@@ -794,9 +807,9 @@ export function callTool(
   if (tool === undefined) return Effect.die(new Error(`${name} has no catalog entry`));
 
   return Effect.flatMap(standingOf(admitted), (standing) => {
-    const { gate } = tool;
+    const gate = shutGate(tool, standing);
 
-    if (gate !== undefined && !standing.open.has(gate)) {
+    if (gate !== undefined) {
       return Effect.succeed(answerOf(tool, gateRefusal(tool, gate)));
     }
 

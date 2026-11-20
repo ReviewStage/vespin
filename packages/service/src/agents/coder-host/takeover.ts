@@ -12,6 +12,7 @@ import { copySessionEntries, holdsSession } from "@repo/database/models/claude-s
 import { readForkCut, readNativeRewind } from "@repo/database/models/conversation-rewind";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
+import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
 import {
   type NoteFiles,
@@ -136,9 +137,22 @@ export type TakeoverAsk = StartWhere & {
   readonly runsOn?: AgentRunsOnRequest | undefined;
 };
 
-/** Where a Start puts its agent: a task, which an agent it is started from must stand on too. */
-export interface StartWhere {
+/** Where a Start puts its agent: a task, or a workspace on no task, which an agent it is started from must stand in too. */
+export type StartWhere = TaskWhere | WorkspaceWhere;
+
+/** A Start on a task, whose workspace and repository the agent takes. */
+export interface TaskWhere {
   readonly taskId: string;
+}
+
+/** A Start on no task, in a workspace the starter is a member of, working in the repositories the Start names. */
+export interface WorkspaceWhere {
+  readonly taskId: null;
+  readonly workspaceId: string;
+  /** The repository the agent's checkout is cloned from; null for an agent in none. */
+  readonly repository: string | null;
+  /** The repositories it works in beside its own, in the order named; none for one in one or none. */
+  readonly extraRepositories?: readonly string[] | undefined;
 }
 
 /** What the first line of a Start from another agent says it is, and names. */
@@ -261,9 +275,20 @@ function takeoverKindOf(from: StartFrom): Takeover {
   return from.told.messageId === undefined ? TAKEOVER.CONTINUE : TAKEOVER.FORK;
 }
 
-/** The place an agent stands in, which a Start from it puts the new agent in: its task. */
-export function placeOfAgent(agent: Pick<Agent, "taskId">): StartWhere {
-  return { taskId: agent.taskId };
+/** The place an agent stands in, which a Start from it puts the new agent in: its task, or its workspace and repository where it stands on none. */
+export function placeOfAgent(
+  agent: Pick<Agent, "taskId" | "organizationId" | "repository">,
+): StartWhere {
+  return agent.taskId === null
+    ? { taskId: null, workspaceId: agent.organizationId, repository: agent.repository }
+    : { taskId: agent.taskId };
+}
+
+/** Whether an agent stands in the place: on its task, or on no task in its workspace. */
+function standsIn(agent: Pick<Agent, "taskId" | "organizationId">, place: StartWhere): boolean {
+  return place.taskId === null
+    ? agent.taskId === null && agent.organizationId === place.workspaceId
+    : agent.taskId === place.taskId;
 }
 
 type InheritedPlace = {
@@ -293,7 +318,10 @@ export function inheritedPlaceOf(
 
 /** The place alone, as a Start from another agent reads its source against it. */
 export function whereOf(place: StartWhere): StartWhere {
-  return { taskId: place.taskId };
+  if (place.taskId !== null) return { taskId: place.taskId };
+  const { workspaceId, repository, extraRepositories } = place;
+
+  return { taskId: null, workspaceId, repository, extraRepositories };
 }
 
 /**
@@ -360,7 +388,12 @@ const madeInPlace = Effect.fnUntraced(function* (
   made: Agent,
   place: StartWhere,
 ): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices> {
-  if (made.taskId !== place.taskId) return false;
+  if (!standsIn(made, place)) return false;
+
+  // Note that a place on no task is reached by its workspace's membership, as the agent is read.
+  if (place.taskId === null) {
+    return yield* hostedStoreOrUnavailable(isWorkspaceMember(userId, place.workspaceId));
+  }
 
   return Option.isSome(yield* hostedStoreOrUnavailable(readTaskWorkspace(userId, place.taskId)));
 });
@@ -489,9 +522,10 @@ const sourceWorkOf = (
   );
 };
 
-/** The repository the new agent clones in the place: the task's as it stands now; none where the task names none. */
+/** The repository the new agent clones in the place: the task's as it stands now, or the one a place on no task names; none where it names none. */
 const placeRepository = (userId: string, place: StartWhere) =>
   Effect.gen(function* () {
+    if (place.taskId === null) return place.repository;
     const task = yield* hostedStoreOrUnavailable(readTaskHeader(userId, place.taskId));
 
     return Option.isSome(task) ? task.value.repository : null;
@@ -515,7 +549,7 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<StartFrom, HostedRefusal, DatabaseServices | SourceCopyServices> {
   const [found] = yield* hostedStoreOrUnavailable(listPublishedAgentsById(userId, [from.agentId]));
 
-  if (found === undefined || found.agent.taskId !== place.taskId) {
+  if (found === undefined || !standsIn(found.agent, place)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
 

@@ -695,21 +695,13 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
     assert.equal(player.hasAttribute("controls"), false, "and not the browser's");
     assert.equal(player.getAttribute("aria-label"), "Video: Inviting a member.webm");
     assert.equal(viewerPlace(document), "1 of 2");
-    // Note that the viewer's strip makes a third, for the video's first frame its thumb shows.
-    assert.deepEqual(created, [
-      CONVERSATION_MEDIA_TYPE.WEBM,
-      CONVERSATION_MEDIA_TYPE.WEBM,
-      CONVERSATION_MEDIA_TYPE.WEBM,
-    ]);
+    // Note that the viewer and its strip's thumb play from the address the inline player made, which is made once.
+    assert.deepEqual(created, [CONVERSATION_MEDIA_TYPE.WEBM]);
 
     const root = roots.pop();
     assert.ok(root);
-    act(() => root.unmount());
-    assert.deepEqual(
-      revoked.sort(),
-      ["blob:video-1", "blob:video-2", "blob:video-3"],
-      "each address is let go of as its video goes",
-    );
+    await act(async () => root.unmount());
+    assert.deepEqual(revoked, ["blob:video-1"], "the address is let go of as its videos go");
   } finally {
     URL.createObjectURL = own.create;
     URL.revokeObjectURL = own.revoke;

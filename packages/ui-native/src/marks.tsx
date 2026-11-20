@@ -43,15 +43,14 @@ import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import {
-  PRIORITY_MARK_BARRED,
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
+  priorityMarkUnder,
   STATUS_MARK_SYMBOL,
 } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { readWorkingBeat, subscribeWorkingBeat } from "./working-beat.js";
 import { tileHue } from "./workspace-tile-model.js";
@@ -199,15 +198,18 @@ export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority
     />
   );
 
-  if (!PRIORITY_MARK_BARRED.has(priority)) return lit;
+  // Note that the faint bars are the ones a priority's menu draws under its lit ones too (`priorityMarkUnder`), so the chip and the menu stand one mark.
+  const under = priorityMarkUnder(priority);
+
+  if (under === undefined) return lit;
 
   return (
     <ZStack>
       <Image
-        {...glyphImage(GLYPH.PRIORITY_BARS)}
+        {...glyphImage(under.glyph)}
         size={size}
         color={ink}
-        modifiers={[opacity(TASK_PRIORITY_UNLIT_OPACITY), accessibilityHidden()]}
+        modifiers={[opacity(under.opacity), accessibilityHidden()]}
       />
       {lit}
     </ZStack>

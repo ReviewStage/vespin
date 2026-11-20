@@ -1,4 +1,9 @@
 import {
+  editSendAsk,
+  RESTORE_FILES_SHORT_WORDS,
+  RESTORE_FILES_WORDS,
+} from "@repo/features/agent-rewind-model";
+import {
   AGENT_STATUS,
   type AgentAttachment,
   type AgentTranscriptMessage,
@@ -28,11 +33,6 @@ import { confirmFailure } from "../failure-report.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type LineAttachment, useLineAttachments } from "./agent-pictures.js";
 import type { HeldUpdate } from "./refused-send.js";
-import {
-  FILES_RESTORED_WORDS,
-  RESTORE_FILES_SHORT_WORDS,
-  RESTORE_FILES_WORDS,
-} from "./rewind-action.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 
@@ -59,23 +59,14 @@ import type { AgentComposerControl } from "./use-agent-composer.js";
 
 const CANCEL_WORDS = "Cancel";
 
-/** What Send asks before it drops the messages after the line, or puts the files back. */
+/** What Send asks before it drops the messages after the line, or puts the files back, in `editSendAsk`'s words. */
 function sendQuestion(
   takes: string | undefined,
   restoring: boolean,
   cuts: boolean,
 ): DialogQuestion {
-  const dropped = `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the conversation, and the agent stopped if it is working.`;
-
   return {
-    title: "Send the edited message?",
-    body: !cuts
-      ? `The agent is stopped if it is working. ${FILES_RESTORED_WORDS}`
-      : restoring
-        ? `${dropped} ${FILES_RESTORED_WORDS}`
-        : `${dropped} Changes the agent made to its files stay as they are.`,
-    verb: "Send message",
-    running: "Sending",
+    ...editSendAsk(takes, restoring, cuts),
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
     // Note that `takes` names the members whose messages go.

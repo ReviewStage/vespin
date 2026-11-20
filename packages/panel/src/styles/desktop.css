@@ -399,10 +399,12 @@ body,
 }
 
 /* The Tasks head heads the groups its view filters, the sections and the
-   list, so the first of them stands a tight gap under it rather than a
-   section's (sidebar-task-view.tsx). */
-.sidebar-tasks-head + .sidebar-group {
-  margin-top: var(--ui-tight-gap);
+   list, which its fold folds together, so the first of them stands a tight
+   gap under it rather than a section's (sidebar-task-view.tsx). Note that
+   the gap is the fold's body's own padding rather than its first group's
+   margin, so the fold unrolls and rolls up the whole of it. */
+.sidebar-tasks-head > .ui-group-header > .ui-disclosure-body {
+  padding-top: var(--ui-tight-gap);
 }
 
 /* The account's own sections, between Pinned and Tasks (sidebar-sections.tsx).
@@ -1249,12 +1251,12 @@ body,
 /* Automations ---------------------------------------------------------------- */
 
 /* A narrow room's row says when it runs next in the line under its name,
-   a failure's mark leading the line as it leads an agent's end line. Note
-   that the mark stands inside the line's replay mark, a box of its own in
-   the tree though not on the screen, so it is reached as a descendant. */
+   a failure's mark leading the line as it leads an agent's end line, centered
+   on the words by the mark itself (`row-mark.tsx`). Note that the mark
+   stands inside the line's replay mark, a box of its own in the tree though
+   not on the screen, so it is reached as a descendant. */
 .automation-group .ui-list-row-description .failed-mark {
   margin-right: var(--ui-tight-gap);
-  vertical-align: -3px; /* off-scale: centers a 14px mark on 12px words */
 }
 
 /* An automation's page's toolbar stands in a box of its own whose width the

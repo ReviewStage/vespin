@@ -33,13 +33,15 @@ export {
 
 /**
  * Where a Slack thread that speaks for an agent came from: a member's
- * message to the bot that started the agent, or the DM the bot sent an
- * automation run's result in. Only a start makes the agent Slack's own,
+ * message to the bot that started the agent, the DM the bot sent an
+ * automation run's result in, or a message the agent sent there itself
+ * (`send_slack_message`). Only a start makes the agent Slack's own,
  * whose task finishes with no merge and which is archived after a good turn.
  */
 export const SLACK_THREAD_ORIGIN = {
   START: "start",
   RUN_RESULT: "run_result",
+  AGENT_POST: "agent_post",
 } as const;
 
 export type SlackThreadOrigin = (typeof SLACK_THREAD_ORIGIN)[keyof typeof SLACK_THREAD_ORIGIN];

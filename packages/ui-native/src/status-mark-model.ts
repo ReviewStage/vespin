@@ -6,8 +6,9 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "@repo/features/task-wire";
-import { GLYPH, type Glyph } from "./glyph.js";
+import { GLYPH, type Glyph, type MarkLayer } from "./glyph.js";
 import { STATUS_TONE, type StatusTone } from "./tokens/status-tone.js";
+import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 
 /**
  * A ring that fills as work moves through it, as `@repo/ui`'s `task-marks.tsx`
@@ -41,6 +42,13 @@ export const PRIORITY_MARK_BARRED: ReadonlySet<TaskPriority> = new Set([
   TASK_PRIORITY.MEDIUM,
   TASK_PRIORITY.LOW,
 ]);
+
+/** What a priority's lit bars stand over, every bar it can light drawn faint, as `task-marks.css` draws a bar the priority doesn't reach; none for urgent's square and no priority's dashes. */
+export function priorityMarkUnder(priority: TaskPriority): MarkLayer | undefined {
+  return PRIORITY_MARK_BARRED.has(priority)
+    ? { glyph: GLYPH.PRIORITY_BARS, opacity: TASK_PRIORITY_UNLIT_OPACITY }
+    : undefined;
+}
 
 /** A priority's ink, as `task-marks.css` draws it: urgent in the attention ink, every other in the muted one. */
 export const PRIORITY_MARK_TONE = {

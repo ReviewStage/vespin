@@ -1,10 +1,8 @@
 // chip-mark-model.ts -- which mark a chip leads with for the entity it names, from what the app holds of it, as the panel's `entity-mark.tsx` reads it.
 
 import { ENTITY_KIND, type Entity } from "@repo/features/entity-kind";
-import {
-  INTEGRATION_PROVIDER_LIST,
-  type IntegrationProvider,
-} from "@repo/features/integration-wire";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
+import type { LinkSite } from "@repo/features/link-site";
 import { providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_TONE } from "@repo/features/task-standing-words";
@@ -26,6 +24,8 @@ export const CHIP_MARK = {
   TILE: "tile",
   /** The mark of the integration a link's page is on, as the desktop draws it. */
   PROVIDER: "provider",
+  /** The mark of the well-known site a link's page is on, as the desktop draws it. */
+  SITE: "site",
 } as const;
 
 /** What a chip leads with for the entity it names, where the app holds it. */
@@ -38,7 +38,8 @@ export type ChipMark =
     }
   | { readonly kind: typeof CHIP_MARK.HARNESS; readonly harness: ModelProvider }
   | { readonly kind: typeof CHIP_MARK.TILE; readonly workspace: SwitcherWorkspace }
-  | { readonly kind: typeof CHIP_MARK.PROVIDER; readonly provider: IntegrationProvider };
+  | { readonly kind: typeof CHIP_MARK.PROVIDER; readonly provider: IntegrationProvider }
+  | { readonly kind: typeof CHIP_MARK.SITE; readonly site: LinkSite };
 
 /** An entity's mark by what the app holds of it; none where it holds nothing, which leaves the chip its kind's glyph. */
 export type ChipMarkOf = (entity: Entity) => ChipMark | undefined;
@@ -62,22 +63,11 @@ function taskMark(status: TaskStatus | undefined): ChipMark | undefined {
     : { kind: CHIP_MARK.GLYPH, glyph: STATUS_MARK_SYMBOL[status], tone: TASK_STATUS_TONE[status] };
 }
 
-/** Whether a well-known site is one of the integrations, as Gmail, Google Calendar and Google Drive are, whose mark it wears. */
-function isProvider(site: string): site is IntegrationProvider {
-  return INTEGRATION_PROVIDER_LIST.some((provider) => provider === site);
-}
-
-/**
- * The mark a link's chip leads with, as the panel's leads it with its
- * provider's or its site's (`ProviderMark`): an integration's page its
- * provider's, and a well-known site's page its site's where the site is an
- * integration too; none for any other site, whose mark the app's catalog
- * holds no image of yet, which keeps the link's glyph.
- */
-function linkMark(link: Extract<Entity, { readonly kind: typeof ENTITY_KIND.LINK }>) {
-  const provider = "site" in link ? link.site : link.provider;
-
-  return isProvider(provider) ? { kind: CHIP_MARK.PROVIDER, provider } : undefined;
+/** The mark a link's chip leads with, as the panel's leads it (`ProviderMark` of its provider or its site): its integration's, or its well-known site's. */
+function linkMark(link: Extract<Entity, { readonly kind: typeof ENTITY_KIND.LINK }>): ChipMark {
+  return "site" in link
+    ? { kind: CHIP_MARK.SITE, site: link.site }
+    : { kind: CHIP_MARK.PROVIDER, provider: link.provider };
 }
 
 /**

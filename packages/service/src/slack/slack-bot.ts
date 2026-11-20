@@ -11,12 +11,12 @@
  * whose token is not held, or will not open, is written nothing, and the
  * token is never logged or kept past the handle.
  *
- * Writing to a member
- * finds their Slack user id the first time and keeps it: through a Slack
- * account they connected themselves under Settings › Integrations, whose own
- * token `auth.test` answers their user id and team for, the first in the
- * bot's team taken; else by their email (`users.lookupByEmail`), a miss
- * kept and asked again only after `SLACK_MEMBER_MISS_LIFETIME`. A member
+ * Writing to a member finds their Slack user id the first time and keeps
+ * it: through a Slack account they connected themselves under Settings ›
+ * Integrations, whose own token `auth.test` answers their user id and team
+ * for, the first in the bot's team taken; else by their email
+ * (`users.lookupByEmail`), a miss kept and asked again only after
+ * `SLACK_MEMBER_MISS_LIFETIME`. A member
  * with no match is written nothing.
  *
  * A member who writes to the bot is found by the id kept for them, else
@@ -24,8 +24,9 @@
  * whose ids are not kept yet (`memberOf`); the caller falls back to the
  * email Slack holds for them (`users.info`). The bot replies in the thread
  * they wrote in (`chat.postMessage` with `thread_ts`), reading the thread's
- * earlier messages (`conversations.replies`) and its link
- * (`chat.getPermalink`). Settings lists the team's channels
+ * earlier messages (`conversations.replies`), one message there and the
+ * thread it stands in (`conversations.replies` bounded to its timestamp),
+ * and its link (`chat.getPermalink`). Settings lists the team's channels
  * (`conversations.list`), and an owner or admin puts the bot in a public one
  * (`conversations.join`) or takes it out of one (`conversations.leave`).
  *
@@ -37,10 +38,10 @@
  * to the bound its caller names.
  *
  * `dm`, `update`, those reads, replies, joins, and leaves, and the files
- * are best-effort: whatever fails, Slack, Connect, the token, or the store, is logged
- * by a fixed line and Slack's own error code, never Slack's words or the
- * token, and answers nothing. Note that neither is to be
- * yielded inside a transaction, because each waits on Slack.
+ * are best-effort: whatever fails, Slack, Connect, the token, or the store,
+ * is logged by a fixed line and Slack's own error code, never Slack's words
+ * or the token, and answers nothing. Note that none is to be yielded inside
+ * a transaction, because each waits on Slack.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
@@ -134,6 +135,11 @@ export interface SlackThreadMessage {
   readonly user?: string;
   readonly bot: boolean;
   readonly text: string;
+}
+
+/** One message as the bot reads it alone, with the thread it stands in: its own timestamp where it starts one or stands in none. */
+export interface SlackThreadedMessage extends SlackThreadMessage {
+  readonly threadTs: string;
 }
 
 /** A channel of the team as the bot sees it: its name, whether it is private, whether the bot is in it, and its topic, empty where none is set. */
@@ -256,6 +262,11 @@ export interface SlackWorkspaceBot {
   ) => Effect.Effect<Option.Option<string>, never, DatabaseServices>;
   /** The name Slack shows for the user, their display name, else their real name, else their handle; nothing where the read failed. */
   readonly userName: (slackUserId: string) => Effect.Effect<Option.Option<string>>;
+  /** The message at `ts`, with the thread it stands in; nothing where it is not found or the read failed. */
+  readonly message: (
+    channel: string,
+    ts: string,
+  ) => Effect.Effect<Option.Option<SlackThreadedMessage>>;
   /** The message's link in Slack; nothing where the read failed. */
   readonly permalink: (channel: string, ts: string) => Effect.Effect<Option.Option<string>>;
   /** The email Slack holds for the user; nothing where it holds none, or the read failed. */
@@ -313,6 +324,7 @@ const RepliesSchema = Schema.Struct({
   messages: Schema.Array(
     Schema.Struct({
       ts: Schema.String,
+      thread_ts: Schema.optional(Schema.String),
       user: Schema.optional(Schema.String),
       bot_id: Schema.optional(Schema.String),
       text: Schema.optional(Schema.String),
@@ -368,6 +380,9 @@ const THREAD_MESSAGES_READ = "200";
 
 /** How many of a thread's messages one page of a paged read asks for, Slack's own bound, so most threads take one read. */
 const THREAD_PAGE_READ = "1000";
+
+/** How many messages a read of one message asks for: a reply and its thread's first message, which Slack names beside it. */
+const SINGLE_MESSAGE_READ = "2";
 
 /** The most pages a paged read of one thread takes before it answers what it has. */
 const THREAD_PAGES_READ = 10;
@@ -685,6 +700,7 @@ function slackWorkspaceBotOver(
         Effect.fail(new SlackBotFailure({ method: SLACK_METHOD.CONVERSATIONS_HISTORY })),
       memberSlackId: () => Effect.succeedNone,
       userName: () => Effect.succeedNone,
+      message: () => Effect.succeedNone,
       permalink: () => Effect.succeedNone,
       userEmail: () => Effect.succeedNone,
       channels: Effect.succeedNone,
@@ -805,6 +821,34 @@ function slackWorkspaceBotOver(
           firstName(user.profile?.display_name, user.profile?.real_name, user.real_name, user.name),
         ),
         Effect.catch(swallowed<string>("read a member's name")),
+      ),
+    message: (channel, ts) =>
+      // Note that a reply's read names its thread's first message too, so the message is found by its own timestamp.
+      api(SLACK_METHOD.CONVERSATIONS_REPLIES, {
+        channel,
+        ts,
+        oldest: ts,
+        latest: ts,
+        inclusive: "true",
+        limit: SINGLE_MESSAGE_READ,
+      }).pipe(
+        Effect.flatMap((answer) =>
+          readAnswer(SLACK_METHOD.CONVERSATIONS_REPLIES, RepliesSchema)(answer),
+        ),
+        Effect.map((answer) => {
+          const found = answer.messages.find((each) => each.ts === ts);
+
+          if (found === undefined) return Option.none<SlackThreadedMessage>();
+
+          return Option.some<SlackThreadedMessage>({
+            ts: found.ts,
+            ...(found.user === undefined ? undefined : { user: found.user }),
+            bot: found.bot_id !== undefined,
+            text: found.text ?? "",
+            threadTs: found.thread_ts ?? found.ts,
+          });
+        }),
+        Effect.catch(swallowed<SlackThreadedMessage>("read a message")),
       ),
     permalink: (channel, ts) =>
       api(SLACK_METHOD.CHAT_GET_PERMALINK, { channel, message_ts: ts }).pipe(

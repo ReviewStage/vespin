@@ -58,6 +58,7 @@ import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentFailure,
@@ -436,6 +437,9 @@ export const START_AGENT_REFUSAL = {
   BRANCH_NO_REPOSITORY:
     "Not started: the task works in no repository, so there is no branch to clone; leave branch " +
     `out, or give the task a repository with ${AGENT_TOOL.UPDATE_TASK} first.`,
+  NO_OWN_TASK:
+    "Not started: you work on no task, so name the task to start the agent on by its taskId; " +
+    `${AGENT_TOOL.CREATE_TASK} makes one, and ${AGENT_TOOL.LIST_TASKS} names those that stand.`,
   NEW_TASK:
     `Not started: start_agent takes no newTask; make the task with ${AGENT_TOOL.CREATE_TASK}, then ` +
     "start the agent on it by its taskId.",
@@ -1747,7 +1751,9 @@ function runOfCaller(calling: Agent) {
  * `message_agent` by that agent's id, as every word between two agents goes
  * (`coder-host/agent-message.ts`), and that it posts its own threads and
  * sends that agent each one's mention, so the developer never hears of one
- * thing from both agents, then the note it was given.
+ * thing from both agents, or, where a Manager started it, which closes its
+ * threads (`tool-catalog/gates.ts`'s `UNMANAGED`), that it reports to that
+ * Manager alone, then the note it was given.
  */
 function startedByNote(starter: Agent, note: string | undefined): string {
   const lead =
@@ -1755,8 +1761,11 @@ function startedByNote(starter: Agent, note: string | undefined): string {
     `not by the developer. Message it with ${AGENT_TOOL.MESSAGE_AGENT}, its agentId ${starter.id}, ` +
     "when you finish, with what you did, what you published, and what you need of it, and whenever " +
     "you need something from it; if your turn fails, it is told. " +
-    "Post your own threads to the developer, with their pictures, as your instructions say, and " +
-    "send that agent each thread's mention, so it posts none of its own on the same thing.";
+    (starter.kind === AGENT_KIND.MANAGER
+      ? `It is a Manager, and you post no threads: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you. ` +
+        `To hand it a picture, show the file with ${AGENT_TOOL.SHOW_MEDIA} and put the picture ids it answers in your message, never a sandbox path.`
+      : "Post your own threads to the developer, with their pictures, as your instructions say, and " +
+        "send that agent each thread's mention, so it posts none of its own on the same thing.");
 
   return note === undefined ? lead : `${lead}\n\n${note}`;
 }
@@ -2480,7 +2489,14 @@ export function runStartAgent(
   const { model, effort, taskId: taskRef, permissionMode } = asked.success;
   const from = startFromOf(asked.success.from);
 
-  if (taskRef === undefined) return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_TASK));
+  // Note that a coding agent on no task has no taskId of its own to name, so it is told to make one.
+  if (taskRef === undefined) {
+    const taskless = callerAgent(call.caller) !== undefined && callerTask(call.caller) === null;
+
+    return Effect.succeed(
+      agentToolRejected(taskless ? START_AGENT_REFUSAL.NO_OWN_TASK : START_AGENT_REFUSAL.NO_TASK),
+    );
+  }
 
   if (from === undefined && model === undefined) {
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_MODEL));

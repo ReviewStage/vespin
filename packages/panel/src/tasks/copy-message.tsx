@@ -1,3 +1,4 @@
+import { REWIND_ACTION, type RewindAction } from "@repo/features/agent-rewind-model";
 import { BUTTON_SIZE, CopyButton, MessageActions } from "@repo/ui";
 import { LinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -6,12 +7,7 @@ import { copyThroughShell, LINK_COPY } from "../copy-feedback.js";
 import { useCopyLink } from "../copy-link-item.js";
 import { ForkMessageAction } from "./fork-action.js";
 import { useMessagePlace } from "./message-links.js";
-import {
-  EditMessageAction,
-  REWIND_ACTION,
-  RevertMessageAction,
-  type RewindAction,
-} from "./rewind-action.js";
+import { EditMessageAction, RevertMessageAction } from "./rewind-action.js";
 
 /**
  * copy-message.tsx -- the actions under a transcript's message: a copy of its words to the clipboard, where its transcript names its messages Copy link, on an agent's own message where its tab offers it, Fork to new agent (`fork-action.tsx`), and, where its tab offers a rewind, a line's Edit or a reply's Rewind conversation to here (`rewind-action.tsx`).

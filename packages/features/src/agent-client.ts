@@ -185,6 +185,7 @@ import {
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
 import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
+import { type ManagerCreateRequest, managerCreateRequestSchema } from "./manager-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
   agentDefaultWriteSchema,
@@ -209,6 +210,7 @@ import {
   pushDeviceStatusRequestSchema,
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
+import type { ReadMark } from "./read-mark.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
 import { imageAnswerOf, servedGitHubImage, servedRefusal, unansweredCall } from "./served-bytes.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
@@ -943,7 +945,7 @@ export class HostedAgentClient {
     });
   }
 
-  /** A workspace's agents, newest started first, narrowed to one repository where one is named and to the words given where some are, the archived ones among them where `includeArchived` asks. */
+  /** A workspace's agents, newest started first, narrowed to one repository where one is named, to the words given where some are, the archived ones among them where `includeArchived` asks. */
   listWorkspace(
     params: AgentWorkspaceListParams,
   ): Effect.Effect<AgentListAnswer, never, HttpClient.HttpClient> {
@@ -978,6 +980,28 @@ export class HostedAgentClient {
         { params: { id: taskId }, body: admitted },
         { as: AGENT_START_RENAMES, deadline: HOSTED_DEADLINE.START },
       ),
+      (started) => ("failure" in started ? started : started.body),
+    );
+  }
+
+  /**
+   * Makes a Manager in the workspace the request names (`manager-wire.ts`),
+   * under the request's own key, so a retry carrying the same key answers the
+   * Manager the first made; a request the service would refuse by shape is
+   * refused here without traveling.
+   */
+  createManager(
+    request: ManagerCreateRequest,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(managerCreateRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return Effect.map(
+      hostedCall(this.#hosted.agents.createManager, admitted, {
+        as: AGENT_START_RENAMES,
+        deadline: HOSTED_DEADLINE.START,
+      }),
       (started) => ("failure" in started ? started : started.body),
     );
   }
@@ -1271,6 +1295,22 @@ export class HostedAgentClient {
       hostedCall(
         this.#hosted.agents.change,
         { params: { id: agentId }, body },
+        { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
+      ),
+      rowWritten,
+    );
+  }
+
+  /** Moves the account's own read mark of a Manager's chat, under the idempotency key given where one is, answering the agent as it then stands. */
+  markRead(
+    agentId: string,
+    readMark: ReadMark,
+    key?: string,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(
+        this.#hosted.agents.change,
+        { params: { id: agentId }, body: { readMark } },
         { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
       ),
       rowWritten,

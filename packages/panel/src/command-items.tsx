@@ -126,6 +126,7 @@ export const PANEL_COMMAND = {
   MARK_READ: keyedAs(APP_COMMAND.TOGGLE_READ, INBOX_READ_MARK.READ, <MailOpenIcon />),
   RENAME: unkeyed("Rename", <GLYPH.RENAME />),
   RENAME_TASK: unkeyed("Rename", <GLYPH.RENAME />, NOUN.TASK),
+  SETTINGS: unkeyed("Settings…", <GLYPH.SETTINGS />),
   VERSION_HISTORY: keyed(APP_COMMAND.VERSION_HISTORY, <HistoryIcon />),
   PIN_TAB: unkeyed("Pin", <GLYPH.PIN />, NOUN.TAB),
   UNPIN_TAB: unkeyed("Unpin", <GLYPH.UNPIN />, NOUN.TAB),

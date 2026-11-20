@@ -48,6 +48,7 @@ import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
+import { LongPressMenu, ROW_ACTION_TONE } from "./list-row.js";
 import { Avatar, HarnessMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -535,13 +536,43 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
   );
 }
 
+/** How a row still waiting stands: the bare spinner alone, as a group's rows while they are read, or beside words the person must read, as a sign-in that waits on them. */
+export const LOADING_ROW_LOOK = {
+  BARE: "bare",
+  SAID: "said",
+} as const;
+
+type LoadingRowLook = (typeof LOADING_ROW_LOOK)[keyof typeof LOADING_ROW_LOOK];
+
 /**
- * A group's rows while they are read: the system's small spinner beside the
- * read's words in the muted ink, as Settings stands one in a group still
- * filling, so a header never stands over nothing.
+ * A group's rows while they are read: the system's small spinner centered
+ * in the row, as Settings stands one in a group still filling, so a header
+ * never stands over nothing, with no words beside it (the developer, Nov 18,
+ * 2026); VoiceOver hears `words`. Where they tell the person what happens,
+ * such as a sign-in waiting on them, they stand beside it in the muted ink
+ * (`LOADING_ROW_LOOK.SAID`).
  */
-export function LoadingRow({ words }: { readonly words: string }) {
+export function LoadingRow({
+  words,
+  look = LOADING_ROW_LOOK.BARE,
+}: {
+  readonly words: string;
+  readonly look?: LoadingRowLook | undefined;
+}) {
   const colors = useColors();
+
+  if (look === LOADING_ROW_LOOK.BARE) {
+    return (
+      <ProgressView
+        modifiers={[
+          frame({ maxWidth: Number.POSITIVE_INFINITY }),
+          tint(colors.TEXT_MUTED),
+          accessibilityLabel(words),
+          listRowBackground(colors.RAISED),
+        ]}
+      />
+    );
+  }
 
   return (
     <HStack spacing={SPACE.ROW} modifiers={[listRowBackground(colors.RAISED)]}>
@@ -720,6 +751,8 @@ export type PickOption = {
   readonly hint?: string | undefined;
   /** The panel's glyph the option leads with, in a menu or a row of `PickRows`, such as a permission mode's; none for none. */
   readonly symbol?: Glyph | undefined;
+  /** A mark of its own leading a row of `PickRows` in the glyph's place, such as a model's harness mark; none for none. */
+  readonly mark?: ReactNode | undefined;
 };
 
 type PickRowsProps = {
@@ -786,9 +819,10 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            {option.symbol === undefined ? null : (
-              <Image {...glyphImage(option.symbol)} color={colors.TEXT_MUTED} />
-            )}
+            {option.mark ??
+              (option.symbol === undefined ? null : (
+                <Image {...glyphImage(option.symbol)} color={colors.TEXT_MUTED} />
+              ))}
             <VStack alignment="leading" spacing={2}>
               <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
               {option.hint === undefined ? null : (
@@ -1241,25 +1275,35 @@ export function NoteRow({
     return <HStack modifiers={placed}>{drawn}</HStack>;
   }
 
-  const removeAct =
-    remove === undefined ? undefined : (
-      <SwiftUIButton
-        {...actContent(remove.label, NOTE_REMOVE.SYMBOL)}
-        role={NOTE_REMOVE.ROLE}
-        onPress={remove.onPress}
-      />
-    );
-
   const menu = (
-    <ContextMenu>
-      <ContextMenu.Items>
-        {edit === undefined ? null : (
-          <SwiftUIButton {...actContent(edit.label, NOTE_EDIT_SYMBOL)} onPress={edit.onPress} />
-        )}
-        {removeAct}
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{drawn}</ContextMenu.Trigger>
-    </ContextMenu>
+    <LongPressMenu
+      groups={[
+        [
+          ...(edit === undefined
+            ? []
+            : [
+                {
+                  label: edit.label,
+                  symbol: NOTE_EDIT_SYMBOL,
+                  tone: ROW_ACTION_TONE.NEUTRAL,
+                  onPress: edit.onPress,
+                },
+              ]),
+          ...(remove === undefined
+            ? []
+            : [
+                {
+                  label: remove.label,
+                  symbol: NOTE_REMOVE.SYMBOL,
+                  tone: ROW_ACTION_TONE.DESTRUCTIVE,
+                  onPress: remove.onPress,
+                },
+              ]),
+        ],
+      ]}
+    >
+      {drawn}
+    </LongPressMenu>
   );
 
   if (remove === undefined) return <HStack modifiers={placed}>{menu}</HStack>;

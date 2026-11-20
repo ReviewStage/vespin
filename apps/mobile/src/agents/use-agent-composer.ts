@@ -18,6 +18,11 @@
  * Stop is offered while the agent may still write (`agentStillWriting`),
  * starting or awaiting its turn included, as the panel offers it. A `/`
  * offers the skills of the agent's task's repository (`use-skill-offer.ts`).
+ * Edit on one of the member's sent lines lays its words in the field, the
+ * field's own kept aside, and takes the keyboard; Send then sends them in
+ * that line's place (`AGENTS_MESSAGE`'s `rewinds`), stopping the turn under
+ * way rather than steering it, and asks first where anything follows the
+ * line, in the panel's words (`editSendAsk`), since what it drops is gone.
  */
 
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
@@ -32,6 +37,7 @@ import {
   STOP_FAILED,
   STOP_NOTHING_YET,
 } from "@repo/features/agent-refusal-words";
+import { editSendAsk } from "@repo/features/agent-rewind-model";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
@@ -145,6 +151,31 @@ export interface AgentComposer {
   readonly note: string | undefined;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills: SkillsOffered | undefined;
+  /** Lays one of the member's sent lines' words in the field to send again in its place, the field's own kept aside, and has it take the keyboard. */
+  readonly editMessage: (line: MessageEdit) => void;
+  /** Gives up the edit of a sent line, the field given back what it held; none while the field holds no sent line's words. */
+  readonly cancelMessageEdit: (() => void) | undefined;
+  /** The question the send of a line written again asks first where anything follows it, as the panel's asks it. */
+  readonly sendingEdit: QueuedDeleteAsk;
+  /** Counts each time the field is asked to take the keyboard, as Edit asks it. */
+  readonly focusAsk: number;
+}
+
+/** One of the member's sent lines opened to write again in its place: its id, its words, and what its send drops. */
+export interface MessageEdit {
+  readonly messageId: string;
+  readonly words: string;
+  /** Whether anything follows the line, which the send drops, so it asks first. */
+  readonly cuts: boolean;
+  /** Another member's messages among those it drops, as "2 messages from Sam"; none where it drops none of theirs. */
+  readonly takes: string | undefined;
+}
+
+/** A sent line open to write again, and the field's own words and pictures kept aside meanwhile. */
+interface Rewriting {
+  readonly line: MessageEdit;
+  readonly words: string;
+  readonly pictures: readonly HeldPicture[];
 }
 
 /** A queued message's Delete as `ConfirmAsk` asks it: the panel's words, whether it stands, and its answers. */
@@ -210,8 +241,13 @@ export function useAgentComposer(
 
   // The queued message whose words the field holds, and the field's own words and pictures kept aside meanwhile; none while it holds its own.
   const [editing, setEditing] = useState<EditStash | undefined>(undefined);
-  // Note that the field's own words are kept while it holds a queued message's, so a page drawn anew opens on the member's draft, not the message.
-  const ownWords = editing === undefined ? words : editing.words;
+  // The sent line whose words the field holds to send in its place, and what it held before; none while it holds its own.
+  const [rewriting, setRewriting] = useState<Rewriting | undefined>(undefined);
+  // Whether the send of a line written again asks first.
+  const [askingEdit, setAskingEdit] = useState(false);
+  const [focusAsk, setFocusAsk] = useState(0);
+  // Note that the field's own words are kept while it holds a queued message's or a sent line's, so a page drawn anew opens on the member's draft, not the message.
+  const ownWords = editing?.words ?? rewriting?.words ?? words;
 
   // Note that the words and the suggestion laid in are kept beside the agent as they change, so a page drawn anew for it opens on them.
   useEffect(() => {
@@ -252,7 +288,7 @@ export function useAgentComposer(
 
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
   const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
-  const taskId = agent?.taskId;
+  const taskId = agent?.taskId ?? undefined;
   const skills = useSkillOffer(words, setWords, taskId === undefined ? undefined : { taskId });
 
   // Whether the screen still stands, since a refusal may land after it was left.
@@ -315,6 +351,14 @@ export function useAgentComposer(
   const send = () => {
     // Note that a send while the field holds a queued message's words saves them back in its place, as Save does.
     if (editing !== undefined) return sendEdit(QUEUE_EDIT_SEND.SAVE);
+
+    // Note that a line written again asks first where anything follows it, since its send drops that for good.
+    if (rewriting !== undefined) {
+      if (words.trim() === "") return;
+
+      return rewriting.line.cuts ? setAskingEdit(true) : sendRewritten(rewriting);
+    }
+
     const text = words.trim();
 
     if (text === "" && pictures.files === undefined) return;
@@ -398,6 +442,85 @@ export function useAgentComposer(
       unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
     });
   };
+
+  /** The field given back the words and pictures it held before a sent line's edit, the edit's own let go. */
+  const giveBackRewritten = (stash: Rewriting) => {
+    pictures.take();
+    pictures.putBack(stash.pictures);
+    setWords(stash.words);
+    setRewriting(undefined);
+  };
+
+  /**
+   * The words in the field sent in place of the sent line, the agent taken
+   * back to just before it first, as the panel's Edit sends them; the field
+   * given back what it held, and the words handed back where it was refused.
+   * Note that it stops the turn under way rather than steering it.
+   */
+  const sendRewritten = (stash: Rewriting) => {
+    const text = words.trim();
+
+    if (text === "") return;
+
+    // Note that pictures attached while the line was written again go with it, as the panel's Edit takes files.
+    const attachments =
+      pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
+
+    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
+    ownSends.current.add(sentLineId(sent.id));
+    setNote(undefined);
+    giveBackRewritten(stash);
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_MESSAGE]({
+          agentId,
+          text,
+          clientKey: sent.id,
+          ...attachments,
+          steers: false,
+          rewinds: { messageId: stash.line.messageId },
+          ...(taskId === undefined ? undefined : { taskId }),
+        }),
+      {
+        went: BUZZ.SUCCESS,
+        inPlace: (refusal: string) => {
+          if (!mounted.current) return;
+          handBack(sent, refusal);
+          void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId: sentLineId(sent.id) }).catch(
+            () => undefined,
+          );
+        },
+        refused: (answer) =>
+          "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+      },
+    );
+  };
+
+  /** What the field holds of its own, kept aside while it holds another message's words: what an edit standing kept aside, or else what it holds now, its pictures taken off. */
+  const ownDraft = (): { readonly words: string; readonly pictures: readonly HeldPicture[] } => {
+    const attached = pictures.take();
+    const kept = editing ?? rewriting;
+
+    return kept === undefined
+      ? { words, pictures: attached }
+      : { words: kept.words, pictures: kept.pictures };
+  };
+
+  const editMessage = (line: MessageEdit) => {
+    // Note that a queued message's edit gives way, its mark cleared, so the field holds one message's words at a time.
+    if (editing !== undefined) {
+      void change({ change: QUEUE_CHANGE.HOLD, messageId: editing.id, held: false });
+      setEditing(undefined);
+    }
+
+    setRewriting({ line, ...ownDraft() });
+    setWords(line.words);
+    setNote(undefined);
+    setFocusAsk((count) => count + 1);
+  };
+
+  const editAsk = editSendAsk(rewriting?.line.takes, false, rewriting?.line.cuts ?? true);
 
   const stop = () => {
     setStopping(true);
@@ -499,11 +622,11 @@ export function useAgentComposer(
     sessions.current += 1;
     const session = sessions.current;
 
+    // Note that a sent line's edit gives way to the queued message's, the field's own kept aside as it was.
     const stash: EditStash =
-      editing === undefined
-        ? { id, session, words, pictures: pictures.take() }
-        : { ...editing, id, session };
+      editing === undefined ? { id, session, ...ownDraft() } : { ...editing, id, session };
 
+    setRewriting(undefined);
     setEditing(stash);
     setWords(message.text);
     // A message the queue would not mark, already on its way, is no longer the field's to edit.
@@ -599,5 +722,20 @@ export function useAgentComposer(
           },
     note,
     skills,
+    editMessage,
+    cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),
+    sendingEdit: {
+      title: editAsk.title,
+      message: editAsk.body,
+      act: editAsk.verb,
+      presented: askingEdit && rewriting !== undefined,
+      onAct: () => {
+        setAskingEdit(false);
+
+        if (rewriting !== undefined) sendRewritten(rewriting);
+      },
+      onDismiss: () => setAskingEdit(false),
+    },
+    focusAsk,
   };
 }

@@ -39,6 +39,7 @@ import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/feature
 import { MENTION_KIND, withoutMemberLinks } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { leadingCommand, SLASH_COMMAND } from "@repo/features/slash-command";
+import type { Task } from "@repo/features/task-wire";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -403,14 +404,27 @@ const handedToHarness = (
   });
 
 /**
+ * The agent's task as the sender reads it, none where they reach it no
+ * longer; an agent on no task holds none, and is held by its own read.
+ */
+const heldTaskOf = (userId: string, agent: Agent) =>
+  agent.taskId === null
+    ? Effect.succeed(Option.some<Task | undefined>(undefined))
+    : readTaskDescription(userId, agent.taskId);
+
+/**
  * Why the agent takes no message now, read again as the hand-over runs:
  * its task out of the sender's reach, or the agent archived or gone;
  * nothing while it still takes one.
  */
 const refusalNow = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, agent: Agent) {
-  const tasks = yield* taskNamesOf(userId, [agent.taskId]);
+  const { taskId } = agent;
 
-  if (!tasks.has(agent.taskId)) return HOSTED_REFUSAL.NOT_FOUND;
+  // Note that an agent on no task is held by its own read alone, below.
+  if (taskId !== null && !(yield* taskNamesOf(userId, [taskId])).has(taskId)) {
+    return HOSTED_REFUSAL.NOT_FOUND;
+  }
+
   const now = yield* readAgent(userId, agent.id);
 
   return Option.isNone(now) || now.value.archivedAt !== null ? HOSTED_REFUSAL.NOT_FOUND : undefined;
@@ -515,7 +529,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
         ),
       ),
       // The sender reaches the agent, as the routing read holds, and its task too, read as the sender.
-      task: Effect.result(hostedStoreOrUnavailable(readTaskDescription(userId, agent.taskId))),
+      task: Effect.result(hostedStoreOrUnavailable(heldTaskOf(userId, agent))),
       workspace: Effect.result(hostedStoreOrUnavailable(agentWorkspace(userId, agent))),
       sessionId: Effect.result(hostedStoreOrUnavailable(recordedRuntimeSession(target))),
       // Read before the harness is asked, so an ended session settles the turn it was running and never one begun since.
@@ -576,7 +590,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
               workspace.value,
               agent.repository,
               agentMember(agent),
-              task.ownerId === userId ? userId : undefined,
+              task?.ownerId === userId ? userId : undefined,
             ),
       ),
       reads: Effect.result(
@@ -671,7 +685,10 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const servers =
     line.sender.kind === MESSAGE_SENDER.AGENT || reviewers
       ? []
-      : mentionedServers(line.serverWords ?? line.text, task.repository ?? null);
+      : mentionedServers(
+          line.serverWords ?? line.text,
+          task === undefined ? agent.repository : (task.repository ?? null),
+        );
 
   // Note that a native agent's are written before its harness hears the words too, so the turn its runner
   // opens on them takes them: the hand-over runs in no transaction, so the agent's row a launch writes

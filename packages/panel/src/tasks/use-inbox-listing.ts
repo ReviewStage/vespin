@@ -3,6 +3,7 @@ import {
   EVERYONES,
   INBOX_SHOW,
   INBOX_WHOSE,
+  type InboxAnyHolder,
   type InboxGroup,
   type InboxListed,
   type InboxRun,
@@ -37,6 +38,7 @@ import { taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import { useInboxWaitingTasks, useListedInbox } from "./use-inbox-slices.js";
 import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
+import { useTasklessInboxGroups } from "./use-taskless-inbox-groups.js";
 import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
 
 /**
@@ -66,6 +68,11 @@ import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
  * to the window once that frame has painted (`useChoiceFirst`), so the
  * sidebar, the side panel, and the window's history, which follow the
  * window's choice, draw it a frame later rather than holding up the thread.
+ *
+ * A thread on no task is listed under the agent that posted it
+ * (`use-taskless-inbox-groups.ts`), and choosing it opens it beside the
+ * list as a task's does, read from the account's feed, which alone holds
+ * it, and answered on it, its agent standing in its task's place.
  *
  * Narrowed to a task, it lists and counts every item of that task alone
  * (`taskGroups`), open and settled, addressed to anyone, as the task's own
@@ -100,6 +107,24 @@ function listedHoldings(
 /** The choice that opens a listed item: by its task, and its agent, which its link names. */
 export function choiceOf({ holder, item }: InboxListed): InboxChoice {
   return { taskId: holder.task.id, itemAgentId: item.agentId, itemId: item.id };
+}
+
+/**
+ * The choice that opens any listed item: one on a task by its task, and one
+ * on no task by its id alone, opened, as a link to it stands it
+ * (`inbox-route.ts`'s `choiceAt`), so the address names it the same way.
+ */
+function anyChoiceOf(listed: InboxListed<InboxAnyHolder>): InboxChoice {
+  const held = onTask(listed);
+
+  return held === undefined ? { itemId: listed.item.id, opened: true } : choiceOf(held);
+}
+
+/** A listed item as held by a task, or none where an agent on no task holds it. */
+export function onTask(listed: InboxListed<InboxAnyHolder>): InboxListed | undefined {
+  const { holder, item } = listed;
+
+  return "task" in holder ? { holder, item } : undefined;
 }
 
 /** A choice on its way to the window, and the window's choice it was made over. */
@@ -185,7 +210,7 @@ function useChoiceFirst(
  * afterwards keeps it folded.
  */
 function useFoldOpensOnChoice(
-  standing: readonly InboxGroup[],
+  standing: readonly InboxGroup<InboxAnyHolder>[],
   chosenId: string | undefined,
   folded: ReadonlySet<InboxRun> | undefined,
   onFold: (run: InboxRun, folded: boolean) => void,
@@ -262,6 +287,23 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   const taskId = chosenTask?.id;
 
+  const { groups: taskless, ...tasklessFeed } = useTasklessInboxGroups(
+    tasks.workspace?.id,
+    tasks.liveAgents,
+    tasks.agents.models,
+  );
+
+  // The agent on no task holding the item asked for, whose threads the feed alone holds.
+  const askedItemId = asked?.itemId;
+
+  const askedAgent = useMemo(
+    () =>
+      taskId !== undefined || askedItemId === undefined
+        ? undefined
+        : taskless.find(({ items }) => items.some((item) => item.id === askedItemId))?.holder.agent,
+    [taskless, taskId, askedItemId],
+  );
+
   const agents = useAgents({
     taskId,
     repository: chosenTask?.repository ?? null,
@@ -278,6 +320,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   const live = useHeldTaskInbox({
     ...liveScope,
+    agentId: askedAgent?.id,
     shown: tasks.shown,
     onScreen: taskId !== undefined && tasks.inboxShown === taskId,
     waiting: inboxWaiting.some((each) => each.taskId === taskId),
@@ -288,7 +331,32 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // Note that the drafts the read no longer holds are let go here, where the read stands, rather than in the pane, which goes with its item.
   useInboxDraftsLetGo(live, liveScope);
   // Note that the models come from the open task's agents where this task's have not read them, so an agent is named alike in both.
-  const named = { ...agents, models: agents.models ?? tasks.agents.models };
+  // An agent on no task stands as its own task's agents would, as its page draws it (`desktop-agent-page.tsx`), so its thread names it.
+  const models = agents.models ?? tasks.agents.models;
+  const askedAgentId = askedAgent?.id;
+
+  const ownAgent = useMemo(
+    () =>
+      askedAgentId === undefined
+        ? undefined
+        : tasks.liveAgents?.find((agent) => agent.id === askedAgentId),
+    [askedAgentId, tasks.liveAgents],
+  );
+
+  const named = useMemo(() => {
+    if (ownAgent === undefined) return { ...agents, models };
+    const archived = ownAgent.archivedAt !== undefined;
+
+    return {
+      ...agents,
+      models,
+      agents: archived ? [] : [ownAgent],
+      archived: archived ? [ownAgent] : [],
+      agentIds: [ownAgent.id],
+      heldIds: [ownAgent.id],
+    };
+  }, [agents, models, ownAgent]);
+
   // The chosen task's own held read stands in for the list's once it answered, so an answer shows
   // at once, and only while it holds, since one that failed stops hearing what changed.
   const liveBoard = live.board;
@@ -310,9 +378,9 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // Note that every read here draws the window's own marks, answers, and messages already, as the host draws them into each (`@repo/host`'s `inbox-collections.ts`).
   const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED);
 
-  const everyItem: readonly InboxGroup[] = useMemo(
-    () => inboxGroups(held, { tasks: holdings, listed: everyTask }),
-    [held, holdings, everyTask],
+  const everyItem: readonly InboxGroup<InboxAnyHolder>[] = useMemo(
+    () => [...inboxGroups(held, { tasks: holdings, listed: everyTask }), ...taskless],
+    [held, holdings, everyTask, taskless],
   );
 
   // Note that a reminder is weighed on the window's clock, since no read of the service's may read one, so an item comes back within the minute its reminder comes due.
@@ -359,12 +427,14 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   );
 
   const listedRows = useMemo(() => listedItems(list), [list]);
-  const askedId = asked?.itemId;
 
-  const chosen = useMemo(
-    () => listedItems(steps).find(({ item }) => item.id === askedId),
-    [steps, askedId],
+  const askedListed = useMemo(
+    () => listedItems(steps).find(({ item }) => item.id === askedItemId),
+    [steps, askedItemId],
   );
+
+  // Note that a thread on no task stands beside the list as a task's does.
+  const chosen = askedListed;
 
   // Note that a scope leaving out every item listed is said apart from an Inbox holding none.
   const searched = search.length > 0 ? query : undefined;
@@ -391,15 +461,26 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   // Note that the holdings are filtered against the task list, so until it is read they hold nothing and prove nothing.
   const listUnread = !tasks.listRead && !tasks.listFailed;
-  const reading = listUnread || holdings.some((holding) => !read.items.has(holding.taskId));
+  // Note that the account's feed is waited on though no task holds an item, since it may hold threads on no task, while an account is signed in to read it.
+  const feedUnread = tasks.signedIn && tasklessFeed.pending;
+
+  const reading =
+    listUnread || feedUnread || holdings.some((holding) => !read.items.has(holding.taskId));
+
   // An item asked for by a link or a notification that no read holds once every read has landed is
   // not there for the reader, whether it was deleted or is of a task they cannot read, and its pane
   // says so rather than standing empty.
   // Note that only the asked task's own reads are waited on, since another's that failed says nothing of this item.
   const holderRead = taskId === undefined || settlesTask(taskId) || live.read || holderEmpty;
 
+  // Note that a thread on no task is held by the feed alone, so it is waited on until the feed and its agent are read.
   const missing =
-    asked?.opened === true && chosen === undefined && !chosenWaits && holderRead && !listUnread;
+    asked?.opened === true &&
+    chosen === undefined &&
+    !chosenWaits &&
+    holderRead &&
+    !listUnread &&
+    !(taskId === undefined && tasklessFeed.pending);
 
   // An item opened whose holder's own read failed says so, with a way to read it again, rather than waiting on it for good,
   // since nothing reads a failed holder again by itself.
@@ -412,10 +493,14 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     retryAgents();
   }, [retryLive, retryAgents]);
 
-  const choose = useCallback((listed: InboxListed) => chooseFirst(choiceOf(listed)), [chooseFirst]);
+  const choose = useCallback(
+    (listed: InboxListed<InboxAnyHolder>) => chooseFirst(anyChoiceOf(listed)),
+    [chooseFirst],
+  );
+
   const resolveItems = useInboxResolver();
-  // Note that a task list that failed leaves the Inbox holding nothing to read, which would otherwise say it was empty.
-  const failed = read.failed || tasks.listFailed;
+  // Note that a task list that failed leaves the Inbox holding nothing to read, which would otherwise say it was empty, and so does a feed refused where no task holds an item.
+  const failed = read.failed || tasks.listFailed || tasklessFeed.failed;
 
   const onRetry = () => {
     read.onRetry();

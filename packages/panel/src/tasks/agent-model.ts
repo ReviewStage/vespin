@@ -1509,13 +1509,6 @@ export function windowLabel(tokens: number): string {
   return formatCompact(Math.floor(tokens / step) * step);
 }
 
-/** A choice as a request carries it: the model, the effort, and the window only where it is the standard one. */
-export function choiceRequest(choice: ModelChoice): ModelChoice {
-  return choice.contextWindow === CONTEXT_WINDOW.STANDARD
-    ? { model: choice.model, effort: choice.effort, contextWindow: CONTEXT_WINDOW.STANDARD }
-    : { model: choice.model, effort: choice.effort };
-}
-
 /** A price multiple as a note says it: 2×, 1.5×, to the hundredth. */
 function factorLabel(factor: number): string {
   return `${Number(factor.toFixed(2))}×`;

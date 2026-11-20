@@ -2799,6 +2799,13 @@ svg.lucide {
   padding-block-start: var(--ui-control-gap);
 }
 
+/* A message of a Manager's chat that goes on its sender's run
+   (`managerChatRuns`) stands close under the one before it, as a chat app
+   stands one sender's bubbles, so the run reads as one. */
+.agent-log-row-run {
+  padding-block-start: var(--ui-tight-gap);
+}
+
 /* A comment's quote line wears every quote's face (`@repo/ui/quote-face`),
    whose own rules stand outside the layers and set no margin, so its gap
    from the words under it is set here, as a quote's in the box is. */

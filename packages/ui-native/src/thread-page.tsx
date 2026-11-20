@@ -14,10 +14,12 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  Animation,
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  animation,
   defaultScrollAnchorForRole,
   disabled,
   font,
@@ -34,7 +36,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
-import { useAccessibilitySize } from "./accessibility.js";
+import { useAccessibilitySize, useReduceMotion } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
@@ -651,6 +653,7 @@ export function ThreadPage(props: ThreadPageProps) {
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
+  const reduceMotion = useReduceMotion();
 
   // Note that the path heading the page wraps, so its words stand uncut, while the bar's keeps to one line.
   const pathTitle = (
@@ -677,6 +680,8 @@ export function ThreadPage(props: ThreadPageProps) {
               frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
               frame({ maxWidth: Number.POSITIVE_INFINITY }),
               padding({ bottom: SPACE.PAGE + footRoom }),
+              // Note that a message landing, a reply's included, comes in on the system's default spring, as Messages' bubbles do, and the ask's card it answered steps away on the same one, since it goes as the reply lands; with Reduce Motion on they stand at once.
+              ...(reduceMotion ? [] : [animation(Animation.default, messages.length)]),
             ]}
           >
             <ThreadHead

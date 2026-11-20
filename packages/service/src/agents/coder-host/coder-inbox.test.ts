@@ -3,11 +3,14 @@ import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { createAgent } from "@repo/database/models/agent-store";
+import { createAgent, readAgent } from "@repo/database/models/agent-store";
+import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
+import { keepDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { inboxItem } from "@repo/database/schemas/inbox";
+import { messages } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
@@ -16,7 +19,10 @@ import {
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
+import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_ASK,
@@ -34,13 +40,14 @@ import {
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
-import { m4aBytes, paddedTo, webmBytes } from "@repo/wire/testing";
+import { m4aBytes, paddedTo, pngBytes, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
-import { ACTION_RESULT_STATUS } from "../../core.js";
+import { ACTION_RESULT_STATUS, MESSAGE_ROLE } from "../../core.js";
 import {
   acknowledgeInboxItem,
+  agentInboxItems,
   answerInboxAsk,
   closeInboxItemAsMember,
   type InboxAgent,
@@ -60,6 +67,7 @@ import {
   withdrawAsk,
 } from "./inbox.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
+import { KEPT_PICTURE_REFUSAL } from "./inbox-kept-picture.js";
 
 /**
  * The coding agent's inbox tools, through their public functions against a
@@ -107,6 +115,33 @@ const agentOn = (userId: string, task: { readonly id: string; readonly workspace
     return { ...agent, workspaceId: task.workspaceId };
   });
 
+/** An account with one agent started on no task, in a workspace of its own. */
+const openTasklessAgent = Effect.gen(function* () {
+  const userId = yield* openUser;
+  const workspaceId = yield* openWorkspace(userId);
+
+  const started = yield* createAgent(userId, {
+    taskId: null,
+    workspaceId,
+    idempotencyKey: randomUUID(),
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    repository: null,
+    descriptionSnapshot: null,
+    prompt: "Keep an eye on the release.",
+    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+  });
+
+  assert.ok(Option.isSome(started));
+
+  return {
+    userId,
+    taskId: null,
+    agentId: started.value.agent.id,
+    organizationId: workspaceId,
+  } satisfies ThreadPoster;
+});
+
 /** An account with one task and one agent started on it, in its repository. */
 const openAgent = Effect.gen(function* () {
   const userId = yield* openUser;
@@ -135,6 +170,53 @@ const SETTINGS = {
     steps: ["Open Settings → Branches.", "Require one review on `main`."],
   },
 };
+
+/** The account's agent's own transcript. */
+const conversationOf = (agent: Pick<ThreadPoster, "userId" | "agentId">) =>
+  Effect.map(readAgent(agent.userId, agent.agentId), (read) => ({
+    userId: agent.userId,
+    conversationId: Option.getOrThrow(read).conversationId,
+  }));
+
+/**
+ * A picture kept beside the agent's transcript, its id; and, where `shown`,
+ * the agent's `show_media` call that answered it, as its journal stores one.
+ * One not shown stands as a browser's screenshot or a line's file does.
+ */
+const keptBeside = (
+  agent: Pick<ThreadPoster, "userId" | "agentId">,
+  bytes: Uint8Array,
+  shown: boolean,
+) =>
+  Effect.gen(function* () {
+    const target = yield* conversationOf(agent);
+    const picture = { bytes, contentType: CONVERSATION_MEDIA_TYPE.PNG, width: 4, height: 3 };
+    const kept = Option.getOrThrow(yield* keepConversationPicture(target, picture));
+
+    if (shown) {
+      const db = yield* Database;
+      const now = new Date();
+      yield* db.insert(messages).values({
+        ...target,
+        seq: 1,
+        clientId: randomUUID(),
+        role: MESSAGE_ROLE.ASSISTANT,
+        // SAFETY: the part is the stored vocabulary's, spelled as the relay writes a tool's call.
+        parts: [
+          {
+            type: `tool-${AGENT_TOOL.SHOW_MEDIA}`,
+            toolCallId: "call-1",
+            state: "output-available",
+            input: { images: [{ path: "shots/form.png", caption: "The form" }] },
+            output: { status: ACTION_RESULT_STATUS.ACCEPTED, pictures: [{ ...kept }] },
+          },
+        ] as never,
+        placedAt: now,
+      });
+    }
+
+    return kept.id;
+  });
 
 /** A tool's input as a harness hands it over. */
 const input = (value: WireBoundaryInput) => unparsedWire(value);
@@ -893,6 +975,95 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         }
 
         assert.deepEqual(yield* taskInboxItems(agent.userId, agent.taskId), []);
+      }),
+  );
+
+  it.effect(
+    "an agent on no task keeps the picture its post draws on the thread, at the address its agent holds, for its starter to read",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openTasklessAgent;
+        const sandbox = sandboxWith({ "shots/form.png": PNG });
+        const drawing = { ...QUEUE, body: "![Shot](shots/form.png)" };
+
+        assert.equal((yield* post(agent, drawing, sandbox)).status, ACTION_RESULT_STATUS.ACCEPTED);
+        const [item] = yield* agentInboxItems(agent);
+        const [message] = item?.thread ?? [];
+        const [, address] = /!\[[^\]]*\]\(<?([^\s)>]+)/u.exec(message?.text ?? "") ?? [];
+        const named = inboxAttachmentOf(address ?? "");
+
+        assert.ok(address?.includes(`/agent/${agent.agentId}/inbox/`), address ?? "no picture");
+        assert.deepEqual(named, {
+          itemId: item?.id,
+          attachmentId: message?.files?.[0]?.attachmentId,
+        });
+
+        const kept = yield* readInboxAttachment(
+          agent.userId,
+          named?.itemId ?? "",
+          named?.attachmentId ?? "",
+        );
+
+        assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
+      }),
+  );
+
+  it.effect(
+    "a post copies onto its thread a picture an agent of its workspace showed, by the id show_media answered, and a description's, by its address; any other picture beside a transcript, and another workspace's, are refused alike",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+        const task = { id: agent.taskId, workspaceId: agent.workspaceId };
+        const teammate = yield* agentOn(agent.userId, task);
+        const shot = pngBytes(4, 3, 1);
+        const shownId = yield* keptBeside(teammate, shot, true);
+        const unshownId = yield* keptBeside(teammate, pngBytes(4, 3, 2), false);
+        const plan = pngBytes(4, 3, 3);
+        const contentType = AGENT_ATTACHMENT_TYPE.PNG;
+
+        const kept = yield* keepDescriptionAttachment(agent.userId, task.id, {
+          contentType,
+          bytes: plan,
+        });
+
+        assert.ok("id" in kept);
+
+        const address = descriptionAttachmentAddress(
+          { taskId: task.id, attachmentId: kept.id },
+          "acme",
+        );
+
+        const stranger = yield* openAgent;
+        const strangerId = yield* keptBeside(stranger, pngBytes(4, 3, 4), true);
+
+        for (const id of [unshownId, strangerId]) {
+          const drawing = { ...QUEUE, body: `![Shot](${id})` };
+
+          assert.equal(
+            refusalOf(yield* post(agent, drawing)),
+            `${KEPT_PICTURE_REFUSAL.UNREACHED} ${id}`,
+          );
+        }
+
+        const drawing = {
+          ...QUEUE,
+          body: `![Form](${shownId} "The form")\n\n![Plan](<${address}>)`,
+        };
+
+        assert.equal((yield* post(agent, drawing)).status, ACTION_RESULT_STATUS.ACCEPTED);
+        const item = yield* onlyItem(agent);
+        const [message] = item.thread ?? [];
+        const addresses = [...(message?.text ?? "").matchAll(/!\[[^\]]*\]\(<?([^\s)>]+)/gu)];
+        const copies = [];
+
+        for (const [, written = ""] of addresses) {
+          const named = inboxAttachmentOf(written);
+          assert.equal(named?.itemId, item.id, written);
+          const copy = yield* readInboxAttachment(agent.userId, item.id, named?.attachmentId ?? "");
+          copies.push(new Uint8Array(Option.getOrThrow(copy).bytes));
+        }
+
+        assert.deepEqual(copies, [shot, plan]);
       }),
   );
 

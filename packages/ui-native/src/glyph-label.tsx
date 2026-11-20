@@ -2,8 +2,10 @@
 
 import { Image, Label, Text } from "@expo/ui/swift-ui";
 import { font, tag } from "@expo/ui/swift-ui/modifiers";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReactElement, ReactNode } from "react";
-import { type Glyph, glyphImage } from "./glyph.js";
+import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
+import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
 /** The text style a glyph stands at beside an act's words, as SwiftUI sizes a symbol by its text. */
@@ -23,6 +25,7 @@ export function GlyphImage({
   textStyle = "body",
   color,
   menuColor,
+  under,
 }: {
   readonly glyph: Glyph;
   readonly textStyle?: GlyphTextStyle | undefined;
@@ -30,11 +33,14 @@ export function GlyphImage({
   readonly color?: string | undefined;
   /** Its ink in a system menu, such as a status's tone. */
   readonly menuColor?: string | undefined;
+  /** A glyph drawn faint under it in a system menu, both in `menuColor` and kept in one image (`underAssetName`, from the app's `@expo/ui` patch), as a priority's lit bars stand over every bar it can light. */
+  readonly under?: MarkLayer | undefined;
 }) {
   return (
     <Image
       {...glyphImage(glyph)}
       {...(menuColor === undefined ? {} : { originalColor: menuColor })}
+      {...(under === undefined ? {} : { underAssetName: under.glyph, underOpacity: under.opacity })}
       {...(color === undefined ? {} : { color })}
       modifiers={[font({ textStyle })]}
     />
@@ -60,19 +66,34 @@ export function GlyphLabel({
   glyph,
   textStyle,
   color,
+  under,
 }: {
   readonly title: string;
   readonly glyph: Glyph;
   readonly textStyle?: GlyphTextStyle | undefined;
   /** The glyph's own color, which a menu keeps, such as a status's tone. */
   readonly color?: string | undefined;
+  /** A glyph drawn faint under it, as `GlyphImage` draws one. */
+  readonly under?: MarkLayer | undefined;
 }) {
   return (
     <Label
       title={title}
-      icon={<GlyphImage glyph={glyph} textStyle={textStyle} menuColor={color} />}
+      icon={<GlyphImage glyph={glyph} textStyle={textStyle} menuColor={color} under={under} />}
     />
   );
+}
+
+/**
+ * An act's words beside an integration's mark, as a system menu draws them:
+ * the provider's own vector from the asset catalog, as Settings › MCP & CLI
+ * and the desktop's server rows lead with it, an image the catalog keeps in
+ * its own colors drawn as it is.
+ */
+export function markContent(label: string, mark: IntegrationProvider) {
+  return {
+    children: <Label title={label} icon={<Image assetName={INTEGRATION_MARK_ASSET[mark]} />} />,
+  };
 }
 
 /**
@@ -116,6 +137,7 @@ export function actContent(
   textStyle?: GlyphTextStyle,
   color?: string,
   photo?: string,
+  under?: MarkLayer,
 ): { readonly label: string } | { readonly children: ReactElement } {
   if (photo !== undefined)
     return { children: <Label title={label} icon={<MenuPhoto photo={photo} />} /> };
@@ -123,7 +145,15 @@ export function actContent(
   return glyph === undefined
     ? { label }
     : {
-        children: <GlyphLabel title={label} glyph={glyph} textStyle={textStyle} color={color} />,
+        children: (
+          <GlyphLabel
+            title={label}
+            glyph={glyph}
+            textStyle={textStyle}
+            color={color}
+            under={under}
+          />
+        ),
       };
 }
 

@@ -2788,7 +2788,9 @@ function pinnedAgents(
 
   const added = agents
     .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
-    .map(({ id, taskId }) => ({ agentId: id, taskId: taskId, pinnedAt: LANDED }));
+    .flatMap(({ id, taskId }) =>
+      taskId === null ? [] : [{ agentId: id, taskId, pinnedAt: LANDED }],
+    );
 
   return [...kept, ...added];
 }
@@ -2855,7 +2857,12 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * are not among them, because the tasks fixture's own answer names them
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
+/** What a dictated clip is heard as in a fixture run, whatever it held, so a flow sees the words land in the field. */
+const DICTATED_WORDS = "Run the invite tests again.";
+
 const ANSWERS: StagedAnswers = {
+  // Note that a dictated clip is heard as fixed words, though no model hears it, so a simulator's silent microphone still dictates.
+  [ACT_KIND.DICTATION_TRANSCRIBE]: () => ({ text: DICTATED_WORDS }),
   // Note that the workspace's cloud environment is read as the service answers it, and a size chosen is taken as the service takes one, though nothing here moves.
   [ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: () => CLOUD_ENVIRONMENT.SIZE,
   [ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: ({ vcpus }) => ({ vcpus }),

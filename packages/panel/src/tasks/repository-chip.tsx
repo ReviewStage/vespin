@@ -636,6 +636,56 @@ export function RepositoryChip(props: RepositoryMenuProps & ChipStanding): React
 }
 
 /**
+ * A chip naming several repositories, as New Manager picks them, over the
+ * same list as the one-pick chip's: each pick checked, the menu standing
+ * open between presses, and a second press on a pick letting it go. The
+ * first picked stays first, which is the one the chip names, the rest
+ * counted after it, and its hint names every pick in order.
+ */
+export function RepositoriesChip(
+  props: ChipStanding & {
+    /** The repositories picked, `owner/name`, in the order picked. */
+    values: readonly string[];
+    chooser: RepositoryChooser;
+    /** Picks the repository, or lets it go where it is picked already. */
+    onToggle: (repository: string) => void;
+    /** Hears the repositories each successful read lists, `owner/name`. */
+    onListed?: ((repositories: readonly string[]) => void) | undefined;
+  },
+): React.JSX.Element {
+  const { values } = props;
+  const place = useMenuPlace();
+
+  const listing = useRepositoryListing(
+    {
+      value: values[0] ?? null,
+      chooser: props.chooser,
+      onChoose: props.onToggle,
+      onListed: props.onListed,
+    },
+    (pick) => pick(),
+  );
+
+  const rest = values.length - 1;
+
+  const menu: RepositoryMenu = {
+    ...place,
+    label: rest > 0 ? `${listing.label} +${rest}` : listing.label,
+    hint: values.length === 0 ? undefined : values.join(", "),
+    glyph: listing.glyph,
+    card: undefined,
+    menu: repositoryMenu(place, {
+      ...listing.menu,
+      value: undefined,
+      checked: checkedAmong(listing.menu.rows, values),
+      align: POPOVER_ALIGN.START,
+    }),
+  };
+
+  return <MenuChip {...props} menu={menu} named={values.length > 0} />;
+}
+
+/**
  * A press named `label` among a row's outlined buttons, over rows its caller
  * lists, as setup's Add repositories is: each pick checked, the menu standing
  * open between presses, and the press keeping its words, since what is

@@ -1,7 +1,6 @@
 // task-rows.tsx -- the rows a task's page and the Tasks list draw beside the task rows: a task's head, an agent, a related task, a group, a row that opens somewhere, and a description's words.
 
 import {
-  ContextMenu,
   HStack,
   Image,
   RNHostView,
@@ -54,10 +53,11 @@ import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import {
-  actionButton,
   FoldChevron,
   type FoldWords,
   foldActions,
+  type LongPressGroup,
+  LongPressMenu,
   ROW_ACTION_TONE,
   type RowAction,
   type RowFold,
@@ -252,8 +252,8 @@ type AgentRowProps = {
     | undefined;
   /** What a swipe from the trailing edge reveals, such as Stop or Archive, the first of it on a full swipe. */
   readonly trailingActions?: readonly RowSwipe[] | undefined;
-  /** What its long press menu holds past its swipes, as the panel's agent menu offers it: its links, then Archive. */
-  readonly menuActions?: readonly RowAction[] | undefined;
+  /** Its long press menu past its fold and its pull request, in the panel's agent menu's groups (`agentMenuGroups`): its links, Rename, Stop and Archive, and last and alone, Permanently delete. Its swipes stand behind the swipe alone. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
   /** What its long press lifts over its menu (`AgentPreview`). */
   readonly preview?: ReactElement | undefined;
   /** What its acts ask first, such as Archive, standing by the row; none where its acts never ask. */
@@ -480,10 +480,9 @@ export function AgentRow(props: AgentRowProps) {
       row={row}
       indent={(depth + (fold === undefined ? 0 : 1)) * column}
       trailingActions={props.trailingActions}
-      menuActions={[
-        ...foldActions(fold, folding),
-        ...pullRequestActions(pullRequest),
-        ...(props.menuActions ?? []),
+      menu={[
+        [...foldActions(fold, folding), ...pullRequestActions(pullRequest)],
+        ...(props.menu ?? []),
       ]}
       preview={props.preview}
       question={props.question}
@@ -508,6 +507,10 @@ type RelationRowProps = {
   readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
   /** Its status as a menu its ring opens, as a task's row does (`StatusRing`); none in a picker, or where the task is unknown, where the ring is its mark alone. */
   readonly statusMenu?: RowSubmenu | undefined;
+  /** Its long press menu whole, in the panel's order: a related task's Change relation and Remove relation, then the task's own menu, as its Tasks row holds it; where given, its swipes stand behind the swipe alone and `menuSubmenus` is left out. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
+  /** What its menu's acts ask first, standing by the row (`RowAsking`); none where they never ask. */
+  readonly question?: RowQuestion | undefined;
 };
 
 /** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, led by its kind's glyph where given, its swipe and long press holding what changes that. */
@@ -521,6 +524,8 @@ export function RelationRow({
   trailingActions,
   menuSubmenus,
   statusMenu,
+  menu,
+  question,
 }: RelationRowProps) {
   const colors = useColors();
 
@@ -563,6 +568,8 @@ export function RelationRow({
       row={row}
       trailingActions={trailingActions}
       menuSubmenus={menuSubmenus}
+      menu={menu}
+      question={question}
       heard={{
         label: name,
         value: [status === undefined ? undefined : TASK_STATUS_WORDS[status], relation],
@@ -579,13 +586,16 @@ type LinkRowProps = {
   readonly tone?: LinkRowTone | undefined;
   readonly disabled?: boolean | undefined;
   readonly onPress: () => void;
+  /** What its long press holds, in the panel's right-click menu's groups for what it opens, such as a page's Copy link; none for a row that acts rather than opens, such as New agent. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
 /**
  * A row pressed to go somewhere or act, in a row's columns: its glyph, its
  * words, and its detail at the line's end, with no mark of where it goes,
  * as the panel's draw none: Automations, New agent, a page, or the threads
- * that need you.
+ * that need you. A row that opens something, such as a page, holds the
+ * panel's menu for it on a long press (`LongPressMenu`).
  */
 export function LinkRow({
   symbol,
@@ -594,16 +604,19 @@ export function LinkRow({
   tone = LINK_ROW_TONE.PLAIN,
   disabled: off = false,
   onPress,
+  menu,
 }: LinkRowProps) {
   const colors = useColors();
   const ink = linkInk(colors, tone);
+  // Note that a held row stands its place in the list on the frame around its menu, as `RowFrame` does, since the menu wraps the button.
+  const placed = menu === undefined ? rowPlacement(colors) : [];
 
-  return (
+  const button = (
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
         disabled(off),
-        ...rowPlacement(colors),
+        ...placed,
         buttonStyle("borderless"),
         accessibilityLabel(label),
         // Note that the detail is heard after the label, since the label stands for the whole row.
@@ -622,6 +635,14 @@ export function LinkRow({
         />
       </HStack>
     </SwiftUIButton>
+  );
+
+  if (menu === undefined) return button;
+
+  return (
+    <HStack modifiers={rowPlacement(colors)}>
+      <LongPressMenu groups={menu}>{button}</LongPressMenu>
+    </HStack>
   );
 }
 
@@ -672,6 +693,8 @@ type VersionRowProps = {
   /** Whether it heads its list, which then draws no hairline over it, as a plain list in Mail or Files begins. */
   readonly first: boolean;
   readonly onPress: () => void;
+  /** What its long press holds, in the panel's version row menu's groups: its links, then Restore this version on any but the description as it stands. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
 /**
@@ -690,17 +713,23 @@ export function VersionRow({
   current,
   first,
   onPress,
+  menu,
 }: VersionRowProps) {
   const colors = useColors();
   const said = current ? `${VERSION_HISTORY_WORDS.CURRENT} · ${summary}` : summary;
 
-  return (
+  const placed = [
+    ...rowPlacement(colors),
+    // Note that a headless plain list draws a hairline over its first row, which iOS's own plain lists leave out.
+    ...(first ? [listRowSeparator("hidden", "top")] : []),
+  ];
+
+  const button = (
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
-        ...rowPlacement(colors),
-        // Note that a headless plain list draws a hairline over its first row, which iOS's own plain lists leave out.
-        ...(first ? [listRowSeparator("hidden", "top")] : []),
+        // Note that a held row stands its place in the list on the frame around its menu, as `RowFrame` does, since the menu wraps the button.
+        ...(menu === undefined ? placed : []),
         buttonStyle("borderless"),
         accessibilityLabel(name),
         accessibilityValue([said, sinceHeard(at, now)].join(", ")),
@@ -728,6 +757,14 @@ export function VersionRow({
         </RowLine>
       </VStack>
     </SwiftUIButton>
+  );
+
+  if (menu === undefined) return button;
+
+  return (
+    <HStack modifiers={placed}>
+      <LongPressMenu groups={menu}>{button}</LongPressMenu>
+    </HStack>
   );
 }
 
@@ -817,11 +854,24 @@ const STRUCK_OPACITY = 0.62;
 /** How wide a changed section's bar stands, in points. */
 const CHANGE_BAR_WIDTH = 3;
 
-/** A changed section's row: its bar, then its words beside it. */
+/**
+ * A changed section: its words in the page's own column, set in by the
+ * bar's room, and the bar standing in that room the words' whole height.
+ * Note that the words never stand in a row beside the bar, because a row
+ * the host measured with no width of its own laid them out at their whole
+ * length, so a changed section's lines ran past the page cut off rather
+ * than wrapping, as an unchanged one's wrap.
+ */
 const CHANGED_STYLE = StyleSheet.create({
-  row: { flexDirection: "row", gap: SPACE.ROW },
-  bar: { width: CHANGE_BAR_WIDTH, borderRadius: CHANGE_BAR_WIDTH / 2, alignSelf: "stretch" },
-  words: { flex: 1 },
+  words: { paddingLeft: CHANGE_BAR_WIDTH + SPACE.ROW },
+  bar: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: CHANGE_BAR_WIDTH,
+    borderRadius: CHANGE_BAR_WIDTH / 2,
+  },
   struck: { opacity: STRUCK_OPACITY },
 });
 
@@ -842,15 +892,13 @@ function ChangedWords({
   const bar = CHANGE_BAR[change];
 
   return (
-    <View style={CHANGED_STYLE.row}>
+    <View style={CHANGED_STYLE.words}>
       <View
         accessible
         accessibilityLabel={VERSION_CHANGE_HEARD[change]}
         style={[CHANGED_STYLE.bar, { backgroundColor: colors[bar.color] }]}
       />
-      <View style={[CHANGED_STYLE.words, bar.dimmed ? CHANGED_STYLE.struck : undefined]}>
-        {children}
-      </View>
+      <View style={bar.dimmed ? CHANGED_STYLE.struck : undefined}>{children}</View>
     </View>
   );
 }
@@ -917,8 +965,6 @@ export function WordsRow({
   hidesHtml,
   change = VERSION_CHANGE.SAME,
 }: WordsRowProps) {
-  const colors = useColors();
-
   const host = (
     <RNHostView matchContents={{ vertical: true }}>
       <View>
@@ -940,17 +986,7 @@ export function WordsRow({
     </RNHostView>
   );
 
-  const held =
-    menuActions.length === 0 ? (
-      host
-    ) : (
-      <ContextMenu>
-        <ContextMenu.Items>
-          {menuActions.map((action) => actionButton(action, colors))}
-        </ContextMenu.Items>
-        <ContextMenu.Trigger>{host}</ContextMenu.Trigger>
-      </ContextMenu>
-    );
+  const held = <LongPressMenu groups={[menuActions]}>{host}</LongPressMenu>;
 
   return (
     <HStack

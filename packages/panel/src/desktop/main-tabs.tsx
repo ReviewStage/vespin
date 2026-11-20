@@ -1,3 +1,4 @@
+import type { AgentFork } from "@repo/features/agent-fork-model";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -57,7 +58,6 @@ import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
 import { useFailedAgents } from "../tasks/failed-lines.js";
 import { agentForkDoors, ForkProvider, type SuggestDoor } from "../tasks/fork-action.js";
-import type { AgentFork } from "../tasks/fork-model.js";
 import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";

@@ -120,7 +120,9 @@ export const ownedByTaskAlone = (table: {
  * carried, which names that message beside its item; its kind says which,
  * and only an answer's or a message's file has a name and a place among its
  * files. Its account and its task stand on the row as they did on the
- * table it moved from, though the item it goes with goes with either.
+ * table it moved from, though the item it goes with goes with either; an
+ * item on no task, a Manager's thread, names none, and its files go with
+ * the item alone.
  *
  * The bytes stand in the row itself, as every owner's did: this deployment
  * keeps no blob store, and each owner holds its bytes to its own bound, a
@@ -209,11 +211,6 @@ export const attachment = pgTable(
     check(
       "attachment_description_comment_file",
       sql`${table.descriptionCommentId} is null or (${table.taskId} is not null and ${table.organizationId} is not null and ${table.name} is not null and ${table.position} is not null and octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)})`,
-    ),
-    // An Inbox file names its item's task, so it moves with the task (`task-store.ts`).
-    check(
-      "attachment_inbox_file_task",
-      sql`${table.inboxItemId} is null or ${table.taskId} is not null`,
     ),
     // Only a WebM recording or an Ogg clip carries a copy for a phone, held to the bound a function may answer whole, as the file is.
     check(

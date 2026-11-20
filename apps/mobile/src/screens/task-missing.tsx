@@ -13,7 +13,6 @@ const READING_TASK = readingWords("the task");
 /** What the screen says where the task list could not be read, beside Try again, as the panel's Tasks page does. */
 const TASKS_UNREAD = readFailedWords(`your ${TERM.TASK.many}`);
 
-/** What a failed read offers. */
 const TRY_AGAIN = "Try again";
 
 /**

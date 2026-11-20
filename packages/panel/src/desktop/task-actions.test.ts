@@ -301,7 +301,7 @@ test("Permanently delete asks in a dialog naming the plan, from the ⋯ and from
   assert.equal(title?.textContent, "Permanently delete task?");
   assert.equal(
     body?.textContent,
-    "“Teammate invitations” and its board and transcript will be deleted. This cannot be undone. To keep it out of the way instead, mark it done.",
+    "This cannot be undone. To keep it out of the way instead, mark it done.",
   );
   // A key already pressed lands on the answer that changes nothing.
   assert.equal(document.activeElement, answer("Cancel"));
@@ -312,7 +312,6 @@ test("Permanently delete asks in a dialog naming the plan, from the ⋯ and from
   unmountAll();
   rightClick(mountSidebarTask(tasks, OTHER, asked), 40, 60);
   choose("Permanently delete");
-  assert.match(dialog()?.textContent ?? "", /“Billing export”/u);
   assert.deepEqual(asked.deleted, [TASK.id]);
   await confirmDelete();
 
@@ -610,7 +609,6 @@ test("the task's toolbar draws no ⋯ of the task's, and ⌘⌫ still asks to de
     assert.ok(runAppCommand(APP_COMMAND.DELETE), "⌘⌫ is offered");
   });
   assert.equal(asking(), true, "⌘⌫ asks first");
-  assert.match(dialog()?.textContent ?? "", /Teammate invitations/u);
 });
 
 /** Dean's own workspace, with no GitHub connected, and the team's, whose GitHub reaches acme-corp's repositories. */

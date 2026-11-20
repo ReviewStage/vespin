@@ -2643,9 +2643,23 @@ export function useTasksTab(input: {
     );
   };
 
-  // An agent's place opened by the agent as the list or the service has it: on its task, an archived agent's tab among its tabs.
-  const openFoundAgent = (agent: AgentSummary, place: AgentPlace) =>
-    openOnTask(agent.taskId, place);
+  // An agent's place opened by the agent as the list or the service has it: on its task, an archived agent's tab among its tabs,
+  // or through its own address where it stands on none.
+  const openFoundAgent = (agent: AgentSummary, place: AgentPlace, home: string) => {
+    if (agent.taskId !== null) {
+      openOnTask(agent.taskId, place);
+
+      return;
+    }
+
+    // Note that a message's page is asked to bring it into view once the agent's own page has arrived, as its tab is on a task.
+    linkArrive(
+      () => openAgentPage(agent.id, home),
+      () => {
+        if (place.kind === LINK_DESTINATION.MESSAGE) revealMessage(place);
+      },
+    );
+  };
 
   /**
    * An agent's place opened on its task, or through its own address, which says it is not found, where it is not read.
@@ -2659,17 +2673,18 @@ export function useTasksTab(input: {
   // through the agent's own address, which says it is not found, where neither reads it.
   const openAgentsPage = (agentId: string, pageId: string, home: string) => {
     const onAgent = (agent: AgentSummary | undefined) => {
-      if (agent === undefined) {
+      const taskId = agent?.taskId ?? null;
+
+      // Note that a page stands on a task, so an agent on none opens its own address.
+      if (taskId === null) {
         linkArrive(() => openAgentPage(agentId, home), NOTHING);
 
         return;
       }
 
-      const onTask = { kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId } as const;
+      const onTask = { kind: LINK_DESTINATION.PAGE, taskId, pageId } as const;
       const tab = pageTab(pageId);
-      linkOnTask({ taskId: agent.taskId, side: { tab, link: onTask } }, () =>
-        linkPanelTab(onTask, tab),
-      );
+      linkOnTask({ taskId, side: { tab, link: onTask } }, () => linkPanelTab(onTask, tab));
     };
 
     const listed = listedAgentIn(listCollections, agentId);
@@ -2694,7 +2709,7 @@ export function useTasksTab(input: {
     if (place.taskId !== undefined) openOnTask(place.taskId, place);
     else if (open !== undefined && agents.agentIds?.includes(place.agentId))
       openOnTask(open, place);
-    else if (listed !== undefined) openFoundAgent(listed, place);
+    else if (listed !== undefined) openFoundAgent(listed, place, home);
     else {
       const current = linkRead();
       const opening = keepLinkLanded();
@@ -2703,7 +2718,7 @@ export function useTasksTab(input: {
         // Note that an agent not read may yet be on a task, so its page stands alone, its own read saying whether it is there, and no tab of a panel it may not hold opens.
         opening(() => {
           if (agent === undefined) linkArrive(() => openAgentPage(place.agentId, home), NOTHING);
-          else openFoundAgent(agent, place);
+          else openFoundAgent(agent, place, home);
         });
       });
     }
@@ -2783,7 +2798,8 @@ export function useTasksTab(input: {
           itemId: place.itemId,
         };
 
-        openInboxItemOn(home.workspaceId, found, home.taskId);
+        // Note that a thread on no task opens in the Inbox by its id alone, as its agent holds it there.
+        openInboxItemOn(home.workspaceId, found, home.taskId ?? undefined);
       });
     });
   };
@@ -2803,13 +2819,13 @@ export function useTasksTab(input: {
     else if (!("agentId" in place)) openInboxItemById(place);
     else if (open !== undefined && agents.agentIds?.includes(place.agentId))
       openInboxItemOn(workspace, place, open);
-    else if (listed !== undefined) openInboxItemOn(workspace, place, listed.taskId);
+    else if (listed !== undefined) openInboxItemOn(workspace, place, listed.taskId ?? undefined);
     else {
       const current = linkRead();
       const opening = keepLinkLanded();
       readAgentById(queryClient, place.agentId).then((agent) => {
         if (!current()) return;
-        opening(() => openInboxItemOn(workspace, place, agent?.taskId));
+        opening(() => openInboxItemOn(workspace, place, agent?.taskId ?? undefined));
       });
     }
   };

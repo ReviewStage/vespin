@@ -16,9 +16,12 @@ import { GLYPH, OctagonMinusIcon, PencilLineIcon } from "../../icons/icons.js";
  * A mark stands a size under the glyph it follows, so it reads as a note on
  * the row rather than a second glyph, its own glyph filling it, in the ink
  * of what it says: a failure in the danger color, a draft in the muted ink
- * beside the row's other marks. It is a picture named for a reader by
- * `label`, a fixed word, so nothing a row holds rides it. A hint may hang
- * from it (`Tooltip`), which hands it the hint's own handlers.
+ * beside the row's other marks. Where it stands among words rather than in a
+ * flex row, a list row's metadata or a line under a name, it stands centered
+ * on their capitals, as the unread dot does, rather than on their baseline,
+ * which would lift it above the words it follows. It is a picture named for
+ * a reader by `label`, a fixed word, so nothing a row holds rides it. A hint
+ * may hang from it (`Tooltip`), which hands it the hint's own handlers.
  *
  * Each kind keeps the class the window's sheets restage it by
  * (`failed-mark`, `draft-mark`, `blocked-mark`), a placement hook rather than a look. It
@@ -73,7 +76,7 @@ export function RowMark({
   return (
     <span
       {...anchor}
-      className={`${KIND_CLASS[kind]} inline-flex size-row-mark flex-none items-center justify-center [&>svg]:size-full`}
+      className={`${KIND_CLASS[kind]} inline-flex size-row-mark flex-none items-center justify-center align-[calc(var(--ui-mark-cap,1cap)/2-var(--spacing-row-mark)/2)] [&>svg]:size-full`}
       role="img"
       aria-label={label}
     >

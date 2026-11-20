@@ -6,7 +6,8 @@ import { reportRendererErrors } from "./renderer-errors";
 /**
  * A development build's renderer errors, as the terminal the run was started
  * from reads them: each error a window's page logs is one line naming the
- * document it came from, a warning is not, one naming an access token is
+ * document it came from, a warning is not, nor Chromium's notice of a
+ * resize observer's report held to the next frame, one naming an access token is
  * withheld but for the fact of it, and once the reporting stops no
  * window says anything, whether it was open before or opened after.
  *
@@ -45,12 +46,13 @@ function open(document: string): InstanceType<typeof FakeWindow> {
   return window;
 }
 
-test("each error a window logs is one line naming its document, and a warning is none", () => {
+test("each error a window logs is one line naming its document, and a warning or a deferred resize is none", () => {
   const lines: string[] = [];
   reportRendererErrors((line) => lines.push(line), electronApp);
 
   const panel = open("index.html");
   panel.log("warning", "the microphone is slow to answer");
+  panel.log("error", "ResizeObserver loop completed with undelivered notifications.");
   panel.log("error", "Uncaught TypeError: session is undefined");
 
   assert.deepEqual(lines, [

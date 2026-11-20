@@ -1,65 +1,38 @@
 /**
- * thread-dms.ts -- our Slack bot writing a member the threads that wait on them, and rewriting each once its ask settles.
+ * thread-dms.ts -- the DMs our Slack bot wrote members about the inbox threads that waited on them, which it writes no more, still answered and pressed.
  *
- * An agent's post that opens a thread, or asks anew on one, is written by
- * the bot to the member it waits on (`WAITS_ON`: the member it is addressed
- * to, else its task's assignee, else the agent's starter), where the
- * workspace's bot is connected, the member's email matches someone in its
- * team, and the member's own switch is on (`slackNotificationsOn`). The bot
- * writes them a DM that says the thread's title, and the post as the
- * first reply in that DM's Slack thread; every later post of the agent's on
- * it that waits on the same member is another reply there, whether it asks
- * or not, so the title is said once. While a reply in its Slack thread holds
- * the thread's open ask, the title DM says that ask's words under the title,
- * and the title alone once it settles (`redrawTitleDms`), so a member reading
- * down their DMs sees which threads wait on them; either way it ends in the
- * open button to the thread, beside the open ask's own buttons while it
- * waits, so it is answered from the title as from its reply. Before the thread has a
- * DM, a follow-up that asks nothing new on a thread still open writes
- * nothing. A member's
- * reply in a DM's Slack thread is found back to its thread by that DM
- * (`threadDmAt`) and posted there as their own reply
- * (`slack-agent-starts.ts`).
- * Each reply says the post's words as Slack draws Markdown
- * (`slackMarkdownBlock`), and an
- * open button to the thread; a decide ask that takes one option offers each
- * as a button beside it (`SlackChoice`), and one that takes several offers
- * them as checkboxes with a Submit button, whose press names the ticked ones
- * by their place among the options (`SLACK_PICKS_ACTION`); a do ask's steps
- * are listed under the words, numbered, with Mark done, which ticks every
- * step, and Couldn't do it beside the open button. Our Slack route answers
- * the ask with any of these (`slack-events-app.ts`), and every other ask is
- * the link alone.
+ * The bot once wrote the member a thread waited on a DM saying its title,
+ * and each post of the agent's as a reply in that DM's Slack thread, each
+ * kept on the agent's message it said (`inbox_message.slack_dm`). It writes
+ * none now and rewrites none on its own, since an agent sends what it wants
+ * in Slack itself (`send_slack_message`); the DMs already written keep
+ * working. A member's reply in a DM's Slack thread is found back to its
+ * thread by that DM (`threadDmAt`) and posted there as their own reply
+ * (`slack-agent-starts.ts`). A DM's buttons still answer its ask: a decide
+ * ask that takes one option offers each as a button (`SlackChoice`), and one
+ * that takes several offers checkboxes with a Submit button, whose press
+ * names the ticked ones by their place among the options
+ * (`SLACK_PICKS_ACTION`); a do ask offers Mark done and Couldn't do it. Our
+ * Slack route answers the ask with any of these (`slack-events-app.ts`) and
+ * rewrites the DM pressed to say what came of it (`rewriteThreadDm`), a
+ * press on a title DM drawing the title again with the ask still open on
+ * it, if any.
  *
- * Each reply is kept on the agent's message it said
- * (`inbox_message.slack_dm`), with the member it went to and the title DM
- * whose thread it stands in; a DM written before the title stood alone kept
- * the post's words itself, and no thread. The pictures and recordings the post
- * carried follow it as files shared under that DM's Slack thread
- * (`SlackBot.upload`), each read as the member it went to reads it. Once
- * the message's ask is answered, withdrawn, or replaced, `settleThreadDms` rewrites the DM to say so and
- * marks it settled, so it is rewritten once and still found as the thread's.
- *
- * Every call here waits on Slack, so each is handed to `afterResponse` by
- * its caller and never yielded inside a transaction; a runtime that holds
- * no bot, such as a test's, writes nothing.
+ * Every call here waits on Slack, so it is never yielded inside a
+ * transaction; a runtime that holds no bot, such as a test's, writes
+ * nothing.
  */
 
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { Database } from "@repo/database/core/query";
-import { slackNotificationsOn } from "@repo/database/models/slack-installation-store";
 import { organization } from "@repo/database/schemas/auth";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { inboxMessage } from "@repo/database/schemas/inbox-message";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
-  INBOX_MESSAGE_AUTHOR,
   INBOX_REPLY,
-  INBOX_STATUS,
-  type InboxItem,
-  type InboxMessage,
   type InboxReadAsk,
   inboxReadAskSchema,
   knownAsk,
@@ -69,13 +42,11 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import { and, desc, eq, isNotNull, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { readInboxAttachment } from "../inbox/inbox-store.js";
 import {
   type SlackBlock,
   SlackBot,
   type SlackMessage,
   type SlackMessageContent,
-  type SlackUpload,
   type SlackWorkspaceBot,
 } from "./slack-bot.js";
 import { slackClipped, slackMarkdownBlock } from "./slack-markdown.js";
@@ -130,9 +101,6 @@ const SETTLED_LINE = {
   [INBOX_ASK_STATUS.REPLACED]: "Replaced by a newer ask",
 } as const;
 
-/** Where a settled ask stands: every status but open. */
-type SettledAskStatus = keyof typeof SETTLED_LINE;
-
 /** What a settled DM says once its member chose options from it. */
 export function chosenLine(labels: readonly string[]): string {
   return `You chose ${labels.join(", ")}`;
@@ -170,46 +138,14 @@ interface AskControls {
 
 const NO_CONTROLS: AskControls = { blocks: [], buttons: [] };
 
-const SETTLED_STATUSES = [
-  INBOX_ASK_STATUS.ANSWERED,
-  INBOX_ASK_STATUS.WITHDRAWN,
-  INBOX_ASK_STATUS.REPLACED,
-] as const satisfies readonly SettledAskStatus[];
-
-/** What a reply about a thread is drawn from: its title, which Slack's notification says, the agent's words in Markdown, the thread's link, and whether it stands alone, a DM from before the title did, so says the title as its header. */
+/** What a reply about a thread is drawn from. */
 interface ThreadDmView {
   readonly title: string;
+  /** The agent's words, in Markdown. */
   readonly text: string;
   readonly link: string;
+  /** Whether the DM stands alone, as one from before the title DM did, so says the title as its header. */
   readonly titled?: boolean;
-}
-
-/** A post as `dmThreadPost` reads it: the agent's workspace, the item as the post wrote it, whether the post asked, and whether its thread stood open before it (`threadStandsOpen`). */
-interface ThreadDmPost {
-  readonly organizationId: string;
-  readonly item: InboxItem;
-  readonly asked: boolean;
-  readonly wasOpen: boolean;
-}
-
-/**
- * The agent's message a post that opens a thread wrote: the one whose ask
- * the item holds open, or for a notice, the agent's latest. Note that the
- * ask is looked for first, because two messages written in one millisecond
- * read in no order of their own.
- */
-function openingMessage(item: InboxItem): InboxMessage | undefined {
-  const thread = item.thread ?? [];
-  const asking = thread.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
-
-  return asking ?? thread.findLast((message) => message.author === INBOX_MESSAGE_AUTHOR.AGENT);
-}
-
-/** The agent's message the post wrote: the ask it opened where it asked, else the agent's latest. */
-function postedMessage(item: InboxItem, asked: boolean): InboxMessage | undefined {
-  return asked
-    ? openingMessage(item)
-    : item.thread?.findLast((message) => message.author === INBOX_MESSAGE_AUTHOR.AGENT);
 }
 
 /** A do ask's steps, as the message's ask names them; none for any other ask. */
@@ -390,26 +326,6 @@ function threadDmContent(
   return { text: line === undefined ? view.title : `${view.title} · ${line}`, blocks };
 }
 
-/** Whether the agent's item under the key stands open: an ask waiting, or a notice waiting on the nod. */
-const findOpenItem = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, key: Schema.String }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ userId, agentId, key }) =>
-    Database.use((db) =>
-      db
-        .select({ id: inboxItem.id })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.userId, userId),
-            eq(inboxItem.agentId, agentId),
-            eq(inboxItem.key, key),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
-          ),
-        ),
-    ),
-});
-
 /** What an item's DMs are drawn with beside a message's words: its title, its agent, and its workspace, by id and by the slug its links are written under. */
 const findItemPlace = SqlSchema.findOneOption({
   Request: Schema.String,
@@ -456,37 +372,6 @@ const findMessageDm = SqlSchema.findOneOption({
     ),
 });
 
-const recordDm = SqlSchema.void({
-  Request: Schema.Struct({ messageId: Schema.String, dm: SlackDmSchema }),
-  execute: ({ messageId, dm }) =>
-    Database.use((db) =>
-      db.update(inboxMessage).set({ slackDm: dm }).where(eq(inboxMessage.id, messageId)),
-    ),
-});
-
-/** Whether a message holds a DM its ask has not yet settled. */
-function unsettledDm() {
-  return and(
-    isNotNull(inboxMessage.slackDm),
-    sql`coalesce((${inboxMessage.slackDm} ->> 'settled')::boolean, false) = false`,
-  );
-}
-
-/** The item's newest DM, settled or not, whose Slack thread a later post replies in. */
-const findLatestDm = SqlSchema.findOneOption({
-  Request: Schema.String,
-  Result: Schema.Struct({ dm: SlackDmSchema }),
-  execute: (itemId) =>
-    Database.use((db) =>
-      db
-        .select({ dm: inboxMessage.slackDm })
-        .from(inboxMessage)
-        .where(and(eq(inboxMessage.itemId, itemId), isNotNull(inboxMessage.slackDm)))
-        .orderBy(desc(inboxMessage.createdAt))
-        .limit(1),
-    ),
-});
-
 /** Where a title DM is, by its conversation and timestamp. */
 interface TitleDm {
   readonly channel: string;
@@ -520,11 +405,6 @@ const findOpenAskAt = SqlSchema.findOneOption({
     ),
 });
 
-/** The DM that opened a DM's Slack thread: the one its reply stands under, or the DM itself where it stood alone. */
-function threadRoot(dm: typeof SlackDmSchema.Type) {
-  return { channel: dm.channel, ts: dm.thread ?? dm.ts, to: dm.to };
-}
-
 /** A DM of the item's in the Slack thread under the DM that opened it, by that DM's conversation and timestamp: its item, that item's workspace, and the DM as kept. */
 const findDmAt = SqlSchema.findOneOption({
   Request: Schema.Struct({ channel: Schema.String, ts: Schema.String }),
@@ -553,82 +433,6 @@ const findDmAt = SqlSchema.findOneOption({
         .limit(1),
     ),
 });
-
-/**
- * The DMs of the item's messages whose ask has settled, each marked settled
- * as it is read, with the message's words, a do ask's steps, and where its ask stands. Note
- * that the outer statement asks again that a DM is unsettled, because a
- * second caller blocked on the row rechecks it once the first commits and
- * so takes none, and no DM is rewritten twice.
- */
-const claimSettledDms = SqlSchema.findAll({
-  Request: Schema.String,
-  Result: Schema.Struct({
-    id: Schema.String,
-    dm: SlackDmSchema,
-    text: Schema.String,
-    steps: Schema.NullOr(Schema.Array(Schema.String)),
-    status: Schema.Literals(SETTLED_STATUSES),
-  }),
-  execute: (itemId) =>
-    Database.use((db) => {
-      const settled = db
-        .select({ id: inboxMessage.id, dm: inboxMessage.slackDm })
-        .from(inboxMessage)
-        .where(
-          and(
-            eq(inboxMessage.itemId, itemId),
-            unsettledDm(),
-            sql`${inboxMessage.ask} ->> 'status' <> ${INBOX_ASK_STATUS.OPEN}`,
-          ),
-        )
-        .as("settled");
-
-      return db
-        .update(inboxMessage)
-        .set({ slackDm: sql`${inboxMessage.slackDm} || '{"settled":true}'::jsonb` })
-        .from(settled)
-        .where(and(eq(inboxMessage.id, settled.id), unsettledDm()))
-        .returning({
-          id: inboxMessage.id,
-          dm: settled.dm,
-          text: inboxMessage.text,
-          steps: sql<unknown>`case when ${inboxMessage.ask} ->> 'type' = ${INBOX_ASK.DO} then ${inboxMessage.ask} -> 'steps' end`,
-          status: sql<string>`${inboxMessage.ask} ->> 'status'`,
-        });
-    }),
-});
-
-/** The files the agent's message carried, its pictures and recordings, read as the member it went to reads them, in the order they were attached; one gone since is left out. */
-function messageUploads(
-  userId: string,
-  itemId: string,
-  message: InboxMessage,
-): Effect.Effect<readonly SlackUpload[], StoreFailure, DatabaseServices> {
-  return Effect.map(
-    Effect.forEach(message.files ?? [], (file) =>
-      Effect.map(
-        readInboxAttachment(userId, itemId, file.attachmentId),
-        Option.map((read): SlackUpload => ({ name: file.name, bytes: read.bytes })),
-      ),
-    ),
-    (read) => read.flatMap((one) => (Option.isSome(one) ? [one.value] : [])),
-  );
-}
-
-/** The title DMs the replies stand under, each once; a DM that stood alone stands under none. */
-function titleDmsOf(dms: readonly (typeof SlackDmSchema.Type)[]): readonly TitleDm[] {
-  const titles: TitleDm[] = [];
-
-  for (const { channel, thread } of dms) {
-    if (thread === undefined) continue;
-
-    if (titles.some((title) => title.channel === channel && title.ts === thread)) continue;
-    titles.push({ channel, ts: thread });
-  }
-
-  return titles;
-}
 
 /**
  * Rewrites each title DM to say the open ask whose reply stands in its Slack
@@ -665,14 +469,6 @@ function redrawTitleDms(
 /** The item's link by its id alone, whose agent and task a reader asks the service for. */
 function threadLink(itemId: string, place: { readonly step: string }) {
   return linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId }, place.step);
-}
-
-/** Whether the agent's item under the key stands open, read before a post so the post's DM tells a follow-up from a thread opened. */
-export function threadStandsOpen(
-  agent: { readonly userId: string; readonly agentId: string },
-  key: string,
-): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
-  return Effect.map(findOpenItem({ ...agent, key }), Option.isSome);
 }
 
 /** The workspace an item is in, which a press from Slack finds its member under; nothing for an item that is gone. */
@@ -762,131 +558,4 @@ export function settledLine(
   return status === undefined || status === INBOX_ASK_STATUS.OPEN
     ? `No longer open in ${PRODUCT_NAME}`
     : SETTLED_LINE[status];
-}
-
-/**
- * Rewrites every DM of the item whose ask has settled to say where it
- * stands, as `threadDmContent` draws it, and forgets it, then the title DMs
- * they stand under, which no longer say their ask; nothing where the
- * runtime holds no bot. The message `chosen` names, the one a press from
- * Slack answered, says its own line instead, the option chosen.
- */
-export function settleThreadDms(
-  itemId: string,
-  chosen?: { readonly messageId: string; readonly line: string },
-): Effect.Effect<void, StoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const slack = yield* Effect.serviceOption(SlackBot);
-
-    if (Option.isNone(slack) || !slack.value.configured) return;
-    const place = yield* findItemPlace(itemId);
-
-    if (Option.isNone(place)) return;
-    const bot = yield* slack.value.forWorkspace(place.value.organizationId);
-
-    // Note that a workspace holding no token claims nothing, so its DMs are rewritten once its token opens again.
-    if (!bot.connected) return;
-    const claimed = yield* claimSettledDms(itemId);
-
-    if (claimed.length === 0) return;
-    const { title } = place.value;
-    const link = threadLink(itemId, place.value);
-    yield* Effect.forEach(
-      claimed,
-      ({ id, dm, text, steps, status }) =>
-        bot.update(
-          dm.channel,
-          dm.ts,
-          threadDmContent(
-            {
-              title,
-              text: wordsWithSteps(text, steps ?? []),
-              link,
-              titled: dm.thread === undefined,
-            },
-            id === chosen?.messageId ? chosen.line : SETTLED_LINE[status],
-          ),
-        ),
-      { discard: true },
-    );
-    yield* redrawTitleDms(bot, itemId, { title, link }, titleDmsOf(claimed.map(({ dm }) => dm)));
-  });
-}
-
-/**
- * Writes the member the post's thread waits on, as a reply in the thread's
- * DM to them where it has one, else, where the post opened the thread or
- * asks anew on it, as the first reply under a new DM saying the thread's
- * title; keeps the reply on the post's message, has the title DM say an ask
- * the reply holds open, and first rewrites the DMs of the asks the post
- * replaced. Nothing where the runtime holds no bot,
- * the post is a follow-up on a thread with no DM to that member, the thread
- * waits on nobody, or the member turned their switch off.
- */
-export function dmThreadPost(
-  post: ThreadDmPost,
-): Effect.Effect<void, StoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const slack = yield* Effect.serviceOption(SlackBot);
-
-    if (Option.isNone(slack) || !slack.value.configured) return;
-    const { item, organizationId } = post;
-    yield* settleThreadDms(item.id);
-    const message = postedMessage(item, post.asked);
-    const recipient = item.waitsOn?.userId;
-
-    if (message === undefined || recipient === undefined) return;
-
-    if (!(yield* slackNotificationsOn(recipient))) return;
-
-    const kept = Option.getOrUndefined(
-      Option.filter(
-        Option.map(yield* findLatestDm(item.id), ({ dm }) => threadRoot(dm)),
-        (root) => root.to === recipient,
-      ),
-    );
-
-    // A post opens a DM where it asks anew or none stood open; a follow-up does neither, but replies in a DM there is.
-    if (kept === undefined && post.wasOpen && !post.asked) return;
-    const place = yield* findItemPlace(item.id);
-
-    if (Option.isNone(place)) return;
-    const link = threadLink(item.id, place.value);
-    const bot = yield* slack.value.forWorkspace(organizationId);
-
-    const opened =
-      kept === undefined
-        ? yield* bot.dm(recipient, titleDmContent(item.title, link))
-        : Option.some(kept);
-
-    if (Option.isNone(opened)) return;
-    const thread = { channel: opened.value.channel, ts: opened.value.ts };
-
-    // Note that a new title DM is kept settled until its reply takes its place, so a failed reply leaves it the thread's, never rewritten.
-    if (kept === undefined) {
-      yield* recordDm({ messageId: message.id, dm: { ...thread, to: recipient, settled: true } });
-    }
-
-    const view = {
-      title: item.title,
-      text: wordsWithSteps(message.text, askSteps(message.ask)),
-      link,
-    };
-
-    const content = threadDmContent(view, undefined, askControls(item.id, message));
-    const sent = yield* bot.dm(recipient, content, thread);
-
-    if (Option.isNone(sent)) return;
-    yield* recordDm({
-      messageId: message.id,
-      dm: { ...sent.value, to: recipient, thread: thread.ts },
-    });
-
-    if (message.ask?.status === INBOX_ASK_STATUS.OPEN) {
-      yield* redrawTitleDms(bot, item.id, { title: item.title, link }, [thread]);
-    }
-
-    const uploads = yield* messageUploads(recipient, item.id, message);
-    yield* bot.upload(thread.channel, thread.ts, uploads);
-  });
 }

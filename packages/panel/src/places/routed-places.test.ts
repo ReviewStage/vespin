@@ -46,6 +46,7 @@ const THERE: PlaceThere = {
   taskStands: () => true,
   columnStands: () => true,
   automationStands: () => true,
+  agentOnNoTask: () => true,
   listed: (workspace) => workspace === "acme",
 };
 
@@ -104,6 +105,11 @@ test.each<readonly [string, string, Partial<PlaceThere>]>([
     "a deleted automation's page",
     "/acme/automation/automation-1",
     { automationStands: () => false },
+  ],
+  [
+    "an agent's page that opened its agent on its task",
+    "/acme/agent/agent-1",
+    { agentOnNoTask: () => false },
   ],
   [
     "an Inbox narrowed to a deleted task",

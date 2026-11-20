@@ -1,6 +1,7 @@
 import { inboxShownTicks } from "@repo/features/inbox-draft";
 import {
   EVERYONES,
+  holderName,
   INBOX_NOT_READ,
   INBOX_RUN,
   INBOX_SCOPES,
@@ -8,6 +9,7 @@ import {
   INBOX_SHOW_EMPTY,
   INBOX_SHOW_LABEL,
   INBOX_WHOSE,
+  type InboxAnyHolder,
   type InboxCounts,
   type InboxListed,
   type InboxListView,
@@ -160,6 +162,7 @@ import {
 } from "../desktop/phone-head.js";
 import { groupCount } from "../desktop/sidebar-fold.js";
 import { type TabActionGroups, useTabActions } from "../desktop/strip-tabs.js";
+import { HolderGlyph } from "../entities/holder-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
@@ -421,7 +424,8 @@ interface InboxHeadSelecting {
 /**
  * One item as a `ListRow` of three lines, as a mail app lists a thread,
  * one thing to a line so nothing is cut short to make room for another:
- * what holds it, its task's status and whole name, and whom its agent
+ * what holds it, its task's status and whole name, or, for a thread on no
+ * task, its agent's mark and name, and whom its agent
  * addressed it to, with how long ago it changed at that line's end, as a
  * mail app puts the time on the sender's line; then the title; then the
  * last word in its thread, muted, led on a thread by what its open ask
@@ -484,7 +488,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   several,
   place,
 }: {
-  listed: InboxListed;
+  listed: InboxListed<InboxAnyHolder>;
   chosen: boolean;
   /** Whether the item's box stands beside the list, so its draft is in sight and unmarked: the chosen item's unless said, and none while the list stands alone. */
   open?: boolean;
@@ -507,9 +511,9 @@ export const InboxItemRow = memo(function InboxItemRow({
   ref?: React.RefCallback<HTMLElement> | undefined;
   /** What the row is chosen by where its list chooses rows (`SelectionRegion`); none where it is never chosen. */
   selectKey?: string | undefined;
-  onChoose: (listed: InboxListed) => void;
+  onChoose: (listed: InboxListed<InboxAnyHolder>) => void;
   /** Marks the item read or unread; none where the row offers no mark. */
-  onMark?: ((listed: InboxListed, unread: boolean) => void) | undefined;
+  onMark?: ((listed: InboxListed<InboxAnyHolder>, unread: boolean) => void) | undefined;
   /** Resolves open items without an answer; none where the row offers no resolve. */
   onResolve?: InboxResolver | undefined;
   /** Sets the item's reminder, or cancels it; none where the row offers no reminder. */
@@ -525,7 +529,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   const unread = isUnread(item);
   const title = cardTitle(item.title);
   const directory = useMemberDirectory();
-  const _reader = directory.readerId ?? readerId;
+  const reader = directory.readerId ?? readerId;
   const { nameOf } = useInboxStanding(listed, readerId);
   const lineKind = inboxLineKind(item);
   const preview = useInboxLinePieces(item, nameOf, ticked);
@@ -563,12 +567,12 @@ export const InboxItemRow = memo(function InboxItemRow({
         }
         describedAs={heard}
         lead={{
-          icon: <PlanGlyph status={holder.task.status} />,
-          // Note that a thread its agent addressed by name says so after its task, since its task's assignee may be someone else.
+          icon: <HolderGlyph holder={holder} />,
+          // Note that a thread its agent addressed by name says so after its holder, since its task's assignee may be someone else; one addressed to the reader says nothing, as it is in their own inbox.
           label:
-            addressedTo === undefined
-              ? holder.task.name
-              : `${holder.task.name} · ${addressedWords(addressee)}`,
+            addressedTo === undefined || addressedTo.userId === reader
+              ? holderName(holder)
+              : `${holderName(holder)} · ${addressedWords(addressee)}`,
         }}
         leadAt={LIST_ROW_LEAD.ABOVE}
         meta={
@@ -1511,7 +1515,9 @@ const LAID_OUT_DEPTH = 1;
  * `change` moved, and the list is handed a view built anew on every draw,
  * though it lists the same rows.
  */
-function useLaidOut(items: readonly InboxListed[]): readonly InboxListed[] {
+function useLaidOut(
+  items: readonly InboxListed<InboxAnyHolder>[],
+): readonly InboxListed<InboxAnyHolder>[] {
   const held = useRef(items);
   const steady = readAlike(held.current, items, LAID_OUT_DEPTH) ? held.current : items;
   useLayoutEffect(() => {
@@ -1560,10 +1566,14 @@ function InboxRows({
   leaving = false,
   row,
 }: {
-  items: readonly InboxListed[];
+  items: readonly InboxListed<InboxAnyHolder>[];
   place: RowsPlace;
   leaving?: boolean;
-  row: (listed: InboxListed, leaving: boolean, at: VirtualRowPlace) => React.ReactNode;
+  row: (
+    listed: InboxListed<InboxAnyHolder>,
+    leaving: boolean,
+    at: VirtualRowPlace,
+  ) => React.ReactNode;
 }): React.JSX.Element {
   const drawn = useLeaving(items, (listed) => listed.item.id);
   const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
@@ -1602,12 +1612,12 @@ const RUN_WORDS = {
 } as const satisfies Record<InboxRun, string>;
 
 /** The one run a list stands its items in where nothing pinned heads them: Everything else, under no heading (`InboxRuns`). */
-function oneRun(view: InboxListView): readonly InboxPinnedRun[] {
+function oneRun(view: InboxListView<InboxAnyHolder>): readonly InboxPinnedRun<InboxAnyHolder>[] {
   return [{ run: INBOX_RUN.REST, items: view.items, count: view.items.length, folded: false }];
 }
 
 /** A run's key, by which it leaves the list. */
-function runKeyOf({ run }: InboxPinnedRun): string {
+function runKeyOf({ run }: InboxPinnedRun<InboxAnyHolder>): string {
   return run;
 }
 
@@ -1633,9 +1643,13 @@ function InboxRuns({
   row,
   onFold,
 }: {
-  view: InboxListView;
+  view: InboxListView<InboxAnyHolder>;
   place: RowsPlace;
-  row: (listed: InboxListed, leaving: boolean, at: VirtualRowPlace) => React.ReactNode;
+  row: (
+    listed: InboxListed<InboxAnyHolder>,
+    leaving: boolean,
+    at: VirtualRowPlace,
+  ) => React.ReactNode;
   /** Folds a run or opens it; none where the runs never fold. */
   onFold: ((run: InboxRun, folded: boolean) => void) | undefined;
 }): React.JSX.Element {
@@ -1693,7 +1707,7 @@ export function InboxList({
   onRemind,
   onPointing,
 }: {
-  view: InboxListView;
+  view: InboxListView<InboxAnyHolder>;
   /** The id of the item the pane shows. */
   chosen: string | undefined;
   /** The catalog as last read, which names each agent's model on its card. */
@@ -1707,7 +1721,7 @@ export function InboxList({
   reading?: boolean;
   columns: InboxColumnsShown;
   rows: InboxRowPresses;
-  onChoose: (listed: InboxListed) => void;
+  onChoose: (listed: InboxListed<InboxAnyHolder>) => void;
   /** Marks an item read or unread from its row or the selection's bar, answering whether the service took it; none where the rows offer no mark. */
   onMark?: InboxListMark | undefined;
   /** Resolves open items without an answer from a row, the selection's head, or E; none where the rows offer no resolve. */
@@ -1832,7 +1846,7 @@ export function InboxList({
   );
 
   // Note that a row leaving the list is the list's motion's rather than one of the keyboard's rows (`ListMotion`).
-  const row = (listed: InboxListed, leaving: boolean, at?: VirtualRowPlace) => (
+  const row = (listed: InboxListed<InboxAnyHolder>, leaving: boolean, at?: VirtualRowPlace) => (
     <InboxItemRow
       key={listed.item.id}
       place={at}

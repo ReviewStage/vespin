@@ -17,6 +17,7 @@ import {
 } from "@repo/features/agent-wire";
 import type { AutomationFiring } from "@repo/features/automation-wire";
 import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -126,7 +127,8 @@ import { task } from "./task.js";
  * GitHub records its base.
  *
  * `kind` is what the agent is (`AGENT_KIND`): a coder, as every agent
- * started now is and every row from before the column reads, or a pilot,
+ * started on a task is and every row from before the column reads; a
+ * manager, which works across the workspace's tasks; or a pilot,
  * as Pilot started before it was removed, which every reader treats as a
  * coder.
  *
@@ -255,10 +257,8 @@ export const agentTable = pgTable(
   "agent",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** The task the agent works on; every agent works on one, and leaves with it. */
-    taskId: uuid("task_id")
-      .notNull()
-      .references(() => task.id, { onDelete: "cascade" }),
+    /** The task the agent works on, and leaves with; null for an agent that works on none. */
+    taskId: uuid("task_id").references(() => task.id, { onDelete: "cascade" }),
     /** The workspace the agent belongs to, its task's or its automation's. */
     organizationId: text("organization_id")
       .notNull()
@@ -313,6 +313,10 @@ export const agentTable = pgTable(
     compactedAt: timestamptz("compacted_at"),
     /** When GitHub was last read of the agent's pull request, and of which branch; null before one, and once a change lets it go. */
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
+    /** When a Manager last sent its chat a message (`send_to_user`), which marks its row unread for each member who has not looked since (`agent-read.ts`); null before its first, and for a coder. */
+    saidAt: timestamptz("said_at"),
+    /** A Manager's face (`@repo/features/manager-face`), picked as it is made (`manager-faces.ts`); null for a coder. */
+    face: jsonb("face").$type<ManagerFace>(),
     /** When the developer archived the agent; null while it is not. */
     archivedAt: timestamptz("archived_at"),
     /** Who archived the agent, and why; null while it is not, and for an archive no one was recorded for. */
@@ -352,7 +356,7 @@ export const agentTable = pgTable(
      * longer is moves nothing of. 0 before the first.
      */
     runnerLaunch: bigint("runner_launch", { mode: "number" }).notNull().default(0),
-    /** What the agent is (`AGENT_KIND`): a coder; a pilot from before Pilot was removed, read as a coder; a coder for every row from before the column. */
+    /** What the agent is (`AGENT_KIND`): a coder; a manager; a pilot from before Pilot was removed, read as a coder; a coder for every row from before the column. */
     kind: text("kind").$type<AgentKind>().notNull().default(AGENT_KIND.CODER),
     /** Where the agent's runner and checkout live; a Vercel Sandbox for every row from before the column. */
     machine: text("machine").$type<AgentMachineKind>().notNull().default(AGENT_MACHINE.VERCEL),

@@ -6,12 +6,20 @@ import {
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
 import { type VersionDiff, versionDiff } from "@repo/features/description-version-diff";
+import {
+  LINK_DESTINATION,
+  linkOf,
+  linkWorkspaceStep,
+  taskLinkStep,
+} from "@repo/features/link-grammar";
 import { providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { DESCRIPTION_ACTOR, type DescriptionLastEdit } from "@repo/features/task-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { readingWords, showMoreWords } from "@repo/features/words";
+import { readingWords, showMoreWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   BUZZ,
   EmptyState,
@@ -19,7 +27,9 @@ import {
   LIST_LOOK,
   LinkRow,
   ListSection,
+  type LongPressGroup,
   NOTICE_KIND,
+  ROW_ACTION_TONE,
   RowList,
   Screen,
   useColors,
@@ -30,11 +40,14 @@ import {
   type VersionWriter,
   WordsRow,
 } from "@repo/ui-native";
+import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
+import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useListedAgents } from "../host/host-provider.js";
+import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
-import { useOpenLink } from "../open-link.js";
+import { openInSafari, useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
   type DescriptionPictures,
@@ -52,7 +65,6 @@ import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
 export const VERSION_ROUTE = "/tasks/version/[id]";
 
-/** The route a task's version history is opened on. */
 export const HISTORY_ROUTE = "/tasks/history/[id]";
 
 /** The glyph the history stands under while it says nothing else. */
@@ -91,6 +103,51 @@ function versionWriter(
 const RESTORE_BAR = "Restore";
 
 /**
+ * Restores a version of a task's description, as the panel's Restore this
+ * version does: at once, Restored said with its Undo once it lands, which
+ * puts back `undoTo`, the version that stood as it was pressed, and a
+ * refusal said with Try again. Every restore of the description, an Undo
+ * among them, is newer than a refused one, whose Try again then sends
+ * nothing. Answers once the restore settles.
+ */
+function useRestoreVersion(
+  taskId: string,
+): (seq: number, undoTo: number | undefined) => Promise<boolean> {
+  const acts = useHostActs();
+  const write = useWrite();
+  const notices = useFailureNotices();
+
+  return (seq, undoTo) => {
+    const subject = { kind: WRITE_SUBJECT.TASK_DESCRIPTION, id: taskId };
+
+    const undo =
+      undoTo === undefined || undoTo === seq
+        ? undefined
+        : () =>
+            void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq: undoTo }), {
+              refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
+              unanswered: VERSION_HISTORY_WORDS.UNDO_REFUSED,
+              // Note that a refused Undo offers Try again, as its words say; a newer restore of the description holds it off (`subject`).
+              retry: true,
+              subject,
+              went: BUZZ.SUCCESS,
+            });
+
+    return write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq }), {
+      refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.RESTORE_REFUSED),
+      unanswered: VERSION_HISTORY_WORDS.RESTORE_REFUSED,
+      // Note that a refused restore offers Try again, as its words say, since nothing else on screen sends it again.
+      retry: true,
+      subject,
+      went: BUZZ.SUCCESS,
+      // Note that Restored and its Undo are said on the restore that landed, a Try again's included.
+      done: () =>
+        notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo }),
+    });
+  };
+}
+
+/**
  * A task description's version history, as the panel's lists it: each
  * version under its writer, what it did and when, the newest marked
  * Current, and Show more under them while older versions stand unread. A
@@ -116,6 +173,52 @@ function History({ taskId: id }: { readonly taskId: string }) {
     const model = listedAgents.find((agent) => agent.id === agentId)?.model;
 
     return model === undefined ? undefined : providerOf(model);
+  };
+
+  const keeping = useKeeping();
+  const restoreVersion = useRestoreVersion(id);
+  const task = useTaskOverview(id)?.task;
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const linkStep = task === undefined ? undefined : linkWorkspaceStep(task.workspaceId, workspaces);
+
+  // A version's long press, as the panel's version row's menu holds it: its links, once its workspace is known, then Restore this version on any but the description as it stands.
+  const versionMenu = (seq: number, current: boolean): readonly LongPressGroup[] => {
+    const link =
+      task === undefined || linkStep === undefined
+        ? undefined
+        : linkOf(
+            { kind: LINK_DESTINATION.VERSION, taskId: taskLinkStep(task), revision: seq },
+            linkStep,
+          );
+
+    return [
+      link === undefined
+        ? []
+        : [
+            {
+              label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+              symbol: GLYPH.LINK,
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => keeping.copyWords(link),
+            },
+            {
+              label: VERB.OPEN_IN_BROWSER,
+              symbol: GLYPH.OPEN_EXTERNALLY,
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => openInSafari(link),
+            },
+          ],
+      current
+        ? []
+        : [
+            {
+              label: VERSION_HISTORY_WORDS.RESTORE,
+              symbol: GLYPH.RESTORE,
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => void restoreVersion(seq, newest),
+            },
+          ],
+    ];
   };
 
   const now = useMinute();
@@ -151,6 +254,7 @@ function History({ taskId: id }: { readonly taskId: string }) {
               now={now}
               current={line.seq === newest}
               first={index === 0}
+              menu={versionMenu(line.seq, line.seq === newest)}
               onPress={() =>
                 router.push({
                   pathname: onOwnTab(VERSION_ROUTE),
@@ -278,10 +382,8 @@ function Version({
   const colors = useColors();
   const router = useRouter();
   const navigation = useNavigation();
-  const acts = useHostActs();
-  const write = useWrite();
   const openLink = useOpenLink(useTaskOverview(taskId)?.task.workspaceId);
-  const notices = useFailureNotices();
+  const restoreVersion = useRestoreVersion(taskId);
   const version = useTaskVersion(taskId, seq);
   const [restoring, setRestoring] = useState(false);
   // The version that stands now, as the history beneath this screen follows it, else as the list stood when it was left.
@@ -309,34 +411,8 @@ function Version({
 
   const restore = () => {
     if (restoring) return;
-    // Note that the Undo puts back the version that stood when the restore was pressed, as the panel's does.
-    const undoTo = standingNow;
     setRestoring(true);
-    // Note that every restore of this task's description, an Undo among them, is newer than a refused one, whose Try again then sends nothing.
-    const subject = { kind: WRITE_SUBJECT.TASK_DESCRIPTION, id: taskId };
-
-    const undo =
-      undoTo === undefined || undoTo === seq
-        ? undefined
-        : () =>
-            void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq: undoTo }), {
-              refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
-              unanswered: VERSION_HISTORY_WORDS.UNDO_REFUSED,
-              subject,
-              went: BUZZ.SUCCESS,
-            });
-
-    void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq }), {
-      refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.RESTORE_REFUSED),
-      unanswered: VERSION_HISTORY_WORDS.RESTORE_REFUSED,
-      // Note that a refused restore offers Try again, as its words say, since the screen has gone back and nothing else sends it again.
-      retry: true,
-      subject,
-      went: BUZZ.SUCCESS,
-      // Note that Restored and its Undo are said on the restore that landed, a Try again's included.
-      done: () =>
-        notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo }),
-    }).then(() => setRestoring(false));
+    void restoreVersion(seq, standingNow).then(() => setRestoring(false));
 
     // Note that the screen goes back as the restore is sent rather than once it lands, which waits on the service and then on the change reaching the app: the description takes the version as it arrives, Restored stands with its Undo then, and a refusal says why in the failure notice.
     if (navigation.isFocused()) router.back();

@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, the skills a `/` offers, and the line saying the field holds a sent message's words to send in its place.
 
 import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -225,5 +225,48 @@ export function SkillSuggestions({
     <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
       {rows}
     </ScrollView>
+  );
+}
+
+/** What the line over a field holding a sent message's words says, and its Cancel. */
+const EDITING_WORDS = { LINE: "Editing message", CANCEL: "Cancel" } as const;
+
+/**
+ * The line over the field while it holds one of the member's sent
+ * messages' words, written again to go in that message's place, as the
+ * panel's Edit opens the line where it stands: the message's Edit glyph
+ * and "Editing message" in the muted ink, and Cancel at its end, which
+ * gives the field back what it held.
+ */
+export function EditingLine({ onCancel }: { readonly onCancel: () => void }) {
+  const colors = useColors();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
+
+  return (
+    <HStack spacing={SPACE.TIGHT * 2}>
+      <Image {...glyphImage(GLYPH.EDIT_MESSAGE)} size={glyph} color={colors.TEXT_MUTED} />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE }),
+          foregroundStyle(colors.TEXT_MUTED),
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        ]}
+      >
+        {EDITING_WORDS.LINE}
+      </Text>
+      <Button onPress={onCancel} modifiers={[buttonStyle("plain")]}>
+        {/* Note that the press's frame and its shape stand on the label, since a plain button takes a press only where its label is hit. */}
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+            foregroundStyle(colors.TEXT_BODY),
+            frame({ minHeight: PRESS_SIZE }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        >
+          {EDITING_WORDS.CANCEL}
+        </Text>
+      </Button>
+    </HStack>
   );
 }

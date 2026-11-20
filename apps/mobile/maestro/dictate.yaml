@@ -1,0 +1,61 @@
+# dictate.yaml -- a message dictated into an agent's composer, as the desktop's: Dictate before Send, the strip while it records (Cancel, how long it has run, Done), a recording dropped, and one sent, its words landing in the field.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its agent still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
+---
+# Launched on the host's Inbox fixture, opened on its invitations agent's
+# page, the microphone allowed up front, so iOS's prompt never stands over the
+# composer. The fixture hears any clip as fixed words (`@repo/host/fixture-inbox`),
+# so the simulator's silent microphone still dictates, and nothing reaches a
+# server.
+- launchApp:
+    clearState: true
+    permissions:
+      microphone: allow
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- extendedWaitUntil:
+    visible: "Then add a Resend button beside each pending invite."
+    timeout: 30000
+- assertVisible:
+    id: "dictation-dictate"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: dictate-idle
+# Dictate turns the row into the strip; Cancel drops the recording unsent.
+- tapOn:
+    id: "dictation-dictate"
+- extendedWaitUntil:
+    visible:
+      id: "dictation-done"
+    timeout: 10000
+- assertVisible:
+    id: "dictation-cancel"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: dictate-recording
+- tapOn:
+    id: "dictation-cancel"
+- assertVisible:
+    id: "dictation-dictate"
+- assertNotVisible: "Run the invite tests again."
+# Recorded again and sent, its words land in the field.
+- tapOn:
+    id: "dictation-dictate"
+- extendedWaitUntil:
+    visible:
+      id: "dictation-done"
+    timeout: 10000
+- tapOn:
+    id: "dictation-done"
+- extendedWaitUntil:
+    visible: "Run the invite tests again."
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: dictate-words

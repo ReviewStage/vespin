@@ -133,3 +133,10 @@ export function choiceOn(
     ? { ...choice, contextWindow: CONTEXT_WINDOW.STANDARD }
     : choice;
 }
+
+/** A choice as a request carries it: the model, the effort, and the window only where it is the standard one. */
+export function choiceRequest(choice: ModelChoice): ModelChoice {
+  return choice.contextWindow === CONTEXT_WINDOW.STANDARD
+    ? { model: choice.model, effort: choice.effort, contextWindow: CONTEXT_WINDOW.STANDARD }
+    : { model: choice.model, effort: choice.effort };
+}

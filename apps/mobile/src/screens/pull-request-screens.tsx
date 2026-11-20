@@ -53,6 +53,7 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  LoadingRow,
   MARK_FACE,
   MarkRow,
   MergeActRow,
@@ -96,7 +97,6 @@ const COMMENTS_ROW = "comments";
 /** The least a check must have run to say how long, as the panel's checks say it. */
 const RAN_AT_LEAST_MS = 1_000;
 
-/** A pull request's own page on GitHub, by its repository and number. */
 function gitHubPullRequestUrl(key: PullRequestKey): string {
   return gitHubPageLink({
     kind: GITHUB_PAGE.PULL_REQUEST,
@@ -172,7 +172,6 @@ const MERGE_ASK: MergeAsk = { title: MERGE_WORDS.MERGE_QUESTION };
 interface MergePress {
   readonly words: string;
   readonly prominent: boolean;
-  /** The change it sends. */
   readonly request: PullRequestActionRequest;
   /** What it asks before it sends; none where it only takes back what was asked for, as Disable auto-merge does. */
   readonly ask: MergeAsk | undefined;
@@ -459,7 +458,7 @@ function PullRequestPage({
     if (asked !== undefined && !asks) setAsked(undefined);
   }, [asked, asks]);
   useScreenActivity((workspaces) =>
-    agent === undefined || title === undefined
+    agent === undefined || agent.taskId === null || title === undefined
       ? undefined
       : pullRequestActivity(
           {
@@ -620,15 +619,13 @@ function PullRequestPage({
         }
         mark={summary === undefined ? undefined : CHECK_SUMMARY_LOOK[summary]}
       >
-        {checks === undefined ? (
+        {checks === undefined && !failedOf(parts.checks) ? (
+          <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CHECKS} />
+        ) : checks === undefined ? (
           <MarkRow
             id="checks-reading"
             mark={CHECK_LOOK[CHECK_STATE.PENDING]}
-            title={
-              failedOf(parts.checks)
-                ? PULL_REQUEST_READ_WORDS.CHECKS_FAILED
-                : PULL_REQUEST_READ_WORDS.READING_CHECKS
-            }
+            title={PULL_REQUEST_READ_WORDS.CHECKS_FAILED}
           />
         ) : checks.length === 0 ? (
           <MarkRow
@@ -662,18 +659,20 @@ function PullRequestPage({
             face={{ of: githubFace(reviewer.by), stands: MARK_FACE.LEAD }}
           />
         ))}
-        <MarkRow
-          id={COMMENTS_ROW}
-          mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
-          title={
-            conversation === undefined
-              ? failedOf(parts.conversation)
+        {conversation === undefined && !failedOf(parts.conversation) ? (
+          <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
+        ) : (
+          <MarkRow
+            id={COMMENTS_ROW}
+            mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
+            title={
+              conversation === undefined
                 ? PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED
-                : PULL_REQUEST_READ_WORDS.READING_CONVERSATION
-              : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
-          }
-          opens={url}
-        />
+                : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
+            }
+            opens={url}
+          />
+        )}
       </ListSection>
     </RowList>,
     <ConfirmAsk

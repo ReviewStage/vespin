@@ -441,7 +441,8 @@ function titledWithTask(
   const written = Effect.gen(function* () {
     const filled = yield* fillAgentTitle(userId, agent.id, title);
 
-    if (!filled) return;
+    // An agent on no task has none to name.
+    if (!filled || agent.taskId === null) return;
     yield* nameUntitledTask(userId, agent.taskId, title);
   });
 

@@ -140,6 +140,8 @@ export const CALL_KIND = {
   CANCEL_WAKEUP: "cancel-wakeup",
   /** A turn a coding agent ended (`end_turn`), with the summary its developer reads as the reply and the follow-ups it offers. */
   END_TURN: "end-turn",
+  /** A Manager's message to its chat (`send_to_user`), its row saying the words. */
+  SEND_TO_USER: "send-to-user",
   /** The workspace's tasks listed (`list_tasks`). */
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
@@ -238,6 +240,7 @@ export const CALL_WORDS = {
   [CALL_KIND.SCHEDULE_WAKEUP]: { verb: "Set a wakeup in", code: false },
   [CALL_KIND.CANCEL_WAKEUP]: { verb: "Canceled the wakeup", code: false },
   [CALL_KIND.END_TURN]: { verb: "Ended the turn", code: false },
+  [CALL_KIND.SEND_TO_USER]: { verb: "Said in the chat:", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
   [CALL_KIND.RECALL]: { verb: "Recalled", code: false },

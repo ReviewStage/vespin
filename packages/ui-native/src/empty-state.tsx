@@ -1,7 +1,8 @@
-// empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's spinner over its words while what it shows is still read.
+// empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's bare spinner while what it shows is still read.
 
 import { ContentUnavailableView, ProgressView, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  accessibilityLabel,
   font,
   foregroundStyle,
   frame,
@@ -14,7 +15,6 @@ import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
-import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What a press to read or send again says, as the app says it everywhere: the panel's Retry in the phone's words. */
 export const TRY_AGAIN_WORDS = "Try again";
@@ -45,11 +45,16 @@ export type EmptyStateProps = EmptyStateAct & {
   readonly title: string;
   readonly symbol: Glyph;
   readonly description?: string | undefined;
-  /** Whether what the screen shows is still read, which stands the system's spinner over the title in the symbol's place, so a read under way never looks like nothing to show. */
+  /** Whether what the screen shows is still read, which stands the system's bare spinner in the state's place, the title heard by VoiceOver alone, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
 };
 
-/** The system's spinner over a read's words, centered in the space it is given, as Mail and Photos stand one while they read. */
+/**
+ * The system's bare spinner, centered in the space it is given where what
+ * is read will stand, as Mail and Photos stand one while they read, with no
+ * words beside it (the developer, Nov 18, 2026); VoiceOver hears the read's
+ * words as its label.
+ */
 function LoadingState({ title }: { readonly title: string }) {
   const colors = useColors();
 
@@ -58,21 +63,16 @@ function LoadingState({ title }: { readonly title: string }) {
       modifiers={[
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
         tint(colors.TEXT_MUTED),
+        accessibilityLabel(title),
       ]}
-    >
-      <Text
-        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-      >
-        {title}
-      </Text>
-    </ProgressView>
+    />
   );
 }
 
 /**
  * An empty screen's glyph, title, line, and the act that fills it, in the
  * system's own ContentUnavailableView, as Mail and Notes say a list is empty;
- * or, while it reads, the spinner and its title. Note that the view takes the
+ * or, while it reads, the bare spinner, heard as its title. Note that the view takes the
  * panel's own Lucide glyph from the asset catalog, and its title and line in
  * the brand's inks, through the app's `@expo/ui` patch
  * (`patches/@expo__ui@58.0.27.patch`).

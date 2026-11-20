@@ -1,5 +1,6 @@
 // start-screens.tsx -- the two pages that start work, each a new conversation's page over the agent page's composer: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus under the composer's field; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
+import { type AgentFork, FORK_WORDS, forkChoice } from "@repo/features/agent-fork-model";
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
@@ -67,9 +68,11 @@ import {
   useModelPick,
   useRepositoryPick,
   useStartAgent,
+  useStartFork,
   useStartTask,
 } from "../tasks/use-start.js";
 import { useAttachedPictures } from "../use-attached-pictures.js";
+import { useDictation } from "../use-dictation.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -95,6 +98,12 @@ const WORDS = {
   CANCEL: "Cancel",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
   TRY_AGAIN: "Try again",
+  /** The line over a fork's draft, naming its source where it is known and quoting the message it forks at, as the panel's chip over the box does. */
+  FORK_OF: (agent: string | undefined, opening: string) => {
+    const of = `${FORK_WORDS.OF} ${agent ?? AGENT_WORD}`;
+
+    return opening === "" ? of : `${of} ${FORK_WORDS.AT} “${opening}”`;
+  },
   /** The line over a suggestion's draft, naming the agent that suggested it where it is known, as the panel's chip over the box does. */
   SUGGESTED_BY: (agent: string | undefined, label: string) => {
     const by = agent === undefined ? "Suggested" : `Suggested by ${agent}`;
@@ -102,6 +111,12 @@ const WORDS = {
     return label === "" ? by : `${by}: “${label}”`;
   },
 } as const;
+
+/** A fork that names no agent, which New agent opened as no fork never sends. */
+const NO_FORK: AgentFork = { agentId: "", opening: "" };
+
+/** What a fork's source is named while it is read, as the panel names an agent of no name. */
+const AGENT_WORD = "agent";
 
 /** How a capsule joins what it says, as the panel's model chip joins a model and its effort. */
 const JOINED = " · ";
@@ -639,21 +654,39 @@ function offered(skills: SkillsOffered | undefined) {
  * suggestion (`opened`), it starts filled in with the suggestion's brief and
  * model under a line naming who suggested it, offers no Runs on, and its
  * Start goes through the suggestion, once, as the panel's draft sends one.
+ * Opened as a fork of an agent at one of its messages (`fork`), it is the
+ * panel's forked draft: headed by the source and the message's opening
+ * words, on the source's model until another is picked, running where the
+ * source runs, so it offers no Runs on and no Talk, and its Start goes with
+ * the box empty, the new agent handed the transcript up to that message.
  */
 export function NewAgentScreen({
   taskId,
   opened,
+  fork,
 }: {
   readonly taskId: string;
   readonly opened?: OpenedSuggestion | undefined;
+  readonly fork?: AgentFork | undefined;
 }) {
   const action = opened?.view.action;
   const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
   const [prompt, setPrompt] = useState(brief);
+  const dictated = useDictation(prompt, setPrompt);
   const [runsOn, setRunsOn] = useState(CLOUD);
-  const pick = useModelPick(action === undefined ? undefined : suggestedChoice(action));
+  const source = useShownAgent(fork?.agentId ?? "");
+
+  const pick = useModelPick(
+    action !== undefined
+      ? suggestedChoice(action)
+      : source === undefined
+        ? undefined
+        : forkChoice(source),
+  );
+
   const [modelsShown, setModelsShown] = useState(false);
   const startAgent = useStartAgent(taskId);
+  const startFork = useStartFork(taskId, fork ?? NO_FORK);
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
@@ -702,31 +735,38 @@ export function NewAgentScreen({
 
   // Note that New agent's own start closes the sheet at once, as New task's does, while a suggestion's keeps it up until the service answers, since it goes through the suggestion once, as the panel's draft sends one.
   const start = () =>
-    opened === undefined
+    fork !== undefined
       ? closing.go(
           () =>
-            startAgent({
-              prompt: prompt.trim(),
-              attachments: pictures.files,
-              picked: pick.picked,
-              runsOn,
-            }),
+            startFork({ prompt: prompt.trim(), attachments: pictures.files, picked: pick.picked }),
           pictures.refusal,
           prompt.trim(),
         )
-      : sheet.go(
-          () => startSuggested(opened.suggestion),
-          pictures.refusal,
-          // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
-          opened.suggestion.title ?? prompt.trim(),
-        );
+      : opened === undefined
+        ? closing.go(
+            () =>
+              startAgent({
+                prompt: prompt.trim(),
+                attachments: pictures.files,
+                picked: pick.picked,
+                runsOn,
+              }),
+            pictures.refusal,
+            prompt.trim(),
+          )
+        : sheet.go(
+            () => startSuggested(opened.suggestion),
+            pictures.refusal,
+            // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
+            opened.suggestion.title ?? prompt.trim(),
+          );
 
   return (
     <>
       <SheetBar
         title={WORDS.NEW_AGENT}
         kept={kept}
-        talk={opened === undefined ? talk : undefined}
+        talk={opened === undefined && fork === undefined ? talk : undefined}
       />
       <StartModelSheet
         pick={pick}
@@ -735,12 +775,14 @@ export function NewAgentScreen({
       />
       <StartPage
         title={
-          opened === undefined
-            ? undefined
-            : WORDS.SUGGESTED_BY(
-                suggester === undefined ? undefined : agentName(suggester),
-                opened.suggestion.label,
-              )
+          fork !== undefined
+            ? WORDS.FORK_OF(source === undefined ? undefined : agentName(source), fork.opening)
+            : opened === undefined
+              ? undefined
+              : WORDS.SUGGESTED_BY(
+                  suggester === undefined ? undefined : agentName(suggester),
+                  opened.suggestion.label,
+                )
         }
         head={startsOn === undefined ? undefined : <StartsOnChip task={startsOn} />}
         words={{
@@ -753,21 +795,28 @@ export function NewAgentScreen({
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
-        notes={notesOf(note, pick.failed)}
+        notes={notesOf(dictated.note, note, pick.failed)}
+        dictation={dictated.dictation}
         add={{ onAdd: pictures.attach }}
-        ready={drafted && placed && !starting}
+        // Note that a fork goes with the box empty, as the panel's forks alone.
+        ready={(drafted || fork !== undefined) && placed && !starting}
         onStart={start}
         onTalk={
-          talk === undefined || opened !== undefined || !talk.ready || starting
+          talk === undefined ||
+          opened !== undefined ||
+          fork !== undefined ||
+          !talk.ready ||
+          starting
             ? undefined
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
+        trailing={<ModelChip pick={pick} onOpen={() => setModelsShown(true)} />}
         chips={
           <>
-            <ModelChip pick={pick} onOpen={() => setModelsShown(true)} />
             {/* Note that a suggestion's agent runs where the member's agents on the task run, so it offers no Runs on, as the panel's draft hides it. */}
-            {opened === undefined ? (
+            {/* Note that a fork runs where its source runs, as the panel's forked draft starts it unless another place is picked. */}
+            {opened === undefined && fork === undefined ? (
               <RunsOnChip pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
             ) : null}
           </>
@@ -805,8 +854,6 @@ export interface NewTaskDraft {
   /** The addresses of the JPEGs its pictures were kept in, in the App Group, which New task reads and deletes. */
   readonly pictures?: readonly string[] | undefined;
 }
-
-/** No task list read yet. */
 
 /** The kinds New task's relation offers, in the panel's order: a sub-task of another, or one waiting on or holding up another. */
 const RELATION_ORDER: readonly TaskCreateRelationKind[] = [
@@ -978,6 +1025,7 @@ export function NewTaskScreen({
   readonly draft?: NewTaskDraft | undefined;
 }) {
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
+  const dictated = useDictation(prompt, setPrompt);
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const listed = useListedTasks();
@@ -1094,7 +1142,8 @@ export function NewTaskScreen({
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
-        notes={notesOf(note, unreached, pick.failed)}
+        notes={notesOf(dictated.note, note, unreached, pick.failed)}
+        dictation={dictated.dictation}
         add={{
           menu: {
             actions: [{ label: WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: pictures.attach }],
@@ -1109,10 +1158,10 @@ export function NewTaskScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
+        trailing={<ModelChip pick={pick} onOpen={() => setModelsShown(true)} />}
         chips={
           <>
             <RepositoryChip repository={repository} tree={tree} />
-            <ModelChip pick={pick} onOpen={() => setModelsShown(true)} />
             <RunsOnChip pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
           </>
         }

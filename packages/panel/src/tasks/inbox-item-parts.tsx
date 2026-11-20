@@ -13,7 +13,10 @@
 import type { ListedAgent } from "@repo/features/agent-wire";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import {
+  holderTask,
   INBOX_LINE,
+  type InboxAgentHolder,
+  type InboxAnyHolder,
   type InboxHolder,
   type InboxLineKind,
   type InboxListed,
@@ -59,6 +62,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { useInboxItemDrafted } from "../composer-drafts.js";
+import { HolderGlyph } from "../entities/holder-glyph.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { StateGlyph } from "../state-glyph.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
@@ -85,20 +89,22 @@ function waitingOn(starter: Actor): string {
   return `Waiting on ${actorName(starter, { sentence: true })}`;
 }
 
-/** What a message or a thread its agent addressed to a member by name says of them: "To you", or "To" and their name. */
+/** What a message or a thread its agent addressed to a member by name says of them: "To" and their name. */
 export function addressedWords(person: Actor): string {
   return `To ${actorName(person, { sentence: true })}`;
 }
 
 /**
  * Whom an agent addressed a message or a thread to by name, at the end of
- * its head: "To", their face, and their name, or "you"; nothing where it
- * named nobody, which then waits on its task's assignee or its starter.
+ * its head: "To", their face, and their name; nothing where it named nobody
+ * or the reader, which then waits on its task's assignee or its starter.
  */
 export function AddressedTo({ to }: { to: InboxPerson | undefined }): React.JSX.Element | null {
   const person = usePerson(to);
+  const { readerId } = useMemberDirectory();
 
-  if (to === undefined) return null;
+  // Note that one addressed to the reader says nothing, as it is in their own inbox.
+  if (to === undefined || to.userId === readerId) return null;
 
   return (
     <span className="inbox-addressed-to inline-flex min-w-0 items-center gap-tight-gap">
@@ -227,7 +233,7 @@ export function InboxItemCard({
   models,
   readerId,
 }: {
-  listed: InboxListed;
+  listed: InboxListed<InboxAnyHolder>;
   /** The time its age counts from; the window's minute where none is handed. */
   now?: number | undefined;
   models: readonly CatalogModel[] | undefined;
@@ -248,7 +254,7 @@ export function InboxItemCard({
         sub={<span>{standingWords(item, needsYou, starter)}</span>}
         corner={<Time at={item.updatedAt} now={now} hint={false} />}
       />
-      <HolderDetail holder={holder} />
+      {"task" in holder ? <HolderDetail holder={holder} /> : <AgentHolderDetail holder={holder} />}
       <HoverCardRule />
       <HoverCardRow
         look={HOVER_CARD_ROW_LOOK.DETAIL}
@@ -279,6 +285,38 @@ function HolderDetail({ holder }: { holder: InboxHolder }): React.JSX.Element {
         <span className={cn(TASK_CARD_STANDING, "flex-nowrap")} data-holder-detail="">
           <TaskKey workspaceName={workspaceName} number={holder.task.number} />
           <HolderRef holder={holder} />
+        </span>
+      }
+    />
+  );
+}
+
+/**
+ * The agent on no task holding an item, as its card says it under the head
+ * where a task's card names the task (`HolderDetail`): a pill of the
+ * agent's mark and its name, which opens the agent.
+ */
+function AgentHolderDetail({ holder }: { holder: InboxAgentHolder }): React.JSX.Element {
+  const openPlace = useOpenPlace();
+  const { agent } = holder;
+  const glyph = <HolderGlyph holder={holder} />;
+
+  return (
+    <HoverCardRow
+      look={HOVER_CARD_ROW_LOOK.DETAIL}
+      label={
+        <span className={cn(TASK_CARD_STANDING, "flex-nowrap")} data-holder-detail="">
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={glyph}
+            label={agent.name}
+            onPress={
+              openPlace === undefined
+                ? undefined
+                : () => openPlace({ kind: LINK_DESTINATION.AGENT, agentId: agent.id })
+            }
+            data-holder-ref=""
+          />
         </span>
       }
     />
@@ -328,12 +366,13 @@ function TaskStatusChip({
   holder,
   drawn = true,
 }: {
-  holder: InboxHolder;
+  holder: InboxAnyHolder;
   /** Whether the mark is drawn, or its words alone said to a reader. */
   drawn?: boolean;
 }): React.JSX.Element | null {
-  if (holder.task.status === undefined) return null;
-  const { status } = holder.task;
+  const status = holderTask(holder)?.status;
+
+  if (status === undefined) return null;
 
   return (
     <span className="inbox-row-task-status inline-flex" data-task-status={status}>
@@ -354,7 +393,10 @@ interface InboxStanding {
 }
 
 /** An item's standing for the reader, read as the member directory around the row knows its people. */
-export function useInboxStanding(listed: InboxListed, readerId: string | undefined): InboxStanding {
+export function useInboxStanding(
+  listed: InboxListed<InboxAnyHolder>,
+  readerId: string | undefined,
+): InboxStanding {
   const { item } = listed;
   const directory = useMemberDirectory();
   const reader = directory.readerId ?? readerId;
@@ -377,7 +419,7 @@ function InboxRowMeta({ children }: { children: ReactNode }): React.JSX.Element 
 
 /** What an item row's end is handed: the item, and how it stands on its row. */
 interface InboxItemEndProps {
-  listed: InboxListed;
+  listed: InboxListed<InboxAnyHolder>;
   /** The time its age counts from; the window's minute where none is handed. */
   now?: number | undefined;
   readerId: string | undefined;

@@ -8,7 +8,10 @@ import {
   Menu,
   ProgressView,
   ScrollView,
+  Spacer,
+  Text,
   TextField,
+  type TextFieldRef,
   type TextFieldSelection,
   Toggle,
   useNativeState,
@@ -31,7 +34,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { longPasteIn } from "@repo/features/long-paste";
 import { TALK_LABEL } from "@repo/features/voice-call-words";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import {
@@ -169,15 +172,153 @@ type ComposerProps = {
   readonly saving?: ComposerSaving | undefined;
   /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
   readonly autoFocus?: boolean | undefined;
+  /** Asks the field to take the keyboard, its caret after its words, each time the count moves, as Edit does once it lays a message's words in; none where nothing asks. */
+  readonly focusAsk?: number | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
   readonly onLongPaste?: ((words: string) => boolean) | undefined;
-  /** The capsules saying where and how a start runs, such as its repository and its model, in a row under the field inside the same glass, the + leading them there rather than the field; none on a conversation's composer. */
+  /** The capsules saying where and how the message runs, such as a start's repository or where an agent works, leading the row under the field after the +, as the desktop composer's foot stands them; none on a thread's composer. */
   readonly tools?: ReactNode;
+  /** What stands at the end of the row under the field before Send, such as the model chip, as the desktop composer stands its model picker at its foot's end; none on a thread's composer. */
+  readonly trailing?: ReactNode;
+  /** Dictate, just before Send at the row's end, and the strip the row becomes while a dictation records, as the desktop composer's (`dictation-strip.tsx`); none where the composer takes none. */
+  readonly dictation?: ComposerDictation | undefined;
   /** The names a flow finds the field and the + by, where its holder names its own. */
   readonly testIds?: { readonly field: string; readonly add: string } | undefined;
 };
+
+/** Where a dictation stands: none under way, its voice recording, or its clip being heard as words. */
+export const DICTATION_PHASE = {
+  IDLE: "idle",
+  RECORDING: "recording",
+  TRANSCRIBING: "transcribing",
+} as const;
+
+export type DictationPhase = (typeof DICTATION_PHASE)[keyof typeof DICTATION_PHASE];
+
+/** A composer's dictation, as the desktop's box offers it: where it stands, when its recording began, and its three presses. */
+export interface ComposerDictation {
+  readonly phase: DictationPhase;
+  /** When the recording began, which the strip's clock counts from; none while nothing records. */
+  readonly startedAt: number | undefined;
+  /** Opens the microphone and starts recording. */
+  readonly onStart: () => void;
+  /** Drops the recording unsent, as the desktop strip's ✕ does. */
+  readonly onCancel: () => void;
+  /** Sends the recording to be heard as words, as the strip's ✓ does. */
+  readonly onFinish: () => void;
+}
+
+/** The desktop's words for a dictation's presses and its wait (`dictation-strip.tsx`). */
+const DICTATION_WORDS = {
+  DICTATE: "Dictate",
+  CANCEL: "Cancel",
+  FINISH: "Done",
+  TRANSCRIBING: "Transcribing",
+} as const;
+
+/** How often the strip's clock counts on, in milliseconds. */
+const CLOCK_TICK_MS = 1_000;
+
+/** How long a recording has run, as the strip says it: minutes and seconds, "0:07". */
+function clockWords(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1_000));
+
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** The strip's clock: how long the recording has run, counting on each second while it stands. */
+function DictationClock({ startedAt }: { readonly startedAt: number | undefined }) {
+  const colors = useColors();
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+
+    return () => clearInterval(tick);
+  }, []);
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE }),
+        SwiftModifiers.monospacedDigit(),
+        foregroundStyle(colors.TEXT_MUTED),
+      ]}
+    >
+      {clockWords(startedAt === undefined ? 0 : now - startedAt)}
+    </Text>
+  );
+}
+
+/** One of the dictation's presses: its glyph alone at a press's size, in the muted ink, heard by its words. */
+function DictationPress({
+  glyph,
+  label,
+  onPress,
+}: {
+  readonly glyph: Glyph;
+  readonly label: string;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.LEAD + 2);
+
+  return (
+    <Button
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("borderless"),
+        accessibilityLabel(label),
+        accessibilityIdentifier(`dictation-${label.toLowerCase()}`),
+      ]}
+    >
+      <Image {...glyphImage(glyph)} size={size} color={colors.TEXT_MUTED} modifiers={PRESS_FRAME} />
+    </Button>
+  );
+}
+
+/**
+ * The row under the field while a dictation stands, as the desktop's strip
+ * stands at its box's foot: ✕, which drops the recording, how long it has
+ * run, and ✓, which sends it to be heard; and, once sent, that it is being
+ * heard, under the system's spinner, until the words land in the field.
+ */
+function DictationStrip({ dictation }: { readonly dictation: ComposerDictation }) {
+  const colors = useColors();
+
+  if (dictation.phase === DICTATION_PHASE.TRANSCRIBING) {
+    return (
+      <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
+        <ProgressView modifiers={[...PRESS_FRAME, tint(colors.TEXT_MUTED)]} />
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {DICTATION_WORDS.TRANSCRIBING}
+        </Text>
+        <Spacer />
+      </HStack>
+    );
+  }
+
+  return (
+    <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
+      <DictationPress
+        glyph={GLYPH.REMOVE}
+        label={DICTATION_WORDS.CANCEL}
+        onPress={dictation.onCancel}
+      />
+      <DictationClock startedAt={dictation.startedAt} />
+      <Spacer />
+      <DictationPress
+        glyph={GLYPH.CHECK}
+        label={DICTATION_WORDS.FINISH}
+        onPress={dictation.onFinish}
+      />
+    </HStack>
+  );
+}
 
 /** An act Send stands for while the field is empty, as the panel's empty Send reads Got it on a notice. */
 export interface ComposerSendAs {
@@ -416,8 +557,21 @@ export function AddPress({
   );
 }
 
-/** The composer's pieces in a row's order: the +, the field, and Send or Stop, which a bar of glass holds. */
-function ComposerPieces(props: ComposerProps) {
+/** The composer's pieces: the +, the field, a call's presses, and Send or Stop, each laid out by its holder. */
+interface ComposerParts {
+  readonly add: ReactElement | null;
+  readonly field: ReactElement;
+  readonly call: ReactElement | null;
+  readonly send: ReactElement;
+}
+
+/** Whether the composer stands its controls in a row under its field, as the desktop composer does: one that starts work or speaks to an agent, holding capsules (`tools`, `trailing`). */
+function stacked(props: ComposerProps): boolean {
+  return props.tools !== undefined || props.trailing !== undefined;
+}
+
+/** The composer's pieces, the field holding its words and Send sending them. */
+function useComposerParts(props: ComposerProps): ComposerParts {
   const {
     placeholder,
     words: held,
@@ -431,11 +585,13 @@ function ComposerPieces(props: ComposerProps) {
     onStop,
     stopping = false,
     onLongPaste,
-    tools,
     testIds,
   } = props;
 
   const text = useNativeState(held ?? "");
+  const field = useRef<TextFieldRef>(null);
+  const { focusAsk } = props;
+
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
   const [opened] = useState(() => (held ?? "").length);
   const caret = useNativeState<TextFieldSelection>({ start: opened, end: opened });
@@ -448,6 +604,16 @@ function ComposerPieces(props: ComposerProps) {
     shown.current = held;
     text.set(held);
   }, [held, text]);
+
+  // Note that the field takes the keyboard once its holder's words have landed in it, after the effect above lays them in, so the caret stands after them.
+  useEffect(() => {
+    if (focusAsk === undefined || focusAsk === 0) return;
+    const end = shown.current.length;
+    void field.current
+      ?.focus()
+      .then(() => field.current?.setSelection(end, end))
+      .catch(() => undefined);
+  }, [focusAsk]);
 
   // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
@@ -463,6 +629,9 @@ function ComposerPieces(props: ComposerProps) {
 
   const empty = words.trim() === "" && !sendable;
   const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
+  const rowed = stacked(props);
+  // Note that a field over a row of controls opens to two lines once a word is typed, as the desktop composer's does, so what is typed has room before it grows. The limit is always a range, because `@expo/ui` draws a range and a bare limit down two branches, and a switch between them made the field anew, dropping the keyboard after the first letter typed.
+  const height = lineLimit({ min: rowed && words !== "" ? 2 : 1, max: lines });
 
   const send =
     onSend === undefined
@@ -476,10 +645,11 @@ function ComposerPieces(props: ComposerProps) {
           setTyped("");
         };
 
-  return (
-    <>
-      {tools === undefined ? <AddPress menu={addMenu} onAdd={onAdd} /> : null}
+  return {
+    add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
+    field: (
       <TextField
+        ref={field}
         text={text}
         placeholder={placeholder}
         axis="vertical"
@@ -488,21 +658,28 @@ function ComposerPieces(props: ComposerProps) {
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          lineLimit(lines),
+          height,
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
-            ...((tools !== undefined || (addMenu === undefined && onAdd === undefined)) && {
+            ...((rowed || (addMenu === undefined && onAdd === undefined)) && {
               leading: FIELD_LEADING,
             }),
           }),
-          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
-          frame({ minHeight: PRESS_SIZE }),
+          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so SwiftUI sizes its text view at that one width as its words change, rather than asking its ideal width too.
+          frame({
+            minHeight: PRESS_SIZE,
+            maxWidth: Number.POSITIVE_INFINITY,
+            alignment: "leading",
+          }),
           accessibilityIdentifier(testIds?.field ?? "composer-field"),
         ]}
       />
-      {call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null}
-      {props.saving === undefined ? (
+    ),
+    call:
+      call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null,
+    send:
+      props.saving === undefined ? (
         <SendButton
           empty={empty}
           typed={words.trim() !== ""}
@@ -514,23 +691,46 @@ function ComposerPieces(props: ComposerProps) {
         />
       ) : (
         <SaveButton saving={props.saving} />
-      )}
+      ),
+  };
+}
+
+/** The composer's pieces in one row, the field between the + and Send, as a thread's reply stands. */
+function RowPieces({ parts }: { readonly parts: ComposerParts }) {
+  return (
+    <>
+      {parts.add}
+      {parts.field}
+      {parts.call}
+      {parts.send}
     </>
   );
 }
 
-/** How far apart a start's capsules stand in the row under the field. */
+/** How far apart the capsules stand in the row under the field. */
 const TOOL_SPACING = SPACE.TIGHT * 2;
 
 /**
- * The row under the field where a composer starts work, as Claude's and
- * ChatGPT's composers stand theirs: the + and then the capsules saying where
- * and how the start runs, inside the composer's own glass, so the keyboard
- * that lifts the composer can never cover them; the capsules scroll sideways
- * where they outrun the bar.
+ * The row under the field, as the desktop composer's foot stands it: the +
+ * at its start and the capsules saying where the message runs after it,
+ * scrolling sideways where they outrun the bar, then at its end what is
+ * picked for it, such as the model, a call's presses, and Send or Stop,
+ * inside the composer's own glass, so the keyboard that lifts the composer
+ * never covers them.
  */
-function ComposerTools(props: ComposerProps) {
-  const { addMenu, onAdd, tools, testIds } = props;
+function ComposerRow({
+  props,
+  parts,
+}: {
+  readonly props: ComposerProps;
+  readonly parts: ComposerParts;
+}) {
+  const { addMenu, onAdd, tools, trailing, testIds, dictation } = props;
+
+  // Note that a dictation under way stands its strip in the row's place, as the desktop's strip stands in its box's foot.
+  if (dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE) {
+    return <DictationStrip dictation={dictation} />;
+  }
 
   return (
     <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
@@ -540,6 +740,16 @@ function ComposerTools(props: ComposerProps) {
           {tools}
         </HStack>
       </ScrollView>
+      {trailing}
+      {dictation === undefined ? null : (
+        <DictationPress
+          glyph={GLYPH.DICTATE}
+          label={DICTATION_WORDS.DICTATE}
+          onPress={dictation.onStart}
+        />
+      )}
+      {parts.call}
+      {parts.send}
     </HStack>
   );
 }
@@ -557,16 +767,18 @@ function ComposerTools(props: ComposerProps) {
  */
 export function Composer(props: ComposerProps) {
   const { onDropPictures } = props;
+  const parts = useComposerParts(props);
+  const rowed = stacked(props);
 
   return (
     <GlassBar
       field
       head={props.head}
-      foot={props.tools === undefined ? undefined : <ComposerTools {...props} />}
+      foot={rowed ? <ComposerRow props={props} parts={parts} /> : undefined}
       above={props.above}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
-      <ComposerPieces {...props} />
+      {rowed ? parts.field : <RowPieces parts={parts} />}
     </GlassBar>
   );
 }
@@ -579,6 +791,8 @@ export function Composer(props: ComposerProps) {
  */
 export function ComposerFoot(props: ComposerProps) {
   const { onDropPictures } = props;
+  const parts = useComposerParts(props);
+  const rowed = stacked(props);
 
   const glass = [
     padding({ all: BAR_EDGE }),
@@ -587,17 +801,26 @@ export function ComposerFoot(props: ComposerProps) {
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
+  // Note that a field over a row of controls stands alone in the glass's column, at its width, with no row of its own around it to size it again.
+  const pieces = rowed ? (
+    parts.field
+  ) : (
+    <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
+      <RowPieces parts={parts} />
+    </HStack>
+  );
+
+  // Note that a composer with a row under its field stands it there inside the same glass, as the bar does.
   const foot =
-    props.head === undefined ? (
+    props.head === undefined && !rowed ? (
       <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={glass}>
-        <ComposerPieces {...props} />
+        <RowPieces parts={parts} />
       </HStack>
     ) : (
       <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
-        <BarHead>{props.head}</BarHead>
-        <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
-          <ComposerPieces {...props} />
-        </HStack>
+        {props.head === undefined ? null : <BarHead>{props.head}</BarHead>}
+        {pieces}
+        {rowed ? <ComposerRow props={props} parts={parts} /> : null}
       </VStack>
     );
 

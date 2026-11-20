@@ -132,6 +132,40 @@ const findServedPicture = SqlSchema.findOneOption({
   execute: ({ playable, ...ask }) => pictureQuery(ask, playable),
 });
 
+/** A description's file as a copy of it is made: its type, its bytes, and a recording's or a clip's copy for a phone where one is kept. */
+export type CopiedDescriptionFile = typeof CopiedDescriptionFileSchema.Type;
+
+const CopiedDescriptionFileSchema = Schema.Struct({
+  contentType: descriptionFileTypeSchema,
+  bytes: Schema.Uint8Array,
+  mp4Bytes: Schema.NullOr(Schema.Uint8Array),
+});
+
+const findWorkspacePicture = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...PictureAskSchema.fields, organizationId: Schema.String }),
+  Result: CopiedDescriptionFileSchema,
+  execute: ({ userId, taskId, attachmentId, organizationId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          contentType: attachment.contentType,
+          bytes: attachment.bytes,
+          mp4Bytes: attachment.mp4Bytes,
+        })
+        .from(attachment)
+        .innerJoin(task, eq(task.id, attachment.taskId))
+        .where(
+          and(
+            eq(attachment.taskId, taskId),
+            eq(attachment.id, attachmentId),
+            eq(task.organizationId, organizationId),
+            descriptionPicture,
+            taskReachableBy(userId),
+          ),
+        ),
+    ),
+});
+
 /** A picture, video, or PDF to keep on the description, a recording with the MP4 its sandbox made of it, which no count weighs. */
 export type DescriptionAttachmentToKeep = DescriptionFile & {
   readonly mp4Bytes?: Uint8Array | undefined;
@@ -190,6 +224,14 @@ export function readDescriptionAttachment(
   attachmentId: string,
 ): TaskStoreEffect<Option.Option<DescriptionFile>> {
   return findPicture({ userId, taskId, attachmentId });
+}
+
+/** One file of the description as `readDescriptionAttachment` reads it, with a recording's or a clip's copy for a phone where one is kept, as a copy of it is made elsewhere: only where the task stands in the workspace given. */
+export function readWorkspaceDescriptionAttachment(
+  reader: { readonly userId: string; readonly organizationId: string },
+  ref: { readonly taskId: string; readonly attachmentId: string },
+): TaskStoreEffect<Option.Option<CopiedDescriptionFile>> {
+  return findWorkspacePicture({ ...reader, ...ref });
 }
 
 /** One picture or video of the description as `readDescriptionAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */

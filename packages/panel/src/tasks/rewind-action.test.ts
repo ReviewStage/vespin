@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { rewindPoints } from "@repo/features/agent-rewind-model";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import { AGENT_STATUS, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
@@ -9,7 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
-import { RevertMessageAction, RewindProvider, rewindPoints } from "./rewind-action.js";
+import { RevertMessageAction, RewindProvider } from "./rewind-action.js";
 import { type HeldComposer, useAgentComposer } from "./use-agent-composer.js";
 
 // Each test's host starts with no message on its way.

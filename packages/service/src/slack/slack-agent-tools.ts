@@ -134,7 +134,10 @@ export const REACT_SLACK_TOOL = {
   name: AGENT_TOOL.REACT_SLACK,
   description:
     "Add the Slack bot's reaction to a Slack message, or take it off with `remove`, in a " +
-    "channel the bot is in. A reaction acknowledges a message where a reply would add nothing. " +
+    "channel the bot is in. Members read your reactions as where you stand, so react `eyes` " +
+    "to a member's message as your very first act on it, before you read or run anything; " +
+    "`+1` to acknowledge one where a reply would add nothing; and `white_check_mark` on the " +
+    "message that started you once its work is done or its pull request merged. " +
     "Answers `accepted`, or `rejected` and why.",
   inputSchema: REACT_SLACK_INPUT,
 } as const;

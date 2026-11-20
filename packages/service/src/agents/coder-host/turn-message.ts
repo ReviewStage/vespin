@@ -24,6 +24,7 @@ import { turnsBefore } from "@repo/database/models/message-reads";
 import { pendingRunnerHanded } from "@repo/database/models/runner-line-store";
 import { readTask } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { EXPERIMENT } from "@repo/settings";
 import type { WireValue } from "@repo/wire";
 import { Effect, Option, Result, Schema } from "effect";
@@ -41,8 +42,10 @@ import {
   movedWords,
   resizedWords,
   savedByAnotherSince,
+  TURN_REPLY,
   type TurnHanded,
   TurnHandedSchema,
+  type TurnReply,
   taskKey,
   taskWithLead,
   timeWithLead,
@@ -101,7 +104,8 @@ const previousTurnStart = (target: ConversationTarget, turnId: string | undefine
  * (`standingContext`). Beside it, whether this is the agent's first turn,
  * and the words its memories are found by (`memoriesOf`): the task's name,
  * the line's words, the brief, and the description where it is handed. A read
- * that fails is logged and hands nothing.
+ * that fails is logged and hands nothing. An agent on no task is handed no
+ * task (`tasklessOf`).
  */
 /**
  * The zone the developer's day is read in on this turn: the one its own
@@ -128,7 +132,8 @@ const taskOf = (
   now: number,
 ) =>
   Effect.gen(function* () {
-    const { taskId } = agent;
+    if (agent.taskId === null) return yield* tasklessOf(admitted, turn);
+    const taskId = agent.taskId;
 
     const descriptionsSince = yield* experimentOnSinceIn(
       agent.organizationId,
@@ -199,6 +204,18 @@ const taskOf = (
   );
 
 /**
+ * What an agent on no task is handed in its task's place: nothing, and on
+ * its first turn the line's words alone to find its memories by.
+ */
+const tasklessOf = (admitted: AdmittedConversation, turn: CoderTurn) =>
+  Effect.map(previousTurnStart(admitted.target, turn.turnId), (since) => ({
+    key: undefined,
+    text: undefined,
+    opening: since === undefined,
+    words: turn.words ?? "",
+  }));
+
+/**
  * The memories of the agent's workspace that the words given find
  * (`matchWorkspaceMemories`), as the turn's message hands them, where its
  * workspace has Memory on; nothing where it is off or none match. They are
@@ -225,6 +242,28 @@ const memoriesOf = (agent: Agent, words: string) =>
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(undefined)),
   );
+
+/**
+ * How the agent's reply reaches the developer, which its turn's kind words
+ * follow: a Manager's by `send_to_user`, never `end_turn`, which it is not
+ * offered; another agent's by `end_turn` where the account has it on, which
+ * only a spoken turn reads, the one turn its words change on; and its last
+ * message otherwise.
+ */
+const turnReplyOf = (
+  agent: Agent,
+  turn: CoderTurn,
+): Effect.Effect<TurnReply, never, DatabaseServices> => {
+  if (agent.kind === AGENT_KIND.MANAGER) return Effect.succeed(TURN_REPLY.SEND_TO_USER);
+
+  if (turn.spoken !== true) return Effect.succeed(TURN_REPLY.LAST_MESSAGE);
+
+  return accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
+    Effect.tapError(logStoreFailure),
+    Effect.orElseSucceed(() => false),
+    Effect.map((on) => (on ? TURN_REPLY.END_TURN : TURN_REPLY.LAST_MESSAGE)),
+  );
+};
 
 /**
  * The message the agent's turn opens with after the history, and what the
@@ -254,15 +293,7 @@ export function coderTurnMessage(
     const clock = { now, timeZone: zoned.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
 
-    // Note that only a spoken turn reads whether the agent ends its turns with `end_turn`, the one turn its words change on.
-    const endsTurns =
-      turn.spoken === true &&
-      (yield* accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
-        Effect.tapError(logStoreFailure),
-        Effect.orElseSucceed(() => false),
-      ));
-
-    const kind = turnKindWords(handed, turn.spoken === true, endsTurns);
+    const kind = turnKindWords(handed, turn.spoken === true, yield* turnReplyOf(agent, turn));
     const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
     const moved = handed.moved === undefined ? undefined : movedWords(handed.moved);
     const taskHanded = task === undefined ? handed.task : task.key;

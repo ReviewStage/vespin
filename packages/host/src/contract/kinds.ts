@@ -261,6 +261,8 @@ export const AGENT_ACT_KIND = {
   /** One workspace's agents, newest started first: what an automation's Same agent is chosen from. */
   AGENTS_WORKSPACE_LIST: "agents.workspaceList",
   AGENTS_START: "agents.start",
+  /** A Manager made in a workspace: an agent of kind `manager` on no task, which the New Manager dialog makes. */
+  AGENTS_CREATE_MANAGER: "agents.createManager",
   AGENTS_MESSAGES: "agents.messages",
   /**
    * One agent's transcript, or one of its workers', held followed while the
@@ -310,6 +312,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_RUN_ACTION_STOP: "agents.runActionStop",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
+  /** A look at a Manager's chat, which moves the reader's own read mark of it. */
+  AGENTS_MARK_READ: "agents.markRead",
   AGENTS_DELETE: "agents.delete",
   /**
    * Which agent's tab the panel shows, or none: what an agent's end leaves no
@@ -1139,6 +1143,7 @@ export const PORT_ACT_USE = {
   AGENTS_LIST: ACT_USE.READ,
   AGENTS_WORKSPACE_LIST: ACT_USE.FETCH,
   AGENTS_START: ACT_USE.WRITE,
+  AGENTS_CREATE_MANAGER: ACT_USE.WRITE,
   AGENTS_MESSAGES: ACT_USE.FETCH,
   AGENTS_TRANSCRIPT: ACT_USE.READ,
   AGENTS_TRANSCRIPT_RETRY: ACT_USE.READ,
@@ -1168,6 +1173,7 @@ export const PORT_ACT_USE = {
   AGENTS_RUN_ACTION_STOP: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
+  AGENTS_MARK_READ: ACT_USE.WRITE,
   AGENTS_DELETE: ACT_USE.WRITE,
   AGENTS_SHOWN: ACT_USE.WRITE,
   AGENTS_SEEN: ACT_USE.WRITE,

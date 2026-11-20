@@ -146,8 +146,10 @@ there, and with the workspace. The bot also keeps your Slack user id, and
 messages you send the bot, and your replies in a Slack thread an agent was
 started from or posts to, with the earlier messages of that Slack thread, are
 handed to an agent. Your workspace's agents can also read, post, and react as the bot in
-any Slack channel it has been added to, private channels included, so
-messages in those channels may reach the agent that reads them, its
+any Slack channel it has been added to, private channels included, and DM you
+there, sharing the pictures, recordings, and sound clips they made, unless you
+turned Slack notifications off; your reply to such a message reaches the agent
+that sent it. So messages in those channels may reach the agent that reads them, its
 transcript, and its traces. A private channel's messages an agent reads land
 in its transcript, which anyone who can open the task can read, whether or
 not they are in that channel. If you allow an app such as Claude Code or Cursor to connect to our MCP
@@ -460,9 +462,9 @@ Protection, and deletes it when you sign out. On the Mac your sign-in tokens
 are kept encrypted under a key in the macOS Keychain. On the iPhone they are
 kept in the iPhone's Keychain itself, readable after the phone's first unlock
 since it started, never synced to iCloud or moved to another device, and
-deleted when you sign out; an update moves tokens an earlier version of the
-app kept encrypted in its own files into the Keychain the first time it
-opens.
+deleted when you sign out. Earlier versions of the app kept them encrypted in
+its own files under a key in the Keychain; once the tokens moved into the
+Keychain itself, the app deletes that key.
 
 Transcripts and pictures you open are held in memory only.
 

@@ -1,4 +1,4 @@
-// splash.ts -- the launch splash, held over the app from its first module until its screens first draw, and let go a frame after, or at a deadline.
+// splash.ts -- the launch splash, held over the app from its first module until its first screen has drawn, and let go then, or at a deadline.
 
 import { hide, preventAutoHideAsync, setOptions } from "expo-splash-screen";
 
@@ -20,11 +20,10 @@ function saidOnConsole(cause: Error): void {
 }
 
 /**
- * Holds the native splash past expo-router's own hide, so it goes once the
- * screens' first frame has laid out under it rather than over a blank
- * window (`HostProvider`), never waiting on the host or the network. Note
- * that it's called once, as the root module loads, and that the deadline
- * lets the splash go on its own after 10 seconds.
+ * Holds the native splash past expo-router's own hide, which comes a frame
+ * after its navigation is ready, long before the host's first reading draws
+ * a screen. Note that it's called once, as the root module loads, and that
+ * the deadline lets the splash go on its own after 10 seconds.
  */
 export function holdSplash(): void {
   setOptions({ fade: true, duration: SPLASH_FADE_MS });

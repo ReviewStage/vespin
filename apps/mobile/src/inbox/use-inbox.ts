@@ -9,7 +9,11 @@
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
 
-import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentCallFailure,
+  INBOX_SCOPE_KIND,
+} from "@repo/features/agent-view";
 import { sizeLabel } from "@repo/features/attachment-model";
 import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
 import {
@@ -26,13 +30,21 @@ import {
   inboxList,
   isUnread,
   MINE,
+  settledOnRead,
   taskHolder,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
-import { INBOX_STATUS, type InboxItem, type InboxItemHome } from "@repo/features/inbox-wire";
 import {
+  INBOX_REPLY,
+  INBOX_STATUS,
+  type InboxItem,
+  type InboxItemHome,
+} from "@repo/features/inbox-wire";
+import {
+  acknowledgedNote,
   closedNote,
   markedNote,
+  NOT_ACKNOWLEDGED,
   NOT_RESOLVED,
   REMIND_REFUSED,
 } from "@repo/features/inbox-write-words";
@@ -153,7 +165,6 @@ export interface InboxListing {
   readonly listed: readonly InboxListed[];
   readonly feed: InboxFeed;
   readonly counts: InboxCounts;
-  readonly unread: readonly string[];
   readonly readerId: string | undefined;
 }
 
@@ -192,9 +203,7 @@ export function useInboxListing(view: {
       search: searchTokens(search),
     }).items;
 
-    const unread = listed.filter(({ item }) => isUnread(item)).map(({ item }) => item.id);
-
-    return keep({ listed, feed, counts: inboxCounts(standing, readerId, MINE), unread, readerId });
+    return keep({ listed, feed, counts: inboxCounts(standing, readerId, MINE), readerId });
   }, [keep, groups, readerId, feed, show, search, chosen]);
 }
 
@@ -339,7 +348,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
   const { home, again } = useItemHome(id, lookedFor);
   const found = home === undefined || Predicate.isString(home) ? undefined : home;
-  const homed = useHomeGroups(found?.taskId);
+  const homed = useHomeGroups(found?.taskId ?? undefined);
   const outside = useSendsDrawn(homed.groups);
   const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
 
@@ -518,16 +527,45 @@ function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
-/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, its reminder set or cleared, an open one resolved from its row, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
+/** How one Got it a read mark sent was answered: taken; passed over as settled first by someone else, which is what the mark asked; or left open because the agent changed the thread first. */
+const NOD_WENT = { TAKEN: "taken", SETTLED: "settled", CHANGED: "changed" } as const;
+
+/** A Got it's answer, or why none came: the host's failure, or no answer at all. */
+type NodWent = (typeof NOD_WENT)[keyof typeof NOD_WENT] | NodUnanswered;
+
+/** Why a Got it came back with no answer the service gave. */
+interface NodUnanswered {
+  readonly failure: AgentCallFailure;
+}
+
+/** Whether a Got it came back with no answer, so its Try again may send it again. */
+function unanswered(went: NodWent | undefined): went is NodUnanswered {
+  return Predicate.isObject(went);
+}
+
+/**
+ * The Inbox's own acts, as the panel's sends them: a thread marked read or
+ * unread, its reminder set or cleared, an open one resolved from its row,
+ * every thread listed marked read, the feed read again, and the task list
+ * that holds its threads read again. Marking threads read by hand, one,
+ * several or every one, also acknowledges each of the reader's own notices
+ * among them that opening would (`settledOnRead`), as the panel's marks do
+ * (`use-inbox-read-marks.ts`), so a thread that asks nothing stops waiting on
+ * them; a question keeps waiting, and so does a notice put away under a
+ * reminder still ahead. The notices go as Got it does, with one Undo that
+ * has them wait again.
+ */
 export function useInboxActs(): {
-  readonly mark: (itemId: string, unread: boolean) => void;
+  /** Marks a thread read or unread, a notice marked read acknowledged too. */
+  readonly mark: (item: InboxItem, unread: boolean) => void;
   /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
   readonly remind: (itemId: string, until: number | null) => void;
   /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused, and offering Undo once it went. */
   readonly resolve: (item: InboxItem) => void;
-  readonly markAll: (itemIds: readonly string[]) => void;
-  /** Marks several threads read or unread at once, as one write, saying how many the service took where it refused some. */
-  readonly markMany: (itemIds: readonly string[], unread: boolean) => void;
+  /** Marks every thread given that is unread as read, and acknowledges the notices among them. */
+  readonly markAll: (items: readonly InboxItem[]) => void;
+  /** Marks several threads read or unread at once, as one write, saying how many the service took where it refused some; those marked read acknowledged as one does. */
+  readonly markMany: (items: readonly InboxItem[], unread: boolean) => void;
   /** Sets or clears the reminder of several threads at once, as one write. */
   readonly remindMany: (itemIds: readonly string[], until: number | null) => void;
   /** Resolves several open threads at once, each against the revision its row drew, as one write, offering one Undo that takes back every one that went. */
@@ -538,10 +576,83 @@ export function useInboxActs(): {
   const acts = useHostActs();
   const write = useWrite();
   const settled = useSettleUndo();
+  const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
-  return useMemo(
-    () => ({
-      mark: (itemId, unread) => {
+  return useMemo(() => {
+    // Note that each nod goes at the revision the thread was marked on, so an agent's change since is never acknowledged unseen, and one settled first by someone else is passed over quietly, since what the mark asked already stands.
+    const nodRead = (items: readonly InboxItem[]) => {
+      const now = Date.now();
+
+      const keyed: readonly SettledThread[] = items.flatMap((item) =>
+        settledOnRead(item, readerId, now) ? [{ item, key: randomUUID() }] : [],
+      );
+
+      if (keyed.length === 0) return;
+      // Note that Try again sends again only the nods no answer reached, under the same keys, so none goes twice; one the agent changed first was answered and never takes.
+      let pending = keyed;
+      let taken: readonly SettledThread[] = [];
+      let changed = 0;
+      let failure: AgentCallFailure | undefined;
+      write(
+        () =>
+          Promise.all(
+            pending.map(({ item, key }) =>
+              Promise.resolve(
+                acts[ACT_KIND.AGENTS_INBOX_ANSWER]({
+                  itemId: item.id,
+                  revision: item.revision,
+                  reply: INBOX_REPLY.ACKNOWLEDGED,
+                  clientKey: key,
+                }),
+              ).then(
+                (answer): NodWent =>
+                  "failure" in answer
+                    ? { failure: answer.failure }
+                    : answer.taken
+                      ? NOD_WENT.TAKEN
+                      : answer.item.status === INBOX_STATUS.OPEN
+                        ? NOD_WENT.CHANGED
+                        : NOD_WENT.SETTLED,
+                (): NodWent => ({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+              ),
+            ),
+          ).then((answers) => {
+            taken = [...taken, ...pending.filter((_, at) => answers[at] === NOD_WENT.TAKEN)];
+            changed += answers.filter((answer) => answer === NOD_WENT.CHANGED).length;
+            failure = answers.find(unanswered)?.failure;
+            pending = pending.filter((_, at) => unanswered(answers[at]));
+
+            return answers;
+          }),
+        {
+          // Note that a nod no answer reached says why and offers Try again, the Undo coming once they go, since the one notice draws Try again or Undo, never both; one the agent changed first says so, in the Undo's notice where others went.
+          refused: () => {
+            if (pending.length === 0 && (changed === 0 || taken.length > 0)) return undefined;
+
+            if (keyed.length === 1) {
+              return failure === undefined ? NOT_ACKNOWLEDGED : refusedWords(failure);
+            }
+
+            return acknowledgedNote(taken.length, pending.length + changed);
+          },
+          retry: () => pending.length > 0,
+          done: () => {
+            if (taken.length === 0) return;
+            settled(
+              taken,
+              SETTLE.ACKNOWLEDGE,
+              changed === 0 ? undefined : acknowledgedNote(taken.length, changed),
+            );
+          },
+        },
+      );
+    };
+
+    return {
+      mark: (item, unread) => {
+        const itemId = item.id;
+
+        if (!unread) nodRead([item]);
         write(() => acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread }), {
           refused: (answer) => ("failure" in answer ? markedNote(unread, 0, 1) : undefined),
           retry: true,
@@ -587,7 +698,10 @@ export function useInboxActs(): {
           },
         );
       },
-      markAll: (itemIds) => {
+      markAll: (items) => {
+        nodRead(items);
+        const itemIds = items.flatMap((item) => (isUnread(item) ? [item.id] : []));
+
         if (itemIds.length === 0) return;
         write(() => acts[ACT_KIND.AGENTS_INBOX_READ_ALL]({ itemIds: [...itemIds] }), {
           refused: (answer) =>
@@ -596,8 +710,11 @@ export function useInboxActs(): {
           went: BUZZ.SUCCESS,
         });
       },
-      markMany: (itemIds, unread) => {
-        if (itemIds.length === 0) return;
+      markMany: (items, unread) => {
+        if (items.length === 0) return;
+
+        if (!unread) nodRead(items);
+        const itemIds = items.map((item) => item.id);
         // Note that Try again sends only the marks that did not land, and the note counts every mark that did.
         let pending = itemIds;
         let marked = 0;
@@ -710,9 +827,8 @@ export function useInboxActs(): {
         acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again")),
       refreshTasks: () =>
         acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again")),
-    }),
-    [acts, write, settled],
-  );
+    };
+  }, [acts, write, settled, readerId]);
 }
 
 /**

@@ -47,11 +47,11 @@ import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
 import {
-  type AgentArchiving,
+  type AgentAsking,
   StatusQuestionAsk,
   TaskAgentRow,
   TaskRows,
-  useAgentArchiveAsk,
+  useAgentRowAsk,
   useTaskRowDoors,
 } from "./task-screens.js";
 
@@ -129,7 +129,7 @@ function FoundList({
   listing,
   onOpen,
   remindMenu,
-  archiving,
+  asking,
   scopes,
   empty,
 }: {
@@ -144,8 +144,8 @@ function FoundList({
   readonly onOpen: (id: string) => void;
   /** Remind me's times on a thread found, as the Inbox's row offers them. */
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
-  /** Archive on an agent found, once it rests, asked first by its row, as a task's Agents ask. */
-  readonly archiving: AgentArchiving;
+  /** Archive and Permanently delete on an agent found, each asked first by its row, as a task's Agents ask. */
+  readonly asking: AgentAsking;
   /** The scopes the results list under, standing as the list's first row. */
   readonly scopes: ListScopes;
   /** What stands over the list while the scope found nothing. */
@@ -219,9 +219,9 @@ function FoundList({
             <TaskAgentRow
               key={line.agent.id}
               line={line}
-              task={found.tasksById.get(line.agent.taskId)}
+              task={line.agent.taskId === null ? undefined : found.tasksById.get(line.agent.taskId)}
               named
-              archiving={archiving}
+              asking={asking}
             />
           ))}
         </ListSection>
@@ -251,7 +251,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const doors = useTaskRowDoors(found.listing.workspace?.id);
   const { listing, status, deletion } = useListingAsks(found.listing, doors);
   const remind = useRemind();
-  const archiving = useAgentArchiveAsk();
+  const asking = useAgentRowAsk();
   const routes = foundRoutes(found);
   const onTab = useOnTab();
 
@@ -291,7 +291,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
       listing={listing}
       onOpen={open}
       remindMenu={remind.itemMenu}
-      archiving={archiving}
+      asking={asking}
       empty={
         !empty ? undefined : reading !== undefined ? (
           <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />

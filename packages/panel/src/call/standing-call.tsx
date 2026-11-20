@@ -62,9 +62,9 @@ function bounded(words: string): string {
 }
 
 /** The call's agent by name and harness, its status, and its task's name, as the task list holds them, read by id from its collections so only those two rows draw the card again. */
-function useListedFacts(taskId: string | undefined, agentId: string | undefined) {
+function useListedFacts(taskId: string | null | undefined, agentId: string | undefined) {
   const collections = useTaskListCollections();
-  const task = useTaskListRow(collections.tasks, taskId);
+  const task = useTaskListRow(collections.tasks, taskId ?? undefined);
   const agent = useTaskListRow(collections.agents, agentId);
 
   return useMemo(
@@ -86,10 +86,13 @@ function useListedFacts(taskId: string | undefined, agentId: string | undefined)
  */
 export function StandingCallProvider({
   onShowAgent,
+  onOpenOwnAgent,
   children,
 }: {
   /** Opens an agent on its task, as the window's way to it. */
   onShowAgent: (taskId: string, agentId: string) => void;
+  /** Opens an agent on no task, a Manager, on its own page. */
+  onOpenOwnAgent: (agentId: string) => void;
   children: ReactNode;
 }): React.JSX.Element {
   const voice = useVoiceCall();
@@ -128,17 +131,21 @@ export function StandingCallProvider({
   useEffect(() => appPlatform().voiceCall?.(standing), [standing]);
 
   // Note that the presses read the call through a ref, because a press from the floating window lands outside any render.
-  const latest = useRef({ voice, onShowAgent });
-  latest.current = { voice, onShowAgent };
+  const latest = useRef({ voice, onShowAgent, onOpenOwnAgent });
+  latest.current = { voice, onShowAgent, onOpenOwnAgent };
 
   const [presses] = useState<CallCardPresses>(() => ({
     setMicrophoneMuted: (muted) => latest.current.voice.setMicrophoneMuted(muted),
     setSpeakerMuted: (muted) => latest.current.voice.setSpeakerMuted(muted),
     end: () => latest.current.voice.end(),
     open: () => {
-      const { voice: now, onShowAgent: show } = latest.current;
+      const { voice: now, onShowAgent: show, onOpenOwnAgent: openOwn } = latest.current;
+      const { call: standing } = now;
 
-      if (now.call !== undefined) show(now.call.taskId, now.call.agentId);
+      if (standing === undefined) return;
+
+      if (standing.taskId === null) openOwn(standing.agentId);
+      else show(standing.taskId, standing.agentId);
     },
   }));
 

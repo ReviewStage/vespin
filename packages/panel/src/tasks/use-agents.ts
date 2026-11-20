@@ -1,4 +1,5 @@
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
+import { type AgentFork, continueFork, forkStart } from "@repo/features/agent-fork-model";
 import {
   ARCHIVE_NOT_READY,
   CLEAR_FAILED,
@@ -17,6 +18,7 @@ import {
   CONTEXT_WINDOW,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
+import { choiceRequest } from "@repo/features/model-effort";
 import type {
   CatalogModel,
   MacOffer,
@@ -89,7 +91,6 @@ import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approva
 import {
   archivedManyWords,
   archiveWords,
-  choiceRequest,
   continueFailureNote,
   RENAME_FAILED,
   RETRY_FAILED,
@@ -103,7 +104,6 @@ import {
   agentPageQueryOptions,
   repositorySkillsQueryOptions,
 } from "./agent-reads.js";
-import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
 import { type HeldUpdate, heldUpdateOver } from "./refused-send.js";
 import { keptSkills } from "./repository-skills.js";
 import type { SkillSource } from "./skill-picker.js";
@@ -1065,7 +1065,9 @@ export function useAgents(input: {
    * stands, and that one still out past its bound is said as failed, so
    * nothing waits on it for ever; should it land after, it settles as read.
    * An ask that landed settles once the slice says how it went (below),
-   * since a Try again answers alike whether its ask was answered or not.
+   * since a Try again answers alike whether its ask was answered or not;
+   * one the host refused is failed at once, since the slice may still hold
+   * an earlier list it did not read again.
    * The ask and its bound run as one fiber, stopped by the next ask or as
    * the hook leaves, so neither sets state on a tab no longer standing.
    */
@@ -1084,8 +1086,20 @@ export function useAgents(input: {
     stopModelsRead.current = rendererFork(
       Effect.all(
         [
-          Effect.promise(() => retryModels().catch(() => undefined)).pipe(
-            Effect.andThen(Effect.sync(() => setModelsLanded(generation))),
+          // Note that a refused ask is failed at once, never landed, because the slice may still hold an earlier list it did not read again.
+          Effect.promise(() =>
+            retryModels().then(
+              () => true,
+              () => false,
+            ),
+          ).pipe(
+            Effect.andThen((answered) =>
+              Effect.sync(() =>
+                answered
+                  ? setModelsLanded(generation)
+                  : settleModels(generation, MODELS_READ.FAILED),
+              ),
+            ),
           ),
           Effect.sleep(Duration.millis(MODELS_READ_BOUND_MS)).pipe(
             Effect.andThen(Effect.sync(() => settleModels(generation, MODELS_READ.FAILED))),

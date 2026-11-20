@@ -10,10 +10,13 @@ import {
   type InboxDraft,
 } from "@repo/features/inbox-draft";
 import {
+  holderRepository,
+  holderTask,
+  holderWorkspaceId,
   INBOX_EVENT_WORDS,
   INBOX_THREAD_EVENT,
+  type InboxAnyHolder,
   type InboxCloser,
-  type InboxHolder,
   type InboxKnownAsk,
   type InboxThreadEventLine,
   type InboxThreadEventsAfter,
@@ -43,6 +46,7 @@ import { markdownLink } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
@@ -1108,7 +1112,7 @@ export interface InboxPanePhone {
  * item's task and its agent, then the side panel.
  */
 function phoneItemGroups(
-  holder: InboxHolder,
+  holder: InboxAnyHolder,
   by: ItemAgent,
   doors: InboxPaneDoors,
   pager: InboxPager | undefined,
@@ -1135,17 +1139,22 @@ function phoneItemGroups(
         ];
 
   const { onOpenHolder } = doors;
-  const { task } = holder;
+  const task = holderTask(holder);
 
-  // ⌘O opens the item's task (`desktop-inbox.tsx`).
-  const holderItem: MenuAction = {
-    label: OPEN_TASK,
-    detail: task.name,
-    replayMasked: true,
-    icon: tabLook({ kind: TAB_KIND.PLAN, name: task.name, status: task.status }).icon,
-    onSelect: onOpenHolder,
-    command: APP_COMMAND.OPEN_IN_TASK,
-  };
+  // ⌘O opens the item's task (`desktop-inbox.tsx`); a thread on no task has none, its agent standing in its place.
+  const holderItem: MenuAction[] =
+    task === undefined
+      ? []
+      : [
+          {
+            label: OPEN_TASK,
+            detail: task.name,
+            replayMasked: true,
+            icon: tabLook({ kind: TAB_KIND.PLAN, name: task.name, status: task.status }).icon,
+            onSelect: onOpenHolder,
+            command: APP_COMMAND.OPEN_IN_TASK,
+          },
+        ];
 
   const agentItem: MenuAction = {
     label: OPEN_AGENT,
@@ -1160,7 +1169,7 @@ function phoneItemGroups(
       ? []
       : [{ label: "Show panel", icon: <SidePanelIcon />, onSelect: phone.onShowPanel }];
 
-  return [steps, [holderItem, agentItem], panel].filter((group) => group.length > 0);
+  return [steps, [...holderItem, agentItem], panel].filter((group) => group.length > 0);
 }
 
 /** What a phone's ⋯ calls the crumbs' presses. */
@@ -1351,8 +1360,8 @@ function AnswerMentions({
 }
 
 /** The words a dictation into an item's box is likely to say: its task's repository's, its title's, and its thread's. */
-function answerKeywords(holder: InboxHolder, item: InboxItem): readonly string[] {
-  const { repository } = holder.task;
+function answerKeywords(holder: InboxAnyHolder, item: InboxItem): readonly string[] {
+  const repository = holderRepository(holder);
   const body = (item.thread ?? []).map((message) => message.text).join("\n");
 
   return dictationKeywords({ repository, title: item.title, body });
@@ -1362,9 +1371,9 @@ function answerKeywords(holder: InboxHolder, item: InboxItem): readonly string[]
 export interface InboxPaneDoors {
   /** The window's tasks, which the crumbs' menus act through, as the sidebar's rows do. */
   readonly tasks: TasksControl;
-  /** Opens the item's task. */
+  /** Opens the item's task, or its agent's own page where it stands on no task. */
   readonly onOpenHolder: () => void;
-  /** The task's hover card, as its sidebar row hangs it. */
+  /** The task's hover card, as its sidebar row hangs it; none for a thread on no task. */
   readonly taskCard: React.ReactNode;
   /** Opens the agent's tab on its task. */
   readonly onOpenAgent: (agentId: string) => void;
@@ -1460,6 +1469,8 @@ function answerNewThread(
  * While the thread holds the window's keys (`keys`), ⌘⌫ and Version history
  * act on its task, and ⌥⌘C and ⇧⌥⌘C on its agent, as Linear's Inbox acts on
  * the issue shown; its crumbs' menus print them so. U and P stay the thread's.
+ * A thread on no task has no task's crumb: its path leads with its agent,
+ * which opens the agent's own page.
  */
 function Crumbs({
   holder,
@@ -1469,7 +1480,7 @@ function Crumbs({
   title,
   titleShown,
 }: {
-  holder: InboxHolder;
+  holder: InboxAnyHolder;
   by: ItemAgent;
   doors: InboxPaneDoors;
   agents: AgentsControl;
@@ -1478,9 +1489,11 @@ function Crumbs({
   /** Whether the heading has scrolled away, so the path names the item. */
   titleShown: boolean;
 }): React.JSX.Element {
-  const path = (task: CrumbHeld, agent: CrumbHeld | undefined) => {
+  const task = holderTask(holder);
+
+  const path = (held: CrumbHeld | undefined, agent: CrumbHeld | undefined) => {
     const crumbs: Crumb[] = [
-      taskCrumb(holder, doors, task),
+      task === undefined ? undefined : taskCrumb(task, doors, held),
       agentCrumb(by, titleShown, agent),
       { label: title, current: true, shown: titleShown },
     ].filter((crumb) => crumb !== undefined);
@@ -1497,34 +1510,27 @@ function Crumbs({
   const keys = doors.keys === true;
   const agentKeys = keys ? THREAD_AGENT_COPY_KEYS : NO_CRUMB_KEYS;
 
-  const withAgent = (task: CrumbHeld) =>
+  const withAgent = (held: CrumbHeld | undefined) =>
     listed === undefined ? (
-      path(task, undefined)
+      path(held, undefined)
     ) : (
       <AgentCrumbMenu tasks={doors.tasks} agents={agents} agent={listed} keys={agentKeys}>
-        {(agent) => path(task, agent)}
+        {(agent) => path(held, agent)}
       </AgentCrumbMenu>
     );
 
+  if (task === undefined) return withAgent(undefined);
+
   return (
-    <TaskCrumbMenu
-      tasks={doors.tasks}
-      task={holder.task}
-      keys={keys ? THREAD_TASK_KEYS : NO_CRUMB_KEYS}
-    >
+    <TaskCrumbMenu tasks={doors.tasks} task={task} keys={keys ? THREAD_TASK_KEYS : NO_CRUMB_KEYS}>
       {withAgent}
     </TaskCrumbMenu>
   );
 }
 
 /** The path's task crumb, wearing its plan's glyph and hanging its card, which opens the task and holds its menu (`held`). */
-function taskCrumb(
-  holder: InboxHolder,
-  doors: InboxPaneDoors,
-  held?: CrumbHeld | undefined,
-): Crumb {
+function taskCrumb(task: TaskSummary, doors: InboxPaneDoors, held?: CrumbHeld | undefined): Crumb {
   const { onOpenHolder } = doors;
-  const { task } = holder;
 
   return {
     label: task.name,
@@ -1555,7 +1561,8 @@ function agentCrumb(by: ItemAgent, fixed = false, held?: CrumbHeld | undefined):
 
 /**
  * A phone's bar's name for the item: its task, as the wide path leads with
- * it, pressing where the wide path's does. Where the Inbox is narrowed to a
+ * it, pressing where the wide path's does; a thread on no task's agent, as
+ * its path leads with it. Where the Inbox is narrowed to a
  * task, the Inbox leads it, pressing back to that narrowed list, so the
  * screen a thread's link lands on says the list it stands in. Note that the
  * bar never names the item's title, because the thread's heading right
@@ -1563,15 +1570,18 @@ function agentCrumb(by: ItemAgent, fixed = false, held?: CrumbHeld | undefined):
  */
 function PhoneHolder({
   holder,
+  by,
   doors,
   narrowed,
 }: {
-  holder: InboxHolder;
+  holder: InboxAnyHolder;
+  by: ItemAgent;
   doors: InboxPaneDoors;
   /** Goes back to the list narrowed to the task; none while it lists every task's. */
   narrowed: (() => void) | undefined;
 }): React.JSX.Element {
-  const holds = taskCrumb(holder, doors);
+  const task = holderTask(holder);
+  const holds = task === undefined ? agentCrumb(by) : taskCrumb(task, doors);
 
   return (
     <Breadcrumbs
@@ -1606,8 +1616,8 @@ export function InboxPane({
   newThread,
   within,
 }: {
-  /** What holds the item: its task. */
-  holder: InboxHolder;
+  /** What holds the item: its task, or the agent that posted it where it stands on no task. */
+  holder: InboxAnyHolder;
   item: InboxItem;
   /** The live read of the item's task, which answers it and holds its draft. */
   control: TaskInboxControl;
@@ -1726,7 +1736,7 @@ export function InboxPane({
   };
 
   // Note that the item's words are read under its own workspace, its plan's, never the one the Inbox lists, which may not be the item's.
-  const { workspaceId } = holder.task;
+  const workspaceId = holderWorkspaceId(holder);
   const onDraft = (next: InboxDraft) => control.onDraft(item, next);
   // The open ask's controls stand in the draft reply, over its note.
   const asking = openAskOf(thread);
@@ -1810,6 +1820,7 @@ export function InboxPane({
           title={
             <PhoneHolder
               holder={holder}
+              by={by}
               doors={doors}
               narrowed={phone.narrowedTask === undefined ? undefined : onBack}
             />

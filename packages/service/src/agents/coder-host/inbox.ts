@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readPageById } from "@repo/database/models/task-pages";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
@@ -74,7 +74,6 @@ import {
   readInboxItemHome,
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
-import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
 import { placeholderLinksWords } from "../link-rule.js";
 import { taskIdOfInput } from "../task-ref.js";
 
@@ -84,6 +83,7 @@ import {
   readSandboxMedia,
   type SandboxImageRefusals,
 } from "./inbox-image.js";
+import { keptAddressesIn, readKeptPicture } from "./inbox-kept-picture.js";
 
 /**
  * inbox.ts -- the coding agent's thread tools: post a message on a thread in the inbox, withdraw a thread's open ask, list threads, and read one whole.
@@ -148,6 +148,8 @@ const POST_THREAD_WORDS =
   `a PNG, JPEG, or WebP of at most ${MAX_PICTURE_MB} MB, a WebM or MP4 video or a WAV, MP3, M4A, AAC, or Ogg sound clip of at most ${MAX_VIDEO_MB} MB, which plays there, ` +
   `or a PDF of at most ${MAX_PDF_MB} MB, kept as a file of the message; at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} a message, ` +
   "and pictures written next to each other stand side by side. " +
+  `In place of a path, draw a picture, recording, or clip an agent of your workspace showed with ${AGENT_TOOL.SHOW_MEDIA} by the id that call answered, ` +
+  `or a task's picture by the address ${AGENT_TOOL.READ_TASK} writes it at: either is copied into the message. ` +
   "Draw the picture a message is about in it, since the thread's reader never sees a transcript. " +
   "ask ends the message with what it asks: " +
   `decide (two to ${INBOX_BOUNDS.MAX_OPTIONS} options, each a short label and an optional detail, and the label you recommend; multiple lets them pick several, and recommended then takes a list; ` +
@@ -166,6 +168,8 @@ const POST_THREAD_WORDS =
   "A post without ask asks nothing: a note, or your reply on the thread. " +
   "A post on a settled thread opens it again, as a note waiting on them where it asks nothing. " +
   "A thread holds one open ask, and a newer ask replaces it; every answer reaches you as a message. " +
+  "A thread reaches the member in the app alone, never in Slack: where a Slack ping is worth it, such as an ask that blocks your work, " +
+  `DM them yourself with ${AGENT_TOOL.SEND_SLACK_MESSAGE}, in your own words. ` +
   "The call answers with the thread and one line for each other thread of yours still open.";
 
 /** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input. */
@@ -779,19 +783,38 @@ interface BodyFiles {
   readonly files: readonly InboxBodyPicture[];
 }
 
+/** The file a body names, read where it stands: a picture already kept in the workspace, copied (`inbox-kept-picture.ts`), or a file in the sandbox. */
+function bodyFile(
+  poster: ThreadPoster,
+  path: string,
+  sandbox: InboxSandboxDoor,
+): Effect.Effect<Result.Result<InboxBodyPicture, string>, StoreFailure, DatabaseServices> {
+  return Effect.flatMap(readKeptPicture(poster, path), (kept) =>
+    kept !== undefined
+      ? Effect.succeed(kept)
+      : Effect.map(
+          readSandboxBodyFile(sandbox, path, PICTURE_REFUSALS),
+          Result.map((file) => ({ ...file, path, name: posix.basename(path) || path })),
+        ),
+  );
+}
+
 /**
- * The files the body names from the sandbox, each read there under the
- * path it is written by and named by its file's own name, and the body
- * with each PDF among them cut out, since its message keeps it as a file
- * it does not draw; or the first refusal among them. Each path is read
- * once, in the order first named, and the first path refused ends the
- * reading, so a post with a file to mend reads no further file for it.
+ * The files the body names, each read under the destination it is written
+ * by: a file of the sandbox named by its file's own name, or a picture
+ * already kept in the workspace, copied; and the body with each PDF among
+ * them cut out, since its message keeps it as a file it does not draw; or
+ * the first refusal among them. Each is read once, the sandbox's in the
+ * order first named and then the kept addresses, and the first refused
+ * ends the reading, so a post with a file to mend reads no further file
+ * for it.
  */
 function bodyFiles(
+  poster: ThreadPoster,
   body: string,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<BodyFiles, string>> {
-  const paths = inboxSandboxPicturePaths(body);
+): Effect.Effect<Result.Result<BodyFiles, string>, StoreFailure, DatabaseServices> {
+  const paths = [...inboxSandboxPicturePaths(body), ...keptAddressesIn(body)];
 
   if (paths.length > INBOX_BOUNDS.MAX_MESSAGE_PICTURES) {
     return Effect.succeed(Result.fail(INBOX_REFUSAL.TOO_MANY_PICTURES));
@@ -801,10 +824,10 @@ function bodyFiles(
     const read: InboxBodyPicture[] = [];
 
     for (const path of paths) {
-      const file = yield* readSandboxBodyFile(sandbox, path, PICTURE_REFUSALS);
+      const file = yield* bodyFile(poster, path, sandbox);
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
-      read.push({ ...file.success, path, name: posix.basename(path) || path });
+      read.push(file.success);
     }
 
     const pdfs = new Set(
@@ -1038,32 +1061,27 @@ export function postToInbox(
     const place = yield* placeOf(agent, post);
 
     if (Result.isFailure(place)) return inboxRejected(place.failure);
-    const named = yield* bodyFiles(post.body, sandbox);
+    const named = yield* bodyFiles(agent, post.body, sandbox);
 
     if (Result.isFailure(named)) return inboxRejected(named.failure);
     const { body, files } = named.success;
     const options = yield* optionMedia(agent, post.ask, files.length, sandbox);
 
     if (Result.isFailure(options)) return inboxRejected(options.failure);
+
     const thread = threadPost({ ...post, body }, place.success, options.success);
-    const wasOpen = yield* threadStandsOpen(agent, thread.key);
     const posted = yield* postInboxThread(agent, thread, files, options.success.files);
 
     if (Result.isFailure(posted)) return inboxRejected(storeRefusal(posted.failure));
-    const { organizationId } = agent;
-    yield* afterResponse(
-      "a thread's Slack DM",
-      dmThreadPost({
-        organizationId,
-        item: posted.success,
-        asked: post.ask !== undefined,
-        wasOpen,
-      }),
-    );
-    yield* afterResponse(
-      "a thread's push",
-      pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId: agent.taskId }),
-    );
+    const { taskId } = agent;
+
+    // Note that a thread on no task is not pushed, since a released iPhone opens an alert on its task.
+    if (taskId !== null) {
+      yield* afterResponse(
+        "a thread's push",
+        pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId }),
+      );
+    }
 
     return yield* written(agent, posted.success);
   }).pipe(
@@ -1122,7 +1140,6 @@ export function withdrawAsk(
     const withdrawn = yield* closeInboxItem(agent, key, reason);
 
     if (Option.isNone(withdrawn)) return yield* notWithdrawn(agent, key);
-    yield* afterResponse("a withdrawn thread's Slack DM", settleThreadDms(withdrawn.value.id));
     yield* afterResponse("a withdrawn thread's push", pushThreadSettled(withdrawn.value.id));
 
     return yield* written(agent, withdrawn.value);

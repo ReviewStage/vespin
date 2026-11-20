@@ -8,6 +8,7 @@ import {
   HStack,
   Image,
   Menu,
+  Section,
   Spacer,
   SwipeActions,
   Text,
@@ -23,6 +24,7 @@ import {
   alignmentGuide,
   background,
   buttonStyle,
+  disabled,
   fixedSize,
   font,
   foregroundStyle,
@@ -44,6 +46,7 @@ import {
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -54,8 +57,8 @@ import { Predicate } from "effect";
 import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
+import { actContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
@@ -180,6 +183,8 @@ export type RowAction = {
   readonly detail?: string | undefined;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
+  /** Whether it stands dimmed and takes no press, its `detail` saying why, as the panel's Unfollow stands for the assignee. */
+  readonly disabled?: boolean | undefined;
 };
 
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
@@ -190,8 +195,14 @@ export type MenuChoice = {
   readonly symbol?: Glyph | undefined;
   /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
   readonly tone?: StatusTone | undefined;
+  /** A glyph drawn faint under its own in the same tone, as a priority's lit bars stand over every bar it can light (`MarkLayers`); none where its glyph stands alone. */
+  readonly under?: MarkLayer | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
+  /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
+  readonly mark?: IntegrationProvider | undefined;
+  /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
+  readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -217,11 +228,6 @@ export type RowMenuGroup = {
   readonly actions?: readonly RowAction[] | undefined;
 };
 
-/** A group's key in its menu: its first piece's words, which a menu holds once. */
-function menuGroupKey(group: RowMenuGroup): string {
-  return group.submenus?.[0]?.label ?? group.actions?.[0]?.label ?? "";
-}
-
 /** Whether a group holds anything to draw. */
 function menuGroupFilled(group: RowMenuGroup): boolean {
   return (group.submenus?.length ?? 0) + (group.actions?.length ?? 0) > 0;
@@ -246,6 +252,8 @@ type RowActs = {
   readonly menuActions?: readonly RowAction[] | undefined;
   /** The long press menu's further groups, after the swipes' group, each set apart by a divider, such as a task's ways to organize it and, last, Permanently delete. */
   readonly menuGroups?: readonly RowMenuGroup[] | undefined;
+  /** The long press menu whole, in its own order, for a row whose menu follows the panel's right-click rather than leading with its swipes: each group set apart by a divider, after Open. Where given, the swipes stand behind the swipe alone, and `menuSubmenus`, `menuActions` and `menuGroups` are left out. */
+  readonly menu?: readonly LongPressGroup[] | undefined;
   /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
   readonly preview?: ReactElement | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
@@ -332,7 +340,10 @@ export function actionButton(
       {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
-      modifiers={destructive ? [] : [tint(ink)]}
+      modifiers={[
+        ...(destructive ? [] : [tint(ink)]),
+        ...(action.disabled === true ? [disabled(true)] : []),
+      ]}
     />
   );
 }
@@ -344,12 +355,25 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
 
 /** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+  if (choice.mark !== undefined) return markContent(choice.label, choice.mark);
+
+  // Note that a choice saying more under its words, such as a member's email, stands as a menu's title and subtitle.
+  if (choice.detail !== undefined)
+    return menuActContent(
+      choice.label,
+      choice.symbol,
+      choice.detail,
+      choiceColor(choice, colors),
+      choice.photo,
+    );
+
   return actContent(
     choice.label,
     choice.symbol,
     undefined,
     choiceColor(choice, colors),
     choice.photo,
+    choice.under,
   );
 }
 
@@ -512,6 +536,55 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
+/** One group of a long press menu, in the menu's order: its acts and the menus within it. */
+export type LongPressGroup = readonly RowSwipe[];
+
+/**
+ * The one long press menu the app opens on anything held, as the panel opens
+ * its right-click menu on the same things: SwiftUI's own menu, its groups in
+ * the panel's order, each set apart from the next by a divider, an act red
+ * where it takes something away, and the preview it lifts where it has one,
+ * as the system's own apps lift a glance at what a row opens. A row draws it
+ * through `RowFrame`, a section's header through `ListSection`'s `menu`,
+ * and SwiftUI or React Native views held through `HeldSwiftMenu` and
+ * `HeldMenu`. The content alone where it offers nothing.
+ */
+export function LongPressMenu({
+  groups,
+  title,
+  preview,
+  children,
+}: {
+  readonly groups: readonly LongPressGroup[];
+  /** What heads the menu, such as when a message was sent, as Messages heads a held message's menu by its time; none where it says nothing over its acts. */
+  readonly title?: string | undefined;
+  readonly preview?: ReactElement | undefined;
+  readonly children: ReactElement;
+}) {
+  const colors = useColors();
+  const filled = groups.filter((group) => group.length > 0);
+
+  if (filled.length === 0 && preview === undefined) return children;
+
+  const items = filled.map((group, at) => (
+    // Note that a group is keyed by its first item's words, which a menu holds once.
+    <Fragment key={group[0]?.label ?? at}>
+      {at === 0 ? null : <Divider />}
+      {group.map((item) => swipeMenuButton(item, colors))}
+    </Fragment>
+  ));
+
+  return (
+    <ContextMenu>
+      <ContextMenu.Items>
+        {title === undefined ? items : <Section title={title}>{items}</Section>}
+      </ContextMenu.Items>
+      <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
+      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
+    </ContextMenu>
+  );
+}
+
 /** A row's content with the question its acts ask standing by it, where its acts ask any. */
 function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
   return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
@@ -542,6 +615,7 @@ export function RowFrame({
   menuSubmenus = [],
   menuActions = [],
   menuGroups = [],
+  menu: ordered,
   preview,
   link,
   question,
@@ -582,7 +656,11 @@ export function RowFrame({
   ];
 
   const groups = menuGroups.filter(menuGroupFilled);
-  const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
+
+  const ownGroup =
+    ordered === undefined
+      ? swiped.length + menuSubmenus.length + menuActions.length > 0
+      : ordered.some((group) => group.length > 0);
 
   // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
   if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
@@ -598,24 +676,20 @@ export function RowFrame({
         ];
 
   const menu = asking(
-    <ContextMenu>
-      <ContextMenu.Items>
-        {opening.map((action) => actionButton(action, colors))}
-        {opening.length > 0 && ownGroup ? <Divider /> : null}
-        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
-        {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
-        {menuActions.map((action) => actionButton(action, colors))}
-        {groups.map((group, at) => (
-          <Fragment key={menuGroupKey(group)}>
-            {at === 0 && opening.length === 0 && !ownGroup ? null : <Divider />}
-            {(group.submenus ?? []).map((submenu) => rowSubmenu(submenu, colors))}
-            {(group.actions ?? []).map((action) => actionButton(action, colors))}
-          </Fragment>
-        ))}
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
-      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
-    </ContextMenu>,
+    <LongPressMenu
+      groups={
+        ordered === undefined
+          ? [
+              opening,
+              [...swiped, ...menuSubmenus, ...menuActions],
+              ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
+            ]
+          : [opening, ...ordered]
+      }
+      preview={preview}
+    >
+      {row}
+    </LongPressMenu>,
     question,
   );
 

@@ -1,4 +1,4 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, the sheet of its options: its model, effort, Fast, permission mode, and MCP servers, and the sheet of its listening ports.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
 
 import {
   AGENT_PORTS_WORDS,
@@ -6,7 +6,11 @@ import {
   type PortAct,
   type PortRow,
 } from "@repo/features/agent-ports-model";
-import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  type AgentOverviewPullRequest,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
 import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
@@ -29,10 +33,18 @@ import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
-import { agentStillWriting } from "@repo/features/task-agents-model";
+import {
+  agentRunsOnWords,
+  agentStillWriting,
+  RUNS_ON_WORDS,
+} from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
 import { MCP_SERVER_LABEL, PATH_OPENS, VERB } from "@repo/features/words";
-import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
+import {
+  type FollowedAgent,
+  selectInboxReader,
+  selectWorkspaces,
+} from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -44,12 +56,15 @@ import {
   type BarSubtitle,
   BUTTON_LOOK,
   CallCardRow,
+  COMPOSER_CALL,
   Composer,
   type ComposerCall,
+  type ComposerDictation,
   type ComposerMenu,
   ConfirmAsk,
   DeniesWaiting,
   drawnCallIds,
+  EditingLine,
   FORM_SPACING,
   footerToneOf,
   GLYPH,
@@ -58,6 +73,8 @@ import {
   glyphSymbol,
   HeldCallBanner,
   ListSection,
+  MENU_CHIP_LOOK,
+  MenuChip,
   MenuRow,
   type MenuRowAct,
   ModelChoiceSheet,
@@ -66,14 +83,14 @@ import {
   openCuts,
   PERMISSION_MODE_GLYPH,
   QueuedLines,
+  runsOnGlyph,
   Screen,
   SettingsForm,
   SkillSuggestions,
   StackSubtitle,
-  SwitchRow,
   shownFiles,
   shownMediaIds,
-  type TRANSCRIPT_ITEM,
+  TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
   type TranscriptToggles,
@@ -89,7 +106,15 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -113,7 +138,9 @@ import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-mode
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
-import { useAgentServers } from "../agents/use-agent-servers.js";
+import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
+import { type AgentCommandsPlace, useAgentCommandsPlace } from "../agents/use-agent-tools.js";
+import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
@@ -124,6 +151,7 @@ import {
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useNewestNote } from "../newest-note.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
   type PullRequestKey,
@@ -134,6 +162,8 @@ import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useDevicePlatform } from "../tasks/use-start.js";
+import { useDictation } from "../use-dictation.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
 
@@ -166,10 +196,11 @@ const COPY_TRANSCRIPT_WORDS = {
   SHARE: "Share…",
 } as const;
 
-/** What the + offers beside the options: the photo picker, and the sheet of every option. */
+/** What the + offers, as the desktop composer's + does: the photo picker, and the MCP servers the agent is handed. */
 const ADD_WORDS = {
   PHOTOS: "Photos",
-  OPTIONS: "Options",
+  /** What the model chip is heard as, which opens the model sheet. */
+  MODEL: "Model",
 } as const;
 
 /** What Rename asks, in the system's alert a task's Rename asks in too (`askForName`). */
@@ -178,17 +209,11 @@ const RENAME_WORDS = {
   ACT: "Rename",
 } as const;
 
-/** The options sheet's words: its name, its rows, its close, and when a change reaches the agent, as the panel's chip applies one. */
-const OPTIONS_WORDS = {
-  TITLE: "Options",
-  MODEL: "Model",
-  EFFORT: "Effort",
-  FAST: "Fast",
-  DONE: "Done",
-  READING_SERVERS: "Reading your MCP servers",
-  NO_SERVERS: "No MCP server is connected. Connect one in Settings.",
-  MORE_SERVERS: "Connect another in Settings.",
-} as const;
+/** What the model chip says between a model and its effort, as the panel's chip joins them. */
+const MODEL_JOINED = " · ";
+
+/** The name a flow finds the composer's model chip by. */
+const MODEL_CHIP_ID = "agent-model-chip";
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
@@ -208,6 +233,23 @@ function useAgentAddress(
       : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
+}
+
+/**
+ * A message's address on vespin.dev under its agent, as the panel's Copy
+ * link names one (`agentMessagePlace`), by the message's id; none before the
+ * agent's workspace is known.
+ */
+function useMessageLink(
+  agentId: string,
+  workspaceId: string | undefined,
+): ((messageId: string) => string | undefined) | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const step = linkWorkspaceStep(workspaceId, workspaces);
+
+  if (step === undefined) return undefined;
+
+  return (messageId) => linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step);
 }
 
 /** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
@@ -285,20 +327,28 @@ function AgentComposerBar({
   note,
   call,
   otherCall,
+  tools,
+  trailing,
+  dictation,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   /** Scrolls the transcript to the call waiting; none where no row draws one. */
   readonly onShowWaiting: (() => void) | undefined;
   readonly addMenu: ComposerMenu;
-  /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
+  /** The newest refusal over the field, a send's, a dictation's, or one of the page's menu or its +, as `AgentComposerArea` picks it. */
   readonly note: string | undefined;
   /** Talk, or the call's presses while a call into this agent stands; none while calls are not offered. */
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** What leads the row under the field after the +: where the agent works. */
+  readonly tools: ReactNode;
+  /** What stands at the end of the row under the field, before Send: the model chip. */
+  readonly trailing: ReactNode;
+  /** Dictate before Send, and its strip while a dictation stands. */
+  readonly dictation: ComposerDictation;
 }) {
-  const said = composer.note ?? note;
   const { banner, waiting } = approvals;
   // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
@@ -308,10 +358,11 @@ function AgentComposerBar({
   const head =
     !denies &&
     banner === undefined &&
+    composer.cancelMessageEdit === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
     otherCall === undefined &&
-    said === undefined ? undefined : (
+    note === undefined ? undefined : (
       <>
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
@@ -323,10 +374,13 @@ function AgentComposerBar({
             onPick={composer.skills.pick}
           />
         )}
+        {composer.cancelMessageEdit === undefined ? null : (
+          <EditingLine onCancel={composer.cancelMessageEdit} />
+        )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
-        {said === undefined ? null : <AskNote words={said} />}
+        {note === undefined ? null : <AskNote words={note} />}
       </>
     );
 
@@ -337,6 +391,9 @@ function AgentComposerBar({
     sendable: composer.sendable,
     onSend: composer.send,
     addMenu,
+    tools,
+    trailing,
+    dictation,
     onDropPictures: composer.dropPictures,
     onLongPaste: composer.pasteText,
     onStop: composer.stop,
@@ -357,58 +414,207 @@ function AgentComposerBar({
         />
       ),
     saving: composer.saving,
+    focusAsk: composer.focusAsk,
   };
 
   return <Composer {...props} />;
 }
 
+/** No row of the transcript on screen yet. */
+const NONE_SHOWN: readonly TranscriptItem[] = [];
+
 /**
- * What the composer's + opens, as the panel's + and model chip offer them,
- * the less frequent of them in one native menu rather than chips along the
- * field: Photos, then Options, the sheet of every option, then the agent's
- * permission mode as a menu of its modes where its harness takes one, and
- * Fast as a switch where its model has a fast version.
+ * The agent's composer as the page's foot holds it, with the questions its
+ * queue and its edits ask first: the one place the words typed live, so a
+ * keystroke draws the composer alone, never the transcript over it. Note
+ * that Edit on a sent line in the transcript reaches it through `editMessage`,
+ * which it keeps pointed at its own.
+ */
+function AgentComposerArea({
+  id,
+  agent,
+  transcript,
+  status,
+  messageSent,
+  suggested,
+  editMessage,
+  approvals,
+  onShowWaiting,
+  servers,
+  note,
+  call,
+  otherCall,
+  tools,
+  trailing,
+}: {
+  readonly id: string;
+  readonly agent: Parameters<typeof useAgentComposer>[1];
+  readonly transcript: Parameters<typeof useAgentComposer>[2];
+  readonly status: Parameters<typeof useAgentComposer>[3];
+  readonly messageSent: Parameters<typeof useAgentComposer>[4];
+  readonly suggested: Parameters<typeof useAgentComposer>[5];
+  readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
+  readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
+  readonly onShowWaiting: (() => void) | undefined;
+  readonly servers: AgentServers;
+  readonly note: string | undefined;
+  readonly call: ComposerCall | undefined;
+  readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** What leads the row under the field after the +: where the agent works. */
+  readonly tools: ReactNode;
+  /** What stands at the end of the row under the field, before Send: the model chip. */
+  readonly trailing: ReactNode;
+}) {
+  const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
+  const dictated = useDictation(composer.words, composer.onWords);
+  // Note that one pick holds the newest refusal, a send's, a dictation's or the page's, so an older one never hides why the last act did not go.
+  const said = useNewestNote([composer.note, dictated.note, note]);
+  useEffect(() => {
+    editMessage.current = composer.editMessage;
+  }, [editMessage, composer.editMessage]);
+
+  return (
+    <>
+      <AgentComposerBar
+        composer={composer}
+        approvals={approvals}
+        onShowWaiting={onShowWaiting}
+        addMenu={agentAddMenu(composer, servers, agent !== undefined)}
+        note={said}
+        call={call}
+        otherCall={otherCall}
+        tools={tools}
+        trailing={trailing}
+        dictation={dictated.dictation}
+      />
+      <ConfirmAsk destructive {...composer.removing} />
+      <ConfirmAsk destructive {...composer.sendingEdit} />
+    </>
+  );
+}
+
+/**
+ * What the composer's + opens, as the desktop composer's + does: Photos,
+ * then MCP servers ›, each server the agent is handed led by its
+ * provider's mark, checked while it is on, a press switching it, once they are read and where any is connected.
+ * The model, its effort, Fast and the permission mode stand once, in the
+ * model chip's sheet at the row's end, as the desktop's model chip holds
+ * them.
  */
 function agentAddMenu(
   composer: AgentComposer,
-  mode: AgentMode | undefined,
-  pick: AgentModelPick,
-  openOptions: (() => void) | undefined,
+  servers: AgentServers,
+  /** Whether the task list holds the agent, whose servers a switch changes; none are offered before, since a switch then changes nothing. */
+  listed: boolean,
 ): ComposerMenu {
   return {
-    actions: [
-      { label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach },
-      ...(openOptions === undefined
-        ? []
-        : [
-            {
-              label: ADD_WORDS.OPTIONS,
-              symbol: GLYPH.OPTIONS,
-              onPress: openOptions,
-            },
-          ]),
-    ],
+    actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
     submenus:
-      mode === undefined
+      !listed || !servers.read || servers.servers.length === 0
         ? []
         : [
             {
-              label: PERMISSION_MODE_WORDS.GROUP,
-              symbol: PERMISSION_MODE_GLYPH[mode.mode],
-              choices: mode.modes.map((option) => ({
-                label: option.label,
-                symbol: PERMISSION_MODE_GLYPH[option.id],
-                on: option.id === mode.mode,
-                onPress: () => mode.choose(option.id),
+              label: MCP_SERVER_LABEL.many,
+              symbol: GLYPH.MCP_SERVER,
+              choices: servers.servers.map((server) => ({
+                label: server.name,
+                mark: server.provider,
+                on: server.on,
+                onPress: () => servers.toggle(server.connection, !server.on),
               })),
               actions: [],
             },
           ],
-    switches:
-      pick.fast === undefined
-        ? []
-        : [{ label: OPTIONS_WORDS.FAST, on: pick.fast.on, onPress: pick.fast.toggle }],
   };
+}
+
+/**
+ * The model chip at the end of the composer's row, as the desktop's stands
+ * at its box's foot: the model and its effort, "Opus 5.5 · High", led by its
+ * harness's mark, a press opening the model sheet, where the model, its
+ * effort, Fast and the permission mode are chosen; none before the agent's
+ * model is known.
+ */
+function AgentModelChip({
+  pick,
+  onOpen,
+}: {
+  readonly pick: AgentModelPick;
+  readonly onOpen: (() => void) | undefined;
+}) {
+  if (pick.model === undefined || onOpen === undefined) return null;
+
+  const model =
+    pick.models.find((option) => option.id === pick.model)?.label ?? modelLabel(pick.model);
+
+  const effort =
+    pick.efforts.length > 1
+      ? pick.efforts.find((option) => option.id === pick.effort)?.label
+      : undefined;
+
+  const harness = providerOf(pick.model);
+
+  return (
+    <MenuChip
+      look={MENU_CHIP_LOOK.COMPOSER}
+      label={effort === undefined ? model : `${model}${MODEL_JOINED}${effort}`}
+      {...(harness === undefined ? {} : { harness })}
+      onOpen={onOpen}
+      testId={MODEL_CHIP_ID}
+    />
+  );
+}
+
+/** What the Machine chip's menu heads where commands go, as the panel's place chip names its Default machine row. */
+const COMMANDS_WORDS = { LABEL: "Terminal and computer use" } as const;
+
+/** The name a flow finds the composer's Machine chip by. */
+const MACHINE_CHIP_ID = "agent-machine-chip";
+
+/**
+ * Where the agent works, as the desktop's Machine chip stands after the +:
+ * Cloud or its device's name, led by the panel's runs-on mark; its menu,
+ * where the agent is offered `run_on_mac`, says where its terminal commands
+ * and computer use go, each machine the agent may send them to, the one
+ * they go to now checked, a pick setting it (`useAgentCommandsPlace`). A
+ * chip with no machine to choose says where the agent works alone.
+ */
+function AgentMachineChip({
+  agent,
+  commands,
+}: {
+  readonly agent: Pick<FollowedAgent, "machine" | "mac">;
+  readonly commands: AgentCommandsPlace | undefined;
+}) {
+  const platform = useDevicePlatform(agent.mac?.deviceId);
+  const symbol = runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform });
+
+  const menu =
+    commands === undefined || commands.machines.length === 0
+      ? undefined
+      : {
+          groups: [
+            {
+              title: COMMANDS_WORDS.LABEL,
+              choices: commands.machines.map((machine) => ({
+                label: machine.name,
+                symbol: runsOnGlyph({ cloud: false }),
+                on: machine.id === commands.machine?.id,
+                onPress: () => commands.choose(machine.id),
+              })),
+            },
+          ],
+        };
+
+  return (
+    <MenuChip
+      look={MENU_CHIP_LOOK.COMPOSER}
+      label={agentRunsOnWords(agent) || RUNS_ON_WORDS.LABEL}
+      symbol={symbol}
+      {...(menu === undefined ? {} : { menu })}
+      testId={MACHINE_CHIP_ID}
+    />
+  );
 }
 
 /**
@@ -446,19 +652,19 @@ function suggestedSendOf(
 /**
  * The line under the agent's name in its bar: where it stands and the model
  * it runs on, as the panel's tab and its model chip say them ("Working ·
- * Opus 5.5"), a press on it opening Options, where the model is chosen;
- * none before either is known.
+ * Opus 5.5"); none before either is known. Note that it is UIKit's own
+ * subtitle, which takes no press, so the model is chosen from the composer's
+ * model chip.
  */
 function agentSubtitle(
   statusWords: string | undefined,
   model: string | undefined,
-  openOptions: (() => void) | undefined,
 ): BarSubtitle | undefined {
   const words = [statusWords, model]
     .filter((each) => each !== undefined && each !== "")
     .join(" · ");
 
-  return words === "" ? undefined : { words, onPress: openOptions, label: ADD_WORDS.OPTIONS };
+  return words === "" ? undefined : { words };
 }
 
 /**
@@ -466,7 +672,7 @@ function agentSubtitle(
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
  * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
- * browser, Rename, typed in the system's alert, Pin or Unpin, Options, a
+ * browser, Rename, typed in the system's alert, Pin or Unpin, a
  * cloud agent's Ports, which opens the sheet of its listening ports, and
  * Run ›, its repository's run actions where its workspace offers them, each
  * run in its sandbox or stopped while it runs, as the panel's narrow ⋯
@@ -474,8 +680,8 @@ function agentSubtitle(
  * archived, and Permanently delete, red and last, which always asks in the
  * panel's words and goes back once the agent is deleted. Under
  * it, its transcript as one lazy list, its head where the agent stands and
- * the model it runs on, which opens the options sheet, as the menu's
- * Options and the composer's + do. The transcript
+ * the model it runs on, which opens the model sheet, as the composer's
+ * model chip does. The transcript
  * is held live while the page is in focus, so a turn under way draws as it
  * moves, and its older pages are read as the reader scrolls up to them; one
  * that could not be read offers Try again. Each call opens in place, and
@@ -493,7 +699,8 @@ function agentSubtitle(
  * follow-up, with the photos the + attaches, steers the turn under way or
  * waits behind it as the member's Follow-up behavior says, and Stop stands
  * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
- * Photos, Options, the permission mode, and Fast. A `/` typed offers the
+ * Photos and MCP servers ›; the model chip at the row's end opens the model
+ * sheet, its effort, Fast and the permission mode. A `/` typed offers the
  * task's skills over the field. Opened from a split view's detail, it is
  * pushed on the tab's own stack over the whole window, as a compact window
  * pushes it.
@@ -558,14 +765,36 @@ function AgentConversation({
     [workspaceId],
   );
 
+  // The transcript's rows on screen, as it tells them, the same rows kept while the same stand.
+  const [rowsShown, setRowsShown] = useState<readonly TranscriptItem[]>(NONE_SHOWN);
+
+  const showRows = useCallback(
+    (items: readonly TranscriptItem[]) =>
+      setRowsShown((held) =>
+        items.length === held.length && items.every((item, at) => item === held[at]) ? held : items,
+      ),
+    [],
+  );
+
+  // The pull requests whose cards stand on screen, by their pages.
+  const cardsShown = useMemo(
+    () =>
+      new Set(
+        rowsShown.flatMap((item) => (item.kind === TRANSCRIPT_ITEM.PULL_REQUEST ? [item.url] : [])),
+      ),
+    [rowsShown],
+  );
+
+  // Note that only the open pull requests whose cards stand on screen are read for their Merge, so an agent that opened dozens never reads them all at once as its page opens, each a follow of its own.
   const open = useMemo(
     () =>
       pullRequests.flatMap(({ state, url }) => {
-        const key = state === PULL_REQUEST_STATE.OPEN ? keyOf(url) : undefined;
+        const key =
+          state === PULL_REQUEST_STATE.OPEN && cardsShown.has(url) ? keyOf(url) : undefined;
 
         return key === undefined ? [] : [key];
       }),
-    [pullRequests, keyOf],
+    [pullRequests, keyOf, cardsShown],
   );
 
   const offers = usePullRequestsRead(open);
@@ -574,7 +803,8 @@ function AgentConversation({
   const asked = merging === undefined ? undefined : offers(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId ?? undefined);
+  const messageLink = useMessageLink(id, shown?.workspaceId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
@@ -638,7 +868,8 @@ function AgentConversation({
   const cuts = useMemo(() => openCuts(items), [items]);
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
-  const mediaIds = useMemo(() => shownMediaIds(items), [items]);
+  // Note that only the pictures and recordings of the rows on screen are read, so a transcript of hundreds of screenshots never holds them all as it opens.
+  const mediaIds = useMemo(() => shownMediaIds(rowsShown), [rowsShown]);
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
@@ -658,16 +889,18 @@ function AgentConversation({
   const sendSuggestion = useSuggestionSender();
   const suggested = suggestedSendOf(opened, id, sendSuggestion);
 
-  const composer = useAgentComposer(
-    id,
-    agent,
-    transcript,
-    status,
-    approvals.messageSent,
-    suggested,
+  // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
+  const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
+
+  const composer = useMemo(
+    () => ({
+      editMessage: (line: Parameters<AgentComposer["editMessage"]>[0]) =>
+        editMessage.current?.(line),
+    }),
+    [],
   );
 
-  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId);
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.taskId ?? undefined);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
@@ -678,7 +911,7 @@ function AgentConversation({
     UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
-    shown === undefined
+    shown === undefined || shown.taskId === null
       ? undefined
       : agentActivity(
           {
@@ -692,16 +925,15 @@ function AgentConversation({
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 
-  // Note that Options stands as the page's own sheet beside it, as its asks do, so the model chip, the + menu and ⋯ all open the one sheet.
-  const [optionsShown, setOptionsShown] = useState(false);
-  const openOptions = agent === undefined ? undefined : () => setOptionsShown(true);
+  // Note that the model sheet stands as the page's own beside it, as its asks do, so the model chip and the bar's line open the one sheet.
+  const [modelsShown, setModelsShown] = useState(false);
+  const openModels = agent === undefined ? undefined : () => setModelsShown(true);
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
   const subtitle = agentSubtitle(
     statusWords,
     agent === undefined ? undefined : modelLabel(agent.model),
-    openOptions,
   );
 
   // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the bar's line changes out of the reader's sight.
@@ -749,11 +981,21 @@ function AgentConversation({
     else router.replace("/tasks");
   };
 
-  const addMenu = agentAddMenu(composer, mode, pick, openOptions);
-  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
+  const servers = useAgentServers(id);
+  const commands = useAgentCommandsPlace(id);
+
+  // Note that the newest refusal of the page's own acts stands over the field, so a server's switch refused after a Pin says its own words rather than the older one's.
+  const note = useNewestNote([
+    actions.note,
+    transcriptCopy.note,
+    servers.note,
+    mode?.note,
+    pick.note,
+  ]);
+
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
-  const taskId = shown?.taskId;
+  const taskId = shown?.taskId ?? undefined;
 
   // Note that the agent's task opens as a page pushed over it on the stack the reader stands in, as a thread's path opens its task and the panel's crumbs do. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
   const openTask =
@@ -761,10 +1003,20 @@ function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
+  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   const copyable = address !== undefined || copiable;
-  const openable = address !== undefined || openOptions !== undefined;
-  const talk = useAgentTalk(id, shown?.taskId);
+  const openable = address !== undefined || agent !== undefined;
+  const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
+
+  const messageActs = useMessageActs({
+    agentId: id,
+    agent: shown,
+    transcript,
+    readerId,
+    composer,
+    calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
+  });
 
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
   const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
@@ -798,20 +1050,31 @@ function AgentConversation({
   };
 
   const composerBar = (
-    <AgentComposerBar
-      composer={composer}
+    <AgentComposerArea
+      id={id}
+      agent={agent}
+      transcript={transcript}
+      status={status}
+      messageSent={approvals.messageSent}
+      suggested={suggested}
+      editMessage={editMessage}
       approvals={approvals}
       onShowWaiting={showWaiting}
-      addMenu={addMenu}
-      note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
+      servers={servers}
+      note={note}
       call={talk.call}
       otherCall={otherCall}
+      tools={
+        agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />
+      }
+      trailing={<AgentModelChip pick={pick} onOpen={openModels} />}
     />
   );
 
   const transcriptView = (
     <AgentTranscript
       items={rows}
+      onRowsShown={showRows}
       reveal={reveal}
       head={null}
       empty={{
@@ -835,6 +1098,8 @@ function AgentConversation({
       onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
+      messageLink={messageLink}
+      messageMore={messageActs.more}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
         const key = keyOf(item.url);
@@ -848,12 +1113,11 @@ function AgentConversation({
 
   const asks = (
     <>
-      <AgentOptionsSheet
-        agentId={id}
+      <AgentModelSheet
         pick={pick}
         mode={mode}
-        presented={optionsShown}
-        onDismiss={() => setOptionsShown(false)}
+        presented={modelsShown}
+        onDismiss={() => setModelsShown(false)}
       />
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
@@ -863,7 +1127,7 @@ function AgentConversation({
         />
       )}
       <ConfirmAsk destructive {...talk.switching} />
-      <ConfirmAsk destructive {...composer.removing} />
+      <ConfirmAsk destructive {...messageActs.reverting} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
@@ -898,7 +1162,7 @@ function AgentConversation({
   return (
     <>
       <Stack.Screen options={barOptions} />
-      {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row; Options stays in ⋯. */}
+      {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row, the model chosen from the composer's model chip. */}
       <StackSubtitle words={subtitle?.words ?? ""} />
       <Stack.Toolbar placement="right">
         {copyable || openable || openTask !== undefined ? (
@@ -969,17 +1233,12 @@ function AgentConversation({
                     {VERB.OPEN_IN_BROWSER}
                   </Stack.Toolbar.MenuAction>
                 )}
-                {openOptions === undefined ? null : (
-                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
-                    {ADD_WORDS.OPTIONS}
-                  </Stack.Toolbar.MenuAction>
-                )}
-                {openOptions !== undefined && hasPorts ? (
+                {agent !== undefined && hasPorts ? (
                   <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
                     {AGENT_PORTS_WORDS.PORTS}
                   </Stack.Toolbar.MenuAction>
                 ) : null}
-                {openOptions === undefined || runActions.length === 0 ? null : (
+                {agent === undefined || runActions.length === 0 ? null : (
                   <Stack.Toolbar.Menu
                     icon={glyphSymbol(GLYPH.RUN)}
                     title={RUN_ACTION_WORDS.SUBMENU}
@@ -1075,7 +1334,7 @@ function AgentPage({
   return (
     <PageScreen
       workspaceId={agent?.workspaceId}
-      taskId={agent?.taskId}
+      taskId={agent?.taskId ?? undefined}
       pageId={pageId}
       version={version}
       title={title}
@@ -1084,41 +1343,27 @@ function AgentPage({
 }
 
 /**
- * The agent's options, as the panel's model chip and + menu change them, in
- * the model sheet over its page (`ModelChoiceSheet`), each change sent at
- * once and drawn on the agent as it is asked, one the service refused reading
- * back and saying why under its section: its model, among the models New
- * agent offers that its harness runs, each under its harness's mark, its
- * effort right under it, and Fast where the model has a fast version, which
- * take effect from its next step; its permission mode, each with its glyph
- * and what it does, where its harness takes one, which takes effect from its
- * next turn; and the connected MCP servers it is handed, each with its
- * switch, a server connected in Settings. Done closes it.
+ * The agent's model sheet (`ModelChoiceSheet`), as the desktop's model chip
+ * opens its menu, each change sent at once and drawn on the agent as it is
+ * asked, one the service refused reading back and saying why: its model,
+ * among the models New agent offers that its harness runs, each under its
+ * harness's mark, its effort right under it, and Fast where the model has a
+ * fast version, which take effect from its next step; and last its
+ * permission mode, each with its glyph and what it does, where its harness
+ * takes one, which takes effect from its next turn. Done closes it.
  */
-function AgentOptionsSheet({
-  agentId,
+function AgentModelSheet({
   pick,
   mode,
   presented,
   onDismiss,
 }: {
-  readonly agentId: string;
-  /** The page's own model and mode, so a change from the sheet or the composer's + menu clears the one refusal and counts as the one latest change. */
+  /** The page's own model and mode, so a change from the sheet clears the one refusal and counts as the one latest change. */
   readonly pick: AgentModelPick;
   readonly mode: AgentMode | undefined;
   readonly presented: boolean;
   readonly onDismiss: () => void;
 }) {
-  const servers = useAgentServers(agentId);
-
-  const serversFooter =
-    servers.note ??
-    (!servers.read
-      ? OPTIONS_WORDS.READING_SERVERS
-      : servers.servers.length === 0
-        ? OPTIONS_WORDS.NO_SERVERS
-        : OPTIONS_WORDS.MORE_SERVERS);
-
   const models = pick.models.flatMap((option) => {
     const provider = providerOf(option.id);
 
@@ -1156,22 +1401,7 @@ function AgentOptionsSheet({
               note: mode.note,
             }
       }
-    >
-      <ListSection
-        title={MCP_SERVER_LABEL.many}
-        footer={serversFooter}
-        footerTone={footerToneOf(servers.note)}
-      >
-        {servers.servers.map((server) => (
-          <SwitchRow
-            key={server.connection}
-            label={server.name}
-            on={server.on}
-            onSwitch={(on) => servers.toggle(server.connection, on)}
-          />
-        ))}
-      </ListSection>
-    </ModelChoiceSheet>
+    />
   );
 }
 

@@ -82,9 +82,10 @@ env:
 - takeScreenshot: tasks-marked-done
 # A long press on a task lifts its preview, its Overview at a glance: its
 # status, key and repository, its name, and its agents, the pinned Weekly
-# digest email's at work. Under it stands the panel's row menu: Open, Mark
-# done, Status, Unpin on a pinned task, Copy link, Rename, Mark as unread,
-# More, which holds Open in browser, and Permanently delete.
+# digest email's at work. Under it stands the panel's row menu, in the
+# panel's order: Open; Copy link and Open in browser; Rename and Mark as
+# unread; Status, Priority and Assignee; Task relation; Unpin on a pinned
+# task; and Permanently delete.
 - scrollUntilVisible:
     element: "Weekly digest email"
     direction: UP
@@ -113,12 +114,16 @@ env:
     env:
       ROW: Weekly digest email
       ITEM: Open
-- assertVisible: "Status"
 - assertVisible: "Copy link"
+- assertVisible: "Open in browser"
 - assertVisible: "Rename"
 - assertVisible: "Mark as unread"
-- assertVisible: "Unpin"
-- assertVisible: "More"
+- assertVisible: "Status"
+- assertVisible: "Priority"
+- assertVisible: "Assignee"
+- scrollUntilVisible:
+    element: "Unpin"
+    direction: DOWN
 # Note that the menu is scrolled to its last act, which a short window, the
 # iPhone Duo's, stands below its foot.
 - scrollUntilVisible:

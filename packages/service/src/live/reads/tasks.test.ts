@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
+import { markAgentRead, stampAgentSaid } from "@repo/database/models/agent-chat-reads";
 import {
   recordAgentSandboxBooted,
   recordAgentSandboxBooting,
@@ -52,6 +53,7 @@ import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_FAILURE,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentSummary,
@@ -102,6 +104,7 @@ import { agentSandboxName } from "../../agents/agent-sandbox-open.js";
 import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/coder-host/status.js";
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
+import { TASKLESS_LIVE } from "../../agents/taskless-reads.js";
 import { TURN_FAILURE } from "../../core.js";
 import type { SyncMoved } from "../../sync/live-query.js";
 import {
@@ -232,10 +235,14 @@ const lineOf = (
 const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
-/** The rows the live statements deliver to the account, decoded as the desktop decodes them. */
-const liveRowsOf = (userId: string, liveSince = EVERY_TASK) =>
+/** The rows the live statements deliver to the account, decoded as the desktop decodes them, for a build that reads agents on no task or, by default, one that does not. */
+const liveRowsOf = (
+  userId: string,
+  liveSince = EVERY_TASK,
+  taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] = TASKLESS_LIVE.LEFT_OUT,
+) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(tasksRead.statements({ userId, liveSince }));
+    const statements = Option.getOrThrow(tasksRead.statements({ userId, liveSince, taskless }));
 
     return yield* Schema.decodeUnknownEffect(TASK_LIST_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -623,7 +630,11 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         agents,
         issues,
       } = Option.getOrThrow(
-        tasksRead.statements({ userId: "user-immutable", liveSince: LIVE_SINCE }),
+        tasksRead.statements({
+          userId: "user-immutable",
+          liveSince: LIVE_SINCE,
+          taskless: TASKLESS_LIVE.CARRIED,
+        }),
       );
 
       assert.deepEqual(yield* mutableFunctionsOf(plans), []);
@@ -1013,6 +1024,98 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
+    "a Manager on no task reads as a Manager with its face and sandbox for a build that reads one, and stays off an older build's list",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const workspaceId = yield* openWorkspace(owner);
+
+        const { agent } = Option.getOrThrow(
+          yield* createAgent(owner, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        );
+
+        yield* claimRuntimeSession(
+          { userId: owner, conversationId: agent.conversationId },
+          "session-1",
+          new Date(NOW),
+        );
+        yield* recordAgentSandboxBooting(agent.id, agentSandboxName("session-1"), new Date(NOW));
+
+        const carried = yield* liveRowsOf(owner, EVERY_TASK, TASKLESS_LIVE.CARRIED);
+
+        assert.deepEqual(
+          taskAgentsOfLiveRows(carried, NOW).map((each) => [
+            each.id,
+            each.taskId,
+            each.kind,
+            each.face,
+            each.sandbox,
+          ]),
+          [
+            [
+              agent.id,
+              null,
+              AGENT_KIND.MANAGER,
+              agent.face,
+              { state: SANDBOX_STATE.BOOTING, stateAt: NOW, runsUntil: null },
+            ],
+          ],
+        );
+        assert.deepEqual((yield* liveRowsOf(owner)).agents, []);
+      }),
+  );
+
+  it.effect(
+    "a Manager's row carries when its chat last said something, and each member's own look at it as their mark alone",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, teammate);
+
+        const { agent } = Option.getOrThrow(
+          yield* createAgent(owner, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        );
+
+        const said = agent.createdAt.getTime() + 60_000;
+        const looked = said + 60_000;
+        yield* stampAgentSaid(agent.id, new Date(said));
+        yield* markAgentRead(owner, agent.id, new Date(looked));
+
+        const marksOf = (userId: string) =>
+          Effect.map(liveRowsOf(userId, EVERY_TASK, TASKLESS_LIVE.CARRIED), (rows) =>
+            taskAgentsOfLiveRows(rows, NOW).map((each) => [each.readThrough, each.saidAt]),
+          );
+
+        assert.deepEqual(yield* marksOf(owner), [[looked, said]]);
+        assert.deepEqual(yield* marksOf(teammate), [[agent.createdAt.getTime(), said]]);
+      }),
+  );
+
+  it.effect(
     "an agent's permission mode reads as the held read reads it, and the asks its runner holds read live until settled",
     () =>
       Effect.gen(function* () {
@@ -1364,7 +1467,10 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         assert.ok(delta !== undefined, "the list answers deltas");
 
         const statements = Option.getOrThrow(
-          delta.statements({ userId: teammate, liveSince: EVERY_TASK }, moved),
+          delta.statements(
+            { userId: teammate, liveSince: EVERY_TASK, taskless: TASKLESS_LIVE.LEFT_OUT },
+            moved,
+          ),
         );
 
         const rows = yield* Schema.decodeUnknownEffect(

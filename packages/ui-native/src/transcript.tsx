@@ -30,8 +30,16 @@ import { FileChip } from "./file-chip.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
-import { CopyWordsMenu } from "./held-menu.js";
+import {
+  CopyWordsMenu,
+  type HeldAct,
+  MessageMenu,
+  MessageWords,
+  TurnActs,
+  useCopyWords,
+} from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
+import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, Picture } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
@@ -118,6 +126,12 @@ const PAGE_WORD = "Page";
 /** What a pull request's card offers first: its page on GitHub. */
 const REVIEW_WORD = "Review";
 
+/** What a pull request card's long press offers, as the panel's pull request row's right-click names them. */
+const PULL_REQUEST_MENU_WORDS = {
+  COPY_GITHUB_LINK: "Copy GitHub link",
+  OPEN_ON_GITHUB: "Open on GitHub",
+} as const;
+
 /** How near its oldest row the reader scrolls before the page older than it is read, in points. */
 const OLDER_REACH = 400;
 
@@ -137,6 +151,8 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
+  turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   said: {
@@ -612,6 +628,10 @@ interface RowDrawing {
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
   readonly onOpenAddress: (address: string) => void;
+  /** A message's address on vespin.dev by its id, which its Copy link copies; none where messages have none. */
+  readonly messageLink?: ((messageId: string) => string | undefined) | undefined;
+  /** What a sent line's long press or a finished turn's ⋯ offers past copying and sharing it, in the panel's order, such as Edit, Rewind conversation to here, and Fork to new agent; none where messages offer nothing more. */
+  readonly messageMore?: ((item: MessageItem) => readonly HeldAct[]) | undefined;
   /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
@@ -625,6 +645,12 @@ interface RowDrawing {
   /** Hands the transcript a call's row as it stands and as it goes, so a reader sent to the call lands on it. */
   readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
 }
+
+/** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
+export type MessageItem = Extract<
+  TranscriptItem,
+  { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.FOOT }
+>;
 
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
@@ -702,6 +728,7 @@ function TranscriptRow({
   const large = useAccessibilitySize();
   const pageMark = useScaledSize(MARK_SIZE.WRITER);
   const pageChevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const copyWords = useCopyWords();
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
@@ -757,29 +784,47 @@ function TranscriptRow({
           {/* Note that a line of files alone draws no empty bubble under them. */}
           {item.words.trim() === "" &&
           (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
-            <CopyWordsMenu words={item.words} width={rowWidth(drawing.column)}>
+            <MessageMenu
+              words={item.words}
+              at={item.at}
+              // Note that a line that reached a turn under way stands in the turn's message, so it is linked by its own row's id.
+              link={drawing.messageLink?.(item.place.row)}
+              more={drawing.messageMore?.(item)}
+              width={rowWidth(drawing.column)}
+            >
               <View style={styles.saidHeld}>
                 <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
-                  <Markdown
-                    words={item.words}
-                    typed
-                    repository={drawing.repository}
-                    onOpenLink={drawing.onOpenLink}
-                    width={bubbleWordsWidth(drawing.column)}
-                  />
+                  {/* Note that Select text selects the words in the bubble itself, as Messages does (`MessageWords`). */}
+                  <MessageWords>
+                    <Markdown
+                      words={item.words}
+                      typed
+                      repository={drawing.repository}
+                      onOpenLink={drawing.onOpenLink}
+                      width={bubbleWordsWidth(drawing.column)}
+                    />
+                  </MessageWords>
                 </View>
               </View>
-            </CopyWordsMenu>
+            </MessageMenu>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:
+      // Note that a finished turn ends on how long it worked, then the acts on its words, standing rather than on a hover, as ChatGPT's row stands under its reply.
       return (
         <View style={[styles.row, { paddingBottom: SPACE.ROW }]}>
           <Text selectable style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
             {item.words}
           </Text>
+          <View style={styles.turnActs}>
+            <TurnActs
+              words={item.copy}
+              link={drawing.messageLink?.(item.place.message)}
+              more={drawing.messageMore?.(item)}
+            />
+          </View>
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
@@ -801,13 +846,15 @@ function TranscriptRow({
         <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
           <CopyWordsMenu words={item.words} width={rowWidth(drawing.column, item.depth)}>
             <View>
-              <Markdown
-                words={item.words}
-                repository={drawing.repository}
-                onOpenLink={drawing.onOpenLink}
-                suggestion={drawing.suggestion}
-                width={rowWidth(drawing.column, item.depth)}
-              />
+              <MessageWords>
+                <Markdown
+                  words={item.words}
+                  repository={drawing.repository}
+                  onOpenLink={drawing.onOpenLink}
+                  suggestion={drawing.suggestion}
+                  width={rowWidth(drawing.column, item.depth)}
+                />
+              </MessageWords>
             </View>
           </CopyWordsMenu>
         </View>
@@ -921,6 +968,29 @@ function TranscriptRow({
                   ? undefined
                   : () => drawing.onOpenPullRequest?.(item)
               }
+              // Note that the long press offers what a press does not, as the panel's pull request row's right-click does: its GitHub link to copy, then its page on GitHub, where a press opens its own screen.
+              menu={[
+                copyWords === undefined
+                  ? []
+                  : [
+                      {
+                        label: PULL_REQUEST_MENU_WORDS.COPY_GITHUB_LINK,
+                        symbol: GLYPH.LINK,
+                        tone: ROW_ACTION_TONE.NEUTRAL,
+                        onPress: () => copyWords(item.url),
+                      },
+                    ],
+                drawing.onOpenPullRequest === undefined
+                  ? []
+                  : [
+                      {
+                        label: PULL_REQUEST_MENU_WORDS.OPEN_ON_GITHUB,
+                        symbol: GLYPH.OPEN_EXTERNALLY,
+                        tone: ROW_ACTION_TONE.NEUTRAL,
+                        onPress: () => drawing.onOpenAddress(item.url),
+                      },
+                    ],
+              ]}
             />
           </InlineHost>
         </View>
@@ -1031,6 +1101,8 @@ type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   readonly older?: OlderPages | undefined;
   /** A call's row to scroll into view, such as the one a held approval waits on, each ask a serial of its own so the same call is shown again. */
   readonly reveal?: TranscriptReveal | undefined;
+  /** Told the rows on screen each time they change, so a page reads only what it shows, such as a pull request card's state or a picture's bytes. */
+  readonly onRowsShown?: ((items: readonly TranscriptItem[]) => void) | undefined;
 };
 
 /** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
@@ -1058,9 +1130,22 @@ export function AgentTranscript({
   now,
   older,
   reveal,
+  onRowsShown,
   ...drawing
 }: AgentTranscriptProps) {
   const colors = useColors();
+  // Note that the list is handed one callback for the rows on screen, which tells the newest one the page gave, since FlashList reads the callback it was first handed.
+  const shownTold = useRef(onRowsShown);
+  useEffect(() => {
+    shownTold.current = onRowsShown;
+  }, [onRowsShown]);
+
+  const onShown = useCallback(
+    ({ viewableItems }: { readonly viewableItems: readonly { readonly item: TranscriptItem }[] }) =>
+      shownTold.current?.(viewableItems.map(({ item }) => item)),
+    [],
+  );
+
   const reduceMotion = useReduceMotion();
   const { bottom, left, right } = useSafeAreaInsets();
   const list = useRef<FlashListRef<TranscriptItem>>(null);
@@ -1248,6 +1333,7 @@ export function AgentTranscript({
             focusSentTo();
           }}
           scrollEventThrottle={64}
+          onViewableItemsChanged={onShown}
           accessibilityLabel="Transcript"
         />
       ) : null}

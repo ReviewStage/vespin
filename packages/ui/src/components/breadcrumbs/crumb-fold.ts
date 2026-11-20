@@ -164,6 +164,12 @@ export function useCrumbFold(
   const watched = useRef(new Set<Element>());
   // Note that the widths stand unset while a fold is under way, so a resize between its steps measures nothing.
   const settled = useRef<readonly number[] | undefined>(undefined);
+
+  // The crumbs and the fold the widths were last settled for.
+  const settledFor = useRef<{ readonly key: string; readonly count: number } | undefined>(
+    undefined,
+  );
+
   const latest = useRef(key);
   latest.current = key;
 
@@ -207,9 +213,13 @@ export function useCrumbFold(
     if (nav === null || nav === undefined || list === null || list === undefined) return;
 
     if (observer.current !== null) watchCrumbs(observer.current, list, watched.current);
-    // Note that a render landing after a width moved measures again from nothing, because here a fold only grows, and the observer would read the widths this render settles on as unchanged.
     const was = settled.current;
+    const last = settledFor.current;
 
+    // Note that a render of the same crumbs folded the same way reads no width, because reading them lays the page out mid-commit on every render of the bar, and a width moved since stands in a box the observer watches, which measures against the widths settled.
+    if (was !== undefined && last?.key === key && last.count === count) return;
+
+    // Note that a render landing after a width moved measures again from nothing, because here a fold only grows, and the observer would read the widths this render settles on as unchanged.
     if (count > 0 && was !== undefined && !sameWidths(was, widthsOf(nav))) {
       settled.current = undefined;
       setState({ key, count: 0 });
@@ -225,6 +235,7 @@ export function useCrumbFold(
     }
 
     settled.current = widthsOf(nav);
+    settledFor.current = { key, count };
   });
 
   return [attach, folded(crumbs, count, most), crumbs.slice(0, count)];
