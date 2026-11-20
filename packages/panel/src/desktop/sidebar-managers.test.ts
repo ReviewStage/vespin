@@ -16,20 +16,32 @@ import { EXPERIMENT } from "@repo/settings";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { MODELS_READ, type ModelsRead } from "../tasks/use-agents.js";
+import {
+  AGENT_RENAME_TERMS,
+  type AgentRenameAsk,
+  agentRenameMutation,
+  MODELS_READ,
+  type ModelsRead,
+} from "../tasks/use-agents.js";
 import type { NewTask } from "../tasks/use-new-task.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads, handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
-import { NO_REPOSITORIES, newTaskControl, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  NO_REPOSITORIES,
+  newTaskControl,
+  tasksControl,
+} from "../testing/tasks-control.js";
 
 /**
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
  * Managers of the live task list's agents, listed under their head where
  * the workspace has the experiment on, each opening its page, and no head
- * at all where it is off; and New Manager, whose edited retry is a request of its
- * own. Synthetic throughout.
+ * at all where it is off; a Manager's row's Settings…, which names it; and
+ * New Manager, whose edited retry is a request of its own. Synthetic
+ * throughout.
  */
 
 const WORKSPACE: Workspace = {
@@ -117,6 +129,7 @@ async function mountSidebar(
   opened: string[],
   openId?: string,
   pinned: readonly string[] = [],
+  renamed: AgentRenameAsk[] = [],
 ): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
   writeListedTasks({
@@ -129,6 +142,16 @@ async function mountSidebar(
     workspace: WORKSPACE,
     liveAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
     agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
+    agents: agentsControl({
+      rename: {
+        ...AGENT_RENAME_TERMS,
+        options: agentRenameMutation((asked) => {
+          renamed.push(asked);
+
+          return Promise.resolve({ agent: { ...MANAGER, title: asked.title } });
+        }),
+      },
+    }),
   });
 
   const container = document.body.appendChild(document.createElement("div"));
@@ -214,6 +237,48 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager", "Billing Manager"]);
   act(() => fold.click());
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
+});
+
+test("a Manager's row offers Settings… in Rename's place, whose Save names the Manager", async () => {
+  const renamed: AgentRenameAsk[] = [];
+  const sidebar = await mountSidebar(true, [], undefined, [], renamed);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  const row =
+    [...(list?.querySelectorAll("button") ?? [])].find((button) =>
+      button.textContent?.includes("Frontend Manager"),
+    ) ?? assert.fail("the Manager's row is drawn");
+
+  act(() => {
+    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+  });
+
+  const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  const labels = items().map((item) => item.textContent ?? "");
+
+  assert.ok(!labels.some((label) => label.startsWith("Rename")), "no Rename stands beside it");
+  const settings = items().find((item) => item.textContent?.startsWith("Settings…"));
+
+  assert.ok(settings, "Settings… stands in the menu");
+  act(() => settings.click());
+
+  const field =
+    document.querySelector<HTMLInputElement>('[role="dialog"] input') ??
+    assert.fail("the Name field is drawn");
+
+  assert.equal(field.value, "Frontend Manager");
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, " Web ");
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  const save =
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (button) => button.textContent === "Save",
+    ) ?? assert.fail("Save is drawn");
+
+  act(() => save.click());
+  await vi.waitFor(() => assert.deepEqual(renamed, [{ agentId: FRONTEND, title: "Web" }]));
 });
 
 /** A Mac the member registered, their last Runs on pick. */

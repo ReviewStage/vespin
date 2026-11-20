@@ -84,7 +84,7 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * stands, led by Pin, or Unpin once the reader pinned it, the reader's own
  * pin of the agent, which stands it under the sidebar's Pinned (an archived
  * agent's row offers neither, as an archived agent stands under no pin): Copy link, Rename, which turns the row's name into its field
- * until the edit ends, Archive, asking first while a teammate's agent
+ * until the edit ends, or for a Manager Settings…, the card that names it, Archive, asking first while a teammate's agent
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
