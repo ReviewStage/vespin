@@ -26,12 +26,12 @@ import {
   BUTTON_SIZE,
   GroupHeader,
   IconButton,
+  LIST_DENSITY,
+  List,
   motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
   PlusIcon,
-  TASK_ROW_EDGES,
-  TaskRows,
   Tooltip,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -42,7 +42,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pinnedManagersOf, useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
-import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
+import { AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
 import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
@@ -121,14 +121,7 @@ export function ManagerRows({
 
   return (
     <ReplayMask>
-      <TaskRows
-        label={MANAGERS_HEAD}
-        cells={AGENT_ROW_CELLS}
-        more={more}
-        edges={TASK_ROW_EDGES.UNCHOSEN}
-        joinsWalk
-        moves
-      >
+      <List label={MANAGERS_HEAD} density={LIST_DENSITY.DENSE} joinsWalk moves>
         {managers.map((agent) => {
           const at = agentLastMovedAt(agent);
 
@@ -152,13 +145,13 @@ export function ManagerRows({
               more={more}
               current={agent.id === openId}
               runsOn={false}
-              choosable={false}
+              look={AGENT_ROW_LOOK.SIDEBAR}
               onPress={() => onOpen(agent.id)}
               onOpenPullRequest={() => onOpen(agent.id)}
             />
           );
         })}
-      </TaskRows>
+      </List>
     </ReplayMask>
   );
 }
