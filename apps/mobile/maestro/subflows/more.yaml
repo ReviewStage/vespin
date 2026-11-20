@@ -1,0 +1,24 @@
+# more.yaml -- opens the open page's ⋯ menu in any window, for a page whose bar keeps every act in it, as a pull request's does.
+#
+# Note that a compact window's one "More" is tapped by name alone, since a
+# negative index found none on the Mac's iOS 26.5 simulator, and a regular
+# window's is the last on screen, where an iPad's overflow stands open with
+# the menu inside it. The way is chosen by the device, `FLOATING_TABS`
+# naming a regular window, as `tab.yaml`'s is.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "More"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn:
+          text: "More"
+          index: -1
+- waitForAnimationToEnd
