@@ -695,9 +695,12 @@ export const AUTOMATION_WEBHOOK = {
  * standing as it was. `webhookSecretHash` replaces a webhook trigger's
  * secret with one the caller minted, by its SHA-256 in hex, so the caller
  * holds the secret before the one before stops admitting calls and the
- * service never sees it.
+ * service never sees it. `takeOver`, sent alone by an owner or an admin,
+ * makes an automation whose creator left the workspace the caller's, off
+ * until they turn it on; a service before it refuses the key.
  */
 export const automationChangeRequestSchema = EffectSchema.Struct({
+  takeOver: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   webhookSecretHash: EffectSchema.optionalKey(
     EffectSchema.String.check(EffectSchema.isPattern(/^[0-9a-f]{64}$/u)),
   ),

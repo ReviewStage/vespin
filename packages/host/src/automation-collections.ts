@@ -80,9 +80,10 @@ function targetFields(
     : { targetKind: target.kind, targetAgentId: null };
 }
 
-/** What a change asks of an automation, laid over its row as the service will write it. */
+/** What a change asks of an automation, laid over its row as the service will write it; a take-over's new creator is the service's to say. */
 export function changedFields({
   target,
+  takeOver: _takeOver,
   ...asked
 }: AutomationChangeParams["change"]): Partial<AutomationRow> {
   return { ...asked, ...(target === undefined ? undefined : targetFields(target)) };

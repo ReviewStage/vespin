@@ -35,6 +35,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  not,
   or,
   type SQL,
   sql,
@@ -260,7 +261,8 @@ const AutomationKeySchema = Schema.Struct({ userId: Schema.String, id: Schema.St
  * rule: a personal automation
  * is its creator's, which the workspace's owners and admins see, pause, and
  * delete; a workspace's every member sees, runs, and pauses, and its
- * creator, owners, and admins change and delete.
+ * creator, owners, and admins change and delete; and one whose creator left
+ * the workspace its owners and admins take over.
  */
 export const AUTOMATION_ACCESS = {
   READ: "read",
@@ -268,6 +270,7 @@ export const AUTOMATION_ACCESS = {
   TOGGLE: "toggle",
   RUN: "run",
   DELETE: "delete",
+  TAKE_OVER: "take-over",
 } as const;
 
 export type AutomationAccess = (typeof AUTOMATION_ACCESS)[keyof typeof AUTOMATION_ACCESS];
@@ -319,6 +322,8 @@ function allowedTo(userId: string, access: AutomationAccess, id?: string): SQL |
         return or(mine, shared);
       case AUTOMATION_ACCESS.DELETE:
         return or(mine, managing);
+      case AUTOMATION_ACCESS.TAKE_OVER:
+        return and(managing, not(memberOfAutomationWorkspace(automation.userId)));
     }
   })();
 
@@ -475,6 +480,26 @@ const writeAutomation = SqlSchema.findAll({
           updatedAt: now,
         })
         .where(allowedTo(userId, access, id))
+        .returning({ id: automation.id, txid: CURRENT_TXID }),
+    ),
+});
+
+const writeTakenOver = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, id: Schema.String, now: Schema.Date }),
+  Result: WrittenSchema,
+  execute: ({ userId, id, now }) =>
+    Database.use((db) =>
+      db
+        .update(automation)
+        .set({
+          userId,
+          enabled: false,
+          // Note that a device is its creator's own, so one named moves to the cloud with the automation.
+          runsOnMachine: sql`case when ${automation.runsOnMachine} = ${AGENT_MACHINE.DEVICE} then null else ${automation.runsOnMachine} end`,
+          runsOnDeviceId: null,
+          updatedAt: now,
+        })
+        .where(allowedTo(userId, AUTOMATION_ACCESS.TAKE_OVER, id))
         .returning({ id: automation.id, txid: CURRENT_TXID }),
     ),
 });
@@ -1162,6 +1187,29 @@ export function updateAutomationCommitted(
     const { txid } = written;
 
     return Option.map(yield* readWritten(userId, id), (automation) => ({ automation, txid }));
+  });
+}
+
+/**
+ * An automation whose creator left the workspace made the account's, an
+ * owner's or an admin's of it, answered as it then stands with the
+ * transaction it went in: turned off until they turn it on, since it now
+ * runs on their plan, and moved off the leaver's device to the cloud; its
+ * prompt, trigger, model and webhook secret kept. None for any other.
+ */
+export function takeOverAutomationCommitted(
+  userId: string,
+  id: string,
+): TaskStoreEffect<Option.Option<AutomationCommitted>> {
+  return Effect.gen(function* () {
+    const [written] = yield* writeTakenOver({ userId, id, now: yield* DateTime.nowAsDate });
+
+    if (written === undefined) return Option.none();
+
+    return Option.map(yield* readWritten(userId, id), (taken) => ({
+      automation: taken,
+      txid: written.txid,
+    }));
   });
 }
 

@@ -20,7 +20,12 @@ import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { member, organization, user } from "../../schemas/auth.js";
-import { getTestDB, openAgentOnOwnTask } from "../../testing/index.js";
+import {
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openAgentOnOwnTask,
+} from "../../testing/index.js";
 import {
   attachRunAgent,
   automationRunsOn,
@@ -39,6 +44,7 @@ import {
   readWebhookAutomation,
   recordAutomationRun,
   settleAutomationRun,
+  takeOverAutomationCommitted,
   updateAutomation,
 } from "../automation-store.js";
 
@@ -639,6 +645,35 @@ it.layer(getTestDB())("the automation store's failed runs", (it) => {
         assert.deepEqual(
           Option.map(yield* readAutomation(owner, id), (read) => read.name),
           Option.some("Nightly flaky-test sweep"),
+        );
+      }),
+  );
+
+  it.effect(
+    "an owner or an admin takes over an automation whose creator left, which becomes theirs and stays off; nobody takes one whose creator is still here, and a member takes none",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const creator = yield* openAccount;
+        const teammate = yield* openAccount;
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, creator);
+        yield* joinWorkspace(workspaceId, teammate);
+        const made = Option.getOrThrow(yield* createAutomation(creator, nightly(workspaceId)));
+
+        const whileHere = yield* takeOverAutomationCommitted(owner, made.id);
+        yield* leaveWorkspace(workspaceId, creator);
+        const byMember = yield* takeOverAutomationCommitted(teammate, made.id);
+        const byOwner = yield* takeOverAutomationCommitted(owner, made.id);
+
+        assert.equal(Option.isNone(whileHere), true);
+        assert.equal(Option.isNone(byMember), true);
+        assert.deepEqual(
+          Option.map(byOwner, ({ automation }) => ({
+            userId: automation.userId,
+            enabled: automation.enabled,
+          })),
+          Option.some({ userId: owner, enabled: false }),
         );
       }),
   );
