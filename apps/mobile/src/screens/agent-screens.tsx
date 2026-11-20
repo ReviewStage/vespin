@@ -50,7 +50,6 @@ import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   AgentTranscript,
   AskNote,
-  AttachedPictures,
   askForName,
   BAR_TITLE,
   type BarSubtitle,
@@ -360,7 +359,6 @@ function AgentComposerBar({
     !denies &&
     banner === undefined &&
     composer.cancelMessageEdit === undefined &&
-    composer.attached.length === 0 &&
     composer.skills === undefined &&
     composer.mentions === undefined &&
     otherCall === undefined &&
@@ -388,7 +386,6 @@ function AgentComposerBar({
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
-        <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
         {note === undefined ? null : <AskNote words={note} />}
       </>
     );

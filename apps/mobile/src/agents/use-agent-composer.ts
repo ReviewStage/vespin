@@ -14,7 +14,11 @@
  * words and pictures back to the field, the refusal said over it in the
  * panel's words, its line let go (`AGENTS_UNSEND`), and the phone buzzes as
  * a refusal does. A paste long enough to bury the message is attached as a
- * text file beside the pictures (`useAttachedPictures`' `pasteText`).
+ * text file beside the pictures (`useAttachedPictures`' `pasteText`). The
+ * field draws each mention and each file attached as its pill, a file's
+ * marker placed where the caret stands as it is attached, as the panel's box
+ * lays in its chip, and a file whose pill is taken out of the words taken
+ * off.
  * Stop is offered while the agent may still write (`agentStillWriting`),
  * starting or awaiting its turn included, as the panel offers it. A `/`
  * offers the skills of the agent's task's repository (`use-skill-offer.ts`).
@@ -45,7 +49,8 @@ import {
   type AgentStatus,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
-import { mentionPill } from "@repo/features/pill-words";
+import { writtenMarkers } from "@repo/features/file-marker";
+import { filePill, mentionPill } from "@repo/features/pill-words";
 import {
   QUEUE_EDIT_SEND,
   type QueueEditSend,
@@ -63,7 +68,6 @@ import {
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
 import {
-  type AttachedPicture,
   BUZZ,
   buzz,
   type CaretAtWord,
@@ -75,7 +79,7 @@ import {
 import { sentLineId } from "@repo/wire/host-ids";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
@@ -122,13 +126,11 @@ export interface AgentComposer {
   readonly send: () => void;
   /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
   readonly sendQueues: boolean;
-  readonly attached: readonly AttachedPicture[];
   readonly attach: () => void;
   /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept. */
   readonly dropPictures: (uris: readonly string[], unreadable: number) => void;
   /** Takes a long paste as a text file beside the pictures, answering whether it did. */
   readonly pasteText: (words: string) => boolean;
-  readonly detach: (id: string) => void;
   /** Stops the turn under way; none while the agent rests. */
   readonly stop: (() => void) | undefined;
   readonly stopping: boolean;
@@ -312,6 +314,38 @@ export function useAgentComposer(
       pick: (mention) => pillField.current?.pick(mentionPill(mention.name, mention.target)),
     },
   );
+
+  // The names the field draws as pills: each file held, a picture or a pasted text.
+  const heldNames = useMemo(
+    () => new Set(pictures.attached.map((each) => each.name)),
+    [pictures.attached],
+  );
+
+  // The files whose markers the field was asked to place and has not yet written, and those whose markers it has written.
+  const placing = useRef(new Set<string>());
+  const written = useRef(new Set<string>());
+
+  // Note that a file attached stands as its marker's pill where the caret is, as the panel's box lays its chip in, and a file whose pill is taken out of the words is taken off, as deleting the panel's chip takes it off; a file put back with its words, as a refused send's, finds its marker already there.
+  useEffect(() => {
+    const inWords = new Set(writtenMarkers(words).map((marker) => marker.name));
+
+    for (const { id, name } of pictures.attached) {
+      if (written.current.has(name) && !inWords.has(name)) pictures.detach(id);
+    }
+
+    const unplaced = [...heldNames].filter(
+      (name) => !inWords.has(name) && !placing.current.has(name) && !written.current.has(name),
+    );
+
+    written.current = new Set([...inWords].filter((name) => heldNames.has(name)));
+    placing.current = new Set(
+      [...placing.current, ...unplaced].filter(
+        (name) => heldNames.has(name) && !written.current.has(name),
+      ),
+    );
+
+    if (unplaced.length > 0) pillField.current?.place(unplaced.map(filePill));
+  }, [words, heldNames, pictures.attached, pictures.detach]);
 
   // Whether the screen still stands, since a refusal may land after it was left.
   const mounted = useRef(true);
@@ -700,11 +734,9 @@ export function useAgentComposer(
     },
     sendable: pictures.files !== undefined,
     send,
-    attached: pictures.attached,
     attach: pictures.attach,
     dropPictures: pictures.drop,
     pasteText: pictures.pasteText,
-    detach: pictures.detach,
     stop: writing ? stop : undefined,
     stopping,
     queued,
@@ -748,7 +780,7 @@ export function useAgentComposer(
     note,
     skills,
     mentions: skills === undefined ? mentions.offered : undefined,
-    pills: { field: pillField, onAtWord: setAtWord },
+    pills: { field: pillField, onAtWord: setAtWord, files: heldNames },
     editMessage,
     cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),
     sendingEdit: {
