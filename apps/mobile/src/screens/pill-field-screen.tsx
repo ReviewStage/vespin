@@ -53,9 +53,15 @@ const styles = StyleSheet.create({
   acts: { flexDirection: "row", flexWrap: "wrap", gap: SPACE.ROW },
 });
 
-/** The value as a fenced block, so the page shows the very Markdown the field writes. */
+/** The shortest fence Markdown reads, which a longer run of backticks in the words would close early. */
+const FENCE_LEAST = 3;
+
+/** The value as a fenced block, so the page shows the very Markdown the field writes, its fence longer than any run of backticks in it. */
 function fenced(value: string): string {
-  return ["```", value, "```"].join("\n");
+  const longest = Math.max(0, ...(value.match(/`+/gu) ?? []).map((run) => run.length));
+  const fence = "`".repeat(Math.max(FENCE_LEAST, longest + 1));
+
+  return [fence, value, fence].join("\n");
 }
 
 /**

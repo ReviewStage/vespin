@@ -127,12 +127,12 @@ export function PillField({
         const drawn: NativePill = { markdown: pill.markdown, ...pillLook(pill, reading) };
         const { caret } = told.current;
         const word = atWord.current;
-        void native.current?.insertPill(word?.start ?? caret, word?.end ?? caret, drawn);
+        void native.current?.insertPill(word?.start ?? caret, word?.end ?? caret, drawn, seen);
       },
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),
     }),
-    [repository],
+    [repository, seen],
   );
 
   const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => {

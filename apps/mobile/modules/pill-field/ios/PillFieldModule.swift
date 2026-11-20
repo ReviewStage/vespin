@@ -54,8 +54,8 @@ public final class PillFieldModule: Module {
         view.editable = editable ?? true
       }
 
-      AsyncFunction("insertPill") { (view: PillFieldView, start: Int, end: Int, pill: PillRecord) in
-        view.insertPill(Pill(pill), replacing: NSRange(location: start, length: end - start))
+      AsyncFunction("insertPill") { (view: PillFieldView, start: Int, end: Int, pill: PillRecord, seen: Int) in
+        view.insertPill(Pill(pill), replacing: NSRange(location: start, length: end - start), seen: seen)
       }
 
       AsyncFunction("focus") { (view: PillFieldView) in
@@ -352,6 +352,9 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   /// The height last told to JavaScript; none yet.
   private var toldHeight: CGFloat?
 
+  /// Whether an edit of the view's own is under way, which tells JavaScript once it is whole rather than as the text view reports each step.
+  private var quiet = false
+
   var look = Look() {
     didSet {
       guard look != oldValue else { return }
@@ -403,27 +406,39 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
 
   /// Takes the runs JavaScript hands, once it has heard every change typed, redrawing only where they differ from the words held.
   func take(_ runs: [Run], seen: Int) {
-    guard seen >= changes, textView.markedTextRange == nil else { return }
+    guard seen >= changes, runs != heldRuns() else { return }
+
+    // Note that words being composed, as a keyboard of marks or dictation holds them, are committed first, so a reset such as a cleared field lands rather than waiting on a composition that would then tell the old words back.
+    if textView.markedTextRange != nil {
+      quiet = true
+      textView.unmarkText()
+      quiet = false
+    }
+
     redraw(runs, force: false)
   }
 
-  /// Puts the pill in place of the range of the drawn words, such as the `@` word a pick answers, with a space after it unless one stands there.
-  func insertPill(_ pill: Pill, replacing range: NSRange) {
+  /// Puts the pill in place of the range of the drawn words, such as the `@` word a pick answers, with a space after it unless one stands there, once JavaScript has heard every change typed, so the range is the words it was read from.
+  func insertPill(_ pill: Pill, replacing range: NSRange, seen: Int) {
     let storage = textView.textStorage
-    guard range.location >= 0, range.length >= 0, NSMaxRange(range) <= storage.length else { return }
+    guard editable, seen >= changes, range.location >= 0, range.length >= 0, NSMaxRange(range) <= storage.length else { return }
+    guard let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+      let end = textView.position(from: start, offset: range.length),
+      let replaced = textView.textRange(from: start, to: end)
+    else { return }
     let string = storage.string as NSString
-    let end = NSMaxRange(range)
-    let next = end < string.length ? string.character(at: end) : nil
-    let piece = NSMutableAttributedString(attributedString: drawn([.pill(pill)]))
-
+    let next = NSMaxRange(range) < string.length ? string.character(at: NSMaxRange(range)) : nil
     // Note that a space standing after the word is kept and stepped over, and a line's end needs none.
-    if next != space, next != lineBreak {
-      piece.append(NSAttributedString(string: " ", attributes: baseAttributes()))
-    }
-    storage.replaceCharacters(in: range, with: piece)
-    // Note that undo knows nothing of an edit made on the storage, so its earlier steps would land on the wrong words.
-    textView.undoManager?.removeAllActions()
-    let after = range.location + piece.length + (next == space ? 1 : 0)
+    let spaced = next == space || next == lineBreak
+    let pillCharacter = NSRange(location: range.location, length: 1)
+
+    // Note that the words are replaced through the text view's own editing, so undo takes the pick back, and the pill is then laid on its character, which moves no words undo knows of.
+    quiet = true
+    textView.replace(replaced, withText: spaced ? "\u{FFFC}" : "\u{FFFC} ")
+    storage.setAttributes(baseAttributes(), range: pillCharacter)
+    storage.addAttribute(.attachment, value: PillAttachment(pill: pill, look: look), range: pillCharacter)
+    quiet = false
+    let after = range.location + (spaced ? 1 : 2) + (next == space ? 1 : 0)
     textView.selectedRange = NSRange(location: after, length: 0)
     textView.typingAttributes = baseAttributes()
     changed()
@@ -440,10 +455,12 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   // MARK: The text view's delegate
 
   func textViewDidChange(_ textView: UITextView) {
+    guard !quiet else { return }
     changed()
   }
 
   func textViewDidChangeSelection(_ textView: UITextView) {
+    guard !quiet else { return }
     tell()
   }
 
@@ -550,10 +567,15 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   private func redraw(_ runs: [Run], force: Bool) {
     let held = heldRuns()
     guard force || runs != held else { return }
-    let caret = markdownOffset(of: textView.selectedRange.location, in: held)
+    let selected = textView.selectedRange
+    let selectionStart = markdownOffset(of: selected.location, in: held)
+    let selectionEnd = markdownOffset(of: NSMaxRange(selected), in: held)
     textView.attributedText = drawn(runs)
+    // Note that words laid in whole leave nothing for undo's earlier steps to stand on, so they are let go rather than landing on the wrong words.
     textView.undoManager?.removeAllActions()
-    textView.selectedRange = NSRange(location: drawnOffset(of: caret, in: runs), length: 0)
+    let start = drawnOffset(of: selectionStart, in: runs)
+    let end = max(drawnOffset(of: selectionEnd, in: runs), start)
+    textView.selectedRange = NSRange(location: start, length: end - start)
     textView.typingAttributes = baseAttributes()
     placeholderLabel.isHidden = textView.textStorage.length > 0
     setNeedsLayout()
