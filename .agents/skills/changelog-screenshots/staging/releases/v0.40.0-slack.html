@@ -1,111 +1,192 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
-/* v0.40.0-slack.html -- 0.40.0's Vespin in Slack: a mockup of acme's Slack, its #relay-eng thread open, where an agent answers Dana in short messages, shares what it made, and reacts for itself.
+/* v0.40.0-slack.html -- 0.40.0's Vespin in Slack: a mockup of acme's Slack desktop window, #relay-eng open with Dana's thread beside it, where an agent answers in short messages, shares what it made, and reacts for itself.
  *
+ * Drawn after the Slack desktop app as the developer uses it (dark, the sidebar's sections, the channel's tabs, the thread pane, the composer's toolbar).
  * Lato is Slack's face: lay @fontsource/lato's latin 400, 700, and 900 woff2 under fonts/ beside this file (npm pack @fontsource/lato@5).
- * Render it with headless Chromium at a device scale of 2 on a transparent page (omitBackground), then frame it with
+ * Render it with headless Chromium at a device scale of 2 on a transparent page (omitBackground), then frame it whole with
  * scripts/changelog-screenshot.sh --from, which finds the window by its opaque body as it finds a real capture's. */
 @font-face{font-family:Lato;src:url(fonts/lato-latin-400-normal.woff2) format("woff2");font-weight:400}
 @font-face{font-family:Lato;src:url(fonts/lato-latin-700-normal.woff2) format("woff2");font-weight:700}
 @font-face{font-family:Lato;src:url(fonts/lato-latin-900-normal.woff2) format("woff2");font-weight:900}
+:root{--chrome:#1b3a33;--side:#1d2120;--pane:#1a1d21;--line:#34383c;--text:#d1d2d3;--dim:#9a9b9d;--white:#f8f8f8;--blue:#1d9bd1;--sel:#0f5c6e}
 html,body{margin:0;background:transparent}
-body{width:1720px;height:1120px;display:flex;align-items:center;justify-content:center;font-family:Lato,sans-serif;-webkit-font-smoothing:antialiased}
-.win{width:1600px;height:1000px;border-radius:12px;overflow:hidden;background:#3f0e40;display:grid;grid-template-rows:38px 1fr;box-shadow:0 0 0 .5px rgba(0,0,0,.6),0 22px 48px rgba(0,0,0,.45),0 4px 12px rgba(0,0,0,.3)}
-.title{display:flex;align-items:center;padding:0 14px;gap:8px;position:relative}
+body{width:1720px;height:1120px;display:flex;align-items:center;justify-content:center;font-family:Lato,sans-serif;-webkit-font-smoothing:antialiased;color:var(--text)}
+svg{display:block}
+.win{width:1600px;height:1000px;border-radius:12px;overflow:hidden;background:var(--chrome);display:grid;grid-template-rows:44px 1fr;box-shadow:0 0 0 .5px rgba(0,0,0,.7),0 22px 48px rgba(0,0,0,.45),0 4px 12px rgba(0,0,0,.3)}
+.bar{display:flex;align-items:center;padding:0 14px;gap:10px;color:rgba(255,255,255,.8)}
 .dot{width:12px;height:12px;border-radius:50%}
-.search{position:absolute;left:50%;transform:translateX(-50%);width:600px;height:24px;border-radius:6px;background:rgba(255,255,255,.18);color:rgba(255,255,255,.85);font-size:13px;display:flex;align-items:center;padding-left:28px;box-sizing:border-box}
-.body{display:grid;grid-template-columns:70px 260px 1fr 640px;background:#1a1d21;margin:0 6px 6px 0;border-radius:0 0 10px 0;overflow:hidden}
-.rail{background:#3f0e40;display:flex;flex-direction:column;align-items:center;padding-top:10px;gap:18px;color:#fff;font-size:11px}
-.rail .ws{width:36px;height:36px;border-radius:9px;background:#0f766e;display:flex;align-items:center;justify-content:center}
+.nav{display:flex;gap:16px;margin-left:auto;margin-right:12px}
+.search{width:640px;height:28px;border-radius:7px;background:rgba(255,255,255,.14);display:flex;align-items:center;gap:8px;padding:0 10px;box-sizing:border-box;font-size:13.5px;color:rgba(255,255,255,.8);margin-right:auto}
+.body{display:grid;grid-template-columns:72px 296px 1fr 500px;min-height:0}
+.rail{display:flex;flex-direction:column;align-items:center;padding-top:4px;gap:14px;font-size:11px;font-weight:700;color:rgba(255,255,255,.85)}
+.rail .ws{width:38px;height:38px;border-radius:10px;background:#0f766e;display:flex;align-items:center;justify-content:center;margin-bottom:6px;box-shadow:0 0 0 2px var(--chrome),0 0 0 4px rgba(255,255,255,.55)}
 .rail .ws img{width:22px}
-.rail .it{display:flex;flex-direction:column;align-items:center;gap:4px;opacity:.85}
-.rail .ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.rail .it{display:flex;flex-direction:column;align-items:center;gap:4px}
+.rail .ico{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center}
 .rail .on .ico{background:rgba(255,255,255,.2)}
-.side{background:#2b0e2c;color:rgba(255,255,255,.75);padding:14px 10px;font-size:15px}
-.side h1{font-size:18px;font-weight:900;color:#fff;margin:2px 8px 16px}
-.side h2{font-size:14px;font-weight:400;margin:14px 8px 6px;opacity:.8}
-.side .row{padding:5px 10px;border-radius:6px;display:flex;align-items:center;gap:8px}
-.side .row.sel{background:#1164a3;color:#fff}
-.side .row.bold{color:#fff;font-weight:700}
-.side .sq{width:20px;height:20px;border-radius:4px;display:inline-block}
-.main{display:flex;flex-direction:column;border-right:1px solid #35373b;color:#d1d2d3}
-.head{height:50px;border-bottom:1px solid #35373b;display:flex;align-items:center;padding:0 20px;font-weight:900;font-size:18px;color:#fff;gap:6px}
-.feed{flex:1;padding:16px 20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px}
-.msg{display:grid;grid-template-columns:40px 1fr;gap:10px;font-size:15px;line-height:1.46}
-.av{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#1a1d21;overflow:hidden}
+.rail .me{margin-top:auto;margin-bottom:14px;position:relative}
+.rail .me img{width:36px;height:36px;border-radius:9px;object-fit:cover}
+.rail .me i{position:absolute;right:-3px;bottom:-3px;width:10px;height:10px;border-radius:50%;background:#2bac76;border:2px solid var(--chrome)}
+.side{background:var(--side);border-radius:10px 0 0 0;padding:12px 10px;font-size:15px;color:rgba(255,255,255,.72);overflow:hidden}
+.side .top{display:flex;align-items:center;margin:2px 8px 12px;color:#fff}
+.side .top b{font-size:19px;font-weight:900;margin-right:6px}
+.side .top span{margin-left:auto;display:flex;gap:14px}
+.find{height:28px;border:1px solid rgba(255,255,255,.18);border-radius:6px;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:13.5px;margin:0 2px 12px;color:rgba(255,255,255,.6)}
+.row{display:flex;align-items:center;gap:9px;padding:5px 10px;border-radius:6px;height:20px}
+.row.sel{background:var(--sel);color:#fff}
+.row.bold{color:#fff;font-weight:900}
+.row .hash{width:16px;text-align:center;opacity:.8}
+.sq{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#1a1d21;flex:none}
+.sec{display:flex;align-items:center;gap:8px;padding:5px 10px;margin-top:10px;font-size:15px}
+.hr{height:1px;background:var(--line);margin:10px 6px}
+.main{background:var(--pane);display:flex;flex-direction:column;border-left:1px solid var(--line);min-height:0}
+.ch{padding:12px 18px 0;border-bottom:1px solid var(--line)}
+.ch .t{display:flex;align-items:center;gap:8px;font-size:19px;font-weight:900;color:#fff}
+.ch .t span{margin-left:auto;display:flex;gap:18px;align-items:center;font-size:13px;font-weight:700;color:var(--text)}
+.tabs{display:flex;gap:22px;font-size:13.5px;font-weight:700;margin-top:12px}
+.tabs div{display:flex;align-items:center;gap:6px;padding-bottom:9px;color:var(--text)}
+.tabs .on{color:#fff;border-bottom:2px solid #fff}
+.feed{flex:1;display:flex;flex-direction:column;justify-content:flex-end;padding:0 0 12px;min-height:0}
+.day{display:flex;align-items:center;margin:8px 0}
+.day:before,.day:after{content:"";flex:1;border-top:1px solid var(--line)}
+.day b{font-size:13px;border:1px solid var(--line);border-radius:14px;padding:3px 12px;font-weight:700;color:var(--text)}
+.m{display:grid;grid-template-columns:40px 1fr;gap:9px;padding:6px 18px;font-size:15px;line-height:1.46}
+.m.hi{background:#3a2c0c}
+.av{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#1a1d21;overflow:hidden;font-size:15px}
 .av img{width:100%;height:100%;object-fit:cover}
 .nm{font-weight:900;color:#fff;margin-right:6px}
 .app{font-size:10px;font-weight:700;background:rgba(255,255,255,.12);color:#c9cacb;padding:1px 4px;border-radius:3px;margin-right:6px;vertical-align:2px}
-.ts{font-size:12px;color:#9a9b9d}
-.mention{background:rgba(29,155,209,.18);color:#1d9bd1;border-radius:3px;padding:0 2px}
-.link{color:#1d9bd1}
-.replies{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:13px;font-weight:700;color:#1d9bd1}
-.replies .av{width:22px;height:22px;border-radius:4px;font-size:11px}
-.reacts{display:flex;gap:6px;margin-top:6px}
-.re{display:flex;align-items:center;gap:5px;font-size:12px;color:#d1d2d3;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:1px 8px}
-.re.mine{background:rgba(29,155,209,.15);border-color:#1d9bd1;color:#1d9bd1}
-.re .e{font-family:"Noto Color Emoji","Apple Color Emoji",sans-serif;font-size:14px}
-.box{margin:0 20px 18px;border:1px solid #565856;border-radius:8px;height:88px;color:#8b8c8e;font-size:15px;padding:12px;box-sizing:border-box}
-.thread{display:flex;flex-direction:column;color:#d1d2d3;background:#1a1d21}
-.thread .head{justify-content:flex-start}
-.thread .head small{font-weight:400;font-size:14px;color:#9a9b9d;margin-left:6px}
-.tfeed{flex:1;padding:16px 22px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
-.sep{display:flex;align-items:center;gap:10px;font-size:13px;color:#9a9b9d}
-.sep:after{content:"";flex:1;border-top:1px solid #35373b}
-.shot{margin-top:8px;width:360px;border-radius:8px;overflow:hidden;border:1px solid #35373b;background:#f3f1ec;color:#1b1d21;font-family:-apple-system,"Helvetica Neue",Arial,sans-serif}
-.shot .bar{height:26px;background:#fff;border-bottom:1px solid #e2e0da;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;color:#6b6f76}
-.shot .card{margin:14px;background:#fff;border:1px solid #e2e0da;border-radius:8px;padding:16px}
-.shot .sub{font-size:11px;color:#6b6f76}
-.shot .h{font-size:16px;font-weight:700;margin:6px 0 4px}
-.shot .p{font-size:12px;color:#4b4f56;line-height:1.4}
-.shot .btn{display:inline-block;margin-top:10px;background:#0f766e;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px}
-.file{font-size:12px;color:#9a9b9d;margin-top:6px}
+.ts{font-size:12px;color:var(--dim)}
+.cont{padding-left:67px;padding-right:18px;font-size:15px;line-height:1.46;margin-top:-2px}
+.mention{background:rgba(29,155,209,.2);color:#1d9bd1;border-radius:3px;padding:0 2px}
+.link{color:var(--blue)}
+.reacts{display:flex;gap:6px;margin-top:5px;align-items:center}
+.re{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;border-radius:12px;padding:1px 7px;height:20px;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}
+.re.mine{background:#1264a3;border-color:#1d9bd1;color:#e8f5fa}
+.re .e{font-family:"Apple Color Emoji","Noto Color Emoji",sans-serif;font-size:13px}
+.addre{width:26px;height:20px;border-radius:12px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center}
+.replies{display:flex;align-items:center;gap:6px;margin-top:5px;font-size:13px;font-weight:700;color:var(--blue)}
+.replies .av{width:24px;height:24px;border-radius:5px;font-size:11px}
+.composer{margin:0 18px 16px;border:1px solid #565856;border-radius:8px;font-size:15px}
+.tool{display:flex;align-items:center;gap:15px;padding:9px 12px;color:#6c6e70}
+.tool i{width:1px;height:16px;background:#4a4c4e}
+.ph{padding:2px 14px 12px;color:#8b8c8e}
+.bot{display:flex;align-items:center;gap:14px;padding:6px 12px 10px;color:#b9babb}
+.bot .send{margin-left:auto;display:flex;gap:10px;color:#8b8c8e}
+.thread{background:var(--pane);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.th{display:flex;align-items:center;height:54px;padding:0 18px;font-size:17px;font-weight:900;color:#fff;border-bottom:1px solid var(--line);flex:none}
+.th span{margin-left:auto;display:flex;gap:18px}
+.tfeed{flex:1;padding-top:10px;min-height:0;overflow:hidden}
+.count{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--dim);margin:6px 18px}
+.count:after{content:"";flex:1;border-top:1px solid var(--line)}
+.fname{font-size:13px;color:var(--dim);margin-top:6px;display:flex;align-items:center;gap:4px}
+.img{margin-top:6px;width:340px;border-radius:8px;overflow:hidden;background:#f3f1ec;font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;color:#1b1d21}
+.img .bar2{height:24px;background:#fff;border-bottom:1px solid #e2e0da;display:flex;align-items:center;gap:6px;padding:0 10px;font-size:10.5px;color:#6b6f76}
+.img .bar2 i{width:7px;height:7px;border-radius:50%;background:#e2e0da}
+.img .card{margin:14px;background:#fff;border:1px solid #e2e0da;border-radius:8px;padding:14px 16px}
+.img .logo{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#0f766e}
+.img .logo b{width:16px;height:16px;border-radius:4px;background:#0f766e;display:inline-block}
+.img .h{font-size:16px;font-weight:700;margin:10px 0 4px}
+.img .p{font-size:11.5px;color:#4b4f56;line-height:1.45}
+.img .btn{display:inline-block;margin-top:10px;background:#3b3f46;color:#fff;font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:6px}
+.unfurl{margin-top:6px;border-left:4px solid #3c3f43;padding:2px 0 2px 12px;font-size:14px;line-height:1.4}
+.unfurl .src{display:flex;align-items:center;gap:6px;font-weight:700;color:#fff;font-size:13px}
+.unfurl .ti{color:var(--blue);font-weight:700}
+.unfurl .meta{color:var(--dim);font-size:13px}
+.pass{color:#2bac76}
+.chk{display:flex;align-items:center;gap:8px;padding:0 14px 8px;font-size:13px;color:#b9babb}
+.chk b{width:14px;height:14px;border:1px solid #8b8c8e;border-radius:3px}
 </style></head><body><div class="win">
-<div class="title"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><div class="search">Search acme</div></div>
+<div class="bar"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span>
+ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left:10px"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+ <div class="nav"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" opacity=".45"><path d="M5 12h14M12 5l7 7-7 7"/></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+ <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Search acme</div>
+ <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/></svg>
+</div>
 <div class="body">
- <div class="rail"><div class="ws"><img src="../../assets/acme-mark.svg"></div>
-  <div class="it on"><div class="ico">⌂</div>Home</div><div class="it"><div class="ico">✉</div>DMs</div><div class="it"><div class="ico">🔔︎</div>Activity</div></div>
- <div class="side"><h1>acme ▾</h1>
-  <h2>▾ Channels</h2>
-  <div class="row"># general</div><div class="row sel"># relay-eng</div><div class="row"># web</div><div class="row"># billing</div><div class="row"># design</div>
-  <h2>▾ Direct messages</h2>
-  <div class="row"><span class="sq" style="background:#f6c69b"></span>Dana Moreno</div>
-  <div class="row"><span class="sq" style="background:#d9c6f5"></span>Priya Raman</div>
-  <div class="row"><span class="sq" style="background:#a9d3f5"></span>Theo Walsh</div>
-  <h2>▾ Apps</h2>
+ <div class="rail">
+  <div class="ws"><img src="../../assets/acme-mark.svg"></div>
+  <div class="it on"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg></div>Home</div>
+  <div class="it"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 3 21V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1M9 11a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v10l-3-3H11a2 2 0 0 1-2-2z"/></svg></div>DMs</div>
+  <div class="it"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></div>Activity</div>
+  <div class="it"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></div>Files</div>
+  <div class="it"><div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></div>More</div>
+  <div class="me"><img src="../../assets/dean-stratakos.jpg"><i></i></div>
+ </div>
+ <div class="side">
+  <div class="top"><b>acme</b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m6 9 6 6 6-6"/></svg><span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 15H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1A2 2 0 1 1 7 5.2l.1.1A1.7 1.7 0 0 0 10 4.1V4a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 11h.1a2 2 0 1 1 0 4z"/></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4z"/></svg></span></div>
+  <div class="find"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>Find a conversation…</div>
+  <div class="row"><span class="hash"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8 10h8M8 14h5"/></svg></span>Threads</div>
+  <div class="row"><span class="hash"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg></span>Huddles</div>
+  <div class="row"><span class="hash"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></span>Drafts &amp; sent</div>
+  <div class="row"><span class="hash"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>Saved</div>
+  <div class="hr"></div>
+  <div class="sec">▾ Channels</div>
+  <div class="row"><span class="hash">#</span>general</div>
+  <div class="row sel"><span class="hash">#</span>relay-eng</div>
+  <div class="row bold"><span class="hash">#</span>web</div>
+  <div class="row"><span class="hash">#</span>billing</div>
+  <div class="row"><span class="hash">#</span>design</div>
+  <div class="sec">▾ Direct messages</div>
+  <div class="row"><span class="sq" style="background:#f6c69b">D</span>Dana Moreno</div>
+  <div class="row"><span class="sq" style="background:#bfe3c0">J</span>Jordan Lee</div>
+  <div class="row"><span class="sq" style="background:#d9c6f5">P</span>Priya Raman</div>
+  <div class="row"><span class="sq" style="background:#a9d3f5">T</span>Theo Walsh</div>
+  <div class="sec">▾ Apps</div>
   <div class="row"><span class="sq" style="background:url(../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png) center/cover"></span>Vespin</div>
  </div>
- <div class="main"><div class="head"># relay-eng</div>
+ <div class="main">
+  <div class="ch"><div class="t"># relay-eng<span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M17 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/></svg>5<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14v-2a9 9 0 0 1 18 0v2M21 15a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2zM3 15a2 2 0 0 0 2 2h1v-6H5a2 2 0 0 0-2 2z"/></svg><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span></div>
+   <div class="tabs"><div class="on">Messages</div><div>Add canvas</div><div>Files &amp; links</div><div>Pins</div><div>+</div></div></div>
   <div class="feed">
-   <div class="sep">Today</div>
-   <div class="msg"><div class="av" style="background:#d9c6f5">P</div><div><span class="nm">Priya Raman</span><span class="ts">1:52 PM</span><div>Seat counts on the billing page look right now that pending invites are left out 🎉</div></div></div>
-   <div class="msg"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">2:14 PM</span>
+   <div class="day"><b>Yesterday</b></div>
+   <div class="m"><div class="av" style="background:#a9d3f5">T</div><div><span class="nm">Theo Walsh</span><span class="ts">4:05 PM</span><div>Audit log export is going out with tomorrow's release. If you have an export you rely on, give the new CSV a look on staging.</div></div></div>
+   <div class="m"><div class="av"><img src="../../assets/dean-stratakos.jpg"></div><div><span class="nm">Dean Stratakos</span><span class="ts">4:12 PM</span><div>Looks good to me. Members page next?</div>
+    <div class="reacts"><span class="re"><span class="e">👍</span>2</span></div></div></div>
+   <div class="m"><div class="av" style="background:#bfe3c0">J</div><div><span class="nm">Jordan Lee</span><span class="ts">4:31 PM</span><div>Webhook retries are live on staging. Deliveries that fail now back off for an hour before the endpoint is marked failing.</div></div></div>
+   <div class="day"><b>Today</b></div>
+   <div class="m"><div class="av" style="background:#d9c6f5">P</div><div><span class="nm">Priya Raman</span><span class="ts">1:52 PM</span><div>Seat counts on the billing page look right now that pending invites are left out</div></div></div>
+   <div class="m hi"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">2:14 PM</span>
     <div>The invite email's subject just says "You've been invited". <span class="mention">@Vespin</span> can it name the workspace?</div>
     <div class="reacts"><span class="re mine"><span class="e">👀</span>1</span><span class="re mine"><span class="e">✅</span>1</span></div>
-    <div class="replies"><span class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></span><span class="av" style="background:#f6c69b">D</span>5 replies <span class="ts" style="font-weight:400">Last reply today at 2:23 PM</span></div></div></div>
+    <div class="replies"><span class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></span><span class="av" style="background:#f6c69b">D</span>5 replies</div></div></div>
   </div>
-  <div class="box">Message #relay-eng</div>
+  <div class="composer">
+   <div class="tool"><b>B</b><em>I</em><u>U</u><s>S</s><i></i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h11M10 12h11M10 18h11M4 6h1M4 12h1M4 18h1"/></svg><i></i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
+   <div class="ph">Message #relay-eng</div>
+   <div class="bot"><span style="width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span><span style="text-decoration:underline;font-size:15px">Aa</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><span class="send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 8-16 8 3-8z"/><path d="M7 12h6"/></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>
+  </div>
  </div>
- <div class="thread"><div class="head">Thread <small># relay-eng</small></div>
+ <div class="thread">
+  <div class="th">Thread<span><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6 6 18M6 6l12 12"/></svg></span></div>
   <div class="tfeed">
-   <div class="msg"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">2:14 PM</span>
+   <div class="m"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">Today at 2:14 PM</span>
     <div>The invite email's subject just says "You've been invited". <span class="mention">@Vespin</span> can it name the workspace?</div>
     <div class="reacts"><span class="re mine"><span class="e">👀</span>1</span><span class="re mine"><span class="e">✅</span>1</span></div></div></div>
-   <div class="sep">5 replies</div>
-   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:14 PM</span>
+   <div class="count">5 replies</div>
+   <div class="m"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">Today at 2:14 PM</span>
     <div>On it. Reading the invite email in acme/relay.</div></div></div>
-   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:18 PM</span>
-    <div>Done: the subject now reads <b>Dana invited you to acme on Relay</b>, and the email names the workspace up top too.</div>
-    <div class="shot"><div class="bar">Dana invited you to acme on Relay</div><div class="card"><div class="sub">Relay · acme</div><div class="h">Join acme on Relay</div><div class="p">Dana Moreno invited you to the acme workspace. The link works for 7 days.</div><div class="btn" style="background:#3b3f46">Accept invite</div></div></div>
-    <div class="file">invite-email.png</div></div></div>
-   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:18 PM</span>
-    <div>It's on <span class="link">#236 Name the workspace in the invite email</span>, and checks pass.</div></div></div>
-   <div class="msg"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">2:21 PM</span>
+   <div class="m"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">Today at 2:18 PM</span>
+    <div>Done: the subject now reads "Dana invited you to acme on Relay", and the email names the workspace up top.</div>
+    <div class="fname">invite-email.png ⌄</div>
+    <div class="img"><div class="bar2"><i></i><i></i><i></i>Dana invited you to acme on Relay</div><div class="card"><div class="logo"><b></b>Relay</div><div class="h">Join acme on Relay</div><div class="p">Dana Moreno invited you to the acme workspace. The link works for 7 days.</div><div class="btn">Accept invite</div></div></div></div></div>
+   <div class="cont">
+    <div class="unfurl"><div class="src"><svg width="15" height="15" viewBox="0 0 16 16" fill="#fff"><path d="M8 0C3.6 0 0 3.6 0 8c0 3.5 2.3 6.5 5.5 7.6.4.1.5-.2.5-.4v-1.5c-2.2.5-2.7-1-2.7-1-.4-.9-.9-1.2-.9-1.2-.7-.5.1-.5.1-.5.8.1 1.2.8 1.2.8.7 1.2 1.9.9 2.3.7.1-.5.3-.9.5-1.1-1.8-.2-3.6-.9-3.6-4 0-.9.3-1.6.8-2.1-.1-.2-.4-1 .1-2.1 0 0 .7-.2 2.2.8.6-.2 1.3-.3 2-.3s1.4.1 2 .3c1.5-1 2.2-.8 2.2-.8.4 1.1.2 1.9.1 2.1.5.6.8 1.3.8 2.1 0 3.1-1.9 3.7-3.6 3.9.3.3.5.8.5 1.5v2.2c0 .2.1.5.6.4C13.7 14.5 16 11.5 16 8c0-4.4-3.6-8-8-8"/></svg>GitHub</div>
+     <div class="ti">#236 Name the workspace in the invite email</div>
+     <div class="meta">acme/relay · 2 commits · <span class="pass">● Checks passed</span></div></div>
+   </div>
+   <div class="m"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">Today at 2:21 PM</span>
     <div>nice! can the button be teal like the rest of Relay?</div>
     <div class="reacts"><span class="re mine"><span class="e">👍</span>1</span></div></div></div>
-   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:23 PM</span>
+   <div class="m"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">Today at 2:23 PM</span>
     <div>Teal it is. Pushed to <span class="link">#236</span>.</div></div></div>
   </div>
-  <div class="box" style="height:76px">Reply…</div>
+  <div class="composer" style="margin-top:8px">
+   <div class="tool"><b>B</b><em>I</em><u>U</u><s>S</s><i></i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6h11M10 12h11M10 18h11M4 6h1M4 12h1M4 18h1"/></svg><i></i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></svg></div>
+   <div class="ph">Reply to thread…</div>
+   <div class="chk"><b></b>Also send to # relay-eng</div>
+   <div class="bot"><span style="width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span><span style="text-decoration:underline;font-size:15px">Aa</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg><span class="send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 4 16 8-16 8 3-8z"/><path d="M7 12h6"/></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></div>
+  </div>
  </div>
 </div></div>
 <script>document.fonts.ready.then(()=>{document.title='done';});</script>
