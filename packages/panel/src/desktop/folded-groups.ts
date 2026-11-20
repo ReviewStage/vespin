@@ -8,7 +8,8 @@ import {
   MINE,
 } from "@repo/features/inbox-list-model";
 import { Schema, SchemaTransformation } from "effect";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useSteadyDoor } from "../steady-door.js";
 import { keptKey, useKept } from "../use-kept.js";
 
 /**
@@ -245,7 +246,8 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     ? stagedFolds
     : { groups, pinned, following, tasks: tasksFolded, managers, sections, openedTasks };
 
-  const fold = (next: Partial<Folds>) => {
+  // Note that a fold is written through a steady door, so the folds stand as one object until one of them moves, and a list drawn through them is drawn again only then.
+  const fold = useSteadyDoor((next: Partial<Folds>) => {
     if (staged) {
       setStagedFolds({ ...stagedFolds, ...next });
 
@@ -265,26 +267,40 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     if (next.sections !== undefined) keepSections(next.sections);
 
     if (next.openedTasks !== undefined) keepOpenedTasks(next.openedTasks);
-  };
+  });
 
-  const toggle = (repository: string | null) => fold({ groups: toggled(folds.groups, repository) });
+  const { groups: foldedGroups, pinned: pinnedFolded, following: followingFolded } = folds;
+  const { tasks: foldedTasks, managers: managersFolded, sections: foldedSections } = folds;
+  const { openedTasks: opened } = folds;
 
-  return {
-    folded: (repository) => folds.groups.includes(repository),
-    toggle,
-    pinnedFolded: folds.pinned,
-    togglePinned: () => fold({ pinned: !folds.pinned }),
-    followingFolded: folds.following,
-    toggleFollowing: () => fold({ following: !folds.following }),
-    tasksFolded: folds.tasks,
-    toggleTasks: () => fold({ tasks: !folds.tasks }),
-    managersFolded: folds.managers,
-    toggleManagers: () => fold({ managers: !folds.managers }),
-    sectionFolded: (sectionId) => folds.sections.includes(sectionId),
-    toggleSection: (sectionId) => fold({ sections: toggled(folds.sections, sectionId) }),
-    taskOpened: (taskId) => folds.openedTasks.includes(taskId),
-    toggleTask: (taskId) => fold({ openedTasks: toggled(folds.openedTasks, taskId) }),
-  };
+  return useMemo(
+    (): FoldedGroups => ({
+      folded: (repository) => foldedGroups.includes(repository),
+      toggle: (repository) => fold({ groups: toggled(foldedGroups, repository) }),
+      pinnedFolded,
+      togglePinned: () => fold({ pinned: !pinnedFolded }),
+      followingFolded,
+      toggleFollowing: () => fold({ following: !followingFolded }),
+      tasksFolded: foldedTasks,
+      toggleTasks: () => fold({ tasks: !foldedTasks }),
+      managersFolded,
+      toggleManagers: () => fold({ managers: !managersFolded }),
+      sectionFolded: (sectionId) => foldedSections.includes(sectionId),
+      toggleSection: (sectionId) => fold({ sections: toggled(foldedSections, sectionId) }),
+      taskOpened: (taskId) => opened.includes(taskId),
+      toggleTask: (taskId) => fold({ openedTasks: toggled(opened, taskId) }),
+    }),
+    [
+      fold,
+      foldedGroups,
+      pinnedFolded,
+      followingFolded,
+      foldedTasks,
+      managersFolded,
+      foldedSections,
+      opened,
+    ],
+  );
 }
 
 /** Which scope the window's Inbox shows, and the press that shows another. */

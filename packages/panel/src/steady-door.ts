@@ -179,3 +179,19 @@ export function useSteadyDoors<Value>(value: Value): Value {
   // SAFETY: a value's steady copy has the value's own shape, each door in it replaced by a steady one of the same signature.
   return place.steady as Value;
 }
+
+/**
+ * The list handed over, made afresh on each draw, handed back as the one
+ * handed back last while it holds the same items in the same order. Note
+ * that only the list is compared, item by item by identity, so it is the
+ * cheap door for a list of rows the window's state already keeps steady.
+ */
+export function useSteadyList<Item>(list: readonly Item[]): readonly Item[] {
+  const kept = useRef(list);
+  const last = kept.current;
+
+  if (last.length !== list.length || list.some((item, at) => item !== last[at]))
+    kept.current = list;
+
+  return kept.current;
+}
