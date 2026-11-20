@@ -1,0 +1,24 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fla10236
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, liveActivity=true})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Press Home key... COMPLETED
+Wait for animation to end... COMPLETED
+Swipe from (20%,1%) to (20%,60%) in 400 ms... COMPLETED
+Tap on (Optional) "Allow"... COMPLETED
+Assert that (Optional) "Fix the token refresh" is visible... COMPLETED
+Take screenshot tap-1-lock-screen-before... COMPLETED
+Tap on (Optional) "Fix the token refresh"... COMPLETED
+Swipe from (50%,98%) to (50%,99%) in 2500 ms... COMPLETED
+Take screenshot tap-2-lock-screen-after... COMPLETED
+Press Home key... COMPLETED
+Wait for animation to end... COMPLETED
+Long press on point (50%,4%)... COMPLETED
+Assert that (Optional) "Fix the token refresh" is visible... COMPLETED
+Take screenshot tap-3-island-before... COMPLETED
+Tap on (Optional) "Fix the token refresh"... COMPLETED
+Swipe from (50%,98%) to (50%,99%) in 2500 ms... COMPLETED
+Take screenshot tap-4-island-after... COMPLETED
