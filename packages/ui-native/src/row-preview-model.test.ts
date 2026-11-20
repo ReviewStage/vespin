@@ -68,6 +68,7 @@ describe("latestStep", () => {
         kind: TRANSCRIPT_ITEM.SAID,
         words: "Hurry up",
         sender: undefined,
+        received: false,
         by: undefined,
         at: undefined,
         stamp: undefined,

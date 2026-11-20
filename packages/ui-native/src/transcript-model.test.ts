@@ -213,7 +213,7 @@ describe("transcriptItems", () => {
     ]);
   });
 
-  it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again, never joining the reader to an app", () => {
+  it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again, never joining the reader to an app, and stands every line but the reader's own received", () => {
     const minute = 60 * 1000;
     const ada = { name: "Ada", userId: "u1" };
     const grace = { name: "Grace", userId: "u2" };
@@ -238,6 +238,19 @@ describe("transcriptItems", () => {
         line("d", 3, grace),
         line("e", 40),
         line("f", 41, { name: "Morning triage" }),
+        {
+          id: "g",
+          role: MESSAGE_ROLE.USER,
+          parts: [
+            {
+              type: "text" as const,
+              text: 'Message · Triage to you:\n\nShip it.\n\nReply with message_agent({ agentId: "0a09f5a6-cff0-4615-aff3-a54d80f101dc", text }).',
+            },
+          ],
+          metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
+          sentAt: 42 * minute,
+          sentBy: { name: "Triage", agent: true },
+        },
       ],
       { writing: false, readerId: "u1", toggles: NO_TOGGLES, now: 41 * minute, pullRequests: [] },
     );
@@ -245,16 +258,24 @@ describe("transcriptItems", () => {
     expect(
       items.map((item) =>
         item.kind === TRANSCRIPT_ITEM.SAID
-          ? [item.words, item.joinsAbove, item.joinsBelow, item.sender, item.stamp !== undefined]
+          ? [
+              item.words,
+              item.joinsAbove,
+              item.joinsBelow,
+              item.sender,
+              item.stamp !== undefined,
+              item.received,
+            ]
           : item.kind,
       ),
     ).toEqual([
-      ["a", false, true, undefined, true],
-      ["b", true, false, undefined, false],
-      ["c", false, true, "Grace", false],
-      ["d", true, false, "Grace", false],
-      ["e", false, false, undefined, true],
-      ["f", false, false, "Morning triage", false],
+      ["a", false, true, undefined, true, false],
+      ["b", true, false, undefined, false, false],
+      ["c", false, true, "Grace", false, true],
+      ["d", true, false, "Grace", false, true],
+      ["e", false, false, undefined, true, false],
+      ["f", false, false, "Morning triage", false, true],
+      ["Ship it.", false, false, "Triage", false, true],
     ]);
   });
 

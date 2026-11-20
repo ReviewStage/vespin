@@ -46,6 +46,7 @@ import {
   type AgentOrigin,
   type AgentPullRequest,
   type AgentTranscriptMessage,
+  agentMessageWords,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import {
@@ -77,7 +78,7 @@ import {
   type ToolState,
 } from "@repo/features/tool-call-block";
 import { shownPageVersion, type ToolCallView, toolCallView } from "@repo/features/tool-call-model";
-import { suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
+import { agentMessageOf, suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
   CALL_MARK,
@@ -211,6 +212,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly files?: readonly SaidFile[] | undefined;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
+      /** Whether anyone but the reader sent it (another agent, a teammate, the app, an automation, GitHub), so it stands at the column's leading edge, as the panel stands a received line at its left; the reader's own alone stand trailing. */
+      readonly received: boolean;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
@@ -539,7 +542,9 @@ function saidItem(
   const sender = own ? undefined : line.sentBy?.name;
 
   const from = suggestionFrom(line, reading, sender);
-  const words = messageWords(line);
+  const said = messageWords(line);
+  // Note that another agent's message reads as a person reads it, without the head and the reply line that are the model's alone, as the panel draws it (`agentMessageWords`).
+  const words = agentMessageOf(line) === undefined ? said : (agentMessageWords(said) ?? said);
   // Note that a started agent's first line names who started it in its head, so its sender stands nowhere else.
   const started = from !== undefined && suggestionStartOf(line) !== undefined;
 
@@ -550,6 +555,7 @@ function saidItem(
     pictures: saidPictures(line),
     files: saidFiles(line),
     sender: started ? undefined : sender,
+    received: !own,
     from,
     by: sender === undefined ? undefined : line.sentBy?.userId,
     at: line.sentAt,
@@ -572,6 +578,8 @@ function originItem(
     pictures: saidPictures(line),
     files: saidFiles(line),
     sender: undefined,
+    // Note that an automation's prompt is the automation's, so it stands at the leading edge under the run's card, as the panel stands its received lines.
+    received: true,
     by: undefined,
     at: line.sentAt,
     stamp: undefined,
