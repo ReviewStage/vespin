@@ -10,7 +10,9 @@
 // settles, and on each frame drawn while the keyboard stands, and set on the
 // bar as a transform, which React Native's layout leaves alone. A view that
 // stops being the bar, as a page goes back with the keyboard up, is set down
-// before Fabric can draw it anew elsewhere still lifted. Note that the display
+// before Fabric can draw it anew elsewhere still lifted. The bar is the last
+// child React mounted, never a view UIKit adds of its own, such as one a
+// selection in the field stands beside it. Note that the display
 // link holds this view while it runs, so it stops as the view leaves its
 // window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
@@ -179,9 +181,10 @@ final class KeyboardDockView: ExpoView {
 
   /// Walks the content for its first scroll view and stands the bar as its edge, or looks again a moment later where there is none yet.
   private func findEdge() {
-    guard let bar = subviews.last, subviews.count > 1 else { return }
+    let mounted = mountedSubviews()
+    guard let bar = mounted.last, mounted.count > 1 else { return }
 
-    guard let scroller = subviews.dropLast().lazy.compactMap({ firstScrollView(in: $0) }).first else {
+    guard let scroller = mounted.dropLast().lazy.compactMap({ firstScrollView(in: $0) }).first else {
       lookAgainSoon()
       return
     }
@@ -198,11 +201,12 @@ final class KeyboardDockView: ExpoView {
 
   /// Whether the bar stands as the edge of a scroll view the content still holds.
   private func edgeStands() -> Bool {
-    guard let bar = subviews.last, subviews.count > 1, let held = edge.scrollView, held.window != nil else {
+    let mounted = mountedSubviews()
+    guard let bar = mounted.last, mounted.count > 1, let held = edge.scrollView, held.window != nil else {
       return false
     }
 
-    return edge.view === bar && subviews.dropLast().contains(where: { held.isDescendant(of: $0) })
+    return edge.view === bar && mounted.dropLast().contains(where: { held.isDescendant(of: $0) })
   }
 
   /// On a frame drawn, lets a scroll view the content no longer holds go and looks for its successor a moment later, without walking the content on the frame.
@@ -241,7 +245,9 @@ final class KeyboardDockView: ExpoView {
     let overlap = max(0, bounds.maxY - keyboardTop())
     let lift = max(0, overlap - safeAreaInsets.bottom)
 
-    if let bar = subviews.last, subviews.count > 1 {
+    let mounted = mountedSubviews()
+
+    if let bar = mounted.last, mounted.count > 1 {
       if bar !== lifted { setDown() }
       bar.transform = lift > 0 ? CGAffineTransform(translationX: 0, y: -lift) : .identity
       lifted = bar
@@ -259,7 +265,17 @@ final class KeyboardDockView: ExpoView {
   }
 }
 
+/// The protocol every view React Native's renderer mounts answers, React Native's own and an Expo module's alike, read by name so the dock needs no React headers; none where the renderer is missing.
+private let mountedByReact = NSProtocolFromString("RCTComponentViewProtocol")
+
 extension KeyboardDockView {
+  /// The dock's children that React mounted, the content and then the bar. Note that a view UIKit adds of its own is passed over, since selecting words in the composer's field stood the system's selection view last in the dock, which the dock then lifted in the bar's place, setting the composer down behind the keyboard.
+  fileprivate func mountedSubviews() -> [UIView] {
+    guard let mountedByReact else { return subviews }
+
+    return subviews.filter { $0.conforms(to: mountedByReact) }
+  }
+
   /// Where the keyboard's top stands in this view: the layout guide's, or the typing field's input accessory's where one stands docked on it. Note that an accessory standing clear of the guide's top, over a keyboard floating on an iPad, is passed over, as the guide passes the keyboard over.
   fileprivate func keyboardTop() -> CGFloat {
     let guideTop = keyboardLayoutGuide.layoutFrame.minY
