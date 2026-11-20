@@ -223,12 +223,15 @@ const stackOwnerOf = (
 ) =>
   listAgentsOnPullRequest(agent.repository, number, AGENTS_PER_STACK_ENTRY).pipe(
     Effect.map((owned) => {
+      // Note that an agent on no task names no entry, since the wire names each by its task.
       const owner = owned.find(
         ({ agent: each }) =>
-          each.organizationId === agent.organizationId && each.archivedAt === null,
+          each.organizationId === agent.organizationId &&
+          each.archivedAt === null &&
+          each.taskId !== null,
       )?.agent;
 
-      return owner === undefined ? undefined : { id: owner.id, taskId: owner.taskId };
+      return owner?.taskId == null ? undefined : { id: owner.id, taskId: owner.taskId };
     }),
     Effect.catch((failure) =>
       Effect.as(

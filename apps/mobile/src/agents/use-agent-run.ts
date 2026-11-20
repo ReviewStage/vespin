@@ -7,9 +7,10 @@
  * member's own Mac, whose actions run only through that Mac's host, and its
  * repository keeps any that may run in the cloud (`runActionsIn`, as the
  * panel filters by the agent's machine) (`WORKSPACE_SANDBOX_SETUP_READ`). Which run is read off the agent's
- * shells (`TERMINAL_LIST`) every few seconds while the page is in focus, and
- * none is offered until they are read, so a running one is never offered as
- * idle. A press under way holds its action until it settles. A
+ * shells (`TERMINAL_LIST`) as the page comes to the front and after each
+ * press, and every few seconds only while one runs and the page is in focus,
+ * and none is offered until they are read, so a running one is never offered
+ * as idle. A press under way holds its action until it settles. A
  * press resumes a stopped sandbox first (`TERMINAL_RESUME`), as the panel's
  * does, then runs the action (`AGENTS_RUN_ACTION`) or stops it
  * (`AGENTS_RUN_ACTION_STOP`); the phone draws no Terminal tab, so what runs
@@ -27,16 +28,18 @@ import {
   SHELLS_LOOK_EVERY_MS,
   sandboxStopped,
 } from "@repo/features/run-actions-model";
+import type { TerminalsAnswer } from "@repo/features/terminal-wire";
 import {
   RUN_ACTION_PLACE,
   type RunAction,
   runActionsIn,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import type { ActPortClient } from "@repo/host/contract";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -47,6 +50,14 @@ const QUERY_ROOT = {
   SETUP: "workspace-sandbox-setup",
   SHELLS: "agent-shells",
 } as const;
+
+/** What a read of the agent's shells answers: its shells, or a refusal. */
+type ShellsRead = Awaited<ReturnType<ActPortClient[typeof ACT_KIND.TERMINAL_LIST]>>;
+
+/** The shells a read answered, or none where it answered a refusal or nothing yet. */
+function shellsOf(read: ShellsRead | undefined): TerminalsAnswer | undefined {
+  return read !== undefined && "terminals" in read ? read : undefined;
+}
 
 /** One of the agent's run actions as the ⋯ offers it: the action, whether it runs now, and the press that runs or stops it. */
 export interface OfferedRunAction {
@@ -93,15 +104,30 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const shellsKey = [QUERY_ROOT.SHELLS, accountId, agentId];
   const pressing = useRef(new Set<string>());
 
-  const { data: shellsRead } = useQuery({
+  // Note that the shells are read as the page comes to the front and after each press, and read again every few seconds only while one of its actions runs, the one state a reader waits to see change, so a page left open polls nothing.
+  const { data: shellsRead, refetch: refetchShells } = useQuery({
     queryKey: shellsKey,
     enabled: offered,
-    refetchInterval: offered && focused ? SHELLS_LOOK_EVERY_MS : false,
+    // Note that a read that failed or was refused is tried again on the same beat until one answers, the last one kept meanwhile included, since an idle answer a failed read left standing may be a run that started since.
+    refetchInterval: (query) => {
+      const read = shellsOf(query.state.data);
+
+      return offered &&
+        focused &&
+        (read === undefined || query.state.status === "error" || runningActions(read).size > 0)
+        ? SHELLS_LOOK_EVERY_MS
+        : false;
+    },
     retry: false,
     queryFn: () => acts[ACT_KIND.TERMINAL_LIST]({ agentId }),
   });
 
-  const shells = shellsRead !== undefined && "terminals" in shellsRead ? shellsRead : undefined;
+  const shells = shellsOf(shellsRead);
+
+  // Note that the page coming back to the front reads the shells again, as a page left standing under another may hold a run started elsewhere since.
+  useEffect(() => {
+    if (focused && offered) void refetchShells();
+  }, [focused, offered, refetchShells]);
   const running = runningActions(shells);
   const stopped = sandboxStopped(shells);
 
@@ -159,6 +185,6 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
     return { action, runs, onPress };
   };
 
-  // Note that nothing is offered until the shells are read, since an action read as idle before then would run again rather than stop; the read every few seconds is its Try again.
+  // Note that nothing is offered until the shells are read, since an action read as idle before then would run again rather than stop; the read every few seconds until one answers is its Try again.
   return shells === undefined ? [] : actions.map(offer);
 }

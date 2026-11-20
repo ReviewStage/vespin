@@ -808,9 +808,9 @@ export function NewAgentScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
+        trailing={<ModelChip pick={pick} onOpen={() => setModelsShown(true)} />}
         chips={
           <>
-            <ModelChip pick={pick} onOpen={() => setModelsShown(true)} />
             {/* Note that a suggestion's agent runs where the member's agents on the task run, so it offers no Runs on, as the panel's draft hides it. */}
             {/* Note that a fork runs where its source runs, as the panel's forked draft starts it unless another place is picked. */}
             {opened === undefined && fork === undefined ? (
@@ -1153,10 +1153,10 @@ export function NewTaskScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
+        trailing={<ModelChip pick={pick} onOpen={() => setModelsShown(true)} />}
         chips={
           <>
             <RepositoryChip repository={repository} tree={tree} />
-            <ModelChip pick={pick} onOpen={() => setModelsShown(true)} />
             <RunsOnChip pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
           </>
         }

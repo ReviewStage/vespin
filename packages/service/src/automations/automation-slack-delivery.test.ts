@@ -29,6 +29,7 @@ import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { ACTION_RESULT_STATUS, TURN_STATUS } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
 import { AGENT_CALLER } from "../agents/agent-tools.js";
+import type { InboxSandboxDoor } from "../agents/coder-host/inbox-image.js";
 import { postTurnToSlack } from "../slack/slack-agent-starts.js";
 import { SlackBot, SlackBotFailure, type SlackWebApi, slackBotOver } from "../slack/slack-bot.js";
 import { runSendSlackMessage } from "../slack/slack-message-tool.js";
@@ -46,6 +47,9 @@ import { endedAt } from "../testing/agent-turns.js";
 const T0 = new Date("2026-11-03T09:00:00Z").getTime();
 
 const SLACK_USER = "U0001";
+
+/** A sandbox the agent keeps nothing in, which a message that shares no file never opens. */
+const noSandbox: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox was opened"));
 
 /** The DM conversation the bot writes the member in. */
 const DM_CHANNEL = "D0001";
@@ -223,7 +227,9 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
         const caller = { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false } as const;
 
         const send = (text: string) =>
-          runSendSlackMessage({ caller }, { text }).pipe(Effect.provideService(SlackBot, bot));
+          runSendSlackMessage({ caller }, { text }, noSandbox).pipe(
+            Effect.provideService(SlackBot, bot),
+          );
 
         const early = yield* send("Too soon.");
 

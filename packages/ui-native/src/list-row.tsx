@@ -45,6 +45,7 @@ import {
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -56,7 +57,7 @@ import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { actContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
@@ -195,6 +196,8 @@ export type MenuChoice = {
   readonly tone?: StatusTone | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
+  /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
+  readonly mark?: IntegrationProvider | undefined;
   /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
   readonly detail?: string | undefined;
   readonly on: boolean;
@@ -349,6 +352,8 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
 
 /** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+  if (choice.mark !== undefined) return markContent(choice.label, choice.mark);
+
   // Note that a choice saying more under its words, such as a member's email, stands as a menu's title and subtitle.
   if (choice.detail !== undefined)
     return menuActContent(

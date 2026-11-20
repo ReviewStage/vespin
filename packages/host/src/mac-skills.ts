@@ -4,14 +4,15 @@
  * Each agent's folder (`MAC_SKILL_FOLDER`) is read in turn, and each folder
  * in it that holds a `SKILL.md` is a skill, read whole: every file under it
  * but the version control's and the package manager's own, named from the
- * skill's folder. A skill is offered with its files in base64, or left out
- * with why where it is past the bounds one request carries
- * (`INSTALLED_SKILL_BOUNDS`) or the install's check would refuse it
- * (`@repo/features/installed-skill-check`). Two kinds of folder are passed
- * over unsaid, as no skill of the member's own: one whose name a dot leads,
- * which the agent keeps itself, such as Codex's `.system`; and one already
- * offered from another skills folder, which a link reaches (`npx skills add`
- * keeps a skill in `~/.agents/skills` and links it into each agent's).
+ * skill's folder, and never a file a link reaches outside it. A skill is
+ * offered with its files in base64, or left out with why where it is past
+ * the bounds one request carries (`INSTALLED_SKILL_BOUNDS`) or the install's
+ * check would refuse it (`@repo/features/installed-skill-check`). Two kinds
+ * of folder are passed over unsaid, as no skill of the member's own: one
+ * whose name a dot leads, which the agent keeps itself, such as Codex's
+ * `.system`; and one already offered from another skills folder, which a
+ * link reaches (`npx skills add` keeps a skill in `~/.agents/skills` and
+ * links it into each agent's).
  *
  * A folder the Mac does not hold, or will not let the app read, is told as
  * absent, and a file it will not read leaves its skill out as too large to
@@ -124,8 +125,20 @@ const foldersOf = (home: string, app: MacSkillApp) =>
     return { app, present: yield* isFolder(root), folder: tilde, found };
   });
 
+/** Whether the file a skill's folder lists is a file really under that folder, so a link out of it, as to the home folder's own files, is no file of the skill's. */
+const isOwnFile = (real: string, folder: string, entry: string) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const at = yield* quietly(fs.realPath(path.join(folder, entry)));
+
+    return (
+      Option.isSome(at) && at.value.startsWith(real + path.sep) && (yield* holdsFile(folder, entry))
+    );
+  });
+
 /** Every file under the skill's folder, by its path from it with `/` between folders; none where the folder cannot be read. */
-const filesUnder = (folder: string) =>
+const filesUnder = (folder: string, real: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -148,7 +161,7 @@ const filesUnder = (folder: string) =>
       })
       .sort();
 
-    return yield* Effect.filter(kept, (entry) => holdsFile(folder, entry));
+    return yield* Effect.filter(kept, (entry) => isOwnFile(real, folder, entry));
   });
 
 /** A skill's folder read whole, within the bounds one request carries, or why it is left out. */
@@ -156,7 +169,7 @@ const readFolder = (found: FoundFolder) =>
   Effect.gen(function* (): Effect.fn.Return<FolderRead, never, Services> {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const paths = yield* filesUnder(found.path);
+    const paths = yield* filesUnder(found.path, found.real);
 
     const sizes = yield* Effect.forEach(paths, (each) =>
       quietly(fs.stat(path.join(found.path, each))),

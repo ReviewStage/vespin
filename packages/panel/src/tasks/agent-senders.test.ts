@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import {
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentSender,
@@ -28,7 +29,7 @@ import {
 } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ACTOR_KIND } from "@repo/ui/actor-model";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -203,16 +204,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The developer's messages as `reader` sees the tab drawn, one element for each of `messages`, every place a press opened kept in `opened`, every automation's page in `automations`' own, where the workspace lists them, and the host's reads `hosted` holds laid on main's document. */
-async function drawnFor(
+/** The tab as `reader` sees it drawn over `messages`, every place a press opened kept in `opened`, every automation's page in `automations`' own, where the workspace lists them, and the host's reads `hosted` holds laid on main's document. */
+async function drawTab(
   reader: string,
-  opened: LinkDestination[] = [],
-  agent: AgentSummary = AGENT,
-  messages: readonly AgentTranscriptMessage[] = MESSAGES,
+  opened: LinkDestination[],
+  agent: AgentSummary,
+  messages: readonly AgentTranscriptMessage[],
   automations?: { readonly rows: readonly AutomationSummary[]; readonly opened: string[] },
   hosted: Partial<AppStateSnapshot> = {},
   before?: string,
-): Promise<readonly Element[]> {
+): Promise<HTMLElement> {
   fakeActs({
     act: (): Promise<FakeActAnswer> =>
       Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." }),
@@ -276,6 +277,21 @@ async function drawnFor(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
+  return container;
+}
+
+/** The developer's messages as `reader` sees the tab drawn (`drawTab`), one element for each of `messages`. */
+async function drawnFor(
+  reader: string,
+  opened: LinkDestination[] = [],
+  agent: AgentSummary = AGENT,
+  messages: readonly AgentTranscriptMessage[] = MESSAGES,
+  automations?: { readonly rows: readonly AutomationSummary[]; readonly opened: string[] },
+  hosted: Partial<AppStateSnapshot> = {},
+  before?: string,
+): Promise<readonly Element[]> {
+  const container = await drawTab(reader, opened, agent, messages, automations, hosted, before);
   const drawn = [...container.querySelectorAll(".is-user, .is-received")];
   assert.equal(drawn.length, messages.length);
 
@@ -528,4 +544,52 @@ test("an agent started blank draws its first line as a line, no description's ca
   // Before its first words, it waits on them rather than saying it is starting, since nothing starts until it is told.
   await sendersFor(CHARLES.userId, blank, []);
   assert.match(document.body.textContent ?? "", /Waiting for your first message\./u);
+});
+
+/** A `send_to_user` call the service took, sending `text`. */
+function sent(callId: string, text: string): WireRecord {
+  return {
+    type: "tool-send_to_user",
+    toolCallId: callId,
+    state: "output-available",
+    input: { text },
+    output: { status: "accepted" },
+  };
+}
+
+test("in a Manager's chat each person's line stands at the right, a teammate's named over their run once two people write, and each message the Manager sent stands at the left on a bubble of its own", async () => {
+  const manager: AgentSummary = { ...AGENT, kind: AGENT_KIND.MANAGER };
+
+  const chat: readonly AgentTranscriptMessage[] = [
+    { ...line("dean", "Ship the invite flow.", { ...DEAN, kind: MEMBER }), sentAt: 1_000 },
+    { ...line("charles", "Seven days.", { ...CHARLES, kind: MEMBER }), sentAt: 2_000 },
+    { ...line("charles-more", "Not five.", { ...CHARLES, kind: MEMBER }), sentAt: 3_000 },
+    {
+      id: "turn",
+      role: MESSAGE_ROLE.ASSISTANT,
+      startedAt: 4_000,
+      finishedAt: 5_000,
+      parts: [
+        { type: "text", text: "Planning it out." },
+        sent("first", "On it."),
+        sent("second", "Seven days it is."),
+      ],
+    },
+  ];
+
+  const container = await drawTab(DEAN.userId, [], manager, chat);
+
+  const drawn = [...container.querySelectorAll(".is-user, .is-received")].map((message) => [
+    message.classList.contains("is-user") ? "right" : "left",
+    message.querySelector(".ui-chat-bubble")?.textContent ?? "",
+    message.querySelector(`${SENDER} .ui-inline-ref-label`)?.textContent ?? null,
+  ]);
+
+  assert.deepEqual(drawn.slice(-5), [
+    ["right", "Ship the invite flow.", null],
+    ["right", "Seven days.", CHARLES.name],
+    ["right", "Not five.", null],
+    ["left", "On it.", null],
+    ["left", "Seven days it is.", null],
+  ]);
 });

@@ -39,7 +39,7 @@ const cardText = EffectSchema.String.check(EffectSchema.isMaxLength(VOICE_BOUNDS
 
 /**
  * The call a window holds, as its card draws it wherever the window is not
- * in front: the agent and task it is about, the agent's name and the
+ * in front: the agent and task it is about, null for an agent on no task, the agent's name and the
  * harness its tile wears, the task's name where the task is listed, where
  * the call stands, its two mutes, and what the agent is doing, absent while
  * it is idle, its command while it runs one. The
@@ -48,7 +48,7 @@ const cardText = EffectSchema.String.check(EffectSchema.isMaxLength(VOICE_BOUNDS
  */
 export const standingCallSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
-  taskId: EffectSchema.String,
+  taskId: EffectSchema.NullOr(EffectSchema.String),
   agentName: cardText,
   provider: EffectSchema.optionalKey(modelProviderSchema),
   taskName: EffectSchema.optionalKey(cardText),

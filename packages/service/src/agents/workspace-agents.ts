@@ -251,13 +251,13 @@ export const workspaceAgentsOf = (
 
     const names = yield* taskNamesOf(
       userId,
-      agents.map((agent) => agent.taskId),
+      agents.flatMap((agent) => (agent.taskId === null ? [] : [agent.taskId])),
     );
 
-    const taskOf = (agent: Agent): AgentTask | null => {
-      const named = names.get(agent.taskId);
+    const taskOf = ({ taskId }: Agent): AgentTask | null => {
+      const named = taskId === null ? undefined : names.get(taskId);
 
-      return named === undefined ? null : { id: agent.taskId, ...named };
+      return taskId === null || named === undefined ? null : { id: taskId, ...named };
     };
 
     return { agents, taskOf, nextOffset };
@@ -288,10 +288,13 @@ export const agentTaskOf = (
   userId: string,
   agent: Agent,
 ): Effect.Effect<AgentTask | null, StoreFailure, DatabaseServices> =>
-  Effect.map(taskNamesOf(userId, [agent.taskId]), (names) => {
-    const named = names.get(agent.taskId);
+  Effect.gen(function* () {
+    const { taskId } = agent;
 
-    return named === undefined ? null : { id: agent.taskId, ...named };
+    if (taskId === null) return null;
+    const named = (yield* taskNamesOf(userId, [taskId])).get(taskId);
+
+    return named === undefined ? null : { id: taskId, ...named };
   });
 
 /** One agent's task as the model reads it, and whether it is the task of whoever is asking. */

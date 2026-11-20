@@ -37,6 +37,7 @@
 import { randomUUID } from "node:crypto";
 import type { ContractedRouter } from "@orpc/server";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { markAgentRead } from "@repo/database/models/agent-chat-reads";
 import {
   type Agent,
   type AgentCommitted,
@@ -63,6 +64,7 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS, type HostedContract } from "@repo/features/contract";
+import { READ_MARK } from "@repo/features/read-mark";
 import type { Sandbox } from "@repo/sandbox";
 import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
@@ -100,6 +102,7 @@ import { askedPullRequest, githubReadRefusal, pullRequestNumberOf } from "./aske
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { answeredApproval } from "./coder-host/approval-answer.js";
 import { retryBoot } from "./coder-host/boot.js";
+import { startManager } from "./coder-host/manager-start.js";
 import { harnessTakesMode } from "./coder-host/permission-mode.js";
 import {
   agentPullRequestReach,
@@ -136,6 +139,7 @@ import {
 } from "./sandbox-use.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
+import { readsTasklessAgents } from "./taskless-reads.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import {
   listedShells,
@@ -335,6 +339,7 @@ export function agentsProcedures(
           ...(repository === undefined ? undefined : { repository }),
           ...(words === undefined ? undefined : { words }),
           includeArchived: listsArchived(input.archived),
+          onTaskOnly: !readsTasklessAgents(context.request),
           offset,
           // One past the bound tells whether a next page stands.
           limit: AGENT_BOUNDS.MAX_WORKSPACE_AGENTS + 1,
@@ -375,6 +380,16 @@ export function agentsProcedures(
         { taskId },
         input.body,
         yield* summaryModelOf,
+      );
+
+      return startAnswer(started);
+    }),
+    /** A Manager made in the workspace the body names, as its creator (`coder-host/manager-start.ts`). */
+    createManager: signedIn.createManager.effect(function* ({ input, context }) {
+      const started = yield* startManager(
+        routedSessions<TypedTurn>(context.userId),
+        context.userId,
+        input,
       );
 
       return startAnswer(started);
@@ -443,6 +458,12 @@ export function agentsProcedures(
     /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
+
+      // Note that an agent on no task is not found by a build that cannot read one.
+      if (agent.taskId === null && !readsTasklessAgents(context.request)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      }
+
       // An open of the agent hands on, past its answer, the queue a hand-off cut off left claimed, once
       // its claim lapsed. Note that it settles no turn: a turn past its deadline is the minute sweep's to
       // reap (`coder-host/reconcile.ts`), never a read's.
@@ -473,8 +494,9 @@ export function agentsProcedures(
      * tab falls back to the model's name. `archived` archives the agent,
      * stopping a turn still running first as a Stop does, or brings it back.
      * `pinned` pins it for the asking member alone, or unpins it.
-     * `readMark`, which a released desktop still sends, changes nothing,
-     * since an agent is read through its task's mark alone.
+     * `readMark` reads a Manager's chat through now for the asking member
+     * alone (`markAgentRead`), which a look at its page sends; a mark by
+     * hand changes nothing.
      * `disabledServers` replaces the list of MCP servers switched off for
      * it, which its next turn reads as it starts. A model and effort, and the
      * standard context window where it is chosen, change what its next step
@@ -520,7 +542,15 @@ export function agentsProcedures(
         );
       }
 
-      if ("readMark" in body) return { agent: yield* summaryOf(userId, agent) };
+      if ("readMark" in body) {
+        // Note that a mark by hand moves nothing, since no window offers one on an agent.
+        if (body.readMark === READ_MARK.UNREAD) return { agent: yield* summaryOf(userId, agent) };
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const txid = yield* hostedStoreOrUnavailable(markAgentRead(userId, agent.id, now));
+        const marked = yield* summaryOf(userId, agent);
+
+        return txid === undefined ? { agent: marked } : { agent: marked, txid };
+      }
 
       if ("disabledServers" in body) {
         const { disabledServers } = body;

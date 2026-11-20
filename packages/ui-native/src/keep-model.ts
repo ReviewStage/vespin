@@ -4,8 +4,9 @@
  * The panel's viewer copies and saves only a file whose bytes the window
  * holds (`heldBytes` in `@repo/panel`'s `attachment-viewer.tsx`), never one
  * drawn from an address, and this holds the same: a picture is kept only
- * from its `data:` address, a recording or a file only from the file the app
- * wrote under its caches. Photos takes a picture the system decodes and an
+ * from its `data:` address or the file the app wrote it to under its caches,
+ * named by its type's extension, and a recording or a file only from the
+ * file the app wrote. Photos takes a picture the system decodes and an
  * MP4, never a WebM or an SVG, and the pasteboard takes a picture the system
  * decodes or a text file's words, never a sound clip; anything may be shared.
  */
@@ -35,7 +36,7 @@ export type KeepAct = (typeof KEEP_ACT)[keyof typeof KEEP_ACT];
 export type Kept =
   | {
       readonly kind: typeof KEPT_KIND.PICTURE;
-      /** The address it is drawn from: a `data:` address holding its bytes, or a web address. */
+      /** The address it is drawn from: a `data:` address holding its bytes, the file the app wrote it to (`file://`, named by its type's extension), or a web address. */
       readonly source: string;
       /** What it shows, which names the file it is shared as. */
       readonly name: string;
@@ -81,6 +82,12 @@ const DECODED_PICTURE_EXTENSION: ReadonlyMap<string, string> = new Map([
 /** The extension a picture the system does not decode is shared under. */
 const SHARED_PICTURE_EXTENSION: ReadonlyMap<string, string> = new Map([["image/svg+xml", "svg"]]);
 
+/** The scheme of a file the app wrote. */
+const FILE_SCHEME = "file://";
+
+/** What a file's extension is made of; anchored at both ends, so it is checked in one pass. */
+const FILE_EXTENSION = /^[a-z0-9]+$/iu;
+
 /** A picture's `data:` address: its type, then its bytes in base64 up to any fragment. */
 const PICTURE_DATA = /^data:(image\/[a-z0-9.+-]+);base64,([^#]+)/iu;
 
@@ -117,15 +124,48 @@ export function heldPicture(source: string): HeldPicture | undefined {
   return extension === undefined ? undefined : { mediaType, base64: match[2] ?? "", extension };
 }
 
-/** What may be done with a picture: nothing for one drawn from an address, sharing alone for one the system does not decode. */
+/** The extension a picture of `mediaType` is written under, so a file of it is read as one; none for a type no file can be named for. */
+export function pictureExtension(mediaType: string): string | undefined {
+  const type = mediaType.toLowerCase();
+
+  return DECODED_PICTURE_EXTENSION.get(type) ?? SHARED_PICTURE_EXTENSION.get(type);
+}
+
+/**
+ * A file address's extension: after the last dot of its last segment, before any query or fragment.
+ * Note that we cut by index rather than with one regular expression, because an unanchored
+ * one backtracks on a long run of dots.
+ */
+function fileExtension(source: string): string | undefined {
+  const cut = source.search(/[?#]/u);
+  const path = cut === -1 ? source : source.slice(0, cut);
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  const extension = dot === -1 ? "" : name.slice(dot + 1);
+
+  return FILE_EXTENSION.test(extension) ? extension : undefined;
+}
+
+/** Whether a picture's extension names a type the system decodes, which may be copied and saved as well as shared. */
+function decodedExtension(extension: string): boolean {
+  return [...DECODED_PICTURE_EXTENSION.values()].includes(extension.toLowerCase());
+}
+
+/** What may be done with a picture: nothing for one drawn from a web address, sharing alone for one the system does not decode. */
 function pictureActs(source: string): readonly KeepAct[] {
-  const held = heldPicture(source);
+  const extension = source.startsWith(FILE_SCHEME)
+    ? fileExtension(source)
+    : heldPicture(source)?.extension;
 
-  if (held === undefined) return [];
+  if (extension === undefined) return [];
 
-  return DECODED_PICTURE_EXTENSION.has(held.mediaType)
-    ? [KEEP_ACT.COPY, KEEP_ACT.SAVE_TO_PHOTOS, KEEP_ACT.SHARE]
-    : [KEEP_ACT.SHARE];
+  if (!decodedExtension(extension)) {
+    return [...SHARED_PICTURE_EXTENSION.values()].includes(extension.toLowerCase())
+      ? [KEEP_ACT.SHARE]
+      : [];
+  }
+
+  return [KEEP_ACT.COPY, KEEP_ACT.SAVE_TO_PHOTOS, KEEP_ACT.SHARE];
 }
 
 /** What may be done with a kept thing, in its menu's order. */

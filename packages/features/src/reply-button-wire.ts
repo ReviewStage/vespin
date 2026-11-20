@@ -149,7 +149,7 @@ export function suggestionWords(text: string): string {
 /** An agent a button names: its id, the task it stands on, whose box a message is drafted in, and its title as its tab names it. */
 const namedAgentSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  taskId: EffectSchema.String,
+  taskId: EffectSchema.NullOr(EffectSchema.String),
   title: EffectSchema.String,
 });
 

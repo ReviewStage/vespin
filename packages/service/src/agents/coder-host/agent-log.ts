@@ -58,7 +58,7 @@ export function agentLogIds(
   return {
     ...(agent.id === undefined ? undefined : { agentId: agent.id }),
     ...(agent.conversationId === undefined ? undefined : { conversationId: agent.conversationId }),
-    ...(agent.taskId === undefined ? undefined : { taskId: agent.taskId }),
+    ...(agent.taskId === undefined || agent.taskId === null ? undefined : { taskId: agent.taskId }),
     ...(sessionId === undefined ? undefined : { sessionId }),
   } satisfies Readonly<Record<string, string>>;
 }

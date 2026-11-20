@@ -1636,6 +1636,68 @@ function relationSwipes(
   ];
 }
 
+/**
+ * A task related to the one shown, as a row of its Sub-tasks or Task
+ * relations: its long press leads with Change relation and Remove relation
+ * and then holds the task's own menu, as its Tasks row does (`rowActs`), as
+ * the panel's related row leads its task's menu with them
+ * (`overview-relations.tsx`); its swipe settles it where it is a sub-task,
+ * then changes or removes the relation. A task the list does not hold yet
+ * offers its relation's acts alone.
+ */
+function RelatedTaskRow({
+  overview,
+  id,
+  kind,
+  listing,
+}: {
+  readonly overview: TaskOverview;
+  readonly id: string;
+  readonly kind: TaskRelationKind;
+  readonly listing: TasksListing;
+}) {
+  const openRelation = useOpenRelation();
+  const asker = useRowAsker();
+  const { task, tasks, relations } = overview;
+  const other = tasks.find((each) => each.id === id);
+  const relation = relationSwipes(task.id, id, kind, relations);
+  const sub = kind === TASK_RELATION_KIND.SUB_TASK;
+
+  const acts =
+    other === undefined
+      ? undefined
+      : rowActs(other, listing.lookOf(other).unread, listing, listing.rowAsks(asker), openRelation);
+
+  return (
+    <RelationRow
+      id={id}
+      name={other?.name ?? WORDS.UNLISTED_TASK}
+      status={other?.status}
+      faded={other !== undefined && taskFinished(other)}
+      statusMenu={other === undefined ? undefined : statusSubmenu(other, overview.setStatus)}
+      relation={sub ? undefined : TASK_RELATION_WORDS[kind]}
+      relationMark={
+        sub
+          ? undefined
+          : {
+              glyph: RELATION_KIND_SYMBOL[kind],
+              // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
+              attention:
+                kind === TASK_RELATION_KIND.BLOCKED_BY &&
+                (other === undefined || !taskFinished(other)),
+            }
+      }
+      // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
+      trailingActions={[
+        ...(sub && other !== undefined ? settleSwipes(other, overview.setStatus) : []),
+        ...relation,
+      ]}
+      menu={[relation, ...(acts?.menu ?? [])]}
+      question={acts?.question}
+    />
+  );
+}
+
 /** The page's own words for its sections' adds. */
 const RELATION_WORDS = {
   ADD_SUB_TASK: "Add sub-task",
@@ -1655,14 +1717,16 @@ function subTasksFinishedWords(finished: number, total: number): string {
  * opens the Task relation sheet on Add sub-task; and, only while it holds a
  * row, its parent and the tasks it waits on and holds up, each saying how it
  * stands, its header's + offering the four kinds, which ⋯'s Task relation
- * offers too while it holds none. Each related row's swipe and long press
- * change its kind or take it away (`relationSwipes`).
+ * offers too while it holds none. Each related row's swipe changes its
+ * kind or takes it away (`relationSwipes`), and its long press leads with
+ * them before its task's own menu (`RelatedTaskRow`).
  */
 function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
-  const { task, document, tasks, relations } = overview;
-  const byId = new Map(tasks.map((each) => [each.id, each]));
+  const { task, document, tasks } = overview;
+  // Note that a related row's menu holds its task's own, as its Tasks row does, so the rows act through the list's own doors; each question one raises stands by its row.
+  const { listing } = useListingAsks(useTasksListing(""), useTaskRowDoors(task.workspaceId));
   const subTasks = subTasksOf(tasks, task.id);
   const finished = subTaskCount(task, subTasks);
 
@@ -1680,8 +1744,10 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
 
   return (
     <>
+      {/* Note that Sub-tasks folds only while it holds a row, as the panel's group does, since a fold over no rows would hide nothing; it opens unfolded and keeps its fold while the page stands. */}
       <ListSection
         title={WORDS.SUB_TASKS}
+        foldable={subTasks.length > 0}
         progress={
           finished.total === 0
             ? undefined
@@ -1704,18 +1770,12 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
         }}
       >
         {subTasks.map((sub) => (
-          <RelationRow
+          <RelatedTaskRow
             key={sub.id}
+            overview={overview}
             id={sub.id}
-            name={sub.name}
-            status={sub.status}
-            faded={taskFinished(sub)}
-            statusMenu={statusSubmenu(sub, overview.setStatus)}
-            // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
-            trailingActions={[
-              ...settleSwipes(sub, overview.setStatus),
-              ...relationSwipes(task.id, sub.id, TASK_RELATION_KIND.SUB_TASK, relations),
-            ]}
+            kind={TASK_RELATION_KIND.SUB_TASK}
+            listing={listing}
           />
         ))}
       </ListSection>
@@ -1736,31 +1796,9 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
           }}
         >
           {sides.map(({ kind, ids }) =>
-            ids.map((id) => {
-              const other = byId.get(id);
-
-              return (
-                <RelationRow
-                  key={id}
-                  id={id}
-                  name={other?.name ?? WORDS.UNLISTED_TASK}
-                  status={other?.status}
-                  faded={other !== undefined && taskFinished(other)}
-                  statusMenu={
-                    other === undefined ? undefined : statusSubmenu(other, overview.setStatus)
-                  }
-                  relation={TASK_RELATION_WORDS[kind]}
-                  relationMark={{
-                    glyph: RELATION_KIND_SYMBOL[kind],
-                    // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
-                    attention:
-                      kind === TASK_RELATION_KIND.BLOCKED_BY &&
-                      (other === undefined || !taskFinished(other)),
-                  }}
-                  trailingActions={relationSwipes(task.id, id, kind, relations)}
-                />
-              );
-            }),
+            ids.map((id) => (
+              <RelatedTaskRow key={id} overview={overview} id={id} kind={kind} listing={listing} />
+            )),
           )}
         </ListSection>
       )}
@@ -2045,7 +2083,14 @@ export function TaskAgentRow({
   const link =
     linkStep === undefined
       ? undefined
-      : linkOf({ kind: LINK_DESTINATION.AGENT, taskId: agent.taskId, agentId: agent.id }, linkStep);
+      : linkOf(
+          {
+            kind: LINK_DESTINATION.AGENT,
+            ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
+            agentId: agent.id,
+          },
+          linkStep,
+        );
 
   // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
   const platform = useDevicePlatform(agent.mac?.deviceId);
@@ -2154,10 +2199,15 @@ function OverviewAgents({
   const { task } = overview;
   const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
 
-  const tree = agentTree(
-    overview.agents,
-    (line) => line.agent,
-    (agentId) => opened.has(agentId),
+  // Note that the tree is made anew only as its agents or their folds move, so the page's other redraws hand `RowForEach` the same rows rather than resetting them.
+  const tree = useMemo(
+    () =>
+      agentTree(
+        overview.agents,
+        (line) => line.agent,
+        (agentId) => opened.has(agentId),
+      ),
+    [overview.agents, opened],
   );
 
   const toggle = (agentId: string) =>
@@ -2170,8 +2220,10 @@ function OverviewAgents({
     });
 
   return (
+    // Note that Agents folds only while it holds an agent, as the panel's group does.
     <ListSection
       title={WORDS.AGENTS}
+      foldable={overview.agents.length > 0}
       count={overview.agents.length === 0 ? undefined : overview.agents.length}
       add={{
         label: WORDS.NEW_AGENT,
@@ -2184,25 +2236,26 @@ function OverviewAgents({
         ],
       }}
     >
-      {tree.map(({ entry, depth, started, folded }) => (
-        <TaskAgentRow
-          key={entry.agent.id}
-          line={{
-            ...entry,
-            waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
-          }}
-          task={task}
-          asking={asking}
-          nest={{
-            depth,
-            fold:
-              started === undefined
-                ? undefined
-                : { open: opened.has(entry.agent.id), onToggle: () => toggle(entry.agent.id) },
-            started,
-          }}
-        />
-      ))}
+      <RowForEach data={tree} keyOf={({ entry }) => entry.agent.id}>
+        {({ entry, depth, started, folded }) => (
+          <TaskAgentRow
+            line={{
+              ...entry,
+              waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
+            }}
+            task={task}
+            asking={asking}
+            nest={{
+              depth,
+              fold:
+                started === undefined
+                  ? undefined
+                  : { open: opened.has(entry.agent.id), onToggle: () => toggle(entry.agent.id) },
+              started,
+            }}
+          />
+        )}
+      </RowForEach>
       {overview.waitingElsewhere === 0 || !inboxShown ? null : (
         <LinkRow
           symbol={GLYPH.INBOX}
@@ -2215,14 +2268,44 @@ function OverviewAgents({
   );
 }
 
-/** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
+/** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds, and held for the panel's page row menu: Copy link and Open in browser, once its workspace is known. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   const now = useMinute();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
+  const keeping = useKeeping();
   const { task, pages } = overview;
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const linkStep = linkWorkspaceStep(task.workspaceId, workspaces);
 
   if (pages.length === 0) return null;
+
+  /** A page's links, as the panel's row offers them (`useLinkItems`); none before its workspace is known. */
+  const pageMenu = (pageId: string): readonly LongPressGroup[] => {
+    if (linkStep === undefined) return [];
+
+    const link = linkOf(
+      { kind: LINK_DESTINATION.PAGE, taskId: taskLinkStep(task), pageId },
+      linkStep,
+    );
+
+    return [
+      [
+        {
+          label: WORDS.COPY_LINK,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => keeping.copyWords(link),
+        },
+        {
+          label: VERB.OPEN_IN_BROWSER,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => openInSafari(link),
+        },
+      ],
+    ];
+  };
 
   return (
     <ListSection title={WORDS.PAGES} count={pages.length}>
@@ -2232,6 +2315,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           symbol={GLYPH.PAGE}
           label={page.title}
           detail={provenanceText(page.at, now)}
+          menu={pageMenu(page.id)}
           onPress={() =>
             router.push({
               pathname: onOwnTab("/tasks/page/[id]"),
@@ -2322,53 +2406,55 @@ function OverviewDescription({
 
   return (
     <ListSection title={WORDS.DESCRIPTION} act={edit}>
-      {blocks.map((block, index) => {
-        const standing = onBlocks.get(block.from) ?? [];
-        const oldest = standing[0];
+      {/* Note that the blocks are recycled as the page scrolls, as the Inbox's rows are, so a long description mounts only the blocks near the screen, each its own host of words, rather than every one as the page opens. */}
+      <RowForEach data={blocks} keyOf={(block) => `${block.from}`}>
+        {(block) => {
+          const standing = onBlocks.get(block.from) ?? [];
+          const oldest = standing[0];
 
-        return (
-          <WordsRow
-            key={`${block.from}`}
-            words={block.drawn}
-            repository={task.repository}
-            onOpenLink={openLink}
-            pictureSource={pictureSource}
-            videoAt={videoAt}
-            fileAt={fileAt}
-            linkStanding={linkStanding}
-            last={index === blocks.length - 1}
-            menuActions={
-              block.quote === undefined
-                ? undefined
-                : [
-                    {
-                      label: COMMENT_WORDS.COMMENT,
-                      symbol: GLYPH.COMMENT,
-                      tone: ROW_ACTION_TONE.NEUTRAL,
-                      onPress: () => {
-                        const quote = block.quote ?? "";
-                        const from = `${block.from}`;
-                        const to = `${block.to}`;
-                        router.push({
-                          pathname: onOwnTab("/tasks/comments/new"),
-                          params: { task: task.id, from, to, quote },
-                        });
+          return (
+            <WordsRow
+              words={block.drawn}
+              repository={task.repository}
+              onOpenLink={openLink}
+              pictureSource={pictureSource}
+              videoAt={videoAt}
+              fileAt={fileAt}
+              linkStanding={linkStanding}
+              last={block.from === blocks.at(-1)?.from}
+              menuActions={
+                block.quote === undefined
+                  ? undefined
+                  : [
+                      {
+                        label: COMMENT_WORDS.COMMENT,
+                        symbol: GLYPH.COMMENT,
+                        tone: ROW_ACTION_TONE.NEUTRAL,
+                        onPress: () => {
+                          const quote = block.quote ?? "";
+                          const from = `${block.from}`;
+                          const to = `${block.to}`;
+                          router.push({
+                            pathname: onOwnTab("/tasks/comments/new"),
+                            params: { task: task.id, from, to, quote },
+                          });
+                        },
                       },
-                    },
-                  ]
-            }
-            comments={
-              oldest === undefined
-                ? undefined
-                : {
-                    count: standing.length,
-                    heard: COMMENT_WORDS.heard(standing.length),
-                    onOpen: () => openThread(oldest.id),
-                  }
-            }
-          />
-        );
-      })}
+                    ]
+              }
+              comments={
+                oldest === undefined
+                  ? undefined
+                  : {
+                      count: standing.length,
+                      heard: COMMENT_WORDS.heard(standing.length),
+                      onOpen: () => openThread(oldest.id),
+                    }
+              }
+            />
+          );
+        }}
+      </RowForEach>
     </ListSection>
   );
 }
@@ -2461,8 +2547,21 @@ function OverviewComments({
   const retry = useTaskCommentsRetry(taskId);
   const settle = useCommentSettle(taskId);
   const [resolvedShown, setResolvedShown] = useState(false);
-  const open = threads.filter(threadOpen);
-  const resolved = threads.filter((thread) => !threadOpen(thread));
+
+  // Note that the threads are split only as they or the resolved toggle move, so the minute's tick hands `RowForEach` the same rows rather than resetting them, a swipe left open among them.
+  const { open, resolved, listed } = useMemo(() => {
+    const openThreads = threads.filter(threadOpen);
+    const resolvedThreads = threads.filter((thread) => !threadOpen(thread));
+
+    // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its row or its thread leaves it.
+    return {
+      open: openThreads,
+      resolved: resolvedThreads,
+      listed: resolvedShown && resolvedThreads.length > 0 ? resolvedThreads : openThreads,
+    };
+  }, [threads, resolvedShown]);
+
+  const showingResolved = listed === resolved && resolved.length > 0;
 
   if (retry !== undefined) {
     return (
@@ -2472,17 +2571,13 @@ function OverviewComments({
     );
   }
 
-  // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its row or its thread leaves it.
-  const showingResolved = resolvedShown && resolved.length > 0;
-  const listed = showingResolved ? resolved : open;
-
   if (open.length === 0 && resolved.length === 0) return null;
 
   return (
     <ListSection title={WORDS.COMMENTS} count={listed.length}>
-      {listed.map((thread) => (
-        <CommentRow key={thread.id} thread={thread} now={now} onSettle={settle} />
-      ))}
+      <RowForEach data={listed} keyOf={(thread) => thread.id}>
+        {(thread) => <CommentRow thread={thread} now={now} onSettle={settle} />}
+      </RowForEach>
       {resolved.length === 0 ? null : (
         <LinkRow
           symbol={showingResolved ? GLYPH.COMMENT : GLYPH.RESOLVED}

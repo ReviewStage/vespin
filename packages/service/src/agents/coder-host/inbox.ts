@@ -74,7 +74,6 @@ import {
   readInboxItemHome,
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
-import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
 import { placeholderLinksWords } from "../link-rule.js";
 import { taskIdOfInput } from "../task-ref.js";
 
@@ -166,6 +165,8 @@ const POST_THREAD_WORDS =
   "A post without ask asks nothing: a note, or your reply on the thread. " +
   "A post on a settled thread opens it again, as a note waiting on them where it asks nothing. " +
   "A thread holds one open ask, and a newer ask replaces it; every answer reaches you as a message. " +
+  "A thread reaches the member in the app alone, never in Slack: where a Slack ping is worth it, such as an ask that blocks your work, " +
+  `DM them yourself with ${AGENT_TOOL.SEND_SLACK_MESSAGE}, in your own words. ` +
   "The call answers with the thread and one line for each other thread of yours still open.";
 
 /** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input. */
@@ -1045,25 +1046,20 @@ export function postToInbox(
     const options = yield* optionMedia(agent, post.ask, files.length, sandbox);
 
     if (Result.isFailure(options)) return inboxRejected(options.failure);
+
     const thread = threadPost({ ...post, body }, place.success, options.success);
-    const wasOpen = yield* threadStandsOpen(agent, thread.key);
     const posted = yield* postInboxThread(agent, thread, files, options.success.files);
 
     if (Result.isFailure(posted)) return inboxRejected(storeRefusal(posted.failure));
-    const { organizationId } = agent;
-    yield* afterResponse(
-      "a thread's Slack DM",
-      dmThreadPost({
-        organizationId,
-        item: posted.success,
-        asked: post.ask !== undefined,
-        wasOpen,
-      }),
-    );
-    yield* afterResponse(
-      "a thread's push",
-      pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId: agent.taskId }),
-    );
+    const { taskId } = agent;
+
+    // Note that a thread on no task is not pushed, since a released iPhone opens an alert on its task.
+    if (taskId !== null) {
+      yield* afterResponse(
+        "a thread's push",
+        pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId }),
+      );
+    }
 
     return yield* written(agent, posted.success);
   }).pipe(
@@ -1122,7 +1118,6 @@ export function withdrawAsk(
     const withdrawn = yield* closeInboxItem(agent, key, reason);
 
     if (Option.isNone(withdrawn)) return yield* notWithdrawn(agent, key);
-    yield* afterResponse("a withdrawn thread's Slack DM", settleThreadDms(withdrawn.value.id));
     yield* afterResponse("a withdrawn thread's push", pushThreadSettled(withdrawn.value.id));
 
     return yield* written(agent, withdrawn.value);

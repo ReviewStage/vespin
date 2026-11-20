@@ -93,6 +93,7 @@ export const WRITE_SUBJECT = {
   TASK_PIN: "task-pin",
   AGENT_PIN: "agent-pin",
   AGENT_NAME: "agent-name",
+  AGENT_DEFAULT_MACHINE: "agent-default-machine",
   TASK_READ: "task-read",
   TASK_NAME: "task-name",
   TASK_REPOSITORY: "task-repository",

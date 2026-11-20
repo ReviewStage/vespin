@@ -34,6 +34,8 @@ export const EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   /** Cursor: Cursor as a third harness, its models in the picker and its API key in Settings › Agents, while it is being built. */
   CURSOR: "cursor",
+  /** Managers: long-lived agents on no task that delegate work across the workspace, starting and following the agents that do it. */
+  MANAGERS: "managers",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -104,6 +106,16 @@ export interface ExperimentEntry {
  * Settings sets it, and every other read treats it as any experiment.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.MANAGERS,
+    scope: EXPERIMENT_SCOPE.WORKSPACE,
+    listed: true,
+    name: "Managers",
+    detail:
+      "A long-lived agent that delegates work across your workspace to agents it starts and follows.",
+    owner: "Charles",
+    since: "2026-11-18",
+  },
   {
     key: EXPERIMENT.CURSOR,
     scope: EXPERIMENT_SCOPE.ACCOUNT,

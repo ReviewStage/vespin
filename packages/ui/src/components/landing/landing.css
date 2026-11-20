@@ -1856,6 +1856,64 @@
     background: var(--ui-color-ground);
   }
 
+  /* The starts: a Slack thread over a terminal, in a column as narrow as
+     the keys' grid, the thread's lines spaced as its cards are. Every part
+     a step shows holds its room from the opening, so the cards keep one
+     height through the story and turn over without a jump. */
+  .ui-landing-starts {
+    max-width: 560px;
+    margin: 0 auto;
+    color: var(--ui-color-text);
+    font-family: var(--ui-font-sans);
+  }
+
+  .ui-landing-starts-cards {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .ui-landing-starts-held {
+    visibility: hidden;
+  }
+
+  .ui-landing-starts-reactions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  /* The stories turning over (`StartsScene`): the finished pair stands above
+     the opening, out of the clipped stage, and the reel comes down from it,
+     so the opening stops where the stage starts. */
+  .ui-landing-starts-turn {
+    overflow: clip;
+  }
+
+  .ui-landing-starts-reel {
+    position: relative;
+  }
+
+  .ui-landing-starts-finished {
+    position: absolute;
+    inset-inline: 0;
+    bottom: calc(100% + 16px);
+  }
+
+  .ui-landing-starts-finished .ui-landing-enter {
+    animation: none;
+  }
+
+  .ui-landing-starts-reel[data-turning] {
+    animation: ui-landing-starts-turn var(--ui-duration-showcase) var(--ui-motion-pane) both;
+  }
+
+  @keyframes ui-landing-starts-turn {
+    from {
+      transform: translateY(calc(100% + 16px));
+    }
+  }
+
   /* The keys: a grid of tiles on a copper glow of its own, fading at its
      edges, the product's mark lit at its heart between the two harnesses'.
      The grid keeps its tiles' size and lets the stage clip its far columns,

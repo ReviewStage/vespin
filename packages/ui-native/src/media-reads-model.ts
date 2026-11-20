@@ -20,8 +20,10 @@ export interface MediaReadSeams {
 
 /** One page's media reads. */
 export interface MediaReads {
-  /** Asks for each id not asked for yet, or let go after its tries failed. */
+  /** Asks for each id not asked for yet, or let go after its tries failed or by `forget`. */
   readonly ask: (ids: readonly string[]) => void;
+  /** Lets each id go, so the next ask for it reads it afresh, as a page that let go of what it drew from does. */
+  readonly forget: (ids: readonly string[]) => void;
   /** Lets every read go, so none that answers after lands and none is tried again. */
   readonly stop: () => void;
 }
@@ -73,6 +75,9 @@ export function mediaReads(seams: MediaReadSeams): MediaReads {
         asked.add(id);
         tryRead(id, 1);
       }
+    },
+    forget: (ids) => {
+      for (const id of ids) asked.delete(id);
     },
     stop: () => {
       stopped = true;

@@ -1,6 +1,14 @@
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
-import { type InboxHolder, type InboxListed, NOTHING_HERE } from "@repo/features/inbox-list-model";
+import {
+  holderRepository,
+  holderTask,
+  holderWorkspaceId,
+  type InboxAnyHolder,
+  type InboxHolderAgent,
+  type InboxListed,
+  NOTHING_HERE,
+} from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import type { DescriptionMention } from "@repo/features/mention-link";
@@ -140,7 +148,9 @@ import { taskCardOf } from "./task-card.js";
  * as chips that open their `SKILL.md` in the panel beside it, as a file the
  * item names opens.
  *
- * Its items are read and listed by `use-inbox-listing.ts`.
+ * Its items are read and listed by `use-inbox-listing.ts`. A thread on no
+ * task, a Manager's, opens in the same pane, its path leading with its agent,
+ * whose crumb opens the agent's own page, in its task's place.
  *
  * It is a memo boundary over the window's steady tasks (`useSteadyDoors`),
  * as the sidebar and a task's page are, so the shell drawn again over the
@@ -260,8 +270,8 @@ export const DesktopInbox = memo(function DesktopInbox({
   const timeOpen = useInboxItemOpenSpan(chosen?.item.id, live.read);
   useInboxOpenSpan(listedRows.length);
 
-  // A row's press opens its item, the keyboard following it.
-  const open = (listed: InboxListed) => {
+  // A row's press opens its item, the keyboard following it, one on no task as one on a task.
+  const open = (listed: InboxListed<InboxAnyHolder>) => {
     timeOpen(listed.item.id);
     choose(listed);
     columns.onOpen(listed.item.id);
@@ -270,7 +280,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   const { onMark: markItem } = marks;
 
   // K and J choose the item above or below, the keyboard following it to its row.
-  const step = (listed: InboxListed) => {
+  const step = (listed: InboxListed<InboxAnyHolder>) => {
     timeOpen(listed.item.id);
     choose(listed);
     columns.onStep();
@@ -280,7 +290,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   // Where the chosen item's words are read: its plan's workspace and repository.
   const place = chosen === undefined ? undefined : answerPlace(chosen.holder, tasks);
   // Where the chosen item's links are written: under its own workspace, by slug once the workspaces are read.
-  const chosenWorkspaceId = chosen?.holder.task.workspaceId;
+  const chosenWorkspaceId = chosen === undefined ? undefined : holderWorkspaceId(chosen.holder);
 
   const chosenLinkWorkspace =
     chosenWorkspaceId === undefined
@@ -302,9 +312,12 @@ export const DesktopInbox = memo(function DesktopInbox({
         // Note that the thread stands on the task of the item it was started from, which may no longer be the one
         // chosen nor listed, so its task is read from the chosen item, then the listed groups, then its agent.
         const taskId =
-          (chosen?.item.id === item.id ? chosen.holder.task.id : undefined) ??
-          standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder.task.id ??
-          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.taskId;
+          (chosen?.item.id === item.id ? holderTask(chosen.holder)?.id : undefined) ??
+          holderTask(
+            standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder,
+          )?.id ??
+          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.taskId ??
+          undefined;
 
         inbox.choose(
           taskId === undefined
@@ -455,7 +468,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     openPlaceHere(placeOfMention(mention), () => tasks.onShowMention(mention));
 
   // An item offers what its task's page does: its description and sections as saved, its pages, its agents, and their pull requests.
-  const heldTask = chosen?.holder.task;
+  const heldTask = holderTask(chosen?.holder);
   const descriptionText = useSavedDescriptionText(heldTask);
 
   const mentions =
@@ -503,8 +516,10 @@ export const DesktopInbox = memo(function DesktopInbox({
       return () => tasks.onShowAgent(taskId, panelAgent);
     }
 
-    if (opened === undefined) return undefined;
-    const { task } = opened.holder;
+    // Note that a thread on no task has no task to open, so ⌘O stands down on it.
+    const task = holderTask(opened?.holder);
+
+    if (task === undefined) return undefined;
 
     return () => tasks.onShowTask(task.id);
   };
@@ -512,10 +527,12 @@ export const DesktopInbox = memo(function DesktopInbox({
   useAppCommand(APP_COMMAND.OPEN_IN_TASK, openInTask());
 
   // ⌘O acts on the item's task while the item shown takes it, so its menus print it.
+  const openedTask = holderTask(opened?.holder);
+
   const opensInTask =
-    !tasks.shown || (panelAgent !== undefined && taskId !== undefined) || opened === undefined
+    !tasks.shown || (panelAgent !== undefined && taskId !== undefined) || openedTask === undefined
       ? undefined
-      : shortcutSubject(SHORTCUT_SUBJECT.TASK, opened.holder.task.id);
+      : shortcutSubject(SHORTCUT_SUBJECT.TASK, openedTask.id);
 
   useShortcutTarget(opensInTask, OPEN_IN_TASK_KEYS);
   const { pages } = view;
@@ -532,7 +549,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   }, [taskId, taskAgents, heldIds, onTaskAgents]);
 
   // The chosen item's thread, beside the list or in its place.
-  const itemPane = (listed: InboxListed) => (
+  const itemPane = (listed: InboxListed<InboxAnyHolder>) => (
     <OpenAddressesHere value={openHere}>
       <SkillFiles
         source={agents.readSkills}
@@ -757,7 +774,7 @@ function DraftedInboxPane({
   /** Whose read it is, under which its cards keep their drafts. */
   scope: Parameters<typeof useInboxCardDrafts>[1];
   /** The item shown while the Inbox holds the keys, which is acknowledged as it opens; none while it is not. */
-  opened: InboxListed | undefined;
+  opened: InboxListed<InboxAnyHolder> | undefined;
   readerId: string | undefined;
 }): React.JSX.Element {
   const live = { ...control, ...useInboxCardDrafts(control, scope) };
@@ -820,12 +837,11 @@ function fileRef(path: string, lines: OpenFileLines | undefined): CodeRef {
  * the plan's page does (`heldTaskMentions`), and its skills' files open
  * there. None until both are known.
  */
-function answerPlace(holder: InboxHolder, tasks: TasksControl): TasklessPlace | undefined {
-  const { workspaceId, repository } = holder.task;
+function answerPlace(holder: InboxAnyHolder, tasks: TasksControl): TasklessPlace | undefined {
+  const workspaceId = holderWorkspaceId(holder);
+  const repository = holderRepository(holder);
 
-  if (workspaceId === undefined || repository === undefined || repository === null) {
-    return undefined;
-  }
+  if (repository === null) return undefined;
 
   const workspace = tasks.workspaces.find((each) => each.id === workspaceId)?.slug ?? workspaceId;
 
@@ -1004,11 +1020,13 @@ function InboxSidePanel({
  * The pane's doors for the task holding its item: they open the task, its
  * agents' tabs, and its files, a file in the panel beside the Inbox where
  * the panel stands for the task. An agent's card hands its threads the same
- * doors (`agent-threads.tsx`).
+ * doors (`agent-threads.tsx`). For a thread on no task they open its agent's
+ * own page, as the agent's own crumb does, and its files in the panel beside
+ * the Inbox, read through the agent's workspace and repository.
  */
 export function paneDoors(
   tasks: TasksControl,
-  holder: InboxHolder,
+  holder: InboxAnyHolder,
   seams: {
     /** The task the panel beside the Inbox stands for. */
     panelFor: string | undefined;
@@ -1016,6 +1034,7 @@ export function paneDoors(
     openPlace: (place: LinkDestination, elsewhere: () => void) => void;
   },
 ): InboxPaneDoors {
+  if (!("task" in holder)) return agentPaneDoors(tasks, holder.agent);
   const { task } = holder;
 
   // An agent the item or its task's card names reads beside it, as a link to it does.
@@ -1043,6 +1062,31 @@ export function paneDoors(
         seams.panelFor === task.id
           ? pressTab({ ...tasks, onKeys: tasks.onTabKeys }, { kind: TAB_PRESS.FILE, ref, commit })
           : tasks.onShowFile(task.id, ref, commit),
+    },
+  };
+}
+
+/** The pane's doors for a thread on no task: its agent's own page in its task's place, and its files read through the agent's repository (`paneDoors`). */
+function agentPaneDoors(tasks: TasksControl, agent: InboxHolderAgent): InboxPaneDoors {
+  const { repository, workspaceId } = agent;
+  const openAgent = (agentId: string) => tasks.agentView.onOpen(agentId);
+
+  return {
+    tasks,
+    onOpenHolder: () => openAgent(agent.id),
+    taskCard: undefined,
+    onOpenAgent: openAgent,
+    code: {
+      repository,
+      place: repository === null ? undefined : { workspaceId, repository },
+      onOpenFile: (ref, commit) => {
+        if (repository === null) return;
+        const reads = { place: { workspaceId, repository }, repository };
+        pressTab(
+          { ...tasks, onKeys: tasks.onTabKeys },
+          { kind: TAB_PRESS.FILE, ref, commit, reads },
+        );
+      },
     },
   };
 }

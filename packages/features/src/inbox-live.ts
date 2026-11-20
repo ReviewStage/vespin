@@ -510,7 +510,7 @@ export function inboxOfLiveRows(rows: ScopeInboxLiveRows): readonly InboxItem[] 
  */
 const inboxItemStampRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  taskId: EffectSchema.String,
+  taskId: EffectSchema.NullOr(EffectSchema.String),
   agentId: EffectSchema.String,
   revision: countedNumber,
   version: countedNumber,
@@ -539,7 +539,10 @@ const inboxItemStampRowSchema = EffectSchema.Struct({
  * whole: its stamp, its row, and every message and file its thread draws,
  * which the reader takes in place of what it holds of the item; a part's
  * `gone` names items alone. The settled items it carries are those changed
- * since `settledSince`, which the service binds from its clock.
+ * since `settledSince`, which the service binds from its clock. Items on
+ * no task, of an agent on none, are carried only to a build that reads a
+ * null `taskId` (`HOSTED_API_VERSION` 6 on), which the service binds as
+ * `taskless` from the headers the build names itself in.
  */
 export const INBOX_ITEMS_READ = liveRead({
   name: LIVE_READ.INBOX_ITEMS,
@@ -548,6 +551,7 @@ export const INBOX_ITEMS_READ = liveRead({
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
     [ACCOUNT_INBOX_ITEMS.SINCE]: LIVE_PARAM.OPTIONAL_TEXT,
     settledSince: LIVE_PARAM.SERVED,
+    taskless: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.DELTA,
   parts: {

@@ -92,10 +92,11 @@ export function useSearchFound(typed: string): SearchFound {
   const ranked = useMemo(() => {
     const tasksById = new Map(listedTasks.map((task) => [task.id, task]));
 
-    // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
+    // Note that an archived agent is left out, as a task's page leaves it out of its Agents, and so is one on no task, a Manager, which no screen here draws.
     const agents = listedAgents.filter(
       (agent) =>
         agent.archivedAt === undefined &&
+        agent.taskId !== null &&
         (workspace === undefined || agent.workspaceId === workspace.id),
     );
 
@@ -106,7 +107,10 @@ export function useSearchFound(typed: string): SearchFound {
       // Note that a blank query ranks nothing, so the Inbox's every item, which it lists with nothing typed, stays out.
       inbox: inboxShown ? rankedBySearch(inbox.listed, query, inboxSearchSubject) : [],
       agents: rankedBySearch(agents, query, (agent) =>
-        agentSearchSubject(agent, tasksById.get(agent.taskId)?.name),
+        agentSearchSubject(
+          agent,
+          agent.taskId === null ? undefined : tasksById.get(agent.taskId)?.name,
+        ),
       ).map((agent) => agentLine(agent, waiting.byAgent, pullRequests)),
       tasksById,
     };

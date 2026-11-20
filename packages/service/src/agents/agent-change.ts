@@ -60,7 +60,6 @@ import { archivedInBackground, type SandboxDeleteReach } from "./session-sandbox
 /** Why the app archived an agent on its own, as its banner says beneath who archived it. */
 export const AUTOMATIC_ARCHIVE_REASON = {
   RUN_FINISHED: "Automation run finished",
-  SLACK_FINISHED: "Slack agent finished",
 } as const;
 
 export type AutomaticArchiveReason =

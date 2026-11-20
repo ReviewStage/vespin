@@ -41,6 +41,7 @@ import { TestClock } from "effect/testing";
 import { ACTION_RESULT_STATUS } from "../../core.js";
 import {
   acknowledgeInboxItem,
+  agentInboxItems,
   answerInboxAsk,
   closeInboxItemAsMember,
   type InboxAgent,
@@ -106,6 +107,33 @@ const agentOn = (userId: string, task: { readonly id: string; readonly workspace
 
     return { ...agent, workspaceId: task.workspaceId };
   });
+
+/** An account with one agent started on no task, in a workspace of its own. */
+const openTasklessAgent = Effect.gen(function* () {
+  const userId = yield* openUser;
+  const workspaceId = yield* openWorkspace(userId);
+
+  const started = yield* createAgent(userId, {
+    taskId: null,
+    workspaceId,
+    idempotencyKey: randomUUID(),
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    repository: null,
+    descriptionSnapshot: null,
+    prompt: "Keep an eye on the release.",
+    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+  });
+
+  assert.ok(Option.isSome(started));
+
+  return {
+    userId,
+    taskId: null,
+    agentId: started.value.agent.id,
+    organizationId: workspaceId,
+  } satisfies ThreadPoster;
+});
 
 /** An account with one task and one agent started on it, in its repository. */
 const openAgent = Effect.gen(function* () {
@@ -893,6 +921,36 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         }
 
         assert.deepEqual(yield* taskInboxItems(agent.userId, agent.taskId), []);
+      }),
+  );
+
+  it.effect(
+    "an agent on no task keeps the picture its post draws on the thread, at the address its agent holds, for its starter to read",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openTasklessAgent;
+        const sandbox = sandboxWith({ "shots/form.png": PNG });
+        const drawing = { ...QUEUE, body: "![Shot](shots/form.png)" };
+
+        assert.equal((yield* post(agent, drawing, sandbox)).status, ACTION_RESULT_STATUS.ACCEPTED);
+        const [item] = yield* agentInboxItems(agent);
+        const [message] = item?.thread ?? [];
+        const [, address] = /!\[[^\]]*\]\(<?([^\s)>]+)/u.exec(message?.text ?? "") ?? [];
+        const named = inboxAttachmentOf(address ?? "");
+
+        assert.ok(address?.includes(`/agent/${agent.agentId}/inbox/`), address ?? "no picture");
+        assert.deepEqual(named, {
+          itemId: item?.id,
+          attachmentId: message?.files?.[0]?.attachmentId,
+        });
+
+        const kept = yield* readInboxAttachment(
+          agent.userId,
+          named?.itemId ?? "",
+          named?.attachmentId ?? "",
+        );
+
+        assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
       }),
   );
 

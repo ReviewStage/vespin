@@ -52,7 +52,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPlayed } from "../cached-media.js";
+import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -67,6 +67,9 @@ const AGENT_MEDIA_PREFIX = "agent";
 
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
 const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
+
+/** The most pictures and recordings an agent's page keeps drawn from, those its rows on screen ask for among them; the oldest beyond it are let go. */
+const MEDIA_KEPT = 24;
 
 /** What a file a member sent an agent is written under in the app's caches, beside its line's message. */
 const SENT_FILE_PREFIX = "sent";
@@ -334,9 +337,14 @@ async function agentMediaSource(
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
-  return isPlayedType(read.contentType)
-    ? cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
-    : `data:${read.contentType};base64,${read.base64}`;
+  if (isPlayedType(read.contentType)) {
+    return cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
+  }
+
+  // Note that a picture is written to the app's caches and drawn from its file, so the page holds its address rather than its bytes, and the system's image cache holds what it decodes; a type no file can be named for keeps its `data:` address.
+  const written = await cachedPicture(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
+
+  return written ?? `data:${read.contentType};base64,${read.base64}`;
 }
 
 /** What an agent's pictures and recordings are drawn from, by id, and what reads one that failed again. */
@@ -401,6 +409,24 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
   }, [acts, agentId]);
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
+
+  // Note that the pictures drawn from are kept to the newest few beyond those asked for now, each a picture's bytes, and the rest let go, read again as their rows come back.
+  useEffect(() => {
+    const asked = new Set(ids);
+    const loose = [...shown.sources.keys()].filter((id) => !asked.has(id));
+    const over = shown.sources.size - MEDIA_KEPT;
+
+    if (over <= 0 || loose.length === 0) return;
+    const gone = loose.slice(0, over);
+    reads?.forget(gone);
+    setShown((held) => {
+      const sources = new Map(held.sources);
+
+      for (const id of gone) sources.delete(id);
+
+      return { agentId: held.agentId, sources };
+    });
+  }, [ids, shown, reads]);
 
   const retry = (pictureId: string) => {
     stand(pictureId, undefined);

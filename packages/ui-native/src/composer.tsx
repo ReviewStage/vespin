@@ -32,7 +32,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { longPasteIn } from "@repo/features/long-paste";
 import { TALK_LABEL } from "@repo/features/voice-call-words";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import {
@@ -176,8 +176,10 @@ type ComposerProps = {
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
   readonly onLongPaste?: ((words: string) => boolean) | undefined;
-  /** The capsules saying where and how a start runs, such as its repository and its model, in a row under the field inside the same glass, the + leading them there rather than the field; none on a conversation's composer. */
+  /** The capsules saying where and how the message runs, such as a start's repository or where an agent works, leading the row under the field after the +, as the desktop composer's foot stands them; none on a thread's composer. */
   readonly tools?: ReactNode;
+  /** What stands at the end of the row under the field before Send, such as the model chip, as the desktop composer stands its model picker at its foot's end; none on a thread's composer. */
+  readonly trailing?: ReactNode;
   /** The names a flow finds the field and the + by, where its holder names its own. */
   readonly testIds?: { readonly field: string; readonly add: string } | undefined;
 };
@@ -419,8 +421,21 @@ export function AddPress({
   );
 }
 
-/** The composer's pieces in a row's order: the +, the field, and Send or Stop, which a bar of glass holds. */
-function ComposerPieces(props: ComposerProps) {
+/** The composer's pieces: the +, the field, a call's presses, and Send or Stop, each laid out by its holder. */
+interface ComposerParts {
+  readonly add: ReactElement | null;
+  readonly field: ReactElement;
+  readonly call: ReactElement | null;
+  readonly send: ReactElement;
+}
+
+/** Whether the composer stands its controls in a row under its field, as the desktop composer does: one that starts work or speaks to an agent, holding capsules (`tools`, `trailing`). */
+function stacked(props: ComposerProps): boolean {
+  return props.tools !== undefined || props.trailing !== undefined;
+}
+
+/** The composer's pieces, the field holding its words and Send sending them. */
+function useComposerParts(props: ComposerProps): ComposerParts {
   const {
     placeholder,
     words: held,
@@ -434,7 +449,6 @@ function ComposerPieces(props: ComposerProps) {
     onStop,
     stopping = false,
     onLongPaste,
-    tools,
     testIds,
   } = props;
 
@@ -479,6 +493,9 @@ function ComposerPieces(props: ComposerProps) {
 
   const empty = words.trim() === "" && !sendable;
   const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
+  const rowed = stacked(props);
+  // Note that a field over a row of controls opens to two lines once a word is typed, as the desktop composer's does, so what is typed has room before it grows.
+  const height = rowed && words !== "" ? lineLimit({ min: 2, max: lines }) : lineLimit(lines);
 
   const send =
     onSend === undefined
@@ -492,9 +509,9 @@ function ComposerPieces(props: ComposerProps) {
           setTyped("");
         };
 
-  return (
-    <>
-      {tools === undefined ? <AddPress menu={addMenu} onAdd={onAdd} /> : null}
+  return {
+    add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
+    field: (
       <TextField
         ref={field}
         text={text}
@@ -505,21 +522,28 @@ function ComposerPieces(props: ComposerProps) {
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          lineLimit(lines),
+          height,
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
-            ...((tools !== undefined || (addMenu === undefined && onAdd === undefined)) && {
+            ...((rowed || (addMenu === undefined && onAdd === undefined)) && {
               leading: FIELD_LEADING,
             }),
           }),
-          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
-          frame({ minHeight: PRESS_SIZE }),
+          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so SwiftUI sizes its text view at that one width as its words change, rather than asking its ideal width too.
+          frame({
+            minHeight: PRESS_SIZE,
+            maxWidth: Number.POSITIVE_INFINITY,
+            alignment: "leading",
+          }),
           accessibilityIdentifier(testIds?.field ?? "composer-field"),
         ]}
       />
-      {call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null}
-      {props.saving === undefined ? (
+    ),
+    call:
+      call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null,
+    send:
+      props.saving === undefined ? (
         <SendButton
           empty={empty}
           typed={words.trim() !== ""}
@@ -531,23 +555,41 @@ function ComposerPieces(props: ComposerProps) {
         />
       ) : (
         <SaveButton saving={props.saving} />
-      )}
+      ),
+  };
+}
+
+/** The composer's pieces in one row, the field between the + and Send, as a thread's reply stands. */
+function RowPieces({ parts }: { readonly parts: ComposerParts }) {
+  return (
+    <>
+      {parts.add}
+      {parts.field}
+      {parts.call}
+      {parts.send}
     </>
   );
 }
 
-/** How far apart a start's capsules stand in the row under the field. */
+/** How far apart the capsules stand in the row under the field. */
 const TOOL_SPACING = SPACE.TIGHT * 2;
 
 /**
- * The row under the field where a composer starts work, as Claude's and
- * ChatGPT's composers stand theirs: the + and then the capsules saying where
- * and how the start runs, inside the composer's own glass, so the keyboard
- * that lifts the composer can never cover them; the capsules scroll sideways
- * where they outrun the bar.
+ * The row under the field, as the desktop composer's foot stands it: the +
+ * at its start and the capsules saying where the message runs after it,
+ * scrolling sideways where they outrun the bar, then at its end what is
+ * picked for it, such as the model, a call's presses, and Send or Stop,
+ * inside the composer's own glass, so the keyboard that lifts the composer
+ * never covers them.
  */
-function ComposerTools(props: ComposerProps) {
-  const { addMenu, onAdd, tools, testIds } = props;
+function ComposerRow({
+  props,
+  parts,
+}: {
+  readonly props: ComposerProps;
+  readonly parts: ComposerParts;
+}) {
+  const { addMenu, onAdd, tools, trailing, testIds } = props;
 
   return (
     <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
@@ -557,6 +599,9 @@ function ComposerTools(props: ComposerProps) {
           {tools}
         </HStack>
       </ScrollView>
+      {trailing}
+      {parts.call}
+      {parts.send}
     </HStack>
   );
 }
@@ -574,16 +619,18 @@ function ComposerTools(props: ComposerProps) {
  */
 export function Composer(props: ComposerProps) {
   const { onDropPictures } = props;
+  const parts = useComposerParts(props);
+  const rowed = stacked(props);
 
   return (
     <GlassBar
       field
       head={props.head}
-      foot={props.tools === undefined ? undefined : <ComposerTools {...props} />}
+      foot={rowed ? <ComposerRow props={props} parts={parts} /> : undefined}
       above={props.above}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
-      <ComposerPieces {...props} />
+      {rowed ? parts.field : <RowPieces parts={parts} />}
     </GlassBar>
   );
 }
@@ -596,6 +643,8 @@ export function Composer(props: ComposerProps) {
  */
 export function ComposerFoot(props: ComposerProps) {
   const { onDropPictures } = props;
+  const parts = useComposerParts(props);
+  const rowed = stacked(props);
 
   const glass = [
     padding({ all: BAR_EDGE }),
@@ -604,17 +653,26 @@ export function ComposerFoot(props: ComposerProps) {
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
+  // Note that a field over a row of controls stands alone in the glass's column, at its width, with no row of its own around it to size it again.
+  const pieces = rowed ? (
+    parts.field
+  ) : (
+    <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
+      <RowPieces parts={parts} />
+    </HStack>
+  );
+
+  // Note that a composer with a row under its field stands it there inside the same glass, as the bar does.
   const foot =
-    props.head === undefined ? (
+    props.head === undefined && !rowed ? (
       <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={glass}>
-        <ComposerPieces {...props} />
+        <RowPieces parts={parts} />
       </HStack>
     ) : (
       <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
-        <BarHead>{props.head}</BarHead>
-        <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
-          <ComposerPieces {...props} />
-        </HStack>
+        {props.head === undefined ? null : <BarHead>{props.head}</BarHead>}
+        {pieces}
+        {rowed ? <ComposerRow props={props} parts={parts} /> : null}
       </VStack>
     );
 

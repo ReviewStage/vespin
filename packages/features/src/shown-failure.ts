@@ -134,6 +134,7 @@ export const FAILURE_SURFACE = {
   MACHINE_CHANGE: "machine.change",
   MACHINE_REMOVE: "machine.remove",
   MACHINES_READ: "machines.read",
+  MANAGER_CREATE: "manager.create",
   INBOX_CLOSE: "inbox.close",
   INBOX_CODE_READ: "inbox_code.read",
   INBOX_FILES_READ: "inbox_files.read",

@@ -419,6 +419,12 @@ the message with 👀 (`eyes`), replying in the thread only to refuse, the
 thread is kept against the agent in `slack_agent_thread`, a later mention in
 that thread is sent to the agent instead, and every settled turn of the agent
 is posted back in the thread once, with the agent's link (`SettledTurnListener`).
+A member's 👍 or 👎 on a message the bot posted in such a thread arrives as a
+`reaction_added` event and is handed to the thread's agent, unless it stands
+archived, as one short line of theirs quoting the start of that message
+(`src/slack/slack-reactions.ts`); a busy agent reads it in the turn it is
+running, so it opens no turn of its own. The bot's own reactions, any other
+emoji, and a reaction on anything but the bot's message are dropped.
 
 Slack sends our app's requests, events and interactivity alike, straight to
 `/api/slack/events`, signed with the app's signing secret

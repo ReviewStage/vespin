@@ -1160,6 +1160,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 
   // Note that a conversation cleared, or a bearer retired, since the bearer was read takes nothing more.
   if (Option.isNone(applied)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+  // Note that an agent on no task has none to name, take up, or settle.
   const { taskId } = agent.value;
   const { runtimeSessionId } = admitted.value;
 
@@ -1167,7 +1168,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,
-      taskId,
+      ...(taskId === null ? undefined : { taskId }),
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
   }
@@ -1217,11 +1218,11 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
   // it up, and a turn's end archives the agent with a task moved to Done while it worked
   // (`tasks/task-finish.ts`).
-  if (applied.value.turns.started) {
+  if (applied.value.turns.started && taskId !== null) {
     yield* reopenTaskForWork(target.userId, taskId);
   }
 
-  if (applied.value.turns.ended) {
+  if (applied.value.turns.ended && taskId !== null) {
     yield* settleTaskAfterTurn(target.userId, taskId, agent.value.id);
   }
 

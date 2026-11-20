@@ -890,7 +890,8 @@ function boundParts<Read extends AnyLiveRead>(
  * the caller's, then bound to the caller; each text the query names bound
  * as it is; each id it names read as one (`pathUuid`), not found where it
  * spells none, and an optional one bound empty where it names none; the
- * params the binding serves bound, handed the query as asked too; the
+ * params the binding serves bound, handed the query as asked and the
+ * request too, whose headers name the build asking; the
  * caller admitted as the binding asks; the parts sealed as its mode answers
  * them (`boundParts`), and measured where the binding measures them; and
  * the fields beside them read.
@@ -919,7 +920,11 @@ function answerBoundRead<Read extends AnyLiveRead>(read: BoundLiveRead<Read>) {
     }
 
     // SAFETY: every param the query names is bound above, and the binding serves the rest (`bindLiveRead` holds it to).
-    const served = read.serve === undefined ? undefined : yield* read.serve(params as never, asked);
+    const served =
+      read.serve === undefined
+        ? undefined
+        : yield* read.serve(params as never, asked, context.request);
+
     // SAFETY: every param the declaration names is bound above or served, and no other.
     const bound = { ...params, ...served } as LiveReadParams<Read>;
 

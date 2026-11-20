@@ -226,6 +226,72 @@ export function usePlaceInSection(): (taskId: string, sectionId: string) => void
 }
 
 /**
+ * Pins an agent, on a plan or with none, in the sidebar or unpins it, for
+ * the account alone: drawn at once, ⌘Z's to take back once kept, and put
+ * back with a toast if the service refuses (`PinWrites.onPinAgent`).
+ */
+export function useAgentPinWrite(): PinWrites["onPinAgent"] {
+  const client = useQueryClient();
+  const toast = useToast();
+  const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+  const agentPinDoors = useTaskRowDoors(ROW_WRITE.AGENT_PIN.kind);
+  const sendAgentPin = agentPinDoors.send;
+
+  // Note that one agent's pins are asked one after another, because each
+  // writes as it lands, so a Pin and an Unpin pressed together landing out
+  // of order would leave standing the one not pressed last. One still
+  // waiting when the account changes is never asked, since a pin is its
+  // presser's own and would land on whoever signed in since.
+  const askAgentPin = (agentId: string, pinned: boolean): Promise<AgentPinAsked> => {
+    const flights = flightsOf(client);
+    const pressedBy = accountIn(client);
+
+    const asked = (flights.get(agentId) ?? Promise.resolve()).then(
+      (): Promise<AgentPinAsked> | AgentPinAsked =>
+        accountIn(client) === pressedBy
+          ? sendAgentPin({ agentId, pinned }).then(
+              (answer) => ("agent" in answer ? AGENT_PIN_ASKED.CHANGED : { refused: answer }),
+              (cause: unknown) => ({ refused: cause }),
+            )
+          : AGENT_PIN_ASKED.UNASKED,
+    );
+
+    flights.set(agentId, asked);
+    asked.then(() => {
+      if (flights.get(agentId) === asked) flights.delete(agentId);
+    });
+
+    return asked;
+  };
+
+  const pinAgent = (agentId: string, pinned: boolean) => {
+    if (fixture) return;
+
+    const pressed = pressRows(ROW_WRITE.AGENT_PIN, agentPinDoors, [
+      { id: agentId, after: { pinned, position: null } },
+    ]);
+
+    askAgentPin(agentId, pinned).then((asked) => {
+      if (asked === AGENT_PIN_ASKED.CHANGED) {
+        pressed.keep(pinned ? AGENT_PINNED_NOTES.PIN : AGENT_PINNED_NOTES.UNPIN);
+
+        return;
+      }
+
+      if (asked === AGENT_PIN_ASKED.UNASKED) return;
+      toast({
+        replayUnmasked: true,
+        words: pinned ? AGENT_PIN_FAILED_NOTES.PIN : AGENT_PIN_FAILED_NOTES.UNPIN,
+        tone: STATUS_TONE.DANGER,
+        failure: { surface: FAILURE_SURFACE.AGENT_PIN, cause: asked.refused, about: { agentId } },
+      });
+    });
+  };
+
+  return pinAgent;
+}
+
+/**
  * The pin and section writes, a task's and an agent's pin each ⌘Z's to take
  * back once kept, their rows read off the task list as it stands at the
  * call (`task-row-doors.ts`). A pin
@@ -246,6 +312,7 @@ export function usePinWrites(typedNames: () => TaskNames): PinWrites {
   );
 
   const writeSections = useSectionWrites();
+  const pinAgent = useAgentPinWrite();
 
   const markTask = (taskId: string, mark: TaskMark): Promise<boolean> => {
     if (fixture) return Promise.resolve(false);
@@ -282,62 +349,6 @@ export function usePinWrites(typedNames: () => TaskNames): PinWrites {
         words: pinned ? REPOSITORY_PIN_FAILED_NOTES.PIN : REPOSITORY_PIN_FAILED_NOTES.UNPIN,
         tone: STATUS_TONE.DANGER,
         failure: { surface: FAILURE_SURFACE.REPOSITORY_PIN, cause: changed.cause },
-      });
-    });
-  };
-
-  // Note that one agent's pins are asked one after another, because each
-  // writes as it lands, so a Pin and an Unpin pressed together landing out
-  // of order would leave standing the one not pressed last. One still
-  // waiting when the account changes is never asked, since a pin is its
-  // presser's own and would land on whoever signed in since.
-  const askAgentPin = (
-    agentId: string,
-    pinned: boolean,
-    position?: string,
-  ): Promise<AgentPinAsked> => {
-    const flights = flightsOf(client);
-    const pressedBy = accountIn(client);
-    const placed = position === undefined ? {} : { position };
-
-    const asked = (flights.get(agentId) ?? Promise.resolve()).then(
-      (): Promise<AgentPinAsked> | AgentPinAsked =>
-        accountIn(client) === pressedBy
-          ? sendAgentPin({ agentId, pinned, ...placed }).then(
-              (answer) => ("agent" in answer ? AGENT_PIN_ASKED.CHANGED : { refused: answer }),
-              (cause: unknown) => ({ refused: cause }),
-            )
-          : AGENT_PIN_ASKED.UNASKED,
-    );
-
-    flights.set(agentId, asked);
-    asked.then(() => {
-      if (flights.get(agentId) === asked) flights.delete(agentId);
-    });
-
-    return asked;
-  };
-
-  const pinAgent = (agentId: string, pinned: boolean) => {
-    if (fixture) return;
-
-    const pressed = pressRows(ROW_WRITE.AGENT_PIN, agentPinDoors, [
-      { id: agentId, after: { pinned, position: null } },
-    ]);
-
-    askAgentPin(agentId, pinned).then((asked) => {
-      if (asked === AGENT_PIN_ASKED.CHANGED) {
-        pressed.keep(pinned ? AGENT_PINNED_NOTES.PIN : AGENT_PINNED_NOTES.UNPIN);
-
-        return;
-      }
-
-      if (asked === AGENT_PIN_ASKED.UNASKED) return;
-      toast({
-        replayUnmasked: true,
-        words: pinned ? AGENT_PIN_FAILED_NOTES.PIN : AGENT_PIN_FAILED_NOTES.UNPIN,
-        tone: STATUS_TONE.DANGER,
-        failure: { surface: FAILURE_SURFACE.AGENT_PIN, cause: asked.refused, about: { agentId } },
       });
     });
   };

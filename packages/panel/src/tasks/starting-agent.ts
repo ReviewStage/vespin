@@ -37,7 +37,7 @@ export function useStartingAgent(
   const actor = {
     ...agentActor(agent, agentName(agent, models)),
     agentId: agent.id,
-    taskId: agent.taskId,
+    ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
   };
 
   const onOpen =
@@ -46,7 +46,7 @@ export function useStartingAgent(
       : () =>
           openPlace({
             kind: LINK_DESTINATION.AGENT,
-            taskId: agent.taskId,
+            ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
             agentId: agent.id,
           });
 

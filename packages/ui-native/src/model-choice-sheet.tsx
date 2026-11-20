@@ -1,41 +1,36 @@
-// model-choice-sheet.tsx -- the sheet a coding agent's model is chosen in, as iOS stands a long choice: Model one row that pushes the models under each harness's mark, its effort right under it as the system's segmented control, Fast where the model has a fast version, and Permissions where the agent's harness takes a mode, with Done in the sheet's bar.
+// model-choice-sheet.tsx -- the sheet a coding agent's model is chosen in, as the panel's model menu holds it: Effort and Fast first, as labeled rows, then every model under its harness's name, each led by its mark, the chosen one checked, and Permissions where the agent's harness takes a mode, with Done in the sheet's bar.
 
 import {
   BottomSheet,
   Form,
   Group,
   Host,
-  Label,
   NavigationStack,
-  Picker,
   Section,
   Button as SwiftUIButton,
-  Text,
   Toolbar,
   ToolbarItem,
 } from "@expo/ui/swift-ui";
 import {
   background,
-  listRowBackground,
   navigationBarTitleDisplayMode,
   navigationTitle,
-  pickerStyle,
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
   scrollContentBackground,
-  tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { HARNESS_INFO } from "@repo/features/agent-credentials-model";
 import { FAST_WORD } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import type { ReactNode } from "react";
+import { useScaledSize } from "./accessibility.js";
+import { MenuPickRow } from "./form-rows.js";
 import { HarnessMark } from "./marks.js";
 import { SwitchRow } from "./option-rows.js";
 import { FOOTER_TONE, SectionFooter } from "./row-list.js";
 import { type PickOption, PickRows } from "./settings-form.js";
-import { useColors } from "./tokens/colors.js";
+import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
 /** What the sheet names its rows and its bar's act. */
@@ -43,6 +38,7 @@ const CHOICE_WORDS = {
   MODEL: "Model",
   EFFORT: "Effort",
   DONE: "Done",
+  JOINED: " · ",
 } as const;
 
 /** A model the sheet offers: its catalog id, its short name as the panel names it, and the harness that runs it. */
@@ -76,8 +72,6 @@ type ModelChoiceSheetProps = {
   readonly mode?: ModeChoice | undefined;
   /** Why the last pick did not take, under the model's section; none while none failed. */
   readonly note?: string | undefined;
-  /** More of the agent's options under them, such as its MCP servers, as sections of the sheet's form. */
-  readonly children?: ReactNode;
 };
 
 /** The harnesses in the order the panel's menu stands them, each with the models it runs, the ones with none left out. */
@@ -97,23 +91,80 @@ function modeFooter(mode: ModeChoice) {
   return <SectionFooter words={mode.footer} tone={FOOTER_TONE.NOTE} />;
 }
 
+/** What the chosen model's row says under its name, as the panel's menu says it beside its check: the effort it runs at, and Fast where it runs fast. */
+function chosenHint(
+  efforts: readonly PickOption[],
+  effort: string | undefined,
+  fast: boolean,
+): string | undefined {
+  const words = [
+    efforts.length > 1 ? efforts.find((option) => option.id === effort)?.label : undefined,
+    fast ? FAST_WORD : undefined,
+  ].filter((word): word is string => word !== undefined);
+
+  return words.length === 0 ? undefined : words.join(CHOICE_WORDS.JOINED);
+}
+
+/** The sheet's models under one harness, each a row led by its mark at a glyph's size, scaled with the reader's text, the chosen one checked and saying its effort. */
+function HarnessModels({
+  models,
+  model,
+  hint,
+  onModel,
+}: {
+  readonly models: readonly ModelOption[];
+  readonly model: string | undefined;
+  readonly hint: string | undefined;
+  readonly onModel: (model: string) => void;
+}) {
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+
+  return (
+    <PickRows
+      options={models.map((option) => ({
+        id: option.id,
+        label: option.label,
+        hint: option.id === model ? hint : undefined,
+        mark: <HarnessMark provider={option.provider} size={size} />,
+      }))}
+      picked={model}
+      onPick={(id) => {
+        if (id !== model) onModel(id);
+      }}
+    />
+  );
+}
+
 /**
- * A coding agent's model, effort, Fast and permission mode, as one sheet:
- * Model is the system's navigation-link picker, a row naming the model
- * chosen that pushes every model the account may run, grouped under each
- * harness by its name and led by its mark, the chosen one checked, as iOS
- * Settings pushes a long choice rather than drop a long menu; Effort stands
- * right under it as the segmented control, where the eye goes after a pick,
- * rather than at the top of a long list; then Fast as a switch, and the
+ * A coding agent's model, effort, Fast and permission mode, as one sheet,
+ * holding what the panel's model menu holds: Effort, a row naming the
+ * effort chosen whose press opens the efforts the model lists, and Fast,
+ * a switch, lead it as labeled rows, so they stand in sight at half height
+ * rather than past a long list; then every model the account may run, in
+ * place rather than a page further, under its harness's name, each led by
+ * its mark and the chosen one checked in copper, saying its effort under
+ * its name, as the panel's menu says it beside its check; then the
  * permission mode with each mode's hint. A pick takes as it is pressed, as
- * the panel's menu takes it, so Done only closes the sheet. It stands on the
- * grouped ground in a host of its own beside its screen, as every ask does.
+ * the panel's menu takes it, so Done only closes the sheet. Every row
+ * stands on the lifted ground (`ElevatedGround`), the rows its pieces draw
+ * as much as its own, so in dark none stands a shade apart; and it stands
+ * on the grouped ground in a host of its own beside its screen, as every
+ * ask does.
  */
 export function ModelChoiceSheet(props: ModelChoiceSheetProps) {
+  return (
+    <ElevatedGround>
+      <ModelChoiceForm {...props} />
+    </ElevatedGround>
+  );
+}
+
+/** The sheet itself, under its lifted ground. */
+function ModelChoiceForm(props: ModelChoiceSheetProps) {
   const { presented, onDismiss, models, model, onModel, efforts, effort, onEffort } = props;
-  // Note that the sheet stands over the window, so in dark it draws on the lifted ground, as iOS lifts what it presents.
-  const colors = useColors(true);
-  const row = [listRowBackground(colors.RAISED)];
+  const colors = useColors();
+  const choosesEffort = efforts.length > 1;
+  const hint = chosenHint(efforts, effort, props.fast?.on === true);
 
   return (
     <Host matchContents style={{ position: "absolute" }}>
@@ -140,59 +191,42 @@ export function ModelChoiceSheet(props: ModelChoiceSheetProps) {
                   navigationBarTitleDisplayMode("inline"),
                 ]}
               >
-                <Section
-                  footer={
-                    props.note === undefined ? undefined : (
-                      <SectionFooter words={props.note} tone={FOOTER_TONE.FAILURE} />
-                    )
-                  }
-                >
-                  <Picker<string | null>
-                    label={CHOICE_WORDS.MODEL}
-                    selection={model ?? null}
-                    onSelectionChange={(id) => {
-                      if (id !== null) onModel(id);
-                    }}
-                    modifiers={[pickerStyle("navigationLink"), ...row]}
+                {!choosesEffort && props.fast === undefined && props.note === undefined ? null : (
+                  <Section
+                    footer={
+                      props.note === undefined ? undefined : (
+                        <SectionFooter words={props.note} tone={FOOTER_TONE.FAILURE} />
+                      )
+                    }
                   >
-                    {byHarness(models).map((group) => (
-                      <Section key={group.provider} title={HARNESS_INFO[group.provider].name}>
-                        {group.models.map((option) => (
-                          <Label
-                            key={option.id}
-                            title={option.label}
-                            icon={<HarnessMark provider={option.provider} size={MARK_SIZE.LEAD} />}
-                            modifiers={[tag(option.id)]}
-                          />
-                        ))}
-                      </Section>
-                    ))}
-                  </Picker>
-                  {efforts.length <= 1 ? null : (
-                    <Picker<string | null>
-                      label={CHOICE_WORDS.EFFORT}
-                      selection={effort ?? null}
-                      onSelectionChange={(id) => {
-                        if (id !== null) onEffort(id);
-                      }}
-                      modifiers={[pickerStyle("segmented"), ...row]}
-                    >
-                      {efforts.map((option) => (
-                        <Text key={option.id} modifiers={[tag(option.id)]}>
-                          {option.label}
-                        </Text>
-                      ))}
-                    </Picker>
-                  )}
-                  {props.fast === undefined ? null : (
-                    <SwitchRow
-                      label={FAST_WORD}
-                      on={props.fast.on}
-                      onSwitch={props.fast.onSwitch}
-                      testId="options-fast"
+                    {choosesEffort ? (
+                      <MenuPickRow
+                        label={CHOICE_WORDS.EFFORT}
+                        options={efforts}
+                        picked={effort}
+                        onPick={onEffort}
+                      />
+                    ) : null}
+                    {props.fast === undefined ? null : (
+                      <SwitchRow
+                        label={FAST_WORD}
+                        on={props.fast.on}
+                        onSwitch={props.fast.onSwitch}
+                        testId="options-fast"
+                      />
+                    )}
+                  </Section>
+                )}
+                {byHarness(models).map((group) => (
+                  <Section key={group.provider} title={HARNESS_INFO[group.provider].name}>
+                    <HarnessModels
+                      models={group.models}
+                      model={model}
+                      hint={hint}
+                      onModel={onModel}
                     />
-                  )}
-                </Section>
+                  </Section>
+                ))}
                 {props.mode === undefined ? null : (
                   <Section title={props.mode.title} footer={modeFooter(props.mode)}>
                     <PickRows
@@ -202,7 +236,6 @@ export function ModelChoiceSheet(props: ModelChoiceSheetProps) {
                     />
                   </Section>
                 )}
-                {props.children}
               </Form>
               <Toolbar.Content>
                 <ToolbarItem placement="confirmationAction">

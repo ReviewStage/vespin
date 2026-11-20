@@ -303,11 +303,17 @@ function landingIn(zone: HTMLElement, item: string, y: number): number {
   }).length;
 }
 
-/** The drop zone of the list's scope under the pointer other than the list's own, with where it would land; none over the list's own or over nothing. */
+/**
+ * The drop zone of the list's scope under the pointer other than the list's
+ * own, with where it would land; none over the list's own or over nothing.
+ * Note that the innermost zone under the pointer is the one, the last in the
+ * document's order, because a zone may stand inside another, as the sections
+ * and the list stand inside the Tasks head's.
+ */
 function zoneUnder(press: RowPress, list: HTMLElement): ZoneLanding | undefined {
   const own = list.closest(`[${DROP_ZONE}]`);
 
-  const zone = [...document.querySelectorAll<HTMLElement>(`[${DROP_ZONE}]`)].find((each) => {
+  const zone = [...document.querySelectorAll<HTMLElement>(`[${DROP_ZONE}]`)].findLast((each) => {
     if (each.closest(`[${DROP_SCOPE}]`) !== press.scope) return false;
     const box = each.getBoundingClientRect();
     const { pointer: y, pointerX: x } = press;

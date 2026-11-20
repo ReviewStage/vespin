@@ -31,6 +31,7 @@ import {
   CODER_HARNESS,
   type CoderHarness,
   coderInstructions,
+  managerInstructions,
 } from "../agents/coder-host/instructions.js";
 import { REPLAY_FIT } from "../agents/coder-host/replay-summary.js";
 import { TURN_DELIVERY } from "../agents/coder-host/turn-delivery-bounds.js";
@@ -46,6 +47,9 @@ import { MAINTENANCE_SWEEP } from "../maintenance/maintenance-bounds.js";
 /** The repository and task the instructions are built for, which stand in for any member's. */
 const PLACEHOLDER_REPOSITORY = "acme/app";
 
+/** The Manager the Manager lines are built for, which stands in for any workspace's. */
+const PLACEHOLDER_MANAGER = "Frontend";
+
 const PLACEHOLDER_TASK = {
   link: "https://vespin.dev/acme/task/1",
   id: "00000000-0000-4000-8000-000000000000",
@@ -58,13 +62,19 @@ const PLACEHOLDER_AGENT = {
 } as const;
 
 /**
- * A sandbox agent on a repository in a workspace with Task descriptions on,
+ * A sandbox agent on a task and a repository in a workspace with Task descriptions on,
  * the settings' default, whose starter keeps an Inbox, and every other gated experiment off. Note that it
  * names no agent's row, because the instructions read the gates it opens alone.
  */
 const PLACEHOLDER_STANDING: AgentStanding = {
   agent: Option.none(),
-  open: new Set([TOOL_GATE.REPOSITORY, TOOL_GATE.SANDBOX, TOOL_GATE.DESCRIPTIONS, TOOL_GATE.INBOX]),
+  open: new Set([
+    TOOL_GATE.TASK,
+    TOOL_GATE.REPOSITORY,
+    TOOL_GATE.SANDBOX,
+    TOOL_GATE.DESCRIPTIONS,
+    TOOL_GATE.INBOX,
+  ]),
   experiments: {
     descriptionsOn: true,
     memoryOn: false,
@@ -249,6 +259,11 @@ function prompts(): AdminCatalogPrompt[] {
 
   return [
     ...instructions,
+    prompt(
+      "Manager",
+      "managerInstructions",
+      managerInstructions({ name: PLACEHOLDER_MANAGER, deviceId: null }),
+    ),
     prompt("Pull request chapters", "CHAPTERS_INSTRUCTIONS", CHAPTERS_INSTRUCTIONS),
     prompt("Chapters repair", "REPAIR_INSTRUCTIONS", REPAIR_INSTRUCTIONS),
   ];
@@ -261,7 +276,8 @@ function tools(): AdminCatalogTool[] {
     inputSchema: JSON.stringify(tool.inputSchema, null, SCHEMA_INDENT),
     definitionChars: tool.description.length + JSON.stringify(tool.inputSchema).length,
     loading: tool.alwaysLoad ? ADMIN_TOOL_LOADING.FIRST_TURN : ADMIN_TOOL_LOADING.SEARCH,
-    gate: tool.gate ?? null,
+    // Note that a tool behind several gates names them together, so the wire keeps its one name.
+    gate: tool.gates?.join(", ") ?? null,
   }));
 }
 

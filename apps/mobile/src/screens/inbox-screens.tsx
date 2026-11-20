@@ -196,7 +196,7 @@ type InboxRowsProps = {
   readonly selected?: string | undefined;
   readonly onSelect: (id: string) => void;
   readonly onRefresh: () => Promise<void>;
-  readonly onMark: (itemId: string, unread: boolean) => void;
+  readonly onMark: (item: InboxItem, unread: boolean) => void;
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
@@ -279,7 +279,7 @@ type InboxRowActs = {
   readonly readerId: string | undefined;
   /** Each member's picture by their id, read once by the list the row stands in. */
   readonly pictureOf: PictureOf;
-  readonly onMark: (itemId: string, unread: boolean) => void;
+  readonly onMark: (item: InboxItem, unread: boolean) => void;
   /** Remind me's times on the thread, a menu a swipe from the trailing edge opens. */
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Resolves the open thread, which a full swipe from the trailing edge runs. */
@@ -374,6 +374,13 @@ function InboxRowView({
         ]
       : [];
 
+  const mark = {
+    label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+    symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+    tone: ROW_ACTION_TONE.READ,
+    onPress: () => onMark(item, !unread),
+  } as const;
+
   return (
     <ListRow
       id={item.id}
@@ -394,23 +401,19 @@ function InboxRowView({
       at={item.updatedAt}
       due={item.remindAt}
       trailingActions={[...resolve, remindMenu(item)]}
-      leadingActions={[
-        {
-          label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-          symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
-          tone: ROW_ACTION_TONE.READ,
-          onPress: () => onMark(item.id, !unread),
-        },
-      ]}
+      leadingActions={[mark]}
       link={link}
-      // Note that the long press offers Copy link after the swipes' acts, as the panel's row menu and the thread's ⋯ offer it.
-      menuActions={[
-        {
-          label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
-          symbol: GLYPH.LINK,
-          tone: ROW_ACTION_TONE.NEUTRAL,
-          onPress: () => keeping.copyWords(link),
-        },
+      // Note that the long press holds the panel's row menu in its order (`useInboxItemActions`): Copy link, then Mark as read or unread, Remind me and Resolve, its swipes standing behind the swipe alone.
+      menu={[
+        [
+          {
+            label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => keeping.copyWords(link),
+          },
+        ],
+        [mark, remindMenu(item), ...resolve],
       ]}
       preview={
         <ThreadPreview
@@ -519,8 +522,8 @@ function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
 /** The Inbox's ⋯ menu: its scopes, the one shown checked, then Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
 function moreMenu(
   scopes: readonly Scope[],
-  unread: readonly string[],
-  markAll: (itemIds: readonly string[]) => void,
+  listed: readonly InboxListed[],
+  markAll: (items: readonly InboxItem[]) => void,
   select: { readonly listed: boolean; readonly onSelect: () => void },
 ): BarMenu {
   return {
@@ -536,8 +539,8 @@ function moreMenu(
       {
         label: MARK_ALL_READ,
         symbol: GLYPH.MARK_ALL_READ,
-        disabled: unread.length === 0,
-        onPress: () => markAll(unread),
+        disabled: !listed.some(({ item }) => isUnread(item)),
+        onPress: () => markAll(listed.map(({ item }) => item)),
       },
     ],
   };
@@ -576,10 +579,7 @@ function chosenActs(
       disabled: none,
       onPress: () => {
         if (none) return;
-        acts.markMany(
-          marking.map((item) => item.id),
-          unread.length === 0,
-        );
+        acts.markMany(marking, unread.length === 0);
         stop();
       },
     },
@@ -830,7 +830,7 @@ function ThreadDetail({
   const remindMenu = place.inStack ? remind.itemMenu : place.remindMenu;
 
   const doors = {
-    onMark: (unread: boolean) => inboxActs.mark(item.id, unread),
+    onMark: (unread: boolean) => inboxActs.mark(item, unread),
     remind: remindMenu(item),
     onCopyLink: () =>
       keeping.copyWords(
@@ -1138,7 +1138,7 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
   const scopes = scopePills(show, choose, listing.counts);
   const selecting = useInboxChoosing();
 
-  const menu = moreMenu(scopes, listing.unread, acts.markAll, {
+  const menu = moreMenu(scopes, listing.listed, acts.markAll, {
     listed: listing.listed.length > 0,
     onSelect: selecting.start,
   });

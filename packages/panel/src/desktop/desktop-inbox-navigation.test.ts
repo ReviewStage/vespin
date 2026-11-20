@@ -173,6 +173,29 @@ test("an Inbox whose account feed refused before it ever answered reads it again
   );
 });
 
+test("an Inbox no task holds items of stands placeholder rows while the account's feed is first read, since the feed may hold threads on no task, and offers Retry once the feed refused", async () => {
+  world.inboxes = new Map();
+  world.feedUnread = true;
+  const { page } = mount({ holding: [], waiting: [] });
+  await settle();
+  const list = page.querySelector<HTMLElement>(".inbox-tasks") ?? assert.fail("the list is drawn");
+
+  assert.equal(
+    list.querySelector('[role="status"][aria-busy="true"]')?.textContent,
+    "Reading your inbox…",
+  );
+
+  act(() => world.deliverFeed({ failed: true }));
+  await settle();
+
+  await vi.waitFor(() =>
+    assert.ok(
+      [...list.querySelectorAll("button")].some((each) => each.textContent === "Retry"),
+      "the list offers to read again",
+    ),
+  );
+});
+
 test("an item a link names before the account's task list is read says no Not found, and shows once the list lands", async () => {
   const { page } = mount({ listUnread: true });
   await settle();

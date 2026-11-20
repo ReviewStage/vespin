@@ -51,10 +51,10 @@ const SWITCH_QUESTION = {
   running: "Ending the other call",
 } as const;
 
-/** The agent a box's Talk calls, and the task it works on. */
+/** The agent a box's Talk calls, and the task it works on, null for an agent on no task. */
 export interface TalkInto {
   readonly agentId: string;
-  readonly taskId: string;
+  readonly taskId: string | null;
 }
 
 /** A box that starts a new agent: its blank start, which calls `call` once the agent lands, or with nothing where it was refused, and whether one is out. */

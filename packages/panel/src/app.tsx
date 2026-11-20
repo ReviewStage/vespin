@@ -957,7 +957,10 @@ function AppWindow(): React.JSX.Element {
                                 <MessageRevealProvider value={messageReveal}>
                                   <ThreadRevealProvider value={threadReveal}>
                                     {/* The window's call as its card draws it, docked wherever the window is not on the call's agent. */}
-                                    <StandingCallProvider onShowAgent={tasks.onShowAgent}>
+                                    <StandingCallProvider
+                                      onShowAgent={tasks.onShowAgent}
+                                      onOpenOwnAgent={tasks.agentView.onOpen}
+                                    >
                                       <SettingsShell
                                         gates={gates}
                                         tab={tab}
