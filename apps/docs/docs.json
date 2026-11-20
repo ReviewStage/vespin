@@ -75,6 +75,7 @@
           "move-to-vespin",
           "cloud-environment",
           "machines",
+          "handoff",
           "ports-and-terminal",
           "integrations",
           "vespin-mcp",

@@ -695,9 +695,9 @@ export function heardFromAnotherAccount(target: ConversationTarget): TaskStoreEf
 /**
  * The account whose Mac the conversation's `run_on_mac` runs on: the
  * assignee of its agent's task, while a member of its workspace, whoever
- * started the agent and whoever has written to it since, or the
- * conversation's own account where its task is assigned to no one or to a
- * member who left, or it is no agent's.
+ * started the agent and whoever has written to it since; or the
+ * conversation's own account, its agent's starter, where its task is
+ * assigned to no one or to a member who left, or it is no agent's.
  */
 export function machineOwnerOf(target: ConversationTarget): TaskStoreEffect<string> {
   return Effect.map(machineRoutingOf(target), (routing) => routing.userId);

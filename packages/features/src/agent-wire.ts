@@ -181,12 +181,16 @@ export const AGENT_AUTHOR = {
 export type AgentAuthor = (typeof AGENT_AUTHOR)[keyof typeof AGENT_AUTHOR];
 
 /**
- * Who pays for a coding agent's model calls, recorded as the agent starts
- * and never moved after: the starter's Claude plan or ChatGPT plan, which
- * run the provider's own harness, the starter's own API key, or our key;
- * or, for a local agent, its Mac's own login to the harness. A plan that
- * runs out pauses the agent rather than falling through to another payer; a
- * Mac signed out since falls back to the account's saved credential.
+ * Who pays for a coding agent's model calls, chosen again at each launch
+ * from its starter's credentials and recorded on the agent
+ * (`agent-runtime-choice.ts`'s `turnPayerOf`): the starter's Claude plan or
+ * ChatGPT plan, which run the provider's own harness, the starter's own API
+ * key, or our key; or, for a local agent, its Mac's own login to the
+ * harness. A plan at its limit moves the agent to the starter's next plan or
+ * key with room; where none has room, to their first API key, and with none
+ * it waits for the soonest reset. A
+ * continue or fork is a new agent of whoever started it, so it pays on their
+ * credentials.
  */
 export const AGENT_PAYER = {
   // Note that the stored spelling says "plan", the subscription's own word, not a task's document.
@@ -1370,9 +1374,11 @@ export const agentSummarySchema = EffectSchema.Struct({
    */
   pendingApprovals: EffectSchema.optionalKey(EffectSchema.Array(agentPendingApprovalSchema)),
   /**
-   * The member who started the agent, whose provider key pays for it and
-   * whose Mac its commands run on, whichever member messages it; absent once
-   * their account is gone, and from a service before it.
+   * The member who started the agent, whose plan or provider key pays for
+   * it whichever member messages it, and whose Mac its commands run on only
+   * where its task is assigned to no one and no machine is picked for it
+   * (`machine-routing.ts`); absent once their account is gone, and from a
+   * service before it.
    */
   startedBy: EffectSchema.optionalKey(memberRefSchema),
   /** The coding agent whose `start_agent` started this one; absent for one a member or an automation started, and from a service before it. */
