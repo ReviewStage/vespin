@@ -10,22 +10,27 @@
  * it (`task-list-continuations.ts`), and drawn by a `fn.select` over the
  * three (`listedAgentOf`). A plan is joined with its agents as the pull
  * requests gather them (`agentsByTask`), its pull requests, and the few of
- * its agents past their grace, and drawn by a `fn.select` over the four
- * (`taskSummaryOf`). Each derivation is written into a field of the query's
- * row, never spread over it, so a reader takes the derivation's own object,
- * the very object until its row, its grace, or its plan's agents move
- * again, and the lists are built again only after a query's change
- * (`listedOf`). So one row that moves builds again its own agent and its own
+ * its agents past their grace, and its agents are tallied by a `fn.select`
+ * over the four (`agentsTallyOf`); its summary is drawn from that tally,
+ * outside the query, with what its archived agents held apart from these
+ * queries add (`task-list-archived.ts`, `summaryOfTally`). Each derivation
+ * is written into a field of the query's row, never spread over it, so a
+ * reader takes the derivation's own object, the very object until its row,
+ * its grace, or its plan's agents move again, and the lists are built
+ * again only after a query's change (`listedOf`). So one row that moves builds again its own agent and its own
  * plan, whatever the account's size, and every other is the object drawn
  * before.
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import {
+  type AgentsTally,
+  type ArchivedActivity,
   agentPinOf,
-  agentsSummaryOf,
+  agentsTallyOf,
   type GracedAgent,
   listedAgentOf,
+  summaryOfTally,
   taskSummaryOf,
 } from "@repo/features/task-list-live";
 import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
@@ -42,6 +47,7 @@ import {
 } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
 import { listedOf, type QueryCollection } from "./drawn-rows.js";
+import { keyedListLog } from "./list-moves.js";
 import type { Continued } from "./task-list-continuations.js";
 import type { PlanAgents, PlanPullRequests } from "./task-list-pull-requests.js";
 import type { AgentRow, PastGrace, PlanRow } from "./task-list-rows.js";
@@ -57,13 +63,29 @@ export interface TaskListSources {
   readonly agentsByTask: QueryCollection<PlanAgents>;
   /** The agents started from each agent (`taskListContinuations`). */
   readonly continuations: QueryCollection<Continued>;
+  /** What each plan's archived agents, held apart from `agents`, add to its summary (`task-list-archived.ts`). */
+  readonly archived: ArchivedSummaries;
+}
+
+/** What the archived agents held apart from the list's live queries add to each plan's summary. */
+export interface ArchivedSummaries {
+  /** What the plan `taskId`'s archived agents add, the very object until one of them moves; none where it has none. */
+  readonly activityOf: (taskId: string) => ArchivedActivity | undefined;
+  /** How many times what any plan's archived agents add has moved, so a reader knows to draw again. */
+  readonly moved: () => number;
+}
+
+/** One plan as its query derives it: its row, and its agents but the archived held apart, tallied; none where it has none. */
+interface TalliedPlan {
+  readonly plan: PlanRow;
+  readonly tally: AgentsTally | undefined;
 }
 
 /** The task list's plans and agents, as its live queries hold them now. */
 export interface TaskListTasks {
   /** The plans newest started first, each with its agents in brief. */
   readonly plans: () => readonly TaskSummary[];
-  /** Every agent on a plan, the archived among them, first started first. */
+  /** Every agent of `agents`, first started first: the archived held apart from them are not among them. */
   readonly taskAgents: () => readonly ListedAgent[];
   /** The reader's pins of agents on a plan, the archived left out. */
   readonly taskAgentPins: () => readonly TaskAgentPin[];
@@ -96,7 +118,8 @@ export function taskListTasks(
   sources: TaskListSources,
 ): Effect.Effect<TaskListTasks, never, Scope.Scope> {
   return Effect.gen(function* () {
-    const { plans, agents, pastGrace, pullRequests, agentsByTask, continuations } = sources;
+    const { plans, agents, pastGrace, pullRequests, agentsByTask, continuations, archived } =
+      sources;
 
     // Each agent as the tabs draw it, first started first, and by id among those started at one instant, derived again only as its row, its grace, or those started from it move.
     const listed = yield* scopedCollection(() =>
@@ -149,7 +172,8 @@ export function taskListTasks(
       }),
     );
 
-    // Each plan as the list's row says it, newest started first, derived again only as its row, its agents, or their graces move.
+    // Each plan with its agents tallied, newest started first, derived again only as its row, its agents, or their graces move.
+    // Note that the summary is drawn from the tally outside the query, with what the plan's archived agents held apart add, because joining that in made every plan's row move through the query again for a whole answer, the most of what an account's archived agents cost it.
     const summaries = yield* scopedCollection(() =>
       createLiveQueryCollection({
         query: (q) =>
@@ -162,15 +186,16 @@ export function taskListTasks(
             .orderBy(({ plan }) => plan.createdAt, "desc")
             .orderBy(({ plan }) => plan.id, { direction: "desc", stringSort: "lexical" })
             .fn.select(({ plan, group, lines, graced }) => ({
-              summary: taskSummaryOf(
-                mainOf(plan),
-                group === undefined
-                  ? undefined
-                  : agentsSummaryOf(
-                      gracedOf(group.agents, graced?.agentIds),
-                      lines?.listing?.pullRequests.length ?? 0,
-                    ),
-              ),
+              tallied: {
+                plan: mainOf(plan),
+                tally:
+                  group === undefined
+                    ? undefined
+                    : agentsTallyOf(
+                        gracedOf(group.agents, graced?.agentIds),
+                        lines?.listing?.pullRequests.length ?? 0,
+                      ),
+              } satisfies TalliedPlan,
             })),
         gcTime: KEPT_BY_SCOPE,
         startSync: true,
@@ -191,8 +216,48 @@ export function taskListTasks(
       }),
     );
 
+    const tallied = yield* listedOf(summaries, (row) => row.tallied);
+    const logged = keyedListLog<TaskSummary>((summary) => summary.id);
+
+    /** Each plan's summary as last drawn, by the tallied plan it was drawn from, with what its archived agents added then. */
+    const drawnOf = new WeakMap<
+      TalliedPlan,
+      { readonly apart: ArchivedActivity | undefined; readonly summary: TaskSummary }
+    >();
+
+    let summarized:
+      | {
+          readonly from: readonly TalliedPlan[];
+          readonly at: number;
+          readonly list: readonly TaskSummary[];
+        }
+      | undefined;
+
+    /** Each plan's summary, the very object while its tallied plan and what its archived agents add stand. */
+    const summaryOf = (each: TalliedPlan): TaskSummary => {
+      const apart = archived.activityOf(each.plan.id);
+      const drawn = drawnOf.get(each);
+
+      if (drawn?.apart === apart && drawn !== undefined) return drawn.summary;
+      const summary = taskSummaryOf(each.plan, summaryOfTally(each.tally, apart));
+      drawnOf.set(each, { apart, summary });
+
+      return summary;
+    };
+
+    const summariesNow = (): readonly TaskSummary[] => {
+      const from = tallied();
+      const at = archived.moved();
+
+      if (summarized?.from !== from || summarized.at !== at) {
+        summarized = { from, at, list: logged(from.map(summaryOf)) };
+      }
+
+      return summarized.list;
+    };
+
     return {
-      plans: yield* listedOf(summaries, (row) => row.summary),
+      plans: summariesNow,
       taskAgents: yield* listedOf(listed, (row) => row.listed),
       taskAgentPins: yield* listedOf(pins, (row) => row.pin),
     };
