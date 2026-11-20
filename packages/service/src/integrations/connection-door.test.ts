@@ -10,12 +10,13 @@ import {
   updateAgentServers,
 } from "@repo/database/models/agent-store";
 import { user } from "@repo/database/schemas/auth";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { messages } from "@repo/database/schemas/storage";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { isRecord, type UnparsedWireValue, type WireRecord } from "@repo/wire";
+import { isRecord, MESSAGE_ROLE, type UnparsedWireValue, type WireRecord } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
   Clock,
@@ -110,6 +111,23 @@ const memberWithLinear = Effect.gen(function* () {
 });
 
 /** The door's services: the store, the fake Connect, GitHub as the App, and Linear's server; every line logged is kept. */
+/** One line a member wrote into the member's agent's conversation, at `seq`. */
+const memberLine = (member: Effect.Success<typeof memberWithLinear>, seq: number, by: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    yield* db.insert(messages).values({
+      userId: member.userId,
+      conversationId: member.admitted.target.conversationId,
+      seq,
+      clientId: randomUUID(),
+      role: MESSAGE_ROLE.USER,
+      parts: [],
+      placedAt: yield* DateTime.nowAsDate,
+      sender: MESSAGE_SENDER.MEMBER,
+      senderUserId: by,
+    });
+  });
+
 function doorServices(bearer: string, heard: Heard, logged: string[]) {
   return Layer.mergeAll(
     NO_GITHUB,
@@ -363,6 +381,35 @@ it.layer(SUITE)("the integrations' door", (it) => {
           }),
         );
         assert.deepEqual(heard.bearers, []);
+      }),
+  );
+
+  it.effect(
+    "a call is refused while a teammate's message is the newest to the agent, and goes through once its starter writes again",
+    () =>
+      Effect.gen(function* () {
+        const member = yield* memberWithLinear;
+        const db = yield* Database;
+        const teammate = `user-${randomUUID()}`;
+        yield* db
+          .insert(user)
+          .values({ id: teammate, name: "Dana", email: `${teammate}@app.test` });
+        const heard = hearing();
+        const services = doorServices(linearTokenOf(member.userId), heard, []);
+
+        const call = callConnectionTool(member.admitted, LINEAR, "list_issues", {}).pipe(
+          Effect.provide(services),
+        );
+
+        yield* memberLine(member, 100, teammate);
+        const led = yield* call;
+        yield* memberLine(member, 101, member.userId);
+        const own = yield* call;
+
+        assert.ok(Result.isFailure(led));
+        assert.equal(led.failure.connection, LINEAR);
+        assert.deepEqual(heard.calls, [{ name: "list_issues", arguments: {} }]);
+        assert.ok(Result.isSuccess(own));
       }),
   );
 

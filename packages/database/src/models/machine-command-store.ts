@@ -18,6 +18,7 @@ import { MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
 import {
   and,
   asc,
+  desc,
   eq,
   exists,
   gte,
@@ -559,6 +560,63 @@ const findForeignLine = SqlSchema.findOneOption({
         .limit(1),
     ),
 });
+
+/**
+ * Whether the newest line a person or an agent wrote into the conversation's
+ * root, the root's own where it is one, is another account's: a member other
+ * than the owner, a former member, or an agent that is not the owner's own or
+ * is gone. Lines the service, an automation, or GitHub put there are passed
+ * over, so a wakeup or a check that follows a teammate's message leaves it
+ * the newest. Nothing where no person or agent wrote at all.
+ */
+const findNewestWriter = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ foreign: Schema.Boolean }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          foreign: sql<boolean>`${or(
+            and(
+              eq(messages.sender, MESSAGE_SENDER.MEMBER),
+              or(isNull(messages.senderUserId), ne(messages.senderUserId, userId)),
+            ),
+            and(
+              eq(messages.sender, MESSAGE_SENDER.AGENT),
+              or(isNull(sendingAgent.userId), ne(sendingAgent.userId, userId)),
+            ),
+          )}`,
+        })
+        .from(conversations)
+        .leftJoin(parent, eq(parent.id, conversations.parentConversationId))
+        .innerJoin(
+          messages,
+          eq(messages.conversationId, sql`coalesce(${parent.id}, ${conversations.id})`),
+        )
+        .leftJoin(sendingAgent, eq(sendingAgent.id, messages.senderAgentId))
+        .where(
+          and(
+            eq(conversations.id, conversationId),
+            eq(conversations.userId, userId),
+            inArray(messages.sender, [MESSAGE_SENDER.MEMBER, MESSAGE_SENDER.AGENT]),
+          ),
+        )
+        .orderBy(desc(messages.seq))
+        .limit(1),
+    ),
+});
+
+/**
+ * Whether another account leads the conversation now: the newest line a
+ * person or an agent wrote into it is not its owner's (`findNewestWriter`).
+ * The owner's own next line takes the lead back.
+ */
+export function ledByAnotherAccount(target: ConversationTarget): TaskStoreEffect<boolean> {
+  return Effect.map(
+    findNewestWriter(target),
+    Option.match({ onNone: () => false, onSome: (newest) => newest.foreign }),
+  );
+}
 
 /** The agent whose conversation, or whose worker's, is asked after, read for its task. */
 const ownAgent = alias(agentTable, "own_agent");

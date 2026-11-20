@@ -1942,6 +1942,34 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
+    "only an agent's starter switches its MCP servers, which are their own accounts; a teammate's switch is refused and changes nothing",
+    () =>
+      Effect.gen(function* () {
+        const { agent, ask, other, owner, task } = yield* messagedAgent(
+          fakeAgentSessions(),
+          undefined,
+        );
+
+        yield* joinWorkspace(task.workspaceId, other);
+
+        const switched = (as: string, disabledServers: readonly string[]) =>
+          ask(request(AGENT, as, { method: "PATCH", id: agent.id, body: { disabledServers } }));
+
+        const byStarter = yield* switched(owner, [INTEGRATION_PROVIDER.LINEAR]);
+        const byTeammate = yield* switched(other, []);
+        const stored = yield* readAgent(owner, agent.id);
+
+        assert.equal(byStarter.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(
+          byTeammate,
+          refusal(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
+        );
+        assert.ok(Option.isSome(stored));
+        assert.deepEqual(stored.value.disabledServers, [INTEGRATION_PROVIDER.LINEAR]);
+      }),
+  );
+
+  it.effect(
     "a message mentioning an MCP server hands the harness a note naming its connection beside the words, and the server is left for the agent's next turn to take",
     () =>
       Effect.gen(function* () {

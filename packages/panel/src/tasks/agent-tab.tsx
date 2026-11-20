@@ -549,6 +549,9 @@ const REFUSED_TURN_FAILURES: ReadonlySet<AgentFailure> = new Set([
   AGENT_FAILURE.MACHINE_SIGN_IN,
 ]);
 
+/** The servers switched off for a teammate's agent as its mentions read them, whose switches the reader is not handed. */
+const NONE_DISABLED: readonly string[] = [];
+
 /** What the tab says where its transcript could not be read. */
 const TRANSCRIPT_FAILED_LINE = "The transcript could not be read.";
 const OLDER_FAILED_LINE = "Earlier messages could not be read.";
@@ -4034,7 +4037,7 @@ function AgentTabView({
 
   const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
   const callRoute = useCallRoute(agent.id);
-  const disabledServers = servers.disabled;
+  const disabledServers = servers?.disabled ?? NONE_DISABLED;
 
   const mentioned = useMemo(
     () => ({ disabled: disabledServers, steering }),
