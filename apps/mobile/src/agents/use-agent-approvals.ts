@@ -8,8 +8,9 @@
  * with its press busy while it is out, and the row then says how it came
  * out, "Allowed" or "Denied"; one that stops waiting with no answer of this
  * page's says it was denied by a message sent meanwhile, answered elsewhere,
- * or expired. The page offers Allow and Deny, the panel's first two answers,
- * once: on the call's own row, or, for a call no row draws, such as a
+ * or expired. The page offers the panel's answers, Allow, Always allow, which
+ * names the command it keeps for every agent where the harness proposed one,
+ * and Deny, once: on the call's own row, or, for a call no row draws, such as a
  * subagent's, in the banner over the composer, as the panel draws such a
  * call as a row of its own.
  */
@@ -28,6 +29,7 @@ import {
 import type { AgentPendingApproval } from "@repo/features/agent-approval-wire";
 import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_STATUS } from "@repo/features/agent-wire";
+import { allowedCommandWords } from "@repo/features/allowed-command-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { FollowedAgent } from "@repo/host/app-state-reads";
 import { BUZZ, type HeldAnswer, type HeldCall } from "@repo/ui-native";
@@ -47,6 +49,7 @@ export interface WaitingBanner {
   readonly asks: string;
   readonly answering: HeldAnswer | undefined;
   readonly note: string | undefined;
+  readonly command: string | undefined;
   readonly onAnswer: (answer: HeldAnswer) => void;
 }
 
@@ -71,6 +74,13 @@ export interface AgentApprovals {
   readonly messageSent: (taken: Promise<boolean>) => void;
 }
 
+/** The command Always allow keeps for every agent, as it reads; none where the harness proposed none. */
+function commandOf(ask: Held): string | undefined {
+  const prefix = ask.approval.commandPrefix;
+
+  return prefix === undefined ? undefined : allowedCommandWords(prefix);
+}
+
 /** An ask once its answer came back: settled as the answer says, or offered again with why it did not go. */
 function answeredAsk(ask: Held, answered: AgentApprovalAnswerView): Held {
   if ("approval" in answered) {
@@ -92,6 +102,7 @@ function heldCallOf(ask: Held, answer: (answer: HeldAnswer) => void): HeldCall {
     about: heldAbout(ask.approval),
     answering: ask.answering,
     note: ask.error,
+    command: commandOf(ask),
     onAnswer: answer,
   };
 }
@@ -238,6 +249,7 @@ export function useAgentApprovals(
               asks: oldest.approval.title,
               answering: oldest.answering,
               note: oldest.error,
+              command: commandOf(oldest),
               onAnswer: (press) => answer(oldest.approval.id, press),
             },
       messageSent,
