@@ -171,7 +171,7 @@ import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
-import { useHeldOrder } from "../tasks/use-held-order.js";
+import { useHeldOrder, usePointerHold } from "../tasks/use-held-order.js";
 import { useFailedRuns, useListedInbox } from "../tasks/use-inbox-slices.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import {
@@ -2102,8 +2102,8 @@ function SidebarColumn({
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
   const [carrying, setCarrying] = useState(false);
-  // Whether the pointer is over the column, while which its tasks hold their places.
-  const [pointing, setPointing] = useState(false);
+  // The pointer over the column, while which its tasks hold their places.
+  const pointer = usePointerHold();
   const overlay = useFloatingSidebar(sidebar);
   useFirstUsableSpan(tasks);
   const body = useRef<HTMLDivElement>(null);
@@ -2470,18 +2470,23 @@ function SidebarColumn({
   // reader's hand. Note that the hold is the pointer's and not the sidebar's
   // being in sight, because a pinned sidebar is in sight for as long as the
   // window is open, and its tasks would sort anew only at the next launch.
-  const sections = useHeldOrder(orderView, tasks.shown && overlay.inSight && pointing, {
-    sameOrder: sameTaskOrder,
-    draw: (places: ReadonlyMap<string, TaskSummary>) => {
-      const placed = [...taskPlaces(statusTasks, places, placing).values()];
-      // Note that rows held still are ordered by the times they were first drawn with, so only a list holding none stands in the live order as it is.
-      const ordered = places.size === 0 ? placed : orderTasks(placed);
-      const held = taskSections(ordered, orderView.grouping, tasks.pinnedRepositories);
+  const sections = useHeldOrder(
+    orderView,
+    tasks.shown && overlay.inSight,
+    {
+      sameOrder: sameTaskOrder,
+      draw: (places: ReadonlyMap<string, TaskSummary>) => {
+        const placed = [...taskPlaces(statusTasks, places, placing).values()];
+        // Note that rows held still are ordered by the times they were first drawn with, so only a list holding none stands in the live order as it is.
+        const ordered = places.size === 0 ? placed : orderTasks(placed);
+        const held = taskSections(ordered, orderView.grouping, tasks.pinnedRepositories);
 
-      return liveSections(held, new Map(statusTasks.map((task) => [task.id, task])));
+        return liveSections(held, new Map(statusTasks.map((task) => [task.id, task])));
+      },
+      placesOf: (_drawn, held) => taskPlaces(statusTasks, held, placing),
     },
-    placesOf: (_drawn, held) => taskPlaces(statusTasks, held, placing),
-  });
+    pointer,
+  );
 
   // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and at the top where no list draws an ancestor of it (`homedTaskRows`).
   const pinnedOwn = pinnedHeld(pinnedSection);
@@ -2670,9 +2675,9 @@ function SidebarColumn({
       data-row-drop-scope=""
       inert={!overlay.inSight}
       onPin={onPressWithin}
-      onPointerEnter={() => setPointing(true)}
+      onPointerEnter={pointer.onPointerEnter}
       onPointerLeave={(event) => {
-        setPointing(false);
+        pointer.onPointerLeave();
         overlay.onPointerLeave(event);
       }}
       onKeyDown={overlay.onKeyDown}
