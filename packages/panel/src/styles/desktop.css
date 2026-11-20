@@ -1497,6 +1497,27 @@ body,
   border-left: 1px solid var(--ui-color-border);
 }
 
+/* A Manager's overview stands its lists in two columns side by side
+   (`manager-overview.tsx`), each its sections one under another, and in
+   one column where its room holds no two. */
+.manager-overview-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  column-gap: var(--ui-page-section-gap);
+  row-gap: var(--ui-page-section-gap);
+}
+
+@container (width < 640px) {
+  .manager-overview-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.manager-overview-column {
+  min-width: 0;
+}
+
 /* The panel's ground, named once (`--side-panel-ground`): the panel paints
    it, or its sheet does where the shell stands it on one (shell.css), and
    whatever in a tab must paint a ground of its own paints this one (a Pull
