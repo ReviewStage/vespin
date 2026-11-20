@@ -262,6 +262,39 @@ it.effect("a clock that was wrong hides no real day, and costs one count at most
 );
 
 it.effect(
+  "a batch that never reached the service rides the next flush once, and is dropped if that fails too",
+  () =>
+    Effect.gen(function* () {
+      let reachable = false;
+
+      const { sender, requests } = yield* sharingSender({}, () => {
+        if (!reachable) throw new TypeError("fetch failed");
+
+        return new Response("{}");
+      });
+
+      const sentNames = (request: RecordedRequest | undefined): readonly string[] =>
+        JSON.parse(request?.body ?? "{}").events.map((event: { name: string }) => event.name);
+
+      // A launch woken in the background, whose first flush finds no network.
+      sender.record(PRODUCT_EVENT.APP_LAUNCH, { app_version: APP_VERSION });
+      yield* sender.flush;
+      reachable = true;
+      yield* sender.flush;
+      assert.deepEqual(sentNames(requests[1]), [PRODUCT_EVENT.APP_LAUNCH]);
+
+      // Unreachable twice over, the count goes rather than riding every flush.
+      reachable = false;
+      sender.record(PRODUCT_EVENT.ACCOUNT_SIGN_IN, {});
+      yield* sender.flush;
+      yield* sender.flush;
+      reachable = true;
+      yield* sender.flush;
+      assert.equal(requests.length, 4);
+    }),
+);
+
+it.effect(
   "every batch says which version it came from, whether that build is packaged, and which app it is",
   () =>
     Effect.gen(function* () {

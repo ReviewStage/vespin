@@ -26,11 +26,19 @@ const SERVICE_BASE_URL = "https://app.example.test";
 
 /** A settings concern in a run that sends, over a service that answers every request and keeps what each carried. */
 const sendingSettings = Effect.fnUntraced(function* (packaged: boolean) {
-  const requests: { readonly url: string; readonly authorization: string | null }[] = [];
+  const requests: {
+    readonly url: string;
+    readonly authorization: string | null;
+    readonly body: string;
+  }[] = [];
 
   const service: typeof globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
-    requests.push({ url: request.url, authorization: request.headers.get("authorization") });
+    requests.push({
+      url: request.url,
+      authorization: request.headers.get("authorization"),
+      body: await request.text(),
+    });
 
     return new Response(null, { status: 204 });
   };
@@ -121,6 +129,35 @@ it.effect(
       yield* countAndFlush;
       assert.equal(sent().length, 1, "a count was sent after usage data was turned off");
     }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer])),
+);
+
+it.effect("a launch that learns late that usage data is on is counted then, and once", () =>
+  Effect.gen(function* () {
+    // A run from source reads usage data off at launch, as a launch whose settings read failed does.
+    const { settings, sent, service } = yield* sendingSettings(false);
+    const flush = Effect.provideService(
+      settings.flushProductEvents,
+      FetchHttpClient.Fetch,
+      service,
+    );
+
+    const launches = () =>
+      sent()
+        .flatMap((request) => JSON.parse(request.body).events)
+        .filter((event: { name: string }) => event.name === PRODUCT_EVENT.APP_LAUNCH).length;
+
+    yield* flush;
+    assert.equal(launches(), 0, "a launch was counted while usage data read off");
+
+    yield* Effect.orDie(settings.acts.SETTING_UPDATE({ field: "usageData", value: true }));
+    yield* flush;
+    assert.equal(launches(), 1, "the launch was not counted once usage data read on");
+
+    yield* Effect.orDie(settings.acts.SETTING_UPDATE({ field: "usageData", value: false }));
+    yield* Effect.orDie(settings.acts.SETTING_UPDATE({ field: "usageData", value: true }));
+    yield* flush;
+    assert.equal(launches(), 1, "one launch was counted twice");
+  }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer])),
 );
 
 /** One browser tab's settings concern over the shared state root, and what it sent its panel. */
