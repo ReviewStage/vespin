@@ -1,0 +1,115 @@
+Auto-merging packages/ui-native/src/glyph.ts
+Auto-merging packages/brand/scripts/generate-surface-shared.mjs
+Auto-merging packages/ui-native/src/glyph.ts
+Auto-merging PRIVACY.md
+Auto-merging apps/mobile/app.config.ts
+Auto-merging pnpm-lock.yaml
+Auto-merging apps/mobile/app.config.ts
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging packages/host/src/contract/client-parity.ts
+Auto-merging packages/ui-native/src/composer.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging pnpm-lock.yaml
+built main 9adbf3cb46 + #10038 be8620f368 #10048 910aad4caf #10081 d4771c3291 #10087 40a20b9786 #10094 37294ae32e #10130 dcb30126d7 #10148 b129a7db4b as 0623058173
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 18:16:35 25984 MB
+curve 18:17:05 26091 MB
+curve 18:17:35 24008 MB
+curve 18:18:06 23615 MB
+curve 18:18:36 23601 MB
+curve 18:19:06 23586 MB
+curve 18:19:37 23524 MB
+curve 18:20:07 23521 MB
+curve 18:20:37 23476 MB
+curve 18:21:08 23072 MB
+curve 18:21:38 23107 MB
+curve 18:22:08 23574 MB
+curve 18:22:39 23531 MB
+curve 18:23:09 23478 MB
+curve 18:23:40 23379 MB
+curve 18:24:10 23319 MB
+curve 18:24:41 23162 MB
+curve 18:25:11 23063 MB
+curve 18:25:42 23035 MB
+curve 18:26:12 22959 MB
+curve 18:26:42 22944 MB
+curve 18:27:13 22911 MB
+curve 18:27:43 22820 MB
+curve 18:28:14 22800 MB
+curve 18:28:44 22778 MB
+curve 18:29:15 22766 MB
+curve 18:29:45 22749 MB
+curve 18:30:15 22727 MB
+curve 18:30:46 22709 MB
+curve 18:31:16 22688 MB
+curve 18:31:46 22670 MB
+curve 18:32:17 22493 MB
+curve 18:32:47 22474 MB
+curve 18:33:18 22450 MB
+curve 18:33:48 22425 MB
+curve 18:34:19 22392 MB
+curve 18:34:49 22357 MB
+curve 18:35:19 22329 MB
+curve 18:35:50 22287 MB
+curve 18:36:20 22163 MB
+curve 18:36:51 22110 MB
+curve 18:37:21 21671 MB
+curve 18:37:51 21567 MB
+curve 18:38:22 21427 MB
+curve 18:38:52 21276 MB
+curve 18:39:22 21210 MB
+curve 18:39:53 21121 MB
+curve 18:40:23 20995 MB
+curve 18:40:54 21001 MB
+curve 18:41:24 20938 MB
+curve 18:41:54 20884 MB
+curve 18:44:12 20786 MB
+curve 18:44:42 20826 MB
+curve 18:45:13 20789 MB
+curve 18:45:43 20745 MB
+curve 18:46:13 20704 MB
+curve 18:46:43 20678 MB
+curve 18:47:14 20654 MB
+curve 18:47:44 20784 MB
+curve 18:48:14 20762 MB
+curve 18:48:45 20732 MB
+curve 18:49:15 20767 MB
+curve 18:49:45 20755 MB
+curve 18:50:16 20625 MB
+curve 18:50:46 20606 MB
+BUILD EXIT 0 18:51:16
+sizes: Assets.car 28764264 bytes (main Vmain4 8576376), .app 123632 KB (main 102900 KB), zipped .app 47537577 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatprs.app: replacing existing signature
+p10048-iphone-tasks: fails 0 shots 1 
+p10038-iphone-live-activity: fails 0 shots 3 
+p10038-iphone-live-activity-dark: fails 0 shots 3 
+p10094-iphone-light: fails 0 shots 5 
+p10094-iphone-dark: fails 0 shots 5 
+p10130 frameworks: 14 here, 14 in Vmain4; sealer: 0 here, 0 in Vmain4
+p10130-update-1-signin-vmain4: fails 0 shots 2 
+  keychain on Vmain4, signed in:  host-secret-key=0 seal-check-key=0 account-tokens=0 (keychain-2-debug.db)
+p10130-update-2-first-launch: fails 0 shots 1 
+  keychain after #10130's first launch:  host-secret-key=0 seal-check-key=0 account-tokens=0 (keychain-2-debug.db)
+p10130-update-3-second-launch: fails 0 shots 1 
+  keychain after the second launch:  host-secret-key=0 seal-check-key=0 account-tokens=0 (keychain-2-debug.db)
+p10130-fresh: fails 0 shots 3 
+  keychain after the fresh sign-out:  host-secret-key=0 seal-check-key=0 account-tokens=0 (keychain-2-debug.db)
+p10148 mic purpose: Vespin uses the microphone while you talk with an agent on a call or dictate a message. | expo-audio in app.config: 2 | audio frameworks: 
+p10148-iphone-light-dictate: fails 0 shots 3 
+p10148-iphone-light-agent: fails 1 shots 15 Tap on id: agent-model-chip... FAILED
+p10148-iphone-light-compose: fails 1 shots 8 Assert that "/migrate" is not visible... FAILED
+p10148-iphone-dark-dictate: fails 0 shots 3 
+p10148-iphone-dark-agent: fails 1 shots 15 Tap on id: agent-model-chip... FAILED
+p10148-iphone-dark-compose: fails 1 shots 8 Assert that "/migrate" is not visible... FAILED
+p10148-ipad27-light-dictate: fails 0 shots 3 
+p10148-ipad27-light-agent: fails 0 shots 23 
+p10148-ipad27-light-compose: fails 1 shots 8 Assert that "/migrate" is not visible... FAILED
+p10148-ipad27-dark-dictate: fails 0 shots 3 
+p10148-ipad27-dark-agent: fails 0 shots 23 
+p10148-ipad27-dark-compose: fails 1 shots 8 Assert that "/migrate" is not visible... FAILED
+p10148-iphone-mic-prompt: fails 0 shots 1 
