@@ -132,6 +132,8 @@ export * from "./components/corner-count/corner-count.js";
 
 export * from "./components/count-figure/count-figure.js";
 
+export * from "./components/count-line/count-line.js";
+
 export * from "./components/detail-page/detail-page.js";
 
 export * from "./components/dialog/dialog.js";

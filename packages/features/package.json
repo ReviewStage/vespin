@@ -213,6 +213,7 @@
     "./pill-words": "./src/pill-words.js",
     "./request-body-limit": "./src/request-body-limit.js",
     "./sound-clip-wire": "./src/sound-clip-wire.js",
+    "./manager-overview-model": "./src/manager-overview-model.js",
     "./person-page-model": "./src/person-page-model.js",
     "./person-page-words": "./src/person-page-words.js",
     "./link-menu-words": "./src/link-menu-words.js",
