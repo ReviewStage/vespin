@@ -57,6 +57,9 @@ private let edgeLookPause: TimeInterval = 0.5
 /// How deep under the dock's content its scroll view is looked for, so a screen still reading, with no list yet, costs a layout pass little.
 private let scrollViewDepth = 8
 
+/// Whether the system's keyboard stands, as its own notices last said, kept for every dock and read and written only on the main thread, where UIKit posts them, since a dock that comes into its window after the keyboard rose, as a start page whose field takes the keyboard as it opens, heard none of them while it stood out of a window.
+nonisolated(unsafe) private var keyboardStands = false
+
 final class KeyboardDockView: ExpoView {
   let onOverlap = EventDispatcher()
 
@@ -117,6 +120,7 @@ final class KeyboardDockView: ExpoView {
 
   /// Follows the keyboard frame by frame while it stands.
   @objc private func keyboardDidShow() {
+    keyboardStands = true
     typing = FirstResponder.current()
     followFrames()
   }
@@ -130,6 +134,7 @@ final class KeyboardDockView: ExpoView {
   }
 
   @objc private func keyboardDidHide() {
+    keyboardStands = false
     frames?.invalidate()
     frames = nil
     follow()
@@ -143,13 +148,15 @@ final class KeyboardDockView: ExpoView {
     framing = false
   }
 
-  /// Follows the keyboard again as the dock comes back into a window with the keyboard already standing, as a page does when the one over it goes back; stops following as it leaves.
+  /// Follows the keyboard as the dock comes into a window with the keyboard already standing, as a page does when the one over it goes back, or a start page whose field took the keyboard as it opened; stops following as it leaves.
   override func didMoveToWindow() {
     super.didMoveToWindow()
     guard window == nil else {
       looksLeft = edgeLooks
+      // Note that the keyboard is followed frame by frame wherever it stands as the dock comes in, whether the dock lifted for it before or never heard it rise, so the suggestion strip growing over a start page's field lifts the bar with it.
+      if keyboardStands { typing = FirstResponder.current() }
       follow()
-      if (told ?? 0) > 0 { followFrames() }
+      if keyboardStands || (told ?? 0) > 0 { followFrames() }
       return
     }
     frames?.invalidate()
