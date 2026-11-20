@@ -8,10 +8,12 @@ import {
   type EntityOf,
   type KnownNames,
 } from "@repo/features/entity-kind";
+import { agentGlyphState, GLYPH_STATE } from "@repo/features/glyph-state";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { AppIcon, ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
+import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorGlyph, ActorMark, automationActor } from "../actor-ref.js";
@@ -28,7 +30,7 @@ import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
-import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
+import { useAgentFace, useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
 import { useTaskReadIn } from "../tasks/use-task-outside.js";
 import { MachineMark } from "../tasks/workspace-machines.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
@@ -112,7 +114,7 @@ function KnownAgentMark({ agentId, at }: { agentId: string; at: EntityMarkAt }):
   return <ReadAgentModel agentId={agentId}>{harnessMark}</ReadAgentModel>;
 }
 
-/** An agent's mark: its tab's tile where the place holds its plan's agents, else its harness's. */
+/** An agent's mark: a Manager's face, livelier while it works, as its row wears it; else its tab's tile where the place holds its plan's agents, else its harness's. */
 function AgentEntityMark({
   agent,
   at,
@@ -122,6 +124,18 @@ function AgentEntityMark({
 }): React.JSX.Element {
   const { tiles } = at;
   const tile = tiles?.tileOf(agent.agentId);
+  const face = useAgentFace(agent.agentId);
+  const status = useAgentStatus(agent.agentId);
+
+  if (face !== undefined) {
+    return (
+      <ManagerFace
+        face={face}
+        size={MANAGER_FACE_SIZE.WORDS}
+        working={status !== undefined && agentGlyphState(status) === GLYPH_STATE.WORKING}
+      />
+    );
+  }
 
   // Note that a tile the page knows no harness of, its agents not yet read say, gives way to the mark read for it.
   const harnessless =

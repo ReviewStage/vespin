@@ -3,7 +3,16 @@ import {
   MANAGER_FACE_COLOR,
   type ManagerFace as ManagerFaceValue,
 } from "@repo/features/manager-face";
-import { GAP, Inline, Stack, TEXT_ELEMENT, TEXT_VARIANT, Text } from "@repo/ui";
+import {
+  GAP,
+  INLINE_REF_LOOK,
+  Inline,
+  InlineRef,
+  Stack,
+  TEXT_ELEMENT,
+  TEXT_VARIANT,
+  Text,
+} from "@repo/ui";
 import { MANAGER_FACE_SIZE, ManagerFace, type ManagerFaceSize } from "@repo/ui/manager-face";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -12,7 +21,7 @@ import { CatalogSection } from "../section";
  * manager-faces.tsx -- every character in every color at a row's and a
  * message's size, at rest and working, a row of each character so the
  * colors line up; and a few faces beside the Managers' names, as the sidebar
- * and the chat will draw them.
+ * and the chat will draw them, and among words, in a mention's chip.
  */
 
 /** The faces beside their names, each a character in a different color, two of them at work. */
@@ -88,6 +97,21 @@ function ManagerFaces(): React.JSX.Element {
                 {name}
               </Text>
             </Inline>
+          ))}
+        </Stack>
+      </CatalogSection>
+      <CatalogSection id="manager-face-words" title="Among words, in a mention's chip">
+        <Stack gap={GAP.CONTROL}>
+          {MANAGERS.map(({ name, face, working }) => (
+            <Text key={name}>
+              Ask{" "}
+              <InlineRef
+                look={INLINE_REF_LOOK.PILL}
+                glyph={<ManagerFace face={face} size={MANAGER_FACE_SIZE.WORDS} working={working} />}
+                label={name}
+              />{" "}
+              to take it on.
+            </Text>
           ))}
         </Stack>
       </CatalogSection>

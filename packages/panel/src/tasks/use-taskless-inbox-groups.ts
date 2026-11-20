@@ -34,7 +34,7 @@ const NO_GROUPS: readonly InboxGroup<InboxAgentHolder>[] = [];
 const NO_AGENTS: Readonly<Record<string, readonly unknown[]>> = {};
 
 /** An agent as an Inbox names it, from what the list or its own read holds of it. */
-type NamedSource = Pick<ListedAgent, "id" | "workspaceId" | "repository"> &
+type NamedSource = Pick<ListedAgent, "id" | "workspaceId" | "repository" | "face"> &
   Parameters<typeof agentName>[0];
 
 /** The agents the reads answered, each as its page names it. Note that it is one function for every render, so the reads' answers are combined again only as they move. */
@@ -56,7 +56,9 @@ function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
     a.name === b.name &&
     a.model === b.model &&
     a.workspaceId === b.workspaceId &&
-    a.repository === b.repository
+    a.repository === b.repository &&
+    a.face?.character === b.face?.character &&
+    a.face?.color === b.face?.color
   );
 }
 
@@ -126,6 +128,7 @@ export function useTasklessInboxGroups(
         model: source.model,
         workspaceId: source.workspaceId,
         repository: source.repository,
+        ...(source.face === undefined ? undefined : { face: source.face }),
       };
 
       const was = kept.current.get(agentId);

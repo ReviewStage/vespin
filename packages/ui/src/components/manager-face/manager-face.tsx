@@ -13,9 +13,10 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * manager-face.tsx -- the friendly face a Manager wears: a React Kawaii character in a soft color, livelier and wearing the working mark while it works.
  *
  * A face is the pair `@repo/features/manager-face` declares, a character and
- * a color, drawn in one of two seats: a row's, the sidebar's 20px, or a
+ * a color, drawn in one of three seats: a row's, the sidebar's 20px, or a
  * message's, the chat's 32px, the avatar's own row and card sizes, so a face
- * lines up with the discs beside it. Each character is drawn in its own
+ * lines up with the discs beside it; or among words, a chip's or a line's,
+ * as tall as their em, where a glyph of the words' size stands. Each character is drawn in its own
  * square cut of Kawaii's 240 box, measured to its body in every mood, since
  * Kawaii leaves a wide margin that would shrink the face to half its seat.
  * Its body takes the color's fill from the theme (`text-manager-face-*`
@@ -25,7 +26,8 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * At rest it smiles (`happy`). While the Manager works the same character
  * turns `excited`, bobs gently, and wears the shared working mark on a disc
  * of the ground at its end corner, so working changes how the face looks and
- * never which face it is. The bob is an endless loop held by
+ * never which face it is; among words, too small to hold the disc, its mood
+ * and its bob say it alone. The bob is an endless loop held by
  * `--ui-loop-motion`, so reduced motion and a capture run hold it at rest,
  * as the working mark holds its own chase. The face is a picture its
  * caller's words beside it name, so it is hidden from a reader.
@@ -34,10 +36,11 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * barrel, so Kawaii reaches only the bundles that draw a Manager.
  */
 
-/** Which seat the face is drawn in: a sidebar row's, or a chat message's. */
+/** Which seat the face is drawn in: a sidebar row's, a chat message's, or a glyph's among words, a chip's or a line's. */
 export const MANAGER_FACE_SIZE = {
   ROW: "row",
   MESSAGE: "message",
+  WORDS: "words",
 } as const;
 
 export type ManagerFaceSize = (typeof MANAGER_FACE_SIZE)[keyof typeof MANAGER_FACE_SIZE];
@@ -75,15 +78,17 @@ const FILL_CLASS = {
 const SEAT_CLASS = {
   [MANAGER_FACE_SIZE.ROW]: "size-manager-face-row",
   [MANAGER_FACE_SIZE.MESSAGE]: "size-manager-face-message",
+  [MANAGER_FACE_SIZE.WORDS]: "size-words-glyph",
 } as const satisfies Record<ManagerFaceSize, string>;
 
-/** Each seat's working disc, and the working mark inside it a step smaller, so a sliver of the ground rings it. */
+/** Each seat's working disc, and the working mark inside it a step smaller, so a sliver of the ground rings it; none among words, too small to hold one. */
 const BADGE_CLASS = {
   [MANAGER_FACE_SIZE.ROW]:
     "size-manager-face-badge-row [--ui-working-mark-size:var(--spacing-ui-8)]",
   [MANAGER_FACE_SIZE.MESSAGE]:
     "size-manager-face-badge-message [--ui-working-mark-size:var(--spacing-ui-12)]",
-} as const satisfies Record<ManagerFaceSize, string>;
+  [MANAGER_FACE_SIZE.WORDS]: undefined,
+} as const satisfies Record<ManagerFaceSize, string | undefined>;
 
 /** A Manager's face in its seat, livelier and wearing the working mark while `working`. */
 export function ManagerFace({
@@ -93,7 +98,7 @@ export function ManagerFace({
 }: {
   /** The character and the color, as the service stores them. */
   face: ManagerFaceValue;
-  /** The seat: a sidebar row's, or a chat message's. */
+  /** The seat: a sidebar row's, a chat message's, or a glyph's among words. */
   size: ManagerFaceSize;
   /** Whether the Manager is at work. */
   working?: boolean | undefined;
@@ -101,6 +106,7 @@ export function ManagerFace({
   // Note that Kawaii names its face's mask by this, so many faces on one page never share a mask; it keeps only an id's safe characters.
   const maskId = useId().replace(/[^\w-]/g, "");
   const { Drawing, viewBox } = CHARACTER[face.character];
+  const badge = BADGE_CLASS[size];
 
   return (
     <span
@@ -117,9 +123,9 @@ export function ManagerFace({
         uniqueId={maskId}
         focusable="false"
       />
-      {working ? (
+      {working && badge !== undefined ? (
         <span
-          className={`pointer-events-none absolute -right-ui-2 -bottom-ui-2 inline-grid place-items-center rounded-disc bg-ground text-muted-foreground ${BADGE_CLASS[size]}`}
+          className={`pointer-events-none absolute -right-ui-2 -bottom-ui-2 inline-grid place-items-center rounded-disc bg-ground text-muted-foreground ${badge}`}
         >
           <WorkingMark />
         </span>

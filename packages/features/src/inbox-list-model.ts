@@ -48,6 +48,7 @@ import {
   recommendedLabels,
   threadNeedsReader,
 } from "./inbox-wire.js";
+import type { ManagerFace } from "./manager-face.js";
 import { insideCode } from "./mention-link.js";
 import { plainWords } from "./plain-words.js";
 import { matchesTokens } from "./search-tokens.js";
@@ -650,6 +651,8 @@ export interface InboxHolderAgent {
   readonly model: string;
   readonly workspaceId: string;
   readonly repository: string | null;
+  /** A Manager's face, which its rows wear in place of its harness's mark; none for a coder, and for a Manager a service older than faces answers. */
+  readonly face?: ManagerFace | undefined;
 }
 
 /** What holds an item on no task: the agent that posted it. */
