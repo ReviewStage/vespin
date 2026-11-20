@@ -322,7 +322,7 @@ const AGENT_ROWS_FIT = {};
  * before a teammate's is archived, because the agents control reads only
  * the open task's.
  */
-function PersonAgentsSection({
+export function PersonAgentsSection({
   title,
   agents,
   count = agents.length,

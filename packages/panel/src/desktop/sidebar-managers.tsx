@@ -73,7 +73,8 @@ function useListedManagers(tasks: TasksControl): ReturnType<typeof useWorkspaceM
   readonly listed: boolean;
 } {
   const workspaceId = tasks.workspace?.id;
-  const listed = useWorkspaceExperiment(workspaceId, EXPERIMENT.MANAGERS) && tasks.signedIn;
+  // MOCKUP: Managers listed whatever the experiment.
+  const listed = (useWorkspaceExperiment(workspaceId, EXPERIMENT.MANAGERS) || true) && tasks.signedIn;
 
   return {
     listed,

@@ -39,6 +39,7 @@ import {
 } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_KIND,
   AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentQueueChange,
@@ -159,6 +160,7 @@ import {
   fixtureAgentOlderMessages,
   fixtureAgentPicture,
   fixtureAgentTranscript,
+  fixtureManagerTranscript,
   fixtureLongTranscript,
 } from "./fixture-agent-transcript.js";
 import {
@@ -260,6 +262,9 @@ const AGENT = {
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
+
+/** MOCKUP: a Manager on no task, which started the fixture's agents. */
+export const FIXTURE_MANAGER_ID = "7a1e9425-6d9f-4ab7-92df-00000000aaaa";
 
 /** The model the digest's agent runs on, Codex's, from the fixture's catalog. */
 const CODEX_MODEL = "openai/gpt-6.1-sol";
@@ -1129,6 +1134,17 @@ const LISTED_SECTIONS: NonNullable<TasksView["taskSections"]> = {
 };
 
 /** The pull request the reference journey's agent opened, open with its checks passing. */
+/** MOCKUP: the digest agent's draft pull request, its checks running. */
+const DIGEST_PULL_REQUEST = {
+  number: 131,
+  title: "Send the weekly digest email",
+  url: "https://github.com/ada/relay/pull/131",
+  state: PULL_REQUEST_STATE.OPEN,
+  checks: CHECK_SUMMARY.PENDING,
+  additions: 268,
+  deletions: 12,
+} as const;
+
 const INVITES_PULL_REQUEST = {
   number: 128,
   title: "Invite a teammate by email",
@@ -1631,15 +1647,36 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     listStatus: TASKS_READ.READY,
     taskAgents: [
       ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
-      ...followed,
+      ...followed.map((agent) => ({ ...agent, startedByAgentId: FIXTURE_MANAGER_ID })),
+      {
+        id: FIXTURE_MANAGER_ID,
+        taskId: null,
+        kind: AGENT_KIND.MANAGER,
+        face: { character: "planet", color: "purple" },
+        model: MODEL,
+        effort: "high",
+        title: "Growth Manager",
+        createdAt: LANDED - 6 * DAY,
+        status: AGENT_STATUS.COMPLETED,
+        settledAt: LANDED - 27 * MINUTE,
+        turnId: null,
+        runStartedAt: LANDED - 2 * MINUTE,
+        startedBy: ADA,
+        runtime: AGENT_RUNTIME.CLAUDE_CODE,
+        workspaceId: FIXTURE_IDS.WORKSPACE,
+        repository: "ada/relay",
+      },
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
       ? list.workspaces
       : [FIXTURE_WORKSPACE, TEAM_WORKSPACE, ...list.workspaces],
     taskPullRequests: [
-      ...(list.taskPullRequests ?? []).filter((each) => each.taskId !== TASK.INVITES),
+      ...(list.taskPullRequests ?? []).filter(
+        (each) => each.taskId !== TASK.INVITES && each.taskId !== TASK.DIGEST,
+      ),
       { taskId: TASK.INVITES, pullRequests: [{ ...INVITES_PULL_REQUEST, agentId: AGENT.INVITES }] },
+      { taskId: TASK.DIGEST, pullRequests: [{ ...DIGEST_PULL_REQUEST, agentId: AGENT.DIGEST }] },
     ],
     agentPullRequests: [
       ...(list.agentPullRequests ?? []).filter((each) => each.taskId !== TASK.INVITES),
@@ -1652,6 +1689,7 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
               pullRequest: { ...INVITES_PULL_REQUEST, changedFiles: 14 },
             },
           ]),
+      { agentId: AGENT.DIGEST, taskId: TASK.DIGEST, pullRequest: { ...DIGEST_PULL_REQUEST, changedFiles: 6 } },
     ],
   };
 }
@@ -2046,6 +2084,10 @@ function stagedTranscripts(
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
+    [FIXTURE_MANAGER_ID]: {
+      ...held[FIXTURE_MANAGER_ID],
+      [OWN_TRANSCRIPT]: { rows: fixtureManagerTranscript(LANDED, ADA) },
+    },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);

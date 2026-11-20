@@ -465,3 +465,50 @@ export function fixtureAgentPicture(
 
   return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 }
+
+/** MOCKUP: a Manager's conversation with the account: asked for the invite launch, it reports the agents it started and their pull requests. */
+export function fixtureManagerTranscript(
+  landed: number,
+  reader: { readonly userId: string; readonly name: string },
+): AppTranscript {
+  const said = (id: string, at: number, text: string): AgentTranscriptMessage => ({
+    id,
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "step-start" },
+      toolPart(AGENT_TOOL.SEND_TO_USER, `${id}-send`, { text }, { status: "accepted" }),
+    ],
+    startedAt: at,
+    finishedAt: at + MINUTE,
+  });
+
+  return {
+    messages: [
+      asked(
+        "fixture-manager-ask",
+        landed - 3 * DAY,
+        "Get teammate invitations ready to launch this week, and the weekly digest going too.",
+        reader,
+      ),
+      said(
+        "fixture-manager-plan",
+        landed - 3 * DAY + 2 * MINUTE,
+        "On it. I split it into four tasks and started an agent on each:\n\n- **Teammate invitations**: the invite flow itself\n- **Invite landing page**: where a link lands\n- **Weekly digest email**: on Codex\n- **Fix ledger rounding**: it blocks the usage numbers in the digest",
+      ),
+      said(
+        "fixture-manager-landing",
+        landed - DAY,
+        "The landing page merged. Rounding is done too.",
+      ),
+      asked("fixture-manager-status", landed - 30 * MINUTE, "Where are we?", reader),
+      said(
+        "fixture-manager-report",
+        landed - 28 * MINUTE,
+        "Two pull requests are open:\n\n- **#128 Invite a teammate by email**: checks green, ready for your review\n- **#131 Send the weekly digest email**: checks running\n\nI asked you in the Inbox who may withdraw an invite; the invitations agent waits on that.",
+      ),
+    ],
+    cursor: "5:0",
+    word: { status: AGENT_STATUS.COMPLETED, runStartedAt: landed - 28 * MINUTE, title: "Growth Manager", caughtUp: true },
+    pages: 1,
+  };
+}

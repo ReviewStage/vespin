@@ -963,9 +963,12 @@ export function TasksBoard({
   room,
   title,
   frame,
+  only,
 }: {
   tasks: TasksControl;
   room: ShellRoom;
+  /** MOCKUP: only these tasks. */
+  only?: ReadonlySet<string> | undefined;
   /** What the toolbar calls the page: the Tasks page's name. */
   title: string;
   /** The Tasks page's toolbar, filter chips, filter, and the Board's display. */
@@ -981,7 +984,11 @@ export function TasksBoard({
   const columnStore = frame.column ?? ownColumn;
   const chosen = useSelector(columnStore) ?? FIRST_SHOWN;
   const setChosen = (next: string) => columnStore.setState(() => next);
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  const named = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  const listed = useMemo(
+    () => (only === undefined ? named : named.filter((task) => only.has(task.id))),
+    [named, only],
+  );
   // Note that a card counts every sub-task listed, as the List's row does, whatever the filter leaves on the board.
   const subTasksOf = useMemo(() => childTaskCounts(listed), [listed]);
   const { filter, display } = frame;

@@ -75,6 +75,8 @@ import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { taskCards } from "./side-panel.js";
 import { useTabViews } from "./strip-tabs.js";
+import { commandCenterVariant, ManagerCommandCenter } from "./manager-command-center.js";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 
 /** What the page says where the agent could not be read. */
 const NOT_READ = "This agent could not be read.";
@@ -355,9 +357,20 @@ function OwnAgentPage({
       <div className="desktop-task relative flex min-h-0 flex-1" data-panel-open="false">
         <Fill as={FILL_ELEMENT.SECTION} className="agent-page" aria-label={label}>
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
+          {/* MOCKUP: a Manager's page as a command center, its chat in a column at its right. */}
+          <div className="flex min-h-0 min-w-0 flex-1">
+          {agent.kind === AGENT_KIND.MANAGER ? (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-r border-border">
+              <ManagerCommandCenter tasks={tasks} manager={agent} variant={commandCenterVariant()} />
+            </div>
+          ) : null}
           {/* Note that the scope stands as the column's own box, as its fill did. */}
           <FindScope
-            className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+            className={
+              agent.kind === AGENT_KIND.MANAGER
+                ? "desktop-task-column flex min-h-0 w-[440px] flex-none flex-col"
+                : "desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+            }
             active={tasks.shown}
             subject={findSubject}
           >
@@ -377,6 +390,7 @@ function OwnAgentPage({
               threads={threads}
             />
           </FindScope>
+          </div>
         </Fill>
       </div>
     </OwnAgentPlaceProvider>
