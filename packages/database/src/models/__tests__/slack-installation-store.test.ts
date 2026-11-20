@@ -10,7 +10,7 @@ import { INTEGRATION_ROW_STATUS } from "../../integration-vocabulary.js";
 import { member as memberTable, organization, user } from "../../schemas/auth.js";
 import { integrationConnection } from "../../schemas/integration.js";
 import { slackInstallation } from "../../schemas/slack-installation.js";
-import { getTestDB } from "../../testing/index.js";
+import { getTestDB, leaveWorkspace } from "../../testing/index.js";
 import { parseKeyRing } from "../provider-key-seal.js";
 import {
   deleteSlackBotToken,
@@ -65,58 +65,66 @@ const openWorkspace = Effect.gen(function* () {
 });
 
 it.layer(getTestDB())("the Slack installation store", (it) => {
-  it.effect("a workspace reads only its own installation and its own members' Slack ids", () =>
-    Effect.gen(function* () {
-      const member = yield* openAccount;
-      const ours = yield* openWorkspace;
-      const theirs = yield* openWorkspace;
-      yield* (yield* Database).insert(memberTable).values({
-        id: randomUUID(),
-        organizationId: ours,
-        userId: member,
-        createdAt: yield* DateTime.nowAsDate,
-      });
+  it.effect(
+    "a workspace reads only its own installation and its own members' Slack ids, never one who left",
+    () =>
+      Effect.gen(function* () {
+        const member = yield* openAccount;
+        const ours = yield* openWorkspace;
+        const theirs = yield* openWorkspace;
+        yield* (yield* Database).insert(memberTable).values({
+          id: randomUUID(),
+          organizationId: ours,
+          userId: member,
+          createdAt: yield* DateTime.nowAsDate,
+        });
 
-      yield* linkSlackInstallation({
-        organizationId: ours,
-        teamId: "T0001",
-        teamName: "Ours",
-        userId: member,
-      });
-      yield* (yield* Database).insert(integrationConnection).values({
-        id: randomUUID(),
-        userId: member,
-        provider: INTEGRATION_PROVIDER.SLACK,
-        connectSubject: member,
-        connectionName: INTEGRATION_PROVIDER.SLACK,
-        status: INTEGRATION_ROW_STATUS.CONNECTED,
-      });
-      const unresolved = yield* slackUnresolvedConnections(ours);
-      const theirsUnresolved = yield* slackUnresolvedConnections(theirs);
-      yield* recordSlackMemberLookup(ours, member, "U0001");
+        yield* linkSlackInstallation({
+          organizationId: ours,
+          teamId: "T0001",
+          teamName: "Ours",
+          userId: member,
+        });
+        yield* (yield* Database).insert(integrationConnection).values({
+          id: randomUUID(),
+          userId: member,
+          provider: INTEGRATION_PROVIDER.SLACK,
+          connectSubject: member,
+          connectionName: INTEGRATION_PROVIDER.SLACK,
+          status: INTEGRATION_ROW_STATUS.CONNECTED,
+        });
+        const unresolved = yield* slackUnresolvedConnections(ours);
+        const theirsUnresolved = yield* slackUnresolvedConnections(theirs);
+        yield* recordSlackMemberLookup(ours, member, "U0001");
 
-      assert.deepEqual(
-        yield* workspaceSlackInstallation(ours),
-        Option.some({ teamId: "T0001", teamName: "Ours" }),
-      );
-      assert.equal(Option.isNone(yield* workspaceSlackInstallation(theirs)), true);
-      assert.deepEqual(unresolved, [{ userId: member, connectSubject: member }]);
-      assert.deepEqual(theirsUnresolved, []);
-      assert.deepEqual(yield* slackUnresolvedConnections(ours), []);
-      assert.deepEqual(
-        Option.map(yield* slackMemberLookup(ours, member), (found) => found.slackUserId),
-        Option.some("U0001"),
-      );
-      assert.equal(Option.isNone(yield* slackMemberLookup(theirs, member)), true);
-      assert.deepEqual(yield* slackMemberOf(ours, "T0001", "U0001"), Option.some(member));
-      assert.equal(Option.isNone(yield* slackMemberOf(theirs, "T0001", "U0001")), true);
-      assert.equal(Option.isNone(yield* slackMemberOf(ours, "T0002", "U0001")), true);
-      const email = `${member}@APP.test`;
-      assert.deepEqual(yield* slackMemberByEmail(ours, email), Option.some(member));
-      assert.equal(Option.isNone(yield* slackMemberByEmail(theirs, email)), true);
-      assert.equal(Option.isNone(yield* deleteSlackInstallation(theirs)), true);
-      assert.equal(Option.isSome(yield* workspaceSlackInstallation(ours)), true);
-    }),
+        assert.deepEqual(
+          yield* workspaceSlackInstallation(ours),
+          Option.some({ teamId: "T0001", teamName: "Ours" }),
+        );
+        assert.equal(Option.isNone(yield* workspaceSlackInstallation(theirs)), true);
+        assert.deepEqual(unresolved, [{ userId: member, connectSubject: member }]);
+        assert.deepEqual(theirsUnresolved, []);
+        assert.deepEqual(yield* slackUnresolvedConnections(ours), []);
+        assert.deepEqual(
+          Option.map(yield* slackMemberLookup(ours, member), (found) => found.slackUserId),
+          Option.some("U0001"),
+        );
+        assert.equal(Option.isNone(yield* slackMemberLookup(theirs, member)), true);
+        assert.deepEqual(yield* slackMemberOf(ours, "T0001", "U0001"), Option.some(member));
+        assert.equal(Option.isNone(yield* slackMemberOf(theirs, "T0001", "U0001")), true);
+        assert.equal(Option.isNone(yield* slackMemberOf(ours, "T0002", "U0001")), true);
+        const email = `${member}@APP.test`;
+        assert.deepEqual(yield* slackMemberByEmail(ours, email), Option.some(member));
+        assert.equal(Option.isNone(yield* slackMemberByEmail(theirs, email)), true);
+        assert.equal(Option.isNone(yield* deleteSlackInstallation(theirs)), true);
+        assert.equal(Option.isSome(yield* workspaceSlackInstallation(ours)), true);
+        yield* leaveWorkspace(ours, member);
+        assert.equal(
+          Option.isNone(yield* slackMemberOf(ours, "T0001", "U0001")),
+          true,
+          "a member who left is no longer found by their kept Slack id",
+        );
+      }),
   );
 
   it.effect("a workspace opens only its own bot token, which no other workspace's row opens", () =>

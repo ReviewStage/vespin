@@ -361,7 +361,7 @@ const findMember = SqlSchema.findOneOption({
     ),
 });
 
-/** The member whose kept Slack id in the workspace is the one given, where the workspace's bot stands connected to the team given. */
+/** The member whose kept Slack id in the workspace is the one given, where the workspace's bot stands connected to the team given; never one who has since left the workspace, whose id stays kept should they rejoin. */
 const findMemberBySlackId = SqlSchema.findOneOption({
   Request: Schema.Struct({
     organizationId: Schema.String,
@@ -377,6 +377,13 @@ const findMemberBySlackId = SqlSchema.findOneOption({
         .innerJoin(
           slackInstallation,
           eq(slackInstallation.organizationId, slackMember.organizationId),
+        )
+        .innerJoin(
+          member,
+          and(
+            eq(member.organizationId, slackMember.organizationId),
+            eq(member.userId, slackMember.userId),
+          ),
         )
         .where(
           and(
