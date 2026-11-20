@@ -54,7 +54,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
+import { createContext, Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
@@ -471,6 +471,7 @@ export function rowPlacement(
   vertical: number = ROW_INSET.VERTICAL,
   indent = 0,
   leading: number = ROW_INSET.LEADING,
+  reach = 0,
 ) {
   return [
     listRowBackground("clear"),
@@ -483,10 +484,13 @@ export function rowPlacement(
     }),
     ...(selected
       ? [
+          // Note that a fill that reaches past the row's own frame, under what the system stands after it, is drawn on the frame padded out by that much and the padding taken back, so the row lays out as it did.
+          padding({ trailing: reach }),
           background(
             colors.SELECTED,
             SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
           ),
+          padding({ trailing: -reach }),
           listRowSeparator("hidden"),
         ]
       : []),
@@ -636,13 +640,22 @@ export function RowFrame({
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
+  const disclosed = useContext(RowDisclosedContext);
+  const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors, selected, vertical, indent, leading),
+    ...rowPlacement(
+      colors,
+      selected,
+      vertical,
+      indent,
+      leading,
+      disclosed ? SPACE.EDGE + chevronRoom : 0,
+    ),
     ...(heard === undefined
       ? []
       : [
@@ -1166,6 +1179,12 @@ function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   }
 }
 
+/** Whether a row stands as a disclosure's label, after which the system stands the disclosure's chevron. */
+const RowDisclosedContext = createContext(false);
+
+/** The room the system's disclosure chevron takes after its label, in points at the default text size, the gap before it included, measured on the iPad (j10090r2), which a selected label's fill reaches under. */
+const DISCLOSURE_CHEVRON_ROOM = 7;
+
 /**
  * A row with the rows nested under it, folded by SwiftUI's own disclosure,
  * as Files and Notes fold a folder: the row stands as its label, its
@@ -1186,7 +1205,7 @@ export function RowDisclosure({
   readonly label: ReactNode;
   readonly children: ReactNode;
 }) {
-  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it; its trailing inset keeps the chevron off the column's edge, and the system sets its rows in under the parent's name.
+  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it; its trailing inset keeps the chevron off the column's edge, and the system sets its rows in under the parent's name. A selected label's fill reaches on under the chevron (`RowDisclosedContext`), since a view modifier here would fall on every row nested under it too.
   return (
     <DisclosureGroup
       isExpanded={open}
@@ -1196,7 +1215,9 @@ export function RowDisclosure({
         listRowBackground("clear"),
       ]}
     >
-      <DisclosureGroup.Label>{label}</DisclosureGroup.Label>
+      <DisclosureGroup.Label>
+        <RowDisclosedContext value={true}>{label}</RowDisclosedContext>
+      </DisclosureGroup.Label>
       {children}
     </DisclosureGroup>
   );
