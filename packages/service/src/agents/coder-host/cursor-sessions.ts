@@ -201,6 +201,9 @@ function cursor(options: RunnerSessionsOptions): RunnerHarness<{ readonly _tag: 
         eventsUrl: options.eventsUrl,
         mcpUrl: options.mcpUrl,
         integrations: yield* options.integrations(agent),
+        ...(layout.installedSkills === undefined
+          ? undefined
+          : { installedSkills: layout.installedSkills }),
         ...(mode?.permissionMode === PERMISSION_MODE.AUTO
           ? { permissionMode: PERMISSION_MODE.AUTO }
           : undefined),
