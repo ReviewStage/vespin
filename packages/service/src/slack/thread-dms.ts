@@ -138,7 +138,7 @@ interface AskControls {
 
 const NO_CONTROLS: AskControls = { blocks: [], buttons: [] };
 
-/** What a reply about a thread is drawn from: its title, which Slack's notification says, the agent's words in Markdown, the thread's link, and whether it stands alone, a DM from before the title did, so says the title as its header. */
+/** What a reply about a thread is drawn from: its title, which Slack's notification says, the agent's words in Markdown, the thread's link, and whether it stands alone, as a DM from before the title DM did, so says the title as its header. */
 interface ThreadDmView {
   readonly title: string;
   readonly text: string;
