@@ -334,6 +334,16 @@ find it in the sidebar's Following group.
 
 ![Usage-based billing, Theo Walsh's task, open on its Overview with its Following chip's popover open: You, with the laptop mark for letting agents use your machines, Theo Walsh marked Assignee, and Dana Moreno, each checked, above Let agents here use my machines switched on; beside it the sidebar's Following group lists Usage-based billing, Rotate webhook signing secrets, and Onboarding checklist above My tasks](apps/web/public/changelog/0.35.0/following.png)
 
+### Find and jump to any message sent to an agent
+
+Hover the rail down the side of an agent's transcript to see the messages sent
+to it, yours and those from teammates, other agents, automations, and GitHub.
+Click one to jump to it.
+
+[#9162](https://github.com/ReviewStage/vespin/pull/9162)
+
+![The Add teammate invitations agent's transcript with the rail down its side pointed at: beside it a stack of the messages sent to the agent, Update docs after a merge in front, with Theo Walsh's, Jordan Lee's, and your own above it, and Handle Postmark bounces, your own, and Dana Moreno's GitHub comment below](apps/web/public/changelog/0.35.0/find-and-jump-to-any-message.png)
+
 ### Improvements
 
 - Settings › Machines lists all your machines and lets you pick a default
@@ -353,8 +363,6 @@ find it in the sidebar's Following group.
   with a note ([#9207](https://github.com/ReviewStage/vespin/pull/9207))
 - Blocked commands read as not run instead of failed, and the agent carries on
   ([#9194](https://github.com/ReviewStage/vespin/pull/9194))
-- Hover the transcript's rail to preview nearby messages
-  ([#9162](https://github.com/ReviewStage/vespin/pull/9162))
 - Integration calls show the account they ran on to everyone
   ([#9300](https://github.com/ReviewStage/vespin/pull/9300))
 - Clearer rows for searches, thread reads, and browser calls

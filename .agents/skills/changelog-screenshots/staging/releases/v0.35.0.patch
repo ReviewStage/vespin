@@ -2163,10 +2163,10 @@ index 000000000..402c064b1
 +}
 diff --git a/packages/panel/src/shots/github-mention.ts b/packages/panel/src/shots/github-mention.ts
 new file mode 100644
-index 000000000..e696abcf3
+index 000000000..5398bf011
 --- /dev/null
 +++ b/packages/panel/src/shots/github-mention.ts
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,85 @@
 +/**
 + * github-mention.ts -- 0.34.0 shot "Mention Vespin on GitHub": the Add teammate invitations agent back at work on Dana's `@vespin` comment on #214, which GitHub steered in as her comment line.
 + *
@@ -2174,6 +2174,7 @@ index 000000000..e696abcf3
 + * laid over the snapshot as the host holds it, scrolled to its foot.
 + */
 +
++import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 +import { LIVE_READ } from "@repo/features/live-wire";
 +import { OWN_TRANSCRIPT } from "@repo/host/app-state";
 +import { ACT_KIND } from "@repo/host/acts";
@@ -2187,17 +2188,19 @@ index 000000000..e696abcf3
 +import { acmeMembers, MEMBER, whoWorkspaces } from "./who";
 +
 +/** The transcript as the host holds it, the agent at work. */
-+export function mentionTranscript() {
-+  const held = shotHeldTranscript(SHOT_ID.AGENT, mentionMessages);
++export function mentionTranscript(messages: () => AgentTranscriptMessage[] = mentionMessages) {
++  const held = shotHeldTranscript(SHOT_ID.AGENT, messages);
 +  return held === undefined
 +    ? undefined
 +    : ({ ...held, word: { ...held.word, status: "running" as const, runStartedAt: ago(0.8) } } as typeof held);
 +}
 +
 +/** The shot's spec, its layout aside, which the rail shot shares. */
-+export function mentionSpec(): Omit<ShotSpec, "layout" | "steps"> {
++export function mentionSpec(
++  messages: () => AgentTranscriptMessage[] = mentionMessages,
++): Omit<ShotSpec, "layout" | "steps"> {
 +  const members = acmeMembers();
-+  const transcript = mentionTranscript();
++  const transcript = mentionTranscript(messages);
 +  return {
 +    planning: shotTasksView({
 +      plan: standingPlan(),
@@ -2207,7 +2210,7 @@ index 000000000..e696abcf3
 +    sidePanel: FIXTURE_CLOSED_PANEL,
 +    readerId: MEMBER.DEAN.userId,
 +    answers: {
-+      ...codingAgentAnswers(mentionMessages),
++      ...codingAgentAnswers(messages),
 +      [ACT_KIND.AGENTS_INBOX_FOLLOW]: () => NEVER,
 +      [ACT_KIND.TASKS_PAGES_FOLLOW]: () => NEVER,
 +    },
@@ -2471,7 +2474,7 @@ index 000000000..f191ccbc7
 +}
 diff --git a/packages/panel/src/shots/mention-transcript.ts b/packages/panel/src/shots/mention-transcript.ts
 new file mode 100644
-index 000000000..49cc80fb6
+index 000000000..7e0e3c8fd
 --- /dev/null
 +++ b/packages/panel/src/shots/mention-transcript.ts
 @@ -0,0 +1,122 @@
@@ -2497,7 +2500,7 @@ index 000000000..49cc80fb6
 +  "@vespin an expired invite link 404s on the accept page. It should say \"This invite is no longer valid\" and offer to ask for a new one, as the plan says.";
 +
 +/** One finished reply of the agent's. */
-+function reply(id: string, at: number, text: string, parts: AgentTranscriptMessage["parts"] = []): AgentTranscriptMessage {
++export function reply(id: string, at: number, text: string, parts: AgentTranscriptMessage["parts"] = []): AgentTranscriptMessage {
 +  return {
 +    id,
 +    role: "assistant",
@@ -3507,24 +3510,80 @@ index 000000000..5c13a76aa
 +  .join("\n")}`;
 diff --git a/packages/panel/src/shots/rail.ts b/packages/panel/src/shots/rail.ts
 new file mode 100644
-index 000000000..2d3795998
+index 000000000..196c28c99
 --- /dev/null
 +++ b/packages/panel/src/shots/rail.ts
-@@ -0,0 +1,34 @@
+@@ -0,0 +1,102 @@
 +/**
-+ * rail.ts -- 0.34.0 shot "Find any line sent to an agent": the Add teammate invitations agent's transcript with its rail's list open on every line sent in, yours, an automation's, another agent's, and Dana's from GitHub.
++ * rail.ts -- 0.35.0 shot "Find and jump to any message sent to an agent": the Add teammate invitations agent's transcript with its rail's stack open, the automation's line in front and three lines either side, from you, Theo, Jordan, Theo's agent, and Dana on GitHub.
 + *
-+ * Throwaway (`README.md`). Shares `mention-transcript.ts` with the GitHub
-+ * mention shot. The rail's list opens on focus as on hover, so a step
-+ * focuses the rail whenever its list is not open, since the capture's
-+ * activation takes the focus.
++ * Throwaway (`README.md`). Takes `mention-transcript.ts`'s transcript, with
++ * three more lines sent in, so the stack stands full on both sides. A step
++ * points at the line in front as a hover does, since a focus would draw
++ * the rail's focus ring.
 + */
 +
-+import { SHOT_ID } from "./plan-document";
++import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
++import { ago } from "./clock";
 +import { mentionSpec } from "./github-mention";
++import { mentionMessages, reply } from "./mention-transcript";
++import { SHOT_ID } from "./plan-document";
 +import type { ShotSpec, ShotStep } from "./shot-spec";
++import { MEMBER } from "./who";
 +
-+/** Focuses the rail whenever its list is not open. */
++/** The words of the line the stack holds in front. */
++const IN_FRONT = "renaming POST /members";
++
++/** A reply that took half a minute, so the times read in order between the transcript's own lines. */
++function quick(id: string, at: number, text: string): AgentTranscriptMessage {
++  return { ...reply(id, at, text), finishedAt: at + 30_000 };
++}
++
++/** Lines sent in before Dean's seed, as Theo and Jordan wrote them. */
++function earlier(): AgentTranscriptMessage[] {
++  return [
++    {
++      id: "m-theo-template",
++      role: "user",
++      sentBy: { name: MEMBER.THEO.name, userId: MEMBER.THEO.userId, kind: "member" },
++      sentAt: ago(11.8),
++      parts: [{ type: "text", text: "Use the password reset email's Postmark layout for the invite. Brand already signed off on it." }],
++    },
++    quick("m-template", ago(11.8), "Switched the invite email to the password reset layout, with its own subject line."),
++    {
++      id: "m-jordan-sent",
++      role: "user",
++      sentBy: { name: MEMBER.JORDAN.name, userId: MEMBER.JORDAN.userId, kind: "member" },
++      sentAt: ago(11.1),
++      parts: [{ type: "text", text: "Could Pending invites say when each one was sent? Support keeps asking." }],
++    },
++    quick("m-sent-at", ago(11.1), "Each pending invite now reads Sent 2 days ago under its email."),
++  ];
++}
++
++/** Dean's line after Theo's agent's. */
++function later(): AgentTranscriptMessage[] {
++  return [
++    {
++      id: "m-dean-resend",
++      role: "user",
++      sentAt: ago(1.8),
++      parts: [{ type: "text", text: "Put Resend in a pending invite's row menu rather than as its own button." }],
++    },
++    quick("m-resend", ago(1.8), "Moved Resend into the row's menu, beside Withdraw invite."),
++  ];
++}
++
++/** The mention transcript with the shot's lines laid in where their times fall. */
++function railMessages(): AgentTranscriptMessage[] {
++  return mentionMessages().flatMap((message) => {
++    if (message.id === "m-dean-seed") return [...earlier(), message];
++    if (message.id === "m-dana-github") return [...later(), message];
++    return [message];
++  });
++}
++
++/** Points at the line in front whenever the stack is shut, as a hover opens it, so no focus ring stands on the rail; the capture's activation may shut it. */
 +const OPEN_RAIL: ShotStep = {
 +  key: "open-rail",
 +  ready: () => true,
@@ -3532,15 +3591,27 @@ index 000000000..2d3795998
 +    window.setTimeout(() => {
 +      window.setInterval(() => {
 +        const rail = document.querySelector<HTMLElement>("[aria-label='Go to a message']");
-+        if (rail !== null && rail.getAttribute("aria-expanded") !== "true") rail.focus();
-+      }, 400);
++        const stack = document.querySelector<HTMLElement>("[role='listbox'][aria-label='Messages to the agent']");
++        // Note that the composer takes the focus as the tab opens, and its caret would blink in the picture.
++        const focused = document.activeElement;
++        if (focused instanceof HTMLElement && (focused.isContentEditable || focused.tagName === "TEXTAREA")) focused.blur();
++        if (rail === null || stack?.getAttribute("aria-hidden") === "false") return;
++        const options = [...document.querySelectorAll<HTMLElement>("[role='option']")];
++        const front = Math.max(0, options.findIndex((each) => (each.textContent ?? "").includes(IN_FRONT)));
++        const line = rail.children[options.length === 0 ? 4 : front] as HTMLElement | undefined;
++        if (line === undefined) return;
++        const box = line.getBoundingClientRect();
++        const at = { bubbles: true, clientX: box.left + box.width / 2, clientY: box.top + box.height / 2, pointerType: "mouse" };
++        line.dispatchEvent(new PointerEvent("pointerover", at));
++        line.dispatchEvent(new PointerEvent("pointermove", at));
++      }, 250);
 +    }, 3000);
 +  },
 +};
 +
 +export function railShot(): ShotSpec {
 +  return {
-+    ...mentionSpec(),
++    ...mentionSpec(railMessages),
 +    layout: { sidebarCollapsed: true, mainTab: { kind: "agent", agent: SHOT_ID.AGENT } },
 +    steps: [OPEN_RAIL],
 +  };
