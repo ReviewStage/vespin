@@ -6,6 +6,7 @@ import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import { AUDIO_TYPE } from "@repo/features/audio-signature";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
+import { pictureExtension } from "@repo/ui-native";
 import { Directory, File, Paths } from "expo-file-system";
 
 /** What a video's file is named with while its bytes are still being written, so no read takes it for the whole file. */
@@ -83,6 +84,26 @@ export async function cachedPlayed(
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
 
   return once(new File(Paths.cache, name), base64);
+}
+
+/**
+ * Where a picture's bytes were written for its row to draw from: a file of
+ * the app's caches named `<prefix>-<id>.<extension>`, written once as a video
+ * is (`cachedPlayed`), so a page holds the file's address rather than the
+ * picture's bytes, and the system's image cache, not the JS heap, holds what
+ * it decoded. None for a picture type no file can be named for.
+ */
+export async function cachedPicture(
+  prefix: string,
+  id: string,
+  contentType: string,
+  base64: string,
+): Promise<string | undefined> {
+  const extension = pictureExtension(contentType);
+
+  if (extension === undefined) return undefined;
+
+  return once(new File(Paths.cache, `${prefix}-${id}.${extension}`), base64);
 }
 
 /**

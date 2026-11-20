@@ -44,13 +44,15 @@ export interface TaskListPullRequests {
 
 /** One plan an agent names, and its agents. */
 export interface PlanAgents {
-  readonly taskId: string;
+  /** Null for the agents on no task, gathered as one plan no plan joins. */
+  readonly taskId: string | null;
   readonly agents: WithVirtualProps<AgentRow, string>[];
 }
 
 /** One plan an agent names, and every pull request its agents opened; none where they opened none. */
 export interface PlanPullRequests {
-  readonly taskId: string;
+  /** Null for the agents on no task, whose pull requests no plan lists. */
+  readonly taskId: string | null;
   readonly listing: TaskPullRequests | undefined;
 }
 
@@ -108,7 +110,7 @@ export function taskListPullRequests(
             return {
               taskId: group.taskId,
               listing:
-                pullRequests.length === 0
+                pullRequests.length === 0 || group.taskId === null
                   ? undefined
                   : ({ taskId: group.taskId, pullRequests } satisfies TaskPullRequests),
             };

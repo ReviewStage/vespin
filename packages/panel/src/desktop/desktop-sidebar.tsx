@@ -66,7 +66,7 @@ import {
   ERROR_STATE_PLACEMENT,
   ErrorState,
   Fill,
-  GROUP_HEADING,
+  GROUP_HEAD,
   GroupHeader,
   HoldPress,
   IconButton,
@@ -212,6 +212,12 @@ import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-c
 import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarFoot } from "./sidebar-foot.js";
 import { SidebarInboxRow } from "./sidebar-inbox-row.js";
+import {
+  ManagerRows,
+  type PinnedManagers,
+  SidebarManagers,
+  usePinnedManagers,
+} from "./sidebar-managers.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
@@ -801,9 +807,14 @@ function accountPinOf(
 }
 
 /** An agent on a plan the account pinned as its row under Pinned draws it: as its tab in the plan's column, named as the agent is. */
-function agentPinOf(pin: TaskAgentPin, agent: AgentSummary, tasks: TasksControl): AgentPin {
+function agentPinOf(
+  pin: TaskAgentPin,
+  task: TaskSummary,
+  agent: AgentSummary,
+  tasks: TasksControl,
+): AgentPin {
   const drawn = {
-    task: pin.taskId,
+    task: task.id,
     tab: agentTab(agent.id),
     label: agentName(agent, tasks.agents.models),
     at: pin.pinnedAt,
@@ -839,11 +850,12 @@ function pinnedRows(
   );
 
   const taskAgentRows = tasks.taskAgentPins.flatMap((pin): PinnedRow[] => {
-    const task = listed(pin.taskId);
+    // Note that an agent pinned on no task, a Manager, is drawn as its own row instead (`PinnedManagers`).
+    const task = pin.taskId === null ? undefined : listed(pin.taskId);
     const agent = tasks.liveAgents?.find((each) => each.id === pin.agentId);
 
     if (task === undefined || agent === undefined) return [];
-    const drawn = agentPinOf(pin, agent, tasks);
+    const drawn = agentPinOf(pin, task, agent, tasks);
 
     return [{ task, pin: drawn, place: { position: drawn.position, at: drawn.at } }];
   });
@@ -1194,10 +1206,15 @@ function PinnedRows({
  * group's is (`sidebarHead`), led by the pin Pin draws, and offers, from its
  * ⋯ and a right-click alike, Mark all as read while a pinned task is unread;
  * it offers no menu while none is, and no Move up or down, since Pinned is
- * the one of its kind.
+ * the one of its kind. The Managers the reader pinned stand on top, as the
+ * Managers section draws them (`ManagerRows`), in their pins' order, and
+ * are counted among the pins; a drag moves none of them, since they stand
+ * in a list of agents' rows of their own.
  */
 function PinnedSection({
   rows,
+  managers,
+  onOpenManager,
   adopted,
   folds,
   shown,
@@ -1207,6 +1224,10 @@ function PinnedSection({
   carried,
 }: {
   rows: readonly PinnedRow[];
+  /** The Managers the reader pinned (`usePinnedManagers`). */
+  managers: PinnedManagers;
+  /** Opens a Manager's page. */
+  onOpenManager: (agentId: string) => void;
   /** The child tasks standing under its plans (`homedTaskRows`). */
   adopted: readonly TaskSummary[];
   folds: FoldedGroups;
@@ -1231,7 +1252,23 @@ function PinnedSection({
     context.every,
   );
 
-  const empty = rows.length === 0;
+  const pinnedManagers = managers.managers;
+  const openManagerId = context.tasks.agentView.agentId;
+  const standingManagers = pinnedManagers.filter((agent) => agent.id === openManagerId);
+  const empty = rows.length === 0 && pinnedManagers.length === 0;
+  const rowsShown = context.tasks.shown && context.inSight;
+
+  const managerRows = (drawn: readonly AgentSummary[]) =>
+    drawn.length === 0 ? null : (
+      <ManagerRows
+        managers={drawn}
+        agents={managers.agents}
+        tasks={context.tasks}
+        shown={rowsShown}
+        onOpen={onOpenManager}
+      />
+    );
+
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
@@ -1251,7 +1288,7 @@ function PinnedSection({
             : {
                 folded,
                 onToggle: folds.togglePinned,
-                count: rows.length,
+                count: rows.length + pinnedManagers.length,
                 noun: PIN_NOUN,
               },
         )}
@@ -1270,19 +1307,25 @@ function PinnedSection({
           )
         }
         standing={
-          standing.length === 0 ? undefined : (
-            <PinnedRows
-              rows={rows.filter(shown)}
-              drawn={standing}
-              context={context}
-              onOpenTab={onOpenTab}
-              movable={false}
-              onDropOut={onDropOut}
-            />
+          standing.length === 0 && standingManagers.length === 0 ? undefined : (
+            <>
+              {managerRows(standingManagers)}
+              {standing.length === 0 ? null : (
+                <PinnedRows
+                  rows={rows.filter(shown)}
+                  drawn={standing}
+                  context={context}
+                  onOpenTab={onOpenTab}
+                  movable={false}
+                  onDropOut={onDropOut}
+                />
+              )}
+            </>
           )
         }
       >
-        {empty ? (
+        {managerRows(pinnedManagers)}
+        {rows.length === 0 ? (
           carried && <DropSlot />
         ) : (
           <PinnedRows
@@ -2176,6 +2219,8 @@ function SidebarColumn({
   const openAutomations = () => automations.open();
   const openMergeQueue = () => mergeQueue.open();
   const openAdmin = () => admin.open();
+  // A Manager stands on no task, so its row opens its own page.
+  const openManager = (agentId: string) => arriveFor(() => tasks.agentView.onOpen(agentId));
   const goHome = () => arriveFor(() => tasks.onGoHome());
   // Home is the place of no task bound, standing on its own route. New task's
   // composer is on it, so its row draws no Draft pencil for the words shown there.
@@ -2217,6 +2262,7 @@ function SidebarColumn({
   // Note that while the view shows finished sub-tasks, those a parent's count names that the list holds not are read into it.
   useSubTaskReads(listedTasks.unheldSubTasks, taskView.view.finishedSubTasks && tasks.listRead);
   const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, tasks);
+  const pinnedManagers = usePinnedManagers(tasks, tasks.taskAgentPins);
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands.
   const { chosenPin } = tasks;
@@ -2491,9 +2537,15 @@ function SidebarColumn({
   // the list still moves from it.
   const pinnedWalked = pinnedTaskRows(pinnedDrawnRows);
 
+  // The tasks the Tasks head heads, the sections' and the list's, which its fold folds together, the open one standing.
+  const tasksHeaded = [
+    ...homedSections.flatMap((drawn) => drawn.tasks),
+    ...taskSectionLists(homedTasks).flat(),
+  ];
+
   const sectionsDrawn = homedSections.flatMap(({ section, tasks: held }) =>
     nestedRows(
-      folds.sectionFolded(section.id) ? held.filter(currentTask) : held,
+      folds.tasksFolded || folds.sectionFolded(section.id) ? held.filter(currentTask) : held,
       folds,
       currentTask,
       everyTask,
@@ -2513,7 +2565,14 @@ function SidebarColumn({
     ...pinnedShownDrawn,
     ...followingDrawn,
     ...sectionsDrawn,
-    ...drawnTasks(homedTasks, folds, currentTask, everyTask),
+    ...(folds.tasksFolded && tasksHeaded.length > 0
+      ? nestedRows(
+          taskSectionLists(homedTasks).flat().filter(currentTask),
+          folds,
+          currentTask,
+          everyTask,
+        )
+      : drawnTasks(homedTasks, folds, currentTask, everyTask)),
   ];
 
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
@@ -2686,10 +2745,20 @@ function SidebarColumn({
                     {...motionRows()}
                   >
                     {places}
+                    {/* Managers stands above everything the workspace's tasks fill, where the workspace has them on. */}
+                    <SidebarManagers
+                      tasks={tasks}
+                      folds={folds}
+                      inSight={overlay.inSight}
+                      onOpen={chosen(openManager)}
+                    />
                     {/* Pinned stands once something is pinned, or, while the account keeps sections, as the place a carried row drops in, and leaves after its exit once neither holds. */}
                     <LeavingGroups
                       groups={
-                        tasks.signedIn && (pinnedSection.length > 0 || (sectionsShown && carrying))
+                        tasks.signedIn &&
+                        (pinnedSection.length > 0 ||
+                          pinnedManagers.managers.length > 0 ||
+                          (sectionsShown && carrying))
                           ? PINNED_LISTED
                           : NOTHING_LISTED
                       }
@@ -2698,6 +2767,8 @@ function SidebarColumn({
                         <PinnedSection
                           key={key}
                           rows={pinnedSection}
+                          managers={pinnedManagers}
+                          onOpenManager={chosen(openManager)}
                           adopted={pinnedAdopted}
                           folds={folds}
                           shown={pinnedShown}
@@ -2725,145 +2796,164 @@ function SidebarColumn({
                         />
                       )}
                     />
-                    {/* The Tasks head heads what its view filters, the sections and the list, Pinned standing above it unfiltered; a row let go on it leaves its section, as one let go on the list does. */}
-                    {tasks.signedIn ? (
-                      <div
-                        className="sidebar-group sidebar-tasks-head"
-                        data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
-                        {...motionKey(TASKS_HEAD_KEY)}
-                      >
-                        <GroupHeader
-                          heading={GROUP_HEADING.NONE}
-                          label={
-                            assignedTo.kind === ASSIGNED_TO.MEMBER ? (
-                              <ReplayMask>{tasksHead}</ReplayMask>
-                            ) : (
-                              tasksHead
-                            )
-                          }
-                          actions={
-                            <>
-                              {!newSectionOffered ? null : (
-                                <Tooltip label={NEW_SECTION}>
-                                  <IconButton
-                                    ref={newSectionButton}
-                                    icon={<FolderPlusIcon />}
-                                    label={NEW_SECTION}
-                                    size={BUTTON_SIZE.COMPACT}
-                                    onClick={askNewSection}
-                                  />
-                                </Tooltip>
-                              )}
-                              <TaskViewOptions
-                                shown={tasks.shown && overlay.inSight}
-                                control={taskView}
-                                shared={shared}
-                                filtered={shared && assignedTo.kind !== mine.kind}
-                              />
-                            </>
-                          }
-                        />
-                      </div>
-                    ) : null}
-                    <SidebarSections
-                      sections={homedSections}
-                      workspaceId={sectionsShown ? tasks.workspace?.id : undefined}
-                      context={{
-                        tasks,
-                        dialogs: sectionDialogs,
-                        edits: sectionEdits,
-                        current: currentTask,
-                        unread,
-                        inSight: overlay.inSight,
-                        folded: folds.sectionFolded,
-                        onToggle: folds.toggleSection,
-                        opened: folds.taskOpened,
-                        every: everyTask,
-                        row: (held, nest, place) => {
-                          const { task } = held;
-
-                          return (
-                            <SidebarTask
-                              key={task.id}
-                              tasks={tasks}
-                              task={task}
-                              current={context.marked(task.id, undefined)}
-                              open={current(task.id)}
-                              unread={unread(task)}
-                              at={taskTime(task, TASK_ORDER.UPDATED)}
-                              now={now}
-                              faces={context.faces}
-                              depth={held.depth}
-                              nest={nest}
-                              place={place}
-                              fold={childTasksFold(held, folds.toggleTask)}
-                              childCount={context.childCount(task.id)}
-                              onOpen={() => context.onOpen(task.id)}
-                            />
-                          );
-                        },
-                        onDropRow: dropRow,
-                        runs: runsPlace,
-                        onCarried: setCarrying,
-                        onNewTaskIn: chosen(newTaskInSection),
-                      }}
-                    />
-                    <nav
-                      className="sidebar-group"
-                      aria-label={tasksHead}
+                    {/* The Tasks head heads what its view filters, the sections and the list, Pinned standing above it unfiltered, and folds them together as Pinned's head folds its pins, while they hold a task, so a note saying the list is empty or still read never folds away; a row let go on it leaves its section, as one let go on the list does. */}
+                    <div
+                      className="sidebar-group sidebar-tasks-head"
                       data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
-                      {...motionRows()}
+                      {...motionKey(TASKS_HEAD_KEY)}
                     >
-                      {((assignedTo.kind !== ASSIGNED_TO.ANYONE &&
-                        assigned.length === 0 &&
-                        shownSections.every((drawn) => drawn.tasks.length === 0)) ||
-                        unlisted) &&
-                      !neverHadTasks &&
-                      tasks.listRead &&
-                      !tasks.listFailed ? (
-                        <NoteLine look={NOTE_LINE_LOOK.ROWS}>
-                          {NONE_MATCH}
-                          {assignedTo.kind === ASSIGNED_TO.ANYONE ? null : (
-                            <>
-                              {" "}
-                              <Button
-                                onClick={() => taskView.onAssignedTo({ kind: ASSIGNED_TO.ANYONE })}
-                              >
-                                Show all
-                              </Button>
-                            </>
-                          )}
-                        </NoteLine>
-                      ) : null}
-                      {/* Note that rows the list still holds stand with no line over them while the app is offline, since the Offline mark says why; a list with none still says it. */}
-                      {tasks.listFailed && (connected || unlisted) ? (
-                        <ErrorState
-                          failure={unreadShown(FAILURE_SURFACE.TASKS_READ)}
-                          onRetry={tasks.onRetryList}
-                          placement={ERROR_STATE_PLACEMENT.ROWS}
+                      <GroupHeader
+                        {...sidebarHead(
+                          tasksHeaded.length === 0
+                            ? undefined
+                            : {
+                                folded: folds.tasksFolded,
+                                onToggle: folds.toggleTasks,
+                                count: tasksHeaded.length,
+                                noun: TASK_NOUN,
+                              },
+                        )}
+                        head={tasks.signedIn ? GROUP_HEAD.SCROLLS : GROUP_HEAD.NONE}
+                        label={
+                          assignedTo.kind === ASSIGNED_TO.MEMBER ? (
+                            <ReplayMask>{tasksHead}</ReplayMask>
+                          ) : (
+                            tasksHead
+                          )
+                        }
+                        actions={
+                          <>
+                            {!newSectionOffered ? null : (
+                              <Tooltip label={NEW_SECTION}>
+                                <IconButton
+                                  ref={newSectionButton}
+                                  icon={<FolderPlusIcon />}
+                                  label={NEW_SECTION}
+                                  size={BUTTON_SIZE.COMPACT}
+                                  onClick={askNewSection}
+                                />
+                              </Tooltip>
+                            )}
+                            <TaskViewOptions
+                              shown={tasks.shown && overlay.inSight}
+                              control={taskView}
+                              shared={shared}
+                              filtered={shared && assignedTo.kind !== mine.kind}
+                            />
+                          </>
+                        }
+                        standing={
+                          tasksHeaded.some(currentTask) ? (
+                            <TaskRows tasks={tasksHeaded.filter(currentTask)} context={context} />
+                          ) : undefined
+                        }
+                      >
+                        <SidebarSections
+                          sections={homedSections}
+                          workspaceId={sectionsShown ? tasks.workspace?.id : undefined}
+                          context={{
+                            tasks,
+                            dialogs: sectionDialogs,
+                            edits: sectionEdits,
+                            current: currentTask,
+                            unread,
+                            inSight: overlay.inSight,
+                            folded: folds.sectionFolded,
+                            onToggle: folds.toggleSection,
+                            opened: folds.taskOpened,
+                            every: everyTask,
+                            row: (held, nest, place) => {
+                              const { task } = held;
+
+                              return (
+                                <SidebarTask
+                                  key={task.id}
+                                  tasks={tasks}
+                                  task={task}
+                                  current={context.marked(task.id, undefined)}
+                                  open={current(task.id)}
+                                  unread={unread(task)}
+                                  at={taskTime(task, TASK_ORDER.UPDATED)}
+                                  now={now}
+                                  faces={context.faces}
+                                  depth={held.depth}
+                                  nest={nest}
+                                  place={place}
+                                  fold={childTasksFold(held, folds.toggleTask)}
+                                  childCount={context.childCount(task.id)}
+                                  onOpen={() => context.onOpen(task.id)}
+                                />
+                              );
+                            },
+                            onDropRow: dropRow,
+                            runs: runsPlace,
+                            onCarried: setCarrying,
+                            onNewTaskIn: chosen(newTaskInSection),
+                          }}
+                        />
+                        <nav
+                          className="sidebar-group"
+                          aria-label={tasksHead}
+                          data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
+                          {...motionRows()}
                         >
-                          Your tasks could not be read.
-                        </ErrorState>
-                      ) : null}
-                      {/* The list is empty before its first read lands, so that it
+                          {((assignedTo.kind !== ASSIGNED_TO.ANYONE &&
+                            assigned.length === 0 &&
+                            shownSections.every((drawn) => drawn.tasks.length === 0)) ||
+                            unlisted) &&
+                          !neverHadTasks &&
+                          tasks.listRead &&
+                          !tasks.listFailed ? (
+                            <NoteLine look={NOTE_LINE_LOOK.ROWS}>
+                              {NONE_MATCH}
+                              {assignedTo.kind === ASSIGNED_TO.ANYONE ? null : (
+                                <>
+                                  {" "}
+                                  <Button
+                                    onClick={() =>
+                                      taskView.onAssignedTo({ kind: ASSIGNED_TO.ANYONE })
+                                    }
+                                  >
+                                    Show all
+                                  </Button>
+                                </>
+                              )}
+                            </NoteLine>
+                          ) : null}
+                          {/* Note that rows the list still holds stand with no line over them while the app is offline, since the Offline mark says why; a list with none still says it. */}
+                          {tasks.listFailed && (connected || unlisted) ? (
+                            <ErrorState
+                              failure={unreadShown(FAILURE_SURFACE.TASKS_READ)}
+                              onRetry={tasks.onRetryList}
+                              placement={ERROR_STATE_PLACEMENT.ROWS}
+                            >
+                              Your tasks could not be read.
+                            </ErrorState>
+                          ) : null}
+                          {/* The list is empty before its first read lands, so that it
               holds none says nothing until the service has answered. */}
-                      {tasks.signedIn && unlisted && !tasks.listRead && !tasks.listFailed ? (
-                        <TaskRowsSkeleton widths={LIST_SKELETON} />
-                      ) : null}
-                      {tasks.signedIn && neverHadTasks && tasks.listRead && !tasks.listFailed ? (
-                        <NoteLine look={NOTE_LINE_LOOK.ROWS}>No tasks yet.</NoteLine>
-                      ) : null}
-                      {tasks.signedIn ? null : (
-                        <NoteLine look={NOTE_LINE_LOOK.ROWS}>Sign in to start a task.</NoteLine>
-                      )}
-                      <TaskGroups
-                        sections={homedTasks}
-                        repositoryOf={repositoryOf}
-                        folds={folds}
-                        onNewTaskIn={chosen(newTaskIn)}
-                        context={context}
-                      />
-                    </nav>
+                          {tasks.signedIn && unlisted && !tasks.listRead && !tasks.listFailed ? (
+                            <TaskRowsSkeleton widths={LIST_SKELETON} />
+                          ) : null}
+                          {tasks.signedIn &&
+                          neverHadTasks &&
+                          tasks.listRead &&
+                          !tasks.listFailed ? (
+                            <NoteLine look={NOTE_LINE_LOOK.ROWS}>No tasks yet.</NoteLine>
+                          ) : null}
+                          {tasks.signedIn ? null : (
+                            <NoteLine look={NOTE_LINE_LOOK.ROWS}>Sign in to start a task.</NoteLine>
+                          )}
+                          <TaskGroups
+                            sections={homedTasks}
+                            repositoryOf={repositoryOf}
+                            folds={folds}
+                            onNewTaskIn={chosen(newTaskIn)}
+                            context={context}
+                          />
+                        </nav>
+                      </GroupHeader>
+                    </div>
                   </div>
                 </SelectionRegion>
               </ChosenTasksContext>

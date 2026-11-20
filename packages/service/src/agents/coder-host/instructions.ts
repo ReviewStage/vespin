@@ -4,6 +4,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_MACHINE,
   type AgentBrief,
   type AgentRunsOnRequest,
@@ -11,6 +12,7 @@ import {
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import { LINK_ORIGIN } from "@repo/features/link-home";
+import { managerGreeting } from "@repo/features/manager-greeting";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { GITHUB_WAKE, type GitHubWake } from "@repo/settings";
@@ -55,6 +57,22 @@ const BRIEF_JOB = {
  */
 const UNCLEAR_LINE =
   "If something doesn't make sense, or you can't tell what to build, ask in a thread.";
+
+/**
+ * What a Manager is told in place of its reply's, its threads', and an
+ * unclear request's lines: its page is a chat, whose every message from it
+ * is a `send_to_user` call, so its plain text and its other calls are never
+ * shown, and it writes there as a coworker on Slack, in several short
+ * messages; and, where it posts threads, that a thread is kept for the asks
+ * a chat cannot hold, since every post is a notification.
+ */
+function chatLine(posts: boolean): string {
+  const chat = `Only \`${AGENT_TOOL.SEND_TO_USER}\` reaches people: your page is a chat that shows their messages and your \`${AGENT_TOOL.SEND_TO_USER}\` messages, never your plain text or other tool calls, and a turn that sends nothing shows nothing. Answer, report, and ask there, as a coworker would on Slack: several short messages rather than one long one, one point to each, straight to the point with no greeting, filler, or recap, and no headers or long lists unless what you say needs them.`;
+
+  return posts
+    ? `${chat} Post a thread with \`${INBOX_TOOLS.POST.name}\` only for a decision with options or a to-do, since every post reaches people as a notification.`
+    : chat;
+}
 
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
@@ -109,7 +127,7 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
 
 /**
  * The agent's own values, as a tool input that asks for them takes them:
- * its id, its task's id, where it runs as `start_agent`'s `runsOn` names
+ * its id, its task's id where it stands on one, where it runs as `start_agent`'s `runsOn` names
  * it, its repository, and the branch it was cloned at; then the developer it
  * works for, by their id and mention link, as `list_agents`' `startedBy`,
  * `post_thread`'s `to`, and a task's `assignee` take them, so it names them
@@ -118,15 +136,16 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
  * holds them; the branch it pushes to is its own to read with git.
  */
 function ownLine(
-  ownTask: OwnTask,
+  ownTask: OwnTask | undefined,
   own: OwnAgent,
   repository: string | null,
   startBranch: string | null,
   workspace: string,
 ): string {
+  // Note that an agent on no task has no taskId of its own to name.
   const values = [
     `agentId \`${own.id}\``,
-    `taskId \`${ownTask.id}\``,
+    ...(ownTask === undefined ? [] : [`taskId \`${ownTask.id}\``]),
     ...(own.runsOn === null ? [] : [`runsOn \`${JSON.stringify(own.runsOn)}\``]),
     ...(repository === null ? [] : [`repository \`${repository}\``]),
     ...(repository === null || startBranch === null ? [] : [`branch \`${startBranch}\``]),
@@ -230,13 +249,14 @@ function publishLines(
  * draws as a chip (`@repo/features/mention-link`): a file of its
  * repository, a pull request by its own address, never a bare `#42`, its
  * task, and a thing of ours by its kind and id under the workspace's
- * address (`../link-rule.ts` says the same to other authors at length).
- * A person is tagged by their mention link, which a teammate's words
- * arrive behind (`../attached-files.ts`'s `senderLabel`).
+ * address (`../link-rule.ts` says the same to other authors at length);
+ * its task only where it stands on one. A person is tagged by their
+ * mention link, which a teammate's words arrive behind
+ * (`../attached-files.ts`'s `senderLabel`).
  */
 function namingLines(
   repository: string | null,
-  ownTask: OwnTask,
+  ownTask: OwnTask | undefined,
   workspace: string,
   posts: boolean,
 ): string[] {
@@ -248,8 +268,15 @@ function namingLines(
       ? ""
       : ` a file \`[@store.ts](https://github.com/${repository}/blob/HEAD/<path>)\`,`;
 
+  const pullRequest = `a pull request \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\` (never a bare \`#42\`)`;
+
+  const things =
+    ownTask === undefined
+      ? `${file === "" ? "" : `${file.slice(0, -1)} or`} ${pullRequest}`
+      : `${file} ${pullRequest}, or your task \`[@<its name>](${ownTask.link})\``;
+
   return [
-    `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${file} a pull request \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\` (never a bare \`#42\`), or your task \`[@<its name>](${ownTask.link})\`.`,
+    `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${things}.`,
     `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`,${item} or \`/task/<task-id>/page/<page-id>\`.`,
     "Tag a person by their mention link, never a bare `@Name`.",
   ];
@@ -311,14 +338,16 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * token. A line on a gated tool of ours is told by whether the agent's
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
- * `edit_description`, its reply by `end_turn`, and its threads by
+ * `edit_description`, its reply by `end_turn`, or a Manager's by
+ * `send_to_user`, which stands for its threads' and unclear request's lines
+ * too, and its threads by
  * `post_thread`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
  */
 export function coderInstructions(
   repository: string | null,
   brief: AgentBrief,
-  ownTask: OwnTask,
+  ownTask: OwnTask | undefined,
   own: OwnAgent,
   standing: AgentStanding,
   authorship: CommitAuthorship | undefined = undefined,
@@ -329,10 +358,13 @@ export function coderInstructions(
   workspace: string = EXAMPLE_WORKSPACE,
   wakesOff: readonly GitHubWake[] = [],
 ): string {
-  const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
+  // An agent on no task has no description to record in and no status to keep.
+  const describes = ownTask !== undefined && offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
   const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
+  const chats = offers(standing, AGENT_TOOL.SEND_TO_USER);
   const posts = offers(standing, INBOX_TOOLS.POST.name);
+  const showsPages = offers(standing, AGENT_TOOL.SHOW_PAGE);
   const shell = harness === CODER_HARNESS.CLAUDE_CODE ? "Bash" : "your shell";
   const branch = startBranch === null ? "" : ` on \`${startBranch}\``;
 
@@ -346,13 +378,19 @@ export function coderInstructions(
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
     ownLine(ownTask, own, repository, startBranch, workspace),
     ...machineLines(machine, repository !== null),
-    ...(posts ? [UNCLEAR_LINE] : []),
+    ...(posts && !chats ? [UNCLEAR_LINE] : []),
     ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
-    `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts ? " and post it in a thread" : ""}.`,
-    endsTurns
-      ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
-      : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
-    ...(posts
+    ...(showsPages
+      ? [
+          `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts ? " and post it in a thread" : ""}.`,
+        ]
+      : []),
+    chats
+      ? chatLine(posts)
+      : endsTurns
+        ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
+        : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
+    ...(posts && !chats
       ? [
           `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
         ]
@@ -363,16 +401,56 @@ export function coderInstructions(
         ]
       : []),
     `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
-    ...statusLines(publishes, {
-      merged: memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED),
-      // Note that an agent on its starter's own token keeps the line it was told before, which names the merge alone.
-      closed: !memberToken && wakesOff.includes(GITHUB_WAKE.CLOSED),
-      dequeued: !memberToken && wakesOff.includes(GITHUB_WAKE.DEQUEUED),
-    }),
+    ...(ownTask === undefined
+      ? []
+      : statusLines(publishes, {
+          merged: memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED),
+          // Note that an agent on its starter's own token keeps the line it was told before, which names the merge alone.
+          closed: !memberToken && wakesOff.includes(GITHUB_WAKE.CLOSED),
+          dequeued: !memberToken && wakesOff.includes(GITHUB_WAKE.DEQUEUED),
+        })),
     ...namingLines(repository, ownTask, workspace, posts),
   ];
 
   return lines.join("\n");
+}
+
+/** Where a Manager runs, which the agents it starts run on too: the cloud, or the Mac it is pinned to. */
+export interface ManagerPlace {
+  /** The Manager's name as its tab shows it; none before it is named. */
+  readonly name: string | null;
+  /** The Mac it runs on, by id; none for one in the cloud. */
+  readonly deviceId: string | null;
+}
+
+/** The `runsOn` a Manager passes `start_agent`, its own machine's, written as the tool takes it. */
+function managerRunsOnOf(place: ManagerPlace): string {
+  return place.deviceId === null
+    ? JSON.stringify({ machine: AGENT_MACHINE.VERCEL })
+    : JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: place.deviceId });
+}
+
+/**
+ * What a Manager is told beyond the coder's lines: its role, the greeting its
+ * conversation opens on,
+ * how it starts and briefs work, and when it reaches a person. Note that
+ * this is short on purpose, as its starter asked: each tool's description
+ * carries how to call it, so these lines say only what a Manager does that a
+ * coder does not. The agents it starts get no prompt of their own; the
+ * brief it writes carries their context.
+ */
+export function managerInstructions(place: ManagerPlace): string {
+  const manager = place.name === null ? "the <your name> Manager" : `the ${place.name} Manager`;
+
+  return [
+    `You are a Manager in this workspace. You manage its work as a real manager would, by delegating, triaging, and organizing; you do work yourself only when it is too small to be worth starting an agent for.`,
+    `Your chat opens with this greeting, shown to people as your first message: "${managerGreeting(place.name)}" So don't introduce yourself again; answer what they ask, and from then on work on your own.`,
+    `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, in the right repository. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, with \`runsOn\` ${managerRunsOnOf(place)} and your repositories, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`).`,
+    `Lay work out as a good engineering manager would, with Linear's hygiene: split it into tasks, group related ones under a parent task (\`parentTaskId\`, \`subTaskIds\`), and name what must land first with \`blockedBy\`. One task is one logical change, ideally one pull request; two changes never share a task, even related ones. Give each task a clear name, the right assignee, and a description of what is decided and what is not.`,
+    `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
+    `Relay what people tell you, in your chat or on a thread, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
+    `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
+  ].join("\n");
 }
 
 export interface OwnTask {
@@ -428,23 +506,28 @@ export interface AgentInstructionsContext {
 
 /**
  * The instructions for the agent its row names, on any harness: its brief
- * (`agentBriefOf`), its task's link, its start branch, and its credential
+ * (`agentBriefOf`), its task's link where it stands on one, its start branch, and its credential
  * read from the row, so every session of the agent is worded
  * alike.
  */
 export function agentCoderInstructions(agent: Agent, context: AgentInstructionsContext): string {
-  const ownTask = {
-    id: agent.taskId,
-    link: linkOf(
-      {
-        kind: LINK_DESTINATION.TASK,
-        taskId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
-      },
-      context.workspace,
-    ),
-  };
+  const { taskId } = agent;
 
-  return coderInstructions(
+  const ownTask =
+    taskId === null
+      ? undefined
+      : {
+          id: taskId,
+          link: linkOf(
+            {
+              kind: LINK_DESTINATION.TASK,
+              taskId: taskLinkStep({ id: taskId, number: context.taskNumber }),
+            },
+            context.workspace,
+          ),
+        };
+
+  const coder = coderInstructions(
     agent.repository,
     agentBriefOf(agent),
     ownTask,
@@ -466,4 +549,9 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
     context.workspace,
     context.wakesOff,
   );
+
+  // A Manager's lines follow the coder's, so a coder's instructions stay as they were.
+  if (agent.kind !== AGENT_KIND.MANAGER) return coder;
+
+  return `${coder}\n${managerInstructions({ name: agent.title, deviceId: agent.machine === AGENT_MACHINE.DEVICE ? (agent.deviceId ?? null) : null })}`;
 }

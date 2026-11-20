@@ -526,10 +526,12 @@ function agentsByTask(
   const byTask = new Map<string, ListedAgent[]>();
 
   for (const agent of listed ?? []) {
-    if (agent.archivedAt !== undefined) continue;
-    const onTask = byTask.get(agent.taskId);
+    const { taskId } = agent;
 
-    if (onTask === undefined) byTask.set(agent.taskId, [agent]);
+    if (taskId === null || agent.archivedAt !== undefined) continue;
+    const onTask = byTask.get(taskId);
+
+    if (onTask === undefined) byTask.set(taskId, [agent]);
     else onTask.push(agent);
   }
 
@@ -1146,7 +1148,7 @@ export function useDeleteAsk(
     (task) =>
       setHeld({
         taskId: task.id,
-        words: deleteTaskWords(task.name, task),
+        words: deleteTaskWords(task),
         presented: true,
         asker,
       });

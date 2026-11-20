@@ -228,10 +228,13 @@ it.layer(getTestDB())("the voice routes", (it) => {
         assert.ok(raw instanceof Uint8Array, "the session goes as a JSON body");
         const sent = JSON.parse(new TextDecoder().decode(raw));
         assert.deepEqual(sent.transport, { type: "webrtc", sdp: OFFER });
-        assert.equal(sent.session.model, "gpt-live-1");
+        assert.equal(sent.session.model, "gpt-live-1.1");
         assert.deepEqual(sent.session.delegation, { type: "client" });
         assert.equal(sent.session.store, false);
         assert.deepEqual(sent.session.audio, { output: { voice: LIVE_VOICE.CEDAR } });
+        // A silent call goes to standby after ten seconds, and the caller's speech wakes it.
+        assert.deepEqual(sent.session.wake_policy, { type: "speech" });
+        assert.equal(sent.session.idle_timeout_s, 10);
         // The panel may only mute, unmute, and end the call, and hears only its start, its close, and the mute acknowledgments.
         assert.deepEqual(sent.session.client, {
           data_channel: {

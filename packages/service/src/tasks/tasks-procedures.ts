@@ -53,7 +53,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { readAgentByKey } from "@repo/database/models/agent-store";
+import { agentTaskId, readAgentByKey } from "@repo/database/models/agent-store";
 import { listRevisions, readRevision } from "@repo/database/models/description-revisions";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { keepRunsOnPick } from "@repo/database/models/runs-on-pick";
@@ -182,7 +182,10 @@ const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
   const made = yield* hostedStoreOrUnavailable(readAgentByKey(userId, idempotencyKey));
 
   if (Option.isNone(made)) return Option.none();
-  const task = yield* hostedStoreOrUnavailable(readTaskDescription(userId, made.value.taskId));
+
+  const task = yield* hostedStoreOrUnavailable(
+    readTaskDescription(userId, agentTaskId(made.value)),
+  );
 
   if (Option.isNone(task) || task.value.workspaceId !== organizationId) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);

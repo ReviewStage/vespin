@@ -12,6 +12,7 @@ import {
 } from "./agent-status.js";
 import {
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentArchivedBy,
@@ -174,12 +175,16 @@ const archiveLiveSchema = EffectSchema.Struct({
 /** One agent as its row delivers it: its own columns, its newest turn's, and what stands beside it, null where none does. */
 const agentLiveRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  taskId: EffectSchema.String,
+  taskId: EffectSchema.NullOr(EffectSchema.String),
   workspaceId: EffectSchema.String,
   model: EffectSchema.String,
   effort: EffectSchema.String,
   contextWindow: EffectSchema.NullOr(EffectSchema.String),
   title: EffectSchema.NullOr(EffectSchema.String),
+  /** What kind of agent it is (`AGENT_KIND`), a word this build does not know read as a coder; absent from a statement before it was carried. */
+  kind: EffectSchema.optionalKey(
+    literalsReadingUnknown(Object.values(AGENT_KIND), AGENT_KIND.CODER),
+  ),
   /** Whether the agent was handed a prompt rather than its description. */
   /** What the agent was handed as its first message: the description, the developer's prompt, or nothing, for one started blank. */
   brief: literalsReadingUnknown(Object.values(AGENT_BRIEF), AGENT_BRIEF.PROMPT),
@@ -209,9 +214,11 @@ const agentLiveRowSchema = EffectSchema.Struct({
   source: EffectSchema.optionalKey(EffectSchema.NullOr(agentSourceSchema)),
   pinnedAt: EffectSchema.NullOr(countedNumber),
   pinPosition: EffectSchema.NullOr(EffectSchema.String),
-  /** The reader's read mark (`read-mark.ts`); absent from a service before read marks were kept. */
+  /** The reader's read mark (`read-mark.ts`): their look at a Manager's chat, else its start; absent from a service before read marks were kept. */
   readThrough: EffectSchema.optionalKey(countedNumber),
   markedUnread: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** When a Manager last sent its chat a message (`send_to_user`); null before its first and for a coder, and absent from a statement before it was carried. */
+  saidAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   createdAt: countedNumber,
   turnId: EffectSchema.NullOr(EffectSchema.String),
   turnStatus: EffectSchema.NullOr(EffectSchema.String),
@@ -297,14 +304,22 @@ export function standsLive(
  * for a released desktop that follows them, and which this build keeps
  * none of; beside them, the workspaces holding any task it reaches. It holds
  * the live tasks alone (`standsLive`), as of the instant the service binds
- * (`liveSince`), and their agents. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * (`liveSince`), and their agents. Every agent on no task the account sees
+ * stands beside them, unarchived or archived since `liveSince`, carried only
+ * to a build that reads a null `taskId` (`HOSTED_API_VERSION` 6 on), which
+ * the service binds as `taskless` from the headers the build names itself
+ * in. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
 export const TASK_LIST_READ = liveRead({
   name: "tasks",
   path: HOSTED_SERVICE_PATH.LIVE_TASKS,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, liveSince: LIVE_PARAM.SERVED },
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    liveSince: LIVE_PARAM.SERVED,
+    taskless: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.DELTA,
   parts: {
     tasks: liveRows({
@@ -871,6 +886,14 @@ function agentSummaryOf(
       : undefined),
     ...(runtime === undefined ? undefined : { runtime }),
     title: row.title,
+    ...(row.kind === AGENT_KIND.MANAGER ? { kind: AGENT_KIND.MANAGER } : undefined),
+    // Note that only a Manager's chat is read by a mark, so a coder's row carries none.
+    ...(row.kind === AGENT_KIND.MANAGER && row.readThrough !== undefined
+      ? { readThrough: row.readThrough }
+      : undefined),
+    ...(row.kind === AGENT_KIND.MANAGER && row.saidAt !== undefined && row.saidAt !== null
+      ? { saidAt: row.saidAt }
+      : undefined),
     ...(row.machine === AGENT_MACHINE.DEVICE
       ? { machine: AGENT_MACHINE.DEVICE }
       : { sandboxVcpus: row.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),
@@ -950,16 +973,19 @@ export function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
   const { taskId, pinnedAt, pinPosition } = row;
 
   if (pinnedAt === null || row.archivedAt !== null) return undefined;
-  const at = { agentId: row.id, taskId: taskId, pinnedAt };
+  const at = { agentId: row.id, taskId, pinnedAt };
 
   return pinPosition === null ? at : { ...at, pinPosition };
 }
 
-/** The pull request an agent's row names of every one it opened (`agentMarkedPullRequest`), as the service last read it on GitHub; none where it opened none. */
+/** The pull request an agent's row names of every one it opened (`agentMarkedPullRequest`), as the service last read it on GitHub; none where it opened none or stands on no task, whose pull requests are listed under a task. */
 export function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undefined {
   const marked = markedOfRow(row);
+  const { taskId } = row;
 
-  return marked === null ? undefined : { agentId: row.id, taskId: row.taskId, pullRequest: marked };
+  return marked === null || taskId === null
+    ? undefined
+    : { agentId: row.id, taskId, pullRequest: marked };
 }
 
 /** The agents started from each agent by its id (`continuedByOf`); none for an agent nothing was started from. */
@@ -1008,9 +1034,9 @@ export function taskAgentsOfLiveRows(rows: TaskListLiveRows, now: number): reado
 }
 
 /**
- * The reader's pins of agents on a plan, the archived ones left out, since
- * an archived agent stands in no list a pin is drawn in: what the sidebar's
- * Pinned section draws beside the pinned plans.
+ * The reader's pins of agents, on a plan or on none, the archived ones left
+ * out, since an archived agent stands in no list a pin is drawn in: what the
+ * sidebar's Pinned section draws beside the pinned plans.
  */
 export function taskAgentPinsOfLiveRows(rows: TaskListLiveRows): readonly TaskAgentPin[] {
   return rows.agents.flatMap((row) => {
@@ -1029,7 +1055,9 @@ export function taskPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Tas
   const byTask = new Map<string, AgentLiveRow[]>();
 
   for (const row of rows.agents) {
-    byTask.set(row.taskId, [...(byTask.get(row.taskId) ?? []), row]);
+    const { taskId } = row;
+
+    if (taskId !== null) byTask.set(taskId, [...(byTask.get(taskId) ?? []), row]);
   }
 
   return [...byTask].flatMap(([taskId, agents]) => {
@@ -1065,10 +1093,13 @@ export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskLis
   const byTask = new Map<string, GracedAgent[]>();
 
   for (const row of rows.agents) {
-    const graced = gracedAt(row, now);
-    const group = byTask.get(row.taskId);
+    const { taskId } = row;
 
-    if (group === undefined) byTask.set(row.taskId, [graced]);
+    if (taskId === null) continue;
+    const graced = gracedAt(row, now);
+    const group = byTask.get(taskId);
+
+    if (group === undefined) byTask.set(taskId, [graced]);
     else group.push(graced);
   }
 

@@ -326,8 +326,10 @@ type StartPageProps = {
   /** What a start, the picker, or a read said, each its own line over the field. */
   readonly notes: readonly string[];
   readonly add: StartAdd;
-  /** The capsules after the + under the field, such as Repository, Model · Effort, and Machine. */
+  /** The capsules after the + under the field, saying where the start runs, such as Repository and Machine. */
   readonly chips: ReactNode;
+  /** What stands at the end of the row under the field before Send, such as Model · Effort, as the desktop composer stands its model picker. */
+  readonly trailing?: ReactNode;
   /** Whether Start may be pressed now: there is something to start on, and no start is out. */
   readonly ready: boolean;
   readonly onStart: () => void;
@@ -390,7 +392,8 @@ function StartHead({ title, head }: Pick<StartPageProps, "title" | "head">) {
  * agent's page. The page's own bar holds its close.
  */
 export function StartPage(props: StartPageProps) {
-  const { words, skills, pictures, onDetach, notes, add, chips, ready, onStart, onTalk } = props;
+  const { words, skills, pictures, onDetach, notes, add, chips, trailing, ready, onStart, onTalk } =
+    props;
 
   const head =
     skills === undefined && pictures.length === 0 && notes.length === 0 ? undefined : (
@@ -420,6 +423,7 @@ export function StartPage(props: StartPageProps) {
           call={onTalk === undefined ? undefined : { kind: COMPOSER_CALL.TALK, onTalk }}
           head={head}
           tools={chips}
+          trailing={trailing}
           autoFocus
           onDropPictures={props.onDropPictures}
           testIds={props.testIds}

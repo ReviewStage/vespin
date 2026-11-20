@@ -2,8 +2,10 @@
 
 import { Image, Label, Text } from "@expo/ui/swift-ui";
 import { font, tag } from "@expo/ui/swift-ui/modifiers";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
+import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
 /** The text style a glyph stands at beside an act's words, as SwiftUI sizes a symbol by its text. */
@@ -80,6 +82,18 @@ export function GlyphLabel({
       icon={<GlyphImage glyph={glyph} textStyle={textStyle} menuColor={color} under={under} />}
     />
   );
+}
+
+/**
+ * An act's words beside an integration's mark, as a system menu draws them:
+ * the provider's own vector from the asset catalog, as Settings › MCP & CLI
+ * and the desktop's server rows lead with it, an image the catalog keeps in
+ * its own colors drawn as it is.
+ */
+export function markContent(label: string, mark: IntegrationProvider) {
+  return {
+    children: <Label title={label} icon={<Image assetName={INTEGRATION_MARK_ASSET[mark]} />} />,
+  };
 }
 
 /**

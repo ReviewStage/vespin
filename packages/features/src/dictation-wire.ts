@@ -5,7 +5,7 @@ import { countedNumber } from "./service-wire.js";
  * dictation-wire.ts -- a clip the developer dictated into a message box, and the words it said.
  *
  * `POST /api/dictation` takes one short recording, WebM with Opus as
- * Chromium's recorder writes it, in base64, with how long it ran and the
+ * Chromium's recorder writes it, or AAC in MPEG-4 as the iPhone's does, in base64, with how long it ran and the
  * words it is likely to say: the repository's name, the task's title, the
  * paths the description names. The service hands the clip and those words to its
  * transcription model and answers the text, and keeps neither the clip nor
@@ -27,8 +27,16 @@ export const DICTATION_BOUNDS = {
   MAX_KEYWORD_CHARS: 100,
 } as const;
 
-/** The one container a clip travels in, which is the MIME type Chromium's recorder writes Opus as. */
+/** The container a clip travels in where it names none: the MIME type Chromium's recorder writes Opus as. */
 export const DICTATION_AUDIO_TYPE = "audio/webm";
+
+/** The containers a clip may travel in: the desktop's and the web's Opus in WebM, and the iPhone's AAC in an MPEG-4 file, which its recorder writes and the transcription model takes alike. */
+export const DICTATION_AUDIO = {
+  WEBM: DICTATION_AUDIO_TYPE,
+  MP4: "audio/mp4",
+} as const;
+
+export type DictationAudio = (typeof DICTATION_AUDIO)[keyof typeof DICTATION_AUDIO];
 
 /** Standard base64 in whole quanta, padded, with no data-URL prefix and no line breaks. */
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u;
@@ -54,7 +62,9 @@ export const dictationRequestSchema = EffectSchema.Struct({
     EffectSchema.isNonEmpty(),
     EffectSchema.isPattern(BASE64_PATTERN),
   ),
-  /** How long the recording ran, in milliseconds, as the desktop timed it. */
+  /** The container the bytes are in; WebM where none is named, as every client before the iPhone's sends it. */
+  audioType: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(DICTATION_AUDIO))),
+  /** How long the recording ran, in milliseconds, as the client timed it. */
   durationMs: countedNumber,
   keywords: EffectSchema.Array(dictationKeywordSchema).check(
     EffectSchema.isMaxLength(DICTATION_BOUNDS.MAX_KEYWORDS),

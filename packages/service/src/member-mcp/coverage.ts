@@ -312,6 +312,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     reviewOptions: SCREEN_ONLY,
     turnChanges: SCREEN_ONLY,
     workspaceTools: SCREEN_ONLY,
+    // Note that a member makes a Manager in the app, and a Manager never starts another.
+    createManager: MEMBER_ONLY,
     // Note that an agent names another machine per call; setting another agent's default from a tool waits on a member asking for one.
     setDefaultMachine: NOT_YET_BUILT,
     // Note that a Terminal tab is interactive, so the CLI's `vespin agent shell` reaches it and no tool does.

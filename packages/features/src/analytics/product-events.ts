@@ -351,6 +351,7 @@ export const PRODUCT_EXPERIMENT = {
   GOALS: "goals",
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
+  MANAGERS: "managers",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   STARTER_TASKS: "starter-tasks",
 } as const;

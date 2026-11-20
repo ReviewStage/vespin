@@ -92,9 +92,6 @@ const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 /** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
 const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
-/** How long a section takes to fold or open, in seconds: the system's own quick ease. */
-const FOLD_SECONDS = 0.25;
-
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
  * stand rather than as grouped cards; a page of one thing's sections, such
@@ -704,7 +701,7 @@ function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
  * where it has no Show all, ends in the act's words, such as Edit. A header
  * given `menu` opens it on a long press (`LongPressMenu`), as the panel's
  * right-click on a sidebar section's header does. Its rows fold away and
- * come back with the system's quick ease, or at once where the reader
+ * come back with the system's default animation, or at once where the reader
  * reduces motion. Note that SwiftUI's own `Section(isExpanded:)` is not used,
  * because it folds only in a sidebar list, where the system draws its own
  * chevron at the header's end.
@@ -811,9 +808,7 @@ export function ListSection({
   // Note that a page's grouped list fills each row with the system's card gray, so its sections clear it, standing their rows on the brand's ground as a plain list does.
   const modifiers = [
     ...(look === LIST_LOOK.DETAIL ? [listRowBackground("clear")] : []),
-    ...(foldable && !reduceMotion
-      ? [animation(Animation.easeInOut({ duration: FOLD_SECONDS }), folded)]
-      : []),
+    ...(foldable && !reduceMotion ? [animation(Animation.default, folded)] : []),
   ];
 
   return (

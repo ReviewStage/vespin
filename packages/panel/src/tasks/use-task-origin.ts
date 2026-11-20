@@ -72,16 +72,31 @@ function useOriginAgent(agentId: string | undefined): OriginAgent | undefined {
 /** What names who made a task: its origin, the one field read. */
 type OriginTask = Pick<TaskSummary, "origin">;
 
+/** No agents: what a reader not yet asked names a task's maker from. */
+const NO_ORIGIN_AGENTS: ReadonlyMap<string, OriginAgent> = new Map();
+
 /**
  * Who made a task for its member, as `originActor` names them from the
- * agents the window holds; none for a task its member made by hand.
+ * agents the window holds; none for a task its member made by hand. Note
+ * that the agents and tasks are read only while `asked`, because the read
+ * draws its holder again as any agent or task moves and names every agent
+ * anew, which a holder that stands drawn but unread, as the shut ⌘K palette
+ * does, pays for on every delivery; unasked, it names each maker by its
+ * origin alone.
  */
-export function useTaskOrigin(): (task: OriginTask) => Actor | undefined {
+export function useTaskOrigin(asked: boolean): (task: OriginTask) => Actor | undefined {
   const collections = useTaskListCollections();
-  const { data: listedAgents } = useLiveQuery((q) => q.from({ agent: collections.agents }));
-  const { data: listedTasks } = useLiveQuery((q) => q.from({ task: collections.tasks }));
+
+  const { data: listedAgents } = useLiveQuery((q) =>
+    asked ? q.from({ agent: collections.agents }) : undefined,
+  );
+
+  const { data: listedTasks } = useLiveQuery((q) =>
+    asked ? q.from({ task: collections.tasks }) : undefined,
+  );
 
   const agents = useMemo(() => {
+    if (listedAgents === undefined || listedTasks === undefined) return NO_ORIGIN_AGENTS;
     const names = new Map(listedTasks.map((task) => [task.id, task.name]));
 
     return new Map(

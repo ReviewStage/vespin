@@ -8,6 +8,7 @@ import {
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
 import {
+  agentTaskId,
   archiveAgent,
   createAgent,
   fillAgentTitle,
@@ -226,6 +227,7 @@ import type { InboxSandboxDoor } from "./inbox-image.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
+import { SEND_TO_USER_TOOL } from "./send-to-user-tool.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { SCHEDULE_WAKEUP_TOOL } from "./wakeup-tool.js";
 
@@ -450,7 +452,7 @@ async function claimed(
     id: started.value.agent.id,
     name: started.value.agent.title ?? AGENT_CHOICE_NAME,
     sessionId: session,
-    taskId: started.value.agent.taskId,
+    taskId: agentTaskId(started.value.agent),
   };
 }
 
@@ -1811,6 +1813,10 @@ test("end_turn shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "end-turn-input", END_TURN_TOOL.inputSchema);
 });
 
+test("send_to_user shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "send-to-user-input", SEND_TO_USER_TOOL.inputSchema);
+});
+
 test("send_slack_message shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(
     GOLDEN_ROOT,
@@ -3165,6 +3171,22 @@ test("create_task makes a task in the caller's workspace for the member the agen
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.PROMPT_NEEDED },
   );
   assert.equal(agentSessions.sent.length, 1, "a start with no prompt starts nothing");
+
+  // An agent on no task has none to start beside, so a start naming no task is refused rather than made one.
+  await database.run(
+    Effect.flatMap(Database, (db) =>
+      db.update(agentTable).set({ taskId: null }).where(eq(agentTable.id, caller.id)),
+    ),
+  );
+  assert.deepEqual(
+    await call(AGENT_TOOL.START_AGENT, { prompt: "Sweep the invites." }, "call-taskless"),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NO_OWN_TASK },
+  );
+  assert.equal(
+    agentSessions.sent.length,
+    1,
+    "a taskless agent's start naming no task starts nothing",
+  );
 });
 
 test("an agent whose starter has left the workspace makes no task in it", async () => {

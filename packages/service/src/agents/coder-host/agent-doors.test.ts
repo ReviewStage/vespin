@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import {
   type Agent,
   type AgentBriefText,
+  agentTaskId,
   createAgent,
   type NewAgent,
 } from "@repo/database/models/agent-store";
@@ -418,7 +419,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
             return { answer, attachmentId: kept.id };
           });
 
-        const own = yield* look(agent.taskId);
+        const own = yield* look(agentTaskId(agent));
         const onSibling = yield* look(sibling.id);
 
         assert.deepEqual(own.answer, {
@@ -450,7 +451,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           Effect.gen(function* () {
             const poster = {
               userId,
-              taskId: on.taskId,
+              taskId: agentTaskId(on),
               agentId: on.id,
               organizationId: on.organizationId,
             };
@@ -465,7 +466,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
               }),
               noSandbox,
             );
-            const [item] = yield* taskInboxItems(userId, on.taskId);
+            const [item] = yield* taskInboxItems(userId, poster.taskId);
             assert.ok(item);
             yield* postInboxMessage(userId, item.id, {
               text: "This one.",

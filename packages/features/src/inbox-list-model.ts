@@ -635,11 +635,49 @@ function lastWords(
 }
 
 /**
- * What holds an item: the task its agent works on. Note that every item
- * names its task, since every agent works on one.
+ * What holds an item on a task: the task its agent works on. Note that the
+ * iOS app's and the widgets' reads hold only these, since the feed they read
+ * keys every item by its task.
  */
 export interface InboxHolder {
   readonly task: TaskSummary;
+}
+
+/** An agent on no task, as an Inbox names it: by its name, wearing its model's harness, in its workspace, on its repository where it has one. */
+export interface InboxHolderAgent {
+  readonly id: string;
+  readonly name: string;
+  readonly model: string;
+  readonly workspaceId: string;
+  readonly repository: string | null;
+}
+
+/** What holds an item on no task: the agent that posted it. */
+export interface InboxAgentHolder {
+  readonly agent: InboxHolderAgent;
+}
+
+/** Anything that holds items: a task, or an agent on no task. */
+export type InboxAnyHolder = InboxHolder | InboxAgentHolder;
+
+/** The task a holder is, or none for an agent on no task and for no holder. */
+export function holderTask(holder: InboxAnyHolder | undefined): TaskSummary | undefined {
+  return holder !== undefined && "task" in holder ? holder.task : undefined;
+}
+
+/** What a holder is called on a row's first line: its task's name, or its agent's. */
+export function holderName(holder: InboxAnyHolder): string {
+  return "task" in holder ? holder.task.name : holder.agent.name;
+}
+
+/** The workspace a holder stands in. */
+export function holderWorkspaceId(holder: InboxAnyHolder): string {
+  return "task" in holder ? holder.task.workspaceId : holder.agent.workspaceId;
+}
+
+/** The repository a holder works on, or none where it works on none. */
+export function holderRepository(holder: InboxAnyHolder): string | null {
+  return "task" in holder ? holder.task.repository : holder.agent.repository;
 }
 
 /**
@@ -658,6 +696,20 @@ export function taskHolder(task: TaskSummary): InboxHolder {
   if (kept !== undefined) return kept;
   const holder: InboxHolder = { task };
   keptHolders.set(task, holder);
+
+  return holder;
+}
+
+/** Each agent's holder as last made, kept for as long as the agent's summary stands (`keptHolders`). */
+const keptAgentHolders = new WeakMap<InboxHolderAgent, InboxAgentHolder>();
+
+/** An agent on no task as the holder of its items, kept (`keptAgentHolders`). */
+export function agentHolder(agent: InboxHolderAgent): InboxAgentHolder {
+  const kept = keptAgentHolders.get(agent);
+
+  if (kept !== undefined) return kept;
+  const holder: InboxAgentHolder = { agent };
+  keptAgentHolders.set(agent, holder);
 
   return holder;
 }
@@ -720,8 +772,10 @@ export function inboxItemWords(item: InboxItem): readonly string[] {
 }
 
 /** Whether an item answers a list's search: every word of it somewhere in the item's words (`inboxItemWords`) or its task's name; any item answers none. */
-function searchedItem(holder: InboxHolder, item: InboxItem, search: readonly string[]): boolean {
-  return search.length === 0 || matchesTokens([holder.task.name, ...inboxItemWords(item)], search);
+function searchedItem(holder: InboxAnyHolder, item: InboxItem, search: readonly string[]): boolean {
+  return (
+    search.length === 0 || matchesTokens([holderName(holder), ...inboxItemWords(item)], search)
+  );
 }
 
 /** Every task's items as a read holds them, by the task's id. */
@@ -803,15 +857,15 @@ export interface InboxCounts {
   readonly [INBOX_SHOW.REMINDERS]: number;
 }
 
-/** One task and every item it holds, as the list is handed them. */
-export interface InboxGroup {
-  readonly holder: InboxHolder;
+/** One holder and every item it holds, as the list is handed them: a task's, unless the list takes agents on no task too. */
+export interface InboxGroup<Holder extends InboxAnyHolder = InboxHolder> {
+  readonly holder: Holder;
   readonly items: readonly InboxItem[];
 }
 
 /** One item the list draws, with what holds it. */
-export interface InboxListed {
-  readonly holder: InboxHolder;
+export interface InboxListed<Holder extends InboxAnyHolder = InboxHolder> {
+  readonly holder: Holder;
   readonly item: InboxItem;
 }
 
@@ -819,17 +873,24 @@ export interface InboxListed {
 export const NO_ITEMS: readonly InboxItem[] = [];
 
 /** Each holder's group as last made, kept while it holds the same items (`inboxGroup`). */
-const keptGroups = new WeakMap<InboxHolder, InboxGroup>();
+const keptGroups = new WeakMap<InboxAnyHolder, InboxGroup<InboxAnyHolder>>();
 
 /**
  * A holder and every item it holds as one group: the one made last for the
  * holder while its items are the same list, so a list read again from items
  * that did not move groups them in the objects it grouped them in before.
  */
-export function inboxGroup(holder: InboxHolder, items: readonly InboxItem[]): InboxGroup {
+export function inboxGroup<Holder extends InboxAnyHolder>(
+  holder: Holder,
+  items: readonly InboxItem[],
+): InboxGroup<Holder> {
   const kept = keptGroups.get(holder);
 
-  if (kept?.items === items) return kept;
+  if (kept?.items === items) {
+    // SAFETY: a holder's kept group holds that very holder, so it is of the holder's own kind.
+    return kept as InboxGroup<Holder>;
+  }
+
   const group = { holder, items };
   keptGroups.set(holder, group);
 
@@ -837,7 +898,7 @@ export function inboxGroup(holder: InboxHolder, items: readonly InboxItem[]): In
 }
 
 /** Each item as last listed, kept while the same holder holds it (`inboxListed`). */
-const keptListed = new WeakMap<InboxItem, InboxListed>();
+const keptListed = new WeakMap<InboxItem, InboxListed<InboxAnyHolder>>();
 
 /**
  * An item listed under what holds it: the one listed last while its holder
@@ -845,10 +906,17 @@ const keptListed = new WeakMap<InboxItem, InboxListed>();
  * object it listed it in before, and the item's row, which is drawn again
  * only for another (`InboxItemRow`), stands as it was.
  */
-function inboxListed(holder: InboxHolder, item: InboxItem): InboxListed {
+function inboxListed<Holder extends InboxAnyHolder>(
+  holder: Holder,
+  item: InboxItem,
+): InboxListed<Holder> {
   const kept = keptListed.get(item);
 
-  if (kept?.holder === holder) return kept;
+  if (kept?.holder === holder) {
+    // SAFETY: an item kept under this very holder is listed under the holder's own kind.
+    return kept as InboxListed<Holder>;
+  }
+
   const listed = { holder, item };
   keptListed.set(item, listed);
 
@@ -860,9 +928,9 @@ function inboxListed(holder: InboxHolder, item: InboxItem): InboxListed {
  * changed first; and the reader it was drawn for, whose items alone need
  * them.
  */
-export interface InboxListView {
+export interface InboxListView<Holder extends InboxAnyHolder = InboxHolder> {
   readonly readerId: string | undefined;
-  readonly items: readonly InboxListed[];
+  readonly items: readonly InboxListed<Holder>[];
   /** Where the pinned tasks' items stand first, each run's count and which are folded (`inboxPinnedRuns`); none where every item stands in one run. */
   readonly runs?: InboxRunsView | undefined;
 }
@@ -942,20 +1010,28 @@ export function settledOnRead(item: InboxItem, readerId: string | undefined, now
 }
 
 /** Whether a listed item needs the reader (`needsReader`), whatever its task's status. */
-export function needsYou(listed: InboxListed, readerId: string | undefined): boolean {
+export function needsYou(
+  listed: InboxListed<InboxAnyHolder>,
+  readerId: string | undefined,
+): boolean {
   return needsReader(listed.item, readerId);
 }
 
 /** The groups of an Inbox narrowed to one task: that task's alone, as a task's "needs you" count opens it. */
-export function taskGroups(groups: readonly InboxGroup[], taskId: string): readonly InboxGroup[] {
-  return groups.filter(({ holder }) => holder.task.id === taskId);
+export function taskGroups<Holder extends InboxAnyHolder>(
+  groups: readonly InboxGroup<Holder>[],
+  taskId: string,
+): readonly InboxGroup<Holder>[] {
+  return groups.filter(({ holder }) => holderTask(holder)?.id === taskId);
 }
 
 /**
  * Every open item, whoever's, the latest changed first, as Home and a
  * person's page list what waits (`use-waiting-items.ts`).
  */
-export function openItems(groups: readonly InboxGroup[]): readonly InboxListed[] {
+export function openItems<Holder extends InboxAnyHolder>(
+  groups: readonly InboxGroup<Holder>[],
+): readonly InboxListed<Holder>[] {
   return groups
     .flatMap(({ holder, items }) => items.map((item) => inboxListed(holder, item)))
     .filter((listed) => needsYou(listed, undefined))
@@ -1031,8 +1107,8 @@ function scopedItem(
  * said with the list, whose rows and steps leave their items out
  * (`inboxShownItems`). A search folds nothing, so no match is hidden.
  */
-export function inboxList(
-  tasks: readonly InboxGroup[],
+export function inboxList<Holder extends InboxAnyHolder>(
+  tasks: readonly InboxGroup<Holder>[],
   view: {
     readonly show: InboxShow;
     readonly chosen: string | undefined;
@@ -1049,12 +1125,14 @@ export function inboxList(
     /** The runs the reader folded where the pinned tasks' items stand first; none folds nothing. */
     readonly folded?: ReadonlySet<InboxRun> | undefined;
   },
-): InboxListView {
+): InboxListView<Holder> {
   const { readerId, whose = EVERYONES, search = NO_SEARCH, places = NO_PLACES } = view;
   const pinnedFirst = view.pinnedFirst === true;
   const at = (item: InboxItem): number => places.get(item.id)?.at ?? item.updatedAt;
+
   // Note that a pinned task's item outranks any other where the pinned stand first, the latest first within each.
-  const rank = ({ holder }: InboxListed): number => (pinnedFirst && isPinned(holder) ? 1 : 0);
+  const rank = ({ holder }: InboxListed<Holder>): number =>
+    pinnedFirst && isPinned(holder) ? 1 : 0;
 
   const items = tasks
     .flatMap(({ holder, items }) =>
@@ -1085,20 +1163,20 @@ export function inboxList(
   };
 }
 
-/** Whether a holder's task is pinned in the reader's sidebar. */
-function isPinned(holder: InboxHolder): boolean {
-  return holder.task.pinnedAt !== undefined;
+/** Whether a holder's task is pinned in the reader's sidebar; an agent on no task never is. */
+function isPinned(holder: InboxAnyHolder): boolean {
+  return holderTask(holder)?.pinnedAt !== undefined;
 }
 
 /** The run a listed item stands in where the pinned tasks' items stand first. */
-export function inboxRunOf({ holder }: InboxListed): InboxRun {
+export function inboxRunOf({ holder }: InboxListed<InboxAnyHolder>): InboxRun {
   return isPinned(holder) ? INBOX_RUN.PINNED : INBOX_RUN.REST;
 }
 
 /** One run as a list draws it: which it is, the rows it draws, how many items it holds, and whether it is folded. */
-export interface InboxPinnedRun {
+export interface InboxPinnedRun<Holder extends InboxAnyHolder = InboxHolder> {
   readonly run: InboxRun;
-  readonly items: readonly InboxListed[];
+  readonly items: readonly InboxListed<Holder>[];
   readonly count: number;
   readonly folded: boolean;
 }
@@ -1110,10 +1188,15 @@ export interface InboxPinnedRun {
  * where no item listed is a pinned task's, so a reader with nothing pinned
  * sees the one run they would see without it.
  */
-export function inboxPinnedRuns(view: InboxListView): readonly InboxPinnedRun[] | undefined {
+export function inboxPinnedRuns<Holder extends InboxAnyHolder>(
+  view: InboxListView<Holder>,
+): readonly InboxPinnedRun<Holder>[] | undefined {
   const { runs } = view;
 
   if (runs === undefined) return undefined;
+
+  // SAFETY: an empty list holds no item, so it is a list of any holder's kind.
+  const none = NO_LISTED as readonly InboxListed<Holder>[];
 
   return INBOX_RUNS.flatMap((run) =>
     runs.counts[run] === 0
@@ -1122,7 +1205,7 @@ export function inboxPinnedRuns(view: InboxListView): readonly InboxPinnedRun[] 
           {
             run,
             items: runs.folded.has(run)
-              ? NO_LISTED
+              ? none
               : view.items.filter((listed) => inboxRunOf(listed) === run),
             count: runs.counts[run],
             folded: runs.folded.has(run),
@@ -1132,7 +1215,7 @@ export function inboxPinnedRuns(view: InboxListView): readonly InboxPinnedRun[] 
 }
 
 /** No item listed. */
-const NO_LISTED: readonly InboxListed[] = [];
+const NO_LISTED: readonly InboxListed<InboxAnyHolder>[] = [];
 
 /**
  * The items a list draws rows for, which its keys, its selection, and K and
@@ -1140,7 +1223,10 @@ const NO_LISTED: readonly InboxListed[] = [];
  * (`inboxPinnedRuns`), bar `kept`, the item the pane shows, which keeps its
  * place among the steps though its row is folded away.
  */
-export function inboxShownItems(view: InboxListView, kept?: string): readonly InboxListed[] {
+export function inboxShownItems<Holder extends InboxAnyHolder>(
+  view: InboxListView<Holder>,
+  kept?: string,
+): readonly InboxListed<Holder>[] {
   const folded = view.runs?.folded;
 
   if (folded === undefined || folded.size === 0) return view.items;
@@ -1155,7 +1241,7 @@ export function inboxShownItems(view: InboxListView, kept?: string): readonly In
  * it stands where it is then.
  */
 export function inboxPlaces(
-  view: InboxListView,
+  view: InboxListView<InboxAnyHolder>,
   held: ReadonlyMap<string, InboxPlace>,
 ): ReadonlyMap<string, InboxPlace> {
   return new Map(
@@ -1195,7 +1281,10 @@ function itemAtNow(item: InboxItem, now: number): InboxItem {
 }
 
 /** Every holder's items as they stand for the reader at `now` (`itemAtNow`), each group handed in kept where none of its items moved. */
-export function inboxAtNow(groups: readonly InboxGroup[], now: number): readonly InboxGroup[] {
+export function inboxAtNow<Holder extends InboxAnyHolder>(
+  groups: readonly InboxGroup<Holder>[],
+  now: number,
+): readonly InboxGroup<Holder>[] {
   return groups.map((group) => {
     const items = group.items.map((item) => itemAtNow(item, now));
 
@@ -1256,7 +1345,7 @@ function showsItem(show: InboxShow, item: InboxItem, readerId: string | undefine
 
 /** How many of every task's items each scope lists, of those addressed to whom Addressed to names where it narrows the scope (`scopedItem`). */
 export function inboxCounts(
-  tasks: readonly InboxGroup[],
+  tasks: readonly InboxGroup<InboxAnyHolder>[],
   readerId: string | undefined,
   whose: InboxWhose = EVERYONES,
 ): InboxCounts {
@@ -1277,7 +1366,7 @@ export function inboxCounts(
 
 /** Whether Mark all as read at `now` would change anything: a task's item is unread, or a notice it acknowledges stands (`settledOnRead`), listed or filtered out. */
 export function anyToMarkRead(
-  tasks: readonly InboxGroup[],
+  tasks: readonly InboxGroup<InboxAnyHolder>[],
   readerId: string | undefined,
   now: number,
 ): boolean {
@@ -1287,23 +1376,25 @@ export function anyToMarkRead(
 }
 
 /** Every item the list draws, in the order it draws them. */
-export function listedItems(view: InboxListView): readonly InboxListed[] {
+export function listedItems<Holder extends InboxAnyHolder>(
+  view: InboxListView<Holder>,
+): readonly InboxListed<Holder>[] {
   return view.items;
 }
 
 /** Where the chosen item stands among those listed, counted from one, and the items either side of it in the list's order. */
-export interface InboxSteps {
+export interface InboxSteps<Holder extends InboxAnyHolder = InboxHolder> {
   readonly at: number;
   readonly total: number;
-  readonly previous: InboxListed | undefined;
-  readonly next: InboxListed | undefined;
+  readonly previous: InboxListed<Holder> | undefined;
+  readonly next: InboxListed<Holder> | undefined;
 }
 
 /** The chosen item's place among the rows, in the list's own order and filter as drawn; none where the list does not hold it. */
-export function inboxSteps(
-  view: InboxListView,
+export function inboxSteps<Holder extends InboxAnyHolder>(
+  view: InboxListView<Holder>,
   chosen: string | undefined,
-): InboxSteps | undefined {
+): InboxSteps<Holder> | undefined {
   const rowed = inboxShownItems(view, chosen);
   const at = rowed.findIndex(({ item }) => item.id === chosen);
 
@@ -1313,9 +1404,9 @@ export function inboxSteps(
 }
 
 /** The list's first and last rows, in its own order and filter as drawn; none where it draws no row. */
-export function inboxEnds(
-  view: InboxListView,
-): { readonly first: InboxListed; readonly last: InboxListed } | undefined {
+export function inboxEnds<Holder extends InboxAnyHolder>(
+  view: InboxListView<Holder>,
+): { readonly first: InboxListed<Holder>; readonly last: InboxListed<Holder> } | undefined {
   const first = view.items[0];
   const last = view.items.at(-1);
 

@@ -1129,6 +1129,8 @@
      button floats on there; and the line of an address that opens nothing. */
   --spacing-content-inset: var(--content-inset);
   --spacing-bubble: 85%; /* off-scale: a share of the column */
+  /* A chat's bubble of what people sent (`chat-bubble.tsx`), a wash of the accent under the foreground's ink. */
+  --color-bubble-sent: color-mix(in srgb, var(--ui-color-accent) 16%, transparent);
   --spacing-transcript-gutter: var(--transcript-gutter);
   --spacing-tool-chip: var(--ui-tool-chip-width);
   --spacing-conversation-empty: 280px; /* off-scale: a short line's measure */

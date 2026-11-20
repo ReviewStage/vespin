@@ -436,6 +436,12 @@ const SEARCH_PAUSE = Duration.millis(250);
 /** No workspaces, before the first document arrives. */
 const NO_WORKSPACES: readonly Workspace[] = [];
 
+/** No tasks: what a list not yet read offers rows from. */
+const NO_TASKS: readonly TaskSummary[] = [];
+
+/** No rows: what a kind not asked for offers. */
+const NO_ROWS: readonly MentionRow[] = [];
+
 /** The list's own name, which its listbox is read by. */
 const MENU_LABEL = "Mention";
 
@@ -821,9 +827,13 @@ function threadRows(
 ): MentionRow[] {
   if (feed === undefined || workspace === undefined) return [];
   const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
+  // Note that the workspace's tasks are read by id, because the feed may hold a thread of every task and a scan per task read the whole list each.
+  const named = new Map<string, TaskSummary>();
+
+  for (const each of tasks) if (each.workspaceId === workspace.id) named.set(each.id, each);
 
   for (const [itemTaskId, items] of Object.entries(feed[INBOX_SCOPE_KIND.TASK])) {
-    const task = tasks.find((each) => each.id === itemTaskId && each.workspaceId === workspace.id);
+    const task = named.get(itemTaskId);
 
     if (task === undefined) continue;
 
@@ -2219,18 +2229,31 @@ export function useMentionPicker({
   // While the workspace has Descriptions off there is no description to mention, its sections or the whole of it, so the task itself is offered among the workspace's tasks.
   const descriptionsOn = useWorkspaceExperiment(tasksWorkspaceId, EXPERIMENT.DESCRIPTIONS);
 
-  const taskRowsOffered = open
-    ? workspaceTaskRows(descriptionsOn ? taskId : undefined, tasksWorkspace, workspaceTasks ?? [])
-    : [];
+  // Note that the rows are built once for what they are made from rather than on every key typed, which searches them anew but changes none.
+  const taskRowsOffered = useMemo(
+    () =>
+      open
+        ? workspaceTaskRows(
+            descriptionsOn ? taskId : undefined,
+            tasksWorkspace,
+            workspaceTasks ?? NO_TASKS,
+          )
+        : NO_ROWS,
+    [open, descriptionsOn, taskId, tasksWorkspace, workspaceTasks],
+  );
 
   // The threads offered are the workspace's as the account's feed holds them, which the host holds for the session.
   const feed = useQuery(inboxItemsQuery());
   const retryFeed = useMutation(inboxItemsRetryMutation());
   const threadsAsked = open && tasksWorkspace !== undefined;
 
-  const threadRowsOffered = threadsAsked
-    ? threadRows(feed.data, taskId, tasksWorkspace, workspaceTasks ?? [])
-    : [];
+  const threadRowsOffered = useMemo(
+    () =>
+      threadsAsked
+        ? threadRows(feed.data, taskId, tasksWorkspace, workspaceTasks ?? NO_TASKS)
+        : NO_ROWS,
+    [threadsAsked, feed.data, taskId, tasksWorkspace, workspaceTasks],
+  );
 
   // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open and again once it opens anew.
   const threadTasksOutside = threadsAsked

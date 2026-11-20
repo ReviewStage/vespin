@@ -180,9 +180,8 @@ env:
     timeout: 5000
 - takeScreenshot: agent-allowed
 # The page's menu opens the options sheet, as the panel's chip and + open
-# their menus: the model and effort the agent runs on, each a menu of what its
-# harness runs, Opus 5.5 to start, with Fast, since the fixture's catalog lists
-# Opus's fast version; its permission mode, Ask for approval to start, each
+# their menus: the effort and Fast first, since the fixture's catalog lists
+# Opus's fast version, then each model its harness runs, Opus 5.5 to start; its permission mode, Ask for approval to start, each
 # mode with what it does; and the MCP servers it is handed, each connected
 # one with its switch. A change is drawn on the agent at once, as the fixture
 # lays it. Note that a regular window's bar stands Pin and Archive beside ⋯
@@ -205,8 +204,17 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-menu
-- tapOn: "Options"
-- assertVisible: "Model"
+# The model, its effort, Fast and the permission mode stand once, in the
+# model chip's sheet at the end of the composer's row, as the desktop's
+# model chip holds them; ⋯ no longer offers Options. Note that the menu is
+# let go first, by a tap on the transcript's top.
+- tapOn:
+    point: "50%, 25%"
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "agent-model-chip"
+- assertVisible: "Effort"
 - assertVisible: ".*Opus 5.5.*"
 - assertVisible: "Fast"
 - assertVisible: "Ask for approval"
@@ -223,37 +231,26 @@ env:
 - runFlow:
     file: subflows/full-sheet.yaml
 - tapOn: "Approve for me.*"
-# Note that Options opens at half height in a compact window, so the permission section's footer may stand below the fold until scrolled to.
+# Note that the sheet opens at half height in a compact window, so the permission section's footer may stand below the fold until scrolled to.
 - scrollUntilVisible:
     element: "Takes effect from the next turn."
     direction: DOWN
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-options-mode
-- scrollUntilVisible:
-    element: "Notion · Personal"
-    direction: DOWN
-- assertVisible: "Linear"
-- tapOn: "Notion · Personal"
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: agent-options-servers
-# Note that the Model row is centered as the form scrolls back, because one
-# left at the top stands under the sheet's bar, and its menu is opened from
-# its value, since the system's menu picker opens from its value alone.
+# The models stand in the sheet under their harness, each a row of its own;
+# a pick of Sonnet, which the fixture's catalog lists no fast version of,
+# takes Fast away.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
-      ELEMENT: "Model.*"
+      ELEMENT: ".*Sonnet 5.5"
       DIRECTION: UP
-- tapOn: "Opus 5.5"
-- assertVisible: ".*Sonnet 5.5"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-model-menu
 - tapOn: ".*Sonnet 5.5"
 - assertVisible: "Effort.*"
-- assertNotVisible: ".*Opus 5.5.*"
 - assertNotVisible:
     id: "options-fast"
 - waitForAnimationToEnd:

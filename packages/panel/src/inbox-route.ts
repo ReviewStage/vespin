@@ -114,7 +114,11 @@ function beingFound(choice: InboxChoice): boolean {
 
 /** The item `itemId` under the task the service says it stands on. */
 function choiceAt(itemId: string, home: InboxItemHome): InboxChoice {
-  return { taskId: home.taskId, itemAgentId: home.agentId, itemId, opened: true };
+  const { taskId } = home;
+
+  return taskId === null
+    ? { itemId, opened: true }
+    : { taskId, itemAgentId: home.agentId, itemId, opened: true };
 }
 
 /**

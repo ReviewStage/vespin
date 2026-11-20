@@ -35,15 +35,12 @@ appId: dev.vespin.ios
 - runFlow:
     file: subflows/lower-keyboard.yaml
 # The model's capsule says the model and its effort, "Opus 5.5 · High", the
-# fixture's first model, and opens the model sheet: Model names the model
-# and pushes the catalog, each model once under its harness, by the panel's
-# name for it ("Sonnet 5.5"); a pick pops back, keeping the effort it lists
-# nearest the one shown, and Done closes the sheet.
+# fixture's first model, and opens the model sheet: Effort and Fast lead it,
+# then the catalog, each model once under its harness, by the panel's name
+# for it ("Sonnet 5.5"); a pick keeps the effort it lists nearest the one
+# shown, and Done closes the sheet.
 - tapOn: "Opus 5.5.*"
-- assertVisible: "Model"
-- waitForAnimationToEnd
-- takeScreenshot: new-agent-model-sheet
-- tapOn: "Model"
+- assertVisible: "Effort"
 - assertVisible: ".*Sonnet 5.5"
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-models

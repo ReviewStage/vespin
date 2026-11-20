@@ -351,8 +351,8 @@ export function AgentComposer({
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
-  /** The task the agent works on, which a call into it names; none where the box offers no Talk, as every box but an agent's own tab's (`agent-talk.tsx`). */
-  talksIn?: string | undefined;
+  /** The task the agent works on, which a call into it names, null for an agent on no task, as a Manager is; none where the box offers no Talk, as every box but an agent's own tab's and page's (`agent-talk.tsx`). */
+  talksIn?: string | null | undefined;
   /** Talk in a box that starts a new agent: the agent's blank start the call opens on; none where the box offers no Talk. */
   startsTalk?: NewAgentTalk | undefined;
   status: AgentStatus;

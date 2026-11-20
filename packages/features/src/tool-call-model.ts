@@ -1714,6 +1714,8 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.SLACK_REACT, input, output, "emoji"),
   [AGENT_TOOL.END_TURN]: ({ input, output }) =>
     namedCall(CALL_KIND.END_TURN, input, output, undefined),
+  [AGENT_TOOL.SEND_TO_USER]: ({ input, output }) =>
+    namedCall(CALL_KIND.SEND_TO_USER, input, output, "text"),
 } as const satisfies Record<AgentTool, ToolReader>;
 
 /**

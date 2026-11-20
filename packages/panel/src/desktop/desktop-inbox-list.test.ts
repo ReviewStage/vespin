@@ -30,6 +30,7 @@ import {
 import { editorBundleLanded } from "../testing/composer.js";
 import {
   ACME,
+  AGENT,
   ASKING_ID,
   answeredBy,
   arrowNamed,
@@ -626,6 +627,52 @@ test("each row names its task on its first line with its time at that line's end
   ];
 
   assert.deepEqual(lines(), expected);
+});
+
+test("a thread on no task names its agent on its first line where a task's thread names the task, and its press opens the thread beside the list, led by its agent", async () => {
+  const manager = {
+    ...AGENT,
+    id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+    taskId: null,
+    title: "Release manager",
+  };
+
+  world.listedAgents = [AGENT, manager];
+  world.tasklessInboxes.set(manager.id, [
+    {
+      ...EXPIRY,
+      id: "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+      agentId: manager.id,
+      title: "Cut the release?",
+    },
+  ]);
+  const { page, asked } = mount();
+  await settle();
+
+  const lead = (title: string) =>
+    rowNamed(page, title).querySelector('.ui-list-row-lead[data-at="above"]')?.textContent;
+
+  assert.deepEqual(
+    [lead("Cut the release?"), lead("Alert at 80%?")],
+    ["Release manager", "Billing usage alerts"],
+  );
+
+  act(() => rowNamed(page, "Cut the release?").click());
+  await settle();
+
+  assert.deepEqual(asked.openedAgents, [], "the thread opens, not its agent's page");
+  assert.equal(paneTitle(page), "Cut the release?");
+
+  const crumbs = [
+    ...page.querySelectorAll<HTMLButtonElement>('.inbox-view-items nav[aria-label="Path"] button'),
+  ];
+
+  assert.deepEqual(
+    crumbs.map((crumb) => crumb.textContent),
+    ["Release manager"],
+  );
+  act(() => crumbs[0]?.click());
+  assert.deepEqual(asked.openedAgents, [manager.id], "its crumb opens the agent's own page");
 });
 
 test("the list is resized from its edge between its bounds, and keeps its width across a relaunch", async () => {

@@ -54,13 +54,15 @@ export interface NativeAgentSessionsOptions {
   readonly origin?: () => string | undefined;
 }
 
-/** The number the agent's task goes by in its workspace, which its link names it by; none where it is not read, and the link names the task's id. */
+/** The number the agent's task goes by in its workspace, which its link names it by; none where it is not read, and the link names the task's id, or where it stands on no task. */
 const agentTaskNumber = (userId: string, agent: Agent) =>
-  readTaskHeader(userId, agent.taskId).pipe(
-    Effect.map((header) => Option.getOrUndefined(header)?.number),
-    Effect.tapError(logStoreFailure),
-    Effect.orElseSucceed(() => undefined),
-  );
+  agent.taskId === null
+    ? Effect.succeed(undefined)
+    : readTaskHeader(userId, agent.taskId).pipe(
+        Effect.map((header) => Option.getOrUndefined(header)?.number),
+        Effect.tapError(logStoreFailure),
+        Effect.orElseSucceed(() => undefined),
+      );
 
 /** The name the agent's starter goes by, which its instructions name them by; none where it is not read, and they are named by id alone. */
 const agentDeveloperName = (agent: Agent) =>

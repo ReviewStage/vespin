@@ -18,8 +18,7 @@
  * is released, so the button may be pressed again.
  */
 
-import type { Agent } from "@repo/database/models/agent-store";
-import { readVisibleAgent } from "@repo/database/models/agent-store";
+import { type Agent, agentTaskId, readVisibleAgent } from "@repo/database/models/agent-store";
 import {
   claimReplyButtonPress,
   type ReplyButton,
@@ -64,7 +63,11 @@ const namedAgent = (userId: string, agentId: string | null) =>
 
     return Option.match(agent, {
       onNone: () => null,
-      onSome: (found: Agent) => ({ id: found.id, taskId: found.taskId, title: agentName(found) }),
+      onSome: (found: Agent) => ({
+        id: found.id,
+        taskId: agentTaskId(found),
+        title: agentName(found),
+      }),
     });
   });
 

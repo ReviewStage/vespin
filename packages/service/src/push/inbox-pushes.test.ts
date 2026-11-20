@@ -10,7 +10,7 @@ import { user } from "@repo/database/schemas/auth";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
-import { inboxPushOf, inboxPushResponseOf } from "@repo/features/inbox-push-wire";
+import { inboxPushOf, inboxPushResponseOf, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PUSH_ENVIRONMENT, PUSH_NOTIFY, type PushNotify } from "@repo/features/push-device-wire";
@@ -272,6 +272,42 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
       }).pipe(Effect.provide(sender.layer));
     },
   );
+
+  it.effect("a failed turn of an agent on no task pushes what the app opens the agent from", () => {
+    const sender = recordingApnsSender();
+
+    return Effect.gen(function* () {
+      const starter = yield* openUser;
+      const { workspaceId } = yield* startTask(starter, { name: "Workspace" });
+
+      const started = yield* createAgent(starter, {
+        taskId: null,
+        workspaceId,
+        idempotencyKey: randomUUID(),
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+        repository: null,
+        descriptionSnapshot: null,
+        prompt: "Watch the billing queue.",
+        runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      });
+
+      const { agent } = Option.getOrThrow(started);
+      yield* phoneOf(starter);
+
+      yield* pushSettledTurn({
+        userId: starter,
+        conversationId: agent.conversationId,
+        turnId: randomUUID(),
+        status: TURN_STATUS.FAILED,
+        failure: "timed_out",
+        ranMs: 1000,
+      });
+
+      const push = inboxPushOf(sender.sent[0]?.payload);
+      assert.equal(push?.kind === PUSH_KIND.RUN_FAILED ? push.agentId : undefined, agent.id);
+    }).pipe(Effect.provide(sender.layer));
+  });
 
   it.effect("a failed turn pushes the agent's starter once, and a stopped one nothing", () => {
     const sender = recordingApnsSender();

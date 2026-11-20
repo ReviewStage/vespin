@@ -1,12 +1,19 @@
-import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  AGENT_KIND,
+  type AgentPullRequest,
+  type AgentSummary,
+} from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
+import { readsUnread } from "@repo/features/read-mark";
 import {
   STARTED_STANDING,
   type StartedAgentsStanding,
   startedHeard,
   startedShown,
 } from "@repo/features/task-agents-model";
+import { selectAgentPinned } from "@repo/host/app-state-reads";
 import {
   InlineEdit,
   type ListRowFold,
@@ -14,6 +21,7 @@ import {
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
+  TASK_ROW_EDGES,
   TaskRow,
   type TaskRowCell,
   TaskRowGlyph,
@@ -22,7 +30,9 @@ import {
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
-import { type ReactNode, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useMemo, useRef } from "react";
+import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useMachineAsks } from "../machine-asks.js";
 import { failedUnderMark } from "../state-glyph.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
@@ -33,8 +43,10 @@ import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import { useAgentPinWrite } from "../tasks/use-pin-writes.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
-import { rowMenu } from "./action-menu.js";
+import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { WaitingCount } from "./task-row-parts.js";
 import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
@@ -60,7 +72,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * color for where it stands and its number (`pull-request-chip.tsx`),
  * hanging the pull request's one card, the agent whose it is and who it
  * names among what the card says (`pull-request-card.tsx`); and where it
- * runs (`runs-on.tsx`), Cloud or the device, with its failed mark once its
+ * runs (`runs-on.tsx`), Cloud or the device, unless its list leaves that out
+ * (`runsOn`), as the sidebar's Managers do, with its failed mark once its
  * turn failed, or once an agent it started failed, its hint saying how
  * many, so a fold never hides a failure. Its time says when it last moved, and its ⋯ comes in over
  * it, as a task's does.
@@ -68,16 +81,23 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * A press opens the agent, and its ⋯, a right-click, a long press, and the
  * menu key offer the agent's one menu over the doors a row has
  * (`agent-actions.tsx`), as a task's row offers the task's wherever it
- * stands: Copy link, Rename, which turns the row's name into its field
+ * stands, led by Pin, or Unpin once the reader pinned it, the reader's own
+ * pin of the agent, which stands it under the sidebar's Pinned (an archived
+ * agent's row offers neither, as an archived agent stands under no pin): Copy link, Rename, which turns the row's name into its field
  * until the edit ends, Archive, asking first while a teammate's agent
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
- * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen
+ * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, unless its list
+ * chooses none (`choosable`), as the sidebar's Managers do, its row then
+ * keeping no gutter for a box it never draws, and a row chosen
  * among several offers its list's acts on every one chosen instead, under
  * how many (`agents-selection.tsx`). An archived agent's row stands settled,
  * its name in the muted ink, as a done task's does, and its menu offers
- * Unarchive in Archive's place.
+ * Unarchive in Archive's place. A Manager's row stands unread, its name in
+ * the heavier weight, while its chat said something after the reader's
+ * mark of it (`chatUnread`), but on the Manager's own page standing open,
+ * whose chat the reader sees as it lands, and in a staged run.
  */
 
 /** The cells an agent's row draws, in a task's row's order. */
@@ -94,6 +114,29 @@ export const AGENT_ROW_CELLS = [
 /** What an agent's row is, naming its ⋯ and menu "Agent actions". */
 const AGENT_THING = "Agent";
 
+/** Pin or Unpin, whichever the agent is not yet, in a group of its own, for an unarchived agent; none for an archived one, whose pin stands nowhere. */
+function pinGroups(
+  agent: AgentSummary,
+  pinned: boolean,
+  onPin: (agentId: string, pinned: boolean) => void,
+  subject: Parameters<typeof commandAction>[2],
+): MenuEntry[][] {
+  if (agent.archivedAt !== undefined) return [];
+  const command = pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT;
+
+  return [[commandAction(command, () => onPin(agent.id, !pinned), subject)]];
+}
+
+/** Whether a Manager's chat said something after the reader's mark of it (`read-mark.ts`); never a coder's, whose row carries no mark. */
+function chatUnread(agent: AgentSummary): boolean {
+  if (agent.kind !== AGENT_KIND.MANAGER || agent.saidAt === undefined) return false;
+
+  return readsUnread(
+    { ...(agent.readThrough === undefined ? undefined : { readThrough: agent.readThrough }) },
+    agent.saidAt,
+  );
+}
+
 /** One agent's row; see the module's head. */
 export function AgentListRow({
   agent,
@@ -108,6 +151,9 @@ export function AgentListRow({
   place,
   more,
   settled = false,
+  current = false,
+  runsOn = true,
+  choosable = true,
   depth,
   nest,
   fold,
@@ -137,6 +183,12 @@ export function AgentListRow({
   more?: boolean | undefined;
   /** Whether it stands settled beside the agents still listed, its name in the muted ink: an archived agent. */
   settled?: boolean | undefined;
+  /** Whether it is the agent its window stands open on, its own page, in the current fill, as a sidebar marks its open row. */
+  current?: boolean | undefined;
+  /** Whether it says where it runs, Cloud or the device, as every list but the sidebar's Managers does; its failed mark stands either way. */
+  runsOn?: boolean | undefined;
+  /** Whether its list may choose it among several, by the box in its gutter, ⌘-click, ⇧-click, and ⌘A, as every list of agents but the sidebar's Managers does. */
+  choosable?: boolean | undefined;
   /** How deep it stands nested under the agent that started it: at the top unless said. */
   depth?: number | undefined;
   /** Where it stands among the agents nested beside it, in a list that nests them; none in one that nests none. */
@@ -159,6 +211,11 @@ export function AgentListRow({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
+
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+  const selectPinned = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
+  const pinned = useQuery({ ...appStateQuery, select: selectPinned }).data === true;
+  const onPin = useAgentPinWrite();
 
   // Note that the developer's machines' asks for the agent count as needing them beside its threads.
   const asked = machineAsksByAgent(useMachineAsks()).get(agent.id) ?? 0;
@@ -209,7 +266,7 @@ export function AgentListRow({
           ),
         [TASK_ROW_CELL.AGENTS]: (
           <ReplayMask>
-            <RunsOnPlace agent={agent} devices={macs} />
+            {runsOn ? <RunsOnPlace agent={agent} devices={macs} /> : null}
             {agentEndMark(agent, true) ??
               (started === undefined || started.failed === 0
                 ? null
@@ -238,10 +295,22 @@ export function AgentListRow({
           ? undefined
           : chosen !== undefined
             ? chosenRowMenu(AGENT_THING, chosen, shown)
-            : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), shown, true)
+            : rowMenu(
+                AGENT_THING,
+                [
+                  ...pinGroups(agent, pinned, onPin, actions.subject),
+                  ...agentMenuGroups(rowDoors(actions.doors)),
+                ],
+                shown,
+                true,
+              )
       }
       more={more}
       settled={settled}
+      unread={!staged && !current && chatUnread(agent)}
+      edges={choosable ? TASK_ROW_EDGES.LIST : TASK_ROW_EDGES.UNCHOSEN}
+      choosable={choosable}
+      current={current}
       hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
       onOpen={onPress}
       pressRef={press}

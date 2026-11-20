@@ -4,9 +4,19 @@ import { Button, HStack, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame } from "@expo/ui/swift-ui/modifiers";
 import type { DraftCopy } from "@repo/features/draft-text";
+import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import {
+  type ComponentRef,
+  createContext,
+  type ReactElement,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { StyleSheet, TextInput, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -20,9 +30,9 @@ import {
   keepActs,
 } from "./keep-model.js";
 import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
-import { SelectTextSheet } from "./select-text-sheet.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE } from "./tokens/space.js";
+import { PROSE_SIZE } from "./tokens/type.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
@@ -30,6 +40,8 @@ const COPY_MESSAGE = "Copy message";
 const styles = StyleSheet.create({
   // Note that the menu and its host span the width they stand in, since a host sized by its SwiftUI alone would stand no wider than nothing.
   host: { alignSelf: "stretch" },
+  // Note that the words being selected stand as the words drawn do, with no inset of the text view's own, so they don't move as the selection starts.
+  selecting: { padding: 0, paddingTop: 0, paddingBottom: 0, fontSize: PROSE_SIZE },
 });
 
 /** One act of a held thing's menu: its words, its glyph, and what a press does. */
@@ -62,10 +74,12 @@ export interface Keeping {
 
 const KeepingDoor = createContext<Keeping | undefined>(undefined);
 
-/** Opens a message's words in the sheet they are selected in, which `KeepingProvider` holds. */
-const SelectTextDoor = createContext<((words: string) => void) | undefined>(undefined);
+/** Whether the message around a view has its words selected in place, and what ends it, as `MessageWords` reads it; none outside a message's menu. */
+const SelectingDoor = createContext<
+  { readonly words: string; readonly done: () => void } | undefined
+>(undefined);
 
-/** Hands every picture, recording, file, and message under it what the app does with what is held, and holds the one sheet a message's Select text opens; none offers no menu. */
+/** Hands every picture, recording, file, and message under it what the app does with what is held; none offers no menu. */
 export function KeepingProvider({
   keeping,
   children,
@@ -73,16 +87,12 @@ export function KeepingProvider({
   readonly keeping: Keeping;
   readonly children: ReactNode;
 }) {
-  const [selecting, setSelecting] = useState<string | undefined>(undefined);
+  return <KeepingDoor value={keeping}>{children}</KeepingDoor>;
+}
 
-  return (
-    <KeepingDoor value={keeping}>
-      <SelectTextDoor value={setSelecting}>
-        {children}
-        <SelectTextSheet words={selecting} onDone={() => setSelecting(undefined)} />
-      </SelectTextDoor>
-    </KeepingDoor>
-  );
+/** Copies words to the pasteboard through the app's keeping, as a held link's Copy link does; none where no app answers it. */
+export function useCopyWords(): ((words: string) => void) | undefined {
+  return useContext(KeepingDoor)?.copyWords;
 }
 
 /** The acts a kept thing's menu offers, in their order; none where nothing is kept yet, or no app answers them. */
@@ -133,9 +143,9 @@ function useMessageActs(
   words: string,
   link: string | undefined,
   more: readonly HeldAct[],
+  selectText: (() => void) | undefined,
 ): readonly HeldAct[] {
   const keeping = useContext(KeepingDoor);
-  const selectText = useContext(SelectTextDoor);
 
   if (keeping === undefined || words.trim() === "") return [];
 
@@ -157,7 +167,7 @@ function useMessageActs(
           {
             label: MESSAGE_ACT_WORDS.SELECT_TEXT,
             symbol: GLYPH.SELECT_TEXT,
-            onPress: () => selectText(words),
+            onPress: selectText,
           },
         ]),
     {
@@ -194,12 +204,18 @@ export function MessageMenu({
   readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
+  const [selecting, setSelecting] = useState(false);
+  const acts = useMessageActs(words, link, more, () => setSelecting(true));
+
+  if (selecting)
+    return (
+      <Selecting words={words} onDone={() => setSelecting(false)}>
+        {children}
+      </Selecting>
+    );
+
   return (
-    <HeldMenu
-      acts={useMessageActs(words, link, more)}
-      title={at === undefined ? undefined : dayAndTimeText(at)}
-      width={width}
-    >
+    <HeldMenu acts={acts} title={at === undefined ? undefined : dayAndTimeText(at)} width={width}>
       {children}
     </HeldMenu>
   );
@@ -398,8 +414,18 @@ export function CopyWordsMenu({
   readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
+  const [selecting, setSelecting] = useState(false);
+  const acts = useMessageActs(words, undefined, [], () => setSelecting(true));
+
+  if (selecting)
+    return (
+      <Selecting words={words} onDone={() => setSelecting(false)}>
+        {children}
+      </Selecting>
+    );
+
   return (
-    <HeldMenu acts={useMessageActs(words, undefined, [])} width={width}>
+    <HeldMenu acts={acts} width={width}>
       {children}
     </HeldMenu>
   );
@@ -413,5 +439,78 @@ export function CopyWordsSwiftMenu({
   readonly words: string;
   readonly children: ReactElement;
 }) {
-  return <HeldSwiftMenu acts={useMessageActs(words, undefined, [])}>{children}</HeldSwiftMenu>;
+  // Note that a message SwiftUI draws offers no Select text, since a SwiftUI line under a menu selects no span of its words in place.
+  return (
+    <HeldSwiftMenu acts={useMessageActs(words, undefined, [], undefined)}>{children}</HeldSwiftMenu>
+  );
+}
+
+/** A message's views with its words selected in place, its menu let go meanwhile, so a press and a drag move the selection rather than lift the menu. */
+function Selecting({
+  words,
+  onDone,
+  children,
+}: {
+  readonly words: string;
+  readonly onDone: () => void;
+  readonly children: ReactElement;
+}) {
+  return <SelectingDoor value={{ words, done: onDone }}>{children}</SelectingDoor>;
+}
+
+/**
+ * A message's words, drawn by `children`, as Messages selects a bubble's:
+ * once its menu's Select text is pressed, the words stand in the system's
+ * own text view in their place, read-only, all of them selected, with the
+ * selection's handles and iOS's edit menu (Copy, Look Up, Share), a drag of
+ * either handle picking any span; the selection let go, by a tap elsewhere
+ * or a tap in the words, the words stand drawn again and the menu returns.
+ * Note that the words are said plainly while selected (`markdownPlainText`),
+ * since the system's text view draws no Markdown. Outside a message's menu,
+ * or while nothing is selected, the words as drawn.
+ */
+export function MessageWords({ children }: { readonly children: ReactElement }) {
+  const selecting = useContext(SelectingDoor);
+
+  if (selecting === undefined) return children;
+
+  return <SelectedWords words={selecting.words} onDone={selecting.done} />;
+}
+
+/** A message's words in the system's text view, read-only, all selected as it stands, ending as the selection is let go. */
+function SelectedWords({ words, onDone }: { readonly words: string; readonly onDone: () => void }) {
+  const colors = useColors();
+  const field = useRef<ComponentRef<typeof TextInput>>(null);
+  // Whether the words have stood selected, so the caret the view opens with never ends the selection before it is drawn.
+  const spanned = useRef(false);
+  const plain = markdownPlainText(words);
+
+  // Note that the view takes the focus as it stands, so its selection shows its handles and the edit menu at once, as Messages' Select does.
+  useEffect(() => {
+    field.current?.focus();
+  }, []);
+
+  return (
+    <TextInput
+      ref={field}
+      value={plain}
+      editable={false}
+      multiline
+      scrollEnabled={false}
+      // Note that it opens with every word selected, and ends once the selection is let go to a caret or the view loses the focus.
+      // Note that the selection set on focus says nothing back on iOS, so it is counted here, and a tap that collapses it ends the selecting.
+      onFocus={() => {
+        field.current?.setSelection(0, plain.length);
+        spanned.current = plain.length > 0;
+      }}
+      onSelectionChange={(event) => {
+        const { start, end } = event.nativeEvent.selection;
+
+        if (start !== end) spanned.current = true;
+        else if (spanned.current) onDone();
+      }}
+      onBlur={onDone}
+      style={[styles.selecting, { color: colors.TEXT_BODY }]}
+    />
+  );
 }

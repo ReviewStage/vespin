@@ -43,7 +43,7 @@ export interface AdminCatalogTool {
   /** Its description and its input's JSON Schema together, in characters. */
   definitionChars: number;
   loading: AdminToolLoading;
-  /** The gate it stands behind, by the gate's own name; null for a tool every agent is offered. */
+  /** The gates it stands behind, by their own names joined with commas; null for a tool every agent is offered. */
   gate: string | null;
 }
 

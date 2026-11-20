@@ -14,7 +14,7 @@ import { handInbox, newTaskControl, tasksControl } from "../testing/tasks-contro
 
 /**
  * sidebar-folds.test.ts -- every group that folds folds under one
- * header, `GroupHeader`: the sidebar's Pinned and repositories, alike but
+ * header, `GroupHeader`: the sidebar's Pinned, My tasks, and repositories, alike but
  * for what each counts, each unrolling as it opens, and a
  * folded group leaving the task open standing.
  */
@@ -103,6 +103,35 @@ test("Pinned folds on its name, counts its pins folded, and leaves the pin that 
   act(() => fold(sidebar, "Pinned").click());
   assert.equal(fold(sidebar, "Pinned").getAttribute("aria-expanded"), "true");
   assert.deepEqual(names(), ["Invite expiry", "Retry audit"]);
+});
+
+test("My tasks folds on its name, counts its tasks folded, leaves the task that is open standing, and stays folded across launches", () => {
+  const control = () =>
+    tasksControl({
+      tasks: [
+        task("p-1", "Invite expiry", "acme/relay"),
+        task("p-2", "Billing export", "acme/console"),
+      ],
+      activeTaskId: "p-1",
+    });
+
+  const sidebar = mountSidebar(control());
+
+  const names = (within: HTMLElement) =>
+    [...within.querySelectorAll(".sidebar-tasks-head .ui-list-row-title")]
+      .map((title) => title.firstChild?.textContent)
+      .sort();
+
+  assert.equal(fold(sidebar, "My tasks").getAttribute("aria-expanded"), "true");
+  assert.deepEqual(names(sidebar), ["Billing export", "Invite expiry"]);
+
+  act(() => fold(sidebar, "My tasks").click());
+  assert.equal(fold(sidebar, "My tasks").getAttribute("aria-expanded"), "false");
+  assert.equal(fold(sidebar, "My tasks").textContent, "My tasks2 tasks");
+  assert.deepEqual(names(sidebar), ["Invite expiry"], "the task on show stays");
+
+  const relaunched = mountSidebar(control());
+  assert.equal(fold(relaunched, "My tasks").getAttribute("aria-expanded"), "false");
 });
 
 test("a folded repository leaves only the task that is open standing, one that needs you folded away with the rest, and unfolds to every task", () => {

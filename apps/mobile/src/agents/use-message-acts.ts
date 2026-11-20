@@ -65,7 +65,7 @@ export function useMessageActs(input: {
   readonly agent: FollowedAgent | undefined;
   readonly transcript: AppTranscript | undefined;
   readonly readerId: string | undefined;
-  readonly composer: AgentComposer;
+  readonly composer: Pick<AgentComposer, "editMessage">;
   readonly calling: boolean;
 }): MessageActs {
   const { agentId, agent, transcript, readerId, composer, calling } = input;

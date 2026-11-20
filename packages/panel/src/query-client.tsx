@@ -20,10 +20,19 @@
  * `networkMode: "always"`: none pauses for the browser's online mark, which
  * reads true while the service is unreachable often enough to mean nothing
  * here.
+ *
+ * What the client tells its readers lands in a microtask rather than the
+ * library's default `setTimeout(0)` (`notifyManager.setScheduler`), because
+ * every render of a component holding a mutation hands its observer new
+ * options, which the cache tells its readers of (`useIsMutating`,
+ * `useMutationState`): with a timer each, an idle window ran hundreds of
+ * timer tasks a second.
  */
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { notifyManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+
+notifyManager.setScheduler(queueMicrotask);
 
 /** The window's one client, which a push writes into with `setQueryData` and every surface reads through. */
 export const queryClient = new QueryClient({

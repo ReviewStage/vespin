@@ -34,9 +34,9 @@ import {
  * its thread draws; and each poll after is held until something moves past
  * the id the last answer named, and answered only the items that moved,
  * each whole, with the ids of those that stand no longer for the account
- * (`gone`). The follow keeps every item it holds with the plan it is on;
- * one whose stamp names no plan, which no agent leaves since every agent
- * works on one, is not held. An item settled longer ago than the
+ * (`gone`). The follow keeps every item it holds with the plan it is on,
+ * or, where its stamp names no plan, as its agent's on no task, which it
+ * tells under that agent (`AppInboxItems`'s `agents`). An item settled longer ago than the
  * read's window leaves it by the clock, which no answer says, so the follow
  * drops it itself; and a sync id that stalls is asked around whole
  * (`live-follow.ts`'s `SYNC_STALL`).
@@ -86,7 +86,8 @@ const KEPT_INBOX_BOUND = {
 /** One item as the follow last took it, and the plan it is on. */
 interface HeldItem {
   readonly item: InboxItem;
-  readonly taskId: string;
+  /** The item's task; null for one on no task. */
+  readonly taskId: string | null;
 }
 
 /** Every item held, by its id. */
@@ -171,7 +172,7 @@ function withinWindow(held: Map<string, HeldItem>, now: number): void {
  */
 const keptInboxSchema = Schema.Struct({
   at: Schema.optionalKey(Schema.String),
-  plans: Schema.Record(Schema.String, Schema.String),
+  plans: Schema.Record(Schema.String, Schema.NullOr(Schema.String)),
 });
 
 type KeptInbox = typeof keptInboxSchema.Type;
@@ -201,12 +202,63 @@ function heldOfKept(items: readonly InboxItem[], kept: KeptInbox): Map<string, H
 /** No item on any plan, as the feed is told before it first answers. */
 const NO_ITEMS: AppInboxItems = { [INBOX_SCOPE_KIND.TASK]: {} };
 
+/** Where an item stands in what the feed tells: on its plan, or, on no plan, under its agent. */
+function holderOf({ item, taskId }: HeldItem): { readonly agents: boolean; readonly id: string } {
+  return taskId === null ? { agents: true, id: item.agentId } : { agents: false, id: taskId };
+}
+
+/** One kind of holder's lists, by the plan's or the agent's id, as the feed tells them. */
+type HolderLists = AppInboxItems[typeof INBOX_SCOPE_KIND.TASK];
+
+/** One kind of holder's lists as `told` tells them: the plans', or the agents' on no plan. */
+function toldOf(told: AppInboxItems, agents: boolean): HolderLists {
+  return agents ? (told.agents ?? {}) : told[INBOX_SCOPE_KIND.TASK];
+}
+
+/**
+ * One kind of holder's lists once those `touched` names are drawn again from
+ * `held`, each as `drawnOf` draws it, in the order its own read answers
+ * them, and gone where it holds none; every other's list is the very one
+ * told.
+ */
+function listsPatched(
+  told: HolderLists,
+  touched: ReadonlySet<string>,
+  agents: boolean,
+  held: Held,
+  drawnOf: (id: string) => InboxItem | undefined,
+): HolderLists {
+  const lists = new Map<string, InboxItem[]>();
+
+  for (const [id, on] of held) {
+    const holder = holderOf(on);
+
+    if (holder.agents !== agents || !touched.has(holder.id)) continue;
+    const items = lists.get(holder.id);
+    const shown = drawnOf(id) ?? on.item;
+
+    if (items === undefined) lists.set(holder.id, [shown]);
+    else items.push(shown);
+  }
+
+  const next = { ...told };
+
+  for (const id of touched) {
+    const items = lists.get(id);
+
+    if (items === undefined) Reflect.deleteProperty(next, id);
+    else next[id] = inboxInOrder(items);
+  }
+
+  return next;
+}
+
 /**
  * The plans `told` once the items `moved` names are drawn again: each plan
  * one of them stood on in `was`, or stands on in `held`, holds what `held`
  * puts on it now, each as `drawnOf` draws it, in the order its own read
- * answers them, and is gone where it holds none; every other plan's list
- * is the very one told.
+ * answers them, and is gone where it holds none; and each agent on no plan
+ * alike, by the agent. Every other list is the very one told.
  */
 function inboxItemsPatched(
   told: AppInboxItems,
@@ -215,34 +267,32 @@ function inboxItemsPatched(
   held: Held,
   drawnOf: (id: string) => InboxItem | undefined,
 ): AppInboxItems {
-  const touched = new Set<string>();
+  const touchedPlans = new Set<string>();
+  const touchedAgents = new Set<string>();
 
   for (const id of moved) {
-    for (const on of [was.get(id), held.get(id)]) if (on !== undefined) touched.add(on.taskId);
+    for (const on of [was.get(id), held.get(id)]) {
+      if (on === undefined) continue;
+      const holder = holderOf(on);
+      (holder.agents ? touchedAgents : touchedPlans).add(holder.id);
+    }
   }
 
-  if (touched.size === 0) return told;
-  const lists = new Map<string, InboxItem[]>();
+  if (touchedPlans.size === 0 && touchedAgents.size === 0) return told;
 
-  for (const [id, { item, taskId }] of held) {
-    if (!touched.has(taskId)) continue;
-    const items = lists.get(taskId);
-    const shown = drawnOf(id) ?? item;
+  const plans =
+    touchedPlans.size === 0
+      ? told[INBOX_SCOPE_KIND.TASK]
+      : listsPatched(toldOf(told, false), touchedPlans, false, held, drawnOf);
 
-    if (items === undefined) lists.set(taskId, [shown]);
-    else items.push(shown);
-  }
+  const agents =
+    touchedAgents.size === 0
+      ? told.agents
+      : listsPatched(toldOf(told, true), touchedAgents, true, held, drawnOf);
 
-  const next = { ...told[INBOX_SCOPE_KIND.TASK] };
-
-  for (const taskId of touched) {
-    const items = lists.get(taskId);
-
-    if (items === undefined) Reflect.deleteProperty(next, taskId);
-    else next[taskId] = inboxInOrder(items);
-  }
-
-  return { [INBOX_SCOPE_KIND.TASK]: next };
+  return agents === undefined
+    ? { [INBOX_SCOPE_KIND.TASK]: plans }
+    : { [INBOX_SCOPE_KIND.TASK]: plans, agents };
 }
 
 /**
