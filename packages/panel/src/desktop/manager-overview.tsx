@@ -19,28 +19,50 @@
  * its cap shows its first rows and the rest on a press (`ShowMoreRow`).
  */
 
-import type { ListedAgent } from "@repo/features/agent-wire";
-import { managerOverview } from "@repo/features/manager-overview-model";
+import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
+import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { type ManagerPullRequest, managerOverview } from "@repo/features/manager-overview-model";
+import type { PersonAgent } from "@repo/features/person-page-model";
 import { TERM } from "@repo/features/words";
 import {
   CountLine,
+  CountParts,
   DetailPage,
   GAP,
   LIST_INSET,
   List,
+  linesCount,
   PAGE_FRAME,
   PAGE_WIDTH,
   ShowMoreRow,
   STATUS_TONE,
   Stack,
+  TASK_ROW_CELL,
+  TASK_ROW_EDGES,
+  TaskRow,
+  type TaskRowCell,
+  TaskRowGlyph,
+  TaskRows,
+  TEXT_ELEMENT,
+  TEXT_FONT,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   useMinute,
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { changesTab } from "@repo/ui/tab-strip-model";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { useCoarsePointer } from "../coarse-pointer.js";
 import { MemberDirectory } from "../member-directory.js";
 import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
+import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
+import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { PersonSectionFrame } from "./person-frame.js";
 
 /** What the panel is called, said to a reader as its region's name. */
@@ -54,10 +76,25 @@ const OVERVIEW_WORDS = {
   WORKING: "agents working",
   PULL_REQUESTS_OPEN: "pull requests open",
   DONE_THIS_WEEK: "done this week",
+  AGENTS: "Agents",
+  PULL_REQUESTS: "Pull requests",
 } as const;
 
 /** The most threads Waiting on you lists before its foot shows the rest. */
 const WAITING_ROWS = 3;
+
+/** The most agents Agents lists before its foot shows the rest. */
+const AGENT_ROWS = 6;
+
+/** The most pull requests Pull requests lists before its foot shows the rest. */
+const PULL_REQUEST_ROWS = 5;
+
+/** The cells a pull request's row draws: its number where a task's key stands, its mark where a task's status does, then how many lines it changes. */
+const PULL_REQUEST_ROW_CELLS = [
+  TASK_ROW_CELL.KEY,
+  TASK_ROW_CELL.STATUS,
+  TASK_ROW_CELL.SUB_TASKS,
+] as const satisfies readonly TaskRowCell[];
 
 /** A list's rows standing under its cap, and the foot that lifts it. */
 interface Capped<Row> {
@@ -107,6 +144,163 @@ function WaitingOnYou({ threads }: { threads: AgentThreads }): React.JSX.Element
   );
 }
 
+/** Opens the pull request a task's agent opened in its Pull request tab, on that task, as its chip does; nothing where its address cannot be read. */
+function openPullRequest(tasks: TasksControl, taskId: string, url: string | undefined): void {
+  const address = url === undefined ? undefined : pullRequestAddressOf(url);
+
+  if (address !== undefined) tasks.onShowPanelTab(taskId, changesTab(address));
+}
+
+/**
+ * Agents: the agents the Manager started, at work first, each the row a
+ * task's agents and a person's page stand in (`AgentListRow`), its menu the
+ * agent's own, a press opening it on its task and its pull request's chip
+ * opening that pull request. Note that an agent is read again by its own id
+ * before it is archived, because the agents control reads only the open
+ * task's.
+ */
+function ManagerAgents({
+  tasks,
+  agents,
+  pullRequests,
+}: {
+  tasks: TasksControl;
+  agents: readonly PersonAgent[];
+  /** The pull request each listed agent opened, by agent. */
+  pullRequests: ReadonlyMap<string, AgentPullRequest>;
+}): React.JSX.Element | null {
+  const { shown, foot } = useCapped(agents, AGENT_ROWS);
+  const more = !useCoarsePointer();
+  const queryClient = useQueryClient();
+
+  const control: AgentsControl = {
+    ...tasks.agents,
+    readAgent: (agentId: string) => readAgentById(queryClient, agentId),
+  };
+
+  if (agents.length === 0) return null;
+
+  const { models } = control;
+
+  return (
+    <PersonSectionFrame
+      label={OVERVIEW_WORDS.AGENTS}
+      title={OVERVIEW_WORDS.AGENTS}
+      count={agents.length}
+      noun={TERM.AGENT}
+    >
+      <ReplayMask>
+        <TaskRows label={OVERVIEW_WORDS.AGENTS} cells={AGENT_ROW_CELLS} more={more} moves>
+          {shown.map(({ task, agent, at }) => {
+            const subject = listedRowSubject(agent, at, {
+              models,
+              me: tasks.me,
+              pullRequests,
+            });
+
+            return (
+              <AgentListRow
+                key={agent.id}
+                agent={agent}
+                agents={control}
+                shown={tasks.shown}
+                subject={subject}
+                at={at}
+                card={<AgentCard subject={subject} models={models} />}
+                pullRequest={pullRequests.get(agent.id)}
+                chosen={undefined}
+                more={more}
+                onPress={() => tasks.onShowAgent(task.id, agent.id)}
+                onOpenPullRequest={() =>
+                  openPullRequest(tasks, task.id, pullRequests.get(agent.id)?.url)
+                }
+              />
+            );
+          })}
+        </TaskRows>
+        {foot}
+      </ReplayMask>
+    </PersonSectionFrame>
+  );
+}
+
+/** A pull request's number in its row's key column, as a task's key stands there. */
+function PullRequestKey({ number }: { number: number }): React.JSX.Element {
+  return (
+    <Text
+      as={TEXT_ELEMENT.SPAN}
+      variant={TEXT_VARIANT.CAPTION}
+      tone={TEXT_TONE.MUTED}
+      font={TEXT_FONT.MONO}
+      aria-hidden
+    >
+      {`#${number}`}
+    </Text>
+  );
+}
+
+/**
+ * Pull requests: those the Manager's agents opened, the open ones first,
+ * each a task's row's anatomy as the Merge queue page stands its own: its
+ * number where a task's key stands, its mark where its status does, its
+ * title, and how many lines it changes, a press opening it in its Pull
+ * request tab on its task.
+ */
+function ManagerPullRequests({
+  tasks,
+  pullRequests,
+}: {
+  tasks: TasksControl;
+  pullRequests: readonly ManagerPullRequest[];
+}): React.JSX.Element | null {
+  const { shown, foot } = useCapped(pullRequests, PULL_REQUEST_ROWS);
+
+  if (pullRequests.length === 0) return null;
+
+  return (
+    <PersonSectionFrame
+      label={OVERVIEW_WORDS.PULL_REQUESTS}
+      title={OVERVIEW_WORDS.PULL_REQUESTS}
+      count={pullRequests.length}
+      noun={TERM.PULL_REQUEST}
+    >
+      <ReplayMask>
+        <TaskRows
+          label={OVERVIEW_WORDS.PULL_REQUESTS}
+          cells={PULL_REQUEST_ROW_CELLS}
+          more={false}
+          edges={TASK_ROW_EDGES.UNCHOSEN}
+          moves
+        >
+          {shown.map(({ pullRequest, task }) => (
+            <TaskRow
+              key={pullRequest.url}
+              taskId={pullRequest.url}
+              name={pullRequest.title}
+              cells={PULL_REQUEST_ROW_CELLS}
+              content={{
+                [TASK_ROW_CELL.KEY]: <PullRequestKey number={pullRequest.number} />,
+                [TASK_ROW_CELL.STATUS]: (
+                  <TaskRowGlyph>
+                    <PullRequestMark pullRequest={pullRequest} />
+                  </TaskRowGlyph>
+                ),
+                [TASK_ROW_CELL.SUB_TASKS]: (
+                  <CountParts parts={linesCount(pullRequest.additions, pullRequest.deletions)} />
+                ),
+              }}
+              more={false}
+              edges={TASK_ROW_EDGES.UNCHOSEN}
+              onOpen={() => openPullRequest(tasks, task.id, pullRequest.url)}
+            />
+          ))}
+        </TaskRows>
+        {foot}
+      </ReplayMask>
+    </PersonSectionFrame>
+  );
+}
+
 /** A Manager's overview, under the page's head and beside its chat. */
 export function ManagerOverview({
   tasks,
@@ -136,6 +330,11 @@ export function ManagerOverview({
 
   const waiting = threads?.waiting.length ?? 0;
 
+  const byAgent = useMemo(
+    () => new Map(overview.pullRequests.map((each) => [each.agent.id, each.pullRequest])),
+    [overview.pullRequests],
+  );
+
   return (
     <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
       <DetailPage frame={PAGE_FRAME.TOOLBAR} label={OVERVIEW} width={PAGE_WIDTH.FULL}>
@@ -156,6 +355,12 @@ export function ManagerOverview({
               ]}
             />
             {threads === undefined ? null : <WaitingOnYou threads={threads} />}
+            <div className="manager-overview-columns">
+              <div className="manager-overview-column">
+                <ManagerAgents tasks={tasks} agents={overview.agents} pullRequests={byAgent} />
+                <ManagerPullRequests tasks={tasks} pullRequests={overview.pullRequests} />
+              </div>
+            </div>
           </Stack>
         </ReplayUnmask>
       </DetailPage>
