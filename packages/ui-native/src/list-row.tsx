@@ -471,6 +471,7 @@ export function rowPlacement(
   vertical: number = ROW_INSET.VERTICAL,
   indent = 0,
   leading: number = ROW_INSET.LEADING,
+  reach = 0,
 ) {
   return [
     listRowBackground("clear"),
@@ -483,10 +484,13 @@ export function rowPlacement(
     }),
     ...(selected
       ? [
+          // Note that a fill that reaches past the row's own frame, under what the system stands after it, is drawn on the frame padded out by that much and the padding taken back, so the row lays out as it did.
+          padding({ trailing: reach }),
           background(
             colors.SELECTED,
             SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
           ),
+          padding({ trailing: -reach }),
           listRowSeparator("hidden"),
         ]
       : []),
@@ -635,8 +639,9 @@ export function RowFrame({
   const colors = useColors();
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
+  const selected = useContext(RowSelectedContext) === id;
   const disclosed = useContext(RowDisclosedContext);
-  const selected = useContext(RowSelectedContext) === id && !disclosed;
+  const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
   const swiped = [...trailingActions, ...leadingActions];
 
@@ -648,8 +653,8 @@ export function RowFrame({
       selected,
       vertical,
       indent,
-      // Note that a disclosure's label stands past the disclosure's own inset, its fill's, so it takes that much less of its own.
-      disclosed ? (leading ?? ROW_INSET.LEADING) - ROW_INSET.FILL : leading,
+      leading,
+      disclosed ? SPACE.EDGE + chevronRoom : 0,
     ),
     ...(heard === undefined
       ? []
@@ -1174,8 +1179,11 @@ function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   }
 }
 
-/** Whether a row stands as a disclosure's label, whose disclosure draws the row's selected fill rather than the row itself, so the fill holds the chevron. */
+/** Whether a row stands as a disclosure's label, after which the system stands the disclosure's chevron. */
 const RowDisclosedContext = createContext(false);
+
+/** The room the system's disclosure chevron takes after its label, in points at the default text size, the gap before it included, measured on the iPad (j10090r2), which a selected label's fill reaches under. */
+const DISCLOSURE_CHEVRON_ROOM = 7;
 
 /**
  * A row with the rows nested under it, folded by SwiftUI's own disclosure,
@@ -1187,40 +1195,24 @@ const RowDisclosedContext = createContext(false);
  * row's own press, which opens what the row is, so only the chevron folds.
  */
 export function RowDisclosure({
-  id,
   open,
   onOpenChange,
   label,
   children,
 }: {
-  /** The id its label's row is picked by, so the disclosure's row stands selected when it is. */
-  readonly id: string;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly label: ReactNode;
   readonly children: ReactNode;
 }) {
-  const colors = useColors();
-  const selected = useContext(RowSelectedContext) === id;
-
-  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground, its insets and its selected fill here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's, and its fill stopped short of the chevron the system stands after the label. Its trailing padding keeps the chevron off the column's edge, inside the fill, and the system sets its rows in under the parent's name.
+  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it; its trailing inset keeps the chevron off the column's edge, and the system sets its rows in under the parent's name. A selected label's fill reaches on under the chevron (`RowDisclosedContext`), since a view modifier here would fall on every row nested under it too.
   return (
     <DisclosureGroup
       isExpanded={open}
       onIsExpandedChange={onOpenChange}
       modifiers={[
-        listRowInsets({ leading: ROW_INSET.FILL, trailing: ROW_INSET.FILL, top: 0, bottom: 0 }),
+        listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
         listRowBackground("clear"),
-        padding({ trailing: SPACE.EDGE - ROW_INSET.FILL }),
-        ...(selected
-          ? [
-              background(
-                colors.SELECTED,
-                SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
-              ),
-              listRowSeparator("hidden"),
-            ]
-          : []),
       ]}
     >
       <DisclosureGroup.Label>

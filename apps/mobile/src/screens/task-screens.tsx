@@ -1037,7 +1037,6 @@ function TaskBranchRows({
 
   return (
     <RowDisclosure
-      id={task.id}
       open={open}
       onOpenChange={(asked) => {
         if (asked !== open) toggle();
