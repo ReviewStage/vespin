@@ -399,10 +399,12 @@ body,
 }
 
 /* The Tasks head heads the groups its view filters, the sections and the
-   list, so the first of them stands a tight gap under it rather than a
-   section's (sidebar-task-view.tsx). */
-.sidebar-tasks-head + .sidebar-group {
-  margin-top: var(--ui-tight-gap);
+   list, which its fold folds together, so the first of them stands a tight
+   gap under it rather than a section's (sidebar-task-view.tsx). Note that
+   the gap is the fold's body's own padding rather than its first group's
+   margin, so the fold unrolls and rolls up the whole of it. */
+.sidebar-tasks-head > .ui-group-header > .ui-disclosure-body {
+  padding-top: var(--ui-tight-gap);
 }
 
 /* The account's own sections, between Pinned and Tasks (sidebar-sections.tsx).
