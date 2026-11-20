@@ -1,0 +1,19 @@
+probe rows 476, commands 41, frames 1258
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+cold-launch-signed-out | 5 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -22 | None | None | -18
+cold-launch-signed-in | 5 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | None | None | None | None
+
+most rendered components per path (summed over its taps):
+cold-launch-signed-out: 
+cold-launch-signed-in: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch-signed-out: 
+cold-launch-signed-in: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch-signed-out: markdown 0.0, rest 0.0
+cold-launch-signed-in: markdown 0.0, rest 0.0
+
+whole run: 53s, 0 commits, 0 components rendered, 6263 ms of stalls over 23 stalls
+events: topHeaderHeightChange×189, topTransitionProgress×37, topFinishTransitioning×31, topWillAppear×23, topAppear×18, topInsetsChange×14, topWillDisappear×5, topTabSelected×5, topDismissed×5, topDisappear×5, topGlobalEvent×5, topDidAppear×5, topTouchStart×1, topTouchEnd×1, topButtonPress×1
