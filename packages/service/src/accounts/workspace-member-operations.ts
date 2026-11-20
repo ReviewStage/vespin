@@ -23,7 +23,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { archiveAgent, listAgentsOfLeaver } from "@repo/database/models/agent-store";
+import { listAgentsOfLeaver } from "@repo/database/models/agent-store";
 import {
   handOverWorkspace,
   removeWorkspaceMember,
@@ -35,8 +35,10 @@ import { AGENT_ARCHIVER, AGENT_KIND } from "@repo/features/agent-wire";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { Effect, Option } from "effect";
+import { archivedAgent } from "../agents/agent-change.js";
 import { everyTurnStoppedByStarter } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
+import { deploymentSandboxDeletes } from "../agents/session-sandboxes.js";
 import { leaverAutomationsPaused } from "../automations/automation-cadence.js";
 import {
   recordServerEvent,
@@ -116,12 +118,14 @@ const leaverAgentsStopped = Effect.fn("web/leaverAgentsStopped")(function* (
   yield* Effect.forEach(
     agents.filter((agent) => agent.kind === AGENT_KIND.MANAGER),
     (manager) =>
-      hostedStoreOrUnavailable(
-        archiveAgent(leaverId, manager.id, true, {
-          by: AGENT_ARCHIVER.APP,
-          userId: leaverId,
-          reason: LEAVER_MANAGER_ARCHIVE_REASON,
-        }),
+      archivedAgent(deploymentSandboxDeletes, STOPPER, leaverId, manager, true, {
+        by: AGENT_ARCHIVER.APP,
+        userId: leaverId,
+        reason: LEAVER_MANAGER_ARCHIVE_REASON,
+      }).pipe(
+        Effect.catch((refusal) =>
+          Effect.logWarning(`a removed member's Manager was not archived: ${refusal.error}`),
+        ),
       ),
     { discard: true },
   );
