@@ -1,4 +1,4 @@
-import { DICTATION_AUDIO_TYPE } from "@repo/features/dictation-wire";
+import { DICTATION_AUDIO, type DictationAudio } from "@repo/features/dictation-wire";
 import { readEither } from "@repo/wire/effect";
 import { Data, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -26,9 +26,13 @@ const TRANSCRIPTION = {
   /** The model OpenAI recommends for recorded speech in its own language. */
   MODEL: "gpt-transcribe",
   PATH: "/audio/transcriptions",
-  /** The name the clip is sent under, whose extension is how the endpoint knows the container. */
-  FILE_NAME: "dictation.webm",
 } as const;
+
+/** The name a clip is sent under by its container, whose extension is how the endpoint knows it. */
+const CLIP_FILE_NAME = {
+  [DICTATION_AUDIO.WEBM]: "dictation.webm",
+  [DICTATION_AUDIO.MP4]: "dictation.m4a",
+} as const satisfies Record<DictationAudio, string>;
 
 /**
  * How long the model is given for a clip of up to two minutes before the clip
@@ -69,14 +73,15 @@ export class TranscriptionFailed extends Data.TaggedError("TranscriptionFailed")
 function transcriptionRequest(input: {
   readonly key: Redacted.Redacted;
   readonly audio: Uint8Array<ArrayBuffer>;
+  readonly audioType: DictationAudio;
   readonly keywords: readonly string[];
 }): HttpClientRequest.HttpClientRequest {
   const form = new FormData();
   form.append("model", TRANSCRIPTION.MODEL);
   form.append(
     "file",
-    new Blob([input.audio], { type: DICTATION_AUDIO_TYPE }),
-    TRANSCRIPTION.FILE_NAME,
+    new Blob([input.audio], { type: input.audioType }),
+    CLIP_FILE_NAME[input.audioType],
   );
 
   for (const keyword of input.keywords) form.append("keywords[]", keyword);
@@ -110,6 +115,7 @@ function replyOf(
 export const transcribeClip = /* @__PURE__ */ Effect.fnUntraced(function* (input: {
   readonly key: Redacted.Redacted;
   readonly audio: Uint8Array<ArrayBuffer>;
+  readonly audioType: DictationAudio;
   readonly keywords: readonly string[];
 }): Effect.fn.Return<Transcribed, TranscriptionFailed, HttpClient.HttpClient> {
   const client = yield* HttpClient.HttpClient;

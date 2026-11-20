@@ -399,7 +399,7 @@ function workspacePhotos({ dependencies, served, gate }: WorkspacesReach) {
       kernel.emit(GATEWAY_EVENT.WORKSPACE_PHOTOS_CHANGED, carried(photos));
     };
 
-    /** `workspaceId`'s photo at `version` fetched and laid; nothing is laid where it did not land. */
+    /** `workspaceId`'s photo at `version` fetched and laid; nothing is laid where it did not land, and it is asked again as the workspaces next move, the list is refreshed, or the app comes forward. */
     const photoFetched = (workspaceId: string, version: string) =>
       Effect.gen(function* () {
         const photo = yield* served(client.workspaces.photo(workspaceId));
@@ -634,6 +634,8 @@ function workspaceList(reach: WorkspacesReach) {
       rows: () => list.rows,
       followed,
       standOnLocal,
+      /** Each listed photo neither held nor asked for fetched again, such as one whose fetches gave out before the account could renew. */
+      photosListed: photos.photosListed,
       photosReset: photos.reset,
       /** The follow let go and the session's workspaces closed, a new session's opened in their place. */
       reset: Effect.gen(function* () {
@@ -1691,7 +1693,10 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       Effect.gen(function* () {
         yield* dependencies.focus.raise;
 
-        if (gate()) yield* github.readGithubWhenStale;
+        if (!gate()) return {};
+        // Note that coming forward asks again for a photo whose fetches gave out, as on a launch in the background, where the account could not renew.
+        yield* list.photosListed;
+        yield* github.readGithubWhenStale;
 
         return {};
       }),
@@ -1729,7 +1734,10 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       yield* list.followed;
       yield* github.opened;
     }),
-    refreshed: Effect.andThen(list.followed, github.readGithubWhenStale),
+    // Note that a refresh asks again for a photo whose fetches gave out, since the workspaces may not move again for the whole session.
+    refreshed: Effect.all([list.followed, list.photosListed, github.readGithubWhenStale], {
+      discard: true,
+    }),
     reset: Effect.gen(function* () {
       // Note that the session's token repository writes are let go first, so none still out lays its answer while the rest of the reset runs.
       yield* tokens.tokenRepositoryWritten.letGo;

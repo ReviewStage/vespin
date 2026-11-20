@@ -379,10 +379,13 @@ type ByInboxHolder<Value> = {
 /**
  * Every inbox item the account reaches, settled ones of the read's window
  * among them, by the plan each is on, each plan's in the order its own read
- * answers them. A plan it holds nothing of holds nothing now.
+ * answers them, and those on no task by the agent that posted them
+ * (`agents`), absent while there are none. A plan or agent it holds nothing
+ * of holds nothing now.
  */
 export type AppInboxItems = {
   readonly [INBOX_SCOPE_KIND.TASK]: Readonly<Record<string, readonly InboxItem[]>>;
+  readonly agents?: Readonly<Record<string, readonly InboxItem[]>>;
 };
 
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */

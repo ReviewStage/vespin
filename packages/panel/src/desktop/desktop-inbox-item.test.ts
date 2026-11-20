@@ -332,7 +332,7 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
   });
   assert.match(
     document.querySelector('[role="alertdialog"]')?.textContent ?? "",
-    new RegExp(BILLING.name, "u"),
+    /Permanently delete task\?/u,
     "⌘⌫ asks first, about the thread's task",
   );
 });
@@ -678,13 +678,17 @@ test("a recording an agent's words draw plays where it stands, and its Expand op
     );
     assert.equal(player.hasAttribute("controls"), false, "and not the browser's");
     assert.equal(player.getAttribute("aria-label"), "Video: Inviting a member");
-    assert.equal(player.getAttribute("src"), "blob:video-2");
+    assert.equal(
+      player.getAttribute("src"),
+      "blob:video-1",
+      "from the address the inline one made",
+    );
     assert.equal(
       card?.querySelector('[aria-label="The invite flow.webm"] video')?.getAttribute("src"),
-      "blob:video-3",
+      "blob:video-1",
       "the viewer's strip shows the recording by its first frame",
     );
-    assert.deepEqual(created, [INBOX_FILE_TYPE.WEBM, INBOX_FILE_TYPE.WEBM, INBOX_FILE_TYPE.WEBM]);
+    assert.deepEqual(created, [INBOX_FILE_TYPE.WEBM], "the recording is made an address once");
     assert.equal(viewerPlace(card ?? document), "2 of 2");
     act(() =>
       card?.dispatchEvent(

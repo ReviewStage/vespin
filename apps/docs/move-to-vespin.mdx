@@ -1,0 +1,37 @@
+---
+title: "Move to Vespin"
+description: "Carry the rules, skills, and setup of your current coding agents into Vespin"
+---
+
+Your coding agents' rules and workflows already live in your repository, so most of a move is putting them where Vespin's agents read them. The prompt below has an agent do that for you and list what's left to set up by hand.
+
+## Run the prompt
+
+1. Start a task on the repository you're moving.
+2. Paste the prompt as its first message.
+3. Review the agent's pull request, and merge it.
+
+```text Move to Vespin
+I'm moving this repository's coding-agent setup to Vespin. In this repository:
+
+1. Find the rules, skills, and workflows that coding agents use here, in any tool's format.
+2. Add the project rules that are missing to AGENTS.md.
+3. Save each reusable workflow as .agents/skills/<name>/SKILL.md, with a name and a description.
+4. Keep rules that apply to certain files or folders scoped to those files or folders.
+5. Don't delete or change the original files. Skip duplicates. Never copy a secret.
+6. Don't set up MCP servers, hooks, or environment variables.
+7. Open a pull request with the changes.
+
+Then list what I still need to set up in Vespin:
+- Each environment variable and secret the agents, tests, or dev server need, by name only, never its value. These go in Settings › Cloud environment.
+- The commands that install dependencies after a fresh clone. These go in the repository's setup script in Settings › Cloud environment.
+- Dev servers and test commands I run often, with their ports. These go in the repository's run actions.
+- Each MCP server or service the agents use. These connect in Settings › Integrations.
+- Work in progress: open branches and unfinished sessions, one line each, so I can start a task for each.
+```
+
+Vespin's agents read skills from `.agents/skills/` and `.claude/skills/` in the repository, so the skills work in every new task once the pull request merges.
+
+## Finish the setup
+
+Work through the agent's list. Variables, setup scripts, and run actions are covered in [Cloud environment](/cloud-environment), and services in [Integrations](/integrations). Paste secrets into **Settings › Cloud environment** yourself, never into the task.

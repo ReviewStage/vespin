@@ -12,6 +12,11 @@ describe("keepActs", () => {
       [KEEP_ACT.COPY, KEEP_ACT.SAVE_TO_PHOTOS, KEEP_ACT.SHARE],
     ],
     [
+      "a picture the app wrote to a file is copied, saved, and shared, as one it holds",
+      { kind: KEPT_KIND.PICTURE, source: "file:///caches/agent-media-1.png", name: "Plan" },
+      [KEEP_ACT.COPY, KEEP_ACT.SAVE_TO_PHOTOS, KEEP_ACT.SHARE],
+    ],
+    [
       "an SVG, which the system does not decode, is only shared",
       { kind: KEPT_KIND.PICTURE, source: SVG, name: "Diagram" },
       [KEEP_ACT.SHARE],

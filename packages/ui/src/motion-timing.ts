@@ -42,7 +42,18 @@ export function tokenTiming(
   durationToken: string,
   easingToken: string,
 ): KeyframeAnimationOptions | undefined {
-  const style = getComputedStyle(element);
+  return styleTiming(getComputedStyle(element), durationToken, easingToken);
+}
+
+/**
+ * The timing `tokenTiming` reads, from a style already computed, so a
+ * caller reading several tokens of one element computes its style once.
+ */
+export function styleTiming(
+  style: CSSStyleDeclaration,
+  durationToken: string,
+  easingToken: string,
+): KeyframeAnimationOptions | undefined {
   const duration = milliseconds(style.getPropertyValue(durationToken));
   const easing = style.getPropertyValue(easingToken).trim();
 

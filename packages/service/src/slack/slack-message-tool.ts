@@ -11,15 +11,37 @@
  * Each message is a `markdown` block, which Slack draws as standard
  * Markdown; a workspace member's mention in it becomes a real Slack
  * mention where their Slack id is known, and their name otherwise. The
+ * pictures, recordings, and sound clips it names by their paths in the
+ * agent's sandbox are read through the door `show_media` reads by, each
+ * sniffed for what it is and held to a video's bound, and refused with the
+ * message unsent where one is not; once it is posted they are shared as
+ * files under it (`SlackWorkspaceBot.upload`). A DM to a member who turned
+ * their Slack notifications off (`slackNotificationsOn`) is refused. The
  * answer names where it landed: the channel, the message's timestamp, the
  * thread's, and its link, so the agent can reply or react to it later.
- * The thread hears nothing else of the turn but that it failed or was
- * stopped (`slack-agent-starts.ts`'s `postTurnToSlack`).
+ *
+ * The thread the message stands in, its own where it stands at the top
+ * level, is then kept as one that speaks for the agent
+ * (`SLACK_THREAD_ORIGIN.AGENT_POST`), so a reply there reaches it rather
+ * than starting a new agent; a thread already kept for an agent stays
+ * that agent's. It is no current thread of the agent's until a member
+ * writes in it. Nothing else posts to Slack for the agent: no thread of
+ * its inbox and no picture it showed, and a thread hears of its turn only
+ * that it failed or was stopped (`slack-agent-starts.ts`'s
+ * `postTurnToSlack`).
  */
 
+import { posix } from "node:path";
 import type { DatabaseServices } from "@repo/database/core/query";
+import {
+  recordSlackAgentThread,
+  slackNotificationsOn,
+} from "@repo/database/models/slack-installation-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
+import { SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { INBOX_BOUNDS } from "@repo/features/inbox-wire";
+import { sniffMediaType } from "@repo/features/media-signature";
 import {
   decodeMention,
   MENTION_KIND,
@@ -37,8 +59,9 @@ import {
   callerAgent,
   orStoreRefusal,
 } from "../agents/agent-tools.js";
+import { type InboxSandboxDoor, readSandboxImage } from "../agents/coder-host/inbox-image.js";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue } from "../core.js";
-import type { SlackBot, SlackMessage } from "./slack-bot.js";
+import type { SlackBot, SlackMessage, SlackUpload } from "./slack-bot.js";
 import { slackClipped, slackMarkdownBlock } from "./slack-markdown.js";
 import { reachChannel, reachSlack, SLACK_USE, type SlackReach } from "./slack-reach.js";
 
@@ -48,9 +71,14 @@ const SLACK_MESSAGE_CHARS = 4_000;
 /** The most characters of a message the notification's plain text says; the block holds the rest. */
 const NOTIFICATION_CHARS = 2_500;
 
+/** The most files one message may share. */
+const SLACK_MESSAGE_FILES = 10;
+
 /** Why a message was not sent, in words the model can act on. */
 const SLACK_MESSAGE_REFUSAL = {
-  UNREADABLE: `Not sent: pass text, one short message of at most ${SLACK_MESSAGE_CHARS} characters, and at most one of channel and member.`,
+  UNREADABLE: `Not sent: pass text, one short message of at most ${SLACK_MESSAGE_CHARS} characters, at most one of channel and member, and at most ${SLACK_MESSAGE_FILES} files.`,
+  NOTIFICATIONS_OFF:
+    "Not sent: that member turned their Slack notifications off, so don't DM them; your inbox threads still reach them.",
   NO_THREAD:
     "Not sent: no Slack thread speaks for you, so name a channel or a member, or answer in your final message as you would anywhere else.",
   NOT_MEMBER: "Not sent: that member is no member of your workspace.",
@@ -58,6 +86,15 @@ const SLACK_MESSAGE_REFUSAL = {
     "Not sent: that member's Slack account could not be found, so the bot cannot write to them.",
   NOT_POSTED: "Not sent: Slack did not take the message; send it again.",
   NOT_AGENT: "Not sent: only a coding agent sends a Slack message.",
+} as const;
+
+/** Why a file was not shared, and the message with it not sent; each is followed by the path. */
+const SLACK_FILE_REFUSAL = {
+  NO_FILE: "Not sent: no such file in your sandbox:",
+  NOT_IMAGE:
+    "Not sent: that file is not a PNG, JPEG, or WebP image, a WebM or MP4 video, or a WAV, MP3, M4A, AAC, or Ogg sound clip:",
+  TOO_LARGE: `Not sent: a file is shared up to ${INBOX_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB; make it smaller and send it again:`,
+  UNREADABLE: "Not sent: that file could not be read from your sandbox:",
 } as const;
 
 /** How an agent behaves in Slack, which every Slack tool's description carries, so every agent sees it. */
@@ -96,6 +133,15 @@ const SEND_SLACK_MESSAGE_INPUT = Schema.Struct({
       "The `ts` of a message to reply under, in the channel, the DM, or your own thread's channel.",
     ),
   ),
+  files: Schema.optionalKey(
+    describeWire(
+      Schema.Array(Schema.Trim.check(Schema.isNonEmpty())).check(
+        Schema.isMaxLength(SLACK_MESSAGE_FILES),
+      ),
+      "Pictures, recordings, or sound clips you made, each a path in your sandbox, shared as " +
+        "files under the message.",
+    ),
+  ),
 });
 
 type SendSlackMessageInput = typeof SEND_SLACK_MESSAGE_INPUT.Type;
@@ -108,7 +154,11 @@ export const SEND_SLACK_MESSAGE_TOOL = {
   description:
     "Send one message as the Slack bot: in the Slack thread you were started from or last " +
     "written in where you name no place, in a channel the bot is in, or to a workspace member " +
-    "as a DM, at the top level or under `thread`. " +
+    "as a DM, at the top level or under `thread`, with any `files` you made shared under it. " +
+    "Nothing reaches Slack unless you send it: not your inbox threads, and not what you show " +
+    `with ${AGENT_TOOL.SHOW_MEDIA}. DM a member yourself only where a ping is worth it, such ` +
+    "as an ask that blocks your work, in your own words; a member who turned Slack " +
+    "notifications off is not DMed. A reply in the thread your message stands in reaches you. " +
     `${SLACK_MANNERS} Where the work opened a pull request, your closing message carries your ` +
     `own ${PRODUCT_NAME} link, your agent's page, beside the pull request's, since nothing ` +
     "else posts it. Answers `accepted` with the " +
@@ -170,6 +220,8 @@ const postedMessage = Effect.fn("web/slackAgentPost")(function* (
   const { bot, agent } = reach;
   let posted: Option.Option<SlackMessage>;
   let threadTs = input.thread;
+  // Note that the thread is kept for the member a DM went to, and for the agent's starter anywhere else.
+  let keptFor = agent.userId;
 
   if (input.member !== undefined) {
     const userId = namedMember(input.member);
@@ -177,6 +229,12 @@ const postedMessage = Effect.fn("web/slackAgentPost")(function* (
     if (!(yield* isWorkspaceMember(userId, agent.organizationId))) {
       return Result.fail<string>(SLACK_MESSAGE_REFUSAL.NOT_MEMBER);
     }
+
+    if (!(yield* slackNotificationsOn(userId))) {
+      return Result.fail<string>(SLACK_MESSAGE_REFUSAL.NOTIFICATIONS_OFF);
+    }
+
+    keptFor = userId;
 
     if (input.thread === undefined) {
       posted = yield* bot.dm(userId, content);
@@ -207,13 +265,37 @@ const postedMessage = Effect.fn("web/slackAgentPost")(function* (
 
   if (Option.isNone(posted)) return Result.fail<string>(SLACK_MESSAGE_REFUSAL.NOT_POSTED);
 
-  return Result.succeed({ message: posted.value, threadTs });
+  return Result.succeed({ message: posted.value, threadTs, keptFor });
+});
+
+/** The files the input names, read from the sandbox in its order, or the refusal's words naming the first that is not one to share. */
+const sharedFiles = Effect.fn("web/slackAgentFiles")(function* (
+  sandbox: InboxSandboxDoor,
+  paths: readonly string[],
+) {
+  const terms = {
+    maxBytes: INBOX_BOUNDS.MAX_VIDEO_BYTES,
+    refusals: SLACK_FILE_REFUSAL,
+    sniff: sniffMediaType,
+  };
+
+  const uploads: SlackUpload[] = [];
+
+  for (const path of paths) {
+    const read = yield* readSandboxImage(sandbox, path, terms);
+
+    if (Result.isFailure(read)) return Result.fail<string>(read.failure);
+    uploads.push({ name: posix.basename(path), bytes: read.success.bytes });
+  }
+
+  return Result.succeed(uploads);
 });
 
 /** One call of `send_slack_message`: the message posted where the input names, refused with why where it may not go there or Slack did not take it. */
 export function runSendSlackMessage(
   call: AgentReadCall,
   input: UnparsedWireValue,
+  sandbox: InboxSandboxDoor,
 ): Effect.Effect<WireRecord, never, SlackBot | DatabaseServices> {
   const read = readInput(input);
 
@@ -235,11 +317,26 @@ export function runSendSlackMessage(
 
       if (Result.isFailure(reached)) return agentToolRejected(reached.failure);
       const reach = reached.success;
+      // A file refused is said before anything is posted, so the agent mends the call whole.
+      const files = yield* sharedFiles(sandbox, read.success.files ?? []);
+
+      if (Result.isFailure(files)) return agentToolRejected(files.failure);
       const text = yield* withSlackMentions(reach, read.success.text);
       const posted = yield* postedMessage(reach, read.success, text);
 
       if (Result.isFailure(posted)) return agentToolRejected(posted.failure);
-      const { message, threadTs } = posted.success;
+      const { message, threadTs, keptFor } = posted.success;
+      const thread = threadTs ?? message.ts;
+      // Note that the thread is kept before its files are sent, so a reply while they upload reaches the agent.
+      yield* recordSlackAgentThread({
+        organizationId: agent.organizationId,
+        channelId: message.channel,
+        threadTs: thread,
+        agentId: agent.id,
+        userId: keptFor,
+        origin: SLACK_THREAD_ORIGIN.AGENT_POST,
+      });
+      yield* reach.bot.upload(message.channel, thread, files.success);
       const link = yield* reach.bot.permalink(message.channel, message.ts);
 
       // Note that the answer names where it went, so the agent can reply or react to it later.

@@ -924,6 +924,7 @@ export function useWindowHistory(input: {
     | "agents"
     | "pages"
     | "workspaces"
+    | "liveAgents"
     | "agentThreads"
   >;
 }): WindowHistory & TaskVisits & HistoryBehind & RecentSteps {

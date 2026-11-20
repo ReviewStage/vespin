@@ -393,7 +393,7 @@ function PersonPage({
       <TaskAgentRow
         key={each.agent.id}
         line={line(each)}
-        task={tasksById.get(each.agent.taskId)}
+        task={each.agent.taskId === null ? undefined : tasksById.get(each.agent.taskId)}
         named
         asking={asking}
       />

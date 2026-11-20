@@ -26,16 +26,20 @@ import {
 import { FiringGlyph } from "../../marks/firing-glyph.js";
 import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
 import { ProductMark } from "../../marks/product-mark.js";
+import { MARK_PROVIDER, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { Badge } from "../badge/badge.js";
 import { BarAction, BarItem, BarItems } from "../bar-item/bar-item.js";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
+import { CARD_LOOK, Card } from "../card/card.js";
 import { Checkbox } from "../checkbox/checkbox.js";
 import { CHIP_LOOK, CHIP_WIDTH, Chip, ChipName } from "../chip/chip.js";
 import { CountParts, linesCount } from "../choice/count-part.js";
 import { CHOICE_LOOK, CHOICE_SELECT, ChoiceList } from "../choice-list/choice-list.js";
+import { CODE_CARD_TITLE, CodeCard } from "../code-card/code-card.js";
 import { Comment, type CommentAuthor } from "../comment/comment.js";
 import { ComposerBody } from "../composer-frame/composer-body.js";
 import { ComposerFoot } from "../composer-frame/composer-foot.js";
@@ -101,7 +105,8 @@ import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./la
  * log, folded calls and all, starting another agent and trading messages
  * with it, the plan's sub-tasks beside it; an automation's page fires a run;
  * the phone holds the same Inbox; and the composer's model menu stands
- * open over Claude's models on a plan and GPT on an API key, still. None is
+ * open over Claude's models on a plan and GPT on an API key, still; and a
+ * Slack mention and the `vespin` command each start an agent. None is
  * pressed: each other scene plays its story on a clock that
  * runs only while it is on screen (`landing-story.ts`). The Inbox and the
  * task are close-ups cut to the panel their story happens in, so they play
@@ -109,7 +114,7 @@ import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./la
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { AGENTS: 1800, RUNS: 1700 } as const;
+const BEAT = { AGENTS: 1800, RUNS: 1700, STARTS: 1600 } as const;
 
 /**
  * The team scene's story: how many steps it plays, the last its log draws
@@ -125,6 +130,7 @@ export const LANDING_SCENE = {
   AUTOMATIONS: "automations",
   DEVICES: "devices",
   KEYS: "keys",
+  STARTS: "starts",
 } as const;
 
 export type LandingScene = (typeof LANDING_SCENE)[keyof typeof LANDING_SCENE];
@@ -1358,12 +1364,166 @@ function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
   );
 }
 
+/**
+ * The starts' story: how many steps it plays, the last it draws (held a
+ * beat), and the step both cards turn over on, the finished pair scrolling
+ * away to the opening it starts from, so the loop has no cut.
+ */
+const STARTS_STORY = { STEPS: 6, LAST: 4, TURN: 5 } as const;
+
+/** What the member asks for from both places, the repository it is asked in, the task the command makes of it, and what the agent posts back. */
+const START = {
+  CHANNEL: "#eng-web",
+  ASK: "the invite link 404s on staging, can you fix it?",
+  REPOSITORY: "acme/relay",
+  COMMAND: 'vespin task create "Invite link" -F bug.md --start',
+  // What `vespin task create` prints once its agent starts (`apps/cli/src/commands/task.ts`).
+  ANSWER: [
+    "Created ACME-58 Invite link in acme/relay.",
+    "Started agent 4f1c9a2e on claude-opus-5-5 (high).",
+  ],
+  // What the agent sends the thread itself (`send_slack_message`), since the bot posts none of a turn's words.
+  REPLY: "The link was built from the production host. Fixed in acme/relay#412.",
+} as const;
+
+/**
+ * The bot's reactions on the member's message (`STATUS_EMOJI`): 👀 while
+ * the agent works, and ✅ once its pull request merges.
+ */
+const STATUS_REACTION = { WORKING: "👀", MERGED: "✅" } as const;
+
+/** The clipboard's act for a card nothing presses. */
+function stillCopy(): Promise<void> {
+  return Promise.resolve();
+}
+
+/** A part a later step shows: drawn from the opening, and held invisible until `shown`, so its card's height never changes. */
+function StartsPart({
+  shown,
+  children,
+}: {
+  shown: boolean;
+  children: ReactNode;
+}): React.JSX.Element {
+  return <div className={shown ? "ui-landing-enter" : "ui-landing-starts-held"}>{children}</div>;
+}
+
+/**
+ * A Slack thread at `step`: a member's mention of the bot, marked 👀 as its
+ * agent starts, the agent's own reply, and ✅ once its pull request merges.
+ */
+function SlackThread({ step }: { step: number }): React.JSX.Element {
+  const member = useLandingMember();
+  const reaction = step >= 3 ? STATUS_REACTION.MERGED : STATUS_REACTION.WORKING;
+
+  return (
+    <Card look={CARD_LOOK.SURFACE}>
+      <div className="ui-landing-starts-cards">
+        <span className="ui-landing-crumb">
+          <ProviderMark provider={MARK_PROVIDER.SLACK} size={PROVIDER_MARK_SIZE.ICON} />
+          {START.CHANNEL}
+        </span>
+        <Comment author={member} at={STORY_NOW - MINUTE} now={STORY_NOW}>
+          <Text>
+            <InlineRef look={INLINE_REF_LOOK.PILL} label={`@${PRODUCT_NAME}`} hint={false} />{" "}
+            {START.ASK}
+          </Text>
+          <StartsPart key={reaction} shown={step >= 1}>
+            <span className="ui-landing-starts-reactions">
+              <Badge>{`${reaction} 1`}</Badge>
+            </span>
+          </StartsPart>
+        </Comment>
+        <StartsPart shown={step >= 2}>
+          <Comment
+            author={{
+              name: PRODUCT_NAME,
+              outline: AVATAR_OUTLINE.SQUARE,
+              glyph: <ProductMark small />,
+            }}
+            at={STORY_NOW}
+            now={STORY_NOW}
+          >
+            <Text>{START.REPLY}</Text>
+          </Comment>
+        </StartsPart>
+      </div>
+    </Card>
+  );
+}
+
+/** A terminal at `step`: the `vespin` command, and what it prints once its agent starts. */
+function StartTerminal({ step }: { step: number }): React.JSX.Element {
+  // Note that the lines not yet printed stand as blank ones, so the card keeps its height.
+  const printed = step >= 1 ? START.ANSWER : START.ANSWER.map(() => " ");
+
+  return (
+    <CodeCard
+      glyph={<GLYPH.TERMINAL />}
+      title="Terminal"
+      titleIs={CODE_CARD_TITLE.WORDS}
+      code={[`$ ${START.COMMAND}`, ...printed].join("\n")}
+      copied={START.COMMAND}
+      copy={stillCopy}
+    />
+  );
+}
+
+/** Both places at `step`: the Slack thread over the terminal. */
+function StartsCards({ step }: { step: number }): React.JSX.Element {
+  return (
+    <div className="ui-landing-starts-cards">
+      <SlackThread step={step} />
+      <StartTerminal step={step} />
+    </div>
+  );
+}
+
+/**
+ * Two ways to start an agent: a Slack mention the bot marks 👀, its agent's
+ * own reply in the thread, and ✅ once its pull request merges, over the
+ * `vespin` command printing the task and agent it started. Then both turn
+ * over, the finished pair scrolling away to the opening it starts from, so
+ * the story loops without a cut. Note that the section stands in no device,
+ * as the keys' does, so it is made a picture the same way: a reader is told
+ * what it shows, and its cards are inert.
+ */
+function StartsScene(): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null);
+  const played = useStory(ref, STARTS_STORY.STEPS, BEAT.STARTS);
+  const step = Math.min(played, STARTS_STORY.LAST);
+  // Note that where motion is held the story stands on its last full step, never mid-turn.
+  const turning = played === STARTS_STORY.TURN && !heldStill();
+
+  return (
+    <div
+      ref={ref}
+      className="ui-landing-scene ui-landing-starts"
+      role="img"
+      aria-label={`A Slack message mentioning @${PRODUCT_NAME} and a vespin command in a terminal, each starting an agent`}
+      {...DESKTOP_SURFACE}
+    >
+      <div className="ui-landing-starts-turn" inert>
+        <div className="ui-landing-starts-reel" data-turning={turning || undefined}>
+          {turning ? (
+            <div className="ui-landing-starts-finished">
+              <StartsCards step={STARTS_STORY.LAST} />
+            </div>
+          ) : null}
+          <StartsCards key="on-show" step={turning ? 0 : step} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const SCENES: Readonly<Record<LandingScene, (props: SceneProps) => React.JSX.Element>> = {
   [LANDING_SCENE.INBOX]: InboxScene,
   [LANDING_SCENE.AGENTS]: AgentsScene,
   [LANDING_SCENE.AUTOMATIONS]: AutomationsScene,
   [LANDING_SCENE.DEVICES]: DevicesScene,
   [LANDING_SCENE.KEYS]: KeysScene,
+  [LANDING_SCENE.STARTS]: StartsScene,
 };
 
 /** The scene that shows `scene`'s feature. */

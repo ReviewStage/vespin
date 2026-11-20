@@ -6,6 +6,7 @@ import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { recordAgentRepositoryHead } from "@repo/database/models/agent-repositories";
 import {
   type AgentLatestTurn,
+  agentTaskId,
   archiveAgent,
   createAgent,
   lineSendersOf,
@@ -792,7 +793,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         );
 
         // The developer closed the task by hand, which archived nothing: a turn there would reopen it.
-        yield* updateTask(owner, agent.taskId, { status: TASK_STATUS.DONE });
+        yield* updateTask(owner, agentTaskId(agent), { status: TASK_STATUS.DONE });
 
         const again = yield* wakeAgents(
           agentSessions.sessionsFor,

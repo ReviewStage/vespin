@@ -23,7 +23,7 @@
 
 import { spendDictationMeter } from "@repo/database/models/quota";
 import { base64Bytes } from "@repo/features/agent-wire";
-import { DICTATION_BOUNDS } from "@repo/features/dictation-wire";
+import { DICTATION_AUDIO, DICTATION_BOUNDS } from "@repo/features/dictation-wire";
 import { Clock, Effect } from "effect";
 import { openAiKeyMiddleware } from "../accounts/openai-key-middleware.js";
 import { dictationDurationOf, recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
@@ -51,7 +51,7 @@ export function dictationProcedures(seams: DictationProcedureSeams) {
 
   return {
     transcribe: dictation.transcribe.effect(function* ({ input, context }) {
-      const { audio, durationMs, keywords } = input;
+      const { audio, audioType = DICTATION_AUDIO.WEBM, durationMs, keywords } = input;
 
       // Note that both bounds answer too large, because either is the clip being longer than a message.
       if (
@@ -64,6 +64,7 @@ export function dictationProcedures(seams: DictationProcedureSeams) {
       const transcribed = yield* transcribeClip({
         key: context.openAiKey,
         audio: clipBytes(audio),
+        audioType,
         keywords,
       }).pipe(
         Effect.tapError((failed) =>

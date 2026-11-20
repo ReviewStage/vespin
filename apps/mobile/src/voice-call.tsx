@@ -223,7 +223,7 @@ function useStandingFacts(call: VoiceCallState | undefined) {
   const agentId = call?.agentId ?? "";
   const collections = useTaskListCollections();
   const agent = useTaskListRow(collections.agents, call?.agentId);
-  const taskName = useTaskListRow(collections.tasks, call?.taskId)?.name;
+  const taskName = useTaskListRow(collections.tasks, call?.taskId ?? undefined)?.name;
 
   const selectRows = useMemo(
     () => selectTranscript({ kind: TRANSCRIPT_KIND.AGENT, agentId }),

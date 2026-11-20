@@ -15,8 +15,9 @@ import {
 import { readTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
+import { inboxMessage } from "@repo/database/schemas/inbox-message";
 import { slackAgentThread } from "@repo/database/schemas/slack-installation";
-import { messages, turns } from "@repo/database/schemas/storage";
+import { messages } from "@repo/database/schemas/storage";
 import {
   CONVERSATION_RUNTIME,
   type ConversationRuntime,
@@ -24,16 +25,22 @@ import {
 } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
-import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_MESSAGE_AUTHOR } from "@repo/features/inbox-wire";
+import {
+  INBOX_ASK,
+  INBOX_ASK_STATUS,
+  INBOX_MESSAGE_AUTHOR,
+  INBOX_REPLY,
+} from "@repo/features/inbox-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { TURN_STATUS, type WireRecord } from "@repo/wire";
+import { ACTION_RESULT_STATUS, type WireRecord } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { Clock, ConfigProvider, DateTime, Effect, Layer, Option, Result } from "effect";
+import { Clock, ConfigProvider, DateTime, Effect, Layer, Option, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
+import { AGENT_CALLER } from "../agents/agent-tools.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { type AfterResponse, keptAfterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -47,10 +54,10 @@ import {
   openGithubUser,
 } from "../testing/github-app-fake.js";
 import { recordingHarness } from "../testing/native-harness-fake.js";
-import { postTurnToSlack } from "./slack-agent-starts.js";
 import { SlackBot, type SlackFileTransfer, type SlackWebApi, slackBotOver } from "./slack-bot.js";
 import { slackEventsApp } from "./slack-events-app.js";
-import { dmThreadPost } from "./thread-dms.js";
+import { runSendSlackMessage } from "./slack-message-tool.js";
+import { SlackChoiceSchema } from "./thread-dms.js";
 
 /** What every case runs over: the store, and sandboxes kept in memory. */
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
@@ -100,6 +107,8 @@ function fakeSlack(calls: SlackCall[], postedTs = "1700000000.000100"): SlackWeb
     calls.push({ method, args });
 
     switch (method) {
+      case "auth.test":
+        return Effect.succeed({ ok: true, team_id: "T0001", team: "Team", user_id: "UBOT" });
       case "users.lookupByEmail":
         return Effect.succeed({ ok: true, user: { id: `U-${args.email}` } });
       case "users.info": {
@@ -190,10 +199,37 @@ const PICK_ONE = {
   options: [{ label: "A week" }, { label: "A month" }],
 } as const;
 
-/** A member's agent at work on a task in a workspace whose bot is connected, its decide ask written to them in Slack. */
+/** The DM a press below is made in, as `press` names it. */
+const PRESSED_DM_TS = "1700000000.000100";
+
+/** The member's email, which the fake Slack knows them by. */
+const ownerEmail = (owner: string) =>
+  Effect.gen(function* () {
+    const [row] = yield* (yield* Database)
+      .select({ email: user.email })
+      .from(user)
+      .where(eq(user.id, owner));
+
+    return row?.email ?? "";
+  });
+
+/** A button of the ask's DM as the bot drew it: the item, the ask, and an option's label or a do ask's answer, or neither for a Submit. */
+function askButton(
+  item: string,
+  ask: string,
+  picked: { readonly choice?: string; readonly reply?: typeof INBOX_REPLY.DONE },
+) {
+  return {
+    action_id: randomUUID(),
+    value: Schema.encodeSync(SlackChoiceSchema)({ item, ask, ...picked }),
+  };
+}
+
+/** A member's agent at work on a task in a workspace whose bot is connected, its decide ask written to them in a Slack DM from before the bot stopped writing them, under the title DM given. */
 const openAskedMember = (
-  bot: Layer.Layer<SlackBot>,
+  _bot: Layer.Layer<SlackBot>,
   ask: Parameters<typeof postInboxThread>[1]["ask"] = PICK_ONE,
+  dmThread = "1700000000.000050",
 ) =>
   Effect.gen(function* () {
     const owner = yield* openGithubUser();
@@ -240,11 +276,17 @@ const openAskedMember = (
       ),
     );
 
-    yield* dmThreadPost({ organizationId, item, asked: true, wasOpen: false }).pipe(
-      Effect.provide(bot),
-    );
+    // A DM the bot wrote about the ask before it stopped writing them, kept on the ask's message as a reply under its title DM.
+    const askId = item.thread?.find((message) => message.ask)?.id ?? "";
+    const slackUserId = `U-${yield* ownerEmail(owner)}`;
+    // The bot kept the member's Slack id as it wrote them that DM.
+    yield* recordSlackMemberLookup(organizationId, owner, slackUserId);
+    yield* (yield* Database)
+      .update(inboxMessage)
+      .set({ slackDm: { channel: "D0001", ts: PRESSED_DM_TS, to: owner, thread: dmThread } })
+      .where(eq(inboxMessage.id, askId));
 
-    return { owner, item };
+    return { owner, item, askId, slackUserId };
   });
 
 /** The installation the mention's workspace connects, reaching the repository its channel defaults to. */
@@ -314,7 +356,7 @@ function press(
     type: "block_actions",
     user: { id: slackUserId, team_id: "T0001" },
     team: { id: "T0001", domain: "team" },
-    container: { type: "message", channel_id: "D0001", message_ts: "1700000000.000100" },
+    container: { type: "message", channel_id: "D0001", message_ts: PRESSED_DM_TS },
     actions: [{ ...button, type: "button", block_id: "b", action_ts: "1700000001.000200" }],
     state: { values: state },
   };
@@ -525,19 +567,8 @@ it.layer(SUITE)("our Slack route", (it) => {
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
 
       return Effect.gen(function* () {
-        const { owner, item } = yield* openAskedMember(bot);
-        // The DM saying the thread's title, then the ask as a reply under it.
-        const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
-
-        const [actions] = JSON.parse(posted?.args.blocks ?? "[]").filter(
-          (block: { type: string }) => block.type === "actions",
-        );
-
-        const [month] = actions.elements.filter(
-          (element: { text: { text: string } }) => element.text.text === "A month",
-        );
-
-        const slackUserId = title?.args.channel ?? "";
+        const { owner, item, askId, slackUserId } = yield* openAskedMember(bot);
+        const month = askButton(item.id, askId, { choice: "A month" });
 
         const askStatus = Effect.map(
           readInboxItem(owner, item.id),
@@ -553,8 +584,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         const kept = keptAfterResponse();
         const signed = yield* answer(bot, press(month, slackUserId), kept.layer);
         const atAnswer = yield* askStatus;
-        // The press's work, then the settle of the DM it hands on once the answer is taken.
-        yield* kept.run;
         yield* kept.run;
 
         const refused = {
@@ -572,9 +601,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           [{ call: "send", account: owner }],
         );
 
-        const updated = calls.filter(
-          (call) => call.method === "chat.update" && call.args.text !== title?.args.text,
-        );
+        const updated = calls.filter((call) => call.method === "chat.update");
 
         assert.equal(updated.length, 1);
         assert.equal(
@@ -592,51 +619,30 @@ it.layer(SUITE)("our Slack route", (it) => {
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
 
       return Effect.gen(function* () {
-        const { owner, item } = yield* openAskedMember(bot, {
+        const { owner, item, askId, slackUserId } = yield* openAskedMember(bot, {
           type: INBOX_ASK.DECIDE,
           options: [{ label: "Email" }, { label: "Slack" }, { label: "SMS" }],
           multiple: true,
         });
 
-        const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
-
-        const elements = JSON.parse(posted?.args.blocks ?? "[]").flatMap(
-          (block: { type: string; elements?: unknown[] }) =>
-            block.type === "actions" ? (block.elements ?? []) : [],
-        );
-
-        const checkboxes = elements.find(
-          (element: { type: string }) => element.type === "checkboxes",
-        );
-
-        const submit = elements.find(
-          (element: { text?: { text: string } }) => element.text?.text === "Submit",
-        );
-
-        const ticked = checkboxes.options.filter(
-          (option: { text: { text: string } }) => option.text.text !== "Slack",
-        );
+        // Email and SMS ticked, by their places among the options.
+        const ticked = [{ value: "0" }, { value: "2" }];
 
         const kept = keptAfterResponse();
         yield* answer(
           bot,
-          press(submit, title?.args.channel ?? "", SIGNING_SECRET, {
-            picks: {
-              [checkboxes.action_id]: { type: "checkboxes", selected_options: ticked },
-            },
+          press(askButton(item.id, askId, {}), slackUserId, SIGNING_SECRET, {
+            picks: { picks: { type: "checkboxes", selected_options: ticked } },
           }),
           kept.layer,
         );
-        yield* kept.run;
         yield* kept.run;
 
         const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
         const asked = stored.item.thread?.find((message) => message.ask);
         assert.equal(asked?.ask?.status, INBOX_ASK_STATUS.ANSWERED);
 
-        const updated = calls.filter(
-          (call) => call.method === "chat.update" && call.args.text !== title?.args.text,
-        );
+        const updated = calls.filter((call) => call.method === "chat.update");
 
         assert.equal(
           updated[0]?.args.text,
@@ -653,22 +659,14 @@ it.layer(SUITE)("our Slack route", (it) => {
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
 
       return Effect.gen(function* () {
-        const { owner, item } = yield* openAskedMember(bot);
-        const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
-
-        const [actions] = JSON.parse(posted?.args.blocks ?? "[]").filter(
-          (block: { type: string }) => block.type === "actions",
-        );
-
-        const [month] = actions.elements.filter(
-          (element: { text: { text: string } }) => element.text.text === "A month",
-        );
+        const { owner, item, askId, slackUserId } = yield* openAskedMember(bot);
+        const month = askButton(item.id, askId, { choice: "A month" });
 
         yield* archiveAgent(owner, item.agentId, true);
         const heard = HARNESS.heard.length;
 
         const kept = keptAfterResponse();
-        yield* answer(bot, press(month, title?.args.channel ?? ""), kept.layer);
+        yield* answer(bot, press(month, slackUserId), kept.layer);
         yield* kept.run;
 
         const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
@@ -683,42 +681,31 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a to-do's DM lists its steps, and its Mark done answers it with every step ticked",
+    "a to-do's Mark done answers it with every step ticked, and its DM then says so under its steps",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
 
       return Effect.gen(function* () {
-        const { owner, item } = yield* openAskedMember(bot, {
+        const { owner, item, askId, slackUserId } = yield* openAskedMember(bot, {
           type: INBOX_ASK.DO,
           steps: ["Open the repository's settings.", "Run this:\n```\npnpm install\n```"],
         });
 
-        const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
-        const blocks = JSON.parse(posted?.args.blocks ?? "[]");
-
-        const done = blocks
-          .flatMap((block: { type: string; elements?: unknown[] }) =>
-            block.type === "actions" ? (block.elements ?? []) : [],
-          )
-          .find((element: { text?: { text: string } }) => element.text?.text === "Mark done");
+        const done = askButton(item.id, askId, { reply: INBOX_REPLY.DONE });
 
         const kept = keptAfterResponse();
-        yield* answer(bot, press(done, title?.args.channel ?? ""), kept.layer);
-        yield* kept.run;
+        yield* answer(bot, press(done, slackUserId), kept.layer);
         yield* kept.run;
 
         const words =
           "Pick how long an invitation stays open.\n\n1. Open the repository's settings.\n\n2. Run this:\n   ```\n   pnpm install\n   ```";
 
-        assert.equal(blocks[0]?.text, words);
         const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
         const asked = stored.item.thread?.find((message) => message.ask);
         assert.equal(asked?.ask?.status, INBOX_ASK_STATUS.ANSWERED);
 
-        const updated = calls.filter(
-          (call) => call.method === "chat.update" && call.args.text !== title?.args.text,
-        );
+        const updated = calls.filter((call) => call.method === "chat.update");
 
         assert.equal(
           updated[0]?.args.text,
@@ -770,11 +757,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(HARNESS.heard.at(-1), { call: "open", account: owner });
         const [refused, ...others] = replies();
         assert.match(refused?.args.text ?? "", /couldn't find you/u);
-        const reactions = calls.filter((call) => call.method === "reactions.add");
-        assert.deepEqual(
-          reactions.map((call) => call.args),
-          [{ channel: "C0001", timestamp: "1700000002.000300", name: "eyes" }],
-        );
 
         const [startedAgent] = yield* (yield* Database)
           .select({
@@ -791,7 +773,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           .where(eq(slackAgentThread.userId, owner));
 
         assert.equal(startedAgent?.repository, "Acme/Relay");
-        // The start says nothing in the thread; the reaction shows it was heard.
+        // The start says nothing in the thread; the agent speaks and reacts there itself.
         assert.deepEqual(others, []);
         const made = Option.getOrThrow(yield* readTask(owner, startedAgent?.taskId ?? ""));
         assert.deepEqual(
@@ -815,6 +797,10 @@ it.layer(SUITE)("our Slack route", (it) => {
           startedAgent?.prompt?.startsWith("find the flakiest test and fix it"),
           "the message is the agent's prompt",
         );
+        assert.ok(
+          startedAgent?.prompt?.includes("channel `C0001`, message `1700000002.000300`"),
+          "the prompt names the message as react_slack takes it",
+        );
         // The agent keeps where it came from, which the lists mark it by.
         assert.deepEqual(startedAgent?.source, {
           kind: "slack",
@@ -831,7 +817,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a message in the thread of an archived agent brings it back, hands it the message, reacts with 👀, and takes 💤 off the message that started it",
+    "a message in the thread of an archived agent brings it back, hands it the message, and posts nothing in the thread",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -855,14 +841,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(
           calls.filter((call) => call.method === "chat.postMessage"),
           [],
-        );
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
-        );
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: threadTs, name: "zzz" }],
         );
       });
     },
@@ -889,9 +867,7 @@ it.layer(SUITE)("our Slack route", (it) => {
 
         assert.equal(HARNESS.heard.length, heard);
         assert.deepEqual(
-          calls.filter(
-            (call) => call.method === "chat.postMessage" || call.method === "reactions.add",
-          ),
+          calls.filter((call) => call.method === "chat.postMessage"),
           [],
         );
 
@@ -901,10 +877,49 @@ it.layer(SUITE)("our Slack route", (it) => {
         );
 
         assert.deepEqual(HARNESS.heard.at(-1), { call: "send", account: owner });
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
+      });
+    },
+  );
+
+  it.effect(
+    "a reply under a DM the agent sent with send_slack_message reaches that agent and starts none",
+    () => {
+      const calls: SlackCall[] = [];
+      // Note that the DM's timestamp is this test's own, because the store is shared with the cases above.
+      const dmTs = `1700000006.${randomUUID().replace(/\D/gu, "").slice(0, 6)}`;
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls, dmTs)));
+
+      return Effect.gen(function* () {
+        const { owner, agent, slackUserId } = yield* openThreadAgent(
+          CONVERSATION_RUNTIME.CLAUDE_CODE,
+          false,
         );
+
+        const caller = { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false } as const;
+        const noSandbox = () => Promise.reject(new Error("the sandbox was opened"));
+
+        const sent = yield* runSendSlackMessage(
+          { caller },
+          { text: "Which plan should the invite go out on?", member: owner },
+          noSandbox,
+        ).pipe(Effect.provide(bot));
+
+        assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED);
+
+        const agentsOf = (yield* Database)
+          .select({ id: agentTable.id })
+          .from(agentTable)
+          .where(eq(agentTable.userId, owner));
+
+        const before = (yield* agentsOf).length;
+
+        yield* answer(
+          bot,
+          dmReply(slackUserId, `Ev${randomUUID()}`, { channel: "D0001", ts: dmTs }),
+        );
+
+        assert.deepEqual(HARNESS.heard.at(-1), { call: "send", account: owner });
+        assert.equal((yield* agentsOf).length, before);
       });
     },
   );
@@ -929,79 +944,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         );
 
         assert.equal(HARNESS.heard.filter((heard) => heard.call === "send").length, sent + 1);
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args.name] : [])),
-          ["eyes"],
-        );
-      });
-    },
-  );
-
-  it.effect(
-    "a message the agent takes into a turn already running is marked with 👍, the turn's end takes 👀 off the message that started it, and that end heard late leaves the next turn's 👀",
-    () => {
-      const calls: SlackCall[] = [];
-      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
-
-      return Effect.gen(function* () {
-        const { owner, agent, threadTs, slackUserId } = yield* openThreadAgent(
-          CONVERSATION_RUNTIME.CLAUDE_CODE,
-          false,
-        );
-
-        const first = "1700000003.000400";
-        const second = "1700000004.000500";
-        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, first));
-        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, second));
-
-        const added = (name: string) =>
-          calls.flatMap((call) =>
-            call.method === "reactions.add" && call.args.name === name ? [call.args.timestamp] : [],
-          );
-
-        assert.deepEqual(added("eyes"), [first]);
-        assert.deepEqual(added("+1"), [second]);
-
-        const [turn] = yield* (yield* Database)
-          .select({ id: turns.id })
-          .from(turns)
-          .where(eq(turns.conversationId, agent.conversationId));
-
-        assert.ok(turn !== undefined, "the first message started a turn");
-        yield* postTurnToSlack({
-          userId: owner,
-          conversationId: agent.conversationId,
-          turnId: turn.id,
-          status: TURN_STATUS.SETTLED,
-          failure: null,
-          ranMs: 1,
-        }).pipe(Effect.provide(bot));
-
-        const removed = () =>
-          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : []));
-
-        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
-
-        // The first turn's end is heard again only after a third message started the next turn.
-        yield* (yield* Database)
-          .update(turns)
-          .set({ status: TURN_STATUS.SETTLED })
-          .where(eq(turns.id, turn.id));
-        // The next turn is queued later than the first, as it would be outside a test's still clock.
-        yield* TestClock.adjust("1 second");
-        const third = "1700000005.000600";
-        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, third));
-        yield* postTurnToSlack({
-          userId: owner,
-          conversationId: agent.conversationId,
-          turnId: turn.id,
-          status: TURN_STATUS.SETTLED,
-          failure: null,
-          ranMs: 1,
-        }).pipe(Effect.provide(bot));
-
-        assert.deepEqual(added("eyes"), [first, third]);
-        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
       });
     },
   );
@@ -1042,10 +984,6 @@ it.layer(SUITE)("our Slack route", (it) => {
           [],
           "the new agent speaks for itself",
         );
-        assert.deepEqual(
-          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
-          [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
-        );
       });
     },
   );
@@ -1054,13 +992,16 @@ it.layer(SUITE)("our Slack route", (it) => {
     "a reply under a thread's DM is posted on that thread as the member it went to, brings its archived agent back and tells it, reacts with 👀, and starts no agent",
     () => {
       const calls: SlackCall[] = [];
-      // Note that the DM's timestamp is this test's own, because the store is shared with the press above.
-      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls, "1700000004.000500")));
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
 
       return Effect.gen(function* () {
-        const { owner, item } = yield* openAskedMember(bot);
-        const posted = calls.find((call) => call.method === "chat.postMessage");
-        const slackUserId = posted?.args.channel ?? "";
+        // Note that the DM's Slack thread is this test's own, because the store is shared with the presses above.
+        const { owner, item, slackUserId } = yield* openAskedMember(
+          bot,
+          PICK_ONE,
+          "1700000004.000500",
+        );
+
         const opened = HARNESS.heard.filter((heard) => heard.call === "open").length;
         yield* archiveAgent(owner, item.agentId, true);
 
@@ -1151,6 +1092,83 @@ it.layer(SUITE)("our Slack route", (it) => {
       });
     },
   );
+  it.effect(
+    "a member's 👍 on the bot's message in an agent's thread reaches that agent quoting it, and the bot's own 👍 or another emoji does not",
+    () => {
+      const calls: SlackCall[] = [];
+      const posted = "1700000007.000700";
+      const fake = fakeSlack(calls);
+
+      return Effect.gen(function* () {
+        const { owner, agent, threadTs, slackUserId } = yield* openThreadAgent(
+          CONVERSATION_RUNTIME.CLAUDE_CODE,
+          false,
+        );
+
+        // Slack's read of the one message the bot posted in the agent's thread.
+        const slack: SlackWebApi = (method, args) =>
+          method === "conversations.replies" && args.ts === posted
+            ? Effect.succeed({
+                ok: true,
+                messages: [
+                  { ts: threadTs, user: slackUserId, text: "fix the flaky test" },
+                  {
+                    ts: posted,
+                    thread_ts: threadTs,
+                    user: "UBOT",
+                    bot_id: "B0001",
+                    text: "I pinned the clock in the retry test.",
+                  },
+                ],
+              })
+            : fake(method, args);
+
+        const bot = Layer.succeed(SlackBot, slackBotOver(slack));
+
+        const reaction = (user: string, name: string) =>
+          slackEvent({
+            type: "event_callback",
+            team_id: "T0001",
+            event_id: `Ev${randomUUID()}`,
+            authorizations: [{ user_id: "UBOT" }],
+            event: {
+              type: "reaction_added",
+              user,
+              reaction: name,
+              item_user: "UBOT",
+              item: { type: "message", channel: "C0001", ts: posted },
+            },
+          });
+
+        const sent = () => HARNESS.heard.filter((heard) => heard.call === "send").length;
+        const before = sent();
+        yield* answer(bot, reaction("UBOT", "+1"));
+        yield* answer(bot, reaction(slackUserId, "tada"));
+
+        assert.equal(sent(), before);
+        yield* answer(bot, reaction(slackUserId, "+1::skin-tone-3"));
+
+        assert.equal(sent(), before + 1);
+        assert.deepEqual(HARNESS.heard.at(-1), { call: "send", account: owner });
+
+        const lines = yield* (yield* Database)
+          .select({ parts: messages.parts })
+          .from(messages)
+          .where(eq(messages.conversationId, agent.conversationId));
+
+        const said = lines.flatMap((line) =>
+          (line.parts ?? []).flatMap((part) => (part.type === "text" ? [part.text] : [])),
+        );
+
+        assert.ok(
+          said.some((words) =>
+            words.startsWith('👍 on your message: "I pinned the clock in the retry test."'),
+          ),
+        );
+      });
+    },
+  );
+
   it.effect(
     "an uninstall of the app from a team deletes its workspace's installation and its members' Slack ids",
     () => {

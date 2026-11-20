@@ -531,6 +531,12 @@ function fakeService() {
 
         return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
       }),
+    createManager: (request) =>
+      Effect.sync(() => {
+        asked.push(`create-manager:${request.workspaceId}:${request.idempotencyKey}`);
+
+        return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
+      }),
     messagesNow: (agentId, after, callId) =>
       Effect.andThen(
         Effect.suspend(() => pageGate),
@@ -675,6 +681,12 @@ function fakeService() {
     pin: (agentId, request) =>
       Effect.sync(() => {
         asked.push(`pin:${agentId}:${String(request.pinned)}`);
+
+        return { agent: AGENT };
+      }),
+    markRead: (agentId, readMark) =>
+      Effect.sync(() => {
+        asked.push(`markRead:${agentId}:${readMark}`);
 
         return { agent: AGENT };
       }),

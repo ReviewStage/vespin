@@ -2788,7 +2788,9 @@ function pinnedAgents(
 
   const added = agents
     .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
-    .map(({ id, taskId }) => ({ agentId: id, taskId: taskId, pinnedAt: LANDED }));
+    .flatMap(({ id, taskId }) =>
+      taskId === null ? [] : [{ agentId: id, taskId, pinnedAt: LANDED }],
+    );
 
   return [...kept, ...added];
 }

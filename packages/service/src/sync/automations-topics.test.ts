@@ -91,6 +91,7 @@ const openAutomationWorld = Effect.gen(function* () {
     .where(eq(agentTable.id, agentId));
 
   const { conversationId, taskId } = row ?? assert.fail("the agent has no conversation");
+  assert.ok(taskId !== null, "the agent stands on a task");
 
   return {
     owner,

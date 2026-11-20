@@ -1197,7 +1197,12 @@ function archivedAgentRows(
         />
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
-      onChoose: () => show(() => tasks.onShowAgent(agent.taskId, agent.id)),
+      onChoose: () =>
+        show(() =>
+          agent.taskId === null
+            ? tasks.agentView.onOpen(agent.id)
+            : tasks.onShowAgent(agent.taskId, agent.id),
+        ),
     };
   });
 }
@@ -2215,7 +2220,6 @@ export function CommandPalette({
   // The listed workspace's members, read once for it, name a task's assignee by face.
   const membersRead = useQuery(workspaceMembersQuery(tasks.workspace?.id));
   const { mutate: retryMembers } = useMutation(workspaceMembersRetryMutation());
-  const originOf = useTaskOrigin();
   const members = membersRead.data?.members;
 
   // Note that the tasks' rows are built once for what they say rather than on every render, and
@@ -2223,6 +2227,9 @@ export function CommandPalette({
   // moving ranks or lights them again but changes none of them, and an account may hold thousands.
   const tasksShown =
     open && tasks.signedIn && (filter === PALETTE_FILTER.ALL || filter === PALETTE_FILTER.TASKS);
+
+  // Note that who made each task is read only while the rows are, because the palette stands drawn while shut.
+  const originOf = useTaskOrigin(tasksShown);
 
   // Note that the tasks the list holds not are asked of the service as typing pauses, and again once the list is first read, and join the list the rows below are built from.
   useServiceTaskSearch(sought, tasksShown && tasks.listRead);

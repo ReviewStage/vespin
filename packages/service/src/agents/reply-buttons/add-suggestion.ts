@@ -210,7 +210,7 @@ export function runAddSuggestion(
       }
 
       const branchless =
-        action.kind === REPLY_BUTTON_ACTION.START
+        action.kind === REPLY_BUTTON_ACTION.START && agent.taskId !== null
           ? yield* branchNeededRefusal(call.caller, agent.taskId, action.branch, "Not added")
           : undefined;
 

@@ -35,6 +35,7 @@ import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_SENDER,
   AGENT_STATUS,
@@ -65,6 +66,13 @@ import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
+import {
+  type ChatRunPlace,
+  type ManagerChatRuns,
+  managerChatLines,
+  managerChatRuns,
+} from "@repo/features/manager-chat";
+import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
@@ -142,9 +150,13 @@ import {
   announce,
   BUTTON_VARIANT,
   Button,
+  CHAT_RUN,
+  CHAT_SIDE,
+  ChatBubble,
   CodeCard,
   CompactedLine,
   ConnectionLostNotice,
+  chatRunOf,
   DisclosureChevron,
   DocumentIcon,
   ERROR_STATE_PLACEMENT,
@@ -344,6 +356,7 @@ import {
 } from "./line-cards.js";
 import { useMachineAskHeld } from "./machine-ask-waiting.js";
 import { MachineRefusalCard } from "./machine-refusal-card.js";
+import { useManagerChatLooks } from "./manager-chat-looks.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
 import {
   agentMessagePlace,
@@ -638,6 +651,12 @@ export interface DelegationDoors {
  * (`sameMessageDraw`) still hangs today's cards.
  */
 const LiveDoors = createContext<Pick<DelegationDoors, "cards"> | undefined>(undefined);
+
+/** A Manager's chat in runs (`managerChatRuns`), where the transcript is one (`managerChatLines`), whose messages are drawn as bubbles in their runs; none for every other agent. */
+const ChatRuns = createContext<ManagerChatRuns | undefined>(undefined);
+
+/** Where a message that stands in no run read stands: a run of its own. */
+const LONE_RUN = { opens: true, closes: true } as const;
 
 /** The live doors where a transcript hands them, else what `doors` carries. */
 function useLiveDoors(
@@ -1947,6 +1966,7 @@ export function AgentMessage({
 }): ReactNode {
   const words = messageWords(message);
   const forkOffered = useForkOffered();
+  const chatRuns = useContext(ChatRuns);
   const sending = useLineSending(message.id);
   const marked = useLineMarked(message.id);
   const status = useLineStatus(message.id);
@@ -2057,13 +2077,40 @@ export function AgentMessage({
       threadHead
     );
 
-    const content = (
-      <MessageContent>
-        <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>
-          <SentWords text={shown} />
-        </SentToAgent>
-      </MessageContent>
+    const sentWords = (
+      <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>
+        <SentWords text={shown} />
+      </SentToAgent>
     );
+
+    // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
+    const copy = (
+      <CopyMessageAction
+        words={shown}
+        copyable={shown !== ""}
+        messageId={message.id}
+        rewind={editsInPlace(message, shown) ? REWIND_ACTION.EDIT : undefined}
+      />
+    );
+
+    if (chatRuns !== undefined) {
+      return (
+        <ChatLine
+          message={message}
+          runs={chatRuns}
+          named={named}
+          subject={subject}
+          shown={shown}
+          words={sentWords}
+          copy={copy}
+          sending={sending}
+          marked={marked}
+          status={status}
+        />
+      );
+    }
+
+    const content = <MessageContent>{sentWords}</MessageContent>;
 
     return (
       <MessageFiles message={message} words={shown} sending={sending}>
@@ -2090,15 +2137,7 @@ export function AgentMessage({
             align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
             status={status}
             at={sentAt}
-            // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
-            actions={
-              <CopyMessageAction
-                words={shown}
-                copyable={shown !== ""}
-                messageId={message.id}
-                rewind={editsInPlace(message, shown) ? REWIND_ACTION.EDIT : undefined}
-              />
-            }
+            actions={copy}
           />
         </Message>
       </MessageFiles>
@@ -2151,6 +2190,20 @@ export function AgentMessage({
   if (moving && stretches.every((stretch) => stretch.rows?.length === 0)) return null;
 
   return stretches.map((stretch, index) => {
+    if (stretch.line === undefined && chatRuns !== undefined) {
+      return (
+        <ChatSent
+          key={index === 0 ? message.id : (stretch.rows[0]?.key ?? message.id)}
+          message={message}
+          place={chatRuns.places.get(message.id) ?? LONE_RUN}
+          words={words}
+          moving={moving}
+        >
+          <TranscriptRows rows={stretch.rows}>{drawPart}</TranscriptRows>
+        </ChatSent>
+      );
+    }
+
     if (stretch.line !== undefined) {
       const line = stretch.line;
 
@@ -2186,6 +2239,155 @@ export function AgentMessage({
       </Message>
     );
   });
+}
+
+/** A Manager's greeting, drawn as its first message though no one sent it and nothing stores it (`@repo/features/manager-greeting`). */
+function ManagerGreetingMessage({ words }: { readonly words: string }): React.JSX.Element {
+  return (
+    <Message
+      from={MESSAGE_ROLE.ASSISTANT}
+      className={RECEIVED_MESSAGE_CLASS}
+      data-manager-greeting=""
+    >
+      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+        <TranscriptWords text={words} />
+      </ChatBubble>
+    </Message>
+  );
+}
+
+/**
+ * A person's line in a Manager's chat: a bubble at the column's right,
+ * whoever sent it, the Manager's standing at the left, shaped by where it
+ * stands in its sender's run, its Copy and Edit, and its mark where it did
+ * not go, beside it, and when it was sent under the run's last. Note that
+ * a sender is named over their run only where more than one person writes
+ * in the chat, and the reader never, as a group chat names its speakers.
+ */
+function ChatLine({
+  message,
+  runs,
+  named,
+  subject,
+  shown,
+  words,
+  copy,
+  sending,
+  marked,
+  status,
+}: {
+  message: AgentTranscriptMessage;
+  runs: ManagerChatRuns;
+  /** Who sent it, as the transcript names them; none for the reader's own. */
+  named: ReactNode;
+  /** What heads the line, such as the suggestion it was sent from; none where nothing does. */
+  subject: ReactNode;
+  /** Its words as drawn, empty for a line of files alone. */
+  shown: string;
+  words: ReactNode;
+  copy: ReactNode;
+  sending: boolean;
+  marked: boolean;
+  status: string | undefined;
+}): React.JSX.Element {
+  const place = runs.places.get(message.id) ?? LONE_RUN;
+
+  const head =
+    place.opens && runs.people > 1 && named !== null ? (
+      <MessageHead sender={named}>{subject}</MessageHead>
+    ) : (
+      subject
+    );
+
+  const mark = marked ? <UndeliveredMark messageId={message.id} /> : null;
+
+  return (
+    <MessageFiles message={message} words={shown} sending={sending}>
+      <Message
+        from={MESSAGE_ROLE.USER}
+        data-message-id={message.id}
+        data-undelivered={marked ? "" : undefined}
+      >
+        {head}
+        <MessageFileChips message={message} sending={sending} />
+        {shown !== "" ? (
+          <ChatBubble
+            side={CHAT_SIDE.SENT}
+            run={chatRunOf(place.opens, place.closes)}
+            beside={
+              <>
+                {mark}
+                {copy}
+              </>
+            }
+          >
+            {words}
+          </ChatBubble>
+        ) : mark === null ? null : (
+          // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
+          <MessageBeside mark={mark}>{null}</MessageBeside>
+        )}
+        <MessageLine
+          status={status}
+          at={place.closes ? message.sentAt : undefined}
+          actions={shown === "" ? copy : undefined}
+        />
+      </Message>
+    </MessageFiles>
+  );
+}
+
+/**
+ * One of a Manager's chat messages (`managerChatLines`): its words in a
+ * bubble at the column's left, shaped by where it stands in its run, its
+ * Copy beside it once it is whole, and when it was sent under the run's
+ * last where its turn has ended. Note that it offers no link, rewind, or
+ * fork, because a message after its turn's first stands under its call's
+ * id, which names no message of the transcript.
+ */
+function ChatSent({
+  message,
+  place,
+  words,
+  moving,
+  children,
+}: {
+  message: AgentTranscriptMessage;
+  place: ChatRunPlace;
+  words: string;
+  moving: boolean;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <Message
+      from={MESSAGE_ROLE.ASSISTANT}
+      className={RECEIVED_MESSAGE_CLASS}
+      data-message-id={message.id}
+    >
+      <ChatBubble
+        side={CHAT_SIDE.RECEIVED}
+        run={chatRunOf(place.opens, place.closes)}
+        beside={moving || words === "" ? null : <CopyMessageAction words={words} />}
+      >
+        {children}
+      </ChatBubble>
+      <MessageLine
+        align={MESSAGE_LINE_ALIGN.START}
+        at={place.closes && !moving ? message.finishedAt : undefined}
+      />
+    </Message>
+  );
+}
+
+/** What a Manager's chat says while its turn runs: its working line in a bubble of the Manager's, as a chat app shows the other side typing. */
+function ChatWorking({ words }: { words: string }): React.JSX.Element {
+  return (
+    <Message from={MESSAGE_ROLE.ASSISTANT} className={RECEIVED_MESSAGE_CLASS}>
+      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+        <WorkingLine startedAt={undefined} words={words} />
+      </ChatBubble>
+    </Message>
+  );
 }
 
 /**
@@ -2834,6 +3036,8 @@ function AgentTranscriptView({
   onOlder,
   olderFailed = false,
   fromStart,
+  greeting,
+  chat = false,
   overComposer = false,
   overEnd,
   earlierOmitted = false,
@@ -2904,6 +3108,10 @@ function AgentTranscriptView({
   olderFailed?: boolean;
   /** Whether the messages begin at the transcript's start, a page landed with none older, so its first line is the opening the brief draws. */
   fromStart: boolean;
+  /** The greeting a Manager's conversation opens on, drawn above its first line; none for every other agent. */
+  greeting?: string | undefined;
+  /** Whether the messages are a Manager's chat (`managerChatLines`), drawn as bubbles in their runs. */
+  chat?: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
   /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
@@ -3021,16 +3229,27 @@ function AgentTranscriptView({
     [finding, entries],
   );
 
-  // A long turn's pieces after its first are set off from the piece before as the rows of one message are, or as the log's own lines are.
+  // A Manager's chat stands in runs of one sender's messages, each drawn close under the one before it.
+  const chatRuns = useMemo(
+    () => (chat ? managerChatRuns(messages, readerId) : undefined),
+    [chat, messages, readerId],
+  );
+
+  // A long turn's pieces after its first are set off from the piece before as the rows of one message are, or as the log's own lines are, and a chat message that goes on its sender's run by a run's step.
   const rowClassOf = useCallback(
     (index: number) => {
       if (index === 0) return LOG_ROW_CLASS;
+      const entry = entries[index];
 
-      return entries[index]?.piece?.continues === true
-        ? `${LOG_ROW_CLASS} agent-log-row-continued`
+      if (entry?.piece?.continues === true) return `${LOG_ROW_CLASS} agent-log-row-continued`;
+
+      const id = entry?.row.message.id;
+
+      return id !== undefined && chatRuns?.places.get(id)?.opens === false
+        ? `${LOG_ROW_CLASS} agent-log-row-run`
         : `${LOG_ROW_CLASS} agent-log-row-next`;
     },
-    [entries],
+    [entries, chatRuns],
   );
 
   useVirtualFind({
@@ -3131,6 +3350,11 @@ function AgentTranscriptView({
     // Note that an ask no drawn call holds stands at the foot after the turn too, settled there as it settled.
     const loose = approvals === undefined ? [] : looseApprovals(approvals.asks, callIds);
 
+    const workingWords =
+      approvals !== undefined && approvals.waiting > 0
+        ? waitingOnYouWords(approvals.waiting)
+        : workingLineWords(phase, waitsUntil);
+
     const trailing =
       !working &&
       loose.length === 0 &&
@@ -3146,16 +3370,11 @@ function AgentTranscriptView({
               ))}
             </div>
           )}
-          {working && !waitingNotice ? (
-            <WorkingLine
-              startedAt={startedAt}
-              words={
-                approvals !== undefined && approvals.waiting > 0
-                  ? waitingOnYouWords(approvals.waiting)
-                  : workingLineWords(phase, waitsUntil)
-              }
-            />
-          ) : null}
+          {!working || waitingNotice ? null : chat ? (
+            <ChatWorking words={workingWords} />
+          ) : (
+            <WorkingLine startedAt={startedAt} words={workingWords} />
+          )}
           {limitNotice}
           {ended === undefined && endTrail === undefined ? null : (
             <div
@@ -3206,121 +3425,126 @@ function AgentTranscriptView({
     return (
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
-          <ConnectionNames needed={callsServer}>
-            <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
-              {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
-              {olderFailed && onOlder !== undefined ? (
-                <div
-                  className={`${FLOATING_OVER_LOG_CLASS} top-ui-8 z-1 max-w-conversation-older bg-well px-list-inset py-tight-gap`}
-                >
-                  <ErrorState
-                    failure={unreadShown(FAILURE_SURFACE.AGENT_TRANSCRIPT_OLDER_READ)}
-                    onRetry={onOlder}
+          <ChatRuns value={chatRuns}>
+            <ConnectionNames needed={callsServer}>
+              <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
+                {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
+                {olderFailed && onOlder !== undefined ? (
+                  <div
+                    className={`${FLOATING_OVER_LOG_CLASS} top-ui-8 z-1 max-w-conversation-older bg-well px-list-inset py-tight-gap`}
                   >
-                    {OLDER_FAILED_LINE}
-                  </ErrorState>
-                </div>
-              ) : null}
-              {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
-              <ConversationContent
-                className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
-                streams
-              >
-                <ConversationRows
-                  keys={rowKeys}
-                  estimate={ROW_ESTIMATE_PX}
-                  gap={0}
-                  rowClassName={rowClassOf}
-                  handle={rowsHandle}
-                  ownLast={ownLast}
+                    <ErrorState
+                      failure={unreadShown(FAILURE_SURFACE.AGENT_TRANSCRIPT_OLDER_READ)}
+                      onRetry={onOlder}
+                    >
+                      {OLDER_FAILED_LINE}
+                    </ErrorState>
+                  </div>
+                ) : null}
+                {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
+                <ConversationContent
+                  className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
+                  streams
                 >
-                  {(at) => {
-                    const entry = entries[at];
+                  <ConversationRows
+                    keys={rowKeys}
+                    estimate={ROW_ESTIMATE_PX}
+                    gap={0}
+                    rowClassName={rowClassOf}
+                    handle={rowsHandle}
+                    ownLast={ownLast}
+                  >
+                    {(at) => {
+                      const entry = entries[at];
 
-                    if (entry === undefined) return null;
-                    const { row, index, piece } = entry;
-                    const { message } = row;
-                    const tails = piece === undefined || piece.last;
-                    const heads = piece === undefined || piece.first;
+                      if (entry === undefined) return null;
+                      const { row, index, piece } = entry;
+                      const { message } = row;
+                      const tails = piece === undefined || piece.last;
+                      const heads = piece === undefined || piece.first;
 
-                    const sender =
-                      message === task
-                        ? briefSender
-                        : messageSender(message, readerId, members, former);
+                      const sender =
+                        message === task
+                          ? briefSender
+                          : messageSender(message, readerId, members, former);
 
-                    // Note that a brief drawn as a line is the source's history, so it stands inside the replay's card rather than as a line sent again over it; a brief drawn as a card of its own still opens the transcript.
-                    const opened = message === first ? opening : undefined;
-                    const folded = opened !== undefined && message !== description;
+                      // Note that a brief drawn as a line is the source's history, so it stands inside the replay's card rather than as a line sent again over it; a brief drawn as a card of its own still opens the transcript.
+                      const opened = message === first ? opening : undefined;
+                      const folded = opened !== undefined && message !== description;
 
-                    return (
-                      <>
-                        {heads ? (
-                          <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
-                        ) : null}
-                        {folded ? null : (
-                          <SteadyAgentMessage
-                            message={opened === undefined ? message : opened.brief}
-                            description={message === description}
-                            taskId={message === description ? taskId : undefined}
-                            lead={lead}
-                            moving={message.id === writing}
-                            delegation={delegation}
-                            todos={todos}
-                            briefTitle={briefTitle}
-                            origin={message === description ? drawnOrigin : undefined}
-                            sender={sender}
-                            wakeupDelay={
-                              isWakeupLine(message)
-                                ? wakeupDelayOf(placed[index - 1]?.message)
-                                : undefined
-                            }
-                            arrived={arrivals.get(message.id) ?? NO_ARRIVED}
-                            delegated={delegated.has(message.id)}
-                            piece={piece}
-                          />
-                        )}
-                        {!tails ? null : opened !== undefined && replay !== undefined ? (
-                          <>
-                            <ReplayCard
-                              replay={opened.replay}
-                              brief={folded ? { message: opened.brief, sender } : undefined}
-                              sentAt={message.sentAt}
-                              place={replay}
-                              taskId={taskId}
+                      return (
+                        <>
+                          {at === 0 && fromStart && greeting !== undefined ? (
+                            <ManagerGreetingMessage words={greeting} />
+                          ) : null}
+                          {heads ? (
+                            <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
+                          ) : null}
+                          {folded ? null : (
+                            <SteadyAgentMessage
+                              message={opened === undefined ? message : opened.brief}
+                              description={message === description}
+                              taskId={message === description ? taskId : undefined}
+                              lead={lead}
+                              moving={message.id === writing}
+                              delegation={delegation}
+                              todos={todos}
+                              briefTitle={briefTitle}
+                              origin={message === description ? drawnOrigin : undefined}
+                              sender={sender}
+                              wakeupDelay={
+                                isWakeupLine(message)
+                                  ? wakeupDelayOf(placed[index - 1]?.message)
+                                  : undefined
+                              }
+                              arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                              delegated={delegated.has(message.id)}
+                              piece={piece}
                             />
-                            {opened.note === undefined ? null : (
-                              <SteadyAgentMessage
-                                message={opened.note}
-                                description={false}
-                                lead={lead}
-                                moving={false}
-                                delegation={delegation}
-                                sender={briefSender}
+                          )}
+                          {!tails ? null : opened !== undefined && replay !== undefined ? (
+                            <>
+                              <ReplayCard
+                                replay={opened.replay}
+                                brief={folded ? { message: opened.brief, sender } : undefined}
+                                sentAt={message.sentAt}
+                                place={replay}
+                                taskId={taskId}
                               />
-                            )}
-                          </>
-                        ) : null}
-                        {earlierOmitted && message === description ? (
-                          <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
-                        ) : null}
-                        {tails ? (
-                          <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
-                        ) : null}
-                        {at === entries.length - 1 ? (
-                          <>
-                            <CallStarts spans={calls.opening} callerOf={callerOf} />
-                            {trailing}
-                          </>
-                        ) : null}
-                      </>
-                    );
-                  }}
-                </ConversationRows>
-              </ConversationContent>
-              <AgentRail lines={railLines} list={log} rows={rowsHandle} bringIn={bringMessage} />
-              <ConversationScrollButton />
-            </Conversation>
-          </ConnectionNames>
+                              {opened.note === undefined ? null : (
+                                <SteadyAgentMessage
+                                  message={opened.note}
+                                  description={false}
+                                  lead={lead}
+                                  moving={false}
+                                  delegation={delegation}
+                                  sender={briefSender}
+                                />
+                              )}
+                            </>
+                          ) : null}
+                          {earlierOmitted && message === description ? (
+                            <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
+                          ) : null}
+                          {tails ? (
+                            <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
+                          ) : null}
+                          {at === entries.length - 1 ? (
+                            <>
+                              <CallStarts spans={calls.opening} callerOf={callerOf} />
+                              {trailing}
+                            </>
+                          ) : null}
+                        </>
+                      );
+                    }}
+                  </ConversationRows>
+                </ConversationContent>
+                <AgentRail lines={railLines} list={log} rows={rowsHandle} bringIn={bringMessage} />
+                <ConversationScrollButton />
+              </Conversation>
+            </ConnectionNames>
+          </ChatRuns>
         </LiveDoors>
       </TranscriptAgentOn>
     );
@@ -3345,23 +3569,26 @@ function AgentTranscriptView({
   // The log's first page, and what stands around it, wait in the tab's own placeholder, which it opened on (`AgentTab`).
   if (holding || (reading && ended === undefined)) return <TranscriptSkeleton />;
 
-  // Note that a start under way says so at the log's top, where its first line lands, rather than centered in whatever room the docks leave, so it stands still as they come and go.
+  // Note that a start under way says so at the log's top, where its first line lands, rather than centered in whatever room the docks leave, so it stands still as they come and go; a Manager's greeting stands there in place of the wait for a first line.
   if (ended === undefined && boot === undefined) {
+    const leadLine =
+      brief === AGENT_BRIEF.BLANK && origin === undefined
+        ? blankAgentLine(
+            standingCalls.length > 0,
+            ownCall?.agentId === agentId ? ownCall?.stage : undefined,
+          )
+        : lead.startingLine;
+
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {starting ?? (
-          <WorkingLine
-            startedAt={undefined}
-            words={
-              brief === AGENT_BRIEF.BLANK && origin === undefined
-                ? blankAgentLine(
-                    standingCalls.length > 0,
-                    ownCall?.agentId === agentId ? ownCall?.stage : undefined,
-                  )
-                : lead.startingLine
-            }
-          />
-        )}
+        {greeting === undefined ? null : <ManagerGreetingMessage words={greeting} />}
+        {starting ??
+          (greeting !== undefined && working ? (
+            // Note that a Manager's chat says only that it works, whatever its turn holds, even while nothing it sent stands yet.
+            <ChatWorking words={workingLineWords(phase, waitsUntil)} />
+          ) : greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
+            <WorkingLine startedAt={undefined} words={leadLine} />
+          ))}
         {endTrail}
       </ConversationLead>
     );
@@ -3529,6 +3756,10 @@ function AgentTabView({
   );
 
   const conditions = useMemo(() => goalConditions(kept), [kept]);
+  // Note that a Manager's page is its chat, never its transcript: people's lines and its `send_to_user` words alone, its work shown only as the working line.
+  const chat = agent.kind === AGENT_KIND.MANAGER;
+  const drawnLines = useMemo(() => (chat ? managerChatLines(lines) : lines), [chat, lines]);
+  useManagerChatLooks(chat ? agent.id : undefined, agent.saidAt);
 
   // Note that only a line still on its way is the reader's newest, since a refused one never reached the agent.
   const pendingWords = useMemo(
@@ -3824,7 +4055,7 @@ function AgentTabView({
                           <ApprovalsProvider asks={approvals.asks}>
                             <GoalConditions value={conditions}>
                               <AgentTranscriptView
-                                messages={lines}
+                                messages={drawnLines}
                                 standingCalls={transcript.calls}
                                 brief={agent.brief}
                                 briefSender={starter === undefined ? undefined : starterActor}
@@ -3832,7 +4063,7 @@ function AgentTabView({
                                 readerId={readerId}
                                 agentId={agent.id}
                                 payerSubscriptionId={transcript.payerSubscriptionId}
-                                taskId={agent.taskId}
+                                taskId={agent.taskId ?? undefined}
                                 replay={replay}
                                 delegation={{
                                   models,
@@ -3858,7 +4089,7 @@ function AgentTabView({
                                 turnId={standing.turnId ?? agent.turnId}
                                 // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
                                 startedAt={
-                                  !counts
+                                  !counts || chat
                                     ? undefined
                                     : composer.rewinding
                                       ? composer.rewoundAt
@@ -3897,6 +4128,8 @@ function AgentTabView({
                                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                 olderFailed={transcript.olderFailed}
                                 fromStart={transcript.pages > 0 && !transcript.hasOlder}
+                                greeting={chat ? managerGreeting(agent.title) : undefined}
+                                chat={chat}
                                 overComposer
                                 overEnd={appsRoom}
                                 bringIn={bringIn}
@@ -3915,7 +4148,7 @@ function AgentTabView({
         </AgentPicturesProvider>
       </CallPlaceProvider>
       <AgentTabFoot>
-        <TodosDock messages={lines} working={standing.working} />
+        {chat ? null : <TodosDock messages={lines} working={standing.working} />}
         <PublishedDock
           published={published}
           agentId={agent.id}
@@ -3923,12 +4156,15 @@ function AgentTabView({
           doors={doors}
         />
         <ThreadsDock threads={threads} />
-        <FollowOfferDock
-          taskId={agent.taskId}
-          messages={kept}
-          pending={pendingWords}
-          readerId={readerId}
-        />
+        {/* Note that a follow-up is offered on a task, so an agent on none is offered none. */}
+        {agent.taskId === null ? null : (
+          <FollowOfferDock
+            taskId={agent.taskId}
+            messages={kept}
+            pending={pendingWords}
+            readerId={readerId}
+          />
+        )}
         {/* Note that a harness that keeps no goal draws no goal row, whatever its words say. */}
         {goalReach === GOAL_REACH.NONE ? null : (
           <GoalDock
@@ -4583,7 +4819,7 @@ export function AgentSubagentTab({
                 ended={
                   transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)
                 }
-                failureAbout={{ agentId, taskId: owner?.taskId, callId }}
+                failureAbout={{ agentId, taskId: owner?.taskId ?? undefined, callId }}
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}

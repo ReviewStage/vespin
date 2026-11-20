@@ -300,10 +300,11 @@ interface LiveReadAnswering<Read extends AnyLiveRead> {
     params: LiveReadParams<Read>,
     query: LiveReadQuery,
   ): Effect.Effect<void, HostedRefusal, WebServices>;
-  /** The params it binds itself, given those its query bound; required where it declares one. */
+  /** The params it binds itself, given those its query bound and the request, whose headers name the build asking; required where it declares one. */
   serve?(
     params: Omit<LiveReadParams<Read>, keyof ServedParams<Read>>,
     query: LiveReadQuery,
+    request: Request,
   ): Effect.Effect<ServedParams<Read>, HostedRefusal, WebServices>;
   /** How often a held poll looks at it; every three seconds where it names none, every second for a read a surface watches closely (`WATCHED_LOOK`). */
   readonly look?: Duration.Duration;

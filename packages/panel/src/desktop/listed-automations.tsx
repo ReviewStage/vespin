@@ -18,7 +18,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 /** Whether an agent the window lists names the automation that started it: a listed task's, followed live, or the open task's, as Home's rows name it. */
 function namesAutomation(tasks: TasksControl, listed: TaskListCollections["tasks"]): boolean {
   const lines = (tasks.liveAgents ?? []).filter(
-    (agent) => listed.has(agent.taskId) && agent.archivedAt === undefined,
+    (agent) => agent.taskId !== null && listed.has(agent.taskId) && agent.archivedAt === undefined,
   );
 
   const agents = [...(tasks.agents.agents ?? []), ...(tasks.agents.archived ?? [])];

@@ -1,12 +1,16 @@
 /**
- * messages.tsx -- a turn of a conversation, the line over a received one naming who sent it and what they did, and the line under every one: when, then its actions, or, where a sent one did not go, Not delivered before when and a red alert beside it, flush with an agent's words where they stand on no bubble, the actions hidden until the pointer rests on the turn or the keyboard is on one of them, and on a touch screen shown by a tap on the turn.
+ * messages.tsx -- a chat's bubbles in runs, and a turn of a conversation, the line over a received one naming who sent it and what they did, and the line under every one: when, then its actions, or, where a sent one did not go, Not delivered before when and a red alert beside it, flush with an agent's words where they stand on no bubble, the actions hidden until the pointer rests on the turn or the keyboard is on one of them, and on a touch screen shown by a tap on the turn.
  */
 
 import {
   AVATAR_SIZE,
   Avatar,
   BUTTON_SIZE,
+  CHAT_RUN,
+  CHAT_SIDE,
+  ChatBubble,
   CopyIcon,
+  chatRunOf,
   IconButton,
   INLINE_REF_LOOK,
   InlineRef,
@@ -38,6 +42,9 @@ const ADA = (
     onPress={() => {}}
   />
 );
+
+/** One sender's run of short messages, as a chat stands them together. */
+const RUN = ["Merged this morning.", "It's behind the Invites flag.", "Turning it on Monday."];
 
 const COPY = (
   <MessageActions>
@@ -142,6 +149,39 @@ function Messages(): React.JSX.Element {
             <Text>Looks good, merging.</Text>
             <MessageLine at={SENT_AT} actions={COPY} />
           </MessageFrame>
+        </div>
+      </CatalogSection>
+      <CatalogSection
+        id="chat-bubbles"
+        title="A chat's bubbles: what people sent at the right, the other side's at the left, one sender's run close, its corners tightened, one time under its last"
+      >
+        <div className="catalog-frame">
+          <div className="flex flex-col gap-ui-4">
+            <MessageFrame revealActionsOnTap className="ml-auto flex flex-col items-end">
+              <ChatBubble side={CHAT_SIDE.SENT} run={CHAT_RUN.ALONE} beside={COPY}>
+                <Text>Is the invite flow out?</Text>
+              </ChatBubble>
+              <MessageLine at={SENT_AT} />
+            </MessageFrame>
+            {RUN.map((words, index) => (
+              <MessageFrame
+                key={words}
+                revealActionsOnTap
+                className="mr-auto flex flex-col items-start"
+              >
+                <ChatBubble
+                  side={CHAT_SIDE.RECEIVED}
+                  run={chatRunOf(index === 0, index === RUN.length - 1)}
+                  beside={COPY}
+                >
+                  <Text>{words}</Text>
+                </ChatBubble>
+                {index === RUN.length - 1 ? (
+                  <MessageLine align={MESSAGE_LINE_ALIGN.START} at={SENT_AT} />
+                ) : null}
+              </MessageFrame>
+            ))}
+          </div>
         </div>
       </CatalogSection>
     </>

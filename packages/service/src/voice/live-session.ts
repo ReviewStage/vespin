@@ -4,10 +4,26 @@
  * One JSON POST to `/live/sessions` with the session and the transport
  * (https://developers.openai.com/api/docs/guides/voice-webrtc?api=live): the
  * model, the instructions, client delegation, because the agent behind the
- * call is its backend and nothing else may act, no storage, the voice, and
- * the panel's data channel cut down to what the panel does with it; and the
- * panel's SDP offer as a `webrtc` transport. No `audio.format`, because
- * WebRTC negotiates its own. The panel carries the call's audio and nothing
+ * call is its backend and nothing else may act, no storage, the voice,
+ * standby, and the panel's data channel cut down to what the panel does with
+ * it; and the panel's SDP offer as a `webrtc` transport. No `audio.format`,
+ * because WebRTC negotiates its own.
+ *
+ * Standby
+ * (https://developers.openai.com/api/docs/guides/live-conversations#managing-idle-sessions)
+ * waits for the caller's speech before inference starts, and pauses it again
+ * after `IDLE_TIMEOUT_S` with no transcript, billed at the paused rate, with
+ * the connection, the session's id, and the sideband all standing; the
+ * caller's next words resume it. Only speech wakes it: nothing the sideband
+ * sends does, and an append sent while it is paused waits, unsaid, for the
+ * caller to speak. A delegation still unanswered holds inference running, so
+ * the agent's reply to one is said as it comes, and only the reply to a turn
+ * no delegation opened can find the voice paused (live-tested on
+ * `gpt-live-1.1`, Nov 19, 2026). The sideband hears `session.paused` and
+ * `session.resumed`, which the loop passes by as it does every event it does
+ * not read, and the panel hears neither.
+ *
+ * The panel carries the call's audio and nothing
  * of its logic, which the service holds over its own sideband
  * (`live-sideband.ts`), unaffected by the allowlist: so the panel may send
  * only mute, unmute, and the close that ends the call, and hears only the
@@ -30,10 +46,15 @@ import { EXCESS_KEYS, type UnparsedWireValue, unparsedWire } from "../core.js";
 import { HOSTED_OPENAI_DEFAULTS } from "../providers/openai.js";
 
 export const LIVE_SESSION = {
-  MODEL: "gpt-live-1",
+  /** GPT-Live-1.1, which takes the same session body and events as GPT-Live-1 and is told when to delegate in plain language (`voice-instructions.ts`). */
+  MODEL: "gpt-live-1.1",
   PATH: "/live/sessions",
   TRANSPORT: "webrtc",
   DELEGATION: "client",
+  /** Inference starts on the caller's speech, at the default threshold, and again after each pause. */
+  WAKE_POLICY: "speech",
+  /** The seconds with no transcript after which inference pauses (5 to 60): past a breath, so a silent call bills at the paused rate soon. */
+  IDLE_TIMEOUT_S: 10,
 } as const;
 
 /** How long OpenAI is given to create the session before the call is answered as failed: inside the panel's held wait for the route. */
@@ -83,6 +104,8 @@ function sessionBody(input: LiveSessionInput) {
       delegation: { type: LIVE_SESSION.DELEGATION },
       store: false,
       audio: { output: { voice: input.voice } },
+      wake_policy: { type: LIVE_SESSION.WAKE_POLICY },
+      idle_timeout_s: LIVE_SESSION.IDLE_TIMEOUT_S,
       client: {
         data_channel: {
           allowed_client_events: PANEL_DATA_CHANNEL.CLIENT_EVENTS,

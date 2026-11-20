@@ -219,7 +219,7 @@ function FoundList({
             <TaskAgentRow
               key={line.agent.id}
               line={line}
-              task={found.tasksById.get(line.agent.taskId)}
+              task={line.agent.taskId === null ? undefined : found.tasksById.get(line.agent.taskId)}
               named
               asking={asking}
             />

@@ -22,6 +22,7 @@ import {
   eq,
   exists,
   inArray,
+  isNull,
   ne,
   notExists,
   type SQL,
@@ -852,7 +853,9 @@ export function agentReachableBy(userId: string): SQL {
  * The condition that the account may read and write the coding agent row a
  * statement reads, the one rule a member, or another agent, keeps for every
  * list of agents and every read or write by id: it reaches the agent
- * (`agentReachableBy`), and its task too (`taskReachableBy`). Note that the task is asked as well, because a read
+ * (`agentReachableBy`), and its task too (`taskReachableBy`), where it
+ * stands on one; an agent on no task is decided by its workspace's
+ * membership alone. Note that the task is asked as well, because a read
  * of an agent by its id would otherwise skip the GitHub visibility of its
  * task, which a list of the task's agents keeps. An agent acting as itself
  * keeps `agentReachableBy` alone, so its starter losing the task's
@@ -866,7 +869,7 @@ export function agentVisibleTo(userId: string): SQL {
       .where(and(eq(task.id, agentTable.taskId), taskReachableBy(userId))),
   );
 
-  return sql`(${agentReachableBy(userId)} and ${taskReached})`;
+  return sql`(${agentReachableBy(userId)} and (${isNull(agentTable.taskId)} or ${taskReached}))`;
 }
 
 /** The condition that the account sees the task row as its GitHub access allows (`seenThroughGitHub`), for a statement that gates its workspace already. */

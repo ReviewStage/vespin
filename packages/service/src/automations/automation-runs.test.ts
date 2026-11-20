@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { readAccountPreferences } from "@repo/database/models/account-store";
 import {
+  agentTaskId,
   archiveAgent,
   createAgent,
   lineSendersOf,
@@ -805,7 +806,10 @@ it.layer(SUITE)("an automation's runs", (it) => {
         yield* ranTurn(departing.owner, orphaned, TURN_STATUS.SETTLED);
         // Its starter gone from the workspace, the agent is no one's to archive.
         yield* leaveWorkspace(departing.workspaceId, departing.owner);
-        const askingTask = Option.getOrThrow(yield* readAgent(archiving.owner, asking)).taskId;
+
+        const askingTask = agentTaskId(
+          Option.getOrThrow(yield* readAgent(archiving.owner, asking)),
+        );
 
         const question = yield* postInboxThread(
           { userId: archiving.owner, taskId: askingTask, agentId: asking },
@@ -923,7 +927,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
         const leadAgent = Option.getOrThrow(yield* readAgent(owner, lead));
 
         const made = yield* createAgent(owner, {
-          taskId: leadAgent.taskId,
+          taskId: agentTaskId(leadAgent),
           idempotencyKey: randomUUID(),
           model: SOL,
           effort: "low",

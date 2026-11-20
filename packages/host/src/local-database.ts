@@ -11,7 +11,8 @@
  * The tables are the sync engine's replica (`row`, `held`, `cursor`, as
  * `local-rows.ts` writes them), its
  * waiting writes (`outbox`), the agent messages the service refused
- * (`refused`), and `meta`, which holds one hash over every kept row shape.
+ * (`refused`), and `meta`, which holds one hash over every kept row shape
+ * and their generation.
  * A build whose hash differs clears the replica, which the service redraws
  * at once, and keeps the two queues, as Linear keeps one schema hash and
  * re-reads from the server.
@@ -118,6 +119,17 @@ const keptRowsSchema = Schema.Struct({
   inbox: Schema.Array(inboxItemSchema),
 });
 
+/**
+ * The generation of the kept rows, hashed beside their shapes, moved where a
+ * list kept at the current shapes still has to be read again. Note that a
+ * field a kept read starts to carry (`TASK_LIST_READ`'s agent `kind`, #10159)
+ * moves the hash when its build ships, but a build that ran before the
+ * service carried it kept every row without it, and a delta past its sync id
+ * carries only the rows that moved, so a Manager that stood still read as a
+ * coder. Moved to 2 for that: the rows those builds kept are read again.
+ */
+const KEPT_ROWS_GENERATION = 2;
+
 /** A value a statement binds or a row answers. */
 export type LocalDatabaseValue = null | number | bigint | string | Uint8Array;
 
@@ -160,12 +172,17 @@ export class LocalDatabaseFailed extends Data.TaggedError("LocalDatabaseFailed")
   }
 }
 
-/** The SHA-256, in hex, of every kept row shape's JSON Schema. */
+/** The SHA-256, in hex, of every kept row shape's JSON Schema and their generation (`KEPT_ROWS_GENERATION`). */
 const keptRowsHash: Effect.Effect<string> = Effect.map(
   Effect.promise(() =>
     crypto.subtle.digest(
       "SHA-256",
-      new TextEncoder().encode(JSON.stringify(Schema.toJsonSchemaDocument(keptRowsSchema))),
+      new TextEncoder().encode(
+        JSON.stringify({
+          generation: KEPT_ROWS_GENERATION,
+          rows: Schema.toJsonSchemaDocument(keptRowsSchema),
+        }),
+      ),
     ),
   ),
   (digest) =>

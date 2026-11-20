@@ -377,7 +377,8 @@ function agentTurnNotification(agent: Agent, turnId: string, body: string) {
     payload: {
       aps: {
         alert: alertOf(agentName(agent), body),
-        "thread-id": agent.taskId,
+        // Note that an agent on no task threads its alerts by itself, as its task would.
+        "thread-id": agent.taskId ?? agent.id,
         category: PUSH_CATEGORY.RUN_FAILED,
         "mutable-content": 1,
         sound: "default",
@@ -386,7 +387,7 @@ function agentTurnNotification(agent: Agent, turnId: string, body: string) {
       // Note that a finished turn goes as this kind too, since it is the one a released app opens the agent from.
       kind: PUSH_KIND.RUN_FAILED,
       agentId: agent.id,
-      taskId: agent.taskId,
+      ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
       turnId,
     },
   });
@@ -534,7 +535,10 @@ function stillWaitingPost(userId: string, itemId: string) {
     if (!waiting) return Option.none<ThreadPushPost>();
     const home = yield* readInboxItemHome(userId, itemId);
 
-    return Option.map(home, ({ taskId }) => ({ item, asked: asks, taskId: taskId }));
+    // Note that an item on no task is not pushed, since a released iPhone opens an alert on its task.
+    return Option.flatMap(home, ({ taskId }) =>
+      taskId === null ? Option.none() : Option.some({ item, asked: asks, taskId }),
+    );
   });
 }
 

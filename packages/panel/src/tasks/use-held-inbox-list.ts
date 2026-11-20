@@ -1,6 +1,7 @@
 import {
   EVERYONES,
   INBOX_WHOSE,
+  type InboxAnyHolder,
   type InboxGroup,
   type InboxListView,
   type InboxPlace,
@@ -47,16 +48,16 @@ import { type HeldOrder, useHeldOrder } from "./use-held-order.js";
 type InboxFilter = Omit<Parameters<typeof inboxList>[1], "chosen" | "places">;
 
 /** What an Inbox draws: its rows, its steps, the chosen item its rows kept, and whether a row held still stands apart from where its item does now. */
-interface Drawn {
-  readonly list: InboxListView;
-  readonly steps: InboxListView;
+interface Drawn<Holder extends InboxAnyHolder> {
+  readonly list: InboxListView<Holder>;
+  readonly steps: InboxListView<Holder>;
   readonly kept: string | undefined;
   readonly heldBack: boolean;
 }
 
 /** What a draw was drawn from, by which the next draw from the same is the same draw (`sameDraw`). */
-interface DrawnFrom {
-  readonly groups: readonly InboxGroup[];
+interface DrawnFrom<Holder extends InboxAnyHolder> {
+  readonly groups: readonly InboxGroup<Holder>[];
   readonly filter: InboxFilter;
   readonly chosen: string | undefined;
   readonly pointing: boolean;
@@ -124,7 +125,10 @@ function sameOrder(was: InboxFilter | undefined, now: InboxFilter): boolean {
  * Note that the places it holds need no comparing, because they are where
  * the last draw stood its rows, which the same draw stands where they are.
  */
-function sameDraw(was: DrawnFrom | undefined, now: DrawnFrom): boolean {
+function sameDraw(
+  was: DrawnFrom<InboxAnyHolder> | undefined,
+  now: DrawnFrom<InboxAnyHolder>,
+): boolean {
   return (
     was !== undefined &&
     was.groups === now.groups &&
@@ -136,7 +140,10 @@ function sameDraw(was: DrawnFrom | undefined, now: DrawnFrom): boolean {
 }
 
 /** Whether a row's place held stands apart from where its item stands now, so letting the hold go moves it. */
-function holdsBack(list: InboxListView, held: ReadonlyMap<string, InboxPlace>): boolean {
+function holdsBack(
+  list: InboxListView<InboxAnyHolder>,
+  held: ReadonlyMap<string, InboxPlace>,
+): boolean {
   if (held.size === 0) return false;
 
   for (const [id, now] of inboxPlaces(list, NO_PLACES)) {
@@ -148,9 +155,9 @@ function holdsBack(list: InboxListView, held: ReadonlyMap<string, InboxPlace>): 
   return false;
 }
 
-type UseHeldInboxListResult = {
-  readonly list: InboxListView;
-  readonly steps: InboxListView;
+type UseHeldInboxListResult<Holder extends InboxAnyHolder> = {
+  readonly list: InboxListView<Holder>;
+  readonly steps: InboxListView<Holder>;
   readonly onPointing: (pointing: boolean) => void;
 };
 
@@ -160,27 +167,30 @@ type UseHeldInboxListResult = {
  * row, both held still as the module's head says while `shown`; and what the
  * list tells as the pointer comes onto it and leaves (`onPointing`).
  */
-export function useHeldInboxList(
-  groups: readonly InboxGroup[],
+export function useHeldInboxList<Holder extends InboxAnyHolder>(
+  groups: readonly InboxGroup<Holder>[],
   filter: InboxFilter,
   chosen: string | undefined,
   shown: boolean,
-): UseHeldInboxListResult {
+): UseHeldInboxListResult<Holder> {
   const keptLast = useRef<string | undefined>(undefined);
   // Note that the hold is the pointer's and not the list's being shown, because the Inbox may stand open for as long as the window does.
   const pointer = useRef(false);
   const pointing = pointer.current;
-  const last = useRef<{ readonly from: DrawnFrom; readonly drawn: Drawn }>(undefined);
+
+  const last = useRef<{ readonly from: DrawnFrom<Holder>; readonly drawn: Drawn<Holder> }>(
+    undefined,
+  );
 
   const placed = useRef<{
-    readonly drawn: Drawn;
+    readonly drawn: Drawn<Holder>;
     readonly places: ReadonlyMap<string, InboxPlace>;
   }>(undefined);
 
   const [, redraw] = useReducer((count: number) => count + 1, 0);
-  const from: DrawnFrom = { groups, filter, chosen, pointing, shown };
+  const from: DrawnFrom<Holder> = { groups, filter, chosen, pointing, shown };
 
-  const order: HeldOrder<InboxFilter, InboxPlace, Drawn> = {
+  const order: HeldOrder<InboxFilter, InboxPlace, Drawn<Holder>> = {
     sameOrder,
     draw: (held, was) => {
       if (last.current !== undefined && sameDraw(last.current.from, from))

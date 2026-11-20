@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { readAgent } from "@repo/database/models/agent-store";
+import { agentTaskId, readAgent } from "@repo/database/models/agent-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
@@ -208,7 +208,10 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
         const db = yield* Database;
         yield* db.update(agentTable).set({ title: null }).where(eq(agentTable.id, agentId));
         const agent = Option.getOrThrow(yield* readAgent(callerId, agentId));
-        yield* db.update(task).set({ name: UNTITLED_TASK_NAME }).where(eq(task.id, agent.taskId));
+        yield* db
+          .update(task)
+          .set({ name: UNTITLED_TASK_NAME })
+          .where(eq(task.id, agentTaskId(agent)));
         const session = fakeLiveSession(undefined);
         const sync = wakeableSync();
         const ready = yield* Deferred.make<void>();

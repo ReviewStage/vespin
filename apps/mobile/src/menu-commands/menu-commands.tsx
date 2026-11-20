@@ -261,7 +261,7 @@ function useSubject(signedIn: boolean): Subject {
 
   // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
   if (ownPage !== undefined)
-    address = ownPageAddress(ownPage, task, agent?.taskId, (id) =>
+    address = ownPageAddress(ownPage, task, agent?.taskId ?? undefined, (id) =>
       linkWorkspaceStep(id, workspaces),
     );
 
@@ -475,7 +475,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.TOGGLE_READ:
-        if (threadId !== undefined) inbox.mark(threadId, !subject.threadUnread);
+        if (subject.thread !== undefined) inbox.mark(subject.thread, !subject.threadUnread);
         else if (task !== undefined) {
           const unread = subject.toggled.includes(MENU_COMMAND.TOGGLE_READ);
           const readMark = unread ? READ_MARK.READ : READ_MARK.UNREAD;

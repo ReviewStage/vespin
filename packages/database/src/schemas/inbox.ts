@@ -31,8 +31,8 @@ import { task } from "./task.js";
  * writes the member and the key the client sent it under, so an answer sent
  * again after a lost reply is taken once, or until it is closed: by the
  * agent, which writes why, or by a member without an answer, which writes
- * the member. The task is the agent's, kept on the row so a task's inbox is
- * read by one index, and the account's open items are read by another. A
+ * the member. The task is the agent's, none for an agent on no task, kept on
+ * the row so a task's inbox is read by one index, and the account's open items are read by another. A
  * message on the item's thread moves when it last changed and never when it
  * was settled. Its open ask may be addressed to one member. The row goes
  * with its account, its task, and its agent alike.
@@ -44,10 +44,8 @@ export const inboxItem = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    /** The agent's task. */
-    taskId: uuid("task_id")
-      .notNull()
-      .references(() => task.id, { onDelete: "cascade" }),
+    /** The agent's task; null for an agent on no task, whose thread follows the agent alone. */
+    taskId: uuid("task_id").references(() => task.id, { onDelete: "cascade" }),
     /** The agent's workspace. */
     organizationId: text("organization_id")
       .notNull()

@@ -101,6 +101,7 @@ import { TaskAgentUnstopped } from "./task-store.js";
 import {
   agentReachableBy,
   agentVisibleTo,
+  isWorkspaceMember,
   reachableTask,
   taskReachableBy,
 } from "./workspace-store.js";
@@ -174,7 +175,8 @@ export interface Agent {
   readonly id: string;
   /** The account that started the agent, whose conversation it runs in and whose provider key pays for it. */
   readonly userId: string;
-  readonly taskId: string;
+  /** The task the agent works on; null for an agent on none, which nothing starts yet. */
+  readonly taskId: string | null;
   /** The workspace the agent belongs to. */
   readonly organizationId: string;
   /** The automation whose run started the agent; null for one started by hand or once that automation is deleted. */
@@ -215,7 +217,7 @@ export interface Agent {
   readonly author: AgentAuthor | null;
   /** How its repository was reached as it started: the workspace's GitHub App, or its starter's own token. */
   readonly githubAccess: GitHubAccess;
-  /** What the agent is: a coder; a pilot stored before Pilot was removed, which every reader treats as a coder. */
+  /** What the agent is: a coder; a manager; a pilot stored before Pilot was removed, which every reader treats as a coder. */
   readonly kind: AgentKind;
   readonly createdAt: Date;
   /** Where its runner runs: a Vercel Sandbox, or its starter's Mac; a Vercel Sandbox where unsaid. */
@@ -224,6 +226,17 @@ export interface Agent {
   readonly deviceId?: string | null;
   /** How its tool calls are answered, which each launch reads; full access where unsaid. */
   readonly permissionMode?: AgentPermissionMode;
+}
+
+/**
+ * The task the agent works on, for a path that needs one. Note that we
+ * assert rather than answer none, because nothing starts an agent on no task
+ * yet, so one reaching a path that needs a task is a defect.
+ */
+export function agentTaskId(agent: Pick<Agent, "id" | "taskId">): string {
+  if (agent.taskId === null) throw new Error(`agent ${agent.id} works on no task`);
+
+  return agent.taskId;
 }
 
 /**
@@ -278,8 +291,9 @@ export type AgentBriefText =
   | { readonly descriptionSnapshot: null; readonly prompt: string }
   | { readonly descriptionSnapshot: null; readonly prompt: null };
 
-/** Where a Start puts the agent: on a task, whose workspace it joins and whose text or the developer's prompt it is handed. */
-export type AgentPlace = AgentBriefText & { readonly taskId: string };
+/** Where a Start puts the agent: on a task, whose workspace it joins and whose text or the developer's prompt it is handed, or on no task, in a workspace the Start names, handed the prompt alone. */
+export type AgentPlace = AgentBriefText &
+  ({ readonly taskId: string } | { readonly taskId: null; readonly workspaceId: string });
 
 /** A Start: where it goes, the request's own key, what to run on, what the agent is handed, and the repository as it stands now. */
 export type NewAgent = AgentPlace & {
@@ -324,6 +338,8 @@ export type NewAgent = AgentPlace & {
   readonly deviceId?: string | undefined;
   /** How its tool calls are answered from its first turn; full access where none is named. */
   readonly permissionMode?: AgentPermissionMode | undefined;
+  /** What the agent is; a coder where none is named. */
+  readonly kind?: AgentKind | undefined;
 };
 
 /** A repository a Start names for the agent beside its own: `owner/name` as reached, and the branch its checkout is cloned at, none for its default branch. */
@@ -504,7 +520,7 @@ const AuthorColumnSchema = Schema.Literals(Object.values(AGENT_AUTHOR));
 const AgentRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
-  taskId: Schema.String,
+  taskId: Schema.NullOr(Schema.String),
   organizationId: Schema.String,
   automationId: Schema.NullOr(Schema.String),
   automationOrigin: AutomationOriginColumnSchema,
@@ -670,7 +686,7 @@ const insertAgent = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
     conversationId: Schema.String,
-    taskId: Schema.String,
+    taskId: Schema.NullOr(Schema.String),
     organizationId: Schema.String,
     automationId: Schema.NullOr(Schema.String),
     automationOrigin: AutomationOriginColumnSchema,
@@ -1599,7 +1615,7 @@ function agentNamed(query: string): SQL | undefined {
 /** The agent a list is read around: the one asking, by its id, its task, and the agent that started it. */
 const AgentAroundSchema = Schema.Struct({
   agentId: Schema.String,
-  taskId: Schema.String,
+  taskId: Schema.NullOr(Schema.String),
   startedByAgentId: Schema.NullOr(Schema.String),
 });
 
@@ -1611,6 +1627,7 @@ const AgentsOfWorkspaceSchema = Schema.Struct({
   words: Schema.NullOr(Schema.String),
   includeArchived: Schema.Boolean,
   archivedOnly: Schema.Boolean,
+  onTaskOnly: Schema.Boolean,
   startedBy: Schema.NullOr(Schema.String),
   automation: Schema.NullOr(Schema.Boolean),
   automationId: Schema.NullOr(Schema.String),
@@ -1658,6 +1675,7 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
   return and(
     agentVisibleTo(userId),
     eq(agentTable.organizationId, organizationId),
+    request.onTaskOnly ? isNotNull(agentTable.taskId) : undefined,
     request.startedBy === null ? undefined : eq(agentTable.userId, request.startedBy),
     request.includeArchived ? undefined : isNull(agentTable.archivedAt),
     request.archivedOnly ? isNotNull(agentTable.archivedAt) : undefined,
@@ -1706,7 +1724,7 @@ function workspaceListOrder(request: typeof AgentsOfWorkspaceSchema.Type): SQL[]
   const { around } = request;
 
   if (around === null) return [desc(agentTable.createdAt), desc(agentTable.id)];
-  const onTask = eq(agentTable.taskId, around.taskId);
+  const onTask = around.taskId === null ? sql`false` : eq(agentTable.taskId, around.taskId);
   const nearness = sql`case when ${ownOfAgent(around)} then 0 when ${onTask} then 1 else 2 end`;
 
   return [nearness, desc(agentTable.createdAt), desc(agentTable.id)];
@@ -2250,7 +2268,7 @@ const AgentHeaderRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
   organizationId: Schema.String,
-  taskId: Schema.String,
+  taskId: Schema.NullOr(Schema.String),
   repository: Schema.NullOr(Schema.String),
   title: Schema.NullOr(Schema.String),
   archivedAt: Schema.NullOr(InstantColumnSchema),
@@ -2302,13 +2320,15 @@ const deleteConversationRow = SqlSchema.void({
 });
 
 /**
- * Starts an agent on a task of the account's workspace: a `coding_agent`
+ * Starts an agent on a task of the account's workspace, or on no task in a
+ * workspace the account is a member of: a `coding_agent`
  * conversation of the account's and the row that binds it to the task, with
  * the description text or the prompt, the repository, the automation whose run
  * started it with that run, and the account's own agent whose `start_agent`
  * started it, as handed, always a coder. A Start whose key the account has
  * already used answers the agent that Start made, whatever else the retry
- * carries, and writes nothing. Nothing where the account reaches no such task.
+ * carries, and writes nothing. Nothing where the account reaches no such
+ * task, or for no task, is no member of the workspace.
  */
 export function createAgent(
   userId: string,
@@ -2317,7 +2337,13 @@ export function createAgent(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
-        const reached = yield* lockReachableTask({ userId, taskId: started.taskId });
+        // Note that an agent on no task is gated by its workspace's membership alone, as it is read (`agentVisibleTo`).
+        const reached =
+          started.taskId === null
+            ? (yield* isWorkspaceMember(userId, started.workspaceId))
+              ? Option.some({ organizationId: started.workspaceId })
+              : Option.none()
+            : yield* lockReachableTask({ userId, taskId: started.taskId });
 
         if (Option.isNone(reached)) return Option.none();
 
@@ -2366,7 +2392,7 @@ export function createAgent(
           mentionedServers: storedServers(started.mentionedServers ?? []),
           githubAccess: started.githubAccess ?? GITHUB_ACCESS.APP,
           payer: started.payer ?? null,
-          kind: AGENT_KIND.CODER,
+          kind: started.kind ?? AGENT_KIND.CODER,
           machine: started.machine ?? AGENT_MACHINE.VERCEL,
           deviceId: started.deviceId ?? null,
           permissionMode: started.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS,
@@ -2510,6 +2536,8 @@ interface WorkspaceAgentsAsked {
   readonly includeArchived?: boolean;
   /** Only the archived agents; `includeArchived` must ask for them too. */
   readonly archivedOnly?: boolean;
+  /** Only the agents on a task, for a reader that reads none on no task; every agent where unsaid. */
+  readonly onTaskOnly?: boolean;
   /** Only the agents this member started, by their account's id; every member's where unsaid. */
   readonly startedBy?: string;
   /** Only the agents an automation's run started where true, only those started otherwise where false; both where unsaid. */
@@ -2537,6 +2565,7 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
     words: options.words ?? null,
     includeArchived: options.includeArchived ?? false,
     archivedOnly: options.archivedOnly ?? false,
+    onTaskOnly: options.onTaskOnly ?? false,
     startedBy: options.startedBy ?? null,
     automation: options.automation ?? null,
     automationId: options.automationId ?? null,

@@ -2,8 +2,9 @@
  * gates.ts -- what opens each of our narrowed tools to an agent, declared once, and where an agent stands against them.
  *
  * A tool of the catalog (`catalog.ts`) is offered every agent, or stands
- * behind one gate: the agent's repository, the sandbox of ours it runs in,
- * its workspace's Memory, or its workspace's Task descriptions. Each gate is
+ * behind its gates, each of which must open: the agent's task, its
+ * repository, the sandbox of ours it runs in, or one of its workspace's
+ * experiments, such as Memory or Task descriptions. Each gate is
  * declared here once, with how it is read off the agent and the words a
  * call it shuts would be refused with, so the list an agent is offered and
  * a refusal of a call it makes anyway read the same rule. An agent's
@@ -20,7 +21,7 @@ import {
   hasRepository,
   readAgentOfConversation,
 } from "@repo/database/models/agent-store";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_KIND, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { Effect, Option } from "effect";
 import { CODER_REFUSAL } from "../coder-host/bounds.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
@@ -31,8 +32,10 @@ import {
   NO_EXPERIMENT_ON,
 } from "../workspace-experiment-on.js";
 
-/** The gates a tool may stand behind; each tool stands behind one at most. */
+/** The gates a tool may stand behind; a tool stands behind every one it names. */
 export const TOOL_GATE = {
+  /** The agent works on a task: one its pages, its browser, and its suggestions stand on. */
+  TASK: "task",
   /** The agent works in a repository: a checkout to open a pull request from. */
   REPOSITORY: "repository",
   /** The agent runs in a sandbox of ours rather than on the developer's own machine. */
@@ -43,12 +46,14 @@ export const TOOL_GATE = {
   DESCRIPTIONS: "descriptions",
   /** The agent's workspace has Reply buttons on. */
   REPLY_BUTTONS: "reply-buttons",
-  /** The agent's workspace has Done and follow-ups on. */
+  /** The agent's workspace has Done and follow-ups on, and it is no Manager, whose words reach people through `send_to_user` alone. */
   TURN_END: "turn-end",
   /** The member whose Mac the agent reaches has Computer use on, as their own experiment. */
   COMPUTER_USE: "computer-use",
   /** The member the agent's threads would land with, its task's assignee else its starter, keeps an Inbox. */
   INBOX: "inbox",
+  /** The agent is a Manager, whose page is a chat with the people who can open it. */
+  MANAGER: "manager",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
@@ -69,6 +74,10 @@ interface Gate {
  * otherwise words its own (`CatalogTool`'s `refused`).
  */
 export const GATES: Readonly<Record<ToolGate, Gate>> = {
+  [TOOL_GATE.TASK]: {
+    opens: (agent) => agent.taskId !== null,
+    refusal: "Not run: you work on no task, and this tool works only for an agent on one.",
+  },
   [TOOL_GATE.REPOSITORY]: {
     opens: (agent) => hasRepository(agent),
     refusal: CODER_REFUSAL.NO_REPOSITORY,
@@ -90,8 +99,9 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
     opens: (_agent, experiments) => experiments.replyButtonsOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
+  // Note that a Manager ends no turn with a summary, since its page draws none: its chat holds its `send_to_user` messages alone.
   [TOOL_GATE.TURN_END]: {
-    opens: (_agent, experiments) => experiments.turnEndOn,
+    opens: (agent, experiments) => experiments.turnEndOn && agent.kind !== AGENT_KIND.MANAGER,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.COMPUTER_USE]: {
@@ -101,6 +111,10 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
   [TOOL_GATE.INBOX]: {
     opens: (_agent, experiments) => experiments.inboxOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
+  },
+  [TOOL_GATE.MANAGER]: {
+    opens: (agent) => agent.kind === AGENT_KIND.MANAGER,
+    refusal: "Not run: only a Manager has a chat to send to; reach people with your threads.",
   },
 };
 
