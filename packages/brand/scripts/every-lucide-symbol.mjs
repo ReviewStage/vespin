@@ -4,13 +4,13 @@
 // app's catalog holds each one. Note that the templates are outlined from the
 // lucide-react @repo/ui resolves, as the committed few are
 // (`generate-surface-shared.mjs`), and only when a prebuild writes the
-// catalog, because all of them run to some 15 MB of SVG.
+// catalog, because all of them run to megabytes of SVG.
 
 import { readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { symbolTemplate } from "./lucide-symbols.mjs";
+import { staticSymbolTemplate } from "./lucide-symbols.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const UI_MANIFEST = join(HERE, "..", "..", "ui", "package.json");
@@ -46,9 +46,17 @@ async function drawings() {
   return read.filter((drawing) => drawing !== undefined).sort((a, b) => (a.name < b.name ? -1 : 1));
 }
 
-/** Every Lucide glyph by its asset name, each as its template. */
-export async function everyLucideSymbol() {
-  return (await drawings()).map(({ name, node }) => ({ name, svg: symbolTemplate(node) }));
+/**
+ * Every Lucide glyph by its asset name but those `held` names, each as a
+ * static template (`staticSymbolTemplate`), one Regular glyph rather than
+ * three weights, since a third of the outlines keeps the catalog's weight
+ * on the app small. The glyphs the app names itself, `held`, keep their
+ * variable templates (`LUCIDE_SYMBOL_TEMPLATES`).
+ */
+export async function everyLucideSymbol(held = new Set()) {
+  return (await drawings())
+    .filter(({ name }) => !held.has(name))
+    .map(({ name, node }) => ({ name, svg: staticSymbolTemplate(node) }));
 }
 
 /** Every Lucide glyph's asset name, sorted, as the app's runtime list names them. */
