@@ -1,0 +1,28 @@
+---
+title: "Handoff"
+description: "Go on with a teammate's agent, and whose plan and Mac it uses"
+---
+
+Anyone in the workspace can open a teammate's agent, and most agents can be messaged and taken up by anyone too. What changes is whose plan pays and whose Mac its terminal commands reach.
+
+## Message a teammate's agent
+
+A message you send to a teammate's agent runs on its starter's plan or API key, not yours. The model chip's menu says whose plan pays.
+
+## Go on as yourself
+
+To keep going on your own plan, start your own agent from theirs:
+
+- **Fork to new agent**, on any of its messages, starts your agent with the conversation up to that message. Their agent keeps running.
+- **Continue in new agent**, offered once a turn fails or the agent's session ends, starts your agent with the whole conversation and its work, and stops theirs.
+
+Either way the new agent is yours. It runs and bills on your plan, and it's listed with you as its starter.
+
+## Where terminal commands go
+
+An agent's terminal commands go to the machine picked for that agent, if there is one. Otherwise they go to the default Mac of its task's assignee, or of its starter if no one is assigned. Assign the task to yourself to move commands to your Mac. Your Mac's **Terminal commands** setting still decides whether they run. See [Machines](/machines#terminal-commands).
+
+## Limits
+
+- An agent that pushes with its starter's own GitHub token takes messages only from its starter, and only they can continue or fork it.
+- An agent that runs on its starter's machine takes messages only from its starter. You can still continue or fork it: pick **Cloud** or one of your own machines under **Runs on** in the new agent's box.
