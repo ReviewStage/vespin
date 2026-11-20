@@ -95,6 +95,7 @@ function FaceRow<Value extends string>({
   nameOf,
   faceOf,
   disabled,
+  describedBy,
   onChoose,
 }: {
   label: string;
@@ -103,6 +104,7 @@ function FaceRow<Value extends string>({
   nameOf: (value: Value) => string;
   faceOf: (value: Value) => ManagerFaceValue;
   disabled: boolean;
+  describedBy: string | undefined;
   onChoose: (value: Value) => void;
 }): React.JSX.Element {
   const keys = useRovingKeys<HTMLDivElement>({
@@ -117,11 +119,11 @@ function FaceRow<Value extends string>({
   });
 
   return (
-    // biome-ignore lint/a11y/useSemanticElements: a radio group of pictures, each a button that is a radio, has no native element.
     <div
       ref={keys.ref}
       role="radiogroup"
       aria-label={label}
+      aria-describedby={describedBy}
       aria-disabled={disabled || undefined}
       className={ROW}
       data-roving={keys["data-roving"]}
@@ -140,7 +142,10 @@ function FaceRow<Value extends string>({
           disabled={disabled}
           className={OPTION}
           {...rovingItem()}
-          onClick={pulseOnPress(() => onChoose(value))}
+          // Note that a press on the option already chosen changes nothing, so its owner hears of none.
+          onClick={pulseOnPress(() => {
+            if (value !== chosen) onChoose(value);
+          })}
         >
           <ManagerFace face={faceOf(value)} size={MANAGER_FACE_SIZE.MESSAGE} />
         </button>
@@ -181,7 +186,7 @@ export function ManagerFacePicker({
   describedBy?: string | undefined;
 }): React.JSX.Element {
   return (
-    <div className={PICKER} aria-describedby={describedBy}>
+    <div className={PICKER}>
       <FaceRow
         label={ROW_NAME.CHARACTER}
         values={CHARACTERS}
@@ -189,6 +194,7 @@ export function ManagerFacePicker({
         nameOf={(character) => CHARACTER_NAME[character]}
         faceOf={(character) => characterFace(character, face)}
         disabled={disabled}
+        describedBy={describedBy}
         onChoose={(character) => onChange(characterFace(character, face))}
       />
       <FaceRow
@@ -198,6 +204,7 @@ export function ManagerFacePicker({
         nameOf={(color) => COLOR_NAME[color]}
         faceOf={(color) => colorFace(color, face)}
         disabled={disabled}
+        describedBy={describedBy}
         onChoose={(color) => onChange(colorFace(color, face))}
       />
     </div>

@@ -2772,10 +2772,19 @@ const CHANGED_FIELDS = [
   "permissionMode",
   "disabledServers",
   "title",
-] as const satisfies readonly Exclude<keyof AgentChange, "pinned">[];
+] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face">[];
 
-/** Whether every field of the change already stands on the agent. */
+/** Whether every field of the change already stands on the agent, a face by its character and color. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
+  const { face } = change;
+
+  if (
+    face !== undefined &&
+    (face.character !== agent.face?.character || face.color !== agent.face?.color)
+  ) {
+    return false;
+  }
+
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
     const held = agent[key];
