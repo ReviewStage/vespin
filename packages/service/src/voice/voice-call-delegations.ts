@@ -45,6 +45,9 @@
  * the key it was recorded under and the event it took last, and from the
  * delegations those lines and the agent's queue name as handed on, so the
  * few seconds the session replays to it are passed by (`voice-delegation`).
+ * What the loop holds in memory alone, the voice's words said over the
+ * caller's open line, it records as the lease is about to publish the next
+ * one (`handingOver`), so the next holder finds it stored.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -80,7 +83,7 @@ import {
 } from "@repo/features/voice-delegation";
 import { failureKind } from "@repo/runtime/effect";
 import { hostMintedId } from "@repo/wire/host-ids";
-import { Effect, Option, Queue, Result, Stream } from "effect";
+import { Deferred, Effect, Option, Queue, Result, Stream } from "effect";
 import { CODER } from "../agents/coder-host/bounds.js";
 import { changeAgentQueue } from "../agents/coder-host/queue-change.js";
 import { spokenLineMetadata } from "../agents/coder-host/spoken-line.js";
@@ -97,6 +100,7 @@ import {
   type WireValue,
 } from "../core.js";
 import { Sync } from "../sync/watch.js";
+import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
 import type { VoiceCallHolder, VoiceCallObserver } from "./voice-call-holder.js";
 
 /** What a line of a call's key is minted under, apart from every other id the host mints. */
@@ -439,7 +443,7 @@ const carriedOut = Effect.fnUntraced(function* (
   holder: VoiceCallHolder,
   agent: Agent,
   target: AgentTarget,
-  output: VoiceOutput,
+  output: Exclude<VoiceOutput, { readonly kind: typeof VOICE_OUTPUT.SETTLED }>,
   naming: CallNaming,
 ) {
   const { call } = holder;
@@ -533,7 +537,7 @@ export const voiceCallDelegations: VoiceCallObserver<
     if (Option.isNone(found)) {
       yield* Effect.logWarning("a voice call's agent is gone; nothing it says is delegated");
 
-      return { observe: () => Effect.void, beside: Effect.never };
+      return { observe: () => Effect.void, beside: Effect.never, handingOver: Effect.void };
     }
 
     const agent = found.value;
@@ -545,14 +549,24 @@ export const voiceCallDelegations: VoiceCallObserver<
     const offer = (input: VoiceInput) => Effect.asVoid(Queue.offer(inputs, input));
 
     const naming: CallNaming = { heard: false, asks: 0 };
+    const settled = yield* Deferred.make<void>();
 
     const carried = Stream.runForEachWhile(
       voiceDelegations(Stream.fromQueue(inputs), start),
-      (output) => carriedOut(holder, agent, target, output, naming),
+      (output) =>
+        output.kind === VOICE_OUTPUT.SETTLED
+          ? Effect.as(Deferred.succeed(settled, undefined), true)
+          : carriedOut(holder, agent, target, output, naming),
     );
 
     return {
       observe: (event) => offer({ from: VOICE_INPUT.LIVE, body: event.body }),
+      // The loop's held line recorded, waited on for a bound only, so a loop that stopped never holds the hand-over up.
+      handingOver: offer({ from: VOICE_INPUT.LEASE }).pipe(
+        Effect.andThen(Deferred.await(settled)),
+        Effect.timeoutOption(VOICE_CALL_LEASE.SETTLE_WAIT),
+        Effect.asVoid,
+      ),
       beside: Option.match(told, {
         // A lease that could not keep the told sequence has lost the call already.
         onNone: () => Effect.void,

@@ -14,21 +14,24 @@
  * is one speaker's run of fragments. The caller's ends where a delegation
  * takes the caller's words, or once the caller has been silent for more than
  * `SILENCE_SPLIT_MS`, which a fragment of either speaker's can show
- * (`splitBefore`); the voice speaking never ends it, since the voice's
- * backchannels ("mm.", "yes,") cut one sentence of the caller's into many
- * (Charles, Nov 19). The voice's ends where the caller starts a line, or
- * after that silence of its own. What the voice says while the caller's line
- * is open is held as one line of the voice's, which takes no row until the
- * caller's line ends, so it stands after it, and grows on from there as the
- * voice goes on. A fragment that started before the other speaker's open
- * utterance did is a late one, as the caller's transcript lags the audio,
- * and grows its own speaker's last line instead. A line is recorded as it
- * opens, or as a held one is let go, so the rows stand in the order they
- * open, and again each time a fragment grows it, under the same id, with the
- * span it was said over and the event it took last, which the service writes
- * in place, so the stored lines are all a later holder of the call needs to
- * go on from. A held line is stored nowhere, so a holder taking the call
- * over keeps of it only what the session replays.
+ * (`splitBefore`), or once the voice says something of substance over it
+ * (`ofSubstance`); the voice's backchannels never end it, since they cut one
+ * sentence of the caller's into many (Charles, Nov 19). The voice's ends
+ * where the caller starts a line, or after that silence of its own. What the
+ * voice says while the caller's line is open is held as one line of the
+ * voice's, which takes no row until the caller's line ends, so it stands
+ * after it, and grows on from there as the voice goes on. A fragment that
+ * started before the other speaker's open utterance did is a late one, as
+ * the caller's transcript lags the audio, and grows its own speaker's last
+ * line instead. A line is recorded as it opens, or as a held one is let go,
+ * so the rows stand in the order they open, and again each time a fragment
+ * grows it, under the same id, with the span it was said over and the event
+ * it took last, which the service writes in place, so the stored lines are
+ * all a later holder of the call needs to go on from. A held line is stored
+ * nowhere, so as the lease is about to hand the call over it is recorded,
+ * ending the caller's line as a delegation does, and the voice's words are
+ * recorded as said from then on (`VOICE_INPUT.LEASE`): nothing the next
+ * holder must start from is held.
  *
  * A delegation hands the agent the caller's lines since the one before it,
  * by their ids, so the service starts the turn on the rows already written
@@ -94,10 +97,14 @@ const REPLY_MAX_APPENDS = 4;
 /** The longest silence on the session's timeline inside one speaker's line; a longer one starts a new line, so a long monologue reads as paragraphs. */
 const SILENCE_SPLIT_MS = 3000;
 
-/** Where an input to the loop came from: GPT-Live's session, or the agent's transcript. */
+/** The most words a sentence of the voice's said over the caller holds and still reads as a backchannel ("mm.", "yes, that's right", "sounds good to me"); a longer one is an interjection of substance. */
+const BACKCHANNEL_MAX_WORDS = 4;
+
+/** Where an input to the loop came from: GPT-Live's session, the agent's transcript, or the lease holding the call, about to hand it over. */
 export const VOICE_INPUT = {
   LIVE: "live",
   AGENT: "agent",
+  LEASE: "lease",
 } as const;
 
 /** What the agent's transcript says of its turn, as the caller follows it. */
@@ -123,14 +130,17 @@ export type AgentTurnEvent =
 export type VoiceInput =
   /** One event GPT-Live's session said, whole, its `event_id` among it. */
   | { readonly from: typeof VOICE_INPUT.LIVE; readonly body: WireValue }
-  | { readonly from: typeof VOICE_INPUT.AGENT; readonly event: AgentTurnEvent };
+  | { readonly from: typeof VOICE_INPUT.AGENT; readonly event: AgentTurnEvent }
+  /** The lease is about to hand the call over, so nothing may stay held. */
+  | { readonly from: typeof VOICE_INPUT.LEASE };
 
-/** What the loop asks of its caller: record a line of the call, send a message to the agent, queue one behind its turn, or tell the voice. */
+/** What the loop asks of its caller: record a line of the call, send a message to the agent, queue one behind its turn, or tell the voice; or what it says back: that nothing is held, so the lease may hand the call over. */
 export const VOICE_OUTPUT = {
   RECORD: "record",
   SEND: "send",
   QUEUE: "queue",
   TELL: "tell",
+  SETTLED: "settled",
 } as const;
 
 /** A client event for GPT-Live's data channel, sent as its JSON. */
@@ -162,7 +172,9 @@ export type VoiceOutput =
       /** The caller's lines the message is, by the ids they were recorded under, oldest first. */
       readonly lines: readonly string[];
     }
-  | { readonly kind: typeof VOICE_OUTPUT.TELL; readonly event: LiveAppend };
+  | { readonly kind: typeof VOICE_OUTPUT.TELL; readonly event: LiveAppend }
+  /** Every line held before it is recorded, and none is held after it. */
+  | { readonly kind: typeof VOICE_OUTPUT.SETTLED };
 
 /** A line of the call as the service stored it, for a holder that takes the call over. */
 export interface StoredVoiceLine {
@@ -252,6 +264,8 @@ interface VoiceState {
   readonly voiced: Line | undefined;
   /** What the voice said while the caller's line stands open, recorded only once that line ends; only while the caller's is the open line. */
   readonly held: Line | undefined;
+  /** Whether the voice's words may be held, which they may not once the lease is about to hand the call over. */
+  readonly holding: boolean;
   /** The speaker whose line is open, or null where none is. */
   readonly open: VoiceSpeaker | null;
   /** Whether the agent's turn runs, so a delegation is queued rather than sent. */
@@ -457,11 +471,29 @@ function laterEnd(standing: number | undefined, given: number | undefined): numb
  * caller's open line, of the voice's, starting then: where a silence longer
  * than `SILENCE_SPLIT_MS` came since the line's last fragment ended. This is
  * the one rule that ends a line by time, so a bound on how long a line may
- * grow belongs here too.
+ * grow belongs here too; the one that ends the caller's line by what the
+ * voice says over it is `ofSubstance`.
  */
 function splitBefore(line: Line | undefined, startMs: number | undefined): boolean {
   return (
     line?.endMs !== undefined && startMs !== undefined && startMs - line.endMs > SILENCE_SPLIT_MS
+  );
+}
+
+/**
+ * Whether what the voice said over the caller's open line has something of
+ * substance in it: a sentence, finished or not, of more words than a
+ * backchannel holds. OpenAI's account of GPT-Live: "'mm hmm,' or 'okay'
+ * should not necessarily become its own message. However, a substantive
+ * assistant interjection often should." Note that it reads one sentence
+ * rather than the whole run, because backchannels said one after another
+ * add up to many words and still say nothing.
+ */
+function ofSubstance(held: Line): boolean {
+  return Array.from(SENTENCES.segment(held.text), ({ segment }) => segment).some(
+    (sentence) =>
+      Array.from(WORDS.segment(sentence)).filter((word) => word.isWordLike).length >
+      BACKCHANNEL_MAX_WORDS,
   );
 }
 
@@ -534,7 +566,12 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
     other?.startMs !== undefined && delta.start_ms !== undefined && delta.start_ms < other.startMs;
 
   // Note that the voice speaking over the caller's open line ends it only once the caller has been silent past the split.
-  if (speaker === VOICE_SPEAKER.VOICE && state.open === VOICE_SPEAKER.CALLER && !late) {
+  if (
+    state.holding &&
+    speaker === VOICE_SPEAKER.VOICE &&
+    state.open === VOICE_SPEAKER.CALLER &&
+    !late
+  ) {
     if (splitBefore(other, delta.start_ms)) {
       const [closed, closing] = closedOpen(state);
       const [next, outputs] = heardFragment(closed, delta);
@@ -546,6 +583,9 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
       state.held === undefined
         ? openedLine(state, speaker, delta, endMs)
         : grown(state.held, delta, endMs);
+
+    // Note that an interjection of substance ends the caller's line and stands as its own, the backchannels before it folded in.
+    if (ofSubstance(held)) return closedOpen({ ...state, held });
 
     return [{ ...state, held }, []];
   }
@@ -649,6 +689,13 @@ function followedAgent(state: VoiceState, event: AgentTurnEvent): Step {
   }
 }
 
+/** The lease about to hand the call over: the held line recorded, the caller's open line ended before it, and nothing held from then on. */
+function settled(state: VoiceState): Step {
+  const [closed, closing] = state.held === undefined ? stood(state) : closedOpen(state);
+
+  return [{ ...closed, holding: false }, [...closing, { kind: VOICE_OUTPUT.SETTLED }]];
+}
+
 /** An input read: GPT-Live's event decoded, or nothing for an event the loop passes by. */
 function readInput(input: VoiceInput): ReadInput | undefined {
   if (input.from !== VOICE_INPUT.LIVE) return input;
@@ -663,6 +710,8 @@ function stepped(state: VoiceState, input: ReadInput): Step {
       return heardLive(state, input.event);
     case VOICE_INPUT.AGENT:
       return followedAgent(state, input.event);
+    case VOICE_INPUT.LEASE:
+      return settled(state);
   }
 }
 
@@ -716,6 +765,7 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
     ),
     voiced,
     held: undefined,
+    holding: true,
     open: newest === undefined || newest.delegated ? null : newest.speaker,
     working: start.agentWorking,
     answering: start.answering,

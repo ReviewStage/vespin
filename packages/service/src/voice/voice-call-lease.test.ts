@@ -81,6 +81,7 @@ const hearing = Effect.map(Queue.unbounded<Heard>(), (heard) => {
           Queue.offer(heard, { eventId: event.eventId, epoch: holder.call.leaseEpoch }),
         ),
       beside: Effect.never,
+      handingOver: Effect.void,
     });
 
   return { heard, observe };
@@ -195,6 +196,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
               Effect.asVoid(Queue.offer(told, sent)),
             ),
           beside: Effect.never,
+          handingOver: Effect.void,
         });
 
       const held = yield* Effect.gen(function* () {

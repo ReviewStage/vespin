@@ -287,6 +287,48 @@ it.effect(
     }),
 );
 
+it.effect(
+  "an interjection of substance ends the caller's line and stands as its own, the backchannels before it folded in",
+  () =>
+    Effect.gen(function* () {
+      const outputs = yield* wordsOutOf([
+        said("Mintlify", 0, 600),
+        voiced("mm.", 700, 900),
+        said(" though", 1000, 1400),
+        voiced(" Yeah, Mintlify's building", 1500, 2000),
+        voiced(" the docs preview.", 2000, 2600),
+        said("Okay.", 2700, 3000),
+      ]);
+
+      assert.deepEqual(outputs, [
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify"),
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify though"),
+        record(VOICE_SPEAKER.VOICE, "line_2", "mm. Yeah, Mintlify's building the docs preview."),
+        record(VOICE_SPEAKER.CALLER, "line_3", "Okay."),
+      ]);
+    }),
+);
+
+it.effect("a lease about to hand over records the voice's held line and holds none after it", () =>
+  Effect.gen(function* () {
+    const outputs = yield* wordsOutOf([
+      said("Run the tests", 0, 900),
+      voiced("mm.", 1000, 1200),
+      { from: VOICE_INPUT.LEASE },
+      said(" and the lint.", 1300, 2000),
+      voiced("Sure.", 2100, 2400),
+    ]);
+
+    assert.deepEqual(outputs, [
+      record(VOICE_SPEAKER.CALLER, "line_1", "Run the tests"),
+      record(VOICE_SPEAKER.VOICE, "line_2", "mm."),
+      { kind: VOICE_OUTPUT.SETTLED },
+      record(VOICE_SPEAKER.CALLER, "line_3", "and the lint."),
+      record(VOICE_SPEAKER.VOICE, "line_4", "Sure."),
+    ]);
+  }),
+);
+
 it.effect("a caller's fragment that started before the voice's line grows the caller's line", () =>
   Effect.gen(function* () {
     const outputs = yield* wordsOutOf([

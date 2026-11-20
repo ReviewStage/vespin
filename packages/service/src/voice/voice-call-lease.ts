@@ -342,6 +342,8 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
       const held = Effect.gen(function* () {
         yield* sleepUntil(startedAt + Duration.toMillis(VOICE_CALL_LEASE.HAND_OVER_AFTER));
         const leases = yield* VoiceCallLeases;
+        // Note that what this holder keeps in memory alone is written before the next lease is published, because that lease claims the call from what is stored.
+        yield* observing.handingOver;
 
         const published = yield* Effect.result(
           leases.publish({ callId: call.id, callerId: call.callerId, epoch: call.leaseEpoch }),

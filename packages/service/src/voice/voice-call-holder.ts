@@ -33,6 +33,8 @@ export interface VoiceCallHolder {
 export interface VoiceCallObserving<R> {
   readonly observe: (event: LiveEvent) => Effect.Effect<void, StoreFailure, R>;
   readonly beside: Effect.Effect<void, StoreFailure, R>;
+  /** What the holder keeps in memory alone written down, run just before it publishes the next lease, since the next holder starts from what is stored. */
+  readonly handingOver: Effect.Effect<void, StoreFailure, R>;
 }
 
 /** How a holder sets out to observe the call, once, as it claims it. */
