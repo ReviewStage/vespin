@@ -79,7 +79,7 @@ function wayBack(
 /** The keyboard moving onto `button` and resting there past the hint's wait, on a faked clock. */
 function focusByKeyboard(button: HTMLButtonElement): void {
   document.documentElement.dataset.keyboard = "true";
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   act(() => button.focus());
   act(() => {
     vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);

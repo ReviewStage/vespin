@@ -1076,7 +1076,7 @@ test("words replied to start a comment quoting them in its field, and two held o
   });
   postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, marks: [{ path, box }] });
   // The pointer over the element in the page tells its comments as the pointer over its pin does, each under the words it quotes.
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, over: path });

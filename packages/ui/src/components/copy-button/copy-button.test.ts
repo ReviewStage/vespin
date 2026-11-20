@@ -79,7 +79,7 @@ test("a copy button is named for what it copies, and draws the copy glyph at res
 });
 
 test("a press copies its words, shows the check, and turns back to the copy glyph after the hold", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   const copied: string[] = [];
   draw(
     createElement(CopyButton, {
@@ -103,7 +103,7 @@ test("a press copies its words, shows the check, and turns back to the copy glyp
 });
 
 test("a refused copy shows the alert and says so, then turns back after the hold", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   draw(
     createElement(CopyButton, {
       text: "pnpm test",
@@ -169,7 +169,7 @@ test("the copy act runs within the press, while a browser's clipboard still take
 });
 
 test("a second press starts the hold over from its own answer", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   draw(createElement(CopyButton, { text: "main", what: "branch name", copy: async () => {} }));
   await press();
   act(() => vi.advanceTimersByTime(HOLD_MS - 1));

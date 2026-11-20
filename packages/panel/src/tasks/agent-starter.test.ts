@@ -232,7 +232,7 @@ const PAST_ANY_WAIT = 1_000;
 
 /** The agent's card and the starter's card over it, the pointer resting on the starter's, each shown past its wait. */
 async function stacked() {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance", "Date"] });
   const { card } = await agentNamed(DEAN.userId);
   pass(PAST_ANY_WAIT);
   const control = document.querySelector("[data-agent-ref]") ?? assert.fail("the agent is named");

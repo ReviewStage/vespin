@@ -617,7 +617,7 @@ test("an option with a card hangs it beside the option while the pointer rests o
   });
   const option = container.querySelector('[role="option"]') ?? assert.fail("the option");
 
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     act(() => {

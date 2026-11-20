@@ -266,7 +266,7 @@ test("a list with no older versions has no foot", () => {
 /** Rests the keyboard's focus on `button` past the hint's wait, on a faked clock, and answers what the hint says. */
 function hintOf(button: HTMLButtonElement): string | null | undefined {
   document.documentElement.dataset.keyboard = "true";
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   act(() => button.focus());
   act(() => {
     vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);

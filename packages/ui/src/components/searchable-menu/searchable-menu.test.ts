@@ -607,7 +607,7 @@ test("the pointer crossing a pinned row on its way into the submenu beside anoth
   });
   mount({ placeholder: "Search models", foot: true });
   const effortOpen = () => document.querySelector('[aria-label="Effort"][role="listbox"]') !== null;
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     mouseOver(pinned("Effort"), 300, 116);
@@ -654,7 +654,7 @@ test("a row's own end marks stand at its end, after why it cannot be picked now,
 
 /** The pointer arriving on `target` and resting there past the hint's wait. */
 function restOn(target: Element): void {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     act(() => {

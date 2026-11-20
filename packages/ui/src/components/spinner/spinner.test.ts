@@ -45,7 +45,7 @@ function render(element: ReactElement): HTMLElement {
 }
 
 test("a wait's status line stands from the start, and its ring waits the settle delay by default", () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   const inline = render(createElement(Spinner, { label: "Loading transcript" }));
   const region = render(createElement(SpinnerRegion, { label: "Loading transcript" }));
 
@@ -66,7 +66,7 @@ test("a wait that asks for no delay shows its ring at once", () => {
 });
 
 test("a busy control's words stand until the settle delay passes, then give way to the ring", () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   const busy = render(createElement(BusyLabel, { busy: true, label: "Saving", children: "Save" }));
   assert.equal(ringIn(busy), false);
   act(() => vi.advanceTimersByTime(MOTION_DELAY_MS.SETTLE));

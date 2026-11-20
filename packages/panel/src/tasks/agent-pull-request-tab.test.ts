@@ -3305,7 +3305,7 @@ test("a picker's choice shows its button busy once the change has waited the set
 
   act(() => labels()?.click());
   await settle();
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
 
   try {
     await pickRow("docs");
