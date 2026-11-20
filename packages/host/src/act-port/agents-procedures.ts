@@ -42,6 +42,7 @@ type NotedAgentAct =
   | "AGENTS_RENAME"
   | "AGENTS_SERVERS"
   | "AGENTS_PERMISSION_MODE"
+  | "AGENTS_FACE"
   | "AGENTS_STOP"
   | "AGENTS_REWIND"
   | "AGENTS_CLEAR"
@@ -129,6 +130,9 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
         );
       },
     ),
+    [AGENT_ACT_KIND.AGENTS_FACE]: actPort[AGENT_ACT_KIND.AGENTS_FACE].effect(function* ({ input }) {
+      return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_FACE, acts.AGENTS_FACE, input));
+    }),
     [AGENT_ACT_KIND.AGENTS_STOP]: actPort[AGENT_ACT_KIND.AGENTS_STOP].effect(function* ({ input }) {
       return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_STOP, acts.AGENTS_STOP, input));
     }),

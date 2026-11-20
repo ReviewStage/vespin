@@ -283,6 +283,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_SERVERS: "agents.servers",
   /** One agent's permission mode changed, which reaches it from its next turn (`agent-approval-wire.ts`). */
   AGENTS_PERMISSION_MODE: "agents.permissionMode",
+  /** A Manager's face changed, which every place it is drawn then draws (`manager-face.ts`). */
+  AGENTS_FACE: "agents.face",
   /** One tool call an agent holds answered: allowed, allowed for the agent, or denied with words (`agent-approval-wire.ts`). */
   AGENTS_ANSWER_APPROVAL: "agents.answerApproval",
   AGENTS_QUEUE: "agents.queue",
@@ -1154,6 +1156,7 @@ export const PORT_ACT_USE = {
   AGENTS_RENAME: ACT_USE.WRITE,
   AGENTS_SERVERS: ACT_USE.WRITE,
   AGENTS_PERMISSION_MODE: ACT_USE.WRITE,
+  AGENTS_FACE: ACT_USE.WRITE,
   AGENTS_ANSWER_APPROVAL: ACT_USE.WRITE,
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
