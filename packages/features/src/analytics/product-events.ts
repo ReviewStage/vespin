@@ -469,10 +469,16 @@ export const PRODUCT_FIRST_ROWS = {
 
 export type ProductFirstRows = (typeof PRODUCT_FIRST_ROWS)[keyof typeof PRODUCT_FIRST_ROWS];
 
-/** What an Inbox first shown waited from: the app's launch, or a sign-in's return, which a launch signed out waits through. */
+/**
+ * What an Inbox first shown waited from: the app's launch, a sign-in's
+ * return, which a launch signed out waits through, or the app coming to the
+ * front, for a launch that began in the background, as a push's wake does,
+ * or went there before the Inbox showed.
+ */
 export const PRODUCT_READY_AFTER = {
   LAUNCH: "launch",
   SIGN_IN: "sign_in",
+  FRONT: "front",
 } as const;
 
 export type ProductReadyAfter = (typeof PRODUCT_READY_AFTER)[keyof typeof PRODUCT_READY_AFTER];
