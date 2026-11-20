@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import plist, { type PlistValue } from "@expo/plist";
+import { everyLucideSymbol } from "@repo/brand/every-lucide-symbol";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { PRODUCT_MARK_SYMBOL_TEMPLATE } from "@repo/brand/product-mark-symbol";
@@ -770,14 +771,18 @@ type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
 // appearance beside its light one where it has one, each of `PICTURE_SETS`
-// as an image set of its files at their scales, and each of Lucide's
-// glyphs `@repo/ui-native` draws (`LUCIDE_SYMBOL`) as a symbol set, a custom
-// SF Symbol from the brand's outlined template, so it sizes with Dynamic
-// Type, weighs with its text, and sits on its baseline as SF Symbols do.
+// as an image set of its files at their scales, and every one of Lucide's
+// glyphs as a symbol set, a custom SF Symbol from the brand's outlined
+// template, so it sizes with Dynamic Type, weighs with its text, and sits on
+// its baseline as SF Symbols do. Note that every glyph is written, not only
+// those `@repo/ui-native` names (`LUCIDE_SYMBOL`), because a section may
+// wear any glyph the panel's picker offers (`EVERY_LUCIDE_SYMBOL`); those it
+// doesn't name stand as static templates, one Regular glyph each, and are
+// outlined here rather than committed, since all of them run to megabytes.
 const withImageSets = (config: ExpoConfig): ExpoConfig =>
   withDangerousMod(config, [
     "ios",
-    (modConfig) => {
+    async (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
       const catalog = join(IOSConfig.Paths.getSourceRoot(projectRoot), "Images.xcassets");
 
@@ -883,8 +888,12 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
+      // Note that the glyphs the app names stand as their variable templates, three weights iOS interpolates, and every other Lucide glyph a section may wear as a static one, a third of the size.
+      const named = new Set(LUCIDE_SYMBOL_TEMPLATES.map(({ name }) => name));
+
       for (const { name, svg } of [
         ...LUCIDE_SYMBOL_TEMPLATES,
+        ...(await everyLucideSymbol(named)),
         ...TASK_STATUS_SYMBOL_TEMPLATES,
         ...TASK_PRIORITY_SYMBOL_TEMPLATES,
         PRODUCT_MARK_SYMBOL_TEMPLATE,

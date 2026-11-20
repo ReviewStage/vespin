@@ -695,6 +695,53 @@ function templateOf(outlinesAt) {
   ].join("");
 }
 
+// A static template's one glyph stands in the medium row, at Regular, as
+// Xcode's static templates hold it: the square at the medium scale's one
+// and a half cap heights, centered on its cap line and baseline.
+const MEDIUM_CAPLINE = 276;
+const MEDIUM_BOX_SIZE = CAP_HEIGHT * 1.5;
+const MEDIUM_SCALE = MEDIUM_BOX_SIZE / BOX;
+const MEDIUM_BOX_TOP = MEDIUM_CAPLINE + CAP_HEIGHT / 2 - MEDIUM_BOX_SIZE / 2;
+
+/** An outline's path data placed in the medium row's square, centered on `centerX`. */
+function mediumPathData(commands, centerX) {
+  const left = centerX - MEDIUM_BOX_SIZE / 2;
+
+  const place = ({ x, y }) =>
+    `${coordinate(left + x * MEDIUM_SCALE)},${coordinate(MEDIUM_BOX_TOP + y * MEDIUM_SCALE)}`;
+
+  return commands.map(({ command, points }) => [command, ...points.map(place)].join(" ")).join(" ");
+}
+
+/**
+ * A Lucide icon's node as a static SF Symbols custom symbol template: one
+ * glyph, Regular at the medium scale, from which iOS derives every weight and
+ * scale by scaling it, rather than three weights it interpolates. Note that
+ * it is a third of a variable template's outlines, for the many glyphs only
+ * a section's chosen icon may wear (`every-lucide-symbol.mjs`), where the
+ * app's catalog weighs on the app's size.
+ */
+export function staticSymbolTemplate(node) {
+  const center = WEIGHT_CENTER.REGULAR;
+  const paths = strokesOf(node).map((stroke) => outlineOf(stroke, STROKE.REGULAR / 2));
+
+  const guides = [
+    `<path id="Capline-M" d="M18,${MEDIUM_CAPLINE} l800,0"/>`,
+    `<path id="Baseline-M" d="M18,${MEDIUM_CAPLINE + CAP_HEIGHT} l800,0"/>`,
+    `<path id="left-margin-Regular-M" d="M${coordinate(center - MEDIUM_BOX_SIZE / 2)},256 l0,110"/>`,
+    `<path id="right-margin-Regular-M" d="M${coordinate(center + MEDIUM_BOX_SIZE / 2)},256 l0,110"/>`,
+  ].join("");
+
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<svg width="800" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">`,
+    `<g id="Notes" font-family="sans-serif" font-size="13px"><rect x="0" y="0" width="800" height="600" fill="white"/><text x="18" y="376">Medium</text><text id="template-version" x="785" y="575" text-anchor="end">Template v.3.0</text></g>`,
+    `<g id="Guides" stroke="rgb(39,170,225)" stroke-width="0.5px">${guides}</g>`,
+    `<g id="Symbols"><g id="Regular-M">${paths.map((commands) => `<path d="${mediumPathData(commands, center)}"/>`).join("")}</g></g>`,
+    `</svg>`,
+  ].join("");
+}
+
 /**
  * A Lucide icon's node (`lucide-react`'s `__iconData.node`) as an SF Symbols
  * custom symbol template, version 3.0, whose three weights iOS interpolates.
