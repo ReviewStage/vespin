@@ -17,7 +17,8 @@
  * (`organization-store.ts`), since the plugin's member writes take only a
  * session and these rules already make the whole decision. A member
  * removed, or one who leaves, stays assigned to the workspace's tasks they
- * were on, read as a former member (`workspace-members.ts`).
+ * were on, read as a former member (`workspace-members.ts`), and their
+ * automations there are turned off.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -28,7 +29,9 @@ import {
 } from "@repo/database/models/organization-store";
 import { workspaceOf } from "@repo/database/models/workspace-store";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
+import { failureKind } from "@repo/runtime/effect";
 import { Effect, Option } from "effect";
+import { leaverAutomationsPaused } from "../automations/automation-cadence.js";
 import {
   recordServerEvent,
   SERVER_EVENT,
@@ -82,6 +85,21 @@ const membersNow = (
   DatabaseServices
 > => Effect.map(hostedStoreOrUnavailable(listMembers(workspaceId)), (members) => ({ members }));
 
+/**
+ * What a member leaves behind settled once they are out of the workspace:
+ * their automations turned off, since each runs as its creator. Note that a
+ * failure is logged rather than failing the removal already made, because
+ * an automation's next firing turns it off as well (`automation-runs.ts`).
+ */
+const leaverSettled = (workspaceId: string, leaverId: string) =>
+  leaverAutomationsPaused(workspaceId, leaverId).pipe(
+    Effect.catch((failure) =>
+      Effect.logWarning(
+        `a removed member's automations were not turned off: ${failureKind(failure)}`,
+      ),
+    ),
+  );
+
 /** A change to a workspace's members, or to the workspace, counted under the member who made it. */
 export function memberChanged(
   userId: string,
@@ -109,6 +127,7 @@ export const workspaceMemberRemove = Effect.fn("web/workspaceMemberRemove")(func
 
   if (!removable.has(role)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* hostedStoreOrUnavailable(removeWorkspaceMember(workspace.id, removed));
+  yield* leaverSettled(workspace.id, removed);
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.REMOVE);
 
   return yield* membersNow(workspace.id);
@@ -168,6 +187,7 @@ export const workspaceLeave = Effect.fn("web/workspaceLeave")(function* (
   }
 
   yield* hostedStoreOrUnavailable(removeWorkspaceMember(workspace.id, userId));
+  yield* leaverSettled(workspace.id, userId);
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.LEAVE);
 
   return { workspaceId: workspace.id };

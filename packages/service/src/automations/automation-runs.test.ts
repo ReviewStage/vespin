@@ -1037,7 +1037,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
   );
 
   it.effect(
-    "a run of an automation whose creator left its workspace fails as creator-left and starts nothing, and the automation stays on",
+    "a run of an automation whose creator left its workspace fails as creator-left and starts nothing, and the automation is turned off",
     () =>
       Effect.gen(function* () {
         const { owner, automation, workspaceId } = yield* openAutomation();
@@ -1062,7 +1062,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
             .where(eq(automationTable.id, automation.id)),
         );
 
-        assert.equal(row?.enabled, true);
+        assert.equal(row?.enabled, false);
       }),
   );
 
