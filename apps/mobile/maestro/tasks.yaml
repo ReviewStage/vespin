@@ -40,18 +40,19 @@ env:
     text: "Launch"
     childOf: "Launch, [0-9]+"
 - assertVisible: "Launch checklist"
-# A long press offers Mark done in the row's menu, and a swipe from the
-# trailing edge reveals it too; either way the row leaves the list once it
-# is pressed.
+# A long press offers Done under the row menu's Status, as the panel's row
+# menu does, and a swipe from the trailing edge reveals Mark done; either way
+# the row leaves the list once it is pressed.
 # Note that a row may stand below the fold of a short window, the folded
 # iPhone Duo's, so the list is scrolled to it.
 - runFlow:
     file: subflows/row-menu.yaml
     env:
       ROW: Launch checklist
-      ITEM: Mark done
+      ITEM: Status
 - takeScreenshot: tasks-menu
-- tapOn: "Mark done"
+- tapOn: "Status"
+- tapOn: "Done"
 - assertNotVisible: "Launch checklist"
 # Note that a swipe on a split view's sidebar reads as a tap under Maestro's
 # driver, so a regular window, which stands "Choose an item" beside its list,
@@ -76,8 +77,9 @@ env:
           file: subflows/row-menu.yaml
           env:
             ROW: Usage alerts
-            ITEM: Mark done
-      - tapOn: "Mark done"
+            ITEM: Status
+      - tapOn: "Status"
+      - tapOn: "Done"
 - assertNotVisible: "Usage alerts"
 - takeScreenshot: tasks-marked-done
 # A long press on a task lifts its preview, its Overview at a glance: its

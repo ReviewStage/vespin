@@ -74,16 +74,17 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     notVisible: "The task could not be unpinned\\..*"
     timeout: 3000
-# Mark done from the same menu asks first in the system's alert, since the
-# task's agent is at work and only the person can decide to stop it; once
-# confirmed, it is refused too: the task stays in the list and the notice
-# says it could not be marked done.
+# Done from the same menu's Status, as the panel's row menu offers it, asks
+# first in the system's alert, since the task's agent is at work and only the
+# person can decide to stop it; once confirmed, it is refused too: the task
+# stays in the list and the notice says it could not be marked done.
 - runFlow:
     file: subflows/row-menu.yaml
     env:
       ROW: Weekly digest email
-      ITEM: Mark done
-- tapOn: "Mark done"
+      ITEM: Status
+- tapOn: "Status"
+- tapOn: "Done"
 - tapOn: "Stop agent"
 - extendedWaitUntil:
     visible: "The task could not be marked done\\..*"
