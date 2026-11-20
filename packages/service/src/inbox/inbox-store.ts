@@ -400,19 +400,25 @@ function liveReminderFor(readerId: string): LiveReminderForResult {
   return { remindAt: remindAtFor(readerId), snoozedUntil: remindAtFor(readerId) };
 }
 
+/** The member the item's agent addressed it to, while a member of its workspace; qualified as `WAITS_ON` is. */
+const ADDRESSEE = sql<
+  string | null
+>`(select ${qualified(member, member.userId)} from ${member} where ${qualified(member, member.organizationId)} = ${qualified(inboxItem, inboxItem.organizationId)} and ${qualified(member, member.userId)} = ${qualified(inboxItem, inboxItem.addresseeId)})`;
+
 /**
- * The member an item waits on: the member its agent addressed it to, or,
- * where it names none, its task's assignee while a member of its workspace,
+ * The member an item waits on: the member its agent addressed it to while
+ * a member of its workspace, or, where it names none or they left, its
+ * task's assignee while a member of its workspace,
  * or the member who started its agent where the task has nobody assigned
  * or is assigned to a member who left, or the item stands on no task. A
  * scalar read rather than a join, because `returning` projects it too and
  * joins nothing, and every name is qualified, because it is nested in reads
  * that join the task themselves.
  */
-const WAITS_ON = sql<string>`coalesce(${qualified(inboxItem, inboxItem.addresseeId)}, (select ${qualified(task, task.assigneeId)} from ${task} inner join ${member} on ${qualified(member, member.organizationId)} = ${qualified(task, task.organizationId)} and ${qualified(member, member.userId)} = ${qualified(task, task.assigneeId)} where ${qualified(task, task.id)} = ${qualified(inboxItem, inboxItem.taskId)}), ${qualified(inboxItem, inboxItem.userId)})`;
+const WAITS_ON = sql<string>`coalesce(${ADDRESSEE}, (select ${qualified(task, task.assigneeId)} from ${task} inner join ${member} on ${qualified(member, member.organizationId)} = ${qualified(task, task.organizationId)} and ${qualified(member, member.userId)} = ${qualified(task, task.assigneeId)} where ${qualified(task, task.id)} = ${qualified(inboxItem, inboxItem.taskId)}), ${qualified(inboxItem, inboxItem.userId)})`;
 
-/** Whether the item's agent addressed it to a member, who `WAITS_ON` then names; qualified as `WAITS_ON` is. */
-const ADDRESSED = sql<boolean>`(${qualified(inboxItem, inboxItem.addresseeId)} is not null)`;
+/** Whether the item's agent addressed it to a member still in its workspace, who `WAITS_ON` then names; qualified as `WAITS_ON` is. */
+const ADDRESSED = sql<boolean>`(${ADDRESSEE} is not null)`;
 
 /** The name of the member an item waits on (`WAITS_ON`), as their account holds it; none once the account is gone. */
 const WAITS_ON_NAME = sql<
@@ -1291,10 +1297,22 @@ function toDoCount(userId: string): SQL<number> {
  * reader's own index (`inbox_item_user_status_updated`) and the assignee's
  * by the task's, where a `coalesce` would read every settled item of their
  * workspaces on each look; an item addressed to someone waits on them
- * alone, and one whose task's assignee left on its starter, as `WAITS_ON` reads
- * it.
+ * alone while they are a member, and one whose task's assignee left on its
+ * starter, as `WAITS_ON` reads it.
  */
 function accountUnreadSettled(userId: string) {
+  const addresseeLeft = notExists(
+    queryBuilder
+      .select({ one: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, inboxItem.organizationId),
+          eq(member.userId, inboxItem.addresseeId),
+        ),
+      ),
+  );
+
   const assigneeLeft = notExists(
     queryBuilder
       .select({ one: member.id })
@@ -1311,7 +1329,10 @@ function accountUnreadSettled(userId: string) {
 
   return and(
     itemVisibleTo(userId),
-    or(eq(inboxItem.addresseeId, userId), and(isNull(inboxItem.addresseeId), derived)),
+    or(
+      eq(inboxItem.addresseeId, userId),
+      and(or(isNull(inboxItem.addresseeId), addresseeLeft), derived),
+    ),
     ne(inboxItem.status, INBOX_STATUS.OPEN),
     unreadFor(userId),
   );
