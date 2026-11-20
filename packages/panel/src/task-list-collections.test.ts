@@ -149,7 +149,7 @@ async function readingById(
       }),
     ),
   );
-  // Note that the lookup follows the ids it was asked once committed, which the live query then answers.
+  // Note that the lookup follows the ids it was asked once committed.
   await act(async () => {
     for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
   });

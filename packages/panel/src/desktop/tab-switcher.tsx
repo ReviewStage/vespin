@@ -50,7 +50,7 @@ import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey } from "@repo/settings/shortcuts";
 import { createWait, DIALOG_SIZE, Dialog, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
 import { HistoryIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -68,6 +68,7 @@ import {
   VERSION_HISTORY_WORDS,
 } from "../history-titles.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { TaskStep } from "../places/task-step.js";
 import type { RecentStep, RecentSteps } from "../places/window-history.js";
@@ -359,7 +360,7 @@ export function TabSwitcher({
 
   const answers = available && desktop;
   // Note that a still is the window's own action, sent on its mutation; nothing the service holds.
-  const { mutateAsync: sendCapture } = useMutation(actMutation(ACT_KIND.WINDOW_CAPTURE));
+  const { mutateAsync: sendCapture } = useMutationCalls(actMutation(ACT_KIND.WINDOW_CAPTURE));
   const [state, setState] = useState<SwitcherState<RecentStep>>(SWITCHER_LET_GO);
   // Counts the stills kept, so one landing while the cards show is drawn at once.
   const [, setStillsKept] = useState(0);

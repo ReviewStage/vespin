@@ -60,7 +60,6 @@ import {
   mutationOptions,
   type QueryClient,
   QueryObserver,
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -78,6 +77,7 @@ import { useChosenWorkspace } from "../desktop/chosen-workspace.js";
 import { type InboxAt, listedInboxChoice, useInboxRoute } from "../inbox-route.js";
 import { heldTaskQuery, historyQuery, historyRetryMutation, pagesQuery } from "../live-reads.js";
 import { useMergeQueueRoute } from "../merge-queue-route.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import {
   beginPanelSpan,
   PANEL_SPAN,
@@ -759,12 +759,12 @@ export function useTasksTab(input: {
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation, and
   // none invalidates a query, since what each changes comes back through app state.
   const queryClient = useQueryClient();
-  const { mutateAsync: sendSelect } = useMutation(actMutation(ACT_KIND.TASKS_SELECT));
-  const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.TASKS_CLOSE));
-  const { mutateAsync: sendRestore } = useMutation(actMutation(ACT_KIND.TASKS_RESTORE));
+  const { mutateAsync: sendSelect } = useMutationCalls(actMutation(ACT_KIND.TASKS_SELECT));
+  const { mutateAsync: sendClose } = useMutationCalls(actMutation(ACT_KIND.TASKS_CLOSE));
+  const { mutateAsync: sendRestore } = useMutationCalls(actMutation(ACT_KIND.TASKS_RESTORE));
   // Note that which agent is shown is told, quiet whatever comes back, since no person pressed for it.
-  const { mutate: tellShown } = useMutation(actMutation(ACT_KIND.AGENTS_SHOWN));
-  const { mutate: refreshTasks } = useMutation(pressMutation(ACT_KIND.TASKS_REFRESH));
+  const { mutate: tellShown } = useMutationCalls(actMutation(ACT_KIND.AGENTS_SHOWN));
+  const { mutate: refreshTasks } = useMutationCalls(pressMutation(ACT_KIND.TASKS_REFRESH));
   const copyWithToast = useCopyToast();
   const toast = useToast();
   const [chosen, setChosen] = useState<PinChoice | undefined>(undefined);
@@ -2082,7 +2082,7 @@ export function useTasksTab(input: {
 
   // Note that the move's options stand across draws, calling the newest move, so a draw that moved nothing hands the same ones.
   const moveTaskOptions = useMemo(() => taskMoveMutation(runTaskMove), [runTaskMove]);
-  const { mutateAsync: sendTaskMove } = useMutation(moveTaskOptions);
+  const { mutateAsync: sendTaskMove } = useMutationCalls(moveTaskOptions);
 
   const moveTask = (
     taskId: string,
@@ -2107,7 +2107,7 @@ export function useTasksTab(input: {
     enabled: shown && historyOpen && historyTaskId !== undefined,
   });
 
-  const { mutate: retryHistory } = useMutation(historyRetryMutation());
+  const { mutate: retryHistory } = useMutationCalls(historyRetryMutation());
 
   const onRetryHistory = useCallback(() => {
     if (historyTaskId !== undefined) retryHistory({ taskId: historyTaskId });
