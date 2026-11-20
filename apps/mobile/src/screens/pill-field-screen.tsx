@@ -89,6 +89,8 @@ export function PillFieldScreen() {
     <ScrollView
       style={{ backgroundColor: colors.GROUND }}
       contentContainerStyle={styles.page}
+      // Note that the page starts under the stack's bar, as UIKit insets a scroller under a translucent bar, since React Native's scroller insets nothing by default and the field stood under the bar.
+      contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
     >
       <View style={[styles.field, { borderColor: colors.CHIP_EDGE }]}>
