@@ -1,0 +1,40 @@
+# pill-field.yaml -- the pill field on its scratch page: laid in with a mention of every kind and a picture's and a file's marker as pills, then cleared, typed into, an `@` word picked into a pill, a picture attached at the caret, and the Markdown it writes shown under it.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as every flow is, so no server is
+# reached, with `-pillField true`, which opens the scratch page
+# (`src/screens/pill-field-screen.tsx`). Note that the value is quoted, as
+# every launch argument's is, because Maestro hands a YAML boolean to the app
+# without its dash, which iOS then never reads.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      pillField: "true"
+- extendedWaitUntil:
+    visible: "Mention Ada"
+    timeout: 30000
+- assertVisible:
+    id: "pill-field"
+- takeScreenshot: pill-field-laid-in
+# Cleared, the field stands one line with its placeholder, and takes words
+# typed into it.
+- tapOn: "Clear"
+- assertVisible: "Message"
+- tapOn:
+    id: "pill-field"
+- inputText: "Ping @Ad"
+# The field tells the `@` word the caret stands in, which the page's Mention
+# names; a press puts the pill in its place, written as the panel writes it.
+- assertVisible: "Mention Ada for @Ad"
+- tapOn: "Mention Ada for @Ad"
+- assertVisible: ".*\\[@Ada Lovelace\\]\\(https://vespin.dev/stage/person/u-ada\\).*"
+- inputText: "with "
+- tapOn: "Attach a picture"
+- assertVisible: ".*\\[Picture 2\\].*"
+- takeScreenshot: pill-field-picked
+- runFlow: subflows/lower-keyboard.yaml
+- takeScreenshot: pill-field-written

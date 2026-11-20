@@ -280,6 +280,8 @@ function GuardedScreens() {
             name={SHEET_ROUTE.VARIABLE_VALUE}
             options={{ ...shortSheet, title: "Add variable" }}
           />
+          {/* Note that the pill field's scratch page is reached only by a launch that asks for it (`-pillField true`), which a flow shoots the field on. */}
+          <Stack.Screen name="pill-field" options={{ headerShown: true, title: "Pill field" }} />
         </Stack.Protected>
         {/* Note that setup stands with no push, in the tabs' place, as the tabs do, since nothing slides it in. */}
         <Stack.Protected guard={app && gate !== SETUP_GATE.NONE}>

@@ -1,4 +1,4 @@
-// index.tsx -- the app's root URL, which opens on the Inbox tab, or Tasks while the Inbox is off, or on the agent a launch names (`-agent <id>`), or on its pull request (`-pullRequest <number>`).
+// index.tsx -- the app's root URL, which opens on the Inbox tab, or Tasks while the Inbox is off, or on the agent a launch names (`-agent <id>`), or on its pull request (`-pullRequest <number>`), or on the pill field's scratch page (`-pillField true`).
 
 import {
   iosAgentRoute,
@@ -8,8 +8,11 @@ import {
 } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { Redirect } from "expo-router";
-import { launchAgent, launchPullRequest } from "../host/launch-arguments.js";
+import { launchAgent, launchPillField, launchPullRequest } from "../host/launch-arguments.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
+
+/** The pill field's scratch page, which a flow shoots the field on. */
+const PILL_FIELD_ROUTE = "/pill-field";
 
 /**
  * Where the launch opens: the agent it names, or that agent's pull request
@@ -18,6 +21,7 @@ import { useInboxShown } from "../inbox/inbox-shown.js";
  * the Tasks list.
  */
 function launchHref(inboxShown: boolean): string {
+  if (launchPillField()) return PILL_FIELD_ROUTE;
   const agent = launchAgent();
 
   if (agent === undefined) {

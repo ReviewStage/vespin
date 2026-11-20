@@ -88,6 +88,14 @@ builds a control of its own.
   Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
   taking the keyboard through `focusAsk`), and an `AskNote`.
+- **`PillField`** is the one field whose words hold pills: each mention and
+  each marker of a held file drawn as the chip it becomes once sent
+  (`pill-look.ts`), selected and deleted as one, copied as its Markdown,
+  in the app's native pill field (`pill-field-native.ts`, UIKit's text view
+  on TextKit 2), its value the wire's Markdown read through
+  `@repo/features/pill-words`. It grows from one line to `maxLines` and then
+  scrolls, tells the `@` word the caret stands in (`onAtWord`), and puts a
+  picked pill in that word's place (`pick`).
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
