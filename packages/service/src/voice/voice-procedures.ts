@@ -7,8 +7,12 @@
  * (`agents/agent-reach.ts`'s `controlsAgent` and `admitsPlanWriter`), and the agent must still
  * have a harness to answer it. The session is created on GPT-Live with the
  * caller's own OpenAI API key, as dictation's clip is
- * (`accounts/openai-key-middleware.ts`), never ours, and with the agent's
- * recent context in its instructions (`voice-instructions.ts`). The call
+ * (`accounts/openai-key-middleware.ts`), never ours, with the voice's policy
+ * and the agent's and its task's names in its instructions, and the agent's
+ * recent messages as its startup history (`voice-instructions.ts`). The
+ * newest rows read are as many as that history may hold messages, since a
+ * row is one message at most; rows it leaves out, the voice's own and those
+ * with no words, leave it shorter rather than being read past. The call
  * then gets its one row (`@repo/database/models/voice-calls`) at lease epoch
  * 1, and its first lease is published, whose holder attaches to the session
  * and holds the call from there to its close (`voice-call-lease.ts`); the
@@ -16,7 +20,7 @@
  * the session's id leaves the service. A lease the queue did not take
  * leaves the call unheld, so its row is deleted and the call refused as
  * unavailable before the panel ever joins the session. Nothing of the
- * offer, the instructions, or the answer is stored, logged, or traced.
+ * offer, the instructions, the history, or the answer is stored, logged, or traced.
  *
  * The call ends when its session closes, which the panel asks of GPT-Live
  * itself; its seconds are kept by the lease that hears the close.
@@ -37,10 +41,10 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
-import { createLiveSession } from "./live-session.js";
+import { createLiveSession, LIVE_INPUT } from "./live-session.js";
 import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
 import { VoiceCallLeases } from "./voice-call-lease.js";
-import { VOICE_CONTEXT, voiceInstructions } from "./voice-instructions.js";
+import { voiceHistory, voiceInstructions } from "./voice-instructions.js";
 
 const MS_PER_SECOND = 1_000;
 
@@ -80,7 +84,12 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
 
       // Note that the conversation is read under the member who started the agent, as its transcript is.
       const recent = yield* hostedStoreOrUnavailable(
-        listRecentMessages(agent.userId, agent.conversationId, CODER_TOOL_SET, VOICE_CONTEXT.READ),
+        listRecentMessages(
+          agent.userId,
+          agent.conversationId,
+          CODER_TOOL_SET,
+          LIVE_INPUT.MAX_MESSAGES,
+        ),
       );
 
       // Note that an agent on no task, a Manager among them, is called with no task name.
@@ -92,14 +101,16 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
       const instructions = voiceInstructions({
         agent,
         taskName: Option.match(task, { onNone: () => "", onSome: (header) => header.name }),
-        messages: recent.ok ? recent.value.map((record) => record.message) : [],
       });
+
+      const history = voiceHistory(recent.ok ? recent.value.map((record) => record.message) : []);
 
       const created = yield* createLiveSession({
         key: context.openAiKey,
         offer: input.sdp,
         voice: input.voice,
         instructions,
+        history,
       }).pipe(
         Effect.tapError((failed) =>
           Effect.logWarning(`The voice session failed with status ${failed.status ?? "none"}`),
