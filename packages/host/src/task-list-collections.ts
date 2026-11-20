@@ -140,7 +140,7 @@ export interface TaskListCollections {
    * held neither its plans nor its agents.
    */
   readonly stored: () => StoredTaskList | undefined;
-  /** Ends once the rows the local database kept are drawn, which they are just after the list stands; at once where it kept none. */
+  /** Ends once the tasks the local database kept are drawn, their agents still filling behind, which they are just after the list stands; at once where it kept none. */
   readonly keptDrawn: Effect.Effect<void>;
   /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
   readonly holds: (id: string) => boolean;
@@ -474,12 +474,14 @@ export function taskListCollections(
             plans.rows().map((row) => row.id),
             plansDrawn,
           );
+          // Note that the tasks are drawn and said before their agents, because a task's row and the Inbox's threads under it need the task alone, and an account's agents are most of the work: their marks fill in behind.
+          yield* ticks.drawn;
+          yield* Deferred.succeed(keptDrawn, undefined);
           yield* inChunks(
             agents.rows().map((row) => row.id),
             agentsDrawn,
           );
           yield* ticks.drawn;
-          yield* Deferred.succeed(keptDrawn, undefined);
         }),
       );
     }

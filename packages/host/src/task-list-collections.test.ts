@@ -75,7 +75,7 @@ function countedPool(pool: EntityPool) {
 const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
 it.effect(
-  "a list the phone kept for an account of thousands stands before its rows are drawn, and draws every one of them just after",
+  "a list the phone kept for an account of thousands stands before its rows are drawn, then draws every task, then every agent behind them",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -130,6 +130,11 @@ it.effect(
           until: () => drawings.at(-1)?.taskAgents.length === agents.length,
           times: 10_000,
         });
+
+        // The tasks are drawn first, whole, for a task's row and the Inbox's threads under it, and their agents fill in behind.
+        const first = drawings[0];
+        assert.equal(first?.list.tasks.length, plans.length);
+        assert.ok((first?.taskAgents.length ?? 0) < agents.length);
 
         const drawn = drawings.at(-1);
         assert.equal(drawn?.list.tasks.length, plans.length);
