@@ -34,8 +34,6 @@ export const VOICE_CALL_LEASE = {
   HAND_OVER_AFTER: Duration.subtract(FUNCTION_LIMIT, HAND_OVER_AHEAD),
   /** How long a lease is held before it lets go, its successor attached. */
   LET_GO_AFTER: Duration.subtract(FUNCTION_LIMIT, LET_GO_AHEAD),
-  /** How long a holder waits on what it keeps in memory alone to be written before it publishes the next lease: a write answers in milliseconds, and a holder that could not write hands over all the same. */
-  SETTLE_WAIT: Duration.seconds(5),
   /** How long a publish is waited on before it counts as failed, so a stalled call to the queue never outlasts the time left to hand over; a send answers in milliseconds. */
   PUBLISH_WAIT: Duration.seconds(5),
   /** How long a lease that could not hand over waits for the session it closed to say so, before it lets go of the call with no seconds kept. */
