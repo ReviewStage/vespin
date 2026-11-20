@@ -13,10 +13,12 @@ import {
 import {
   accessibilityHidden,
   accessibilityLabel,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
   gaugeStyle,
+  lineLimit,
   monospacedDigit,
   offset,
   opacity,
@@ -611,7 +613,8 @@ export function subTasksHeard(done: number, total: number): string {
  * How many of a task's sub-tasks are finished, of all of them, as the
  * panel's rows say it (`ProgressCount`): a small ring filled to that share
  * in the working blue from twelve o'clock, then "2/5" in the muted ink and
- * tabular figures. The ring is SwiftUI's own circular capacity gauge, scaled
+ * tabular figures, whole on one line, so a narrow row cuts its name rather
+ * than wrapping the count. The ring is SwiftUI's own circular capacity gauge, scaled
  * to a mark's size, since a shape here takes no trim. Hidden from VoiceOver,
  * since its row says the count in words (`subTasksHeard`).
  */
@@ -641,6 +644,8 @@ export function SubTaskProgress({
           font({ textStyle: TYPE_ROLE.TIME }),
           monospacedDigit(),
           foregroundStyle(colors.TEXT_MUTED),
+          lineLimit(1),
+          fixedSize(),
         ]}
       >
         {`${done}/${total}`}
