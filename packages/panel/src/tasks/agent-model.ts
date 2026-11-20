@@ -68,6 +68,7 @@ import {
 import {
   type CatalogModel,
   type ContextWindows,
+  type MacOffer,
   MODEL_PROVIDER,
   MODEL_SPEED,
   type ModelChoice,
@@ -830,12 +831,37 @@ export function modelConnectWords(model: CatalogModel): string | undefined {
 }
 
 /**
+ * The catalog as a Start on `device` meets it: a model no credential of the
+ * account's pays for (`credentialMissing`) runs there all the same where the
+ * Mac lists its provider (`MacOffer.providers`, the service's
+ * `macRunsProvider`), since a local agent runs on the Mac's own sign-in to
+ * its harness (`AGENT_PAYER.MAC_SIGN_IN`) and needs none; in the cloud, and
+ * for a provider the Mac runs no harness of, the catalog as read, the same
+ * array where nothing changes. Every surface that offers a Start reads its
+ * catalog through this, so its menu, its banner, and its hold agree.
+ */
+export function modelsRunOn(
+  models: readonly CatalogModel[] | undefined,
+  device: Pick<MacOffer, "providers"> | undefined,
+): readonly CatalogModel[] | undefined {
+  if (models === undefined || device === undefined) return models;
+
+  const runsThere = (model: CatalogModel) =>
+    model.credentialMissing === true && device.providers.includes(model.provider);
+
+  if (!models.some(runsThere)) return models;
+
+  return models.map((model) => (runsThere(model) ? { ...model, credentialMissing: false } : model));
+}
+
+/**
  * Why a choice cannot run, and the press that connects what would run it:
  * the note a model menu and Settings' Model row stand under the choice
  * where no plan or API key of the account's pays for its model, as
  * an account finds the Claude default it stored once its Claude credential
- * is gone; none for a choice something pays for, or one the catalog no
- * longer lists.
+ * is gone; none for a choice something pays for, a Mac's own sign-in among
+ * them where the caller read the catalog for that Mac (`modelsRunOn`), or
+ * one the catalog no longer lists.
  */
 export function unrunnableChoice(
   models: readonly CatalogModel[],

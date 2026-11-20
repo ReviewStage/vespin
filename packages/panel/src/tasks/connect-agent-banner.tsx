@@ -19,7 +19,8 @@ import { useRepositoryRemedy } from "./repository-remedy.js";
 /**
  * connect-agent-banner.tsx -- the line over a composer whose agent nothing of the account's pays for: what to connect, and the presses that connect it.
  *
- * A box whose chosen model no plan or API key of the account's pays for
+ * A box whose chosen model no plan or API key of the account's pays for,
+ * in the cloud or on a Mac that runs no harness of it (`modelsRunOn`),
  * holds Start (`unrunnableChoice`), and this line says so above it, before
  * anything is typed, rather than a line under the box once Start is
  * pressed, in the banner's inset look and its neutral tone, so it reads as
