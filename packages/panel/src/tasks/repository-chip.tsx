@@ -643,7 +643,7 @@ export function RepositoryChip(props: RepositoryMenuProps & ChipStanding): React
  * counted after it, and its hint names every pick in order.
  */
 export function RepositoriesChip(
-  props: Omit<ChipStanding, "held"> & {
+  props: ChipStanding & {
     /** The repositories picked, `owner/name`, in the order picked. */
     values: readonly string[];
     chooser: RepositoryChooser;
