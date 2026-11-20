@@ -19,10 +19,12 @@ import {
   type Agent,
   type AgentStoreEffect,
   hasRepository,
+  readAgent,
   readAgentOfConversation,
 } from "@repo/database/models/agent-store";
 import { AGENT_KIND, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { Effect, Option } from "effect";
+import { logStoreFailure } from "../../http/store-failure.js";
 import { CODER_REFUSAL } from "../coder-host/bounds.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
@@ -54,13 +56,21 @@ export const TOOL_GATE = {
   INBOX: "inbox",
   /** The agent is a Manager, whose page is a chat with the people who can open it. */
   MANAGER: "manager",
+  /** No Manager started the agent: one a Manager started reaches people through that Manager alone, so it posts no threads of its own. */
+  UNMANAGED: "unmanaged",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
 
-/** One gate: whether it opens to an agent, given its experiments (`ExperimentsOn`), and the words a call it shuts is refused with. */
+/** What a gate reads beside the agent's row: its experiments, and whether a Manager started it, read once with them. */
+interface GateFacts {
+  readonly experiments: ExperimentsOn;
+  readonly startedByManager: boolean;
+}
+
+/** One gate: whether it opens to an agent, given what it reads beside the row (`GateFacts`), and the words a call it shuts is refused with. */
 interface Gate {
-  readonly opens: (agent: Agent, experiments: ExperimentsOn) => boolean;
+  readonly opens: (agent: Agent, facts: GateFacts) => boolean;
   readonly refusal: string;
 }
 
@@ -88,35 +98,55 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
       "Not run: you run on the developer's own machine, where this tool is not offered; do it from your shell instead.",
   },
   [TOOL_GATE.MEMORY]: {
-    opens: (_agent, experiments) => experiments.memoryOn,
+    opens: (_agent, { experiments }) => experiments.memoryOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.DESCRIPTIONS]: {
-    opens: (_agent, experiments) => experiments.descriptionsOn,
+    opens: (_agent, { experiments }) => experiments.descriptionsOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.REPLY_BUTTONS]: {
-    opens: (_agent, experiments) => experiments.replyButtonsOn,
+    opens: (_agent, { experiments }) => experiments.replyButtonsOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   // Note that a Manager ends no turn with a summary, since its page draws none: its chat holds its `send_to_user` messages alone.
   [TOOL_GATE.TURN_END]: {
-    opens: (agent, experiments) => experiments.turnEndOn && agent.kind !== AGENT_KIND.MANAGER,
+    opens: (agent, { experiments }) => experiments.turnEndOn && agent.kind !== AGENT_KIND.MANAGER,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.COMPUTER_USE]: {
-    opens: (_agent, experiments) => experiments.computerUseOn,
+    opens: (_agent, { experiments }) => experiments.computerUseOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.INBOX]: {
-    opens: (_agent, experiments) => experiments.inboxOn,
+    opens: (_agent, { experiments }) => experiments.inboxOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
   [TOOL_GATE.MANAGER]: {
     opens: (agent) => agent.kind === AGENT_KIND.MANAGER,
     refusal: "Not run: only a Manager has a chat to send to; reach people with your threads.",
   },
+  [TOOL_GATE.UNMANAGED]: {
+    opens: (_agent, { startedByManager }) => !startedByManager,
+    refusal:
+      "Not run: a Manager started you, and you post no threads; send questions and reports to it with message_agent.",
+  },
 };
+
+/**
+ * Whether the agent's own starter, where an agent started it, is a Manager.
+ * Note that only the direct starter counts, and that a starter which cannot
+ * be read is taken as none, logged for the operator.
+ */
+function startedByManager(agent: Agent): Effect.Effect<boolean, never, DatabaseServices> {
+  if (agent.startedByAgentId === null) return Effect.succeed(false);
+
+  return readAgent(agent.userId, agent.startedByAgentId).pipe(
+    Effect.map(Option.exists((starter) => starter.kind === AGENT_KIND.MANAGER)),
+    Effect.tapError(logStoreFailure),
+    Effect.orElseSucceed(() => false),
+  );
+}
 
 /** Where an agent stands against the gates: its row, where it still stands, the gates open to it, and its experiments, which word the tools it is listed. */
 export interface AgentStanding {
@@ -133,13 +163,18 @@ export function standingOfAgent(
     return Effect.succeed({ agent, open: new Set(), experiments: NO_EXPERIMENT_ON });
   }
 
-  return Effect.map(experimentsOnIn(agent.value), (experiments) => ({
-    agent,
-    open: new Set(
-      Object.values(TOOL_GATE).filter((gate) => GATES[gate].opens(agent.value, experiments)),
-    ),
-    experiments,
-  }));
+  return Effect.map(
+    Effect.all([experimentsOnIn(agent.value), startedByManager(agent.value)]),
+    ([experiments, managed]) => ({
+      agent,
+      open: new Set(
+        Object.values(TOOL_GATE).filter((gate) =>
+          GATES[gate].opens(agent.value, { experiments, startedByManager: managed }),
+        ),
+      ),
+      experiments,
+    }),
+  );
 }
 
 /** The standing of the agent whose conversation the call was admitted to. */
