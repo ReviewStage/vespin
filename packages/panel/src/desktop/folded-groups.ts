@@ -12,7 +12,7 @@ import { useCallback, useState } from "react";
 import { keptKey, useKept } from "../use-kept.js";
 
 /**
- * folded-groups.ts -- which of the sidebar's groups the developer folded, Managers, Pinned, Following, and the repositories', kept across launches, and what the Inbox lists and how wide its list stands kept the same way.
+ * folded-groups.ts -- which of the sidebar's groups the developer folded, Managers, Pinned, Following, the Tasks head's, and the repositories', kept across launches, and what the Inbox lists and how wide its list stands kept the same way.
  *
  * A fold is this window's alone, as the sidebar's width is, so it is kept in
  * the renderer's own storage rather than on the account: a group folded on
@@ -20,7 +20,8 @@ import { keptKey, useKept } from "../use-kept.js";
  * name, and the tasks with no repository by null. A repository whose last
  * task goes leaves its entry behind: it is a few bytes, and a task on it
  * later comes back folded as it was left. Pinned is kept under a key of
- * its own, since it is no repository, and so are the account's own
+ * its own, since it is no repository, as are Following and the Tasks head,
+ * which folds the sections and the list together whoever's tasks it names, and so are the account's own
  * sections, each by its id. A task's child tasks nested under
  * its row stand folded until it is opened, so the tasks opened are kept,
  * each by its id, under a key of their own. A fixture run starts with every group open
@@ -51,6 +52,7 @@ const STORAGE_KEY = {
   GROUPS: "app.sidebarFoldedGroups",
   PINNED: "app.sidebarPinnedFolded",
   FOLLOWING: "app.sidebarFollowingFolded",
+  TASKS: "app.sidebarTasksFolded",
   MANAGERS: "app.sidebarManagersFolded",
   SECTIONS: "app.sidebarFoldedSections",
   OPENED_TASKS: "app.sidebarOpenedTasks",
@@ -110,7 +112,7 @@ export const INBOX_LIST_WIDTH = {
 /** The folded groups, each by its repository, its creator, or its assignee, null for the plans with none. */
 const storedFolds = Schema.fromJsonString(Schema.Array(Schema.NullOr(Schema.String)));
 
-/** Whether Pinned, Following, or Managers is folded. */
+/** Whether Pinned, Following, the Tasks head, or Managers is folded. */
 const storedFlag = Schema.fromJsonString(Schema.Boolean);
 
 /** The account's sections folded, or the tasks opened, by id. */
@@ -165,6 +167,7 @@ const KEPT = {
   FOLDED_GROUPS: keptKey(STORAGE_KEY.GROUPS, storedFolds),
   PINNED_FOLDED: keptKey(STORAGE_KEY.PINNED, storedFlag),
   FOLLOWING_FOLDED: keptKey(STORAGE_KEY.FOLLOWING, storedFlag),
+  TASKS_FOLDED: keptKey(STORAGE_KEY.TASKS, storedFlag),
   MANAGERS_FOLDED: keptKey(STORAGE_KEY.MANAGERS, storedFlag),
   FOLDED_SECTIONS: keptKey(STORAGE_KEY.SECTIONS, storedTasks),
   OPENED_TASKS: keptKey(STORAGE_KEY.OPENED_TASKS, storedTasks),
@@ -179,6 +182,8 @@ interface Folds {
   readonly groups: readonly (string | null)[];
   readonly pinned: boolean;
   readonly following: boolean;
+  /** The Tasks head's, which folds the sections and the list under it. */
+  readonly tasks: boolean;
   readonly managers: boolean;
   /** The account's own sections folded, by id. */
   readonly sections: readonly string[];
@@ -190,6 +195,7 @@ const OPEN: Folds = {
   groups: [],
   pinned: false,
   following: false,
+  tasks: false,
   managers: false,
   sections: [],
   openedTasks: [],
@@ -208,6 +214,9 @@ export interface FoldedGroups {
   togglePinned: () => void;
   followingFolded: boolean;
   toggleFollowing: () => void;
+  /** Whether the Tasks head folds the sections and the list under it. */
+  tasksFolded: boolean;
+  toggleTasks: () => void;
   managersFolded: boolean;
   toggleManagers: () => void;
   /** Whether one of the account's sections is folded, by its id. */
@@ -226,6 +235,7 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
   const [groups, keepGroups] = useKept(KEPT.FOLDED_GROUPS, OPEN.groups);
   const [pinned, keepPinned] = useKept(KEPT.PINNED_FOLDED, OPEN.pinned);
   const [following, keepFollowing] = useKept(KEPT.FOLLOWING_FOLDED, OPEN.following);
+  const [tasksFolded, keepTasks] = useKept(KEPT.TASKS_FOLDED, OPEN.tasks);
   const [managers, keepManagers] = useKept(KEPT.MANAGERS_FOLDED, OPEN.managers);
   const [sections, keepSections] = useKept(KEPT.FOLDED_SECTIONS, OPEN.sections);
   const [openedTasks, keepOpenedTasks] = useKept(KEPT.OPENED_TASKS, OPEN.openedTasks);
@@ -233,7 +243,7 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
 
   const folds = staged
     ? stagedFolds
-    : { groups, pinned, following, managers, sections, openedTasks };
+    : { groups, pinned, following, tasks: tasksFolded, managers, sections, openedTasks };
 
   const fold = (next: Partial<Folds>) => {
     if (staged) {
@@ -247,6 +257,8 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     if (next.pinned !== undefined) keepPinned(next.pinned);
 
     if (next.following !== undefined) keepFollowing(next.following);
+
+    if (next.tasks !== undefined) keepTasks(next.tasks);
 
     if (next.managers !== undefined) keepManagers(next.managers);
 
@@ -264,6 +276,8 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     togglePinned: () => fold({ pinned: !folds.pinned }),
     followingFolded: folds.following,
     toggleFollowing: () => fold({ following: !folds.following }),
+    tasksFolded: folds.tasks,
+    toggleTasks: () => fold({ tasks: !folds.tasks }),
     managersFolded: folds.managers,
     toggleManagers: () => fold({ managers: !folds.managers }),
     sectionFolded: (sectionId) => folds.sections.includes(sectionId),
