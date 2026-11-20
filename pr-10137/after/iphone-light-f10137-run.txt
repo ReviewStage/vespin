@@ -10,6 +10,7 @@ WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
 Set orientation PORTRAIT... COMPLETED
 Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
 Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Assert that (Optional) id: agent-model-chip is visible... COMPLETED
 Run flow when id: agent-model-chip is visible...
   Tap on id: agent-model-chip... COMPLETED
 Run flow when id: agent-model-chip is visible... COMPLETED
@@ -28,4 +29,4 @@ Possible causes:
 
 ==== Debug output (logs & screenshots) ====
 
-/Users/deanstratakos/vespin-ipad-agent/out/sj10137b/iphone-light-f10137/2026-11-20_053113
+/Users/deanstratakos/vespin-ipad-agent/out/sj10137b/iphone-light-f10137/2026-11-20_060638
