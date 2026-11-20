@@ -388,7 +388,7 @@ function keptStanding(
 }
 
 it.effect(
-  "a kept read hands the store the synced rows that moved and the keys it holds, and nothing as it closes",
+  "a kept read hands the store the synced rows that moved and the keys it holds, past a whole answer only the keys that moved since, another read's among them, and nothing as it closes",
   () =>
     Effect.gen(function* () {
       const { pool, rows, told, letGo } = yield* keptStanding({
@@ -410,6 +410,22 @@ it.effect(
       const ship = { id: "3", name: "Ship", runs: 0 };
       yield* rows.answer([{ ...deploy, runs: 1 }, ship], { cursor: { syncId: 2 } });
       yield* Fiber.interrupt(rename);
+
+      // Past a sync id, Deploy goes and Launch comes; then another read answers Ship moved, which the kept read's next answer hands on though it names no row.
+      const launch = { id: "4", name: "Launch", runs: 0 };
+
+      yield* rows.answer([{ ...ship, runs: 1 }, launch], {
+        gone: ["2"],
+        cursor: { syncId: 3 },
+      });
+
+      const other = yield* pool.stand(ROW, {
+        redraw: () => Effect.void,
+        confirmation: () => undefined,
+      });
+
+      yield* other.answer([{ ...ship, runs: 2 }]);
+      yield* rows.answer([], { gone: [], cursor: { syncId: 4 } });
       yield* letGo;
 
       assert.deepEqual(told, [
@@ -422,7 +438,7 @@ it.effect(
             { key: "2", row: deploy },
           ],
           deleted: [],
-          held: ["1", "2"],
+          held: { every: ["1", "2"] },
           cursor: { syncId: 1 },
         },
         {
@@ -434,8 +450,29 @@ it.effect(
             { key: "3", row: ship },
           ],
           deleted: ["1"],
-          held: ["2", "3"],
+          held: { every: ["2", "3"] },
           cursor: { syncId: 2 },
+        },
+        {
+          read: "feed",
+          kind: "row",
+          workspace: "w",
+          upserted: [
+            { key: "3", row: { ...ship, runs: 1 } },
+            { key: "4", row: launch },
+          ],
+          deleted: ["2"],
+          held: { appended: ["4"] },
+          cursor: { syncId: 3 },
+        },
+        {
+          read: "feed",
+          kind: "row",
+          workspace: "w",
+          upserted: [{ key: "3", row: { ...ship, runs: 2 } }],
+          deleted: [],
+          held: { appended: [] },
+          cursor: { syncId: 4 },
         },
       ]);
     }),
@@ -464,10 +501,10 @@ it.effect(
               { key: "1", row: triage },
               { key: "2", row: ship },
             ],
-            held: ["1", "2"],
+            held: { every: ["1", "2"] },
             cursor: "c1",
           },
-          { upserted: [], held: ["1", "2"], cursor: "c2" },
+          { upserted: [], held: { every: ["1", "2"] }, cursor: "c2" },
         ],
       );
     }),

@@ -79,14 +79,17 @@
  * (`PoolOptions.store`): each time it answers, the store is handed, in one
  * call, the synced rows of it that moved since its last answer, the keys it
  * holds, and its cursor (`KeptAnswer`), cut to its bound where it names one.
- * Only the service's rows reach the store, never a write drawn over them,
- * and a kept read's scope closing tells it nothing, so quitting never empties
- * it. As a kept read first stands, it answers from what the store holds of
- * it (`RowsStore.loaded`), before the service answers, as Linear's local
- * bootstrap draws from its database before it catches up: those rows count
- * as synced, writes standing drawn over them, but are never handed back to
- * the store, and a stored row never replaces one the pool already holds. Its
- * stored cursor (`HeldRows.stored`) is what its follow reads past.
+ * Past a whole answer, an unbounded read hands it only the keys whose row
+ * or holding moved since (`unreported`), in work as large as the change
+ * rather than the read. Only the service's rows reach the store, never a
+ * write drawn over them, and a kept read's scope closing tells it nothing,
+ * so quitting never empties it. As a kept read first stands, it answers
+ * from what the store holds of it (`RowsStore.loaded`), before the service
+ * answers, as Linear's local bootstrap draws from its database before it
+ * catches up: those rows count as synced, writes standing drawn over them,
+ * but are never handed back to the store, and a stored row never replaces
+ * one the pool already holds. Its stored cursor (`HeldRows.stored`) is what
+ * its follow reads past.
  */
 
 import {
@@ -189,6 +192,16 @@ export interface KeptRow {
 }
 
 /**
+ * The keys a kept read holds, as one answer tells the store: every one, in
+ * the read's order; or, for an answer that moved only some, the keys it took
+ * up since it last answered, held after every key it held then, those it let
+ * go named by the answer's `deleted`.
+ */
+export type KeptHeld =
+  | { readonly every: readonly string[] }
+  | { readonly appended: readonly string[] };
+
+/**
  * One answer of a kept read, as the store is handed it: the synced rows that
  * moved since the read last answered, upserted and deleted by key, the keys
  * the read now holds, and its cursor with the answer's other fields, whole
@@ -200,7 +213,7 @@ export interface KeptAnswer {
   readonly workspace: string | undefined;
   readonly upserted: readonly KeptRow[];
   readonly deleted: readonly string[];
-  readonly held: readonly string[];
+  readonly held: KeptHeld;
   readonly cursor: unknown;
 }
 
@@ -482,7 +495,11 @@ interface Holding<Row, Change = unknown> {
   held: Set<string>;
   adopted: ReadonlySet<string>;
   /** The synced rows last handed the store for a kept read, by key. */
-  reported: ReadonlyMap<string, Row>;
+  reported: Map<string, Row>;
+  /** Whether the read's next answer hands the store every key it holds, a whole answer having replaced them. */
+  reportsWhole: boolean;
+  /** The keys whose synced row, or whose holding by the read, moved since it last handed the store any, for a kept read. */
+  readonly unreported: Set<string>;
 }
 
 /** One write standing: the keys it changes and its change, the service's word in its place once it answered one. */
@@ -637,6 +654,18 @@ function movedBy<Row extends object, Change>(
   return redrawn([...new Set([...showing, ...holdersOf(rows.reads, moved)])], moved);
 }
 
+/** Marks `keys`, whose synced rows moved, as unreported on every kept read of `rows`, so the next answer of each tells its store of them. */
+function unreported<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  keys: readonly string[],
+): void {
+  for (const holding of rows.reads) {
+    if (holding.read.kept === undefined || holding.reportsWhole) continue;
+
+    for (const key of keys) holding.unreported.add(key);
+  }
+}
+
 /** Each read that adopts a row made of `keys`, and does not show it yet, shown it while a write stands over it. */
 function adopted<Row extends object, Change>(rows: KindRows<Row, Change>, keys: readonly string[]) {
   for (const key of keys) {
@@ -672,6 +701,7 @@ function takenAndDrawn<Row extends object, Change>(
 ): Effect.Effect<readonly string[]> {
   return Effect.suspend(() => {
     const written = rows.synced.take(next);
+    unreported(rows, written);
 
     return Effect.as(redrawn(holdersOf(rows.reads, written, except), written), written);
   });
@@ -741,6 +771,7 @@ function movedOnly<Row extends object, Change>(
   }
 
   const written = rows.synced.patch(upserted, deleted);
+  unreported(rows, [...written, ...placed]);
 
   return Effect.as(redrawn(holdersOf(rows.reads, written, holding), written), [
     ...new Set([...written, ...placed]),
@@ -761,6 +792,7 @@ function answeredWhole<Row extends object, Change>(
 ): Effect.Effect<readonly string[]> {
   const was = holding.held;
   holding.held = keys;
+  holding.reportsWhole = true;
   const next = new Map(rows.synced.held());
 
   for (const [key, row] of taken) next.set(key, row);
@@ -777,6 +809,7 @@ function answeredWhole<Row extends object, Change>(
   ];
 
   const written = rows.synced.take(next);
+  unreported(rows, written);
 
   return Effect.as(redrawn(holdersOf(rows.reads, written, holding), written), [
     ...new Set([...written, ...placed]),
@@ -841,7 +874,8 @@ function cut<Row>(kept: KeptRead<Row>, rows: readonly Row[]): readonly Row[] {
  * is taken: the synced rows of its cut that moved since it last answered, the
  * keys the cut holds, and its cursor, which the read keeps whole even where
  * the cut leaves rows out, since the read alone knows whether it can follow
- * on past it from what was kept.
+ * on past it from what was kept. An unbounded read past a whole answer
+ * (`reportsWhole`) reads only its keys that moved since (`unreportedOf`).
  */
 function reported<Row extends object, Change>(
   rows: KindRows<Row, Change>,
@@ -849,24 +883,67 @@ function reported<Row extends object, Change>(
   kept: KeptRead<Row>,
   { cursor }: Answered,
 ): KeptAnswer {
+  const named = { read: kept.name, kind: kept.kind, workspace: kept.workspace, cursor };
+
+  if (kept.bound === undefined && !holding.reportsWhole) {
+    return { ...named, ...unreportedOf(rows, holding) };
+  }
+
   const synced = rows.synced.held();
   const all = [...holding.held].flatMap((key) => synced.get(key) ?? []);
   const keptRows = cut(kept, all);
   const next = new Map(keptRows.map((row) => [rows.kind.key(row), row]));
   const changes = rowChanges(holding.reported, next);
   holding.reported = next;
+  holding.reportsWhole = false;
+  holding.unreported.clear();
 
   return {
-    read: kept.name,
-    kind: kept.kind,
-    workspace: kept.workspace,
+    ...named,
     upserted: changes.flatMap((change) =>
       change.type === "delete" ? [] : [{ key: rows.kind.key(change.value), row: change.value }],
     ),
     deleted: changes.flatMap((change) => (change.type === "delete" ? [change.key] : [])),
-    held: [...next.keys()],
-    cursor,
+    held: { every: [...next.keys()] },
   };
+}
+
+/**
+ * What moved of an unbounded kept read since it last answered, read from its
+ * unreported keys alone: each whose synced row it holds now and did not, or
+ * holds as another row than it handed the store, upserted, the first taken
+ * up after every key it held; and each it handed the store and holds no
+ * row of now, deleted.
+ */
+function unreportedOf<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  holding: Holding<Row, Change>,
+): Pick<KeptAnswer, "upserted" | "deleted" | "held"> {
+  const synced = rows.synced.held();
+  const upserted: KeptRow[] = [];
+  const deleted: string[] = [];
+  const appended: string[] = [];
+
+  for (const key of holding.unreported) {
+    const row = holding.held.has(key) ? synced.get(key) : undefined;
+    const was = holding.reported.get(key);
+
+    if (row === undefined) {
+      if (was !== undefined) deleted.push(key);
+      holding.reported.delete(key);
+      continue;
+    }
+
+    if (was !== undefined && Equal.equals(was, row)) continue;
+
+    if (was === undefined) appended.push(key);
+    upserted.push({ key, row });
+    holding.reported.set(key, row);
+  }
+
+  holding.unreported.clear();
+
+  return { upserted, deleted, held: { appended } };
 }
 
 /** `read` stood on `rows` for the caller's scope, its keys let go as the scope closes and any row no other read holds with them. */
@@ -886,7 +963,7 @@ function stood<Row extends object, Change>(
         rows.takenAt.delete(key);
       }
 
-      rows.synced.take(next);
+      unreported(rows, rows.synced.take(next));
     });
 
   const acquired = Effect.acquireRelease(
@@ -896,6 +973,8 @@ function stood<Row extends object, Change>(
         held: new Set(),
         adopted: new Set(),
         reported: new Map(),
+        reportsWhole: true,
+        unreported: new Set(),
       };
 
       rows.reads.add(holding);
@@ -993,6 +1072,7 @@ function takenInPlace<Row extends object, Change>(
 
         if (holding.held.has(key) || !next.has(key)) continue;
         holding.held.add(key);
+        holding.unreported.add(key);
       }
     }
 
