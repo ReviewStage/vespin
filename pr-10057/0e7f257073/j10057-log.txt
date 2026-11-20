@@ -1,0 +1,18 @@
+== bundle P10057 base 0e7f257073
+  built 0e7f257073 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-sheet: fails 1 shots 1 Tap on ".*Teammate invitations.*Build teammate invitations.*", Index: 0... FAILED
+iphone-light-agent: fails 0 shots 23 
+iphone-light-compose: fails 0 shots 9 
+iphone-dark-sheet: fails 1 shots 1 Tap on ".*Teammate invitations.*Build teammate invitations.*", Index: 0... FAILED
+iphone-dark-agent: fails 0 shots 23 
+iphone-dark-compose: fails 0 shots 9 
+ipad27-light-sheet: fails 1 shots 3 Tap on "Options"... FAILED
+ipad27-light-agent: fails 0 shots 23 
+ipad27-light-compose: fails 0 shots 9 
+ipad27-dark-sheet: fails 1 shots 3 Tap on "Options"... FAILED
+ipad27-dark-agent: fails 0 shots 23 
+ipad27-dark-compose: fails 0 shots 9 
