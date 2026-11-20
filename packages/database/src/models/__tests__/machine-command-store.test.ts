@@ -51,6 +51,7 @@ import {
   claimMachineCommands,
   commandMachinesOf,
   heardFromAnotherAccount,
+  ledByAnotherAccount,
   machineCommandResult,
   machineCommandsWaiting,
   machineOwnerOf,
@@ -479,6 +480,32 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
         );
         yield* leaveWorkspace(workspace, teammate);
         assert.equal(yield* machineOwnerOf(target), starter, "an assignee who left hands it back");
+      }),
+  );
+
+  it.effect(
+    "a teammate leads from their line until the starter writes again, through the service's lines, and to no one else",
+    () =>
+      Effect.gen(function* () {
+        const { starter, teammate, workspace } = yield* people;
+        const agent = yield* openAgent(starter, workspace);
+        const target = { userId: starter, conversationId: agent.conversationId };
+
+        const line = (seq: number, userId: string) =>
+          sendLine(starter, agent.conversationId, seq, { kind: MESSAGE_SENDER.MEMBER, userId });
+
+        yield* line(1, starter);
+        assert.equal(yield* ledByAnotherAccount(target), false, "the starter's own");
+        yield* line(2, teammate);
+        yield* sendLine(starter, agent.conversationId, 3, { kind: MESSAGE_SENDER.APP });
+        assert.equal(yield* ledByAnotherAccount(target), true, "a teammate's, a wake after it");
+        assert.equal(
+          yield* ledByAnotherAccount({ userId: teammate, conversationId: agent.conversationId }),
+          false,
+          "another account reads none of the conversation",
+        );
+        yield* line(4, starter);
+        assert.equal(yield* ledByAnotherAccount(target), false, "the starter's again");
       }),
   );
 

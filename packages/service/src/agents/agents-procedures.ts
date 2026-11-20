@@ -499,7 +499,8 @@ export function agentsProcedures(
      * alone (`markAgentRead`), which a look at its page sends; a mark by
      * hand changes nothing.
      * `disabledServers` replaces the list of MCP servers switched off for
-     * it, which its next turn reads as it starts. A model and effort, and the
+     * it, which its next turn reads as it starts, set only by its starter,
+     * whose own accounts its servers are. A model and effort, and the
      * standard context window where it is chosen, change what its next step
      * runs on, checked against the catalog as a Start checks its own; a body
      * naming no window puts it back on the model's whole one, and the
@@ -558,6 +559,9 @@ export function agentsProcedures(
 
       if ("disabledServers" in body) {
         const { disabledServers } = body;
+
+        // Note that a teammate never switches the starter's own accounts on for the agent.
+        if (agent.userId !== userId) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
 
         return yield* committedAgent(
           userId,

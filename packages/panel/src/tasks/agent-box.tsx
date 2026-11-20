@@ -50,7 +50,8 @@ export interface AgentBox {
   readonly readModels: () => void;
   /** The teammate who started the agent, whose plan or key pays for it; none for the reader's own. */
   readonly owner: Actor | undefined;
-  readonly servers: AgentServersControl;
+  /** The agent's MCP servers and their switches; none for a teammate's agent, whose servers are its starter's own accounts, which only they switch. */
+  readonly servers: AgentServersControl | undefined;
   readonly mode: AgentModeControl | undefined;
   /** Starts the agent's harness on a fresh session (`/clear`), which the `/` list's commands stand on; none where there is none to clear. */
   readonly onClear: (() => Promise<boolean>) | undefined;
@@ -96,7 +97,7 @@ export function useAgentBox(input: {
     modelsFailed: agents.modelsFailed,
     readModels: agents.readModels,
     owner,
-    servers,
+    servers: teammate ? undefined : servers,
     mode,
     // Note that only an agent on a harness has a session to clear, and only one the reader controls.
     onClear: agent?.runtime === undefined || teammate ? undefined : () => agents.onClear(agentId),

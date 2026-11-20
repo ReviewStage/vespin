@@ -29,6 +29,14 @@
  * revoked at the provider that we have not yet seen lists its kept tools,
  * and its first call answers why.
  *
+ * A teammate's words never drive the starter's accounts: while the newest
+ * message to the agent is another member's, or another account's agent's
+ * (`ledByAnotherAccount`), every call is refused with why, read again at
+ * each call, so a teammate's steer mid-turn stops the next call and the
+ * starter's own next message lets them through again. The tools are still
+ * listed, because a list carries no account's data and a warm runner lists
+ * them only as it launches.
+ *
  * The app's account settings are where an integration is connected, so
  * nothing here starts a sign-in: a connection the member has not
  * connected, or whose grant expired, lists no tools, and a call of it is
@@ -52,6 +60,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { ledByAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readNativeProjection } from "@repo/database/models/native-projection-store";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { causeKind } from "@repo/runtime/effect";
@@ -112,6 +121,17 @@ const TOOLS_KEPT = Duration.days(7);
  * tools rather than being failed by the harness.
  */
 const LIST_TIMEOUT = Duration.seconds(10);
+
+/**
+ * Why a call ran nothing while a teammate leads the agent
+ * (`ledByAnotherAccount`): its integrations are its starter's own accounts,
+ * which another member's words never drive.
+ */
+const LED_BY_TEAMMATE =
+  "Not run: this agent's integrations are its starter's own accounts, and they are off while " +
+  "the newest message to it is a teammate's. They come back once its starter writes to it " +
+  "again. Carry on without them, and tell the teammate they can take this agent over to go on " +
+  "with their own integrations.";
 
 /** A refusal: the words the call is failed with, and, for a connection the member must connect, which and that it must. */
 export interface ConnectionRefusal {
@@ -428,8 +448,8 @@ export function listConnectionTools(
  * One call of a connection's tool with its input, on the member's own
  * grant: the provider's MCP result as it sent it, its own error among them.
  * A connection the agent is not handed, one the member has not connected,
- * a tool the server lists none of, and a session that failed are each
- * refused. The tools the session listed are kept on the grant, so the next
+ * a tool the server lists none of, a session that failed, and every call
+ * while a teammate leads the agent (`LED_BY_TEAMMATE`) are each refused. The tools the session listed are kept on the grant, so the next
  * launch's listing shows what the provider lists now.
  */
 export function callConnectionTool(
@@ -443,6 +463,11 @@ export function callConnectionTool(
 
     if (Option.isNone(connection)) {
       return Result.fail(refused(`Connection "${name}" is not available to this agent.`));
+    }
+
+    // Note that the lead is read at each call, because a teammate may steer a turn the starter began.
+    if (yield* ledByAnotherAccount(admitted.target)) {
+      return Result.fail(refused(LED_BY_TEAMMATE, { connection: name }));
     }
 
     const grant = yield* connectionGrant(admitted, connection.value);
