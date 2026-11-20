@@ -36,6 +36,12 @@ export const APPROVAL_PRESS_WORDS = {
   DENYING: "Denying",
 } as const;
 
+/** What stands under the presses where Always allow keeps the command's first words for every agent of the member's: these words either side of the command (`pnpm test *`). */
+export const ALWAYS_ALLOW_COMMAND_WORDS = {
+  BEFORE: `${APPROVAL_PRESS_WORDS.ALLOW_FOR_AGENT} won't ask again for `,
+  AFTER: " in any of your agents.",
+} as const;
+
 /** Why an answer did not go: refused as not the reader's to answer or gone, or not heard back, which a press again may mend. */
 const ANSWER_FAILED = {
   NOT_PERMITTED: "Only a member who controls this agent can answer it.",
