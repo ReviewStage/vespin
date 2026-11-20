@@ -33,27 +33,30 @@ export const MESSAGE_LINE_ALIGN = {
 
 export type MessageLineAlign = (typeof MESSAGE_LINE_ALIGN)[keyof typeof MESSAGE_LINE_ALIGN];
 
-/** Where the line's start stands: at a bubble's or a card's inset, or flush with words set on no ground, as an agent's own words are. */
+/** Where the line's start stands: at a bubble's or a card's inset, at a bubble's inset past its sender's picture beside it (`ChatBubble`'s `avatar`), or flush with words set on no ground, as an agent's own words are. */
 export const MESSAGE_LINE_INSET = {
   BUBBLE: "bubble",
+  AVATAR: "avatar",
   FLUSH: "flush",
 } as const;
 
 export type MessageLineInset = (typeof MESSAGE_LINE_INSET)[keyof typeof MESSAGE_LINE_INSET];
 
+/** The sender's inset, and the time's where it opens the line: at its end, and at its start too, past the sender's picture where one stands beside the bubble, unless the line opens flush with words on no ground. */
+const OPENING_INSET = {
+  [MESSAGE_LINE_INSET.BUBBLE]: "px-ui-4",
+  [MESSAGE_LINE_INSET.AVATAR]: "ps-chat-avatar-bubble pe-ui-4",
+  [MESSAGE_LINE_INSET.FLUSH]: "pe-ui-4",
+} as const satisfies Record<MessageLineInset, string>;
+
 /** Whether the line opens at a bubble's inset: at its start where it keeps to the left, unless its message's words stand on no ground. */
 function opensInset(align: MessageLineAlign, inset: MessageLineInset): boolean {
-  return align === MESSAGE_LINE_ALIGN.START && inset === MESSAGE_LINE_INSET.BUBBLE;
-}
-
-/** The sender's inset: at its end, and at its start too unless the line opens flush with words on no ground. */
-function senderInset(inset: MessageLineInset): string {
-  return inset === MESSAGE_LINE_INSET.BUBBLE ? "px-ui-4" : "pe-ui-4";
+  return align === MESSAGE_LINE_ALIGN.START && inset !== MESSAGE_LINE_INSET.FLUSH;
 }
 
 /** The time's inset: at its end, and at its start too where it opens a received message's line, so it stands at the bubble's inset as the head over it does (`MessageHead`). */
 function timeInset(named: boolean, align: MessageLineAlign, inset: MessageLineInset): string {
-  return !named && opensInset(align, inset) ? "px-ui-4" : "pe-ui-4";
+  return !named && opensInset(align, inset) ? OPENING_INSET[inset] : "pe-ui-4";
 }
 
 /** The line under a message: `sender` or `status`, `at`, and `actions`, each left out where the message has none, the actions on the side away from `align`'s edge. */
@@ -101,7 +104,9 @@ export function MessageLine({
     >
       {actionsFirst ? actions : null}
       {named ? (
-        <span className={`ui-message-line-sender flex min-w-0 items-center ${senderInset(inset)}`}>
+        <span
+          className={`ui-message-line-sender flex min-w-0 items-center ${OPENING_INSET[inset]}`}
+        >
           {lead}
         </span>
       ) : null}

@@ -7,7 +7,11 @@
  * tightened, so the run reads as one block that opens and closes round.
  * What stands beside a bubble (`beside`), such as its actions, stands on the
  * side toward the column's middle and adds nothing to the run's height, so
- * the run stays tight. The two sides wear different grounds, the sent one a
+ * the run stays tight. A sender's picture (`avatar`), such as a Manager's
+ * face, stands at the bubble's outer side, level with its foot, beside the
+ * run's last bubble and a bubble alone, as a chat app stands it, and keeps
+ * its room beside the run's others, so the run's bubbles line up, and the
+ * line under the run starts past it (`MESSAGE_LINE_INSET.AVATAR`). The two sides wear different grounds, the sent one a
  * wash of the accent and the received one the raised fill, both under the
  * foreground's ink, so the words, links, chips, and code inside read as
  * they do anywhere in a transcript. Where the bubble stands in the column,
@@ -58,6 +62,14 @@ const RUN_CORNERS: Record<ChatSide, Record<ChatRun, string>> = {
   },
 };
 
+/** Whether a bubble shows its sender's picture: the run's last and a bubble alone do, and the others keep its room. */
+const AVATAR_SHOWN: Record<ChatRun, boolean> = {
+  [CHAT_RUN.ALONE]: true,
+  [CHAT_RUN.FIRST]: false,
+  [CHAT_RUN.MIDDLE]: false,
+  [CHAT_RUN.LAST]: true,
+};
+
 /** Where a message stands in its run, from whether it opens the run and whether it closes it. */
 export function chatRunOf(opens: boolean, closes: boolean): ChatRun {
   if (opens) return closes ? CHAT_RUN.ALONE : CHAT_RUN.FIRST;
@@ -65,15 +77,18 @@ export function chatRunOf(opens: boolean, closes: boolean): ChatRun {
   return closes ? CHAT_RUN.LAST : CHAT_RUN.MIDDLE;
 }
 
-/** One message's bubble, `children` its words, shaped by its `side` and its place in its `run`, with `beside` toward the column's middle. */
+/** One message's bubble, `children` its words, shaped by its `side` and its place in its `run`, with `beside` toward the column's middle and its sender's `avatar` at its outer side. */
 export function ChatBubble({
   side,
   run,
+  avatar,
   beside,
   children,
 }: {
   side: ChatSide;
   run: ChatRun;
+  /** The sender's picture, drawn beside the run's last bubble and a bubble alone and its room kept beside the others; none where the chat draws none. */
+  avatar?: ReactNode;
   /** What stands beside the bubble toward the column's middle, such as its actions or a mark that it did not go; none where nothing does. */
   beside?: ReactNode;
   children: ReactNode;
@@ -84,6 +99,13 @@ export function ChatBubble({
       data-side={side}
       data-run={run}
     >
+      {avatar === undefined ? null : (
+        <span
+          className={`ui-chat-bubble-avatar inline-flex w-chat-avatar flex-none justify-center self-end ${AVATAR_SHOWN[run] ? "" : "invisible"}`}
+        >
+          {avatar}
+        </span>
+      )}
       {/* Note that it clips past the keyboard's ring rather than at its edge, so a fold, a chip, or a link it holds keeps its ring. */}
       <div
         className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] ${SIDE_GROUND[side]} ${RUN_CORNERS[side][run]}`}

@@ -72,6 +72,7 @@ import {
   managerChatLines,
   managerChatRuns,
 } from "@repo/features/manager-chat";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
@@ -186,6 +187,7 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
+import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useDisclosure } from "@repo/ui/use-disclosure";
@@ -654,6 +656,16 @@ const LiveDoors = createContext<Pick<DelegationDoors, "cards"> | undefined>(unde
 
 /** A Manager's chat in runs (`managerChatRuns`), where the transcript is one (`managerChatLines`), whose messages are drawn as bubbles in their runs; none for every other agent. */
 const ChatRuns = createContext<ManagerChatRuns | undefined>(undefined);
+
+/** A Manager's face, which stands beside each run of its chat's messages (`ChatBubble`'s `avatar`); none for every other agent, and for a Manager a service older than faces answers. */
+const ChatFace = createContext<ManagerFaceValue | undefined>(undefined);
+
+/** The face beside a Manager's bubbles, at a message's seat; none where it wears none. */
+function chatAvatar(face: ManagerFaceValue | undefined): React.JSX.Element | undefined {
+  return face === undefined ? undefined : (
+    <ManagerFace face={face} size={MANAGER_FACE_SIZE.MESSAGE} />
+  );
+}
 
 /** Where a message that stands in no run read stands: a run of its own. */
 const LONE_RUN = { opens: true, closes: true } as const;
@@ -2242,14 +2254,20 @@ export function AgentMessage({
 }
 
 /** A Manager's greeting, drawn as its first message though no one sent it and nothing stores it (`@repo/features/manager-greeting`). */
-function ManagerGreetingMessage({ words }: { readonly words: string }): React.JSX.Element {
+function ManagerGreetingMessage({
+  words,
+  face,
+}: {
+  readonly words: string;
+  readonly face: ManagerFaceValue | undefined;
+}): React.JSX.Element {
   return (
     <Message
       from={MESSAGE_ROLE.ASSISTANT}
       className={RECEIVED_MESSAGE_CLASS}
       data-manager-greeting=""
     >
-      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(face)}>
         <TranscriptWords text={words} />
       </ChatBubble>
     </Message>
@@ -2358,6 +2376,8 @@ function ChatSent({
   moving: boolean;
   children: ReactNode;
 }): React.JSX.Element {
+  const face = useContext(ChatFace);
+
   return (
     <Message
       from={MESSAGE_ROLE.ASSISTANT}
@@ -2367,12 +2387,14 @@ function ChatSent({
       <ChatBubble
         side={CHAT_SIDE.RECEIVED}
         run={chatRunOf(place.opens, place.closes)}
+        avatar={chatAvatar(face)}
         beside={moving || words === "" ? null : <CopyMessageAction words={words} />}
       >
         {children}
       </ChatBubble>
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
+        inset={face === undefined ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR}
         at={place.closes && !moving ? message.finishedAt : undefined}
       />
     </Message>
@@ -2380,10 +2402,16 @@ function ChatSent({
 }
 
 /** What a Manager's chat says while its turn runs: its working line in a bubble of the Manager's, as a chat app shows the other side typing. */
-function ChatWorking({ words }: { words: string }): React.JSX.Element {
+function ChatWorking({
+  words,
+  face,
+}: {
+  words: string;
+  face: ManagerFaceValue | undefined;
+}): React.JSX.Element {
   return (
     <Message from={MESSAGE_ROLE.ASSISTANT} className={RECEIVED_MESSAGE_CLASS}>
-      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(face)}>
         <WorkingLine startedAt={undefined} words={words} />
       </ChatBubble>
     </Message>
@@ -3037,6 +3065,7 @@ function AgentTranscriptView({
   olderFailed = false,
   fromStart,
   greeting,
+  face,
   chat = false,
   overComposer = false,
   overEnd,
@@ -3110,6 +3139,8 @@ function AgentTranscriptView({
   fromStart: boolean;
   /** The greeting a Manager's conversation opens on, drawn above its first line; none for every other agent. */
   greeting?: string | undefined;
+  /** A Manager's face, beside each run of its chat (`ChatFace`); none for every other agent, and for a Manager a service older than faces answers. */
+  face?: ManagerFaceValue | undefined;
   /** Whether the messages are a Manager's chat (`managerChatLines`), drawn as bubbles in their runs. */
   chat?: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
@@ -3371,7 +3402,7 @@ function AgentTranscriptView({
             </div>
           )}
           {!working || waitingNotice ? null : chat ? (
-            <ChatWorking words={workingWords} />
+            <ChatWorking words={workingWords} face={face} />
           ) : (
             <WorkingLine startedAt={startedAt} words={workingWords} />
           )}
@@ -3426,124 +3457,131 @@ function AgentTranscriptView({
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ChatRuns value={chatRuns}>
-            <ConnectionNames needed={callsServer}>
-              <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
-                {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
-                {olderFailed && onOlder !== undefined ? (
-                  <div
-                    className={`${FLOATING_OVER_LOG_CLASS} top-ui-8 z-1 max-w-conversation-older bg-well px-list-inset py-tight-gap`}
-                  >
-                    <ErrorState
-                      failure={unreadShown(FAILURE_SURFACE.AGENT_TRANSCRIPT_OLDER_READ)}
-                      onRetry={onOlder}
+            <ChatFace value={face}>
+              <ConnectionNames needed={callsServer}>
+                <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
+                  {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
+                  {olderFailed && onOlder !== undefined ? (
+                    <div
+                      className={`${FLOATING_OVER_LOG_CLASS} top-ui-8 z-1 max-w-conversation-older bg-well px-list-inset py-tight-gap`}
                     >
-                      {OLDER_FAILED_LINE}
-                    </ErrorState>
-                  </div>
-                ) : null}
-                {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
-                <ConversationContent
-                  className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
-                  streams
-                >
-                  <ConversationRows
-                    keys={rowKeys}
-                    estimate={ROW_ESTIMATE_PX}
-                    gap={0}
-                    rowClassName={rowClassOf}
-                    handle={rowsHandle}
-                    ownLast={ownLast}
+                      <ErrorState
+                        failure={unreadShown(FAILURE_SURFACE.AGENT_TRANSCRIPT_OLDER_READ)}
+                        onRetry={onOlder}
+                      >
+                        {OLDER_FAILED_LINE}
+                      </ErrorState>
+                    </div>
+                  ) : null}
+                  {/* The description's card stands off the tab row by the gap between a column's groups; lines fade under the bar or banner above. */}
+                  <ConversationContent
+                    className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}
+                    streams
                   >
-                    {(at) => {
-                      const entry = entries[at];
+                    <ConversationRows
+                      keys={rowKeys}
+                      estimate={ROW_ESTIMATE_PX}
+                      gap={0}
+                      rowClassName={rowClassOf}
+                      handle={rowsHandle}
+                      ownLast={ownLast}
+                    >
+                      {(at) => {
+                        const entry = entries[at];
 
-                      if (entry === undefined) return null;
-                      const { row, index, piece } = entry;
-                      const { message } = row;
-                      const tails = piece === undefined || piece.last;
-                      const heads = piece === undefined || piece.first;
+                        if (entry === undefined) return null;
+                        const { row, index, piece } = entry;
+                        const { message } = row;
+                        const tails = piece === undefined || piece.last;
+                        const heads = piece === undefined || piece.first;
 
-                      const sender =
-                        message === task
-                          ? briefSender
-                          : messageSender(message, readerId, members, former);
+                        const sender =
+                          message === task
+                            ? briefSender
+                            : messageSender(message, readerId, members, former);
 
-                      // Note that a brief drawn as a line is the source's history, so it stands inside the replay's card rather than as a line sent again over it; a brief drawn as a card of its own still opens the transcript.
-                      const opened = message === first ? opening : undefined;
-                      const folded = opened !== undefined && message !== description;
+                        // Note that a brief drawn as a line is the source's history, so it stands inside the replay's card rather than as a line sent again over it; a brief drawn as a card of its own still opens the transcript.
+                        const opened = message === first ? opening : undefined;
+                        const folded = opened !== undefined && message !== description;
 
-                      return (
-                        <>
-                          {at === 0 && fromStart && greeting !== undefined ? (
-                            <ManagerGreetingMessage words={greeting} />
-                          ) : null}
-                          {heads ? (
-                            <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
-                          ) : null}
-                          {folded ? null : (
-                            <SteadyAgentMessage
-                              message={opened === undefined ? message : opened.brief}
-                              description={message === description}
-                              taskId={message === description ? taskId : undefined}
-                              lead={lead}
-                              moving={message.id === writing}
-                              delegation={delegation}
-                              todos={todos}
-                              briefTitle={briefTitle}
-                              origin={message === description ? drawnOrigin : undefined}
-                              sender={sender}
-                              wakeupDelay={
-                                isWakeupLine(message)
-                                  ? wakeupDelayOf(placed[index - 1]?.message)
-                                  : undefined
-                              }
-                              arrived={arrivals.get(message.id) ?? NO_ARRIVED}
-                              delegated={delegated.has(message.id)}
-                              piece={piece}
-                            />
-                          )}
-                          {!tails ? null : opened !== undefined && replay !== undefined ? (
-                            <>
-                              <ReplayCard
-                                replay={opened.replay}
-                                brief={folded ? { message: opened.brief, sender } : undefined}
-                                sentAt={message.sentAt}
-                                place={replay}
-                                taskId={taskId}
+                        return (
+                          <>
+                            {at === 0 && fromStart && greeting !== undefined ? (
+                              <ManagerGreetingMessage words={greeting} face={face} />
+                            ) : null}
+                            {heads ? (
+                              <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
+                            ) : null}
+                            {folded ? null : (
+                              <SteadyAgentMessage
+                                message={opened === undefined ? message : opened.brief}
+                                description={message === description}
+                                taskId={message === description ? taskId : undefined}
+                                lead={lead}
+                                moving={message.id === writing}
+                                delegation={delegation}
+                                todos={todos}
+                                briefTitle={briefTitle}
+                                origin={message === description ? drawnOrigin : undefined}
+                                sender={sender}
+                                wakeupDelay={
+                                  isWakeupLine(message)
+                                    ? wakeupDelayOf(placed[index - 1]?.message)
+                                    : undefined
+                                }
+                                arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                                delegated={delegated.has(message.id)}
+                                piece={piece}
                               />
-                              {opened.note === undefined ? null : (
-                                <SteadyAgentMessage
-                                  message={opened.note}
-                                  description={false}
-                                  lead={lead}
-                                  moving={false}
-                                  delegation={delegation}
-                                  sender={briefSender}
+                            )}
+                            {!tails ? null : opened !== undefined && replay !== undefined ? (
+                              <>
+                                <ReplayCard
+                                  replay={opened.replay}
+                                  brief={folded ? { message: opened.brief, sender } : undefined}
+                                  sentAt={message.sentAt}
+                                  place={replay}
+                                  taskId={taskId}
                                 />
-                              )}
-                            </>
-                          ) : null}
-                          {earlierOmitted && message === description ? (
-                            <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
-                          ) : null}
-                          {tails ? (
-                            <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
-                          ) : null}
-                          {at === entries.length - 1 ? (
-                            <>
-                              <CallStarts spans={calls.opening} callerOf={callerOf} />
-                              {trailing}
-                            </>
-                          ) : null}
-                        </>
-                      );
-                    }}
-                  </ConversationRows>
-                </ConversationContent>
-                <AgentRail lines={railLines} list={log} rows={rowsHandle} bringIn={bringMessage} />
-                <ConversationScrollButton />
-              </Conversation>
-            </ConnectionNames>
+                                {opened.note === undefined ? null : (
+                                  <SteadyAgentMessage
+                                    message={opened.note}
+                                    description={false}
+                                    lead={lead}
+                                    moving={false}
+                                    delegation={delegation}
+                                    sender={briefSender}
+                                  />
+                                )}
+                              </>
+                            ) : null}
+                            {earlierOmitted && message === description ? (
+                              <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
+                            ) : null}
+                            {tails ? (
+                              <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
+                            ) : null}
+                            {at === entries.length - 1 ? (
+                              <>
+                                <CallStarts spans={calls.opening} callerOf={callerOf} />
+                                {trailing}
+                              </>
+                            ) : null}
+                          </>
+                        );
+                      }}
+                    </ConversationRows>
+                  </ConversationContent>
+                  <AgentRail
+                    lines={railLines}
+                    list={log}
+                    rows={rowsHandle}
+                    bringIn={bringMessage}
+                  />
+                  <ConversationScrollButton />
+                </Conversation>
+              </ConnectionNames>
+            </ChatFace>
           </ChatRuns>
         </LiveDoors>
       </TranscriptAgentOn>
@@ -3581,11 +3619,11 @@ function AgentTranscriptView({
 
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {greeting === undefined ? null : <ManagerGreetingMessage words={greeting} />}
+        {greeting === undefined ? null : <ManagerGreetingMessage words={greeting} face={face} />}
         {starting ??
           (greeting !== undefined && working ? (
             // Note that a Manager's chat says only that it works, whatever its turn holds, even while nothing it sent stands yet.
-            <ChatWorking words={workingLineWords(phase, waitsUntil)} />
+            <ChatWorking words={workingLineWords(phase, waitsUntil)} face={face} />
           ) : greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
             <WorkingLine startedAt={undefined} words={leadLine} />
           ))}
@@ -4129,6 +4167,7 @@ function AgentTabView({
                                 olderFailed={transcript.olderFailed}
                                 fromStart={transcript.pages > 0 && !transcript.hasOlder}
                                 greeting={chat ? managerGreeting(agent.title) : undefined}
+                                face={chat ? agent.face : undefined}
                                 chat={chat}
                                 overComposer
                                 overEnd={appsRoom}
