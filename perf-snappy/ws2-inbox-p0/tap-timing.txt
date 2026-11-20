@@ -1,0 +1,11 @@
+probe rows 92, commands 5, frames 202
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+
+most rendered components per path (summed over its taps):
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+
+whole run: 2s, 0 commits, 0 components rendered, 1007 ms of stalls over 3 stalls
+events: topHeaderHeightChange×25, topLoad×7, topLoadEnd×7, topLoadStart×7, topTransitionProgress×4, topFinishTransitioning×4, topWillAppear×3, topInsetsChange×2, topAppear×2, topTabSelected×1, topGlobalEvent×1, topDidAppear×1, topWindowChange×1
