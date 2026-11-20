@@ -1,10 +1,17 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { TASKS_READ } from "@repo/features/tasks-view";
 import { Context } from "effect";
 import { describe, expect, it } from "vitest";
 import type { AppStateSnapshot } from "./app-state.js";
-import { answerKeeper, selectInboxHoldings, shareAppState } from "./app-state-reads.js";
+import {
+  answerKeeper,
+  INBOX_FEED,
+  selectInboxFeed,
+  selectInboxHoldings,
+  shareAppState,
+} from "./app-state-reads.js";
 import { AppStateStore, initialAppState } from "./client/app-state-store.js";
 import { runModeFor } from "./run-mode.js";
 
@@ -126,5 +133,16 @@ describe("selectInboxHoldings", () => {
     expect(taskIdsOf(documentWith(byTask, true, []))).toEqual(["newer", "older"]);
     expect(taskIdsOf(documentWith(byTask, true, [{ taskId: "older" }]))).toEqual(["older"]);
     expect(taskIdsOf(documentWith(byTask, false, []))).toEqual([]);
+  });
+
+  it("reads the feed's rows as still on their first read while the task list they're grouped under is read or drawn", () => {
+    const listing = (listStatus: AppStateSnapshot["tasks"]["listStatus"]) => {
+      const document = documentWith(byTask, true, []);
+
+      return selectInboxFeed({ ...document, tasks: { ...document.tasks, listStatus } });
+    };
+
+    expect(listing(TASKS_READ.READING)).toBe(INBOX_FEED.READING);
+    expect(listing(TASKS_READ.READY)).toBe(INBOX_FEED.ANSWERED);
   });
 });

@@ -14,6 +14,7 @@ import { TURN_STATUS } from "@repo/wire";
 import { Deferred, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { taskListDelivery } from "./app-state.js";
+import { KEPT_LIST } from "./kept-lists.js";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
 import { agentListRow, planListRow } from "./testing/task-list-rows.js";
@@ -72,6 +73,75 @@ function countedPool(pool: EntityPool) {
 
 /** Lets the list's timer fiber run: arm its wait, or draw once that wait ends. */
 const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
+
+it.effect(
+  "a list the phone kept for an account of thousands stands before its rows are drawn, then draws every task, then every agent behind them",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        // Note that this test takes a few seconds, since its point is the size of the account that held a phone's start: 3,200 tasks and 5,400 agents.
+        const plans = Array.from({ length: 3_200 }, (_, at) => ({
+          ...planListRow(`task-${at}`, `Task ${at}`),
+          createdAt: at,
+        }));
+
+        const agents = Array.from({ length: 5_400 }, (_, at) => ({
+          ...agentListRow(`task-${at % plans.length}`, at),
+          id: `agent-${at}`,
+          turnId: `turn-${at}`,
+          turnStatus: TURN_STATUS.SETTLED,
+          queuedAt: at,
+          startedAt: at,
+          settledAt: at + 1,
+        }));
+
+        const kept = new Map<string, readonly unknown[]>([
+          [KEPT_LIST.TASK_LIST_PLANS.name, plans],
+          [KEPT_LIST.TASK_LIST_AGENTS.name, agents],
+        ]);
+
+        const pool = yield* entityPool({
+          mintKey: () => "key",
+          replayRefused: Effect.void,
+          store: {
+            rows: {
+              answered: () => Effect.void,
+              loaded: (name) =>
+                Effect.succeed({ rows: kept.get(name.read) ?? [], cursor: { at: "1" } }),
+            },
+          },
+        });
+
+        const drawings: LiveTaskList[] = [];
+
+        yield* taskListCollections({
+          pool,
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
+        });
+
+        // Standing drew nothing, so the host's first document never waits on the list.
+        assert.equal(drawings.length, 0);
+
+        yield* Effect.repeat(Effect.yieldNow, {
+          until: () => drawings.at(-1)?.taskAgents.length === agents.length,
+          times: 10_000,
+        });
+
+        // The tasks are drawn first, whole, for a task's row and the Inbox's threads under it, and their agents fill in behind.
+        const first = drawings[0];
+        assert.equal(first?.list.tasks.length, plans.length);
+        assert.ok((first?.taskAgents.length ?? 0) < agents.length);
+
+        const drawn = drawings.at(-1);
+        assert.equal(drawn?.list.tasks.length, plans.length);
+        assert.equal(drawn?.taskAgents.length, agents.length);
+      }),
+    ),
+);
 
 it.effect(
   "an agent's row that moves on an account of thousands draws its own agent and task again, reading no other row, every other task and agent the object drawn before, and the Done tasks the live set's instant passes leave with no row moving",

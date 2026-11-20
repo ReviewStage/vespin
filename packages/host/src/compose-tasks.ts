@@ -1746,13 +1746,24 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       if (stored !== undefined) {
         const { kept } = stored;
         listKeptAt = kept?.at;
-        // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands.
-        write({
-          listStatus: TASKS_READ.READY,
-          ...(kept?.taskWorkspaces === undefined
-            ? undefined
-            : { taskWorkspaces: kept.taskWorkspaces }),
-        });
+        const { collections, scope } = taskList;
+
+        // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands. It is said ready only once its kept rows are drawn, which is just after it stands, so no window reads an empty list as one with no tasks; where the follow answered first, its answer said so already.
+        yield* Effect.forkIn(
+          Effect.andThen(
+            collections.keptDrawn,
+            Effect.sync(() => {
+              if (view.listStatus === TASKS_READ.READY) return;
+              write({
+                listStatus: TASKS_READ.READY,
+                ...(kept?.taskWorkspaces === undefined
+                  ? undefined
+                  : { taskWorkspaces: kept.taskWorkspaces }),
+              });
+            }),
+          ),
+          scope,
+        );
       }
     }
 
