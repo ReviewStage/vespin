@@ -149,7 +149,7 @@ const POST_THREAD_WORDS =
   `or a PDF of at most ${MAX_PDF_MB} MB, kept as a file of the message; at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} a message, ` +
   "and pictures written next to each other stand side by side. " +
   `In place of a path, draw a picture, recording, or clip an agent of your workspace showed with ${AGENT_TOOL.SHOW_MEDIA} by the id that call answered, ` +
-  `or a task description's picture by its address as ${AGENT_TOOL.READ_TASK} writes it: either is copied into the message. ` +
+  `or a task's picture by the address ${AGENT_TOOL.READ_TASK} writes it at: either is copied into the message. ` +
   "Draw the picture a message is about in it, since the thread's reader never sees a transcript. " +
   "ask ends the message with what it asks: " +
   `decide (two to ${INBOX_BOUNDS.MAX_OPTIONS} options, each a short label and an optional detail, and the label you recommend; multiple lets them pick several, and recommended then takes a list; ` +
