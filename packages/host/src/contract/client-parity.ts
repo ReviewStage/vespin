@@ -110,7 +110,9 @@ const IOS = {
   ),
   DESKTOP_ONLY: byDesign("A desktop-only platform concern, refused by the iOS host"),
   DESK_TOOLS: byDesign("iOS v1 leaves the terminal and the live view to the desktop and the web"),
-  DICTATION: byDesign("iOS uses the keyboard's own dictation"),
+  DICTATION: byDesign(
+    "iOS asks for and opens the microphone itself, through iOS's own prompt and its own recorder, rather than the desktop's",
+  ),
   CALL_WINDOW: byDesign(
     "iOS floats no window over other apps; a call keeps on with the screen locked, and its way back stands over the tab bar",
   ),
@@ -242,7 +244,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.SOUND_RENAME]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_REMOVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_CHOOSE]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: panel(IOS.DICTATION),
+  [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: EVERYWHERE,
   [PORT_ACT_KIND.VOICE_OPEN]: EVERYWHERE,
   [PORT_ACT_KIND.ACCOUNT_ACTIVE]: panel(IOS.PRESENCE),
   [PORT_ACT_KIND.PUSH_DEVICE_REGISTER]: PHONE_ONLY,

@@ -74,10 +74,13 @@ export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-m
 
 export {
   Composer,
+  type ComposerDictation,
   ComposerFoot,
   type ComposerMenu,
   type ComposerSaving,
   type ComposerSendAs,
+  DICTATION_PHASE,
+  type DictationPhase,
 } from "./composer.js";
 
 export {
