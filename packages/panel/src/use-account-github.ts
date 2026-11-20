@@ -11,10 +11,11 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { actMutation } from "./act-mutations.js";
 import type { GitHubConnectControl } from "./github-connect.js";
+import { useMutationCalls } from "./mutation-calls.js";
 import { useToast } from "./toast.js";
 import { appStateQuery, selectFixtureStaged, selectListedTasks } from "./use-app-state.js";
 
@@ -32,8 +33,8 @@ export function useAccountGitHub(): GitHubConnectControl {
   const connection = useQuery({ ...appStateQuery, select: selectListedGitHub }).data;
   // A fixture's GitHub is connected nowhere.
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
-  const { mutateAsync: sendConnect } = useMutation(actMutation(ACT_KIND.GITHUB_CONNECT));
-  const { mutateAsync: sendDisconnect } = useMutation(actMutation(ACT_KIND.GITHUB_DISCONNECT));
+  const { mutateAsync: sendConnect } = useMutationCalls(actMutation(ACT_KIND.GITHUB_CONNECT));
+  const { mutateAsync: sendDisconnect } = useMutationCalls(actMutation(ACT_KIND.GITHUB_DISCONNECT));
   const toast = useToast();
 
   return useMemo(() => {

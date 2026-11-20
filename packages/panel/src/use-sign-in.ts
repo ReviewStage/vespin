@@ -2,10 +2,11 @@ import type { AccountProvider } from "@repo/credentials/snapshot";
 import { SIGN_IN_FAILURE, type SignInFailure } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
-import { useMutation } from "@tanstack/react-query";
+
 import { useCallback, useRef, useState } from "react";
 import { actMutation, pressMutation } from "./act-mutations.js";
 import { appPlatform } from "./app-platform.js";
+import { useMutationCalls } from "./mutation-calls.js";
 
 export interface SignIn {
   signInWait: AccountProvider | undefined;
@@ -22,11 +23,11 @@ export interface SignIn {
  * signed in or not.
  */
 export function useSignIn(): SignIn {
-  const { mutateAsync: beginAccountSignIn } = useMutation(
+  const { mutateAsync: beginAccountSignIn } = useMutationCalls(
     actMutation(ACT_KIND.ACCOUNT_BEGIN_SIGN_IN),
   );
 
-  const { mutate: cancelAccountSignIn } = useMutation(
+  const { mutate: cancelAccountSignIn } = useMutationCalls(
     pressMutation(ACT_KIND.ACCOUNT_CANCEL_SIGN_IN),
   );
 
