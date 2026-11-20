@@ -1,4 +1,4 @@
-import type { MouseEvent, Ref } from "react";
+import { type MouseEvent, memo, type Ref, useCallback, useRef } from "react";
 import { GLYPH } from "../../icons/glyph-registry.js";
 import { type ButtonLight, type ButtonSize, IconButton } from "../button/button.js";
 import { Tooltip } from "../tooltip/hint.js";
@@ -24,19 +24,8 @@ export function moreLabel(thing: string): string {
   return `${thing} actions`;
 }
 
-/** A ⋯ that drops the menu of `thing`'s acts, named "{thing} actions". */
-export function MoreButton({
-  thing,
-  size,
-  lights,
-  disabled,
-  tabbable,
-  ref,
-  onClick,
-  "aria-haspopup": hasPopup,
-  "aria-expanded": expanded,
-  "aria-describedby": describedBy,
-}: {
+/** What a ⋯ is handed. */
+interface MoreButtonProps {
   /** What it acts on, as a sentence opens with it: "Task", "Repository". */
   thing: string;
   size?: ButtonSize | undefined;
@@ -54,7 +43,21 @@ export function MoreButton({
   "aria-expanded"?: boolean | undefined;
   /** The id of the words naming which thing it is, where several stand side by side. */
   "aria-describedby"?: string | undefined;
-}): React.JSX.Element {
+}
+
+/** The ⋯ as drawn, held while what it shows holds (`MoreButton`). */
+const DrawnMoreButton = memo(function DrawnMoreButton({
+  thing,
+  size,
+  lights,
+  disabled,
+  tabbable,
+  ref,
+  onClick,
+  "aria-haspopup": hasPopup,
+  "aria-expanded": expanded,
+  "aria-describedby": describedBy,
+}: MoreButtonProps): React.JSX.Element {
   const label = moreLabel(thing);
 
   return (
@@ -74,4 +77,21 @@ export function MoreButton({
       />
     </Tooltip>
   );
+});
+
+/**
+ * A ⋯ that drops the menu of `thing`'s acts, named "{thing} actions".
+ *
+ * Note that its press is a steady one calling the newest handed over,
+ * because `useMenu`'s `trigger()` makes one afresh on each draw of its
+ * owner, and a header's or a row's ⋯ and its hint would then be drawn
+ * again with every draw of the list around them, though nothing they show
+ * moved.
+ */
+export function MoreButton({ onClick, ...shown }: MoreButtonProps): React.JSX.Element {
+  const newest = useRef(onClick);
+  newest.current = onClick;
+  const press = useCallback((event: MouseEvent<HTMLButtonElement>) => newest.current?.(event), []);
+
+  return <DrawnMoreButton {...shown} onClick={onClick === undefined ? undefined : press} />;
 }

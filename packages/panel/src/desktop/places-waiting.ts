@@ -92,7 +92,11 @@ export function useInboxViewCount(tasks: TasksControl): BarCount {
   );
 
   const value = tasks.signedIn ? counts[show] : 0;
-  const noun = INBOX_SHOW_COUNT[show];
 
-  return { value, noun: value === 1 ? noun.one : noun.many, tone: SHOW_TONE[show] };
+  // Note that the count stands while it says the same, because the Inbox's row holds while what it is handed does.
+  return useMemo(() => {
+    const noun = INBOX_SHOW_COUNT[show];
+
+    return { value, noun: value === 1 ? noun.one : noun.many, tone: SHOW_TONE[show] };
+  }, [value, show]);
 }
