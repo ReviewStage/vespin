@@ -10,9 +10,10 @@
 import type { InboxGroup } from "@repo/features/inbox-list-model";
 import { inboxGroupsIn, selectInboxHoldings } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
+import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 
 /** No holder grouped: what a read before the document lands answers. */
 const NO_GROUPS: readonly InboxGroup[] = [];
@@ -27,6 +28,12 @@ const NO_GROUPS: readonly InboxGroup[] = [];
 export function useInboxGroupsIn(workspaceId: string | undefined): readonly InboxGroup[] {
   const { data: holdings } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
   const listed = useListedTasks();
+  const read = holdings !== undefined;
+
+  // Note that the launch notes when a screen first grouped the Inbox, so `app:ready` says how much of its wait came after.
+  useEffect(() => {
+    if (read) noteLaunchPhase(LAUNCH_PHASE.INBOX);
+  }, [read]);
 
   return useMemo(
     () => (holdings === undefined ? NO_GROUPS : inboxGroupsIn(holdings, listed, workspaceId)),

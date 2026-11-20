@@ -27,6 +27,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
+import { noteDelivered } from "../launch-phases.js";
 
 /** The one key the document is held under in the app's client. */
 const APP_STATE_KEY = "app-state";
@@ -68,6 +69,7 @@ export function followAppStateInto(
     bridge,
     (state) => {
       client.setQueryData(appStateQuery.queryKey, state);
+      noteDelivered();
 
       return undefined;
     },
