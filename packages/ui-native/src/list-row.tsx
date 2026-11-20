@@ -54,7 +54,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
+import { createContext, Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
@@ -635,14 +635,22 @@ export function RowFrame({
   const colors = useColors();
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
-  const selected = useContext(RowSelectedContext) === id;
+  const disclosed = useContext(RowDisclosedContext);
+  const selected = useContext(RowSelectedContext) === id && !disclosed;
   const choosing = useContext(RowChoosingContext);
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors, selected, vertical, indent, leading),
+    ...rowPlacement(
+      colors,
+      selected,
+      vertical,
+      indent,
+      // Note that a disclosure's label stands past the disclosure's own inset, its fill's, so it takes that much less of its own.
+      disclosed ? (leading ?? ROW_INSET.LEADING) - ROW_INSET.FILL : leading,
+    ),
     ...(heard === undefined
       ? []
       : [
@@ -1166,6 +1174,9 @@ function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   }
 }
 
+/** Whether a row stands as a disclosure's label, whose disclosure draws the row's selected fill rather than the row itself, so the fill holds the chevron. */
+const RowDisclosedContext = createContext(false);
+
 /**
  * A row with the rows nested under it, folded by SwiftUI's own disclosure,
  * as Files and Notes fold a folder: the row stands as its label, its
@@ -1176,27 +1187,45 @@ function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
  * row's own press, which opens what the row is, so only the chevron folds.
  */
 export function RowDisclosure({
+  id,
   open,
   onOpenChange,
   label,
   children,
 }: {
+  /** The id its label's row is picked by, so the disclosure's row stands selected when it is. */
+  readonly id: string;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly label: ReactNode;
   readonly children: ReactNode;
 }) {
-  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it; its trailing inset keeps the chevron off the column's edge, and the system sets its rows in under the parent's name.
+  const colors = useColors();
+  const selected = useContext(RowSelectedContext) === id;
+
+  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground, its insets and its selected fill here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's, and its fill stopped short of the chevron the system stands after the label. Its trailing padding keeps the chevron off the column's edge, inside the fill, and the system sets its rows in under the parent's name.
   return (
     <DisclosureGroup
       isExpanded={open}
       onIsExpandedChange={onOpenChange}
       modifiers={[
-        listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
+        listRowInsets({ leading: ROW_INSET.FILL, trailing: ROW_INSET.FILL, top: 0, bottom: 0 }),
         listRowBackground("clear"),
+        padding({ trailing: SPACE.EDGE - ROW_INSET.FILL }),
+        ...(selected
+          ? [
+              background(
+                colors.SELECTED,
+                SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
+              ),
+              listRowSeparator("hidden"),
+            ]
+          : []),
       ]}
     >
-      <DisclosureGroup.Label>{label}</DisclosureGroup.Label>
+      <DisclosureGroup.Label>
+        <RowDisclosedContext value={true}>{label}</RowDisclosedContext>
+      </DisclosureGroup.Label>
       {children}
     </DisclosureGroup>
   );
