@@ -1,6 +1,7 @@
 import { AGENT_MACHINE, type AgentRunsOnRequest } from "@repo/features/agent-wire";
 import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
+  AUTOMATION_RUN_REASON,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
@@ -293,6 +294,23 @@ export function memberOfAutomationWorkspace(
           roles === undefined ? undefined : roleAmong(roles),
         ),
       ),
+  );
+}
+
+/**
+ * The condition that a failed run of the automation a statement names is
+ * told to the account: one of its own, while it is a member of the
+ * automation's workspace, or, for an owner or an admin of it, one that
+ * failed because its creator left, so somebody still here hears of it.
+ */
+export function failedRunToldTo(userId: string): SQL | undefined {
+  return or(
+    and(eq(automation.userId, userId), memberOfAutomationWorkspace(userId)),
+    and(
+      memberOfAutomationWorkspace(userId, [WORKSPACE_ROLE.OWNER, WORKSPACE_ROLE.ADMIN]),
+      not(memberOfAutomationWorkspace(automation.userId)),
+      eq(automationRun.reason, AUTOMATION_RUN_REASON.CREATOR_LEFT),
+    ),
   );
 }
 
@@ -1021,9 +1039,10 @@ const FailedRunRowSchema = Schema.Struct({
 
 /**
  * The newest run of each of the account's own automations that failed to
- * start since `since`, the latest first. Note that the account must still
- * be a member of the automation's workspace, because a creator who left
- * reaches nothing of it.
+ * start since `since`, the latest first, and of each one whose creator left
+ * a workspace the account owns or administers (`failedRunToldTo`). Note
+ * that the account must still be a member of the automation's workspace,
+ * because a creator who left reaches nothing of it.
  */
 const findOwnFailedRuns = SqlSchema.findAll({
   Request: Schema.Struct({ userId: Schema.String, since: Schema.Date }),
@@ -1044,8 +1063,7 @@ const findOwnFailedRuns = SqlSchema.findAll({
         .innerJoin(automation, eq(automation.id, automationRun.automationId))
         .where(
           and(
-            eq(automation.userId, userId),
-            memberOfAutomationWorkspace(userId),
+            failedRunToldTo(userId),
             eq(automationRun.status, AUTOMATION_RUN_STATUS.FAILED),
             gte(automationRun.settledAt, since),
           ),
