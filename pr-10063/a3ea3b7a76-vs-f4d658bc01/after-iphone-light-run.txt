@@ -1,0 +1,38 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow ftext-phone
+Set orientation PORTRAIT... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-1-inbox...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that (Optional) "zz-no-such-words" is visible... WARNED
+Take screenshot ${P}-2-thread... COMPLETED
+Swipe from (2%, 50%) to (85%, 50%) in 400 ms... COMPLETED
+Tap on id: tasks-tab... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-3-tasks... COMPLETED
+Tap on "Weekly digest email"... COMPLETED
+Assert that (Optional) "zz-no-such-words" is visible... WARNED
+Take screenshot ${P}-4-task... COMPLETED
+Tap on (Optional) "Send the weekly digest"... COMPLETED
+Assert that (Optional) "zz-no-such-words" is visible... WARNED
+Take screenshot ${P}-5-agent... COMPLETED
+Swipe from (2%, 50%) to (85%, 50%) in 400 ms... COMPLETED
+Swipe from (2%, 50%) to (85%, 50%) in 400 ms... COMPLETED
+Tap on id: inbox-tab... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-7-switcher-menu... COMPLETED
+Tap on "Settings(, .*)?"... COMPLETED
+Assert that (Optional) "zz-no-such-words" is visible... WARNED
+Take screenshot ${P}-6-settings... COMPLETED
