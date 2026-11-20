@@ -1,0 +1,10 @@
+== bundle PJj9974ax3 base 9f9d9d2da7
+  built 9f9d9d2da7 base app Vmain4.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-ax3: fails 0 shots 4 
+iphone-dark-ax3: fails 0 shots 4 
+ipad27-light-ax3: fails 0 shots 4 
+ipad27-dark-ax3: fails 0 shots 4 
