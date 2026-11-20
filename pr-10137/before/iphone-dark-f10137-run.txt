@@ -31,6 +31,11 @@ Run flow when "New task" is visible...
   Tap on (Optional) "New task"... COMPLETED
 Run flow when "New task" is visible... COMPLETED
 Wait for animation to end... COMPLETED
+Tap on (Optional) "Continue"... WARNED
+Run flow when "(space|return|Return)" is visible...
+  Hide Keyboard... COMPLETED
+Run flow when "(space|return|Return)" is visible... COMPLETED
+Wait for animation to end... COMPLETED
 Tap on (Optional) "(Model|.*Opus.*|.*Sonnet.*|.*Fable.*)"... COMPLETED
 Wait for animation to end... COMPLETED
 Take screenshot newtask-sheet-half... COMPLETED
