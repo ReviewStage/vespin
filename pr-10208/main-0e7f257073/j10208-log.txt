@@ -1,0 +1,13 @@
+== bundle PJj10208 base 0e7f257073
+  built 0e7f257073 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-compose: fails 0 shots 9 
+iphone-light-agent: fails 0 shots 23 
+iphone-dark-compose: fails 0 shots 9 
+iphone-dark-agent: fails 0 shots 23 
+ipad27-light-compose: fails 0 shots 9 
+ipad27-dark-compose: fails 0 shots 9 
+iphone-mic-prompt: fails 0 shots 2 
