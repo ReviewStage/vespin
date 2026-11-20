@@ -25,7 +25,7 @@ import {
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
-import { AGENT_KIND, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
+import { AGENT_KIND, AGENT_MACHINE, AGENT_PAYER, type AgentKind } from "@repo/features/agent-wire";
 import { BROWSER_AGENT_ACTION } from "@repo/features/browser-agent-actions";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
@@ -320,6 +320,38 @@ function assignedTo(agent: { readonly organizationId: string; readonly taskId: s
 }
 
 /** A Codex agent on a task in no repository, with a runner's bearer recorded for its conversation. */
+/** An agent with a bearer, started by another agent of its starter's of the kind given. */
+const agentStartedBy = (kind: AgentKind) =>
+  Effect.gen(function* () {
+    const agent = yield* agentWithBearer;
+
+    const started = yield* createAgent(agent.userId, {
+      taskId: null,
+      workspaceId: agent.organizationId,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: null,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+    });
+
+    const starter = Option.getOrThrow(started).agent;
+    yield* Database.use((db) =>
+      Effect.all([
+        db.update(agentTable).set({ kind }).where(eq(agentTable.id, starter.id)),
+        db
+          .update(agentTable)
+          .set({ startedByAgentId: starter.id })
+          .where(eq(agentTable.id, agent.agentId)),
+      ]),
+    );
+
+    return agent;
+  });
+
 const agentInNoRepositoryWithBearer = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
@@ -839,6 +871,16 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         return agent;
       }),
+      withheld: [],
+    },
+    {
+      why: "started by a Manager, the threads it posts and withdraws",
+      agent: agentStartedBy(AGENT_KIND.MANAGER),
+      withheld: ["post_thread", "withdraw_ask"],
+    },
+    {
+      why: "started by an ordinary agent, nothing more",
+      agent: agentStartedBy(AGENT_KIND.CODER),
       withheld: [],
     },
     {

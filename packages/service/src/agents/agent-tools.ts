@@ -58,6 +58,7 @@ import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentFailure,
@@ -1750,7 +1751,9 @@ function runOfCaller(calling: Agent) {
  * `message_agent` by that agent's id, as every word between two agents goes
  * (`coder-host/agent-message.ts`), and that it posts its own threads and
  * sends that agent each one's mention, so the developer never hears of one
- * thing from both agents, then the note it was given.
+ * thing from both agents, or, where a Manager started it, which closes its
+ * threads (`tool-catalog/gates.ts`'s `UNMANAGED`), that it reports to that
+ * Manager alone, then the note it was given.
  */
 function startedByNote(starter: Agent, note: string | undefined): string {
   const lead =
@@ -1758,8 +1761,10 @@ function startedByNote(starter: Agent, note: string | undefined): string {
     `not by the developer. Message it with ${AGENT_TOOL.MESSAGE_AGENT}, its agentId ${starter.id}, ` +
     "when you finish, with what you did, what you published, and what you need of it, and whenever " +
     "you need something from it; if your turn fails, it is told. " +
-    "Post your own threads to the developer, with their pictures, as your instructions say, and " +
-    "send that agent each thread's mention, so it posts none of its own on the same thing.";
+    (starter.kind === AGENT_KIND.MANAGER
+      ? `It is a Manager, and you post no threads: send your questions and reports to it with ${AGENT_TOOL.MESSAGE_AGENT}, and it reaches people for you.`
+      : "Post your own threads to the developer, with their pictures, as your instructions say, and " +
+        "send that agent each thread's mention, so it posts none of its own on the same thing.");
 
   return note === undefined ? lead : `${lead}\n\n${note}`;
 }
@@ -2488,9 +2493,7 @@ export function runStartAgent(
     const taskless = callerAgent(call.caller) !== undefined && callerTask(call.caller) === null;
 
     return Effect.succeed(
-      agentToolRejected(
-        taskless ? START_AGENT_REFUSAL.NO_OWN_TASK : START_AGENT_REFUSAL.NO_TASK,
-      ),
+      agentToolRejected(taskless ? START_AGENT_REFUSAL.NO_OWN_TASK : START_AGENT_REFUSAL.NO_TASK),
     );
   }
 
