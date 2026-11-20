@@ -72,8 +72,8 @@ builds a control of its own.
   Send, or, with nothing typed, Stop while an agent works; its + is one act
   or a native menu (`ComposerMenu`: an agent's Photos and MCP servers, as
   the desktop's + holds them); where it holds capsules it stands as the
-  desktop composer does, its field on top, two lines tall once a word is
-  typed, and under it one row of the + and the capsules saying where the
+  desktop composer does, its field on top, one line until its words wrap,
+  and under it one row of the + and the capsules saying where the
   message runs, then at its end the model chip (`trailing`, whose sheet
   holds the model, effort, Fast and the permission mode, each once),
   Dictate, and Send, a dictation under way standing its strip in the row's

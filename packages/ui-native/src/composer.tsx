@@ -630,8 +630,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const empty = words.trim() === "" && !sendable;
   const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
   const rowed = stacked(props);
-  // Note that a field over a row of controls opens to two lines once a word is typed, as the desktop composer's does, so what is typed has room before it grows. The limit is always a range, because `@expo/ui` draws a range and a bare limit down two branches, and a switch between them made the field anew, dropping the keyboard after the first letter typed.
-  const height = lineLimit({ min: rowed && words !== "" ? 2 : 1, max: lines });
+  // Note that the field stands one line until its words wrap, then grows to its most. The limit is a range, because `@expo/ui` draws a range and a bare limit down two branches, and a switch between them made the field anew, dropping the keyboard.
+  const height = lineLimit({ min: 1, max: lines });
 
   const send =
     onSend === undefined
