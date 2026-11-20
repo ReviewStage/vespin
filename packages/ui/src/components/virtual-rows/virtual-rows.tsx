@@ -29,7 +29,13 @@ import {
 import { joinRefs } from "../../join-refs.js";
 import { offsetWithin } from "../../offset-within.js";
 import { motionRows } from "../list-motion/list-motion.js";
-import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/roving-keys.js";
+import {
+  ROVING_REACH,
+  type RovingReach,
+  reachedKey,
+  rovingItemIn,
+  rovingStopsOf,
+} from "../roving-keys/roving-keys.js";
 
 /**
  * virtual-rows.tsx -- a long run of rows in a scroller of the caller's, drawing only those near the view, anchored to its last.
@@ -98,7 +104,10 @@ import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/rovin
  *
  * A list of several runs, a list's groups each one, holds each while it
  * stands (`useVirtualRuns`), so a row any of them leaves undrawn is brought
- * in by its key alone.
+ * in by its key alone. A walk over runs and items drawn whole beside them,
+ * as Home's Inbox and Recent are one walk, reads each run's every row where
+ * its block stands among the items (`reachAcrossRuns`), so a key goes on
+ * to the row after the last one drawn rather than to the next list.
  *
  * Where it is asked to (`holdsFocus`), as a list walked by the keyboard
  * is, a row holding the keyboard stays drawn wherever the run is scrolled,
@@ -295,6 +304,93 @@ export function reachInRun(
     }
 
     return handle.bringIn(key, (row) => rovingItemIn(row)?.focus());
+  };
+}
+
+/** One stop of a walk across runs: a run's row by its key, drawn or not, or an item drawn whole beside the runs. */
+type WalkStop =
+  | { readonly run: VirtualRowsHandle; readonly key: string }
+  | { readonly item: HTMLElement };
+
+/** Every stop of the walk `box` holds, in the order it stands: each run's every row where its block stands, and each item drawn whole. */
+function walkStopsOf(box: HTMLElement): WalkStop[] {
+  return rovingStopsOf(box, ".ui-virtual-rows").flatMap((each): WalkStop[] => {
+    const run = RUNS.get(each);
+
+    if (run !== undefined) return run.keys().map((key) => ({ run, key }));
+    const block = each.closest(".ui-virtual-rows");
+
+    // Note that a run's rows drawn are counted with its block, which comes before them.
+    return block !== null && RUNS.has(block) && box.contains(block) ? [] : [{ item: each }];
+  });
+}
+
+/** Whether `stop` is the item in hand. */
+function holdsHand(stop: WalkStop, item: HTMLElement): boolean {
+  if ("item" in stop) return stop.item === item;
+  const block = item.closest(".ui-virtual-rows");
+
+  const key = item
+    .closest(`[${VIRTUAL_ROW_KEY_ATTRIBUTE}]`)
+    ?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE);
+
+  return block !== null && RUNS.get(block) === stop.run && key === stop.key;
+}
+
+/** Takes the focus to `stop`'s item, its row brought in where it is not drawn; answers whether it could. */
+function focusStop(stop: WalkStop): boolean {
+  if ("item" in stop) {
+    stop.item.focus();
+
+    return true;
+  }
+
+  const drawn = stop.run.rowElement(stop.key);
+  const item = drawn === undefined ? undefined : rovingItemIn(drawn);
+
+  if (item !== undefined) {
+    item.focus();
+
+    return true;
+  }
+
+  return stop.run.bringIn(stop.key, (row) => rovingItemIn(row)?.focus());
+}
+
+/**
+ * What a walk over runs of rows and items drawn whole beside them hands
+ * its walk (`useRovingKeys`' `reach`), as Home's rows are its Inbox's run
+ * and Recent's rows: a key goes on to the item it reaches among every run's
+ * rows, drawn or not, and the items between them, in the order they stand,
+ * wrapping at either end, a row not drawn brought in. A box that stands in
+ * the walk, a run's, is read with its rows wherever it is scrolled to,
+ * though it draws none of them.
+ */
+export function reachAcrossRuns(
+  box: RefObject<HTMLElement | null>,
+): (from: HTMLElement | undefined, to: RovingReach) => boolean {
+  return (from, to) => {
+    const root = box.current;
+
+    if (root === null) return false;
+    const stops = walkStopsOf(root);
+    const at = from === undefined ? -1 : stops.findIndex((stop) => holdsHand(stop, from));
+    const last = stops.length - 1;
+
+    const index =
+      to === ROVING_REACH.FIRST
+        ? 0
+        : to === ROVING_REACH.LAST
+          ? last
+          : at < 0
+            ? undefined
+            : to === ROVING_REACH.NEXT
+              ? (at + 1) % stops.length
+              : (at + last) % stops.length;
+
+    const stop = index === undefined ? undefined : stops[index];
+
+    return stop === undefined ? false : focusStop(stop);
   };
 }
 

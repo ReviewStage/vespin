@@ -1527,8 +1527,8 @@ function useLaidOut(
   return steady;
 }
 
-/** How tall a row is taken to be before it is drawn, in pixels: its three lines and its insets. */
-const ROW_ESTIMATE_PX = 72;
+/** How tall a row is taken to be before it is drawn, in pixels: its three lines and its insets, wherever its rows are listed. */
+export const INBOX_ROW_ESTIMATE_PX = 72;
 
 /**
  * The room between two rows, in pixels: the tight gap (`--ui-tight-gap`),
@@ -1586,7 +1586,7 @@ function InboxRows({
       scroller={place.scroller}
       shiftedBy={place.body}
       keys={keys}
-      estimate={ROW_ESTIMATE_PX}
+      estimate={INBOX_ROW_ESTIMATE_PX}
       gap={ROW_GAP_PX}
       overscan={place.finding ? keys.length : undefined}
       anchor={VIRTUAL_ROWS_ANCHOR.START}

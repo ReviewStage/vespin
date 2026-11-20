@@ -265,6 +265,21 @@ export function focusRovingStop(box: HTMLElement): boolean {
   return stop !== undefined;
 }
 
+/**
+ * The items of the set `box` holds that can take the focus, and every box
+ * matching `beside` that stands in the set, in the order they are drawn, as
+ * a set walking runs of rows drawing only some of theirs reads each run's
+ * block among its items (`reachAcrossRuns`).
+ */
+export function rovingStopsOf(box: HTMLElement, beside: string): HTMLElement[] {
+  return Array.from(box.querySelectorAll<HTMLElement>(`[${ITEM_ATTRIBUTE}], ${beside}`)).filter(
+    (each) =>
+      each.hasAttribute(ITEM_ATTRIBUTE)
+        ? each.parentElement?.closest(`[${BOX_ATTRIBUTE}]`) === box && available(each)
+        : each.closest(`[${BOX_ATTRIBUTE}]`) === box,
+  );
+}
+
 type RovingItemResult = { readonly "data-roving-item": "" };
 
 /** What an item of a roving set wears, spread on the element that takes the focus. */

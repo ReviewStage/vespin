@@ -7,6 +7,7 @@ import {
   Arrival,
   DetailPage,
   ErrorState,
+  joinRefs,
   PAGE_FRAME,
   STATUS_TONE,
   useMinute,
@@ -14,6 +15,7 @@ import {
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
+import { reachAcrossRuns } from "@repo/ui/virtual-rows";
 import { useMemo, useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
@@ -72,7 +74,10 @@ import { RecentTasks } from "./recent-tasks.js";
  *
  * The rows of both sections are one Tab stop that ↑ and ↓ walk from the
  * first Inbox item to the last recent task (`useRovingKeys`), and Return
- * opens the row reached, so a launch is a key or two from a task. Until the
+ * opens the row reached, so a launch is a key or two from a task. The
+ * Inbox draws only the rows near the view (`InboxItemRows`), so the walk
+ * reads its every row where it stands (`reachAcrossRuns`), and a step past
+ * the last one drawn goes on to the next item rather than to Recent. Until the
  * task list is read the page draws what it already knows, the greeting and
  * the composer, which hang on no list, and nothing where the sections will
  * stand, unless the read has stood a while, when one quiet line says it is
@@ -309,8 +314,10 @@ export function DesktopHome({
   /** Whether a fixture stages the window, whose tasks' looks are its own rather than kept (`useUnreadTasks`). */
   staged: boolean;
 }): React.JSX.Element {
-  // The rows of both sections, one walk for ↑ and ↓ from the first Inbox item to the last task.
-  const roving = useRovingKeys<HTMLDivElement>();
+  // The rows of both sections, one walk for ↑ and ↓ from the first Inbox item to the last task, the Inbox's undrawn rows among them.
+  const rows = useRef<HTMLDivElement>(null);
+  const roving = useRovingKeys<HTMLDivElement>({ reach: reachAcrossRuns(rows) });
+  const rowsRef = useMemo(() => joinRefs(rows, roving.ref), [roving.ref]);
   // Note that on a phone the words leave the caret alone, because a field typed in puts the places bar away (`mobile-bar.tsx`).
   const takesFocus = room !== SHELL_ROOM.NARROW;
   const read = useWaitingItems(tasks);
@@ -329,7 +336,7 @@ export function DesktopHome({
       <DetailPage frame={PAGE_FRAME.PAGE} title={greeting(accountName, fresh)}>
         <HomeComposer tasks={tasks} takesFocus={takesFocus} />
         {/* Note that the box lays nothing out: it only hears the arrows its rows walk by. */}
-        <div className="home-rows contents" {...roving}>
+        <div className="home-rows contents" {...roving} ref={rowsRef}>
           {/* Note that the sections stand in one mark, so a section still follows the last (`person-frame.tsx`), and their names, counts, and notes show in a screen recording while each masks its rows. */}
           <ReplayUnmask>
             <Arrival reading={arriving} label={READING_TASKS}>
