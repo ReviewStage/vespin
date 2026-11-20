@@ -367,10 +367,12 @@ function OwnAgentPage({
   tasks,
   agent,
   away,
+  staged,
 }: {
   tasks: TasksControl;
   agent: ListedAgent;
   away: TaskHeadBack | undefined;
+  staged: boolean;
 }): React.JSX.Element {
   const place = useOwnAgentPlace(tasks, agent, tasks.agents.models);
   const agents = useOwnAgents(tasks, agent, place);
@@ -428,7 +430,7 @@ function OwnAgentPage({
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
           {overview ? (
             <Fill flow={FILL_FLOW.ROW} className="manager-page">
-              <ManagerOverview tasks={tasks} manager={agent} threads={threads} />
+              <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
               <div
                 className="manager-page-chat"
                 style={cssCustomProperties({ "--manager-chat-width": `${chatWidth.width}px` })}
@@ -464,10 +466,13 @@ function OwnAgentPage({
 export function AgentRoutePage({
   tasks,
   away,
+  staged = false,
 }: {
   tasks: TasksControl;
   /** A phone's way back out of the page, the window's Back; none elsewhere. */
   away?: TaskHeadBack | undefined;
+  /** Whether a fixture stages the window, whose tasks' looks are its own rather than kept (`useUnreadTasks`). */
+  staged?: boolean | undefined;
 }): React.JSX.Element {
   const { agentId } = useParams({ from: "/places/$workspace/agent/$agentId" });
   const found = useAgentFound(tasks, agentId);
@@ -488,7 +493,9 @@ export function AgentRoutePage({
   }
 
   if ("agent" in found)
-    return <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} />;
+    return (
+      <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} staged={staged} />
+    );
 
   // In the page's own frame, so its row and sheet stand where the task's agent tab will.
   return (
