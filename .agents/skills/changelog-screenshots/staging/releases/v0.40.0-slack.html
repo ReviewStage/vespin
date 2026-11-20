@@ -1,0 +1,112 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+/* v0.40.0-slack.html -- 0.40.0's Vespin in Slack: a mockup of acme's Slack, its #relay-eng thread open, where an agent answers Dana in short messages, shares what it made, and reacts for itself.
+ *
+ * Lato is Slack's face: lay @fontsource/lato's latin 400, 700, and 900 woff2 under fonts/ beside this file (npm pack @fontsource/lato@5).
+ * Render it with headless Chromium at a device scale of 2 on a transparent page (omitBackground), then frame it with
+ * scripts/changelog-screenshot.sh --from, which finds the window by its opaque body as it finds a real capture's. */
+@font-face{font-family:Lato;src:url(fonts/lato-latin-400-normal.woff2) format("woff2");font-weight:400}
+@font-face{font-family:Lato;src:url(fonts/lato-latin-700-normal.woff2) format("woff2");font-weight:700}
+@font-face{font-family:Lato;src:url(fonts/lato-latin-900-normal.woff2) format("woff2");font-weight:900}
+html,body{margin:0;background:transparent}
+body{width:1720px;height:1120px;display:flex;align-items:center;justify-content:center;font-family:Lato,sans-serif;-webkit-font-smoothing:antialiased}
+.win{width:1600px;height:1000px;border-radius:12px;overflow:hidden;background:#3f0e40;display:grid;grid-template-rows:38px 1fr;box-shadow:0 0 0 .5px rgba(0,0,0,.6),0 22px 48px rgba(0,0,0,.45),0 4px 12px rgba(0,0,0,.3)}
+.title{display:flex;align-items:center;padding:0 14px;gap:8px;position:relative}
+.dot{width:12px;height:12px;border-radius:50%}
+.search{position:absolute;left:50%;transform:translateX(-50%);width:600px;height:24px;border-radius:6px;background:rgba(255,255,255,.18);color:rgba(255,255,255,.85);font-size:13px;display:flex;align-items:center;padding-left:28px;box-sizing:border-box}
+.body{display:grid;grid-template-columns:70px 260px 1fr 640px;background:#1a1d21;margin:0 6px 6px 0;border-radius:0 0 10px 0;overflow:hidden}
+.rail{background:#3f0e40;display:flex;flex-direction:column;align-items:center;padding-top:10px;gap:18px;color:#fff;font-size:11px}
+.rail .ws{width:36px;height:36px;border-radius:9px;background:#0f766e;display:flex;align-items:center;justify-content:center}
+.rail .ws img{width:22px}
+.rail .it{display:flex;flex-direction:column;align-items:center;gap:4px;opacity:.85}
+.rail .ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.rail .on .ico{background:rgba(255,255,255,.2)}
+.side{background:#2b0e2c;color:rgba(255,255,255,.75);padding:14px 10px;font-size:15px}
+.side h1{font-size:18px;font-weight:900;color:#fff;margin:2px 8px 16px}
+.side h2{font-size:14px;font-weight:400;margin:14px 8px 6px;opacity:.8}
+.side .row{padding:5px 10px;border-radius:6px;display:flex;align-items:center;gap:8px}
+.side .row.sel{background:#1164a3;color:#fff}
+.side .row.bold{color:#fff;font-weight:700}
+.side .sq{width:20px;height:20px;border-radius:4px;display:inline-block}
+.main{display:flex;flex-direction:column;border-right:1px solid #35373b;color:#d1d2d3}
+.head{height:50px;border-bottom:1px solid #35373b;display:flex;align-items:center;padding:0 20px;font-weight:900;font-size:18px;color:#fff;gap:6px}
+.feed{flex:1;padding:16px 20px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px}
+.msg{display:grid;grid-template-columns:40px 1fr;gap:10px;font-size:15px;line-height:1.46}
+.av{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#1a1d21;overflow:hidden}
+.av img{width:100%;height:100%;object-fit:cover}
+.nm{font-weight:900;color:#fff;margin-right:6px}
+.app{font-size:10px;font-weight:700;background:rgba(255,255,255,.12);color:#c9cacb;padding:1px 4px;border-radius:3px;margin-right:6px;vertical-align:2px}
+.ts{font-size:12px;color:#9a9b9d}
+.mention{background:rgba(29,155,209,.18);color:#1d9bd1;border-radius:3px;padding:0 2px}
+.link{color:#1d9bd1}
+.replies{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:13px;font-weight:700;color:#1d9bd1}
+.replies .av{width:22px;height:22px;border-radius:4px;font-size:11px}
+.reacts{display:flex;gap:6px;margin-top:6px}
+.re{display:flex;align-items:center;gap:5px;font-size:12px;color:#d1d2d3;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:1px 8px}
+.re.mine{background:rgba(29,155,209,.15);border-color:#1d9bd1;color:#1d9bd1}
+.re .e{font-family:"Noto Color Emoji","Apple Color Emoji",sans-serif;font-size:14px}
+.box{margin:0 20px 18px;border:1px solid #565856;border-radius:8px;height:88px;color:#8b8c8e;font-size:15px;padding:12px;box-sizing:border-box}
+.thread{display:flex;flex-direction:column;color:#d1d2d3;background:#1a1d21}
+.thread .head{justify-content:flex-start}
+.thread .head small{font-weight:400;font-size:14px;color:#9a9b9d;margin-left:6px}
+.tfeed{flex:1;padding:16px 22px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.sep{display:flex;align-items:center;gap:10px;font-size:13px;color:#9a9b9d}
+.sep:after{content:"";flex:1;border-top:1px solid #35373b}
+.shot{margin-top:8px;width:360px;border-radius:8px;overflow:hidden;border:1px solid #35373b;background:#f3f1ec;color:#1b1d21;font-family:-apple-system,"Helvetica Neue",Arial,sans-serif}
+.shot .bar{height:26px;background:#fff;border-bottom:1px solid #e2e0da;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:11px;color:#6b6f76}
+.shot .card{margin:14px;background:#fff;border:1px solid #e2e0da;border-radius:8px;padding:16px}
+.shot .sub{font-size:11px;color:#6b6f76}
+.shot .h{font-size:16px;font-weight:700;margin:6px 0 4px}
+.shot .p{font-size:12px;color:#4b4f56;line-height:1.4}
+.shot .btn{display:inline-block;margin-top:10px;background:#0f766e;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:6px}
+.file{font-size:12px;color:#9a9b9d;margin-top:6px}
+</style></head><body><div class="win">
+<div class="title"><span class="dot" style="background:#ff5f57"></span><span class="dot" style="background:#febc2e"></span><span class="dot" style="background:#28c840"></span><div class="search">Search acme</div></div>
+<div class="body">
+ <div class="rail"><div class="ws"><img src="../../assets/acme-mark.svg"></div>
+  <div class="it on"><div class="ico">⌂</div>Home</div><div class="it"><div class="ico">✉</div>DMs</div><div class="it"><div class="ico">🔔︎</div>Activity</div></div>
+ <div class="side"><h1>acme ▾</h1>
+  <h2>▾ Channels</h2>
+  <div class="row"># general</div><div class="row sel"># relay-eng</div><div class="row"># web</div><div class="row"># billing</div><div class="row"># design</div>
+  <h2>▾ Direct messages</h2>
+  <div class="row"><span class="sq" style="background:#f6c69b"></span>Dana Moreno</div>
+  <div class="row"><span class="sq" style="background:#d9c6f5"></span>Priya Raman</div>
+  <div class="row"><span class="sq" style="background:#a9d3f5"></span>Theo Walsh</div>
+  <h2>▾ Apps</h2>
+  <div class="row"><span class="sq" style="background:url(../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png) center/cover"></span>Vespin</div>
+ </div>
+ <div class="main"><div class="head"># relay-eng</div>
+  <div class="feed">
+   <div class="sep">Today</div>
+   <div class="msg"><div class="av" style="background:#d9c6f5">P</div><div><span class="nm">Priya Raman</span><span class="ts">1:52 PM</span><div>Seat counts on the billing page look right now that pending invites are left out 🎉</div></div></div>
+   <div class="msg"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">2:14 PM</span>
+    <div>The invite email's subject just says "You've been invited". <span class="mention">@Vespin</span> can it name the workspace?</div>
+    <div class="reacts"><span class="re mine"><span class="e">👀</span>1</span><span class="re mine"><span class="e">✅</span>1</span></div>
+    <div class="replies"><span class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></span><span class="av" style="background:#f6c69b">D</span>5 replies <span class="ts" style="font-weight:400">Last reply today at 2:23 PM</span></div></div></div>
+  </div>
+  <div class="box">Message #relay-eng</div>
+ </div>
+ <div class="thread"><div class="head">Thread <small># relay-eng</small></div>
+  <div class="tfeed">
+   <div class="msg"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">2:14 PM</span>
+    <div>The invite email's subject just says "You've been invited". <span class="mention">@Vespin</span> can it name the workspace?</div>
+    <div class="reacts"><span class="re mine"><span class="e">👀</span>1</span><span class="re mine"><span class="e">✅</span>1</span></div></div></div>
+   <div class="sep">5 replies</div>
+   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:14 PM</span>
+    <div>On it. Reading the invite email in acme/relay.</div></div></div>
+   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:18 PM</span>
+    <div>Done: the subject now reads <b>Dana invited you to acme on Relay</b>, and the email names the workspace up top too.</div>
+    <div class="shot"><div class="bar">Dana invited you to acme on Relay</div><div class="card"><div class="sub">Relay · acme</div><div class="h">Join acme on Relay</div><div class="p">Dana Moreno invited you to the acme workspace. The link works for 7 days.</div><div class="btn" style="background:#3b3f46">Accept invite</div></div></div>
+    <div class="file">invite-email.png</div></div></div>
+   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:18 PM</span>
+    <div>It's on <span class="link">#236 Name the workspace in the invite email</span>, and checks pass.</div></div></div>
+   <div class="msg"><div class="av" style="background:#f6c69b">D</div><div><span class="nm">Dana Moreno</span><span class="ts">2:21 PM</span>
+    <div>nice! can the button be teal like the rest of Relay?</div>
+    <div class="reacts"><span class="re mine"><span class="e">👍</span>1</span></div></div></div>
+   <div class="msg"><div class="av"><img src="../../../../../apps/web/public/changelog/email/2026-11-16/vespin-icon.png"></div><div><span class="nm">Vespin</span><span class="app">APP</span><span class="ts">2:23 PM</span>
+    <div>Teal it is. Pushed to <span class="link">#236</span>.</div></div></div>
+  </div>
+  <div class="box" style="height:76px">Reply…</div>
+ </div>
+</div></div>
+<script>document.fonts.ready.then(()=>{document.title='done';});</script>
+</body></html>
