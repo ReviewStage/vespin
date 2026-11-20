@@ -293,12 +293,17 @@ it.effect(
       service.tasks = [task(INVITES, "Renamed on the service", "# Invites", 11)];
       service.live.list.refuse({ failure: TASK_CALL_FAILURE.UNANSWERED });
       asked.length = 0;
-      const { last, settled } = yield* launched;
+      const { last, settled, told } = yield* launched;
       yield* settled;
 
       assert.deepEqual(
         last()?.tasks.map((each) => each.name),
         ["Teammate invitations"],
+      );
+      // Note that the kept rows are drawn just after the list stands, so a window is never told the list is ready while it still lists none of them.
+      assert.deepEqual(
+        told.filter((view) => view.listStatus === TASKS_READ.READY && view.tasks.length === 0),
+        [],
       );
       assert.ok(
         keptAt !== undefined && keptAt !== "",
