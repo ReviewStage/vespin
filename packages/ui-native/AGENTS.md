@@ -82,7 +82,9 @@ builds a control of its own.
   `DeniesWaiting` (that a message sent now denies the call waiting, a press
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
-  Deny and Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
+  Deny and Allow), the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
+  offers (the panel's groups and words, a pick written `@Name` and sent as
+  its link, since the field draws no chip), its `QueuedLines` (Steer and
   Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
   taking the keyboard through `focusAsk`), and an `AskNote`.

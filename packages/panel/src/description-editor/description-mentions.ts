@@ -1,3 +1,4 @@
+import { atWordAround } from "@repo/features/at-word";
 import type { Editor } from "@tiptap/core";
 import type { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
@@ -9,7 +10,7 @@ import {
   type Transaction,
 } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { atWordAround, spacedChip } from "./chip-spacing.js";
+import { spacedChip } from "./chip-spacing.js";
 import {
   type ComposerTrigger,
   type DescriptionEditorMentions,

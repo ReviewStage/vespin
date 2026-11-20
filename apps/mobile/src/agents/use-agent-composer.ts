@@ -75,6 +75,7 @@ import { useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
+import { type MentionsOffered, useMentionOffer } from "../use-mention-offer.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
 
@@ -151,6 +152,8 @@ export interface AgentComposer {
   readonly note: string | undefined;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills: SkillsOffered | undefined;
+  /** The agents, tasks and people an `@` being typed offers; none while no `@` word ends the words, or while a `/` offers its skills. */
+  readonly mentions: MentionsOffered | undefined;
   /** Lays one of the member's sent lines' words in the field to send again in its place, the field's own kept aside, and has it take the keyboard. */
   readonly editMessage: (line: MessageEdit) => void;
   /** Gives up the edit of a sent line, the field given back what it held; none while the field holds no sent line's words. */
@@ -290,6 +293,7 @@ export function useAgentComposer(
   const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
   const taskId = agent?.taskId ?? undefined;
   const skills = useSkillOffer(words, setWords, taskId === undefined ? undefined : { taskId });
+  const mentions = useMentionOffer(words, setWords, { workspaceId: agent?.workspaceId, taskId });
 
   // Whether the screen still stands, since a refusal may land after it was left.
   const mounted = useRef(true);
@@ -359,9 +363,11 @@ export function useAgentComposer(
       return rewriting.line.cuts ? setAskingEdit(true) : sendRewritten(rewriting);
     }
 
-    const text = words.trim();
+    const typed = words.trim();
 
-    if (text === "" && pictures.files === undefined) return;
+    if (typed === "" && pictures.files === undefined) return;
+    // Note that the message goes with each picked mention written as its link, while the words the field gets back on a refusal are those typed.
+    const text = mentions.sendable(typed);
 
     if (suggested !== undefined && suggestionOut) return;
 
@@ -375,7 +381,7 @@ export function useAgentComposer(
     const attachments =
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
-    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
+    const sent: Sent = { id: randomUUID(), words: typed, pictures: pictures.take() };
     ownSends.current.add(sentLineId(sent.id));
     setWords("");
     setNote(undefined);
@@ -458,15 +464,16 @@ export function useAgentComposer(
    * Note that it stops the turn under way rather than steering it.
    */
   const sendRewritten = (stash: Rewriting) => {
-    const text = words.trim();
+    const typed = words.trim();
 
-    if (text === "") return;
+    if (typed === "") return;
+    const text = mentions.sendable(typed);
 
     // Note that pictures attached while the line was written again go with it, as the panel's Edit takes files.
     const attachments =
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
-    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
+    const sent: Sent = { id: randomUUID(), words: typed, pictures: pictures.take() };
     ownSends.current.add(sentLineId(sent.id));
     setNote(undefined);
     giveBackRewritten(stash);
@@ -722,6 +729,7 @@ export function useAgentComposer(
           },
     note,
     skills,
+    mentions: skills === undefined ? mentions.offered : undefined,
     editMessage,
     cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),
     sendingEdit: {
