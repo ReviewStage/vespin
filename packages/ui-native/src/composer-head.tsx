@@ -242,17 +242,17 @@ function SuggestionRow({
   );
 }
 
-/** One thing an `@` offers: its id, the name it goes under, and what its row says after the name. */
+/** One thing an `@` offers: its id, its kind's glyph, the name it goes under, and what its row says after the name. */
 export type MentionSuggestion = {
   readonly id: string;
+  readonly glyph: Glyph;
   readonly name: string;
   readonly detail?: string | undefined;
 };
 
-/** A group of what an `@` offers, under the panel's heading, each row led by its kind's glyph. */
+/** A group of what an `@` offers, under the panel's heading, each row led by its kind's glyph, since Suggested holds several kinds. */
 export type MentionSuggestionGroup = {
   readonly title: string;
-  readonly glyph: Glyph;
   readonly rows: readonly MentionSuggestion[];
 };
 
@@ -308,7 +308,7 @@ export function MentionSuggestions({
           {group.rows.map((row) => (
             <SuggestionRow
               key={row.id}
-              glyph={group.glyph}
+              glyph={row.glyph}
               title={row.name}
               detail={row.detail}
               onPress={() => onPick(group.title, row.id)}

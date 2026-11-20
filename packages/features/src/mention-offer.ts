@@ -1,17 +1,36 @@
-// mention-offer.ts -- the people, agents and tasks an `@` typed in a field that can draw no chip offers, as the panel's mention picker groups and words them, and the message's words with each picked mention written as the link the wire carries.
+// mention-offer.ts -- the people, agents, tasks, pages, threads, pull requests and dates an `@` typed in a field that can draw no chip offers, as the panel's mention picker groups and words them, and the message's words with each picked mention written as the link the wire carries.
 
 import { atWordAround } from "./at-word.js";
+import { dateChipText, dateLabel, dateOfWords } from "./date-mention.js";
 import { MENTION_SIGIL, mentionMarkdownLink } from "./link-grammar.js";
+import { encodeMention, MENTION_KIND, type MentionPlace } from "./mention-link.js";
 import { searchHit } from "./search-score.js";
 import { noMatchWords, TERM } from "./words.js";
 
 /** The groups an `@` offers, in the panel's words (`MENTION_GROUP`). */
 export const MENTION_OFFER_GROUP = {
   SUGGESTED: "Suggested",
+  DATES: "Dates",
   AGENTS: "Agents",
   TASKS: "Tasks",
   PEOPLE: "People",
+  PAGES: "Pages",
+  THREADS: "Threads",
+  PULL_REQUESTS: "Pull requests",
 } as const;
+
+/** What each thing an `@` offers is, which its row's glyph says. */
+export const MENTION_OFFER_KIND = {
+  AGENT: "agent",
+  TASK: "task",
+  PERSON: "person",
+  PAGE: "page",
+  THREAD: "thread",
+  PULL_REQUEST: "pull-request",
+  DATE: "date",
+} as const;
+
+export type MentionOfferKind = (typeof MENTION_OFFER_KIND)[keyof typeof MENTION_OFFER_KIND];
 
 export type MentionOfferGroup = (typeof MENTION_OFFER_GROUP)[keyof typeof MENTION_OFFER_GROUP];
 
@@ -24,6 +43,7 @@ export const MENTION_NO_MATCH = noMatchWords(TERM.RESULT);
 /** One thing an `@` may name: what it is called, what its row says after its name, what else finds it, and the link a pick writes. */
 export interface MentionCandidate {
   readonly id: string;
+  readonly kind: MentionOfferKind;
   readonly name: string;
   /** What the row says after the name, as the panel's: "You" or an address for a person, a task's key. */
   readonly detail?: string | undefined;
@@ -41,12 +61,16 @@ export interface MentionGroup {
   readonly rows: readonly MentionCandidate[];
 }
 
-/** What an `@` offers from: the place's own agents, suggested first, then every agent, task and person the place reads. */
+/** What an `@` offers from: what the place suggests (its own agents, threads, pull requests and pages, as the panel's Suggested holds them), then every agent, task, person, page, thread and pull request the place reads, and the dates the words name. */
 export interface MentionSources {
   readonly suggested: readonly MentionCandidate[];
   readonly agents: readonly MentionCandidate[];
   readonly tasks: readonly MentionCandidate[];
   readonly people: readonly MentionCandidate[];
+  readonly pages: readonly MentionCandidate[];
+  readonly threads: readonly MentionCandidate[];
+  readonly pullRequests: readonly MentionCandidate[];
+  readonly dates: readonly MentionCandidate[];
 }
 
 /** A mention picked into the words: the name the field shows after the `@`, and the link it is sent as. */
@@ -86,28 +110,64 @@ function matching(rows: readonly MentionCandidate[], query: string): readonly Me
     .map(({ row }) => row);
 }
 
+/** The date the words name, as the panel's Dates offers it: its chip's words, its whole date after them, and its `mention://date` link; none where they name no date. */
+export function dateCandidates(
+  query: string,
+  now: number,
+  zone: string,
+  place: MentionPlace,
+): readonly MentionCandidate[] {
+  const date = query.trim() === "" ? undefined : dateOfWords(query, now, zone);
+
+  if (date === undefined) return [];
+
+  return [
+    {
+      id: encodeMention({ kind: MENTION_KIND.DATE, ...date }, place),
+      kind: MENTION_OFFER_KIND.DATE,
+      name: dateChipText(date, now, zone),
+      detail: dateLabel(date, zone),
+      target: encodeMention({ kind: MENTION_KIND.DATE, ...date }, place),
+    },
+  ];
+}
+
+/** Whether the words are a task's key typed whole, which leads its group, as the panel's keyed group leads. */
+function keyed(rows: readonly MentionCandidate[], query: string): boolean {
+  return rows.some((row) => row.key !== undefined && query.toLocaleUpperCase() === row.key);
+}
+
 /**
  * The groups an `@` offers for what is typed after it, as the panel's picker
- * orders them: with nothing typed, the place's own agents as Suggested, then
- * People; with words typed, Agents, Tasks and People, each the rows the
- * words find, best first, four at most, a group finding none left out.
+ * orders them: with nothing typed, what the place suggests, then People;
+ * with words typed, the date they name, then Agents, Tasks (first where the
+ * words are a task's key), People, Pages, Threads and Pull requests, each
+ * the rows the words find, best first, four at most, a group finding none
+ * left out.
  */
 export function mentionGroups(sources: MentionSources, query: string): readonly MentionGroup[] {
   const asked = query.trim();
 
-  const groups: readonly MentionGroup[] =
-    asked === ""
-      ? [
-          { title: MENTION_OFFER_GROUP.SUGGESTED, rows: sources.suggested.slice(0, PER_GROUP) },
-          { title: MENTION_OFFER_GROUP.PEOPLE, rows: sources.people.slice(0, PER_GROUP) },
-        ]
-      : [
-          { title: MENTION_OFFER_GROUP.AGENTS, rows: matching(sources.agents, asked) },
-          { title: MENTION_OFFER_GROUP.TASKS, rows: matching(sources.tasks, asked) },
-          { title: MENTION_OFFER_GROUP.PEOPLE, rows: matching(sources.people, asked) },
-        ];
+  if (asked === "") {
+    return [
+      { title: MENTION_OFFER_GROUP.SUGGESTED, rows: sources.suggested.slice(0, PER_GROUP) },
+      { title: MENTION_OFFER_GROUP.PEOPLE, rows: sources.people.slice(0, PER_GROUP) },
+    ].filter((group) => group.rows.length > 0);
+  }
 
-  return groups.filter((group) => group.rows.length > 0);
+  const tasks = { title: MENTION_OFFER_GROUP.TASKS, rows: matching(sources.tasks, asked) };
+  const leadsWithKey = keyed(tasks.rows, asked);
+
+  return [
+    { title: MENTION_OFFER_GROUP.DATES, rows: sources.dates },
+    ...(leadsWithKey ? [tasks] : []),
+    { title: MENTION_OFFER_GROUP.AGENTS, rows: matching(sources.agents, asked) },
+    ...(leadsWithKey ? [] : [tasks]),
+    { title: MENTION_OFFER_GROUP.PEOPLE, rows: matching(sources.people, asked) },
+    { title: MENTION_OFFER_GROUP.PAGES, rows: matching(sources.pages, asked) },
+    { title: MENTION_OFFER_GROUP.THREADS, rows: matching(sources.threads, asked) },
+    { title: MENTION_OFFER_GROUP.PULL_REQUESTS, rows: matching(sources.pullRequests, asked) },
+  ].filter((group) => group.rows.length > 0);
 }
 
 /** The words with the `@` word they end with written as the picked name and a space after it, as the field shows a pick. */
