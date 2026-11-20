@@ -117,7 +117,13 @@ import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { PLUS_TAB, useComposeAction, useDetailColumnBar, useListColumn } from "./app-sidebar.js";
+import {
+  PLUS_TAB,
+  useComposeAction,
+  useDetailColumnBar,
+  useListColumn,
+  useSplitBuild,
+} from "./app-sidebar.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -1404,12 +1410,13 @@ function InboxSplitScreen({
 
   const first = useListColumn(list);
   const firstDetailBar = useDetailColumnBar(detailBar);
+  const build = useSplitBuild();
 
   return (
     <>
       {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
       <Stack.Screen options={{ headerShown: false, title: INBOX_TITLE }} />
-      <Screen>
+      <Screen key={build}>
         <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
       </Screen>
     </>

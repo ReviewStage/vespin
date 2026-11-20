@@ -10,8 +10,8 @@ import {
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
 import { useIsFocused, useRouter } from "expo-router";
-import { type ReactNode, useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { Platform, useWindowDimensions } from "react-native";
 import { useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -71,6 +71,45 @@ export function useDetailColumnBar(bar: ColumnBar | undefined): ColumnBar {
   const compose = useComposeAction();
 
   return PLUS_TAB ? { ...bar } : { ...bar, lead: [compose] };
+}
+
+/**
+ * Which build of a tab's split view stands, as a key for the `Screen` that
+ * hosts it: bumped once after an iPad turns, for a split view that stood
+ * unselected since it was last built, and only once it is in front again.
+ * Note that it rebuilds rather than lays out again, because SwiftUI's split
+ * view, once its tab's view has left the window, keeps a bar's height above
+ * its columns from before the turn, a band no inset of ours or re-layout
+ * clears, while one built since and kept in front turns as it should. The
+ * pick and the list's open groups are held above it, so they outlive the
+ * rebuild; its list's scroll place does not.
+ */
+export function useSplitBuild(): number {
+  const focused = useIsFocused();
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+  const [build, setBuild] = useState(0);
+  // Whether the split view has stood unselected since it was last built.
+  const stale = useRef(!focused);
+  // Which way the window stood when the split view was last built or last caught up in front.
+  const builtLandscape = useRef(landscape);
+
+  useEffect(() => {
+    if (!focused) stale.current = true;
+  }, [focused]);
+
+  useEffect(() => {
+    if (!focused || builtLandscape.current === landscape) return;
+
+    builtLandscape.current = landscape;
+
+    if (!stale.current) return;
+
+    stale.current = false;
+    setBuild((last) => last + 1);
+  }, [focused, landscape]);
+
+  return build;
 }
 
 /**
