@@ -5,12 +5,19 @@ import {
   type AgentStatus,
 } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
+import {
+  agentGlyphState,
+  GLYPH_STATE,
+  type GlyphState,
+  glyphStateWords,
+} from "@repo/features/glyph-state";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TASK_REGION } from "@repo/features/tasks-model";
 import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
+import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { HarnessMark } from "../harness-marks.js";
@@ -219,6 +226,48 @@ export function AgentGlyph({ agent }: { agent: AgentStanding | undefined }) {
   const state = agent?.status === undefined ? GLYPH_STATE.REST : agentGlyphState(agent.status);
 
   return <StateGlyph glyph={<AgentMark provider={provider} />} state={state} />;
+}
+
+/**
+ * A Manager's face (`@repo/ui/manager-face`) where an agent's glyph stands,
+ * in a row and a top bar's lead: at its row seat's 20px, centered on the
+ * glyph's own box (`state-glyph`) and standing a little past its edges, so
+ * the name after it starts where a task's name does. It wears where the
+ * Manager stands: livelier and wearing the working mark while it may still
+ * write, as `AgentGlyph` gives way to the working mark, said Working aloud
+ * then in `StateGlyph`'s fixed words; at rest a picture its row's name
+ * already names.
+ */
+export function ManagerGlyph({
+  face,
+  status,
+}: {
+  face: ManagerFaceValue;
+  status: AgentStatus;
+}): React.JSX.Element {
+  const state = agentGlyphState(status);
+  const working = state === GLYPH_STATE.WORKING;
+
+  const drawn = <ManagerFace face={face} size={MANAGER_FACE_SIZE.ROW} working={working} />;
+
+  if (!working) {
+    return (
+      <span className="state-glyph" data-state={state}>
+        {drawn}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="state-glyph"
+      data-state={state}
+      role="img"
+      aria-label={glyphStateWords(state, false)}
+    >
+      {drawn}
+    </span>
+  );
 }
 
 /** A subagent's glyph wearing where it stands, as `AgentGlyph` wears an agent's. */
