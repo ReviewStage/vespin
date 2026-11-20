@@ -58,6 +58,7 @@ import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { HOSTED_API_ERROR } from "../http/http.js";
 import type { HostedRefusal } from "../http/http-effect.js";
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
+import { leaverAutomationsPaused } from "./automation-cadence.js";
 
 /**
  * automation-runs.ts -- one queued automation run acted on: its coding agent started as the deployment acting for the owner, and the run settled.
@@ -773,6 +774,14 @@ const outcomeOf = Effect.fnUntraced(function* (sessionsFor: SessionsForAccount, 
         automation: decision.automation,
       };
     case DECISION.REFUSED:
+      // A creator who left fails every firing, so their automations here are turned off at the first.
+      if (decision.reason === AUTOMATION_RUN_REASON.CREATOR_LEFT) {
+        yield* leaverAutomationsPaused(
+          decision.automation.organizationId,
+          decision.automation.userId,
+        );
+      }
+
       return {
         outcome: {
           status: AUTOMATION_RUN_STATUS.FAILED,

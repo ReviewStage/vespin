@@ -618,6 +618,25 @@ const writeSpent = SqlSchema.void({
     ),
 });
 
+const writeLeaverPaused = SqlSchema.findAll({
+  Request: Schema.Struct({ organizationId: Schema.String, userId: Schema.String }),
+  Result: AutomationRowSchema,
+  execute: ({ organizationId, userId }) =>
+    Database.use((db) =>
+      db
+        .update(automation)
+        .set({ enabled: false })
+        .where(
+          and(
+            eq(automation.organizationId, organizationId),
+            eq(automation.userId, userId),
+            eq(automation.enabled, true),
+          ),
+        )
+        .returning(AUTOMATION_COLUMNS),
+    ),
+});
+
 const findAutomationToRun = SqlSchema.findOneOption({
   Request: Schema.String,
   Result: AutomationRowSchema,
@@ -1261,6 +1280,19 @@ export function advanceAutomationSchedule(
  */
 export function pauseSpentAutomation(id: string, at: string): TaskStoreEffect<void> {
   return writeSpent({ id, at });
+}
+
+/**
+ * Turns off every automation the account created in the workspace, as a
+ * member's toggle does, once they are no longer in it, answering the ones
+ * it turned off so their schedules can follow; one already off stays as it
+ * is.
+ */
+export function pauseAutomationsOfLeaver(
+  organizationId: string,
+  userId: string,
+): TaskStoreEffect<readonly Automation[]> {
+  return writeLeaverPaused({ organizationId, userId });
 }
 
 /** The archivable agents of the run the agent belongs to, each read with how many agents the run has, so its reader can tell the run read whole. */
