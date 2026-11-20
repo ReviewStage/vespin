@@ -1,0 +1,10 @@
+== bundle PJj10231 base 1e20598595
+  built 1e20598595 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-f10231: fails 0 shots 2 
+iphone-dark-f10231: fails 0 shots 2 
+ipad27-light-f10231: fails 0 shots 3 
+ipad27-dark-f10231: fails 0 shots 3 
