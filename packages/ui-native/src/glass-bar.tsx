@@ -36,6 +36,9 @@ const DockKeyboard = createContext(0);
 /** Whether the dock the bar stands in lifts it natively, clear of the bottom safe area it keeps standing over; none outside the native dock. */
 const DockLifted = createContext(false);
 
+/** The bottom safe area the native dock lifts the bar less by, as it tells it, which the bar's foot pads by so the two are one number; none before the dock tells it, or outside it. */
+const DockInset = createContext<number | undefined>(undefined);
+
 /** Tells the dock how tall the bar inside it stands, with its gap, and where its top stands in the window; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
 
@@ -217,7 +220,10 @@ export function BarHead({
 function DockedFoot({ children }: { readonly children: ReactNode }) {
   const keyboard = useKeyboardHeight() > 0;
   const lifted = useContext(DockLifted);
+  const inset = useContext(DockInset);
   const measure = useContext(DockMeasure);
+  // Note that inside the native dock the foot pads by the bottom safe area the dock tells, the one its lift is less by, rather than one React Native reads for itself, since on a page presented full screen, such as New task, the two differed by the home indicator and the bar stood that far short of the keyboard.
+  const told = lifted && inset !== undefined;
 
   const onLayout =
     measure === undefined
@@ -227,8 +233,8 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one. The native dock lifts the bar only as far past that safe area as the keyboard stands, so the bar keeps it throughout, and a drag that pulls the keyboard down lowers the bar without a jump at its end.
   return (
     <SafeAreaView
-      edges={keyboard && !lifted ? ["left", "right"] : ["bottom", "left", "right"]}
-      style={styles.gap}
+      edges={told || (keyboard && !lifted) ? ["left", "right"] : ["bottom", "left", "right"]}
+      style={told ? [styles.gap, { paddingBottom: SPACE.ROW + inset }] : styles.gap}
     >
       <View onLayout={onLayout}>{children}</View>
     </SafeAreaView>
@@ -361,12 +367,16 @@ function DockColumn({
  */
 export function GlassDock({ children, bar }: DockProps) {
   const [overlap, setOverlap] = useState(0);
+  const [inset, setInset] = useState<number | undefined>(undefined);
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
 
   return (
     <KeyboardDockArea
       style={styles.dock}
-      onOverlap={(event) => setOverlap(event.nativeEvent.overlap)}
+      onOverlap={(event) => {
+        setOverlap(event.nativeEvent.overlap);
+        setInset(event.nativeEvent.inset);
+      }}
     >
       <DockKeyboard value={overlap}>
         <DockRoom value={room}>{children}</DockRoom>
@@ -374,7 +384,9 @@ export function GlassDock({ children, bar }: DockProps) {
       {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
       <View style={styles.docked} collapsable={false}>
         <DockLifted value={true}>
-          <DockColumn bar={bar} onRoom={setRoom} />
+          <DockInset value={inset}>
+            <DockColumn bar={bar} onRoom={setRoom} />
+          </DockInset>
         </DockLifted>
       </View>
     </KeyboardDockArea>

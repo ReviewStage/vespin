@@ -28,6 +28,12 @@
 // scrolling under the composer's glass fade rather than standing sharp behind
 // its placeholder and its +.
 //
+// The bar's foot pads by the bottom safe area this view tells with the
+// overlap, the same number the lift is less by, rather than by a safe area
+// React Native reads for itself: on a page presented full screen, such as
+// New task, the two differed by the home indicator's height, so the bar
+// stood that much short of the keyboard and its row of capsules under it.
+//
 // Note that the overlap is read against this view, which stands still, and
 // never against the bar it moves, which would chase its own lift. A keyboard
 // undocked or floating on an iPad stands over nothing (`followsUndockedKeyboard`
@@ -65,6 +71,9 @@ final class KeyboardDockView: ExpoView {
 
   /// The overlap last told to JavaScript; none yet.
   private var told: CGFloat?
+
+  /// The bottom safe area last told to JavaScript, which the bar pads its foot by while the dock lifts it, so the lift and the padding are one number; none yet.
+  private var toldInset: CGFloat?
 
   /// Whether the dock is following a frame drawn, when it moves the bar without telling JavaScript.
   private var framing = false
@@ -192,6 +201,12 @@ final class KeyboardDockView: ExpoView {
     follow()
   }
 
+  /// Tells JavaScript the bottom safe area again where it moves, as a page presented full screen settles into its window.
+  override func safeAreaInsetsDidChange() {
+    super.safeAreaInsetsDidChange()
+    follow()
+  }
+
   /// Stands the bar as the bottom edge element of the first scroll view the content holds, as soon as both are mounted, and again once the content's scroll view is another, such as a list drawn in place of its skeleton.
   private func standAsEdge() {
     if edgeStands() { return }
@@ -275,10 +290,14 @@ final class KeyboardDockView: ExpoView {
 
     guard !framing else { return }
 
-    // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone.
-    if let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
+    // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone, and so is a new bottom safe area, which the bar pads its foot by.
+    let inset = safeAreaInsets.bottom
+    let insetMoved = toldInset.map { abs($0 - inset) >= overlapStep } ?? true
+
+    if !insetMoved, let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
     told = overlap
-    onOverlap(["overlap": overlap])
+    toldInset = inset
+    onOverlap(["overlap": overlap, "inset": inset])
   }
 }
 
