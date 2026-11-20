@@ -76,9 +76,9 @@ import {
   type StoredVoiceLine,
   VOICE_INPUT,
   VOICE_OUTPUT,
+  type VoiceAct,
   type VoiceCallStart,
   type VoiceInput,
-  type VoiceOutput,
   voiceDelegations,
 } from "@repo/features/voice-delegation";
 import { failureKind } from "@repo/runtime/effect";
@@ -443,7 +443,7 @@ const carriedOut = Effect.fnUntraced(function* (
   holder: VoiceCallHolder,
   agent: Agent,
   target: AgentTarget,
-  output: Exclude<VoiceOutput, { readonly kind: typeof VOICE_OUTPUT.SETTLED }>,
+  output: VoiceAct,
   naming: CallNaming,
 ) {
   const { call } = holder;

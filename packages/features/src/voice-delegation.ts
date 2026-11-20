@@ -175,6 +175,9 @@ export type VoiceOutput =
   /** Every line held before it is recorded, and none is held after it. */
   | { readonly kind: typeof VOICE_OUTPUT.SETTLED };
 
+/** What the loop asks its caller to carry out: every output but its word that nothing is held. */
+export type VoiceAct = Exclude<VoiceOutput, { readonly kind: typeof VOICE_OUTPUT.SETTLED }>;
+
 /** A line of the call as the service stored it, for a holder that takes the call over. */
 export interface StoredVoiceLine {
   readonly speaker: VoiceSpeaker;
