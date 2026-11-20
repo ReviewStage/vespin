@@ -36,7 +36,7 @@ struct StopAgentIntent: LiveActivityIntent {
     self.agentId = agentId
   }
 
-  /// An agent's page in the app, which the activity's row for it opens too.
+  /// An agent's page in the app, which Stop opens where it can't send, and a call's activity opens.
   static func page(agent id: String) -> URL {
     var components = URLComponents()
     components.scheme = "vespin"

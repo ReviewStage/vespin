@@ -8,10 +8,12 @@
 // agents work, and by its done mark once none does, in the working blue or
 // the done green, and copper (`Attention`) marks only what wants the member:
 // the asks waiting, the compact presentation's Inbox glyph, and the keyline
-// while one waits. A tap opens the Inbox while an ask waits, else the newest
-// running agent. The colors are the brand's, written into this target's
-// asset catalog by `app.config.ts`. Every presentation has a preview at the
-// end of the file.
+// while one waits. Nothing in it is a link, so no row or region opens a page
+// of the app: a person swipes it away more often than they open it, and a
+// swipe the system read as a tap opened an agent. A tap still opens the app,
+// as iOS opens it on any activity. The colors are the brand's, written into
+// this target's asset catalog by `app.config.ts`. Every presentation has a
+// preview at the end of the file.
 
 import ActivityKit
 import AppIntents
@@ -31,7 +33,6 @@ struct AgentsLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: AgentsActivityAttributes.self) { context in
       ActivityContentView(state: context.state)
-        .widgetURL(context.state.opens)
     } dynamicIsland: { context in
       let state = context.state
       return DynamicIsland {
@@ -53,7 +54,6 @@ struct AgentsLiveActivity: Widget {
       } minimal: {
         RunningCount(state: state)
       }
-      .widgetURL(state.opens)
       .keylineTint(state.keyline)
     }
     .supplementalActivityFamilies([.small])
@@ -153,18 +153,15 @@ struct AgentRow: View {
   var body: some View {
     // Note that the circle's gap from the timer is this spacing and the target's whole extra width, 18 points, as it was while the circle stood centered in its target.
     HStack(spacing: 10 - (StopTarget.width - StopTarget.mark) / 2) {
-      // Note that the row opens its agent's page everywhere but on Stop, which a link around it would swallow.
-      Link(destination: AgentsActivityAttributes.ContentState.route(agent: agent.id)) {
-        HStack(spacing: 4) {
-          Text(agent.title).font(.subheadline.weight(.medium)).lineLimit(1)
-          Spacer(minLength: 4)
-          Text(agent.turnStart, style: .timer)
-            .font(.caption)
-            .monospacedDigit()
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.trailing)
-            .frame(maxWidth: 56, alignment: .trailing)
-        }
+      HStack(spacing: 4) {
+        Text(agent.title).font(.subheadline.weight(.medium)).lineLimit(1)
+        Spacer(minLength: 4)
+        Text(agent.turnStart, style: .timer)
+          .font(.caption)
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+          .multilineTextAlignment(.trailing)
+          .frame(maxWidth: 56, alignment: .trailing)
       }
       Button(intent: StopAgentIntent(agentId: agent.id)) {
         // The panel's Stop is a filled square, which SF Symbols' stop.fill draws, in the ground on an ink circle, as the composer's Stop stands.
@@ -303,14 +300,7 @@ extension AgentsActivityAttributes.ContentState {
   /// The island's keyline: copper while an ask needs the member, else the count's tone.
   var keyline: Color { waiting > 0 ? Color("Attention") : tone }
 
-  /// Where a tap opens: the Inbox while an ask waits, else the newest running agent, else the Tasks tab.
-  var opens: URL {
-    if waiting > 0 { return URL(string: "vespin://inbox")! }
-    if let agent = agents.first { return Self.route(agent: agent.id) }
-    return URL(string: "vespin://tasks")!
-  }
-
-  /// An agent's page in the app, as Stop opens it where it can't send.
+  /// An agent's page in the app, which a call's activity opens (`CallLiveActivity.swift`).
   static func route(agent id: String) -> URL { StopAgentIntent.page(agent: id) }
 }
 
