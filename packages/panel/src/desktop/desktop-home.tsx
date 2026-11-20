@@ -14,7 +14,7 @@ import {
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
 import { unreadShown } from "../failure-report.js";
@@ -209,7 +209,8 @@ function HomeRecent({
   // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
   const unread = useUnreadTasks({ staged });
   const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
-  const recent = recentTasks(listed, room);
+  // Note that the list is sorted once per move of the tasks, so a render that moves none sorts nothing.
+  const recent = useMemo(() => recentTasks(listed, room), [listed, room]);
 
   if (recent.length === 0 && !tasks.listFailed) return null;
 

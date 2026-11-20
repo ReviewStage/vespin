@@ -1,4 +1,4 @@
-import { useLayoutEffect, useReducer, useRef } from "react";
+import { useLayoutEffect, useMemo, useReducer, useRef } from "react";
 
 /**
  * use-held-order.ts -- a list's rows held in the places they were first
@@ -23,10 +23,24 @@ import { useLayoutEffect, useReducer, useRef } from "react";
  * the pointer coming and going draws nothing, since the rows on screen are
  * where they were drawn, unless a draw while it stood held a row back, which
  * its leaving draws again where each row stands now.
+ *
+ * A list is drawn again only when what it is drawn from moves: the caller's
+ * `draw`, held steady across renders that change nothing it reads, and the
+ * places it is handed, which stand as the same map while every row keeps the
+ * place it held. So a render that moves nothing in the list does no list work.
  */
 
 /** No row's place held: every row stands where it is now. */
 const NO_PLACES: ReadonlyMap<string, never> = new Map<string, never>();
+
+/** Whether two lists' places stand every row in the same place. */
+function samePlaces<P>(was: ReadonlyMap<string, P>, now: ReadonlyMap<string, P>): boolean {
+  if (was.size !== now.size) return false;
+
+  for (const [row, place] of now) if (was.get(row) !== place) return false;
+
+  return true;
+}
 
 /** The list last drawn in sight: the view it was drawn under and where each of its rows stands, by row. */
 interface Held<V, P> {
@@ -91,11 +105,15 @@ export function useHeldOrder<V, P, L>(
   const holding = shown && (pointer === undefined || pointer.over.current);
   const last = holding ? held.current : undefined;
   const places = last !== undefined && order.sameOrder(last.view, view) ? last.places : NO_PLACES;
-  const drawn = order.draw(places, last?.view);
+  const was = last?.view;
+  const { draw } = order;
+  const drawn = useMemo(() => draw(places, was), [draw, places, was]);
   // Note that what was drawn is held once it is on screen, so a render React drops holds nothing,
   // and held while the pointer is away too, so the pointer coming holds the rows as they are on screen.
+  // Note that places that stand every row where it stood are kept as the same map, so the next render draws nothing again.
   useLayoutEffect(() => {
-    held.current = shown ? { view, places: order.placesOf(drawn, places) } : undefined;
+    const now = order.placesOf(drawn, places);
+    held.current = shown ? { view, places: samePlaces(places, now) ? places : now } : undefined;
 
     if (pointer !== undefined) pointer.heldBack.current = places.size > 0;
 
