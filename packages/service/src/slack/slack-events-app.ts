@@ -21,24 +21,29 @@
  * posted in an agent's thread (`slack-reactions.ts`); every other event is
  * acknowledged unread.
  *
- * A press (`block_actions`) is acknowledged at once with an empty answer, as
- * Slack asks within its three seconds, and acted on once the answer has left,
- * a failure logged by its kind alone. It is read for the option button's
- * value, which names the item, the message whose ask it answers, and the
- * option (`SlackChoice`, `thread-dms.ts`), or a do ask's answer, Mark done
- * ticking every step, or for a Submit's, which names no option and is
- * answered with the checkboxes the press's state holds ticked, each found
- * back by its place among the ask's options; a press with none, the Open
- * button's and a tick of a checkbox among them, is acknowledged and nothing
- * else. The presser is found back as the workspace member the bot's lookups
- * kept under that Slack user, or one whose own Slack account is that user, in
- * the team the item's workspace connected (`SlackWorkspaceBot.memberOf`), and
- * the ask is answered as that member (`answerAsMember`) under the button's
- * action id, so a press Slack sends again is the answer already taken. The
- * answer taken is handed to the agent as its "Thread answer", and the DM is
- * rewritten to say the option chosen; a press on an ask already settled
- * rewrites the DM to say where it stands. Of a request nothing is logged but
- * a fixed line: its kind as it is heard, and a refused signature.
+ * A press (`block_actions`) is acknowledged at once with an empty answer,
+ * because Slack asks for one within its three seconds. It is acted on once
+ * the answer has left, and a failure is logged by its kind alone.
+ *
+ * A press is read for its button's value (`SlackChoice`, `thread-dms.ts`),
+ * which names the item and the message whose ask it answers. An option's
+ * button names the option. A do ask's button names its answer, and Mark done
+ * ticks every step. A Submit names no option and is answered with the
+ * checkboxes the press's state holds ticked, each found back by its place
+ * among the ask's options. A press with none of these, the Open button's and
+ * a tick of a checkbox among them, is acknowledged and nothing else.
+ *
+ * The presser is found back as the workspace member the bot's lookups kept
+ * under that Slack user, or one whose own Slack account is that user, in the
+ * team the item's workspace connected (`SlackWorkspaceBot.memberOf`). The ask
+ * is answered as that member (`answerAsMember`) under the button's action id,
+ * so a press Slack sends again is the answer already taken. The answer taken
+ * is handed to the agent as its "Thread answer", and the DM is rewritten to
+ * say the option chosen. A press on an ask already settled rewrites the DM to
+ * say where it stands.
+ *
+ * Of a request nothing is logged but a fixed line: its kind as it is heard,
+ * and a refused signature.
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";

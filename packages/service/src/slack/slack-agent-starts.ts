@@ -35,41 +35,48 @@
  * (`SlackWorkspaceBot.memberOf`), may reply there; anyone else is told so and
  * nothing is posted.
  *
- * A message in a thread that speaks for an agent (`slack_agent_thread`), one
- * it was started from, its automation run's result was sent in, or it posted
- * to itself (`send_slack_message`), whether it names the bot or not, is sent
- * to that agent as the writer's own message (`steer.ts`), the agent brought
- * back first where it stands archived, as a chat tool reopens a conversation,
- * and the thread becomes the agent's current one once the agent took the
- * message. Where its session has ended for good (`AGENT_RETIRED`), a new
- * agent continues it as Continue does, handed its work, a summary of its
- * transcript, and the message, and the thread moves to it, the bot saying
- * nothing of it, the new agent on the ended one's own task, as Continue puts
- * it; any other makes a task and starts an agent as the writer on it, on the
- * one path a Start takes (`coder-host/start.ts`), both keyed by Slack's event
- * id. The task starts untitled, for its agent's title to name it, with a
- * blank description, since the message is the agent's prompt, assigned to the
- * writer and in progress, and works in the repository the message names as
- * `owner/name` where the workspace reaches it, else in the channel's default
- * repository, else in the workspace's, both as an owner or admin named them
- * in Settings, else in the repository of the writer's latest agent in the
- * workspace, else in none. The images and PDFs the message shared are read
- * from Slack on the bot's token once the writer is found
- * (`SlackWorkspaceBot.download`), sniffed by their bytes and held to the
- * bounds a Start holds a message's files to: a PNG, JPEG, or WebP within them
- * read whole, and a larger one, or one of a type no model reads (a Mac's HEIC
- * screenshot), read as the largest thumbnail Slack made of it that fits; a
- * PDF within them read whole, and one past them left out; each handed to the
- * agent as the message's files, a Start's or a steer's alike, as the message
- * box sends them; any other file is left out, and a message of such files
- * alone is acted on as one with words.
- * Its prompt is the writer's words, the thread's earlier messages fenced as
- * data, since anyone in the channel wrote them, and the message's link; only
- * the writer's own words hand it MCP servers. Its first line, and each
- * message sent on, says Slack carried it, with the writer's words and the
- * message's link (`slackLine`), which a window draws in place of the prompt
- * the agent reads. The bot says nothing in the thread and reacts to nothing,
- * and the thread is kept as the agent's.
+ * A message in a thread that speaks for an agent (`slack_agent_thread`) goes
+ * to that agent, whether it names the bot or not. Such a thread is one the
+ * agent was started from, one its automation run's result was sent in, or one
+ * it posted to itself (`send_slack_message`). The message is sent as the
+ * writer's own (`steer.ts`). An archived agent is brought back first, as a
+ * chat tool reopens a conversation. The thread becomes the agent's current
+ * one once the agent took the message.
+ *
+ * Where the agent's session has ended for good (`AGENT_RETIRED`), a new agent
+ * continues it as Continue does, on the ended one's own task, keyed by
+ * Slack's event id. It is handed the ended agent's work, a summary of its
+ * transcript, and the message. The thread moves to it, and the bot says
+ * nothing of it.
+ *
+ * Any other message makes a task and starts an agent as the writer on it, on
+ * the one path a Start takes (`coder-host/start.ts`). Both are keyed by
+ * Slack's event id. The task starts untitled, for its agent's title to name
+ * it, and with a blank description, since the message is the agent's prompt.
+ * It is assigned to the writer and in progress. It works in the first of
+ * these that stands: the repository the message names as `owner/name` where
+ * the workspace reaches it, the channel's default repository, the
+ * workspace's (both as an owner or admin named them in Settings), and the
+ * repository of the writer's latest agent in the workspace; else in none.
+ *
+ * The images and PDFs the message shared are read from Slack on the bot's
+ * token once the writer is found (`SlackWorkspaceBot.download`). They are
+ * sniffed by their bytes and held to the bounds a Start holds a message's
+ * files to. A PNG, JPEG, or WebP within them is read whole. A larger one, or
+ * one of a type no model reads (a Mac's HEIC screenshot), is read as the
+ * largest thumbnail Slack made of it that fits. A PDF within them is read
+ * whole, and one past them is left out. Each is handed to the agent as the
+ * message's files, a Start's or a steer's alike, as the message box sends
+ * them. Any other file is left out, and a message of such files alone is
+ * acted on as one with words.
+ *
+ * A started agent's prompt is the writer's words, the thread's earlier
+ * messages fenced as data, since anyone in the channel wrote them, and the
+ * message's link; only the writer's own words hand it MCP servers. Its first
+ * line, and each message sent on, says Slack carried it, with the writer's
+ * words and the message's link (`slackLine`), which a window draws in place
+ * of the prompt the agent reads. The bot says nothing in the thread and
+ * reacts to nothing, and the thread is kept as the agent's.
  *
  * Where an agent stands shows on members' messages as the agent's own
  * reactions (`react_slack`), never the bot's: its prompt names the message's
