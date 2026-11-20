@@ -47,7 +47,7 @@ import { appStateQuery, selectExperiment, selectNewAgentServersOff } from "../us
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
-import { unrunnableChoice } from "./agent-model.js";
+import { modelsRunOn, unrunnableChoice } from "./agent-model.js";
 import { repositorySkillsQueryOptions } from "./agent-reads.js";
 import type { AgentServersControl } from "./agent-servers.js";
 import { ConnectAgentBanner, NOTICE_LOOK, type NoticeLook } from "./connect-agent-banner.js";
@@ -532,6 +532,9 @@ export function NewTaskComposer({
     runsOnStands && keptDevice,
   );
 
+  // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
+  const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
+
   // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
   const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
   const { repository: picked, judged, drop } = repositoryDefault;
@@ -546,9 +549,7 @@ export function NewTaskComposer({
   // An agent needs something to work on, words or files, and works in no repository where none is chosen.
   // Note that an agent nothing of the account's pays for is held here, with the press that connects one, rather than refused once pressed; a bare task needs none.
   const unpaid =
-    newTask.models === undefined || choice === undefined
-      ? undefined
-      : unrunnableChoice(newTask.models, choice);
+    models === undefined || choice === undefined ? undefined : unrunnableChoice(models, choice);
 
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
@@ -786,8 +787,8 @@ export function NewTaskComposer({
     : [relationMenuPanel(relationSearchId, relationControl, relationKind, setRelationKind)];
 
   const agentNotice =
-    unpaid === undefined || newTask.models === undefined ? null : (
-      <ConnectAgentBanner models={newTask.models} unpaid={unpaid} look={notices} />
+    unpaid === undefined || models === undefined ? null : (
+      <ConnectAgentBanner models={models} unpaid={unpaid} look={notices} />
     );
 
   const carded = notices === NOTICE_LOOK.CARD;
@@ -838,7 +839,7 @@ export function NewTaskComposer({
           !devicesUnread && (startsBare || unpaid === undefined) && (!forAutomation || requested)
         }
         model={choice === undefined ? undefined : { choice, note: undefined, choose }}
-        models={newTask.models}
+        models={models}
         modelsFailed={newTask.modelsFailed}
         readModels={newTask.readModels}
         usage={undefined}

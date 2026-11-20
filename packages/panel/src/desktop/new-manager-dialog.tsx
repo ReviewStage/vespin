@@ -50,11 +50,12 @@ import {
 import { ManagerFacePicker } from "@repo/ui/manager-face-picker";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { askAct } from "../act.js";
 import { refusedWith, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
+import { modelsRunOn } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { CHIP_PLACE, RepositoriesChip, type RepositoryChooser } from "../tasks/repository-chip.js";
 import { useRepositoryDefault } from "../tasks/repository-default.js";
@@ -334,6 +335,8 @@ export function useNewManagerDialog({
   // Note that the card stays mounted between openings, so each waits on a devices' read made since it opened.
   const [openedOn, setOpenedOn] = useState<number | undefined>(undefined);
   const devicesUnread = useDevicesRead(newTask.modelsRead, keptDevice, openedOn).unread;
+  // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
+  const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 
   const creating = useMutation({
     mutationKey: [ACT_KIND.AGENTS_CREATE_MANAGER, workspaceId],
@@ -458,7 +461,7 @@ export function useNewManagerDialog({
           changed();
         },
         runtime: undefined,
-        models: newTask.models,
+        models,
         modelsFailed: newTask.modelsFailed,
         readModels: newTask.readModels,
         defaultRead: drawnDefault,

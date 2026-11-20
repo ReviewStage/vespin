@@ -6,14 +6,14 @@ import { useSecond } from "@repo/ui";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { ConversationLead } from "../ai-elements/conversation.js";
 import { appStateQuery, selectNewAgentServersOff } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS } from "./agent-composer.js";
-import { agentName, unrunnableChoice } from "./agent-model.js";
+import { agentName, modelsRunOn, unrunnableChoice } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ArchivedComposerNote } from "./archived-note.js";
@@ -171,11 +171,6 @@ export function DraftAgentTab({
     choose: (permissionMode) => control.onDraftChange({ permissionMode }),
   });
 
-  // Note that a model nothing of the account's pays for holds Send, with the press that connects one, rather than being refused once sent.
-  const unpaid =
-    control.models === undefined || choice === undefined
-      ? undefined
-      : unrunnableChoice(control.models, choice);
   // Runs on reads the member's devices where no read has listed them.
 
   useEffect(() => {
@@ -193,6 +188,12 @@ export function DraftAgentTab({
     },
     (runsOn) => control.onDraftChange({ runsOn }),
   );
+
+  // Note that a model nothing of the account's pays for holds Send, with the press that connects one, rather than being refused once sent, but on a device that runs its harness, on the device's own sign-in.
+  const models = useMemo(() => modelsRunOn(control.models, device), [control.models, device]);
+
+  const unpaid =
+    models === undefined || choice === undefined ? undefined : unrunnableChoice(models, choice);
 
   const send = () => {
     const prompt = draft.prompt.trim();
@@ -313,9 +314,9 @@ export function DraftAgentTab({
             onDrop={control.onDropFork}
           />
         )}
-        {unpaid === undefined || control.models === undefined ? null : (
+        {unpaid === undefined || models === undefined ? null : (
           <div className={COMPOSER_DOCK_CLASS}>
-            <ConnectAgentBanner models={control.models} unpaid={unpaid} />
+            <ConnectAgentBanner models={models} unpaid={unpaid} />
           </div>
         )}
         <AgentComposer
@@ -334,7 +335,7 @@ export function DraftAgentTab({
                   choose: (next) => control.onDraftChange({ choice: next }),
                 }
           }
-          models={control.models}
+          models={models}
           modelsFailed={control.modelsFailed}
           readModels={control.readModels}
           usage={undefined}

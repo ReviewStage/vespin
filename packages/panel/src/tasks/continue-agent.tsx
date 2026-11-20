@@ -34,7 +34,7 @@ import { ActionMenu } from "../desktop/action-menu.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { COMPOSER_ROOM_CLASS } from "./agent-composer.js";
-import { CONTINUE_LABEL, CONTINUED_IN, modelLabel } from "./agent-model.js";
+import { CONTINUE_LABEL, CONTINUED_IN, modelLabel, modelsRunOn } from "./agent-model.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { useContinueDoor } from "./fork-action.js";
 import { ModelMenu, settledChoice } from "./model-menu.js";
@@ -221,7 +221,8 @@ export function ContinueAgent({
  * beside it, a chevron opening
  * the shared model menu (`model-menu.tsx`), whose pick names another model
  * on the press, starting nothing. Where nothing of the reader's pays for
- * the other harness, Connect names it, landing on its row in Settings ›
+ * the other harness, and the reader's own device the agent runs on runs no
+ * harness of it (`modelsRunOn`), Connect names it, landing on its row in Settings ›
  * Agents. Nothing is offered before the catalog is read, nor where nothing
  * starts a continue (`continueAgent`); where the catalog offers no other
  * model the reader runs, Connect stands alone.
@@ -231,8 +232,8 @@ export function RefusalContinue({
   control,
   carry,
 }: {
-  agent: Pick<AgentSummary, "id" | "model" | "effort">;
-  control: Pick<AgentsControl, "continueAgent" | "models" | "modelsFailed" | "readModels">;
+  agent: Pick<AgentSummary, "id" | "model" | "effort" | "mac">;
+  control: Pick<AgentsControl, "continueAgent" | "models" | "macs" | "modelsFailed" | "readModels">;
   /** The box's words and files, which the press carries into the new agent. */
   carry: ContinueCarry | undefined;
 }): React.JSX.Element | null {
@@ -243,7 +244,12 @@ export function RefusalContinue({
   const menuId = useId();
   const root = useRef<HTMLSpanElement>(null);
   const remedy = useRepositoryRemedy();
-  const { models } = control;
+
+  // Note that a continue runs where its source runs, so on the reader's own device a model of a harness it runs needs nothing of the reader's to pay for it.
+  const models = modelsRunOn(
+    control.models,
+    control.macs?.find((device) => device.deviceId === agent.mac?.deviceId),
+  );
 
   if (control.continueAgent === undefined || models === undefined) return null;
   const offer = refusalOffer(models, agent);
