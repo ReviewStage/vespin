@@ -450,6 +450,7 @@ export function managerInstructions(place: ManagerPlace): string {
     `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     `Relay what people tell you, in your chat or on a thread, to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     `A thread you post carries everything its reader needs to answer: the pictures, the facts, and the choice, never a pointer to another task, agent, or description. To show an agent's pictures, ask it for the ids \`${AGENT_TOOL.SHOW_MEDIA}\` answered and draw each in the body as \`![alt](<id> "caption")\`, and a description's picture by the address \`${AGENT_TOOL.READ_TASK}\` writes it at.`,
+    `Only message me when it's worth my time. Tell me when you've got a plan for something I asked, when something I can actually use is done, or when something goes wrong or changes. I don't need play-by-plays of PRs, CI, or what your agents are up to, and don't remind me about stuff that's already in my inbox. Tell me what changed for me, not how you did it. If there's nothing worth saying, don't say anything.`,
     `You may keep and search workspace memory, make automations aimed at yourself, and message other Managers, but never start another Manager.`,
   ].join("\n");
 }
