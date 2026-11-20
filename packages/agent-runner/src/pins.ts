@@ -147,7 +147,7 @@ export const CODEX_PIN = {
  * as it looks for it (`CURSOR_SDK_ENTRY`). It needs Node 22.13 or later.
  */
 export const CURSOR_SDK_PIN = {
-  VERSION: "1.4.1",
+  VERSION: "1.4.2",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/cursor-sdk`,
   /** The SDK's ES module entry, under `DIRECTORY`. */
   ENTRY: "node_modules/@cursor/sdk/dist/esm/index.js",
@@ -288,7 +288,7 @@ export const NODE_MAC_PIN: AgentToolPin = {
 const HOST_CLI_VERSION = {
   CLAUDE_CODE: "0.3.328",
   CODEX: "0.170.0",
-  CURSOR_SDK: "1.4.1",
+  CURSOR_SDK: "1.4.2",
   GH: "2.103.3",
 } as const;
 
@@ -352,8 +352,8 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
   NAME: "cursor-sdk",
   VERSION: HOST_CLI_VERSION.CURSOR_SDK,
   ARCHIVE: npmArchive("@cursor/sdk", `sdk-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`),
-  SHA256: "5682cd890cfab70c3c8ae18aa8ac57d024b34d6b4bfa39b920d15b44d6b8cdeb",
-  BYTES: 4_875_424,
+  SHA256: "38baf2ec3d11c5567b4b885f02146e89b697a4656d462b1c8731e6caba2a12a5",
+  BYTES: 4_943_696,
   ROOT: "package",
   MEMBERS: ["package.json", "dist"],
   BINARY: "dist/esm/index.js",
@@ -363,15 +363,15 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
     "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox",
   ],
   FILES: {
-    "dist/esm/index.js": "6f7bf20a18337a3ffbc8983c37f58d6a335568eec6d37a67328e4d929e3b3cef",
+    "dist/esm/index.js": "bbaa5f9f0856701126a285b7cc5b418cf4a8eefa01164513e431b0a2d1b7d1d1",
     "node_modules/@cursor/sdk-darwin-arm64/bin/rg":
-      "5f336f205111fb454666dd5fc1860ee81a636e5e3c0f63b63bb245e1a082d29b",
+      "26390c7cf1a18eb518260918d9d9ba4b2d41ee2cf7453f57e874187748d6ffc3",
     "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox":
-      "8703373b9cb03242abf5d2379f7ab1c49f1c8e9c5a4ac457e470a1eec53e0e0b",
+      "587154e9a49f3239510d4e29f228c6757a0dc0747565f38bf0344a25bb035c28",
     "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter/binding.node":
-      "6667169300658037d80b281a29c6adb62d58655e0a0a58c9b478d4df36c4df4f",
+      "2661b7238d7641a779520152f1b22671d77b1b4c3f2aa25f8e8122642ab11e1c",
     "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter-bash/binding.node":
-      "373de15776cb28a53f2a27cb5eef29cd7a3a49826ecaf1c99cf9590dd575096c",
+      "d9dc3d5d94e7c56e400d79928dd286bd0cdccc70db92df35683c455db41387b0",
   },
   PARTS: [
     {
@@ -379,8 +379,8 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
         "@cursor/sdk-darwin-arm64",
         `sdk-darwin-arm64-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`,
       ),
-      SHA256: "b1997bd62e5214ede0ecd25e1146455c54805f97bca81c8677f8b774be6c0d26",
-      BYTES: 3_510_640,
+      SHA256: "38a0ddab8fe6792825094a8e23ed080161e8a19b015dca37b098adc0ea45a917",
+      BYTES: 3_510_671,
       ROOT: "package",
       INTO: "node_modules/@cursor/sdk-darwin-arm64",
     },
