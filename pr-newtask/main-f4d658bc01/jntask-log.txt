@@ -1,0 +1,18 @@
+== bundle PJNTASK base f4d658bc01
+  built f4d658bc01 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-new-task: fails 0 shots 9 
+iphone-light-new-agent: fails 0 shots 4 
+iphone-light-failure-notice: fails 1 shots 1 Assert that "The task could not be unpinned\..*" is visible... FAILED
+iphone-dark-new-task: fails 0 shots 9 
+iphone-dark-new-agent: fails 0 shots 4 
+iphone-dark-failure-notice: fails 1 shots 1 Assert that "The task could not be unpinned\..*" is visible... FAILED
+ipad27-light-new-task: fails 0 shots 8 
+ipad27-light-new-agent: fails 0 shots 4 
+ipad27-light-failure-notice: fails 2 shots 3   Assert that "${ITEM}" is visible... FAILED
+ipad27-dark-new-task: fails 0 shots 8 
+ipad27-dark-new-agent: fails 0 shots 4 
+ipad27-dark-failure-notice: fails 2 shots 3   Assert that "${ITEM}" is visible... FAILED
