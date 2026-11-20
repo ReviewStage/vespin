@@ -7,13 +7,15 @@
  * people, the reader first; with words typed, the date they name, then the
  * workspace's agents, tasks and people, the task's pages, the workspace's
  * threads and the task's pull requests the words find, as
- * `@repo/features/mention-offer` groups and scores them. A pick writes `@Name ` in the word's place, since the
- * system's field can draw no chip, and the send writes each picked
- * `@Name` still standing as the link the panel's chip writes
- * (`[@Name](https://vespin.dev/…)`, a pull request's GitHub address, a
- * date's `mention://date`). The people and the task's pages are followed
- * only while an `@` is being typed. Note that a field hands no caret, so the word is the
- * one the words end with, which is where the caret stands as it is typed.
+ * `@repo/features/mention-offer` groups and scores them. In a field that
+ * draws pills (`PillField`), the word is the one its caret stands in, as the
+ * field tells it, and a pick puts the mention's pill in its place, already
+ * the link the panel's chip writes. In the system's field, which draws no
+ * chip and hands no caret, the word is the one the words end with, a pick
+ * writes `@Name ` in its place, and the send writes each picked `@Name`
+ * still standing as that link (`[@Name](https://vespin.dev/…)`, a pull
+ * request's GitHub address, a date's `mention://date`). The people and the
+ * task's pages are followed only while an `@` is being typed.
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
@@ -91,6 +93,12 @@ export interface MentionsOffered {
   readonly pick: (group: string, id: string) => void;
 }
 
+/** A field that draws pills: the `@` word its caret stands in, and the door that puts a picked mention's pill in its place. */
+export interface MentionPills {
+  readonly word: { readonly query: string } | undefined;
+  readonly pick: (mention: PickedMention) => void;
+}
+
 /** What `useMentionOffer` hands its composer: the offer while an `@` is typed, and the words as they are sent, each pick written as its link. */
 export interface MentionOffer {
   readonly offered: MentionsOffered | undefined;
@@ -99,16 +107,20 @@ export interface MentionOffer {
 
 /**
  * What the `@` word `words` end with offers in the place, a pick handing
- * the words with the name written in to `onWords`; none while no `@` word
- * ends them, or before the place's workspace is known.
+ * the words with the name written in to `onWords`, or, in a field drawing
+ * `pills`, what the word its caret stands in offers, a pick putting the
+ * mention's pill there; none while no `@` word stands, or before the
+ * place's workspace is known.
  */
 export function useMentionOffer(
   words: string,
   onWords: (words: string) => void,
   place: { readonly workspaceId: string | undefined; readonly taskId: string | undefined },
+  pills?: MentionPills | undefined,
 ): MentionOffer {
   const { workspaceId, taskId } = place;
-  const word = useMemo(() => atWordEnding(words), [words]);
+  const ending = useMemo(() => atWordEnding(words), [words]);
+  const word = pills === undefined ? ending : pills.word;
   const asking = word !== undefined && workspaceId !== undefined;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const step = linkWorkspaceStep(workspaceId, workspaces);
@@ -258,7 +270,9 @@ export function useMentionOffer(
     taskPullRequests,
   ]);
 
-  const sendable = (text: string) => withMentionLinks(text, picked.current);
+  // Note that a field drawing pills holds each mention as its link already, so its words go as they stand.
+  const sendable = (text: string) =>
+    pills === undefined ? withMentionLinks(text, picked.current) : text;
 
   if (!asking) return { offered: undefined, sendable };
 
@@ -283,9 +297,14 @@ export function useMentionOffer(
           ?.rows.find((each) => each.id === id);
 
         if (row === undefined) return;
-        picked.current = [...picked.current, { name: row.name, target: row.target }];
-        onWords(wordsWithPick(words, word.start, row.name));
+        const mention = { name: row.name, target: row.target };
         buzz(BUZZ.SELECTION);
+
+        if (pills !== undefined) return pills.pick(mention);
+
+        if (ending === undefined) return;
+        picked.current = [...picked.current, mention];
+        onWords(wordsWithPick(words, ending.start, row.name));
       },
     },
     sendable,

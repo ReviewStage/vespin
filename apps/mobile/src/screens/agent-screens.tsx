@@ -424,6 +424,7 @@ function AgentComposerBar({
       ),
     saving: composer.saving,
     focusAsk: composer.focusAsk,
+    pills: composer.pills,
   };
 
   return <Composer {...props} />;
