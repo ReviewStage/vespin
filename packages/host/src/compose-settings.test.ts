@@ -135,6 +135,7 @@ it.effect("a launch that learns late that usage data is on is counted then, and 
   Effect.gen(function* () {
     // A run from source reads usage data off at launch, as a launch whose settings read failed does.
     const { settings, sent, service } = yield* sendingSettings(false);
+
     const flush = Effect.provideService(
       settings.flushProductEvents,
       FetchHttpClient.Fetch,
