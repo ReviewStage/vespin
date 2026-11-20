@@ -1,0 +1,63 @@
+# rec-04-sheets.yaml -- New task's sheet raised, typed in, and dragged down (its discard ask), then the switcher's menu and the Settings sheet dragged away.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- startRecording: rec-04-sheets
+- tapOn: "New task"
+- waitForAnimationToEnd
+- takeScreenshot: a04-new-task
+- swipe:
+    start: "50%, 14%"
+    end: "50%, 92%"
+    duration: 800
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "New task"
+    optional: true
+- waitForAnimationToEnd
+- inputText: "Let an owner revoke an invite."
+- waitForAnimationToEnd
+- takeScreenshot: a04-new-task-typed
+- swipe:
+    start: "50%, 14%"
+    end: "50%, 92%"
+    duration: 800
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a04-new-task-drag-with-draft
+- tapOn:
+    text: "Discard.*"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    id: "workspace-switcher"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a04-switcher
+- tapOn:
+    text: "Settings(, .*)?"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a04-settings
+- swipe:
+    start: "50%, 14%"
+    end: "50%, 92%"
+    duration: 800
+    optional: true
+- waitForAnimationToEnd
+- stopRecording

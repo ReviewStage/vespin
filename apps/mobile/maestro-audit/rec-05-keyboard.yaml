@@ -1,0 +1,64 @@
+# rec-05-keyboard.yaml -- a thread's reply field and an agent's composer taking the keyboard, words typed, and the keyboard dragged down with the list, as Messages lowers it.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn: "Recorded the invite flow"
+- waitForAnimationToEnd
+- startRecording: rec-05-keyboard
+- tapOn:
+    id: "composer-field"
+    optional: true
+- waitForAnimationToEnd
+- inputText: "Looks good, ship it after the copy pass."
+- waitForAnimationToEnd
+- takeScreenshot: a05-thread-keyboard
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 92%"
+    duration: 900
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a05-thread-lowered
+- tapOn:
+    id: "composer-field"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    point: "50%, 25%"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a05-thread-tap-off
+- launchApp:
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- extendedWaitUntil:
+    visible: "Steer"
+    timeout: 30000
+- tapOn:
+    id: "composer-field"
+    optional: true
+- inputText: "Also cover the expired invite."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a05-agent-keyboard
+- swipe:
+    start: "50%, 25%"
+    end: "50%, 92%"
+    duration: 900
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a05-agent-lowered
+- stopRecording

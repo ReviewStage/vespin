@@ -1,0 +1,50 @@
+# rec-01-push-back.yaml -- a thread and a task pushed and popped: the push, the edge back swipe, the back button.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- startRecording: rec-01-push-back
+- tapOn: "Recorded the invite flow"
+- waitForAnimationToEnd
+- takeScreenshot: a01-thread
+- swipe:
+    start: "1%, 50%"
+    end: "75%, 50%"
+    duration: 700
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a01-after-edge-swipe
+- tapOn:
+    text: "Recorded the invite flow"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    id: "BackButton"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    file: ../maestro/subflows/tab.yaml
+    env:
+      TAB: Tasks
+- tapOn:
+    text: "Weekly digest email"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a01-task
+- swipe:
+    start: "1%, 50%"
+    end: "75%, 50%"
+    duration: 700
+    optional: true
+- waitForAnimationToEnd
+- stopRecording

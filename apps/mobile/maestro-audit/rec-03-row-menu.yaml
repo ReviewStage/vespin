@@ -1,0 +1,37 @@
+# rec-03-row-menu.yaml -- a row's long press lifting its preview and menu, and the menu put away, on an Inbox row and a task row.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- startRecording: rec-03-row-menu
+- longPressOn: "Recorded the invite flow"
+- waitForAnimationToEnd
+- takeScreenshot: a03-inbox-menu
+- tapOn:
+    point: "50%, 6%"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    file: ../maestro/subflows/tab.yaml
+    env:
+      TAB: Tasks
+- longPressOn:
+    text: "Weekly digest email"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a03-task-menu
+- tapOn:
+    point: "50%, 6%"
+    optional: true
+- waitForAnimationToEnd
+- stopRecording

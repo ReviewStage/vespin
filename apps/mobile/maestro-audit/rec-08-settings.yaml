@@ -1,0 +1,63 @@
+# rec-08-settings.yaml -- Settings opened from the switcher, a row pushed and popped, a picker changed, and the sheet put away by Done.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: "Settings(, .*)?"
+- waitForAnimationToEnd
+- startRecording: rec-08-settings
+- takeScreenshot: a08-settings
+- scrollUntilVisible:
+    element:
+      id: "settings-notifications"
+    optional: true
+- tapOn:
+    id: "settings-notifications"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a08-notifications
+- tapOn:
+    text: "Always"
+    optional: true
+- waitForAnimationToEnd
+- swipe:
+    start: "1%, 50%"
+    end: "75%, 50%"
+    duration: 700
+    optional: true
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Send feedback"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a08-settings-foot
+- scrollUntilVisible:
+    element: "Signed in with GitHub"
+    direction: UP
+    optional: true
+- tapOn:
+    text: "Signed in with GitHub"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a08-account
+- tapOn:
+    id: "BackButton"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Done"
+    optional: true
+- waitForAnimationToEnd
+- stopRecording

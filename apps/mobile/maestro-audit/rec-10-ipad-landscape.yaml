@@ -1,0 +1,56 @@
+# rec-10-ipad-landscape.yaml -- an iPad in landscape: the sidebar, list and detail, rows picked down the list, a task opened, New task's form sheet, and the sidebar hidden and shown. Run on the iPad only.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd
+- startRecording: rec-10-ipad-landscape
+- takeScreenshot: a10-inbox
+- tapOn:
+    text: "Recorded the invite flow"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a10-thread
+- tapOn:
+    text: "Who can withdraw an invite\\?"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    file: ../maestro/subflows/tab.yaml
+    env:
+      TAB: Tasks
+- tapOn:
+    text: "Weekly digest email"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a10-task
+- tapOn:
+    text: "New task"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a10-new-task
+- tapOn:
+    text: "Cancel"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    id: "ToggleSidebar"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a10-sidebar-toggled
+- tapOn:
+    id: "ToggleSidebar"
+    optional: true
+- waitForAnimationToEnd
+- stopRecording

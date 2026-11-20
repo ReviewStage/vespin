@@ -1,0 +1,42 @@
+# rec-07-search.yaml -- the Search tab: its field focused, words typed, results narrowing, one opened and gone back from, and the field cleared and canceled.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- startRecording: rec-07-search
+- runFlow:
+    file: ../maestro/subflows/tab.yaml
+    env:
+      TAB: Search
+- waitForAnimationToEnd
+- tapOn:
+    text: "Search Vespin"
+    optional: true
+- waitForAnimationToEnd
+- inputText: "invite"
+- waitForAnimationToEnd
+- takeScreenshot: a07-search-results
+- tapOn:
+    text: "Recorded the invite flow"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    id: "BackButton"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Cancel"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a07-search-canceled
+- stopRecording

@@ -1,0 +1,54 @@
+# rec-02-row-swipes.yaml -- an Inbox row and a task row swiped from each edge, part way then put back, as Mail's rows are.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- startRecording: rec-02-row-swipes
+- swipe:
+    from: "Recorded the invite flow"
+    direction: LEFT
+    duration: 900
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a02-inbox-trailing
+- tapOn:
+    point: "50%, 85%"
+    optional: true
+- waitForAnimationToEnd
+- swipe:
+    from: "Recorded the invite flow"
+    direction: RIGHT
+    duration: 900
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a02-inbox-leading
+- tapOn:
+    point: "50%, 85%"
+    optional: true
+- waitForAnimationToEnd
+- runFlow:
+    file: ../maestro/subflows/tab.yaml
+    env:
+      TAB: Tasks
+- swipe:
+    from: "Weekly digest email"
+    direction: LEFT
+    duration: 900
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: a02-task-trailing
+- tapOn:
+    point: "50%, 85%"
+    optional: true
+- waitForAnimationToEnd
+- stopRecording

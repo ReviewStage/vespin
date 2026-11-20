@@ -1,0 +1,64 @@
+# rec-09-agent.yaml -- an agent's page: the transcript scrolled back and Jump to latest, the + menu, the model chip's sheet, and the ⋯ menu.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- extendedWaitUntil:
+    visible: "Steer"
+    timeout: 30000
+- startRecording: rec-09-agent
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+    duration: 800
+    optional: true
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+    duration: 800
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a09-scrolled-back
+- tapOn:
+    text: "Jump to latest"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    text: "Add"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a09-add-menu
+- tapOn:
+    point: "50%, 20%"
+    optional: true
+- tapOn:
+    id: "agent-model-chip"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a09-model-sheet
+- swipe:
+    start: "50%, 45%"
+    end: "50%, 95%"
+    duration: 800
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    text: "More"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a09-more-menu
+- tapOn:
+    point: "50%, 90%"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- stopRecording
