@@ -11,8 +11,11 @@
  * face, stands at the bubble's outer side, level with its foot, beside the
  * run's last bubble and a bubble alone, as a chat app stands it, and keeps
  * its room beside the run's others, so the run's bubbles line up, and the
- * line under the run starts past it (`MESSAGE_LINE_INSET.AVATAR`). The two sides wear different grounds, the sent one a
- * wash of the accent and the received one the raised fill, both under the
+ * line under the run starts past it (`MESSAGE_LINE_INSET.AVATAR`). It is
+ * the one bubble of every transcript: an agent's, where a line stands
+ * alone, and a Manager's chat, where it stands in runs. A bubble wears the
+ * raised fill unless its caller asks for a wash of the accent (`tone`),
+ * as a Manager's chat does for what people sent, both under the
  * foreground's ink, so the words, links, chips, and code inside read as
  * they do anywhere in a transcript. Where the bubble stands in the column,
  * and the line over or under it, is its caller's.
@@ -40,10 +43,18 @@ export const CHAT_RUN = {
 
 export type ChatRun = (typeof CHAT_RUN)[keyof typeof CHAT_RUN];
 
-/** The bubble's ground on each side. */
-const SIDE_GROUND: Record<ChatSide, string> = {
-  [CHAT_SIDE.SENT]: "bg-bubble-sent",
-  [CHAT_SIDE.RECEIVED]: "bg-fill-strong",
+/** The bubble's ground: the raised fill, or a wash of the accent. */
+export const CHAT_TONE = {
+  RAISED: "raised",
+  ACCENT: "accent",
+} as const;
+
+export type ChatTone = (typeof CHAT_TONE)[keyof typeof CHAT_TONE];
+
+/** The class each tone grounds the bubble with. */
+const TONE_GROUND: Record<ChatTone, string> = {
+  [CHAT_TONE.RAISED]: "bg-fill-strong",
+  [CHAT_TONE.ACCENT]: "bg-bubble-sent",
 };
 
 /** The corners tightened on each side where the run goes on past the bubble: below it, above it, or both. */
@@ -77,16 +88,19 @@ export function chatRunOf(opens: boolean, closes: boolean): ChatRun {
   return closes ? CHAT_RUN.LAST : CHAT_RUN.MIDDLE;
 }
 
-/** One message's bubble, `children` its words, shaped by its `side` and its place in its `run`, with `beside` toward the column's middle and its sender's `avatar` at its outer side. */
+/** One message's bubble, `children` its words, shaped by its `side` and its place in its `run`, grounded by its `tone`, with `beside` toward the column's middle and its sender's `avatar` at its outer side. */
 export function ChatBubble({
   side,
   run,
+  tone = CHAT_TONE.RAISED,
   avatar,
   beside,
   children,
 }: {
   side: ChatSide;
   run: ChatRun;
+  /** Its ground; the raised fill where none is given. */
+  tone?: ChatTone;
   /** The sender's picture, drawn beside the run's last bubble and a bubble alone and its room kept beside the others; none where the chat draws none. */
   avatar?: ReactNode;
   /** What stands beside the bubble toward the column's middle, such as its actions or a mark that it did not go; none where nothing does. */
@@ -108,7 +122,7 @@ export function ChatBubble({
       )}
       {/* Note that it clips past the keyboard's ring rather than at its edge, so a fold, a chip, or a link it holds keeps its ring. */}
       <div
-        className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] ${SIDE_GROUND[side]} ${RUN_CORNERS[side][run]}`}
+        className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] ${TONE_GROUND[tone]} ${RUN_CORNERS[side][run]}`}
       >
         {children}
       </div>

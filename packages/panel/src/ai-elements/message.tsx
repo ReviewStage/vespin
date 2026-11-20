@@ -10,8 +10,9 @@ import { markdownHtmlParserQuery } from "../markdown-html-parser.js";
  *
  * Copied from the AI Elements registry (https://elements.ai-sdk.dev) and
  * restyled to our tokens: the developer's turn stands at the right in a
- * raised bubble, the app's at the left in plain text across the whole column,
- * as a chat app draws them. The actions on a message are the
+ * raised bubble, `@repo/ui`'s `ChatBubble` as a Manager's chat draws it, the
+ * app's at the left in plain text across the whole column, as a chat app
+ * draws them. The actions on a message are the
  * registry's, each one a quiet icon button in `@repo/ui`'s `MessageActions`,
  * which shows while the pointer or the keyboard is on the message, in the
  * line under it (`MessageLine`), with the window's own
@@ -60,23 +61,21 @@ export function Message({ className, from, ...props }: MessageProps): ReactNode 
 /**
  * A line the other side sent, the app's, GitHub's, or another agent's, at the
  * column's left, the other side of the conversation, its line under it starting at its left edge: the same
- * bubble as the developer's own, which stands at the right.
+ * bubble as the developer's own (`ChatBubble`), which stands at the right.
  */
 export const RECEIVED_MESSAGE_CLASS = "is-received mr-auto max-w-bubble items-start";
 
 export type MessageContentProps = HTMLAttributes<HTMLDivElement>;
 
-/** The words of a turn: plain across the column, or the developer's raised bubble. */
+/** The words of the agent's own turn, plain across the column; a bubble is `@repo/ui`'s `ChatBubble`. */
 export function MessageContent({ children, className, ...props }: MessageContentProps): ReactNode {
   return (
     // A reply is reading text, so it keeps a reading leading rather than the
     // body role's. It clips past the keyboard's ring rather than at its edge,
-    // so a fold, a tool line, or a chip it holds keeps its ring. The
-    // developer's turn and a received line raise it in a bubble.
+    // so a fold, a tool line, or a chip it holds keeps its ring.
     <div
       className={cn(
         "message-content min-w-0 max-w-full overflow-clip [overflow-clip-margin:var(--ui-focus-ring-room)] text-body leading-reading text-foreground",
-        "group-[:is(.is-user,.is-received)]/message:w-fit group-[:is(.is-user,.is-received)]/message:rounded-ui-14 group-[:is(.is-user,.is-received)]/message:bg-fill-strong group-[:is(.is-user,.is-received)]/message:px-list-inset group-[:is(.is-user,.is-received)]/message:py-row-inset",
         className,
       )}
       {...props}
@@ -87,10 +86,11 @@ export function MessageContent({ children, className, ...props }: MessageContent
 }
 
 /**
- * The developer's bubble with a mark at its side, toward the column's middle,
+ * A mark on a row of its own, for a line of files alone that did not go,
  * as a chat app stands its red alert beside a message that did not go
- * (`undelivered-mark.tsx`); the mark keeps its full ink while the bubble
- * fades (`tasks.css`).
+ * (`undelivered-mark.tsx`); a line of words stands its mark beside its
+ * bubble (`ChatBubble`'s `beside`), and the mark keeps its full ink while
+ * the bubble fades (`tasks.css`).
  */
 export function MessageBeside({
   mark,

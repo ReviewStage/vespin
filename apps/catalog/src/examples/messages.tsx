@@ -9,6 +9,7 @@ import {
   BUTTON_SIZE,
   CHAT_RUN,
   CHAT_SIDE,
+  CHAT_TONE,
   ChatBubble,
   CopyIcon,
   chatRunOf,
@@ -168,7 +169,12 @@ function Messages(): React.JSX.Element {
         <div className="catalog-frame">
           <div className="flex flex-col gap-ui-4">
             <MessageFrame revealActionsOnTap className="ml-auto flex flex-col items-end">
-              <ChatBubble side={CHAT_SIDE.SENT} run={CHAT_RUN.ALONE} beside={COPY}>
+              <ChatBubble
+                side={CHAT_SIDE.SENT}
+                run={CHAT_RUN.ALONE}
+                tone={CHAT_TONE.ACCENT}
+                beside={COPY}
+              >
                 <Text>Is the invite flow out?</Text>
               </ChatBubble>
               <MessageLine at={SENT_AT} />
