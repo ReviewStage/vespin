@@ -12,6 +12,18 @@ import { type InboxListed, waitsOnReaderNow } from "@repo/features/inbox-list-mo
 import type { PersonAgent } from "@repo/features/person-page-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import {
+  Badge,
+  CHAT_RUN,
+  CHAT_SIDE,
+  ChatBubble,
+  GlyphSlot,
+  INLINE_REF_FIT,
+  INLINE_REF_LOOK,
+  InlineRef,
+  PROGRESS_TONE,
+  PROGRESS_WIDTH,
+  Progress,
+  TaskStatusMark,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
@@ -54,10 +66,14 @@ import {
 } from "lucide-react";
 import { INBOX_ASK, type InboxItem, knownAsk, openAskOf } from "@repo/features/inbox-wire";
 import { ManagerFace, MANAGER_FACE_SIZE } from "@repo/ui/manager-face";
+import { SWIMLANE_TONE, type Swimlane, type SwimlaneSpan, Swimlanes } from "@repo/ui/swimlanes";
+import { ICON_SIZE } from "@repo/ui/icons";
+import { ArrowRightIcon, MessageSquareIcon } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { agentName } from "../tasks/agent-model.js";
-import { AgentGlyph } from "../tasks/tab-look.js";
+import { AgentGlyph, AgentMark } from "../tasks/tab-look.js";
+import { providerOf } from "../tasks/agent-model.js";
 import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM } from "../shell-room.js";
@@ -87,6 +103,14 @@ export const COMMAND_CENTER = {
   D3: "d3",
   /** D4: dense, on one screen beside the open sidebar. */
   D4: "d4",
+  /** Bold 1: the Manager as a person, its team below. */
+  HERO: "hero",
+  /** Bold 2: a written brief. */
+  BRIEF: "brief",
+  /** Bold 3: a lane of time to each agent. */
+  LANES: "lanes",
+  /** Bold 4: one flow from asked to merged. */
+  PIPELINE: "pipeline",
 } as const;
 
 export type CommandCenterVariant = (typeof COMMAND_CENTER)[keyof typeof COMMAND_CENTER];
@@ -822,6 +846,415 @@ function DenseDashboard({ tasks, managed }: { tasks: TasksControl; managed: Mana
   );
 }
 
+/* ----- The bold directions ----- */
+
+/** What an agent would say of itself, in a line. */
+function agentSays(each: PersonAgent, managed: Managed): string {
+  const { agent, task } = each;
+  const approval = agent.pendingApprovals?.[0];
+  const pullRequest = managed.pullRequests.get(agent.id);
+
+  if (approval !== undefined) return `Waiting on you to approve: ${approval.title}`;
+  if (agent.status !== AGENT_STATUS.RUNNING) return `Done with ${task.name}.`;
+  if (pullRequest?.checks === "passing") return `${pullRequestNumberLabel(pullRequest)} is ready for your review.`;
+  if (pullRequest !== undefined) return `${pullRequestNumberLabel(pullRequest)} is open; checks are running.`;
+
+  return `Working on ${task.name}.`;
+}
+
+/** Where an agent stands, first what needs the reader, then what works, then what finished. */
+function rankOf(each: PersonAgent): number {
+  if ((each.agent.pendingApprovals?.length ?? 0) > 0) return 0;
+
+  return each.agent.status === AGENT_STATUS.RUNNING ? 1 : 2;
+}
+
+/** An agent's standing as a badge under its mark. */
+function AgentStanding({ each }: { each: PersonAgent }) {
+  const rank = rankOf(each);
+
+  return rank === 0 ? (
+    <Badge tone={STATUS_TONE.ATTENTION}>Needs you</Badge>
+  ) : rank === 1 ? (
+    <Badge tone={STATUS_TONE.WORKING}>Working</Badge>
+  ) : (
+    <Badge tone={STATUS_TONE.COMPLETE}>Done</Badge>
+  );
+}
+
+/** Bold 1: opening a person: its face and what it says, then its team, each saying where it stands. */
+function HeroCenter({ tasks, managed, manager }: { tasks: TasksControl; managed: Managed; manager: ListedAgent }) {
+  const working = managed.agents.filter(({ agent }) => agent.status === AGENT_STATUS.RUNNING);
+  const first = managed.waiting[0]?.item.title;
+  const says = `${working.length} of my ${managed.agents.length} agents are working, and ${managed.waiting.length} things need you${first === undefined ? "." : `, starting with "${first}"`}`;
+
+  return (
+    <Stack gap={GAP.PAGE}>
+      <Stack gap={GAP.SECTION} align={ALIGN.CENTER}>
+        {manager.face === undefined ? null : (
+          <ManagerFace face={manager.face} size={MANAGER_FACE_SIZE.HERO} working={manager.status === AGENT_STATUS.RUNNING} />
+        )}
+        <Text variant={TEXT_VARIANT.TITLE}>{agentName(manager, tasks.agents.models)}</Text>
+        <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+          {says}
+        </ChatBubble>
+      </Stack>
+      <Stack gap={GAP.BLOCK}>
+        <Text variant={TEXT_VARIANT.GROUP} tone={TEXT_TONE.MUTED}>
+          Its team
+        </Text>
+        <div className="grid grid-cols-4 items-start gap-ui-12">
+          {managed.agents.toSorted((a, b) => rankOf(a) - rankOf(b)).map((each) => (
+            <Card key={each.agent.id} look={CARD_LOOK.WELL} padding={CARD_PADDING.COMPACT} hover={CARD_HOVER.WASH}>
+              <CardPress
+                onPress={() => tasks.onShowAgent(each.task.id, each.agent.id)}
+                label={agentName(each.agent, tasks.agents.models)}
+              >
+                <Stack gap={GAP.BLOCK} align={ALIGN.CENTER}>
+                  <GlyphSlot size={ICON_SIZE.EMPTY}>
+                    <AgentMark provider={providerOf(each.agent.model)} />
+                  </GlyphSlot>
+                  <AgentStanding each={each} />
+                  <Stack gap={GAP.NONE} align={ALIGN.CENTER}>
+                    <Text variant={TEXT_VARIANT.LABEL}>{agentName(each.agent, tasks.agents.models)}</Text>
+                    <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                      {each.task.name}
+                    </Text>
+                  </Stack>
+                  <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
+                    {agentSays(each, managed)}
+                  </ChatBubble>
+                </Stack>
+              </CardPress>
+            </Card>
+          ))}
+        </div>
+      </Stack>
+      <Stack gap={GAP.BLOCK}>
+        <Text variant={TEXT_VARIANT.GROUP} tone={TEXT_TONE.MUTED}>
+          Needs you
+        </Text>
+        <AnswerRows tasks={tasks} managed={managed} />
+      </Stack>
+    </Stack>
+  );
+}
+
+/** A task named in running words, as a mention's pill. */
+function TaskPill({ tasks, task }: { tasks: TasksControl; task: TaskSummary | undefined }) {
+  if (task === undefined) return null;
+
+  return (
+    <InlineRef
+      look={INLINE_REF_LOOK.PILL}
+      fit={INLINE_REF_FIT.FLOW}
+      glyph={<TaskStatusMark status={task.status} />}
+      label={task.name}
+      onPress={() => tasks.onSelect(task.id)}
+    />
+  );
+}
+
+/** A pull request named in running words. */
+function PullRequestPill({ tasks, each, managed }: { tasks: TasksControl; each: PersonAgent | undefined; managed: Managed }) {
+  const pullRequest = each === undefined ? undefined : managed.pullRequests.get(each.agent.id);
+
+  if (each === undefined || pullRequest === undefined) return null;
+
+  return (
+    <InlineRef
+      look={INLINE_REF_LOOK.PILL}
+      fit={INLINE_REF_FIT.FLOW}
+      glyph={<PullRequestMark pullRequest={pullRequest} />}
+      label={`${pullRequestNumberLabel(pullRequest)} ${pullRequest.title}`}
+      onPress={() => tasks.onShowAgent(each.task.id, each.agent.id)}
+    />
+  );
+}
+
+/** One section of the brief: its heading over its words. */
+function BriefSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Stack gap={GAP.TIGHT}>
+      <Text variant={TEXT_VARIANT.SECTION}>{title}</Text>
+      {children}
+    </Stack>
+  );
+}
+
+/** Bold 2: a written brief: what finished, what is in review, what needs the reader, what comes next, signed. */
+function BriefCenter({ tasks, managed, manager }: { tasks: TasksControl; managed: Managed; manager: ListedAgent }) {
+  const named = (name: string) => managed.tasks.find((task) => task.name === name);
+  const agentOn = (name: string) => managed.agents.find((each) => each.task.name === name);
+
+  return (
+    <Stack gap={GAP.PAGE}>
+      <BriefSection title="Finished">
+        <Text>
+          <TaskPill tasks={tasks} task={named("Ledger rounding")} /> wrapped up on Tuesday: totals now
+          round half-cents to even, as the bank does. The <TaskPill tasks={tasks} task={named("Invite landing page")} />{" "}
+          merged yesterday, so an invite link lands on a real page.
+        </Text>
+      </BriefSection>
+      <BriefSection title="In review">
+        <Text>
+          <PullRequestPill tasks={tasks} each={agentOn("Teammate invitations")} managed={managed} /> passed
+          its checks and is ready for you. <PullRequestPill tasks={tasks} each={agentOn("Weekly digest email")} managed={managed} />{" "}
+          is still running its checks; I'll tell you when it's green.
+        </Text>
+      </BriefSection>
+      <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.COMPACT}>
+        <Stack gap={GAP.BLOCK}>
+          <Text variant={TEXT_VARIANT.SECTION}>{`${managed.waiting.length} things need you`}</Text>
+          <AnswerRows tasks={tasks} managed={managed} />
+        </Stack>
+      </Card>
+      <BriefSection title="What's next">
+        <Text>
+          Once you say who may withdraw an invite, the invitations agent finishes its tests and I'll ask
+          you to merge #128. Meanwhile <TaskPill tasks={tasks} task={named("Launch checklist")} /> is being
+          drafted, and <TaskPill tasks={tasks} task={named("Invite email copy")} /> starts as soon as #128
+          lands.
+        </Text>
+      </BriefSection>
+      <Inline gap={GAP.CONTROL}>
+        {manager.face === undefined ? null : <ManagerFace face={manager.face} size={MANAGER_FACE_SIZE.ROW} />}
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {agentName(manager, tasks.agents.models)}, written <Time at={manager.settledAt ?? manager.createdAt} /> ago
+        </Text>
+      </Inline>
+    </Stack>
+  );
+}
+
+const MINUTE = 60_000;
+
+/** MOCKUP: an agent's turns, laid as the fixture holds no turn times: steady turns from its start, the last running to now while it works. */
+function turnsOf(agent: ListedAgent, from: number, now: number, seed: number): readonly SwimlaneSpan[] {
+  const end = agent.status === AGENT_STATUS.RUNNING ? now : (agent.settledAt ?? agent.createdAt);
+  const spans: SwimlaneSpan[] = [];
+  const turn = (100 + seed * 41) * MINUTE;
+  const rest = (80 + seed * 37) * MINUTE;
+
+  for (let at = Math.max(agent.createdAt, from); at < end; at += turn + rest) {
+    const to = Math.min(at + turn, end);
+    const last = to >= end && agent.status === AGENT_STATUS.RUNNING;
+    const waiting = last && agent.pendingApprovals !== undefined && agent.pendingApprovals.length > 0;
+
+    spans.push({
+      from: at,
+      to: last ? now : to,
+      tone: waiting ? SWIMLANE_TONE.WAITING : last ? SWIMLANE_TONE.WORKING : SWIMLANE_TONE.DONE,
+      label: waiting ? "Waiting on your approval" : last ? "At work now" : "A turn",
+    });
+  }
+
+  return spans;
+}
+
+/** The hours the lanes are read against, every six on the clock. */
+function ticksOf(from: number, to: number) {
+  const ticks = [];
+  const first = new Date(from);
+  first.setMinutes(0, 0, 0);
+  first.setHours(Math.ceil(first.getHours() / 6) * 6);
+
+  for (let at = first.getTime(); at < to; at += 6 * HOUR) {
+    const date = new Date(at);
+    const hour = date.toLocaleTimeString("en-US", { hour: "numeric" });
+    const label = date.getHours() === 0 ? date.toLocaleDateString("en-US", { weekday: "short" }) : hour;
+    ticks.push({ at, label });
+  }
+
+  return ticks;
+}
+
+/** Bold 3: a lane of time to each agent across yesterday and today: its turns as bars, its pull requests and asks as marks, and a line at now. */
+function LanesCenter({ tasks, managed, manager }: { tasks: TasksControl; managed: Managed; manager: ListedAgent }) {
+  const now = useMinute();
+  const from = now - 28 * HOUR;
+  const to = now + 90 * MINUTE;
+  const done = managed.tasks.filter((task) => task.status === TASK_STATUS.DONE);
+
+  const managerLane: Swimlane = {
+    key: manager.id,
+    head: (
+      <Inline wrap={false} gap={GAP.CONTROL}>
+        {manager.face === undefined ? null : <ManagerFace face={manager.face} size={MANAGER_FACE_SIZE.ROW} />}
+        <Text variant={TEXT_VARIANT.LABEL}>{agentName(manager, tasks.agents.models)}</Text>
+      </Inline>
+    ),
+    spans: [
+      { from: now - 24 * HOUR, to: now - 23 * HOUR, tone: SWIMLANE_TONE.DONE, label: "Told you the landing page merged" },
+      { from: now - 9 * HOUR, to: now - 8 * HOUR, tone: SWIMLANE_TONE.DONE, label: "Checked on its agents" },
+      { from: now - 30 * MINUTE, to: now - 27 * MINUTE, tone: SWIMLANE_TONE.DONE, label: "Answered: where are we?" },
+    ],
+    marks: done.map((task) => ({
+      at: task.completedAt ?? task.updatedAt,
+      glyph: <GitMergeIcon />,
+      label: `Merged ${task.name}`,
+    })),
+  };
+
+  const lanes = managed.agents
+    .toSorted((a, b) => b.agent.createdAt - a.agent.createdAt)
+    .map((each, index): Swimlane => {
+      const pullRequest = managed.pullRequests.get(each.agent.id);
+      const asks = managed.waiting.filter(({ item }) => item.agentId === each.agent.id);
+
+      return {
+        key: each.agent.id,
+        head: (
+          <Inline wrap={false} gap={GAP.CONTROL}>
+            <AgentGlyph agent={each.agent} />
+            <Stack gap={GAP.NONE}>
+              <Text variant={TEXT_VARIANT.LABEL}>{agentName(each.agent, tasks.agents.models)}</Text>
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                {each.task.name}
+              </Text>
+            </Stack>
+          </Inline>
+        ),
+        spans: turnsOf(each.agent, from, now, index),
+        marks: [
+          ...(pullRequest === undefined
+            ? []
+            : [{ at: now - (index + 1) * 7 * HOUR, glyph: <GitPullRequestIcon />, label: `Opened ${pullRequestNumberLabel(pullRequest)}` }]),
+          ...asks.map(({ item }) => ({ at: item.updatedAt, glyph: <MessageCircleQuestionIcon />, label: `Asked you: ${item.title}` })),
+          ...(each.agent.status === AGENT_STATUS.COMPLETED
+            ? [{ at: each.task.completedAt ?? each.task.updatedAt, glyph: <CircleCheckIcon />, label: "Finished" }]
+            : []),
+        ],
+      };
+    });
+
+  return (
+    <Stack gap={GAP.SECTION}>
+      <Swimlanes label="Who's doing what" lanes={[managerLane, ...lanes]} from={from} to={to} now={now} ticks={ticksOf(from, to)} />
+      <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+        Bars are turns: blue at work now, gray finished, orange waiting on you. Turn times are laid out for the mock. Marks: pull request opened, ask posted, merged, finished.
+      </Text>
+      <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.COMPACT}>
+        <Stack gap={GAP.BLOCK}>
+          <Text variant={TEXT_VARIANT.SECTION}>Needs you</Text>
+          <AnswerRows tasks={tasks} managed={managed} />
+        </Stack>
+      </Card>
+    </Stack>
+  );
+}
+
+/** One stage of the pipeline: its count, its name, its share of everything as a bar, then each item on it. */
+function Stage({ title, total, children, count }: { title: string; total: number; count: number; children: ReactNode }) {
+  return (
+    <Card look={CARD_LOOK.WELL} padding={CARD_PADDING.COMPACT}>
+    <Stack gap={GAP.BLOCK}>
+      <Stack gap={GAP.TIGHT}>
+        <Text variant={TEXT_VARIANT.TITLE}>{count}</Text>
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {title}
+        </Text>
+        <Progress value={total === 0 ? 0 : (count / total) * 100} label={`${count} of ${total} ${title}`} width={PROGRESS_WIDTH.FILL} />
+      </Stack>
+      <Stack gap={GAP.ITEM} align={ALIGN.STRETCH}>
+        {children}
+      </Stack>
+    </Stack>
+    </Card>
+  );
+}
+
+/** Bold 4: one flow from what the reader asked to what merged, each thing a chip at the stage it stands at. */
+function PipelineCenter({ tasks, managed }: { tasks: TasksControl; managed: Managed }) {
+  const prOpen = managed.agents.filter(({ agent }) => managed.pullRequests.get(agent.id)?.state === "open");
+  const inProgress = managed.tasks.filter(
+    (task) => task.status === TASK_STATUS.IN_PROGRESS && !prOpen.some((each) => each.task.id === task.id),
+  );
+  const planned = managed.tasks.filter((task) => task.status === TASK_STATUS.TODO);
+  const merged = managed.tasks.filter((task) => task.status === TASK_STATUS.DONE);
+  const asked = ["Launch invitations", "Weekly digest"];
+  const total = asked.length + planned.length + inProgress.length + prOpen.length + merged.length;
+  const waitsOn = (taskId: string) =>
+    managed.waiting.filter(({ item }) => managed.agents.some((each) => each.agent.id === item.agentId && each.task.id === taskId)).length;
+
+  const taskChip = (task: TaskSummary) => (
+    <Stack key={task.id} gap={GAP.TIGHT} align={ALIGN.START} className="min-w-0">
+      <InlineRef
+        look={INLINE_REF_LOOK.PILL}
+        fit={INLINE_REF_FIT.FLOW}
+        glyph={<TaskStatusMark status={task.status} />}
+        label={task.name}
+        onPress={() => tasks.onSelect(task.id)}
+      />
+      {waitsOn(task.id) === 0 ? null : (
+        <Badge tone={STATUS_TONE.ATTENTION}>{`${waitsOn(task.id)} ${waitsOn(task.id) === 1 ? "ask" : "asks"} for you`}</Badge>
+      )}
+    </Stack>
+  );
+
+  const arrow = (
+    <span className="self-center text-muted-foreground">
+      <ArrowRightIcon aria-hidden="true" />
+    </span>
+  );
+
+  return (
+    <Stack gap={GAP.PAGE}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-ui-6">
+        <Stage title="Asked" count={asked.length} total={total}>
+          {asked.map((words) => (
+            <InlineRef key={words} look={INLINE_REF_LOOK.PILL}
+        fit={INLINE_REF_FIT.FLOW} glyph={<MessageSquareIcon />} label={words} />
+          ))}
+        </Stage>
+        {arrow}
+        <Stage title="Planned" count={planned.length} total={total}>
+          {planned.map(taskChip)}
+        </Stage>
+        {arrow}
+        <Stage title="In progress" count={inProgress.length} total={total}>
+          {inProgress.map(taskChip)}
+        </Stage>
+        {arrow}
+        <Stage title="PR open" count={prOpen.length} total={total}>
+          {prOpen.map((each) => {
+            const pullRequest = managed.pullRequests.get(each.agent.id);
+
+            return pullRequest === undefined ? null : (
+              <Stack key={each.agent.id} gap={GAP.TIGHT} align={ALIGN.START} className="min-w-0">
+                <InlineRef
+                  look={INLINE_REF_LOOK.PILL}
+        fit={INLINE_REF_FIT.FLOW}
+                  glyph={<PullRequestMark pullRequest={pullRequest} />}
+                  label={`${pullRequestNumberLabel(pullRequest)} ${pullRequest.title}`}
+                  onPress={() => tasks.onShowAgent(each.task.id, each.agent.id)}
+                />
+                {waitsOn(each.task.id) === 0 ? (
+                  <Badge tone={pullRequest.checks === "passing" ? STATUS_TONE.COMPLETE : STATUS_TONE.WORKING}>
+                    {`Checks ${pullRequest.checks}`}
+                  </Badge>
+                ) : (
+                  <Badge tone={STATUS_TONE.ATTENTION}>{`${waitsOn(each.task.id)} ${waitsOn(each.task.id) === 1 ? "ask" : "asks"} for you`}</Badge>
+                )}
+              </Stack>
+            );
+          })}
+        </Stage>
+        {arrow}
+        <Stage title="Merged" count={merged.length} total={total}>
+          {merged.map(taskChip)}
+        </Stage>
+      </div>
+      <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.COMPACT}>
+        <Stack gap={GAP.BLOCK}>
+          <Text variant={TEXT_VARIANT.SECTION}>Holding the flow up</Text>
+          <AnswerRows tasks={tasks} managed={managed} />
+        </Stack>
+      </Card>
+    </Stack>
+  );
+}
+
 const TITLES = {
   [COMMAND_CENTER.TRIAGE]: "What needs you",
   [COMMAND_CENTER.BOARD]: "Its tasks",
@@ -831,6 +1264,10 @@ const TITLES = {
   [COMMAND_CENTER.D2]: "Overview",
   [COMMAND_CENTER.D3]: "Overview",
   [COMMAND_CENTER.D4]: "Overview",
+  [COMMAND_CENTER.HERO]: "",
+  [COMMAND_CENTER.BRIEF]: "Since you were here",
+  [COMMAND_CENTER.LANES]: "Who's doing what",
+  [COMMAND_CENTER.PIPELINE]: "From ask to merge",
 } as const satisfies Record<CommandCenterVariant, string>;
 
 /** The main panel of a Manager's page in the direction asked. */
@@ -861,6 +1298,14 @@ export function ManagerCommandCenter({
       <AgentCardsDashboard tasks={tasks} managed={managed} manager={manager} />
     ) : variant === COMMAND_CENTER.D4 ? (
       <DenseDashboard tasks={tasks} managed={managed} />
+    ) : variant === COMMAND_CENTER.HERO ? (
+      <HeroCenter tasks={tasks} managed={managed} manager={manager} />
+    ) : variant === COMMAND_CENTER.BRIEF ? (
+      <BriefCenter tasks={tasks} managed={managed} manager={manager} />
+    ) : variant === COMMAND_CENTER.LANES ? (
+      <LanesCenter tasks={tasks} managed={managed} manager={manager} />
+    ) : variant === COMMAND_CENTER.PIPELINE ? (
+      <PipelineCenter tasks={tasks} managed={managed} />
     ) : (
       <TriageCenter tasks={tasks} managed={managed} />
     );
@@ -869,7 +1314,7 @@ export function ManagerCommandCenter({
     <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
       {variant === COMMAND_CENTER.BOARD ? (
         body
-      ) : variant === COMMAND_CENTER.D4 ? (
+      ) : variant === COMMAND_CENTER.D4 || variant === COMMAND_CENTER.HERO ? (
         // MOCKUP: no page title, so it all fits on one screen.
         <DetailPage frame={PAGE_FRAME.TOOLBAR} label="Overview" width={PAGE_WIDTH.FULL}>
           {body}
@@ -878,8 +1323,12 @@ export function ManagerCommandCenter({
         <DetailPage
           frame={PAGE_FRAME.PAGE}
           title={TITLES[variant]}
-          description={summary}
-          width={variant === COMMAND_CENTER.TRIAGE || variant === COMMAND_CENTER.FEED ? undefined : PAGE_WIDTH.FULL}
+          description={
+            variant === COMMAND_CENTER.BRIEF
+              ? `From ${agentName(manager, tasks.agents.models)} · Friday, November 20`
+              : summary
+          }
+          width={variant === COMMAND_CENTER.TRIAGE || variant === COMMAND_CENTER.FEED || variant === COMMAND_CENTER.BRIEF ? undefined : PAGE_WIDTH.FULL}
         >
           {body}
         </DetailPage>

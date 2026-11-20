@@ -23,6 +23,7 @@
     "./icons": "./src/icons/icons.js",
     "./landed": "./src/components/landed/landed.js",
     "./manager-face": "./src/components/manager-face/manager-face.js",
+    "./swimlanes": "./src/components/swimlanes/swimlanes.js",
     "./manager-face-picker": "./src/components/manager-face/manager-face-picker.js",
     "./daily-bars": "./src/chart/daily-bars.js",
     "./markdown": "./src/markdown/markdown.js",

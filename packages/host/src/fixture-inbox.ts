@@ -924,6 +924,17 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     TASK.ROUNDING,
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
+  // MOCKUP: the Manager's fourth agent, at work with no pull request yet.
+  [
+    LISTED.LAUNCH,
+    agentOn(
+      "81e2a425-6d9f-4ab7-92df-0000000aaaab",
+      LISTED.LAUNCH,
+      "Draft the launch checklist",
+      AGENT_STATUS.RUNNING,
+      90 * MINUTE,
+    ),
+  ],
 ]);
 
 /** A task's agents as its row in the list counts them. */

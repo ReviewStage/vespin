@@ -41,6 +41,8 @@ export const MANAGER_FACE_SIZE = {
   ROW: "row",
   MESSAGE: "message",
   WORDS: "words",
+  /** MOCKUP: a profile's hero. */
+  HERO: "hero",
 } as const;
 
 export type ManagerFaceSize = (typeof MANAGER_FACE_SIZE)[keyof typeof MANAGER_FACE_SIZE];
@@ -79,6 +81,7 @@ const SEAT_CLASS = {
   [MANAGER_FACE_SIZE.ROW]: "size-manager-face-row",
   [MANAGER_FACE_SIZE.MESSAGE]: "size-manager-face-message",
   [MANAGER_FACE_SIZE.WORDS]: "size-words-glyph",
+  [MANAGER_FACE_SIZE.HERO]: "size-ui-96",
 } as const satisfies Record<ManagerFaceSize, string>;
 
 /** Each seat's working disc, and the working mark inside it a step smaller, so a sliver of the ground rings it; none among words, too small to hold one. */
@@ -88,6 +91,7 @@ const BADGE_CLASS = {
   [MANAGER_FACE_SIZE.MESSAGE]:
     "size-manager-face-badge-message [--ui-working-mark-size:var(--spacing-ui-12)]",
   [MANAGER_FACE_SIZE.WORDS]: undefined,
+  [MANAGER_FACE_SIZE.HERO]: "size-ui-32 [--ui-working-mark-size:var(--spacing-ui-20)]",
 } as const satisfies Record<ManagerFaceSize, string | undefined>;
 
 /** A Manager's face in its seat, livelier and wearing the working mark while `working`. */
