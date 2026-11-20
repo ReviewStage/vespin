@@ -69,6 +69,7 @@ import {
   subTasksHeard,
   TaskStatusMark,
   ToneGlyph,
+  UnassignedMark,
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
@@ -1344,7 +1345,6 @@ export function TaskRow(props: TaskRowProps) {
   const colors = useColors();
   const minute = useMinute();
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
   const column = useNestColumn();
   // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, each a column of the lead's scaled width, and by however much the lead has grown.
   const indent = depth * column + lead - MARK_SIZE.LEAD;
@@ -1382,14 +1382,7 @@ export function TaskRow(props: TaskRowProps) {
                 size={MARK_SIZE.FACE}
               />
             )}
-            {props.unassigned === true ? (
-              <Image
-                {...glyphImage(GLYPH.UNASSIGNED)}
-                size={glyph}
-                color={colors.TEXT_MUTED}
-                modifiers={[accessibilityHidden(true)]}
-              />
-            ) : null}
+            {props.unassigned === true ? <UnassignedMark size={MARK_SIZE.FACE} /> : null}
             {props.at === undefined ? null : <RowTime at={props.at} now={minute} />}
             {taskKey === undefined ? null : (
               <Text
