@@ -772,7 +772,8 @@ export function Composer(props: ComposerProps) {
 
   return (
     <GlassBar
-      field
+      // Note that a field over a row of controls stands on the glass alone, as the desktop's box stands its field and its row on one ground, with no filled box of ours behind the words.
+      field={!rowed}
       head={props.head}
       foot={rowed ? <ComposerRow props={props} parts={parts} /> : undefined}
       above={props.above}
