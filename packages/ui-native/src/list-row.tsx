@@ -1186,12 +1186,15 @@ export function RowDisclosure({
   readonly label: ReactNode;
   readonly children: ReactNode;
 }) {
-  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its leading and vertical insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it.
+  // Note that the disclosure, not its label, is the list's row, so it takes the row's ground and its insets here: the label's own (`RowFrame`) stood ignored, setting the parent's ring in from every other row's and drawing the list's selection in the screen's ink behind it; its trailing inset keeps the chevron off the column's edge, and the system sets its rows in under the parent's name.
   return (
     <DisclosureGroup
       isExpanded={open}
       onIsExpandedChange={onOpenChange}
-      modifiers={[listRowInsets({ leading: 0, top: 0, bottom: 0 }), listRowBackground("clear")]}
+      modifiers={[
+        listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
+        listRowBackground("clear"),
+      ]}
     >
       <DisclosureGroup.Label>{label}</DisclosureGroup.Label>
       {children}
