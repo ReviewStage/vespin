@@ -311,6 +311,25 @@ it.effect("the session going idle ends the open line, and the next words open th
 );
 
 it.effect(
+  "the caller's words that woke the session open a line of their own though they come after the voice's answer",
+  () =>
+    Effect.gen(function* () {
+      const outputs = yield* wordsOutOf([
+        said("Run the tests.", 0, 1000),
+        { from: VOICE_INPUT.LIVE, body: { type: "session.paused", event_id: "event_paused" } },
+        voiced("Sure.", 12_000, 12_200),
+        said("Also the lint.", 11_000, 11_800),
+      ]);
+
+      assert.deepEqual(outputs, [
+        record(VOICE_SPEAKER.CALLER, "line_1", "Run the tests."),
+        record(VOICE_SPEAKER.VOICE, "line_2", "Sure."),
+        record(VOICE_SPEAKER.CALLER, "line_3", "Also the lint."),
+      ]);
+    }),
+);
+
+it.effect(
   "a reply over 500 tokens goes to the voice as its opening sentences in four appends",
   () =>
     Effect.gen(function* () {

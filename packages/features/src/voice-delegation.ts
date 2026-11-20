@@ -23,7 +23,8 @@
  * delegation ends the caller's line, and the session going idle into
  * standby (`session.paused`) ends both. A fragment that started before the
  * other speaker's open line did is a late one, as the caller's transcript
- * lags the audio, and grows its own speaker's last line instead. A line is
+ * lags the audio, and grows its own speaker's last line instead, unless the
+ * session went idle since that line ended. A line is
  * recorded as it opens, so the rows stand in the order the lines opened,
  * and again each time a fragment grows it, under the same id, with the span
  * it was said over and the event it took last, which the service writes in
@@ -239,10 +240,12 @@ interface Resume {
   readonly endMs: number | undefined;
 }
 
-/** Whether each speaker's line is open. */
-type OpenLines = { readonly [speaker in VoiceSpeaker]: boolean };
+/** A yes or no for each speaker. */
+type EachSpeaker = { readonly [speaker in VoiceSpeaker]: boolean };
 
-const NONE_OPEN: OpenLines = { [VOICE_SPEAKER.CALLER]: false, [VOICE_SPEAKER.VOICE]: false };
+const NO_SPEAKER: EachSpeaker = { [VOICE_SPEAKER.CALLER]: false, [VOICE_SPEAKER.VOICE]: false };
+
+const EVERY_SPEAKER: EachSpeaker = { [VOICE_SPEAKER.CALLER]: true, [VOICE_SPEAKER.VOICE]: true };
 
 const OTHER_SPEAKER = {
   [VOICE_SPEAKER.CALLER]: VOICE_SPEAKER.VOICE,
@@ -261,7 +264,9 @@ interface VoiceState {
   /** The voice's latest line, which grows. */
   readonly voiced: Line | undefined;
   /** Whether each speaker's growing line is open, which both are while their speech overlaps. */
-  readonly open: OpenLines;
+  readonly open: EachSpeaker;
+  /** Whether each speaker's growing line ended as the session went idle, so no late fragment grows it, since the words that wake the session come after the pause however late their transcript does. */
+  readonly sealed: EachSpeaker;
   /** Whether the agent's turn runs, so a delegation is queued rather than sent. */
   readonly working: boolean;
   /** The delegation the running turn answers, or null for a turn none opened. */
@@ -487,7 +492,9 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
     other?.endMs !== undefined && delta.start_ms !== undefined && delta.start_ms <= other.endMs;
 
   const turned = other !== undefined && !overlaps;
-  const grows = own !== undefined && (late || (state.open[speaker] && !turned));
+
+  const grows =
+    own !== undefined && ((late && !state.sealed[speaker]) || (state.open[speaker] && !turned));
 
   if (grows) {
     const [kept, outputs] = recorded({
@@ -511,9 +518,18 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
     eventId: delta.event_id,
   });
 
-  const open = turned ? NONE_OPEN : state.open;
+  const open = turned ? NO_SPEAKER : state.open;
 
-  return [{ ...withLine(state, kept, true), open: { ...open, [speaker]: true } }, opening];
+  const opened = withLine(state, kept, true);
+
+  return [
+    {
+      ...opened,
+      open: { ...open, [speaker]: true },
+      sealed: { ...state.sealed, [speaker]: false },
+    },
+    opening,
+  ];
 }
 
 /**
@@ -572,7 +588,7 @@ function heardLive(state: VoiceState, event: LiveServerEvent): Step {
       return delegated(state, event.delegation.id);
     // Note that the session going idle is the call's long silence, as GPT-Live itself says it, so every line ends and the next words open their own.
     case LIVE_SERVER_EVENT.PAUSED:
-      return [{ ...state, open: NONE_OPEN }, []];
+      return [{ ...state, open: NO_SPEAKER, sealed: EVERY_SPEAKER }, []];
     case LIVE_SERVER_EVENT.CLOSED:
       return [state, []];
   }
@@ -666,8 +682,9 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
     voiced,
     open:
       newest === undefined || newest.delegated
-        ? NONE_OPEN
-        : { ...NONE_OPEN, [newest.speaker]: true },
+        ? NO_SPEAKER
+        : { ...NO_SPEAKER, [newest.speaker]: true },
+    sealed: NO_SPEAKER,
     working: start.agentWorking,
     answering: start.answering,
     step: null,
