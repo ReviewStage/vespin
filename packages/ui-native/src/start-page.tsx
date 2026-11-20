@@ -41,6 +41,8 @@ import { Composer, type ComposerDictation, type ComposerMenu } from "./composer.
 import {
   type AttachedPicture,
   AttachedPictures,
+  type MentionSuggestionGroup,
+  MentionSuggestions,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -319,6 +321,14 @@ type StartPageProps = {
         readonly onPick: (name: string) => void;
       }
     | undefined;
+  /** What an `@` being typed offers, as the agent page's composer offers it; none while no `@` word ends the words. */
+  readonly mentions?:
+    | {
+        readonly groups: readonly MentionSuggestionGroup[];
+        readonly empty: string | undefined;
+        readonly onPick: (group: string, id: string) => void;
+      }
+    | undefined;
   readonly pictures: readonly AttachedPicture[];
   readonly onDetach: (id: string) => void;
   /** Called with the file addresses of pictures dropped on the page, on an iPad; it takes no drop where none is given. */
@@ -389,19 +399,29 @@ function StartHead({ title, head }: Pick<StartPageProps, "title" | "head">) {
  * Send, or Talk while it holds nothing, at its end. Under its field, inside
  * the same glass, stand the + and the capsules saying where and how the work
  * starts (`MenuChip` in its composer look), so the keyboard, or the bar iOS
- * stands over it, never covers them. The skills a `/` offers, the pictures
+ * stands over it, never covers them. The skills a `/` offers, what an `@` offers, the pictures
  * attached, and what a start said stand over the field, as they do on an
  * agent's page. The page's own bar holds its close.
  */
 export function StartPage(props: StartPageProps) {
-  const { words, skills, pictures, onDetach, notes, add, chips, trailing, ready, onStart, onTalk } =
-    props;
+  const { words, skills, mentions, pictures, onDetach, notes } = props;
+  const { add, chips, trailing, ready, onStart, onTalk } = props;
 
   const head =
-    skills === undefined && pictures.length === 0 && notes.length === 0 ? undefined : (
+    skills === undefined &&
+    mentions === undefined &&
+    pictures.length === 0 &&
+    notes.length === 0 ? undefined : (
       <>
         {skills === undefined ? null : (
           <SkillSuggestions skills={skills.skills} empty={skills.empty} onPick={skills.onPick} />
+        )}
+        {mentions === undefined ? null : (
+          <MentionSuggestions
+            groups={mentions.groups}
+            empty={mentions.empty}
+            onPick={mentions.onPick}
+          />
         )}
         <AttachedPictures pictures={pictures} onDetach={onDetach} />
         {notes.map((note) => (

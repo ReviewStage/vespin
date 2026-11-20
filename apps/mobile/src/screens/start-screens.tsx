@@ -74,6 +74,7 @@ import {
 import { useAttachedPictures } from "../use-attached-pictures.js";
 import { useDictation } from "../use-dictation.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
+import { type MentionOffer, useMentionOffer } from "../use-mention-offer.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
 import { type NewAgentTalk, useNewAgentTalk } from "../voice-call.js";
@@ -639,6 +640,15 @@ function useClosingStart(
   return { starting: sent, go };
 }
 
+/** What an `@` offers, as the start page takes it; none while a `/` offers its skills, which stand in its place. */
+function offeredMentions(mentions: MentionOffer, skills: SkillsOffered | undefined) {
+  const offered = mentions.offered;
+
+  return skills !== undefined || offered === undefined
+    ? undefined
+    : { groups: offered.groups, empty: offered.empty, onPick: offered.pick };
+}
+
 /** The skills a `/` offers, as the start page takes them. */
 function offered(skills: SkillsOffered | undefined) {
   return skills === undefined
@@ -703,11 +713,19 @@ export function NewAgentScreen({
   const starting = sheet.starting || closing.starting;
   const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
 
+  const mentions = useMentionOffer(prompt, setPrompt, {
+    workspaceId: startsOn?.workspaceId,
+    taskId: startsOn?.id,
+  });
+
+  // The prompt as it is sent, each picked mention written as its link.
+  const sendablePrompt = () => mentions.sendable(prompt.trim());
+
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
     suggestion: OpenedSuggestion["suggestion"],
   ): Promise<StartAnswer> => {
-    const sent = sentOf(suggestion, prompt.trim(), pictures.files ?? [], pick.picked);
+    const sent = sentOf(suggestion, sendablePrompt(), pictures.files ?? [], pick.picked);
 
     const result = await sendSuggestion(
       { agentId: suggestion.agentId, buttonId: suggestion.buttonId, sent },
@@ -738,21 +756,25 @@ export function NewAgentScreen({
     fork !== undefined
       ? closing.go(
           () =>
-            startFork({ prompt: prompt.trim(), attachments: pictures.files, picked: pick.picked }),
+            startFork({
+              prompt: sendablePrompt(),
+              attachments: pictures.files,
+              picked: pick.picked,
+            }),
           pictures.refusal,
-          prompt.trim(),
+          sendablePrompt(),
         )
       : opened === undefined
         ? closing.go(
             () =>
               startAgent({
-                prompt: prompt.trim(),
+                prompt: sendablePrompt(),
                 attachments: pictures.files,
                 picked: pick.picked,
                 runsOn,
               }),
             pictures.refusal,
-            prompt.trim(),
+            sendablePrompt(),
           )
         : sheet.go(
             () => startSuggested(opened.suggestion),
@@ -792,6 +814,7 @@ export function NewAgentScreen({
           onLongPaste: pictures.pasteText,
         }}
         skills={offered(skills)}
+        mentions={offeredMentions(mentions, skills)}
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
@@ -1063,6 +1086,10 @@ export function NewTaskScreen({
         : { workspaceId, repository: skillsRepository },
   );
 
+  const mentions = useMentionOffer(prompt, setPrompt, { workspaceId, taskId: undefined });
+  // The prompt as it is sent, each picked mention written as its link.
+  const sendablePrompt = () => mentions.sendable(prompt.trim());
+
   const unreached =
     tree !== undefined
       ? undefined
@@ -1086,14 +1113,14 @@ export function NewTaskScreen({
     go(
       () =>
         startTask({
-          prompt: prompt.trim(),
+          prompt: sendablePrompt(),
           attachments: pictures.files,
           picked: pick.picked,
           runsOn,
           ...place,
         }),
       pictures.refusal,
-      prompt.trim(),
+      sendablePrompt(),
     );
   };
 
@@ -1139,6 +1166,7 @@ export function NewTaskScreen({
           onLongPaste: pictures.pasteText,
         }}
         skills={offered(skills)}
+        mentions={offeredMentions(mentions, skills)}
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
