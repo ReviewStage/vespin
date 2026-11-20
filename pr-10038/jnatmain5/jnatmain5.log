@@ -1,0 +1,84 @@
+Auto-merging apps/mobile/live-activity/AgentsLiveActivity.swift
+built main 49f0d847f0 + #10038 fbf2c15dd7 #10077 7adeee30cb #9974 (on main) as 533a15af01
+install 0
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 17:11:47 29619 MB
+curve 17:12:17 29652 MB
+curve 17:12:47 28244 MB
+curve 17:13:18 27409 MB
+curve 17:13:48 27175 MB
+curve 17:14:19 27144 MB
+curve 17:14:49 27146 MB
+curve 17:15:19 27066 MB
+curve 17:15:49 27034 MB
+curve 17:16:20 26917 MB
+curve 17:16:50 26473 MB
+curve 17:17:20 27117 MB
+curve 17:17:51 27051 MB
+curve 17:18:21 27005 MB
+curve 17:18:51 26943 MB
+curve 17:19:22 26885 MB
+curve 17:19:52 26748 MB
+curve 17:20:23 26612 MB
+curve 17:20:53 26554 MB
+curve 17:21:23 26483 MB
+curve 17:21:54 26490 MB
+curve 17:22:24 26459 MB
+curve 17:22:54 26390 MB
+curve 17:23:25 26331 MB
+curve 17:23:55 26297 MB
+curve 17:24:25 26316 MB
+curve 17:24:56 26293 MB
+curve 17:25:26 26262 MB
+curve 17:25:56 26223 MB
+curve 17:26:27 26238 MB
+curve 17:26:57 26199 MB
+curve 17:27:27 26180 MB
+curve 17:27:58 26142 MB
+curve 17:28:28 26115 MB
+curve 17:28:58 26074 MB
+curve 17:29:29 26055 MB
+curve 17:29:59 26043 MB
+curve 17:30:29 26007 MB
+curve 17:31:00 25966 MB
+curve 17:31:30 25916 MB
+curve 17:32:00 25876 MB
+curve 17:32:31 25715 MB
+curve 17:33:01 25621 MB
+curve 17:33:32 25574 MB
+curve 17:34:02 25230 MB
+curve 17:34:32 25086 MB
+curve 17:35:03 25022 MB
+curve 17:35:33 24841 MB
+curve 17:36:04 24755 MB
+curve 17:36:34 24665 MB
+curve 17:37:04 24545 MB
+curve 17:37:35 24506 MB
+curve 17:38:05 24469 MB
+curve 17:38:35 24372 MB
+curve 17:39:05 24307 MB
+curve 17:39:36 24247 MB
+curve 17:40:06 24296 MB
+curve 17:40:36 24261 MB
+curve 17:41:07 24133 MB
+curve 17:41:37 24157 MB
+curve 17:42:07 24149 MB
+curve 17:42:38 24138 MB
+curve 17:43:08 24093 MB
+curve 17:43:38 24073 MB
+BUILD EXIT 0 17:44:09
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatmain5.app: replacing existing signature
+p10038-iphone-live-activity: fails 0 shots 3 
+p10077-iphone-live-activity: fails 0 shots 3 
+p10077-iphone-live-activity-dark: fails 0 shots 3 
+p9974-iphone-light-large: fails 0 shots 1 
+p9974-iphone-light-ax3: fails 1 shots 2 Scrolling DOWN until ".*MCP.*CLI.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
+p9974-iphone-dark-large: fails 0 shots 1 
+p9974-iphone-dark-ax3: fails 1 shots 2 Scrolling DOWN until ".*MCP.*CLI.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
+p9974-ipad27-light-large: fails 0 shots 1 
+p9974-ipad27-light-ax3: fails 1 shots 2 Scrolling DOWN until ".*MCP.*CLI.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
+p9974-ipad27-dark-large: fails 0 shots 1 
+p9974-ipad27-dark-ax3: fails 1 shots 2 Scrolling DOWN until ".*MCP.*CLI.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centeri
