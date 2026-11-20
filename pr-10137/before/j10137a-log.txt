@@ -5,3 +5,7 @@ pinned to f585517929
   typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
   export 0
   signed 0
+iphone-light-f10137: fails 0 shots 9 
+iphone-dark-f10137: fails 0 shots 9 
+ipad27-light-f10137: fails 0 shots 9 
+ipad27-dark-f10137: fails 0 shots 9 
