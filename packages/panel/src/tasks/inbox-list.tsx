@@ -529,7 +529,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   const unread = isUnread(item);
   const title = cardTitle(item.title);
   const directory = useMemberDirectory();
-  const _reader = directory.readerId ?? readerId;
+  const reader = directory.readerId ?? readerId;
   const { nameOf } = useInboxStanding(listed, readerId);
   const lineKind = inboxLineKind(item);
   const preview = useInboxLinePieces(item, nameOf, ticked);
@@ -568,9 +568,9 @@ export const InboxItemRow = memo(function InboxItemRow({
         describedAs={heard}
         lead={{
           icon: <HolderGlyph holder={holder} />,
-          // Note that a thread its agent addressed by name says so after its holder, since its task's assignee may be someone else.
+          // Note that a thread its agent addressed by name says so after its holder, since its task's assignee may be someone else; one addressed to the reader says nothing, as it is in their own inbox.
           label:
-            addressedTo === undefined
+            addressedTo === undefined || addressedTo.userId === reader
               ? holderName(holder)
               : `${holderName(holder)} · ${addressedWords(addressee)}`,
         }}

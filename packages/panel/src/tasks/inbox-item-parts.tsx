@@ -89,20 +89,22 @@ function waitingOn(starter: Actor): string {
   return `Waiting on ${actorName(starter, { sentence: true })}`;
 }
 
-/** What a message or a thread its agent addressed to a member by name says of them: "To you", or "To" and their name. */
+/** What a message or a thread its agent addressed to a member by name says of them: "To" and their name. */
 export function addressedWords(person: Actor): string {
   return `To ${actorName(person, { sentence: true })}`;
 }
 
 /**
  * Whom an agent addressed a message or a thread to by name, at the end of
- * its head: "To", their face, and their name, or "you"; nothing where it
- * named nobody, which then waits on its task's assignee or its starter.
+ * its head: "To", their face, and their name; nothing where it named nobody
+ * or the reader, which then waits on its task's assignee or its starter.
  */
 export function AddressedTo({ to }: { to: InboxPerson | undefined }): React.JSX.Element | null {
   const person = usePerson(to);
+  const { readerId } = useMemberDirectory();
 
-  if (to === undefined) return null;
+  // Note that one addressed to the reader says nothing, as it is in their own inbox.
+  if (to === undefined || to.userId === readerId) return null;
 
   return (
     <span className="inbox-addressed-to inline-flex min-w-0 items-center gap-tight-gap">
