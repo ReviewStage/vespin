@@ -35,11 +35,12 @@ struct AgentsLiveActivity: Widget {
     } dynamicIsland: { context in
       let state = context.state
       return DynamicIsland {
+        // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
         DynamicIslandExpandedRegion(.leading) {
-          CountLabel(state: state).padding(.leading, 4)
+          CountLabel(state: state).padding(.leading, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          WaitingLabel(state: state).padding(.trailing, 4)
+          WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.bottom) {
           // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
@@ -150,7 +151,8 @@ struct AgentRow: View {
   let agent: AgentsActivityAttributes.Agent
 
   var body: some View {
-    HStack(spacing: 10) {
+    // Note that the circle's gap from the timer is this spacing and the target's whole extra width, 18 points, as it was while the circle stood centered in its target.
+    HStack(spacing: 10 - (StopTarget.width - StopTarget.mark) / 2) {
       // Note that the row opens its agent's page everywhere but on Stop, which a link around it would swallow.
       Link(destination: AgentsActivityAttributes.ContentState.route(agent: agent.id)) {
         HStack(spacing: 4) {
@@ -179,7 +181,8 @@ struct AgentRow: View {
             }
           }
           // Note that the target is wider and taller than the circle, but gives its height back to the row, so three rows still fit the expanded island; it reaches halfway into the gap between rows, never into the next row's Stop.
-          .frame(width: StopTarget.width, height: StopTarget.height)
+          // Note that the circle stands at the target's trailing edge, so it lines up with the header's trailing edge, and the target's extra width reaches toward the title instead.
+          .frame(width: StopTarget.width, height: StopTarget.height, alignment: .trailing)
           .contentShape(Rectangle())
           .padding(.vertical, (StopTarget.mark - StopTarget.height) / 2)
       }
@@ -196,7 +199,7 @@ enum StopTarget {
   static let height: CGFloat = mark + AgentList.spacing
 }
 
-/// How far the expanded island's rows stand in from its sides, in points, clear of the curve of its corners.
+/// How far the expanded island's header and rows stand in from its sides, in points, clear of the curve of its corners.
 enum ExpandedInset {
   static let side: CGFloat = 8
 }
