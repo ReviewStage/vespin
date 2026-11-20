@@ -14,6 +14,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useState } from "react";
 import type { PlaceLeave } from "../places/place-leave.js";
+import { useSteadyDoor } from "../steady-door.js";
 import { appStateQuery, selectFixtureStaged, selectSignedIn } from "../use-app-state.js";
 
 /** Who the cards may stand for: whether an account reads the window, a fixture's reader among them, and its id. */
@@ -71,11 +72,14 @@ export function useNewWorkspace(placeLeave: PlaceLeave): NewWorkspace {
     setFounding(undefined);
   }
 
+  // Note that the cards take the window in the page's place with no address of their own, so a page holding unsaved
+  // work asks first inside `arrive`, as leaving it does, and they open once Leave is pressed. The door stands across
+  // the shell's draws, because every workspace menu under it is handed it (`NewWorkspaceOpener`) and would draw again.
+  const onOpen = useSteadyDoor(() => placeLeave.arrive(NOTHING, () => setFounding({ accountId })));
+
   return {
     open: signedIn && founding !== undefined && founding.accountId === accountId,
-    // Note that the cards take the window in the page's place with no address of their own, so a page holding unsaved
-    // work asks first inside `arrive`, as leaving it does, and they open once Leave is pressed.
-    onOpen: () => placeLeave.arrive(NOTHING, () => setFounding({ accountId })),
+    onOpen,
     onClose: () => setFounding(undefined),
   };
 }

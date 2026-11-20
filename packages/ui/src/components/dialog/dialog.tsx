@@ -751,7 +751,17 @@ export function Dialog({
     if (goneAtOnce) exited();
   });
 
-  if (goneAtOnce) return null;
+  // Note that a card never opened draws no tree, because a list holds a shut
+  // one in every row that can ask, each drawn again with its row for nothing
+  // Base UI shows. Its first opening mounts it shut and opens it in a layout
+  // effect, before the frame paints, so Base UI sees it open and plays the
+  // card's entrance as it does for every later opening.
+  const [mounted, setMounted] = useState(open);
+  useLayoutEffect(() => {
+    if (open && !mounted) setMounted(true);
+  }, [open, mounted]);
+
+  if (goneAtOnce || (!open && !mounted)) return null;
 
   const keyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     // Note that no key pressed in the card goes on to the window. A button's
@@ -783,7 +793,7 @@ export function Dialog({
 
   return (
     <ShadcnDialog
-      open={open}
+      open={open && mounted}
       // Note that the card traps focus without locking the page's scroll,
       // as it always has: the dimmed window already takes every press
       // outside the card, and a lock would shift a page with a scrollbar.

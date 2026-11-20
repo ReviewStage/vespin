@@ -2,6 +2,8 @@ import type { TaskStanding } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BUTTON_SIZE, ComposeIcon, IconButton, PlusIcon, Tooltip } from "@repo/ui";
 import { TASKS_GROUP, type TasksGroupHead } from "@repo/ui/tasks-page-model";
+import { memo } from "react";
+import { useSteadyDoor } from "../steady-door.js";
 import type { QuickAddInto } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
@@ -59,8 +61,8 @@ export function NewTaskButton({
   );
 }
 
-/** A group's +, at its head's end, named for the task it starts. */
-export function NewTaskInButton({
+/** A group's + as drawn, held while its name holds (`NewTaskInButton`). */
+const DrawnNewTaskInButton = memo(function DrawnNewTaskInButton({
   label,
   onPress,
 }: {
@@ -72,6 +74,22 @@ export function NewTaskInButton({
       <IconButton icon={<PlusIcon />} label={label} size={BUTTON_SIZE.COMPACT} onClick={onPress} />
     </Tooltip>
   );
+});
+
+/**
+ * A group's +, at its head's end, named for the task it starts. Note that
+ * its press is a steady door calling the newest, because its header makes
+ * one afresh on each draw of the list, which would draw the + and its hint
+ * again for nothing they show.
+ */
+export function NewTaskInButton({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}): React.JSX.Element {
+  return <DrawnNewTaskInButton label={label} onPress={useSteadyDoor(onPress)} />;
 }
 
 /** Where a Tasks page group's quick add puts its task: the group's status, priority, or assignee, or its repository; nothing for a group a task cannot be added to, pinned tasks, a section, a creator, or tasks with no repository. */
