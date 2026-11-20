@@ -81,9 +81,10 @@ export class SecretCipher extends Context.Service<SecretCipher, SecretCipherSeam
 
 /**
  * Where the platform keeps the account's tokens itself, as the iPhone's
- * Keychain does through `expo-secure-store`, which the OAuth source hands the
- * settings store in its cipher's place where the shell provides one. The
- * desktop provides none, so its tokens stay sealed by `SecretCipher`.
+ * Keychain does through `expo-secure-store`, which the vault's OAuth source
+ * (`oauthVaultAccountSourceLayerFor`) hands the settings store with no
+ * cipher. The desktop provides none, so its tokens stay sealed by
+ * `SecretCipher`.
  */
 export class PlatformTokenVault extends Context.Service<PlatformTokenVault, TokenVault>()(
   "@repo/host/PlatformTokenVault",

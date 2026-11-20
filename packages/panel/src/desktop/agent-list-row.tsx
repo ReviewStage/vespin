@@ -3,6 +3,7 @@ import {
   AGENT_KIND,
   type AgentPullRequest,
   type AgentSummary,
+  type ListedAgent,
 } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
@@ -84,7 +85,7 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * stands, led by Pin, or Unpin once the reader pinned it, the reader's own
  * pin of the agent, which stands it under the sidebar's Pinned (an archived
  * agent's row offers neither, as an archived agent stands under no pin): Copy link, Rename, which turns the row's name into its field
- * until the edit ends, Archive, asking first while a teammate's agent
+ * until the edit ends, or for a Manager Settings…, the card that names it, Archive, asking first while a teammate's agent
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
  * press away. Its list chooses its rows together as a task list does, by
@@ -161,7 +162,8 @@ export function AgentListRow({
   onPress,
   onOpenPullRequest,
 }: {
-  agent: AgentSummary;
+  /** The agent, and where the list carries them its workspace and its checkout, which a Manager's Settings names. */
+  agent: AgentSummary & Partial<Pick<ListedAgent, "workspaceId" | "repository">>;
   /** The agents control its menu acts through, which gives its models and the member's devices too. */
   agents: AgentsControl;
   /** Whether the list is on screen, which its menu and its Archive's question ask on. */

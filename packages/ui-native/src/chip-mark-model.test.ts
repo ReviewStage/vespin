@@ -43,7 +43,7 @@ describe("a chip's mark", () => {
   });
 
   // Note that the regression this catches is a link to an integration's page, a Notion page's say, drawn with the link's globe, as the panel never draws it.
-  it("is a link's provider's mark where the app holds one, and the link's glyph for a site it holds none of", () => {
+  it("is a link's provider's mark, or its well-known site's", () => {
     const page = "https://example.com/page";
 
     expect(
@@ -52,13 +52,9 @@ describe("a chip's mark", () => {
         HELD,
       ),
     ).toEqual({ kind: CHIP_MARK.PROVIDER, provider: INTEGRATION_PROVIDER.NOTION });
-    expect(chipMarkOf({ kind: ENTITY_KIND.LINK, site: LINK_SITE.GMAIL, url: page }, HELD)).toEqual({
-      kind: CHIP_MARK.PROVIDER,
-      provider: INTEGRATION_PROVIDER.GMAIL,
-    });
     expect(
       chipMarkOf({ kind: ENTITY_KIND.LINK, site: LINK_SITE.YOUTUBE, url: page }, HELD),
-    ).toBeUndefined();
+    ).toEqual({ kind: CHIP_MARK.SITE, site: LINK_SITE.YOUTUBE });
   });
 
   it("is none, leaving its kind's glyph, where the app holds nothing of it or the kind wears no mark of its own", () => {

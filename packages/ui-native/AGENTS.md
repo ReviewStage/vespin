@@ -75,8 +75,10 @@ builds a control of its own.
   desktop composer does, its field on top, two lines tall once a word is
   typed, and under it one row of the + and the capsules saying where the
   message runs, then at its end the model chip (`trailing`, whose sheet
-  holds the model, effort, Fast and the permission mode, each once) and
-  Send; and its head, inside the same glass, holds an agent's
+  holds the model, effort, Fast and the permission mode, each once),
+  Dictate, and Send, a dictation under way standing its strip in the row's
+  place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
+  and its head, inside the same glass, holds an agent's
   `DeniesWaiting` (that a message sent now denies the call waiting, a press
   scrolling to the call's row, whose Deny and Allow alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with

@@ -17,8 +17,8 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
  * on stays where it is.
  *
  * While the page is shown under the same view (the workspace listed, the
- * filter, and the display's grouping, order, completed window, and whether
- * the pins lead), every task keeps the group and the place it was first
+ * filter, and the display's grouping, order, completed window, whether
+ * sub-tasks stand beside their parents, and whether the pins lead), every task keeps the group and the place it was first
  * drawn in: it is grouped, ordered, and filtered as it stood then, and drawn
  * as it is now, so a teammate's change of its status, priority, assignee,
  * or name moves nothing under the reader. Hidden, or drawn under another
@@ -65,6 +65,7 @@ function sameTasksOrder(was: HeldTasksView, now: HeldTasksView): boolean {
     was.display.order === now.display.order &&
     was.display.completed === now.display.completed &&
     was.display.pinnedFirst === now.display.pinnedFirst &&
+    was.display.subTasks === now.display.subTasks &&
     sameFilter(was.filter, now.filter)
   );
 }

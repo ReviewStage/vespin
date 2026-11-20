@@ -124,6 +124,7 @@ const storedDisplay = Schema.fromJsonString(
     emptyGroups: Schema.optionalKey(Schema.Boolean),
     completed: Schema.optionalKey(Schema.Literals(Object.values(COMPLETED_WINDOW))),
     pinnedFirst: Schema.optionalKey(Schema.Boolean),
+    subTasks: Schema.optionalKey(Schema.Boolean),
     properties: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PROPERTY_ORDER))),
     /** The properties the view offered when it was kept. */
     offered: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PROPERTY_ORDER))),

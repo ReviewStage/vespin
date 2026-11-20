@@ -1,5 +1,5 @@
 /**
- * slack-events-app.ts -- our Slack bot's one inbound route: a press of an ask's button in a member's DM answers the ask, as the member would in the app.
+ * slack-events-app.ts -- our Slack bot's one inbound route: the events Slack sends, and a press of an ask's button in a member's DM, which answers the ask as the member would in the app.
  *
  * Slack sends every request for our own Slack app, events and interactivity
  * alike, to this one path, signed with the app's signing secret
@@ -13,34 +13,37 @@
  * unavailable and reads nothing.
  * Interactivity arrives form-encoded, its JSON under `payload`; an event
  * arrives as JSON: Slack's URL check is answered, an uninstall of the app
- * from a team, or a revoke of its bot token there, deletes the
- * installation of every workspace connected to that team, and with it its
- * token and its members' Slack ids, and a message a member
- * addressed to the bot, a mention or a direct message, is acknowledged and
- * acted on once the answer has left (`slack-agent-starts.ts`), as is a
- * member's 👍 or 👎 on a message the bot posted in an agent's thread
- * (`slack-reactions.ts`); every other event is acknowledged unread.
+ * from a team, or a revoke of its bot token there, deletes the installation
+ * of every workspace connected to that team, and with it its token and its
+ * members' Slack ids, and a message a member addressed to the bot, a mention
+ * or a direct message, is acknowledged and acted on once the answer has left
+ * (`slack-agent-starts.ts`), as is a member's 👍 or 👎 on a message the bot
+ * posted in an agent's thread (`slack-reactions.ts`); every other event is
+ * acknowledged unread.
  *
  * A press (`block_actions`) is acknowledged at once with an empty answer,
- * as Slack asks within its three seconds, and acted on once the answer has
- * left, a failure logged by its kind alone. It is read for the option
- * button's value, which
- * names the item, the message whose ask it answers, and the option
- * (`SlackChoice`, `thread-dms.ts`), or a do ask's answer, Mark done ticking
- * every step, or for a Submit's, which names no option
- * and is answered with the checkboxes the press's state holds ticked, each
- * found back by its place among the ask's options; a press with none, the
- * Open button's and a tick of a checkbox among them, is acknowledged and
- * nothing else. The presser is found back as
- * the workspace member the bot's lookups kept under that Slack user, or
- * one whose own Slack account is that user, in the team the item's
- * workspace connected (`SlackWorkspaceBot.memberOf`), and the ask is
- * answered as that member (`answerAsMember`) under the button's action id,
- * so a press Slack sends again is the answer already taken. The answer
- * taken is handed to the agent as its "Thread answer", and the DM is
- * rewritten to say the option chosen; a press on an ask already settled
- * rewrites the DM to say where it stands. Of a request nothing is logged
- * but a fixed line: its kind as it is heard, and a refused signature.
+ * because Slack asks for one within its three seconds. It is acted on once
+ * the answer has left, and a failure is logged by its kind alone.
+ *
+ * A press is read for its button's value (`SlackChoice`, `thread-dms.ts`),
+ * which names the item and the message whose ask it answers. An option's
+ * button names the option. A do ask's button names its answer, and Mark done
+ * ticks every step. A Submit names no option and is answered with the
+ * checkboxes the press's state holds ticked, each found back by its place
+ * among the ask's options. A press with none of these, the Open button's and
+ * a tick of a checkbox among them, is acknowledged and nothing else.
+ *
+ * The presser is found back as the workspace member the bot's lookups kept
+ * under that Slack user, or one whose own Slack account is that user, in the
+ * team the item's workspace connected (`SlackWorkspaceBot.memberOf`). The ask
+ * is answered as that member (`answerAsMember`) under the button's action id,
+ * so a press Slack sends again is the answer already taken. The answer taken
+ * is handed to the agent as its "Thread answer", and the DM is rewritten to
+ * say the option chosen. A press on an ask already settled rewrites the DM to
+ * say where it stands.
+ *
+ * Of a request nothing is logged but a fixed line: its kind as it is heard,
+ * and a refused signature.
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -164,9 +167,9 @@ const UrlVerificationSchema = Schema.Struct({
 });
 
 /**
- * An uninstall or a revoke as far as it is read: the team, when Slack
- * says it happened (whole seconds since the epoch), and for a revoke, the bot users whose tokens went; a revoke of user tokens alone
- * names no bot.
+ * An uninstall or a revoke as far as it is read: the team, when Slack says it
+ * happened (whole seconds since the epoch), and for a revoke, the bot users
+ * whose tokens went; a revoke of user tokens alone names no bot.
  */
 const LifecycleEventSchema = Schema.Struct({
   type: Schema.Literal(SLACK_REQUEST_TYPE.EVENT_CALLBACK),
@@ -360,13 +363,12 @@ function pressedDm(press: BlockActions): SlackMessage | undefined {
 }
 
 /**
- * A press of an option, a do ask's button, or a Submit of the options
- * ticked, answered as the member who pressed it, and the pressed DM
- * rewritten past the answer: an answer taken now or before says what was
- * answered, and an ask no longer open says where it stands. Only the DM
- * pressed is rewritten, since the bot writes no new thread DMs and rewrites
- * none on its own. Nothing where the item,
- * the member, or the option is not found.
+ * A press of an option, a do ask's button, or a Submit of the options ticked,
+ * answered as the member who pressed it, and the pressed DM rewritten past
+ * the answer: an answer taken now or before says what was answered, and an
+ * ask no longer open says where it stands. Only the DM pressed is rewritten,
+ * since the bot writes no new thread DMs and rewrites none on its own.
+ * Nothing where the item, the member, or the option is not found.
  */
 const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockActions) {
   const pressed = pressedChoice(press);

@@ -1,74 +1,82 @@
 /**
  * slack-agent-starts.ts -- a member's @mention of our Slack bot, or a direct message to it, starts a coding agent as them or reaches the agent its thread speaks for, as does any reply in an agent's thread, and every settled turn bound for Slack is posted there.
  *
- * Our Slack route hands each event Slack sent here
- * (`slack-events-app.ts`): an `app_mention` in a channel, a `message.im`
- * a member wrote to the bot directly, or a `message` replying in a thread
- * of a public or private channel, which is heard only where that thread
- * speaks for an agent (below). Such a reply that names the bot is dropped
- * unread, because Slack sends it as an `app_mention` too, under another
- * event id, which acts on it once. A bot's message, a message's edit or
- * any subtype but a file share, and Slack's own retry of an event
- * (`x-slack-retry-num`) are dropped unread, and the work runs once the answer has left, inside
- * Slack's three seconds. Every event heard writes one fixed line, its kind
- * and what came of it (`heardLine`), and nothing Slack wrote.
+ * Our Slack route hands each event Slack sent here (`slack-events-app.ts`):
+ * an `app_mention` in a channel, a `message.im` a member wrote to the bot
+ * directly, or a `message` replying in a thread of a public or private
+ * channel, which is heard only where that thread speaks for an agent (below).
+ * Such a reply that names the bot is dropped unread, because Slack sends it
+ * as an `app_mention` too, under another event id, which acts on it once. A
+ * bot's message, a message's edit or any subtype but a file share, and
+ * Slack's own retry of an event (`x-slack-retry-num`) are dropped unread, and
+ * the work runs once the answer has left, inside Slack's three seconds. Every
+ * event heard writes one fixed line, its kind and what came of it
+ * (`heardLine`), and nothing Slack wrote.
  *
  * The writer is found as a member of a workspace connected to the event's
  * team, oldest connection first: by the Slack id the bot kept for them, or
- * through a Slack account a member connected themselves (`SlackWorkspaceBot.memberOf`),
- * or else by the email Slack holds for them (`users.info`), which is then kept.
- * Where none holds them as a member, the bot says so in the thread and
- * starts nothing; a reply that named the bot nowhere is let go quietly
- * instead, since people who are not members talk in a thread too, as is
- * one in a thread no agent's, which starts nothing. Every call to Slack is made on the token of the workspace
- * it acts for (`SlackBot.forWorkspace`), and one made before a workspace is
- * found on the first connected to the team that holds one; where none
- * does, nothing can answer, and the event is dropped with a fixed line.
+ * through a Slack account a member connected themselves
+ * (`SlackWorkspaceBot.memberOf`), or else by the email Slack holds for them
+ * (`users.info`), which is then kept. Where none holds them as a member, the
+ * bot says so in the thread and starts nothing; a reply that named the bot
+ * nowhere is let go quietly instead, since people who are not members talk in
+ * a thread too, as is one in a thread no agent's, which starts nothing. Every
+ * call to Slack is made on the token of the workspace it acts for
+ * (`SlackBot.forWorkspace`), and one made before a workspace is found on the
+ * first connected to the team that holds one; where none does, nothing can
+ * answer, and the event is dropped with a fixed line.
  *
  * A reply in the Slack thread of a DM the bot wrote a member about an inbox
- * thread, as it did before it left Slack to the agents (`threadDmAt`), is posted on that thread as the member's own reply,
- * as one in the app is (`messageAsMember`), keyed by Slack's event id, and
- * the agent, brought back first where it stands archived, hears it as a
- * thread message; the bot reacts with 👀. Only the
- * member the DM went to, found as a press finds them (`SlackWorkspaceBot.memberOf`),
- * may reply there; anyone else is told so and nothing is posted.
+ * thread, as it did before it left Slack to the agents (`threadDmAt`), is
+ * posted on that thread as the member's own reply, as one in the app is
+ * (`messageAsMember`), keyed by Slack's event id, and the agent, brought back
+ * first where it stands archived, hears it as a thread message; the bot
+ * reacts with 👀. Only the member the DM went to, found as a press finds them
+ * (`SlackWorkspaceBot.memberOf`), may reply there; anyone else is told so and
+ * nothing is posted.
  *
- * A message in a thread that speaks for an agent (`slack_agent_thread`), one
- * it was started from, its automation run's result was sent in, or it posted
- * to itself (`send_slack_message`), whether
- * it names the bot or not, is sent to
- * that agent as the writer's own message (`steer.ts`), the agent brought
- * back first where it stands archived, as a chat tool reopens a
- * conversation, and the thread becomes the agent's current one once the
- * agent took the message. Where its session has ended for good (`AGENT_RETIRED`), a new
- * agent continues it as Continue does, handed its work, a summary of its
- * transcript, and the message, and the thread moves to it, the bot saying
- * nothing of it, the new agent on the ended one's own task, as Continue
- * puts it; any other
- * makes a task and starts an agent as the writer on it, on the one path a
- * Start takes (`coder-host/start.ts`), both keyed by Slack's event id. The
- * task starts untitled, for its agent's title to name it, with a blank
- * description, since the message is the agent's prompt, assigned to the writer and
- * in progress, and works in the repository the
- * message names as `owner/name` where the workspace reaches it, else in the
- * channel's default repository, else in the workspace's, both as an owner
- * or admin named them in Settings, else in the repository of the writer's
- * latest agent in the workspace, else in none. The images and PDFs the
- * message shared are read from Slack on the bot's token once the writer is
- * found (`SlackWorkspaceBot.download`), sniffed by their bytes and held to the bounds
- * a Start holds a message's files to: a PNG, JPEG, or WebP within them read
- * whole, and a larger one, or one of a type no model reads (a Mac's HEIC
- * screenshot), read as the largest thumbnail Slack made of it that fits; a
- * PDF within them read whole, and one past them left out; each handed to
- * the agent as the message's files, a Start's or a steer's alike, as the
- * message box sends them; any other file is left out, and a message of
- * such files alone is acted on as one with words.
- * Its prompt is the writer's words, the thread's earlier messages fenced as data, since anyone in the channel wrote them, and the
- * message's link; only the writer's own words hand it MCP servers. Its
- * first line, and each message sent on, says Slack carried it, with the
- * writer's words and the message's link (`slackLine`), which a window draws
- * in place of the prompt the agent reads. The bot says nothing in the
- * thread and reacts to nothing, and the thread is kept as the agent's.
+ * A message in a thread that speaks for an agent (`slack_agent_thread`) goes
+ * to that agent, whether it names the bot or not. Such a thread is one the
+ * agent was started from, one its automation run's result was sent in, or one
+ * it posted to itself (`send_slack_message`). The message is sent as the
+ * writer's own (`steer.ts`). An archived agent is brought back first, as a
+ * chat tool reopens a conversation. The thread becomes the agent's current
+ * one once the agent took the message.
+ *
+ * Where the agent's session has ended for good (`AGENT_RETIRED`), a new agent
+ * continues it as Continue does, on the ended one's own task, keyed by
+ * Slack's event id. It is handed the ended agent's work, a summary of its
+ * transcript, and the message. The thread moves to it, and the bot says
+ * nothing of it.
+ *
+ * Any other message makes a task and starts an agent as the writer on it, on
+ * the one path a Start takes (`coder-host/start.ts`). Both are keyed by
+ * Slack's event id. The task starts untitled, for its agent's title to name
+ * it, and with a blank description, since the message is the agent's prompt.
+ * It is assigned to the writer and in progress. It works in the first of
+ * these that stands: the repository the message names as `owner/name` where
+ * the workspace reaches it, the channel's default repository, the
+ * workspace's (both as an owner or admin named them in Settings), and the
+ * repository of the writer's latest agent in the workspace; else in none.
+ *
+ * The images and PDFs the message shared are read from Slack on the bot's
+ * token once the writer is found (`SlackWorkspaceBot.download`). They are
+ * sniffed by their bytes and held to the bounds a Start holds a message's
+ * files to. A PNG, JPEG, or WebP within them is read whole. A larger one, or
+ * one of a type no model reads (a Mac's HEIC screenshot), is read as the
+ * largest thumbnail Slack made of it that fits. A PDF within them is read
+ * whole, and one past them is left out. Each is handed to the agent as the
+ * message's files, a Start's or a steer's alike, as the message box sends
+ * them. Any other file is left out, and a message of such files alone is
+ * acted on as one with words.
+ *
+ * A started agent's prompt is the writer's words, the thread's earlier
+ * messages fenced as data, since anyone in the channel wrote them, and the
+ * message's link; only the writer's own words hand it MCP servers. Its first
+ * line, and each message sent on, says Slack carried it, with the writer's
+ * words and the message's link (`slackLine`), which a window draws in place
+ * of the prompt the agent reads. The bot says nothing in the thread and
+ * reacts to nothing, and the thread is kept as the agent's.
  *
  * Where an agent stands shows on members' messages as the agent's own
  * reactions (`react_slack`), never the bot's: its prompt names the message's
@@ -79,27 +87,26 @@
  * agent's sandbox boots, traded for the agent alone marking where it stands.
  *
  * Every settled turn bound for Slack is posted once, in one place
- * (`postTurnToSlack`): a turn that ends an automation run delivering to
- * Slack as a new DM to the run's owner (`claimRunSlackDelivery`,
+ * (`postTurnToSlack`): a turn that ends an automation run delivering to Slack
+ * as a new DM to the run's owner (`claimRunSlackDelivery`,
  * `../automations/automation-slack-delivery.ts`), which is then kept as the
- * agent's current thread, and any other turn of an agent a thread speaks
- * for in its current thread, the one kept, moved, or written in latest
+ * agent's current thread, and any other turn of an agent a thread speaks for
+ * in its current thread, the one kept, moved, or written in latest
  * (`claimSlackThreadTurn`), never in every thread it was ever kept for. A
- * thread hears only what the agent sends there itself
- * (`send_slack_message`, `slack-message-tool.ts`): a turn that finished well
- * posts none of its words, and only one that failed, was stopped, or hit its
- * plan's usage limit is said so, with the agent's link, since the agent
- * cannot say that itself; a picture it showed is shared there only where
- * it sends one itself (`send_slack_message`'s `files`). A run's result DM
- * shares the pictures, recordings, and sound clips the agent showed with
- * `show_media` in that turn as files under it (`SlackWorkspaceBot.upload`).
- * An agent started from Slack and its task follow the lifecycle of one
- * started in the app: no turn's end archives the agent or moves its task
- * (`tasks/task-finish.ts`), which stand until a member or an agent settles
- * them, and a message in the thread brings back an agent a member archived.
- * Slack's words reach the
- * agent's prompt, transcript, and traces, never a log line: a failure is
- * logged by its kind alone.
+ * thread hears only what the agent sends there itself (`send_slack_message`,
+ * `slack-message-tool.ts`): a turn that finished well posts none of its
+ * words, and only one that failed, was stopped, or hit its plan's usage limit
+ * is said so, with the agent's link, since the agent cannot say that itself;
+ * a picture it showed is shared there only where it sends one itself
+ * (`send_slack_message`'s `files`). A run's result DM shares the pictures,
+ * recordings, and sound clips the agent showed with `show_media` in that turn
+ * as files under it (`SlackWorkspaceBot.upload`). An agent started from Slack
+ * and its task follow the lifecycle of one started in the app: no turn's end
+ * archives the agent or moves its task (`tasks/task-finish.ts`), which stand
+ * until a member or an agent settles them, and a message in the thread brings
+ * back an agent a member archived. Slack's words reach the agent's prompt,
+ * transcript, and traces, never a log line: a failure is logged by its kind
+ * alone.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -754,10 +761,10 @@ const agentLink = (userId: string, organizationId: string, agentId: string) =>
 /**
  * The ended agent continued in a new one as the member, as Continue and
  * `start_agent`'s `from` continue it: handed its work and its transcript, the
- * steps that do not fit summarized, with the member's message as its note
- * and the files it shared as the note's files.
- * The thread moves to it, and the bot says nothing more, for the new agent
- * speaks for itself; a refusal is said instead.
+ * steps that do not fit summarized, with the member's message as its note and
+ * the files it shared as the note's files. The thread moves to it, and the
+ * bot says nothing more, for the new agent speaks for itself; a refusal is
+ * said instead.
  */
 const continueFromSlack = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
@@ -903,9 +910,9 @@ const sendToAgent = Effect.fnUntraced(function* (
 
 /**
  * The task the message's agent starts on, made for it: untitled, so the
- * agent's title names it as it names any untitled task (`title.ts`),
- * assigned to the writer, in the repository the start resolved or in none,
- * in progress, and with a blank description, since the message is handed to the
+ * agent's title names it as it names any untitled task (`title.ts`), assigned
+ * to the writer, in the repository the start resolved or in none, in
+ * progress, and with a blank description, since the message is handed to the
  * agent as its prompt. Note that it is made under an id drawn from Slack's
  * event id, as the agent is keyed by it, because a start run again must find
  * the task it made rather than make a second.
@@ -1000,10 +1007,10 @@ const startFromSlack = Effect.fnUntraced(function* (
 
 /**
  * A reply in the Slack thread of a DM the bot wrote about an inbox thread,
- * posted on that thread as the member's own reply, as one in the app is,
- * with the files it shared as the reply's files, under Slack's event id,
- * and marked heard; from anyone but the member the
- * DM went to, or a refusal, it is said in the thread instead.
+ * posted on that thread as the member's own reply, as one in the app is, with
+ * the files it shared as the reply's files, under Slack's event id, and
+ * marked heard; from anyone but the member the DM went to, or a refusal, it
+ * is said in the thread instead.
  */
 const replyToThreadDm = Effect.fnUntraced(function* (
   bot: SlackWorkspaceBot,
@@ -1235,12 +1242,12 @@ const turnPlace = Effect.fnUntraced(function* (agent: Agent, turnId: string) {
 });
 
 /**
- * Posts the settled turn once where it belongs (`turnPlace`): a run's
- * result, with the pictures the turn showed shared after it, or in a
- * thread only a turn that did not finish well, with the agent's link. A
- * run's result DM is kept as the agent's current thread, with this turn posted in it, so
- * a reply there reaches the agent and what it sends lands there.
- * A failure is logged by its kind alone, never answered.
+ * Posts the settled turn once where it belongs (`turnPlace`): a run's result,
+ * with the pictures the turn showed shared after it, or in a thread only a
+ * turn that did not finish well, with the agent's link. A run's result DM is
+ * kept as the agent's current thread, with this turn posted in it, so a reply
+ * there reaches the agent and what it sends lands there. A failure is logged
+ * by its kind alone, never answered.
  */
 export function postTurnToSlack(
   turn: SettledAgentTurn,

@@ -74,6 +74,7 @@ const PLACEHOLDER_STANDING: AgentStanding = {
     TOOL_GATE.SANDBOX,
     TOOL_GATE.DESCRIPTIONS,
     TOOL_GATE.INBOX,
+    TOOL_GATE.UNMANAGED,
   ]),
   experiments: {
     descriptionsOn: true,

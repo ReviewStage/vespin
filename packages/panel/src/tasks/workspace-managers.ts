@@ -21,7 +21,7 @@ import { type AgentsControl, readAgentById } from "./use-agents.js";
 /** The workspace's Managers as the sidebar draws them, and the agents control a Manager's row acts through. */
 interface WorkspaceManagers {
   /** The Managers; none while the live list carries no agents yet. */
-  readonly managers: readonly AgentSummary[] | undefined;
+  readonly managers: readonly ListedAgent[] | undefined;
   readonly agents: AgentsControl;
 }
 
@@ -50,10 +50,10 @@ function managersOf(listed: readonly ListedAgent[], workspaceId: string): readon
  * of agents, in the order Pinned stands its pins: those dragged to a place
  * by it, then the rest newest pinned first (`pin-order.ts`).
  */
-export function pinnedManagersOf(
-  managers: readonly AgentSummary[],
+export function pinnedManagersOf<Agent extends AgentSummary>(
+  managers: readonly Agent[],
   pins: readonly TaskAgentPin[],
-): readonly AgentSummary[] {
+): readonly Agent[] {
   const byId = new Map(managers.map((agent) => [agent.id, agent]));
 
   const pinned = pins.flatMap((pin) => {

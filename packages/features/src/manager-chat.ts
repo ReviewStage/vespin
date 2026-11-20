@@ -5,7 +5,10 @@
  * it and the Manager, never its transcript: a person's line stands as they
  * sent it (`isPersonLine`), and each `send_to_user` call a turn made stands
  * as a message of its own, in the order it was sent, so a turn that sent
- * three short messages draws three bubbles. A person's line that reached a
+ * three short messages draws three bubbles. On a call, each line the voice
+ * said stands as the Manager's own message, as an ordinary agent's
+ * transcript draws it as the agent's reply (`isVoiceLine`), since it is what
+ * the caller heard the Manager say. A person's line that reached a
  * turn while it ran stands between the messages it arrived between.
  * Everything else the transcript holds (the Manager's own text, its thoughts
  * and other calls, and the lines its agents, wakes, threads, and GitHub sent
@@ -25,11 +28,12 @@ import {
   MESSAGE_ROLE,
   type WireValue,
 } from "@repo/wire";
-import { AGENT_PART, type AgentPart, arrivedParts } from "./agent-parts.js";
+import { AGENT_PART, type AgentPart, arrivedParts, messageWords } from "./agent-parts.js";
 import { AGENT_TOOL } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { TOOL_STATE } from "./tool-call-block.js";
 import { isPersonLine } from "./transcript-lines.js";
+import { isAgentTurn, isVoiceLine } from "./voice-call-lines.js";
 
 /** The longest pause, in milliseconds, between two messages of one sender that still stand in one run. */
 const CHAT_RUN_GAP_MS = 10 * 60 * 1000;
@@ -105,13 +109,28 @@ function turnChat(
   return chat;
 }
 
-/** A Manager's transcript as its chat: people's lines, and each `send_to_user` call as a message of its own, the lines that reached a turn standing between its messages where they arrived. */
+/**
+ * A line the voice said on a call as the Manager's chat message, as a
+ * `send_to_user` call becomes one: its words alone, sent when it was said,
+ * which is its start and its end. It keeps its row's id and metadata, so
+ * it is still the call's line (`isVoiceLine`) and never a turn.
+ */
+function voiceChat(line: AgentTranscriptMessage): readonly AgentTranscriptMessage[] {
+  const text = messageWords(line).trim();
+
+  if (text === "") return [];
+  const { cutParts: _cut, sentAt, ...kept } = line;
+  const parts: readonly WireValue[] = [{ type: AGENT_PART.TEXT, text }];
+  const at = sentAt === undefined ? undefined : { sentAt, startedAt: sentAt, finishedAt: sentAt };
+
+  return [{ ...kept, parts, ...at }];
+}
+
+/** A Manager's transcript as its chat: people's lines, each `send_to_user` call as a message of its own, the lines that reached a turn standing between its messages where they arrived, and the voice's lines on a call. */
 export function managerChatLines(
   messages: readonly AgentTranscriptMessage[],
 ): readonly AgentTranscriptMessage[] {
-  const turns = new Set(
-    messages.flatMap((message) => (message.role === MESSAGE_ROLE.ASSISTANT ? [message.id] : [])),
-  );
+  const turns = new Set(messages.flatMap((message) => (isAgentTurn(message) ? [message.id] : [])));
 
   const arrived = new Map<string, AgentTranscriptMessage[]>();
 
@@ -126,6 +145,9 @@ export function managerChatLines(
   }
 
   return messages.flatMap((message): readonly AgentTranscriptMessage[] => {
+    // Note that the voice's line is no turn, so it stands as a message of its own rather than as a turn's sent words, which it holds none of.
+    if (isVoiceLine(message)) return voiceChat(message);
+
     if (message.role === MESSAGE_ROLE.ASSISTANT) {
       return turnChat(message, arrived.get(message.id) ?? []);
     }

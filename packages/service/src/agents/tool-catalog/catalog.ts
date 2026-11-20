@@ -550,6 +550,9 @@ const LOADED: Served = { alwaysLoad: true };
 /** Loaded from the first turn, behind the starter's Inbox. */
 const INBOX_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX] };
 
+/** Loaded from the first turn, behind the starter's Inbox, and closed to an agent a Manager started, which reaches people through it. */
+const OWN_THREADS_LOADED: Served = { ...LOADED, gates: [TOOL_GATE.INBOX, TOOL_GATE.UNMANAGED] };
+
 /** Every tool served, in the order `tools/list` names them. */
 const CATALOG = [
   // The threads, posted to the inbox, where the agent's starter keeps one; a thread is read by its id even where not, since a teammate's agent may still post one.
@@ -557,7 +560,7 @@ const CATALOG = [
     INBOX_TOOLS.POST,
     (admitted, input, { sandbox }) =>
       runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox }),
-    INBOX_LOADED,
+    OWN_THREADS_LOADED,
   ),
   served(
     INBOX_TOOLS.LIST,
@@ -570,7 +573,7 @@ const CATALOG = [
   served(
     INBOX_TOOLS.WITHDRAW,
     (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
-    INBOX_LOADED,
+    OWN_THREADS_LOADED,
   ),
   // The pull request, the description, and pages and pictures.
   served(OPEN_PULL_REQUEST_TOOL, (admitted, input) => runAgentOpenPullRequest(admitted, input), {

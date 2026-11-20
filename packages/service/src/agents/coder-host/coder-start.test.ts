@@ -17,6 +17,7 @@ import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing"
 import { BOOT_FAILURE, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
 import { AGENT_KIND, AGENT_MACHINE, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { ManagerCreateRequest } from "@repo/features/manager-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -426,7 +427,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
   );
 
   it.effect(
-    "a Manager is made on no task as its creator's, named as asked and handed nothing, so it opens no session and sends no line, told the greeting its page opens on, only where its workspace has Managers on, and an account outside the workspace makes none",
+    "a Manager is made on no task as its creator's, named as asked, wearing the face picked, and handed nothing, so it opens no session and sends no line, told the greeting its page opens on, only where its workspace has Managers on, and an account outside the workspace makes none",
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
@@ -443,6 +444,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           runsOn: { machine: AGENT_MACHINE.VERCEL },
           model: AGENT_DEFAULT_CHOICE.model,
           effort: "high",
+          face: { character: MANAGER_FACE_CHARACTER.CAT, color: MANAGER_FACE_COLOR.PEACH },
         };
 
         const made = (userId: string) =>
@@ -467,8 +469,24 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         assert.ok(Result.isSuccess(started));
         const agent = Option.getOrThrow(yield* readAgent(owner, started.success.agent.id));
         assert.deepEqual(
-          [agent.kind, agent.taskId, agent.organizationId, agent.userId, agent.title, agent.prompt],
-          [AGENT_KIND.MANAGER, null, workspaceId, owner, "Billing", null],
+          [
+            agent.kind,
+            agent.taskId,
+            agent.organizationId,
+            agent.userId,
+            agent.title,
+            agent.prompt,
+            agent.face,
+          ],
+          [
+            AGENT_KIND.MANAGER,
+            null,
+            workspaceId,
+            owner,
+            "Billing",
+            null,
+            { character: MANAGER_FACE_CHARACTER.CAT, color: MANAGER_FACE_COLOR.PEACH },
+          ],
         );
         assert.deepEqual(opened, [], "making a Manager opens no session");
 

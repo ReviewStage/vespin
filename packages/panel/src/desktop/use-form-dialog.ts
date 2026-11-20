@@ -23,7 +23,7 @@ import { useState } from "react";
  */
 
 /** What a form's owner draws its card and foot from. */
-interface FormDialog {
+export interface FormDialog {
   /** Whether the card stands. */
   open: boolean;
   /** Whether the answer is under way or its check is showing, which stills the card. */

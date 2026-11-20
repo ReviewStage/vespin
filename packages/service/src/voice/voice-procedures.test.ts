@@ -15,7 +15,14 @@ import {
 } from "@repo/database/testing";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { LIVE_VOICE } from "@repo/features/voices";
-import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, type WireBoundaryInput } from "@repo/wire";
+import {
+  type AssistantMessageMetadata,
+  MESSAGE_AUTHOR,
+  MESSAGE_CHANNEL,
+  MESSAGE_ROLE,
+  type UserMessageMetadata,
+  type WireBoundaryInput,
+} from "@repo/wire";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Cause, type Context, Effect, Layer, Logger, Option } from "effect";
@@ -73,8 +80,32 @@ function liveResponse(answer: LiveAnswer): Response {
   );
 }
 
-/** An agent of the owner's on a task named "Flaky tests", running on Claude Code, in our sandbox or on the owner's own Mac; its id. */
-const openAgent = (ownerId: string, workspaceId: string, onMac = false) =>
+/** What a conversation holds, oldest first: each row's role, words, and metadata. */
+type Said = readonly (
+  | readonly [typeof MESSAGE_ROLE.USER, string, UserMessageMetadata]
+  | readonly [typeof MESSAGE_ROLE.ASSISTANT, string, AssistantMessageMetadata]
+)[];
+
+/** A line the developer typed. */
+const TYPED: UserMessageMetadata = { channel: MESSAGE_CHANNEL.TYPED };
+
+/** A call already held: the developer's spoken line, the voice's retelling of it, and the agent's reply. */
+const CALL_HELD: Said = [
+  [
+    MESSAGE_ROLE.USER,
+    "Use the staging database.",
+    { author: MESSAGE_AUTHOR.DEVELOPER, channel: MESSAGE_CHANNEL.VOICE },
+  ],
+  [
+    MESSAGE_ROLE.ASSISTANT,
+    "Passing that on now.",
+    { author: MESSAGE_AUTHOR.VOICE_MODEL, channel: MESSAGE_CHANNEL.VOICE },
+  ],
+  [MESSAGE_ROLE.ASSISTANT, "Switched the tests to staging.", { author: MESSAGE_AUTHOR.MODEL }],
+];
+
+/** An agent of the owner's on a task named "Flaky tests", running on Claude Code, in our sandbox or on the owner's own Mac, its conversation holding what was said; its id. */
+const openAgent = (ownerId: string, workspaceId: string, onMac = false, said = CALL_HELD) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const agentId = yield* openAgentOnOwnTask(ownerId, workspaceId);
@@ -85,21 +116,6 @@ const openAgent = (ownerId: string, workspaceId: string, onMac = false) =>
       .where(eq(agentTable.id, agentId));
 
     assert.ok(row);
-
-    // A call already held: the developer's spoken line, the voice's retelling of it, and the agent's reply.
-    const said = [
-      [
-        MESSAGE_ROLE.USER,
-        "Use the staging database.",
-        { author: MESSAGE_AUTHOR.DEVELOPER, channel: MESSAGE_CHANNEL.VOICE },
-      ],
-      [
-        MESSAGE_ROLE.ASSISTANT,
-        "Passing that on now.",
-        { author: MESSAGE_AUTHOR.VOICE_MODEL, channel: MESSAGE_CHANNEL.VOICE },
-      ],
-      [MESSAGE_ROLE.ASSISTANT, "Switched the tests to staging.", { author: MESSAGE_AUTHOR.MODEL }],
-    ] as const;
 
     yield* db.insert(messages).values(
       said.map(([role, text, metadata], seq) => ({
@@ -252,10 +268,75 @@ it.layer(getTestDB())("the voice routes", (it) => {
           },
         });
         assert.ok(sent.session.instructions.includes("Task: Flaky tests"));
-        // The developer's spoken line and the agent's reply are context; the voice's own retelling is not.
-        assert.ok(sent.session.instructions.includes("Developer: Use the staging database."));
-        assert.ok(sent.session.instructions.includes("Agent: Switched the tests to staging."));
-        assert.ok(!sent.session.instructions.includes("Passing that on now."));
+        // The developer's spoken line and the agent's reply open the session as its history, never in its instructions; the voice's own retelling is left out.
+        assert.deepEqual(sent.session.input, [
+          {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: "Use the staging database." }],
+          },
+          {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: "Switched the tests to staging." }],
+          },
+        ]);
+        assert.ok(!sent.session.instructions.includes("Use the staging database."));
+        assert.ok(!sent.session.instructions.includes("Switched the tests to staging."));
+      }),
+  );
+
+  // OpenAI's bounds on the history are 128 messages and 8,192 tokens, a message's text counted at its bytes and its framing at 4 tokens.
+  it.effect.each([
+    {
+      bound: "128 messages: the newest 128 of 130",
+      said: Array.from(
+        { length: 130 },
+        (_, index) => [MESSAGE_ROLE.USER, `Line ${index}.`, TYPED] as const,
+      ),
+      opened: Array.from({ length: 128 }, (_, index) => ({
+        role: "user",
+        text: `Line ${index + 2}.`,
+      })),
+    },
+    {
+      bound: "8,192 tokens: the newest whole, and the one before it cut to the room left",
+      said: [
+        [MESSAGE_ROLE.USER, "a".repeat(100), TYPED],
+        [MESSAGE_ROLE.ASSISTANT, "b".repeat(5_000), { author: MESSAGE_AUTHOR.MODEL }],
+        [MESSAGE_ROLE.USER, "c".repeat(5_000), TYPED],
+      ] as const,
+      // 8,192 - (5,000 + 4) leaves 3,188 tokens; less 4 of framing, 3,184 bytes, which hold 3,181 letters and the 3-byte "…".
+      opened: [
+        { role: "assistant", text: `${"b".repeat(3_181)}…` },
+        { role: "user", text: "c".repeat(5_000) },
+      ],
+    },
+  ])(
+    "a call opens on the agent's newest messages, oldest first, within OpenAI's bound of $bound",
+    ({ said, opened }) =>
+      Effect.gen(function* () {
+        const ownerId = yield* openVoiceCaller();
+        const workspaceId = yield* openWorkspace(ownerId);
+        const agentId = yield* openAgent(ownerId, workspaceId, false, said);
+        const router = openRouter();
+
+        yield* router.open(ownerId, agentId);
+
+        const [request] = router.calls;
+        assert.ok(request);
+        const raw = request.init.body;
+        assert.ok(raw instanceof Uint8Array, "the session goes as a JSON body");
+        const sent = JSON.parse(new TextDecoder().decode(raw));
+        assert.deepEqual(
+          sent.session.input.map(
+            (message: { role: string; content: readonly { text: string }[] }) => ({
+              role: message.role,
+              text: message.content.map((part) => part.text).join(""),
+            }),
+          ),
+          opened,
+        );
       }),
   );
 

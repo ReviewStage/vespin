@@ -1,4 +1,10 @@
-import { repositoryParts, TASK_ORDER, taskTime } from "@repo/features/task-list-model";
+import {
+  repositoryParts,
+  TASK_ORDER,
+  tasksById,
+  taskTime,
+  topTasks,
+} from "@repo/features/task-list-model";
 import {
   DESCRIPTION_ACTOR,
   isTaskSettled,
@@ -24,7 +30,9 @@ import {
  * group with no task still stands, which of the settled, Done and Canceled,
  * stand beside the open work (none, those finished in the past week or
  * month, or all, as Linear's "completed issues" option reads, though a
- * settled status the filter names stands in full), whether the pins and the account's sections
+ * settled status the filter names stands in full), whether a sub-task
+ * stands beside its parent or only under it, as Linear's "Sub-issues"
+ * option reads, whether the pins and the account's sections
  * lead the List, and which of a task's properties its row or card draws.
  * The List and the Board each keep a display of their own, because a board
  * wants every column in sight and the finished work in its last one, where a
@@ -175,6 +183,8 @@ export interface TasksDisplay {
   readonly completed: CompletedWindow;
   /** Whether the pinned tasks, then the account's sections, lead the List before its groups. */
   readonly pinnedFirst: boolean;
+  /** Whether a sub-task stands beside its parent; off, it stands only under it, its parent's count saying how many there are (`withSubTasksShown`). */
+  readonly subTasks: boolean;
   /** The properties drawn, in `TASK_PROPERTY_ORDER`. */
   readonly properties: readonly TaskProperty[];
 }
@@ -222,13 +232,14 @@ export function keptTasksDisplay(kept: KeptTasksDisplay, initial: TasksDisplay):
   };
 }
 
-/** The List until its reader changes it: by status from the work under way, the most pressing first, nothing settled, the pins and sections leading, each row drawing all but its creator, its assignee saying who is on it. */
+/** The List until its reader changes it: by status from the work under way, the most pressing first, nothing settled, only the tasks at the top, each parent's row counting its sub-tasks, the pins and sections leading, each row drawing all but its creator, its assignee saying who is on it. */
 export const DEFAULT_LIST_DISPLAY: TasksDisplay = {
   grouping: TASKS_GROUPING.STATUS,
   order: TASKS_ORDER.PRIORITY,
   emptyGroups: false,
   completed: COMPLETED_WINDOW.NONE,
   pinnedFirst: true,
+  subTasks: false,
   properties: TASK_PROPERTY_ORDER.filter((property) => property !== TASK_PROPERTY.CREATOR),
 };
 
@@ -292,13 +303,14 @@ export function listPropertiesFitting<Column extends ListColumn>(
   );
 }
 
-/** The Board until its reader changes it: a column for every status, every one standing, the most pressing first, the settled finished in the past week, each card drawing all but its creator and when it was last updated. */
+/** The Board until its reader changes it: a column for every status, every one standing, the most pressing first, the settled finished in the past week, only the tasks at the top, each parent's card counting its sub-tasks, and each card drawing all but its creator and when it was last updated. */
 export const DEFAULT_BOARD_DISPLAY: TasksDisplay = {
   grouping: TASKS_GROUPING.STATUS,
   order: TASKS_ORDER.PRIORITY,
   emptyGroups: true,
   completed: COMPLETED_WINDOW.PAST_WEEK,
   pinnedFirst: false,
+  subTasks: false,
   properties: TASK_PROPERTY_ORDER.filter(
     (property) => property !== TASK_PROPERTY.UPDATED && property !== TASK_PROPERTY.CREATOR,
   ),
@@ -550,6 +562,30 @@ function standingTasks(
   return { standing, older };
 }
 
+/**
+ * The tasks that stand as the display lays out sub-tasks: all of them where
+ * it shows sub-tasks; else those at the top of the tree the standing nest
+ * into, as the sidebar nests them (`topTasks`), so a sub-task stands only
+ * under its standing ancestor, and the older at the top of the tree they
+ * nest into beside the standing, so "+ N older" counts only what showing
+ * them draws. A sub-task whose every ancestor the filter or the window
+ * leaves out stands on its own, as a pinned one does.
+ */
+function withSubTasksShown(
+  { standing, older }: StandingTasks,
+  every: readonly TaskSummary[],
+  display: TasksDisplay,
+): StandingTasks {
+  if (display.subTasks) return { standing, older };
+  const byId = tasksById(every);
+  const olderIds = new Set(older.map(taskIdOf));
+
+  return {
+    standing: topTasks(standing, byId),
+    older: topTasks([...standing, ...older], byId).filter((task) => olderIds.has(task.id)),
+  };
+}
+
 /** A priority's rank, the most pressing first. */
 function priorityRank(task: TaskSummary): number {
   return TASK_PRIORITY_ORDER.indexOf(priorityOf(task));
@@ -753,7 +789,9 @@ function groupedBy(
 /**
  * The List's groups: where the display leads with them, the pinned tasks
  * first, in the order handed, then each of the account's sections, in its
- * own order, then the rest under the grouping chosen. Every group holds only
+ * own order, then the rest under the grouping chosen, a sub-task among them
+ * under its parent alone where the display hides sub-tasks
+ * (`withSubTasksShown`). Every group holds only
  * the tasks that stand (`standingTasks`), and a task stands in one group
  * alone: a pin before its section, a section before its grouping's group.
  * Pinned left with no task is not drawn, though every section is, so a row
@@ -786,7 +824,8 @@ export function tasksListGroups(
     now: number;
   },
 ): readonly TasksGroup[] {
-  const { standing, older } = standingTasks(tasks, filter, display, now);
+  const stood = standingTasks(tasks, filter, display, now);
+  const { standing } = stood;
   const groups: TasksGroup[] = [];
   const placed = new Set<string>();
 
@@ -813,7 +852,9 @@ export function tasksListGroups(
     }
   }
 
-  const rest = standing.filter((task) => !placed.has(task.id));
+  // Note that a pin or a section takes its tasks before sub-tasks fold under their parents, so one the member put there stands there, as in the sidebar.
+  const folded = withSubTasksShown(stood, tasks, display);
+  const rest = folded.standing.filter((task) => !placed.has(task.id));
 
   const context = {
     filter,
@@ -824,7 +865,7 @@ export function tasksListGroups(
     members,
   };
 
-  return [...groups, ...groupedBy({ standing: rest, older }, context)];
+  return [...groups, ...groupedBy({ standing: rest, older: folded.older }, context)];
 }
 
 /**
@@ -857,7 +898,7 @@ export function tasksBoardColumns(
 ): readonly TasksGroup[] {
   const grouping = boardGrouping(display.grouping);
 
-  return groupedBy(standingTasks(tasks, filter, display, now), {
+  return groupedBy(withSubTasksShown(standingTasks(tasks, filter, display, now), tasks, display), {
     filter,
     display: { ...display, grouping },
     statusOrder: TASK_STATUS_ORDER,

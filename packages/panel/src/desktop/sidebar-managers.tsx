@@ -18,7 +18,7 @@
  * its head alone.
  */
 
-import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
+import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
 import type { TaskAgentPin } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
@@ -57,14 +57,14 @@ const MANAGER_NOUN: CountNoun = { one: "manager", many: "managers" };
 const MANAGERS_KEY = "managers";
 
 /** No Manager pinned, the same array every render. */
-const NO_MANAGERS: readonly AgentSummary[] = [];
+const NO_MANAGERS: readonly ListedAgent[] = [];
 
 /** No pull request, which a Manager's row never names, since a Manager opens none of its own. */
 const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
 /** The Managers the reader pinned, as Pinned draws them, and the agents control their rows act through. */
 export interface PinnedManagers {
-  readonly managers: readonly AgentSummary[];
+  readonly managers: readonly ListedAgent[];
   readonly agents: AgentsControl;
 }
 
@@ -109,7 +109,7 @@ export function ManagerRows({
   shown,
   onOpen,
 }: {
-  managers: readonly AgentSummary[];
+  managers: readonly ListedAgent[];
   agents: AgentsControl;
   tasks: TasksControl;
   /** Whether the rows are in sight, which their menus ask on. */
@@ -189,7 +189,7 @@ export function SidebarManagers({
   // The open Manager's row stands under the head while the section is folded, as Pinned's and Following's open rows do.
   const standing = listedManagers.filter((agent) => agent.id === openId);
 
-  const rows = (drawn: readonly AgentSummary[]) => (
+  const rows = (drawn: readonly ListedAgent[]) => (
     <ManagerRows managers={drawn} agents={agents} tasks={tasks} shown={shown} onOpen={onOpen} />
   );
 

@@ -1,4 +1,4 @@
-// native-provider-marks.ts -- writes or checks the iOS app's integration marks, each the desktop's own vector, from `ProviderMark`.
+// native-provider-marks.ts -- writes or checks the iOS app's integration and link site marks, each the desktop's own vector, from `ProviderMark`.
 
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -9,6 +9,7 @@ import {
   INTEGRATION_PROVIDER_LIST,
   type IntegrationProvider,
 } from "@repo/features/integration-wire";
+import { LINK_SITE_LIST, type LinkSite, linkSiteName } from "@repo/features/link-site";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ProviderMark } from "../src/marks/provider-mark.js";
@@ -20,6 +21,26 @@ import { ProviderMark } from "../src/marks/provider-mark.js";
  */
 const OUT = fileURLToPath(new URL("../../ui-native/assets/provider-marks/", import.meta.url));
 
+/** A mark the phone holds: an integration's, or a well-known site's a link's chip leads with, as the panel's `entity-mark.tsx` draws a link. */
+type NativeMark = IntegrationProvider | LinkSite;
+
+/** Every mark the phone holds, each once, since a site such as Gmail is an integration too. */
+const MARKS: readonly NativeMark[] = [
+  ...new Set<NativeMark>([...INTEGRATION_PROVIDER_LIST, ...LINK_SITE_LIST]),
+];
+
+/** What a mark is called, its title in its file: an integration's name, else its site's. */
+function markName(mark: NativeMark): string {
+  const integration = INTEGRATION_PROVIDER_LIST.find((each) => each === mark);
+
+  if (integration !== undefined) return INTEGRATION_NAME[integration];
+  const site = LINK_SITE_LIST.find((each) => each === mark);
+
+  if (site === undefined) throw new Error(`native-provider-marks: "${mark}" names no mark`);
+
+  return linkSiteName(site, "");
+}
+
 /** The desktop's stylesheet, which inks each mark a brand names one ink per ground for. */
 const DESKTOP_CSS = fileURLToPath(new URL("../../panel/src/styles/desktop.css", import.meta.url));
 
@@ -28,12 +49,12 @@ const NAMED_INK_RULE =
   /--integration-ink-([a-z-]+):\s*light-dark\(\s*([^,\s]+)\s*,\s*([^)\s]+)\s*\)/gu;
 
 /** The light and dark ink of each provider the desktop inks by its ground, read from its stylesheet, so the phone's marks follow it. */
-async function namedInks(): Promise<ReadonlyMap<IntegrationProvider, readonly [string, string]>> {
+async function namedInks(): Promise<ReadonlyMap<NativeMark, readonly [string, string]>> {
   const css = await readFile(DESKTOP_CSS, "utf8");
-  const inks = new Map<IntegrationProvider, readonly [string, string]>();
+  const inks = new Map<NativeMark, readonly [string, string]>();
 
   for (const [, provider, light, dark] of css.matchAll(NAMED_INK_RULE)) {
-    const named = INTEGRATION_PROVIDER_LIST.find((each) => each === provider);
+    const named = MARKS.find((each) => each === provider);
 
     if (named !== undefined && light !== undefined && dark !== undefined)
       inks.set(named, [light, dark]);
@@ -49,14 +70,14 @@ function escapedText(words: string): string {
 
 /** Each mark's files by name: a mark in `currentColor` with no named ink is a template, which iOS draws in the ink of its row. */
 function filesOf(
-  provider: IntegrationProvider,
-  inks: ReadonlyMap<IntegrationProvider, readonly [string, string]>,
+  provider: NativeMark,
+  inks: ReadonlyMap<NativeMark, readonly [string, string]>,
 ): ReadonlyMap<string, string> {
   const markup = renderToStaticMarkup(createElement(ProviderMark, { provider }))
     .replace(/ class="[^"]*"/g, "")
     .replace(/ (aria-hidden|focusable)="[^"]*"/g, "")
     .replace(/^<svg (?![^>]*xmlns=)/u, '<svg xmlns="http://www.w3.org/2000/svg" ')
-    .replace(/^(<svg[^>]*>)/u, `$1<title>${escapedText(INTEGRATION_NAME[provider])}</title>`);
+    .replace(/^(<svg[^>]*>)/u, `$1<title>${escapedText(markName(provider))}</title>`);
 
   const ink = inks.get(provider);
 
@@ -72,9 +93,7 @@ function filesOf(
 
 const inks = await namedInks();
 
-const wanted = new Map(
-  INTEGRATION_PROVIDER_LIST.flatMap((provider) => [...filesOf(provider, inks)]),
-);
+const wanted = new Map(MARKS.flatMap((provider) => [...filesOf(provider, inks)]));
 
 if (argv.includes("--check")) {
   const held = await readdir(OUT).catch(() => []);
@@ -93,7 +112,7 @@ if (argv.includes("--check")) {
 
   if (drifted.length > 0) {
     console.error(
-      `error: the iOS app's integration marks no longer match @repo/ui's (${drifted.join(", ")}); run pnpm --dir packages/ui exec tsx scripts/native-provider-marks.ts`,
+      `error: the iOS app's integration and site marks no longer match @repo/ui's (${drifted.join(", ")}); run pnpm --dir packages/ui exec tsx scripts/native-provider-marks.ts`,
     );
     exit(1);
   }

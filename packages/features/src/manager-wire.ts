@@ -5,13 +5,15 @@
  * workspace and working in the repositories it names, the first of them its
  * checkout. Its name is its title from the start, which no generated title
  * replaces. It runs where `runsOn` says, on the model and effort named, and
- * the account that makes it is its owner. The answer is a Start's
+ * the account that makes it is its owner. It wears the face the request
+ * picks, or else one the service picks for it. The answer is a Start's
  * (`agents.start`), so a panel that reads an agent on no task reads it.
  */
 
 import { Schema as EffectSchema } from "effect";
 import { AGENT_BOUNDS, agentRunsOnRequestSchema } from "./agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./link-grammar.js";
+import { managerFacePickSchema } from "./manager-face.js";
 import { workspaceIdSchema } from "./task-wire.js";
 import { trimmedText } from "./text-schema.js";
 
@@ -23,7 +25,8 @@ const MANAGER_BOUNDS = {
 /**
  * A Manager to make: the key a retry carries again, the workspace it stands
  * in, its name, its repositories (one or more, each once, the first its
- * checkout), where it runs, and its model and effort.
+ * checkout), where it runs, its model and effort, and the face it wears,
+ * the service's pick where none is named.
  */
 export const managerCreateRequestSchema = EffectSchema.Struct({
   idempotencyKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
@@ -36,6 +39,7 @@ export const managerCreateRequestSchema = EffectSchema.Struct({
   runsOn: agentRunsOnRequestSchema,
   model: trimmedText(AGENT_BOUNDS.MAX_CHOICE_CHARS),
   effort: trimmedText(AGENT_BOUNDS.MAX_CHOICE_CHARS),
+  face: EffectSchema.optionalKey(managerFacePickSchema),
 });
 
 export type ManagerCreateRequest = typeof managerCreateRequestSchema.Type;

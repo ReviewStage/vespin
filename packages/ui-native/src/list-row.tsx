@@ -56,7 +56,7 @@ import { Predicate } from "effect";
 import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { actContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
@@ -194,6 +194,8 @@ export type MenuChoice = {
   readonly symbol?: Glyph | undefined;
   /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
   readonly tone?: StatusTone | undefined;
+  /** A glyph drawn faint under its own in the same tone, as a priority's lit bars stand over every bar it can light (`MarkLayers`); none where its glyph stands alone. */
+  readonly under?: MarkLayer | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
   /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
@@ -370,6 +372,7 @@ export function choiceContent(choice: MenuChoice, colors: BrandColors) {
     undefined,
     choiceColor(choice, colors),
     choice.photo,
+    choice.under,
   );
 }
 

@@ -34,6 +34,7 @@ import {
   agentChangesAnswerSchema,
   agentChatHoldSchema,
   agentDeleteAnswerSchema,
+  agentFaceRequestSchema,
   agentListAnswerSchema,
   agentMoveRequestSchema,
   agentPageAnswerSchema,
@@ -237,7 +238,8 @@ const archivedQuery = EffectSchema.optionalKey(EffectSchema.String);
 
 /**
  * One change of an agent (PATCH): its title, its archive, its pin, the
- * reader's read mark, its MCP servers, its permission mode, or its model and effort, tried in that order.
+ * reader's read mark, its MCP servers, its permission mode, a Manager's
+ * face, or its model and effort, tried in that order.
  */
 const agentChangeRequestSchema = EffectSchema.Union([
   agentRenameRequestSchema,
@@ -246,6 +248,7 @@ const agentChangeRequestSchema = EffectSchema.Union([
   agentReadRequestSchema,
   agentServersRequestSchema,
   agentPermissionModeRequestSchema,
+  agentFaceRequestSchema,
   modelChoiceSchema,
 ]);
 

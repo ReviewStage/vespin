@@ -37,7 +37,7 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { useAnnounced, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL } from "./call.js";
-import { Composer, type ComposerMenu } from "./composer.js";
+import { Composer, type ComposerDictation, type ComposerMenu } from "./composer.js";
 import {
   type AttachedPicture,
   AttachedPictures,
@@ -330,6 +330,8 @@ type StartPageProps = {
   readonly chips: ReactNode;
   /** What stands at the end of the row under the field before Send, such as Model · Effort, as the desktop composer stands its model picker. */
   readonly trailing?: ReactNode;
+  /** Dictate before Send, and its strip while a dictation stands; none where the page takes none. */
+  readonly dictation?: ComposerDictation | undefined;
   /** Whether Start may be pressed now: there is something to start on, and no start is out. */
   readonly ready: boolean;
   readonly onStart: () => void;
@@ -424,6 +426,7 @@ export function StartPage(props: StartPageProps) {
           head={head}
           tools={chips}
           trailing={trailing}
+          dictation={props.dictation}
           autoFocus
           onDropPictures={props.onDropPictures}
           testIds={props.testIds}

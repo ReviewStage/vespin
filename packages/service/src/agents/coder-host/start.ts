@@ -52,6 +52,7 @@ import {
 import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import type { GitHubAccess } from "@repo/features/github-repositories-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { automationRun } from "@repo/features/model-label";
 import {
   agentFallbackChoice,
@@ -263,6 +264,8 @@ export type StartAsk = StartPlace & {
   readonly title?: string | undefined;
   /** What the agent is: a Manager, made on no task; none for a coder, as every other Start makes. */
   readonly kind?: AgentKind | undefined;
+  /** The face a Manager's creator picked; none for the service's pick, and for a coder. */
+  readonly face?: ManagerFace | undefined;
   /** What carried the prompt where something other than the Start did, which the first line says in place of its brief: a member's message to the Slack bot; none for every other Start. */
   readonly carried?: SlackLineMetadata | undefined;
   /** How the summary of the steps a replay cannot keep is written, for a Start from another agent; none leaves those steps out unsummarized. */
@@ -1099,6 +1102,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       startedByAgentId: ask.startedBy?.id,
       title: rules.title,
       kind: ask.kind,
+      face: ask.face,
       idempotencyKey: ask.idempotencyKey,
       model: choice.model,
       effort: choice.effort,

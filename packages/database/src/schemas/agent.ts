@@ -17,6 +17,7 @@ import {
 } from "@repo/features/agent-wire";
 import type { AutomationFiring } from "@repo/features/automation-wire";
 import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -314,6 +315,8 @@ export const agentTable = pgTable(
     publishedRead: jsonb("published_read").$type<StoredPublishedRead>(),
     /** When a Manager last sent its chat a message (`send_to_user`), which marks its row unread for each member who has not looked since (`agent-read.ts`); null before its first, and for a coder. */
     saidAt: timestamptz("said_at"),
+    /** A Manager's face (`@repo/features/manager-face`), picked as it is made (`manager-faces.ts`); null for a coder. */
+    face: jsonb("face").$type<ManagerFace>(),
     /** When the developer archived the agent; null while it is not. */
     archivedAt: timestamptz("archived_at"),
     /** Who archived the agent, and why; null while it is not, and for an archive no one was recorded for. */
