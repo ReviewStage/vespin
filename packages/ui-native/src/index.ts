@@ -87,6 +87,9 @@ export {
   type AttachedPicture,
   AttachedPictures,
   EditingLine,
+  type MentionSuggestion,
+  type MentionSuggestionGroup,
+  MentionSuggestions,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";

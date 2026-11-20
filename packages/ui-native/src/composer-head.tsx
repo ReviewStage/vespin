@@ -12,7 +12,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { GLYPH, glyphImage } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { AvatarPhoto } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -135,6 +135,156 @@ const SUGGESTIONS_SHOWN = 4;
 const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
 
 /**
+ * One row a composer's head offers over the field, as a `/` offers a skill
+ * and an `@` a mention: its glyph, its words, and a muted line after them,
+ * the row's whole width taking the press. Note that at an accessibility
+ * size its words wrap rather than cut.
+ */
+function SuggestionRow({
+  glyph,
+  title,
+  detail,
+  onPress,
+}: {
+  readonly glyph: Glyph;
+  readonly title: string;
+  readonly detail?: string | undefined;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  const large = useAccessibilitySize();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const lines = large ? [] : [lineLimit(1)];
+
+  return (
+    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(title)]}>
+      {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the row's words still picks it. */}
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[
+          frame({
+            minHeight: SUGGESTION_HEIGHT,
+            maxWidth: Number.POSITIVE_INFINITY,
+            alignment: "leading",
+          }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        <Image {...glyphImage(glyph)} size={size} color={colors.TEXT_MUTED} />
+        <VStack alignment="leading" spacing={1}>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
+              foregroundStyle(colors.TEXT),
+              ...lines,
+            ]}
+          >
+            {title}
+          </Text>
+          {detail === undefined || detail === "" ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                ...lines,
+              ]}
+            >
+              {detail}
+            </Text>
+          )}
+        </VStack>
+      </HStack>
+    </Button>
+  );
+}
+
+/** One thing an `@` offers: its id, the name it goes under, and what its row says after the name. */
+export type MentionSuggestion = {
+  readonly id: string;
+  readonly name: string;
+  readonly detail?: string | undefined;
+};
+
+/** A group of what an `@` offers, under the panel's heading, each row led by its kind's glyph. */
+export type MentionSuggestionGroup = {
+  readonly title: string;
+  readonly glyph: Glyph;
+  readonly rows: readonly MentionSuggestion[];
+};
+
+/**
+ * What an `@` being typed offers, as the panel's mention picker groups it:
+ * each group under its small muted heading, its rows led by their kind's
+ * glyph, a person's "You" or address and a task's key after the name, and
+ * the row picked written into the message; what stands where nothing
+ * matches said in the muted ink. It stands over the field inside the
+ * composer's glass, as the skills a `/` offers do, and scrolls past a few
+ * rows, so the field stays in sight over the keyboard.
+ */
+export function MentionSuggestions({
+  groups,
+  empty,
+  onPick,
+}: {
+  readonly groups: readonly MentionSuggestionGroup[];
+  /** What stands where nothing is offered, such as no result matching. */
+  readonly empty: string | undefined;
+  readonly onPick: (group: string, id: string) => void;
+}) {
+  const colors = useColors();
+  const large = useAccessibilitySize();
+
+  if (groups.length === 0) {
+    if (empty === undefined) return null;
+
+    return (
+      <Text
+        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+      >
+        {empty}
+      </Text>
+    );
+  }
+
+  const shown = groups.reduce((count, group) => count + group.rows.length, 0);
+
+  const rows = (
+    <VStack alignment="leading" spacing={SPACE.TIGHT}>
+      {groups.map((group) => (
+        <VStack key={group.title} alignment="leading" spacing={0}>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
+              foregroundStyle(colors.TEXT_MUTED),
+              SwiftModifiers.accessibilityAddTraits(["isHeader"]),
+            ]}
+          >
+            {group.title}
+          </Text>
+          {group.rows.map((row) => (
+            <SuggestionRow
+              key={row.id}
+              glyph={group.glyph}
+              title={row.name}
+              detail={row.detail}
+              onPress={() => onPick(group.title, row.id)}
+            />
+          ))}
+        </VStack>
+      ))}
+    </VStack>
+  );
+
+  if (large || shown <= SUGGESTIONS_SHOWN) return rows;
+
+  return (
+    <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
+      {rows}
+    </ScrollView>
+  );
+}
+
+/**
  * The skills a `/` being typed offers, as a list over the field inside the
  * composer's glass, right above the keyboard, as Messages offers its
  * suggestions: each its `/name` and a muted line of what it is for, written
@@ -153,10 +303,8 @@ export function SkillSuggestions({
   readonly onPick: (name: string) => void;
 }) {
   const colors = useColors();
+  // Note that at an accessibility size the list stands whole, since four rows of a fixed height showed about two.
   const large = useAccessibilitySize();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-  // Note that at an accessibility size a skill's name and what it is for wrap rather than cut, and the list stands whole, since four rows of a fixed height showed about two.
-  const lines = large ? undefined : 1;
 
   if (skills.length === 0) {
     if (empty === undefined) return null;
@@ -173,48 +321,13 @@ export function SkillSuggestions({
   const rows = (
     <VStack alignment="leading" spacing={0}>
       {skills.map((skill) => (
-        <Button
+        <SuggestionRow
           key={skill.name}
+          glyph={GLYPH.SKILL}
+          title={skill.word}
+          detail={skill.detail}
           onPress={() => onPick(skill.name)}
-          modifiers={[buttonStyle("plain"), accessibilityLabel(skill.word)]}
-        >
-          {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the skill's words still picks it. */}
-          <HStack
-            spacing={SPACE.ROW}
-            modifiers={[
-              frame({
-                minHeight: SUGGESTION_HEIGHT,
-                maxWidth: Number.POSITIVE_INFINITY,
-                alignment: "leading",
-              }),
-              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-            ]}
-          >
-            <Image {...glyphImage(GLYPH.SKILL)} size={glyph} color={colors.TEXT_MUTED} />
-            <VStack alignment="leading" spacing={1}>
-              <Text
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
-                  foregroundStyle(colors.TEXT),
-                  ...(lines === undefined ? [] : [lineLimit(lines)]),
-                ]}
-              >
-                {skill.word}
-              </Text>
-              {skill.detail === "" ? null : (
-                <Text
-                  modifiers={[
-                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                    foregroundStyle(colors.TEXT_MUTED),
-                    ...(lines === undefined ? [] : [lineLimit(lines)]),
-                  ]}
-                >
-                  {skill.detail}
-                </Text>
-              )}
-            </VStack>
-          </HStack>
-        </Button>
+        />
       ))}
     </VStack>
   );

@@ -74,6 +74,7 @@ import {
   HeldCallBanner,
   ListSection,
   MENU_CHIP_LOOK,
+  MentionSuggestions,
   MenuChip,
   MenuRow,
   type MenuRowAct,
@@ -361,6 +362,7 @@ function AgentComposerBar({
     composer.cancelMessageEdit === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
+    composer.mentions === undefined &&
     otherCall === undefined &&
     note === undefined ? undefined : (
       <>
@@ -372,6 +374,13 @@ function AgentComposerBar({
             skills={composer.skills.skills}
             empty={composer.skills.empty}
             onPick={composer.skills.pick}
+          />
+        )}
+        {composer.mentions === undefined ? null : (
+          <MentionSuggestions
+            groups={composer.mentions.groups}
+            empty={composer.mentions.empty}
+            onPick={composer.mentions.pick}
           />
         )}
         {composer.cancelMessageEdit === undefined ? null : (
