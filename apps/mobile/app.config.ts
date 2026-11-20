@@ -934,9 +934,9 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         ],
       },
       // Declared exempt from US export rules, so App Store Connect stops
-      // asking on every build: the app's one cipher of its own (the host's
-      // sealed files, `keychain-cipher.ts`) protects only its own data at
-      // rest, and everything on the wire is the system's HTTPS.
+      // asking on every build: the app has no cipher of its own, keeping its
+      // tokens in the system's Keychain and its files under the system's Data
+      // Protection, and everything on the wire is the system's HTTPS.
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
       // A call into an agent keeps on with the screen locked or another app
