@@ -1,0 +1,10 @@
+== bundle PJj9974ax3 base 6de874341d
+  built 6de874341d base app Vmain4.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-ax3: fails 1 shots 2 Swiping in UP direction on "Relay"... FAILED
+iphone-dark-ax3: fails 1 shots 2 Swiping in UP direction on "Relay"... FAILED
+ipad27-light-ax3: fails 1 shots 2 Swiping in UP direction on "Relay"... FAILED
+ipad27-dark-ax3: fails 1 shots 2 Swiping in UP direction on "Relay"... FAILED
