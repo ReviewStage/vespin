@@ -64,7 +64,8 @@ import { type AwaitingLineMetadata, storeWriter } from "@repo/database/models/wr
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { TOPIC } from "@repo/database/sync/notification";
 import { AGENT_PART, type AgentPart, agentPart } from "@repo/features/agent-parts";
-import { QUEUE_CHANGE, VOICE_SPEAKER } from "@repo/features/agent-wire";
+import { AGENT_KIND, type AgentKind, QUEUE_CHANGE, VOICE_SPEAKER } from "@repo/features/agent-wire";
+import { sentWords } from "@repo/features/manager-chat";
 import { toolCallView } from "@repo/features/tool-call-model";
 import { callLine } from "@repo/features/turn-rows";
 import {
@@ -208,12 +209,21 @@ function toolCallsOf(record: StoredMessageRecord): readonly { id: string; step: 
   });
 }
 
-/** A finished journal's reply: the summary of its last `end_turn` where one took it (`endTurnSummary`), or else the words of its last step, after every tool call, which are what the turn answered. */
-function replyOf(record: StoredMessageRecord): string {
+/**
+ * A finished journal's reply: for a Manager, whose plain text reaches no one,
+ * the words of the `send_to_user` calls it sent, in order (`sentWords`);
+ * otherwise, or where a Manager sent none, the summary of its last `end_turn`
+ * where one took it (`endTurnSummary`), or else the words of its last step,
+ * after every tool call, which are what the turn answered.
+ */
+function replyOf(record: StoredMessageRecord, kind: AgentKind): string {
+  const parts = record.message.parts.map((part) => partOf(part));
+  const sent = kind === AGENT_KIND.MANAGER ? parts.flatMap((part) => sentWords(part) ?? []) : [];
+
+  if (sent.length > 0) return sent.join("\n\n");
   const summary = endTurnSummary(record.message);
 
   if (summary !== undefined) return summary;
-  const parts = record.message.parts.map((part) => partOf(part));
 
   const lastStep = parts.findLastIndex(
     (part) => part.kind === AGENT_PART.TOOL || part.kind === AGENT_PART.STEP_START,
@@ -322,6 +332,7 @@ const toldFrom = Effect.fnUntraced(function* (holder: VoiceCallHolder, target: A
 const followed = Effect.fnUntraced(function* (
   holder: VoiceCallHolder,
   target: AgentTarget,
+  kind: AgentKind,
   from: number,
   offer: (event: AgentTurnEvent) => Effect.Effect<void>,
 ) {
@@ -391,7 +402,7 @@ const followed = Effect.fnUntraced(function* (
         return;
       }
 
-      const reply = replyOf(record);
+      const reply = replyOf(record, kind);
 
       if (reply !== "") yield* offer({ kind: AGENT_TURN.REPLY, text: reply });
       yield* offer({ kind: AGENT_TURN.ENDED });
@@ -558,7 +569,9 @@ export const voiceCallDelegations: VoiceCallObserver<
         onNone: () => Effect.void,
         onSome: (from) =>
           Effect.raceFirst(
-            followed(holder, target, from, (event) => offer({ from: VOICE_INPUT.AGENT, event })),
+            followed(holder, target, agent.kind, from, (event) =>
+              offer({ from: VOICE_INPUT.AGENT, event }),
+            ),
             carried,
           ),
       }),

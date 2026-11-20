@@ -7,6 +7,7 @@ import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { getTestDB } from "@repo/database/testing";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { LIVE_CLIENT_EVENT, LIVE_SERVER_EVENT } from "@repo/features/voice-delegation";
@@ -310,6 +311,56 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
         yield* endedAt(agent, RUN_STATUS.SUCCEEDED, 2_000, "Nothing else changed.");
         yield* sync.wake;
         assert.equal(yield* nextCommentary(told), "The docs are written.");
+        yield* Fiber.interrupt(holder);
+      });
+
+      yield* run.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            sync.layer,
+            takingHarness(yield* Queue.unbounded<string>()),
+            session.layer,
+          ),
+        ),
+      );
+    }).pipe(Effect.provide(world)),
+  );
+
+  it.effect("a Manager's turn is answered with what it sent with `send_to_user`", () =>
+    Effect.gen(function* () {
+      const { call, callerId, agentId } = yield* openCall;
+      const db = yield* Database;
+      yield* db
+        .update(agentTable)
+        .set({ kind: AGENT_KIND.MANAGER })
+        .where(eq(agentTable.id, agentId));
+      const told = yield* Queue.unbounded<{ readonly type: string }>();
+      const session = fakeLiveSession(undefined, told);
+      const sync = wakeableSync();
+      const ready = yield* Deferred.make<void>();
+      const agent = Option.getOrThrow(yield* readAgent(callerId, agentId));
+
+      const run = Effect.gen(function* () {
+        const holder = yield* Effect.forkChild(
+          holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, settingOut(ready)),
+        );
+
+        yield* Deferred.await(ready);
+
+        yield* endedAt(
+          agent,
+          RUN_STATUS.SUCCEEDED,
+          1_000,
+          "Checked the workers' status.",
+          TURN_FAILURE.MODEL,
+          undefined,
+          ["Both workers are green.", "The docs PR is up."],
+        );
+
+        // Note that a later turn follows, so a reply left untold shows as the wrong reply rather than a wait.
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, 2_000, "Nothing else changed.");
+        yield* sync.wake;
+        assert.equal(yield* nextCommentary(told), "Both workers are green.\n\nThe docs PR is up.");
         yield* Fiber.interrupt(holder);
       });
 

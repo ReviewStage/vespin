@@ -24,6 +24,7 @@ import { turnsBefore } from "@repo/database/models/message-reads";
 import { pendingRunnerHanded } from "@repo/database/models/runner-line-store";
 import { readTask } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import { EXPERIMENT } from "@repo/settings";
 import type { WireValue } from "@repo/wire";
 import { Effect, Option, Result, Schema } from "effect";
@@ -40,6 +41,7 @@ import {
   memoriesWithLead,
   movedWords,
   resizedWords,
+  SPOKEN_REPLY,
   savedByAnotherSince,
   type TurnHanded,
   TurnHandedSchema,
@@ -268,15 +270,23 @@ export function coderTurnMessage(
     const clock = { now, timeZone: zoned.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
 
-    // Note that only a spoken turn reads whether the agent ends its turns with `end_turn`, the one turn its words change on.
+    // Note that only a spoken turn of a coder reads whether the agent ends its turns with `end_turn`, the one turn its words change on, since a Manager's voice reads what it sends.
     const endsTurns =
       turn.spoken === true &&
+      agent.kind !== AGENT_KIND.MANAGER &&
       (yield* accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
         Effect.tapError(logStoreFailure),
         Effect.orElseSucceed(() => false),
       ));
 
-    const kind = turnKindWords(handed, turn.spoken === true, endsTurns);
+    const reply =
+      agent.kind === AGENT_KIND.MANAGER
+        ? SPOKEN_REPLY.SENT
+        : endsTurns
+          ? SPOKEN_REPLY.END_TURN
+          : SPOKEN_REPLY.FINAL;
+
+    const kind = turnKindWords(handed, turn.spoken === true, reply);
     const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
     const moved = handed.moved === undefined ? undefined : movedWords(handed.moved);
     const taskHanded = task === undefined ? handed.task : task.key;

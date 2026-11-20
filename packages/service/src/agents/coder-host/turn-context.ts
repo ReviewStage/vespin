@@ -153,14 +153,30 @@ export function taskKey(
   return contentKey(JSON.stringify(descriptionsOn ? handed : [...handed, { descriptionsOn }]));
 }
 
+/** What a spoken turn's voice reads aloud: the agent's final reply, its `end_turn` summary, or, for a Manager, what it sends with `send_to_user`. */
+export const SPOKEN_REPLY = {
+  FINAL: "final",
+  END_TURN: "end-turn",
+  SENT: "sent",
+} as const;
+
+type SpokenReply = (typeof SPOKEN_REPLY)[keyof typeof SPOKEN_REPLY];
+
+/** What a spoken turn is told the developer hears, by what its voice reads aloud. */
+const HEARD: Record<SpokenReply, string> = {
+  [SPOKEN_REPLY.FINAL]: "your final reply is what they hear",
+  [SPOKEN_REPLY.END_TURN]: "your final reply is what they hear",
+  [SPOKEN_REPLY.SENT]: `what you send with \`${AGENT_TOOL.SEND_TO_USER}\` is what they hear, and nothing else you write is`,
+};
+
 /**
  * What a spoken turn is told: the developer is speaking through a voice
  * that reads the agent's reply aloud, so the reply is short, plain, and
  * leads with what matters.
  */
-const SPOKEN_WORDS = `## This turn is spoken
+const spokenWords = (reply: SpokenReply) => `## This turn is spoken
 
-The developer is speaking to you through a voice that reads your replies aloud, so this turn's message is what they said, and your final reply is what they hear. Answer short, in plain facts: no Markdown, code blocks, or tables, and no file paths or links read out. Lead with the result and any decision waiting on the developer, a sentence or two at a time, and leave the detail to what you write to the task.`;
+The developer is speaking to you through a voice that reads your replies aloud, so this turn's message is what they said, and ${HEARD[reply]}. Answer short, in plain facts: no Markdown, code blocks, or tables, and no file paths or links read out. Lead with the result and any decision waiting on the developer, a sentence or two at a time, and leave the detail to what you write to the task.`;
 
 /** What a spoken turn is told beside them where the agent ends its turns with `end_turn`, whose summary the voice reads aloud. */
 const SPOKEN_END_TURN = `On a call, write \`${AGENT_TOOL.END_TURN}\`'s summary as plain sentences, not bullets or links.`;
@@ -168,6 +184,9 @@ const SPOKEN_END_TURN = `On a call, write \`${AGENT_TOOL.END_TURN}\`'s summary a
 /** The line a turn opens with after a spoken one, whose call's words still stand in the history. */
 const TYPED_AFTER_CALL =
   'This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: your words are read, and a question for the developer goes in a thread.';
+
+/** The line a Manager's turn opens with after a spoken one, whose messages are read in its chat. */
+const TYPED_AFTER_CALL_SENT = `This turn is typed (nothing you send is heard), so "This turn is spoken" above no longer holds: your \`${AGENT_TOOL.SEND_TO_USER}\` messages are read in your chat.`;
 
 /**
  * What a turn opens with of its kind: on a spoken turn the words for a reply
@@ -179,11 +198,17 @@ const TYPED_AFTER_CALL =
 export function turnKindWords(
   handed: TurnHanded,
   spoken: boolean,
-  endsTurns: boolean,
+  reply: SpokenReply,
 ): string | undefined {
-  if (spoken) return endsTurns ? `${SPOKEN_WORDS} ${SPOKEN_END_TURN}` : SPOKEN_WORDS;
+  if (spoken) {
+    const words = spokenWords(reply);
 
-  return handed.spoken === true ? TYPED_AFTER_CALL : undefined;
+    return reply === SPOKEN_REPLY.END_TURN ? `${words} ${SPOKEN_END_TURN}` : words;
+  }
+
+  if (handed.spoken !== true) return undefined;
+
+  return reply === SPOKEN_REPLY.SENT ? TYPED_AFTER_CALL_SENT : TYPED_AFTER_CALL;
 }
 
 /**

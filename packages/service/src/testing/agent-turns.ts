@@ -23,7 +23,7 @@ import { Effect } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { ACTION_RESULT_STATUS, unparsedWire } from "../core.js";
 
-/** One turn of the agent's, begun just before `at`, answered with the words given where some are, closed by an `end_turn` taken with the summary given where one is, and ended in the run status given at `at`, a failed one for `failure`; its id. */
+/** One turn of the agent's, begun just before `at`, answered with the words given where some are, each of `sent` sent to people by an accepted `send_to_user`, closed by an `end_turn` taken with the summary given where one is, and ended in the run status given at `at`, a failed one for `failure`; its id. */
 export const endedAt = (
   agent: Agent,
   status: RunStatus,
@@ -31,6 +31,7 @@ export const endedAt = (
   said?: string,
   failure: TurnFailure = TURN_FAILURE.MODEL,
   summary?: string,
+  sent: readonly string[] = [],
 ) =>
   Effect.gen(function* () {
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
@@ -58,11 +59,15 @@ export const endedAt = (
       answer.stepStart();
       answer.text(said);
 
-      if (summary !== undefined) {
+      const calls = [
+        ...sent.map((text) => ({ name: AGENT_TOOL.SEND_TO_USER, input: { text } })),
+        ...(summary === undefined ? [] : [{ name: AGENT_TOOL.END_TURN, input: { summary } }]),
+      ];
+
+      for (const { name, input } of calls) {
         const callId = randomUUID();
-        const input = { summary };
         answer.toolCall(
-          { callId, name: AGENT_TOOL.END_TURN, argumentsJson: JSON.stringify(input) },
+          { callId, name, argumentsJson: JSON.stringify(input) },
           unparsedWire(input),
         );
         answer.toolResult(callId, {

@@ -40,7 +40,7 @@ type ChatSender =
   | { readonly manager: false; readonly person: string | undefined };
 
 /** The words of a `send_to_user` call whose input is whole, but one its answer refused; none for any other part. */
-function sentWords(part: AgentPart): string | undefined {
+export function sentWords(part: AgentPart): string | undefined {
   if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.SEND_TO_USER) return undefined;
 
   // Note that a call still streaming its input holds only the start of its words, so it stands once they are whole.
