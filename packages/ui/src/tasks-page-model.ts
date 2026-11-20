@@ -1,4 +1,10 @@
-import { repositoryParts, TASK_ORDER, taskTime } from "@repo/features/task-list-model";
+import {
+  hasHeldAncestor,
+  repositoryParts,
+  TASK_ORDER,
+  tasksById,
+  taskTime,
+} from "@repo/features/task-list-model";
 import {
   DESCRIPTION_ACTOR,
   isTaskSettled,
@@ -24,7 +30,9 @@ import {
  * group with no task still stands, which of the settled, Done and Canceled,
  * stand beside the open work (none, those finished in the past week or
  * month, or all, as Linear's "completed issues" option reads, though a
- * settled status the filter names stands in full), whether the pins and the account's sections
+ * settled status the filter names stands in full), whether a sub-task
+ * stands beside its parent or only under it, as Linear's "Sub-issues"
+ * option reads, whether the pins and the account's sections
  * lead the List, and which of a task's properties its row or card draws.
  * The List and the Board each keep a display of their own, because a board
  * wants every column in sight and the finished work in its last one, where a
@@ -175,6 +183,8 @@ export interface TasksDisplay {
   readonly completed: CompletedWindow;
   /** Whether the pinned tasks, then the account's sections, lead the List before its groups. */
   readonly pinnedFirst: boolean;
+  /** Whether a sub-task stands beside its parent; off, it stands only under it, its parent's count saying how many there are (`withoutSubTasks`). */
+  readonly subTasks: boolean;
   /** The properties drawn, in `TASK_PROPERTY_ORDER`. */
   readonly properties: readonly TaskProperty[];
 }
@@ -222,13 +232,14 @@ export function keptTasksDisplay(kept: KeptTasksDisplay, initial: TasksDisplay):
   };
 }
 
-/** The List until its reader changes it: by status from the work under way, the most pressing first, nothing settled, the pins and sections leading, each row drawing all but its creator, its assignee saying who is on it. */
+/** The List until its reader changes it: by status from the work under way, the most pressing first, nothing settled, every sub-task beside its parent, the pins and sections leading, each row drawing all but its creator, its assignee saying who is on it. */
 export const DEFAULT_LIST_DISPLAY: TasksDisplay = {
   grouping: TASKS_GROUPING.STATUS,
   order: TASKS_ORDER.PRIORITY,
   emptyGroups: false,
   completed: COMPLETED_WINDOW.NONE,
   pinnedFirst: true,
+  subTasks: true,
   properties: TASK_PROPERTY_ORDER.filter((property) => property !== TASK_PROPERTY.CREATOR),
 };
 
@@ -292,13 +303,14 @@ export function listPropertiesFitting<Column extends ListColumn>(
   );
 }
 
-/** The Board until its reader changes it: a column for every status, every one standing, the most pressing first, the settled finished in the past week, each card drawing all but its creator and when it was last updated. */
+/** The Board until its reader changes it: a column for every status, every one standing, the most pressing first, the settled finished in the past week, only the tasks at the top, each parent's card counting its sub-tasks, and each card drawing all but its creator and when it was last updated. */
 export const DEFAULT_BOARD_DISPLAY: TasksDisplay = {
   grouping: TASKS_GROUPING.STATUS,
   order: TASKS_ORDER.PRIORITY,
   emptyGroups: true,
   completed: COMPLETED_WINDOW.PAST_WEEK,
   pinnedFirst: false,
+  subTasks: false,
   properties: TASK_PROPERTY_ORDER.filter(
     (property) => property !== TASK_PROPERTY.UPDATED && property !== TASK_PROPERTY.CREATOR,
   ),
@@ -547,7 +559,29 @@ function standingTasks(
     }
   }
 
-  return { standing, older };
+  return display.subTasks ? { standing, older } : withoutSubTasks({ standing, older }, tasks);
+}
+
+/**
+ * The standing tasks less each sub-task an ancestor of which stands too,
+ * so it stands under that ancestor's card alone, and the older less each
+ * one an ancestor of which stands or is older, so "+ N older" counts only
+ * what showing them draws. A sub-task whose every ancestor the filter or
+ * the window leaves out stands on its own, as a pinned one does, as the
+ * sidebar stands a child task where no parent of it stands (`withSubTasks`).
+ */
+function withoutSubTasks(
+  { standing, older }: StandingTasks,
+  every: readonly TaskSummary[],
+): StandingTasks {
+  const byId = tasksById(every);
+  const shown = new Set(standing.map(taskIdOf));
+  const kept = new Set([...shown, ...older.map(taskIdOf)]);
+
+  return {
+    standing: standing.filter((task) => !hasHeldAncestor(task, shown, byId)),
+    older: older.filter((task) => !hasHeldAncestor(task, kept, byId)),
+  };
 }
 
 /** A priority's rank, the most pressing first. */

@@ -113,7 +113,9 @@ import type { SettledPages } from "./use-settled-pages.js";
  * by, each a submenu with its choice checked, the Board offered only the
  * groupings a dragged card can be sent, and by a person only in a shared
  * workspace; then the switches, the pins and
- * sections leading the List, and empty groups; Show completed, which of the
+ * sections leading the List, empty groups, and Show sub-tasks, each
+ * sub-task beside its parent, which the Board starts with off, so a parent
+ * stands alone, its card counting its sub-tasks; Show completed, which of the
  * Done and Canceled tasks stand by when each was finished; then the
  * properties a row or a card draws; and Reset view while the view is not the
  * one it started as. A settled group the window leaves older tasks out of
@@ -138,6 +140,9 @@ export interface TasksViewFrame {
   /** Where the column a narrow room's Columns view shows is held across the page's visits; the view's own otherwise. */
   readonly column?: Store<string | undefined> | undefined;
 }
+
+/** What the switch is called that stands each sub-task beside its parent, as Linear's "Sub-issues" does, rather than only under it. */
+export const SHOW_SUB_TASKS = "Show sub-tasks";
 
 /** What the buttons are called, on their tooltips and their menus alike. */
 export const FILTER = "Filter";
@@ -746,6 +751,7 @@ function sameDisplay(a: TasksDisplay, b: TasksDisplay): boolean {
     a.emptyGroups === b.emptyGroups &&
     a.completed === b.completed &&
     a.pinnedFirst === b.pinnedFirst &&
+    a.subTasks === b.subTasks &&
     a.properties.length === b.properties.length &&
     a.properties.every((property) => b.properties.includes(property))
   );
@@ -819,6 +825,7 @@ function displayEntries({
             }),
           ]
         : []),
+      toggle(SHOW_SUB_TASKS, display.subTasks, { subTasks: !display.subTasks }),
     ],
     [
       {

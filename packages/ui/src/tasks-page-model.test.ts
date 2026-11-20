@@ -73,6 +73,7 @@ function task(
     updatedAt = 1,
     createdAt = updatedAt,
     completedAt,
+    parent,
   }: {
     status?: TaskStatus;
     priority?: TaskPriority;
@@ -82,6 +83,8 @@ function task(
     updatedAt?: number;
     createdAt?: number;
     completedAt?: number;
+    /** The name of the task it is a sub-task of. */
+    parent?: string;
   } = {},
 ): TaskSummary {
   return {
@@ -94,6 +97,7 @@ function task(
     ...(status === undefined ? undefined : { status }),
     ...(priority === undefined ? undefined : { priority }),
     ...(completedAt === undefined ? undefined : { completedAt }),
+    ...(parent === undefined ? undefined : { parentTaskId: parent }),
     ...(creator === undefined
       ? undefined
       : { ownerId: creator, createdBy: { userId: creator, name: NAMES.get(creator) ?? "" } }),
@@ -370,6 +374,43 @@ test("the Board stands a column for every status at first, empty ones too, the s
       ["priority", "none"],
       ["Unweighed", "Dropped"],
     ],
+  ]);
+});
+
+test("the Board at first stands a sub-task only under its parent, alone where the filter leaves every ancestor out, and none in the older count; Show sub-tasks stands each beside it", () => {
+  const tasks = [
+    task("Invites", { status: TASK_STATUS.IN_PROGRESS, assignee: MAYA }),
+    task("Invite email", { status: TASK_STATUS.TODO, parent: "Invites", assignee: DEAN }),
+    task("Invite copy", { status: TASK_STATUS.TODO, parent: "Invite email", assignee: DEAN }),
+    task("Old landing", {
+      status: TASK_STATUS.DONE,
+      parent: "Invites",
+      completedAt: NOW - 40 * DAY,
+    }),
+  ];
+
+  const board = (display: Partial<TasksDisplay>, filter: TasksFilter = NO_TASKS_FILTER) =>
+    tasksBoardColumns(tasks, {
+      filter,
+      display: { ...DEFAULT_BOARD_DISPLAY, emptyGroups: false, ...display },
+      readerId: DEAN,
+      personName: () => "",
+      members: [],
+      now: NOW,
+    });
+
+  expect(drawn(board({}))).toEqual([[["status", "in-progress"], ["Invites"]]]);
+  expect(board({}).some((column) => column.older !== undefined)).toBe(false);
+  expect(
+    drawn(board({}, toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.ASSIGNEE, DEAN))),
+  ).toEqual([[["status", "todo"], ["Invite email"]]]);
+  expect(drawn(board({ subTasks: true }))).toEqual([
+    [
+      ["status", "todo"],
+      ["Invite email", "Invite copy"],
+    ],
+    [["status", "in-progress"], ["Invites"]],
+    [["status", "done"], []],
   ]);
 });
 

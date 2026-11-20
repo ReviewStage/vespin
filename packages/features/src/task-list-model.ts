@@ -375,6 +375,15 @@ function heldAncestor(
   return undefined;
 }
 
+/** Whether a task has an ancestor `held` holds (`heldAncestor`), so it can stand under it rather than beside it; never a pinned one, which stands on its own. */
+export function hasHeldAncestor(
+  task: TaskSummary,
+  held: ReadonlySet<string>,
+  every: TasksById,
+): boolean {
+  return heldAncestor(task, (taskId) => held.has(taskId), every) !== undefined;
+}
+
 /** The task a task stands under where `tasks` holds it: its nearest ancestor `tasks` holds (`heldAncestor`). */
 function parentIn(
   task: TaskSummary,
