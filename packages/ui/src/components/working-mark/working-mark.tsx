@@ -9,8 +9,10 @@ import { useOnBeat } from "../time/time-clock.js";
  * the 16px icon seat: eight 3px cells lapped round a 3×3 grid, 2px apart.
  * Each pixel steps to the next cell on the one 200ms beat every mark shares
  * (`useOnBeat`), lapping the eight cells in 1.6s, so the motion is stepped
- * frames of `transform` alone, never lays anything out, and costs the window
- * a frame only when a pixel moves. Note that the beat writes the pixels'
+ * frames of `transform` alone and costs the window a frame only when a pixel
+ * moves. Note that the cells are HTML elements, not SVG shapes, because a
+ * style write on an SVG shape invalidates SVG layout on every beat, where a
+ * `transform` on an HTML box invalidates no layout at all. Note that the beat writes the pixels'
  * `transform`s straight onto them rather than rendering the mark again, so a
  * step runs no React; and that it is no CSS animation, because Chromium's
  * compositor runs a stepped loop on every vsync, which measured dearer than
@@ -21,9 +23,9 @@ import { useOnBeat } from "../time/time-clock.js";
  * is decorative; the seat it stands in names it. Its side is 16px unless a
  * container sets `--ui-working-mark-size`.
  *
- * It is drawn in the Tailwind theme's utilities: its size is fixed by the
- * `viewBox` the mark always carries, asked on the mark with that attribute
- * so a glyph's seat around it never stretches the grid.
+ * It is drawn in the Tailwind theme's utilities: every cell is placed and
+ * sized in percentages of the mark's side, so the grid scales with the side
+ * and a glyph's seat around it never stretches it.
  */
 
 /**
@@ -61,49 +63,48 @@ const TRACK = [
   [0, 1],
 ] as const;
 
-/** Where a cell's top-left corner stands in the mark, in CSS pixels. */
-interface CellCorner {
-  readonly x: number;
-  readonly y: number;
-}
+/** A cell's box in the mark, in percentages of its side, so the grid scales with the side. */
+function cellStyle(column: number, row: number): React.CSSProperties {
+  const percent = (pixels: number) => `${(pixels / SIDE) * 100}%`;
 
-/** The corner of the grid's cell at column `column` and row `row`. */
-function cellAt(column: number, row: number): CellCorner {
-  return { x: INSET + column * PITCH, y: INSET + row * PITCH };
+  return {
+    left: percent(INSET + column * PITCH),
+    top: percent(INSET + row * PITCH),
+    width: percent(CELL),
+    height: percent(CELL),
+  };
 }
 
 /** The `transform` that sets a pixel on the track cell at `index`, lapping past the last, from the first cell it is drawn on. */
 function cellTransform(index: number): string {
   const [column, row] = TRACK[index % TRACK.length] ?? TRACK[0];
+  // Note that a percentage in `translate` is of the pixel's own side, so one step is a pitch in cells.
+  const step = (cells: number) => `${Number(((cells * PITCH * 100) / CELL).toFixed(3))}%`;
 
-  return `translate(${column * PITCH}px, ${row * PITCH}px)`;
+  return `translate(${step(column)}, ${step(row)})`;
 }
 
 /** The moving pixels, on their resting cells until a beat moves them. */
 function WorkingDots({
   dotRefs,
 }: {
-  readonly dotRefs?: React.RefObject<(SVGRectElement | null)[]>;
+  readonly dotRefs?: React.RefObject<(HTMLSpanElement | null)[]>;
 }): React.JSX.Element {
   return (
     <>
       {WORKING_DOTS.map(({ dot, restsOn, tail }, index) => (
-        <rect
+        <span
           key={dot}
           ref={
             dotRefs === undefined
               ? undefined
-              : (rect) => {
-                  dotRefs.current[index] = rect;
+              : (cell) => {
+                  dotRefs.current[index] = cell;
                 }
           }
-          className={tail ? "ui-working-mark-dot opacity-60" : "ui-working-mark-dot"}
+          className={`ui-working-mark-dot absolute rounded-[25%] bg-current${tail ? " opacity-60" : ""}`}
           data-dot={dot}
-          style={{ transform: cellTransform(restsOn) }}
-          {...cellAt(0, 0)}
-          width={CELL}
-          height={CELL}
-          rx={CELL / 4}
+          style={{ ...cellStyle(0, 0), transform: cellTransform(restsOn) }}
         />
       ))}
     </>
@@ -112,13 +113,13 @@ function WorkingDots({
 
 /** The moving pixels stepping on the shared beat, each beat writing their `transform`s itself. */
 function LappingDots(): React.JSX.Element {
-  const dotRefs = useRef<(SVGRectElement | null)[]>([]);
+  const dotRefs = useRef<(HTMLSpanElement | null)[]>([]);
 
   const step = useCallback((beat: number) => {
     WORKING_DOTS.forEach(({ restsOn }, index) => {
-      const rect = dotRefs.current[index];
+      const cell = dotRefs.current[index];
 
-      if (rect) rect.style.transform = cellTransform(restsOn + beat);
+      if (cell) cell.style.transform = cellTransform(restsOn + beat);
     });
   }, []);
 
@@ -133,24 +134,18 @@ export function WorkingMark(): React.JSX.Element {
   const held = useMotionHeld();
 
   return (
-    <svg
-      className="ui-working-mark [&[viewBox]]:block [&[viewBox]]:size-working-mark [&[viewBox]]:flex-none [&[viewBox]]:fill-current"
-      width={SIDE}
-      height={SIDE}
-      viewBox={`0 0 ${SIDE} ${SIDE}`}
+    <span
+      className="ui-working-mark relative inline-block size-working-mark flex-none align-middle"
       aria-hidden="true"
     >
       {TRACK.map(([column, row], index) => (
-        <rect
+        <span
           key={index}
-          className="ui-working-mark-track opacity-30"
-          {...cellAt(column, row)}
-          width={CELL}
-          height={CELL}
-          rx={CELL / 4}
+          className="ui-working-mark-track absolute rounded-[25%] bg-current opacity-30"
+          style={cellStyle(column, row)}
         />
       ))}
       {held ? <WorkingDots /> : <LappingDots />}
-    </svg>
+    </span>
   );
 }
