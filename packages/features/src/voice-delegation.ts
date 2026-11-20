@@ -10,16 +10,25 @@
  * Both sides are kept as text, one line to each utterance, recorded under an
  * id the loop derives from the event its first fragment came in (`lineId`),
  * since GPT-Live's deltas carry no item id and no event ends an utterance:
- * only a fragment and its interval on the session's timeline. An utterance is one speaker's run of fragments: it ends where
- * the other speaker starts, where a delegation takes the caller's words, or
- * after a silence of more than `SILENCE_SPLIT_MS`. A fragment that started
- * before the other speaker's open utterance did is a late one, as the
- * caller's transcript lags the audio, and grows its own speaker's last line
- * instead. A line is recorded as it opens, so the rows stand in the order
- * they were said, and again each time a fragment grows it, under the same
- * id, with the span it was said over and the event it took last, which the
- * service writes in place, so the stored lines are all a later holder of
- * the call needs to go on from.
+ * only a fragment and its interval on the session's timeline. An utterance
+ * is one speaker's run of fragments. The caller's ends where a delegation
+ * takes the caller's words, or once the caller has been silent for more than
+ * `SILENCE_SPLIT_MS`, which a fragment of either speaker's can show
+ * (`splitBefore`); the voice speaking never ends it, since the voice's
+ * backchannels ("mm.", "yes,") cut one sentence of the caller's into many
+ * (Charles, Nov 19). The voice's ends where the caller starts a line, or
+ * after that silence of its own. What the voice says while the caller's line
+ * is open is held as one line of the voice's, which takes no row until the
+ * caller's line ends, so it stands after it, and grows on from there as the
+ * voice goes on. A fragment that started before the other speaker's open
+ * utterance did is a late one, as the caller's transcript lags the audio,
+ * and grows its own speaker's last line instead. A line is recorded as it
+ * opens, or as a held one is let go, so the rows stand in the order they
+ * open, and again each time a fragment grows it, under the same id, with the
+ * span it was said over and the event it took last, which the service writes
+ * in place, so the stored lines are all a later holder of the call needs to
+ * go on from. A held line is stored nowhere, so a holder taking the call
+ * over keeps of it only what the session replays.
  *
  * A delegation hands the agent the caller's lines since the one before it,
  * by their ids, so the service starts the turn on the rows already written
@@ -239,8 +248,10 @@ interface VoiceState {
   readonly handedOn: ReadonlySet<string>;
   /** The caller's lines since the last delegation took them, oldest first; the last grows. */
   readonly heard: readonly Line[];
-  /** The voice's latest line, which grows. */
+  /** The voice's latest recorded line, which grows. */
   readonly voiced: Line | undefined;
+  /** What the voice said while the caller's line stands open, recorded only once that line ends; only while the caller's is the open line. */
+  readonly held: Line | undefined;
   /** The speaker whose line is open, or null where none is. */
   readonly open: VoiceSpeaker | null;
   /** Whether the agent's turn runs, so a delegation is queued rather than sent. */
@@ -400,14 +411,23 @@ function stood(state: VoiceState): Step {
   return [state, []];
 }
 
-/** The open line closed and recorded as it stands, where one is open. */
+/**
+ * The open line closed and recorded as it stands, where one is open, and the
+ * voice's held line let go after it: recorded, so it takes its row after the
+ * caller's, and left open, since the voice may still be saying it.
+ */
 function closedOpen(state: VoiceState): Step {
   const line = state.open === null ? undefined : growingLine(state, state.open);
+  const [kept, closing] = line === undefined ? [undefined, []] : recorded(line);
+  const closed = { ...(kept === undefined ? state : withLine(state, kept, false)), open: null };
 
-  if (line === undefined) return [{ ...state, open: null }, []];
-  const [kept, outputs] = recorded(line);
+  if (state.held === undefined) return [closed, closing];
+  const [voiced, letGo] = recorded(state.held);
 
-  return [{ ...withLine(state, kept, false), open: null }, outputs];
+  return [
+    { ...closed, voiced, held: undefined, open: VOICE_SPEAKER.VOICE },
+    [...closing, ...letGo],
+  ];
 }
 
 /**
@@ -433,12 +453,58 @@ function laterEnd(standing: number | undefined, given: number | undefined): numb
 }
 
 /**
+ * Whether a line ends before a fragment of its speaker's, or, for the
+ * caller's open line, of the voice's, starting then: where a silence longer
+ * than `SILENCE_SPLIT_MS` came since the line's last fragment ended. This is
+ * the one rule that ends a line by time, so a bound on how long a line may
+ * grow belongs here too.
+ */
+function splitBefore(line: Line | undefined, startMs: number | undefined): boolean {
+  return (
+    line?.endMs !== undefined && startMs !== undefined && startMs - line.endMs > SILENCE_SPLIT_MS
+  );
+}
+
+/** The line grown by a fragment, which it took last. */
+function grown(line: Line, delta: TranscriptDelta, endMs: number | undefined): Line {
+  return {
+    ...line,
+    text: line.text + delta.delta,
+    startMs: line.startMs ?? delta.start_ms,
+    endMs: laterEnd(line.endMs, endMs),
+    eventId: delta.event_id,
+  };
+}
+
+/** A line opened by its first fragment, its id derived from the fragment's event, recorded as yet by nothing. */
+function openedLine(
+  state: VoiceState,
+  speaker: VoiceSpeaker,
+  delta: TranscriptDelta,
+  endMs: number | undefined,
+): Line {
+  return {
+    speaker,
+    id: state.lineId(delta.event_id),
+    text: delta.delta,
+    recorded: "",
+    startMs: delta.start_ms,
+    endMs,
+    eventId: delta.event_id,
+  };
+}
+
+/**
  * Where a fragment goes: nowhere where its speaker's stored line took it
- * already (`replayed`); onto its speaker's growing line where no long
- * silence came before the fragment, while that line is open or where the
- * other speaker's line is open and began after the fragment did, as a late
- * one; or a new line otherwise, which closes the other speaker's open line
- * unless the fragment is late. Every line it grows or opens is recorded.
+ * already (`replayed`); for the voice's while the caller's line is open and
+ * the fragment is not late, into the voice's held line, recorded nothing,
+ * unless the caller has been silent past the split, which ends the caller's
+ * line first; onto its speaker's growing line where no long silence came
+ * before the fragment, while that line is open or where the other speaker's
+ * line is open and began after the fragment did, as a late one; or a new
+ * line otherwise, which closes the other speaker's open line unless the
+ * fragment is late. Every line it grows or opens outside the held one is
+ * recorded.
  */
 function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
   const speaker = SPEAKER_OF_DELTA[delta.type];
@@ -467,36 +533,34 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
   const late =
     other?.startMs !== undefined && delta.start_ms !== undefined && delta.start_ms < other.startMs;
 
-  const silent =
-    own?.endMs !== undefined &&
-    delta.start_ms !== undefined &&
-    delta.start_ms - own.endMs > SILENCE_SPLIT_MS;
+  // Note that the voice speaking over the caller's open line ends it only once the caller has been silent past the split.
+  if (speaker === VOICE_SPEAKER.VOICE && state.open === VOICE_SPEAKER.CALLER && !late) {
+    if (splitBefore(other, delta.start_ms)) {
+      const [closed, closing] = closedOpen(state);
+      const [next, outputs] = heardFragment(closed, delta);
 
+      return [next, [...closing, ...outputs]];
+    }
+
+    const held =
+      state.held === undefined
+        ? openedLine(state, speaker, delta, endMs)
+        : grown(state.held, delta, endMs);
+
+    return [{ ...state, held }, []];
+  }
+
+  const silent = splitBefore(own, delta.start_ms);
   const grows = own !== undefined && !silent && (state.open === speaker || late);
 
   if (grows) {
-    const [kept, outputs] = recorded({
-      ...own,
-      text: own.text + delta.delta,
-      startMs: own.startMs ?? delta.start_ms,
-      endMs: laterEnd(own.endMs, endMs),
-      eventId: delta.event_id,
-    });
+    const [kept, outputs] = recorded(grown(own, delta, endMs));
 
     return [withLine(state, kept, false), outputs];
   }
 
   const [closed, closing] = late ? stood(state) : closedOpen(state);
-
-  const [kept, opening] = recorded({
-    speaker,
-    id: state.lineId(delta.event_id),
-    text: delta.delta,
-    recorded: "",
-    startMs: delta.start_ms,
-    endMs,
-    eventId: delta.event_id,
-  });
+  const [kept, opening] = recorded(openedLine(state, speaker, delta, endMs));
 
   const opened = withLine(closed, kept, true);
 
@@ -651,6 +715,7 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
         start.lines.some((stored) => stored.id === line.id && !stored.delegated),
     ),
     voiced,
+    held: undefined,
     open: newest === undefined || newest.delegated ? null : newest.speaker,
     working: start.agentWorking,
     answering: start.answering,
@@ -662,7 +727,7 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
  * The delegation loop over a call's inputs, merged into one stream by the
  * caller, answering what to send the agent and what to tell the voice, in
  * order; it ends once GPT-Live closes the session or the input ends, with
- * the line open then recorded.
+ * the line open then recorded, and the voice's held line after it.
  */
 export function voiceDelegations<E, R>(
   inputs: Stream.Stream<VoiceInput, E, R>,
@@ -675,7 +740,7 @@ export function voiceDelegations<E, R>(
       (input) => input.from === VOICE_INPUT.LIVE && input.event.type === LIVE_SERVER_EVENT.CLOSED,
       { excludeLast: true },
     ),
-    // The line open as the call ends is recorded as it stands.
+    // The line open as the call ends is recorded as it stands, and the voice's held line after it.
     Stream.mapAccum(() => startedVoiceLoop(start), stepped, {
       onHalt: (state) => closedOpen(state)[1],
     }),

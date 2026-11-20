@@ -234,9 +234,9 @@ it.effect(
       const outputs = yield* wordsOutOf([
         said("What's left", 0, 400),
         said(" on the task?", 400, 900),
-        voiced("Only the", 1200, 1500),
-        voiced(" docs.", 1500, 1800),
-        said("Then write them.", 2400, 3000),
+        voiced("Only the", 1200, 2500),
+        voiced(" docs.", 4000, 4400),
+        said("Then write them.", 4600, 5000),
         delegation("item_1"),
       ]);
 
@@ -256,13 +256,44 @@ it.effect(
     }),
 );
 
+it.effect(
+  "the voice's interjections leave the caller's words one line, and stand as one line after it",
+  () =>
+    Effect.gen(function* () {
+      const outputs = yield* wordsOutOf([
+        said("Mintlify", 0, 600),
+        voiced("mm.", 700, 900),
+        said(" though", 1000, 1400),
+        voiced(" Yes,", 1500, 1700),
+        said(" Mintlify, right", 1800, 2600),
+        voiced(" that's right.", 2700, 3200),
+        said(" 'Kay", 3300, 3500),
+        delegation("item_1"),
+      ]);
+
+      assert.deepEqual(outputs, [
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify"),
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify though"),
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify though Mintlify, right"),
+        record(VOICE_SPEAKER.CALLER, "line_1", "Mintlify though Mintlify, right 'Kay"),
+        record(VOICE_SPEAKER.VOICE, "line_2", "mm. Yes, that's right."),
+        {
+          kind: VOICE_OUTPUT.SEND,
+          text: "Mintlify though Mintlify, right 'Kay",
+          delegationId: "item_1",
+          lines: ["line_1"],
+        },
+      ]);
+    }),
+);
+
 it.effect("a caller's fragment that started before the voice's line grows the caller's line", () =>
   Effect.gen(function* () {
     const outputs = yield* wordsOutOf([
       said("Is the build", 0, 500),
-      voiced("It is", 1200, 1500),
+      voiced("It is", 4000, 4300),
       said(" green?", 500, 900),
-      voiced(" green.", 1500, 1800),
+      voiced(" green.", 4300, 4600),
     ]);
 
     assert.deepEqual(outputs, [
