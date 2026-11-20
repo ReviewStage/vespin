@@ -1055,21 +1055,26 @@ export function runNowAction(running: boolean, onRunNow: () => void): MenuAction
 /**
  * An automation's own acts, as its row and its editor's ⋯ offer them alike:
  * Copy link, where the page hands down a workspace; Run now, where it can
- * run; and Delete, red, which asks first, last and alone.
+ * run; Take over, where its creator left and the reader may take it; and
+ * Delete, red, which asks first, last and alone.
  */
 export function automationActionGroups({
   links,
   runNow,
+  takeOver,
   onDelete,
 }: {
   /** Copy link and Open in new tab (`linkItems`); none where the page hands down no workspace. */
   links: readonly MenuAction[];
   runNow: MenuAction | undefined;
+  /** Take over, offered an owner or an admin where the automation's creator left the workspace; none elsewhere. */
+  takeOver?: MenuAction | undefined;
   onDelete: () => void;
 }): MenuAction[][] {
   return [
     [...links],
     runNow === undefined ? [] : [runNow],
+    takeOver === undefined ? [] : [takeOver],
     [{ label: "Delete", icon: <GLYPH.DELETE />, onSelect: onDelete, danger: true }],
   ].filter((group) => group.length > 0);
 }

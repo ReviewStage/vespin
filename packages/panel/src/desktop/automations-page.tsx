@@ -25,7 +25,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TRIGGER_PROVIDER, type TriggerProvider } from "@repo/features/trigger-catalog";
 import { managesWorkspace } from "@repo/features/workspace-role";
-import type { Workspace } from "@repo/features/workspace-wire";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, type Experiment, experimentOn, INTRO } from "@repo/settings";
 import {
@@ -67,7 +67,7 @@ import {
   useMinute,
   VisuallyHidden,
 } from "@repo/ui";
-import { ACTOR_KIND, actorName } from "@repo/ui/actor-model";
+import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -92,7 +92,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useToast } from "../toast.js";
 import { useExperimentsIn } from "../workspace-experiments.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
-import { rowMenu } from "./action-menu.js";
+import { type MenuAction, rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
 import {
   AutomationEditor,
@@ -292,6 +292,55 @@ function useRunNow(automationId: string): UseRunNowResult {
   return { running: runAutomation.isPending, run };
 }
 
+/** What a refused Take over says. */
+const TAKE_OVER_REFUSED = "Couldn't take over this automation.";
+
+/** The roles that take over an automation whose creator left the workspace. */
+const TAKING_ROLES: ReadonlySet<string> = new Set([WORKSPACE_ROLE.OWNER, WORKSPACE_ROLE.ADMIN]);
+
+/**
+ * Take over from a row's menu, offered an owner or an admin of the
+ * workspace where the automation's creator left it: the automation becomes
+ * the reader's, off until they turn it on, and a refusal is said in a toast,
+ * as Run now's is.
+ */
+function useTakeOver(
+  automation: AutomationSummary,
+  workspace: Workspace | undefined,
+  onTakeOver: () => Promise<AutomationWriteAnswer>,
+): MenuAction | undefined {
+  const toast = useToast();
+
+  const maker = useCreator(
+    automation.creatorId === undefined ? {} : { ownerId: automation.creatorId },
+  );
+
+  const left = maker.kind === ACTOR_KIND.SOMEONE && maker.reason === SOMEONE_REASON.FORMER;
+
+  if (!left || workspace === undefined || !TAKING_ROLES.has(workspace.role)) return undefined;
+
+  return {
+    label: "Take over",
+    icon: <GLYPH.PERSON />,
+    onSelect: () => {
+      void onTakeOver().then((answer) => {
+        if ("failure" in answer) {
+          toast({
+            words: TAKE_OVER_REFUSED,
+            replayUnmasked: true,
+            tone: STATUS_TONE.DANGER,
+            failure: {
+              surface: FAILURE_SURFACE.AUTOMATION_SAVE,
+              cause: answer,
+              about: { automationId: automation.id },
+            },
+          });
+        }
+      });
+    },
+  };
+}
+
 /**
  * One automation's row: its tile, the glyph of what fires it wearing where its newest run
  * stands, its name over what fires it, who made it, when it runs next with a
@@ -314,6 +363,7 @@ function AutomationRow({
   narrow,
   onOpen,
   onToggle,
+  onTakeOver,
   onDelete,
 }: {
   automation: AutomationSummary;
@@ -322,10 +372,13 @@ function AutomationRow({
   narrow: boolean;
   onOpen: () => void;
   onToggle: (enabled: boolean) => Promise<AutomationWriteAnswer>;
+  /** Makes it the reader's, where its creator left. */
+  onTakeOver: () => Promise<AutomationWriteAnswer>;
   /** Asks whether to delete it. */
   onDelete: () => void;
 }): React.JSX.Element {
   const runNow = useRunNow(automation.id);
+  const takeOver = useTakeOver(automation, workspace, onTakeOver);
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const next = automationNext(automation);
   const nextWords = automationNextText(automation, now);
@@ -396,6 +449,7 @@ function AutomationRow({
           automationActionGroups({
             links,
             runNow: runNowAction(runNow.running, runNow.run),
+            takeOver,
             onDelete,
           }),
           undefined,
@@ -415,6 +469,7 @@ interface AutomationRowsShown {
   narrow: boolean;
   onOpen: (automation: AutomationSummary) => void;
   onToggle: (automation: AutomationSummary, enabled: boolean) => Promise<AutomationWriteAnswer>;
+  onTakeOver: (automation: AutomationSummary) => Promise<AutomationWriteAnswer>;
   onDelete: (automation: AutomationSummary) => void;
 }
 
@@ -444,6 +499,7 @@ function AutomationGroupRows({
           narrow={shown.narrow}
           onOpen={() => shown.onOpen(automation)}
           onToggle={(enabled) => shown.onToggle(automation, enabled)}
+          onTakeOver={() => shown.onTakeOver(automation)}
           onDelete={() => shown.onDelete(automation)}
         />
       ))}
@@ -764,7 +820,7 @@ function ListPage({
   const now = useMinute();
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
-  const { read, reload, toggle } = automations;
+  const { read, reload, toggle, change } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
   const groups = automationGroups(listed);
 
@@ -821,6 +877,9 @@ function ListPage({
                 door.open({ kind: AUTOMATIONS_PAGE.EDIT, automationId: automation.id })
               }
               onToggle={(automation, enabled) => toggle(automation.id, enabled)}
+              onTakeOver={(automation) =>
+                change({ automationId: automation.id, change: { takeOver: true } })
+              }
               onDelete={deletion.ask}
             />
             <SuggestedAutomations tasks={tasks} listed={listed} />

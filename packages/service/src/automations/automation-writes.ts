@@ -13,6 +13,7 @@ import {
   listAutomationRuns,
   readAutomation,
   recordAutomationRun,
+  takeOverAutomationCommitted,
   updateAutomationCommitted,
 } from "@repo/database/models/automation-store";
 import { isWorkspaceMember, personalWorkspaceOf } from "@repo/database/models/workspace-store";
@@ -556,6 +557,36 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * An automation whose creator left the workspace taken over by an owner or
+ * an admin of it, answered as it then stands: theirs, off until they turn
+ * it on, its schedule kept off with it. A take-over is asked alone, and one
+ * the account may not take is refused as not permitted.
+ */
+const takenOverAs = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  standing: Automation,
+  asked: typeof automationChangeRequestSchema.Type,
+  source: (typeof SERVER_AUTOMATION_SOURCE)[keyof typeof SERVER_AUTOMATION_SOURCE],
+) {
+  if (Object.keys(asked).length > 1) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  const written = yield* hostedStoreOrUnavailable(takeOverAutomationCommitted(userId, standing.id));
+
+  if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  yield* cadenceOrUnavailable((yield* AutomationCadence).keep(written.value.automation));
+  yield* recordServerEvent(
+    SERVER_EVENT.AUTOMATION_CHANGE,
+    { userId, workspaceId: standing.organizationId },
+    { action: SERVER_AUTOMATION_CHANGE_ACTION.EDIT, source },
+  );
+
+  return {
+    automation: yield* summaryOf(userId, written.value.automation),
+    webhookSecret: undefined,
+    txid: written.value.txid,
+  };
+});
+
+/**
  * One automation the account reads changed as the request asks, answered as
  * it then stands; one it reads but may not change, or turn on or off where
  * the request names `enabled` alone, is refused as not permitted. A
@@ -573,6 +604,7 @@ export const changeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   HostedRefusal,
   DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
+  if (asked.takeOver === true) return yield* takenOverAs(userId, standing, asked, source);
   const { changes, webhookSecret } = yield* changesOf(userId, standing, asked);
 
   // Turning it on or off alone is the toggle, which more of the workspace may do than change it; a machine is a change.
