@@ -263,6 +263,20 @@ none added, since an added highlight drew a second platter of glass over a
 button's own on iPadOS 26. No Maestro flow can drag or hover, so these are
 checked by hand on an iPad with a trackpad.
 
+## The pill field module
+
+`@repo/ui-native`'s `PillField` draws mentions and files' markers as pills
+inside the words, as the desktop's box draws its chips, while its value stays
+the Markdown the wire carries. It is the app's own native module, autolinked
+from `modules/pill-field/`: UIKit's text view on TextKit 2, each pill an
+attachment whose view is the chip. The Swift reads no Markdown: JavaScript
+hands it the words as runs (`@repo/features/pill-words`), each pill with the
+Markdown it is written back as, its words and glyph (`pill-look.ts`), and it
+writes the Markdown back with each pill's in its place. Its scratch page,
+`-pillField true` beside `-fixture inbox`, is what `maestro/pill-field.yaml`
+shoots; the composers and the description editor move onto it one surface at
+a time.
+
 ## The rich copy module
 
 A draft's Copy message puts one pasteboard item holding the body's HTML, the

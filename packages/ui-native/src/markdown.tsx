@@ -1,7 +1,7 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, drafts to send elsewhere, links, mention chips, and pictures that open full screen and zoom.
 
 import { readerZone } from "@repo/features/date-mention";
-import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
+import { ENTITY_KIND, entityWordHeard } from "@repo/features/entity-kind";
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
@@ -32,6 +32,7 @@ import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
 import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
+import { ENTITY_GLYPH } from "./entity-glyph.js";
 import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeeping, useKeptActs, useQuickLook } from "./held-menu.js";
@@ -65,52 +66,6 @@ import { type BrandColors, type StatusTone, toneColor, useColors } from "./token
 import { RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
-
-/**
- * The glyph each kind of entity leads its chip with, as the panel's
- * `entity-mark.tsx` gives each kind its own Lucide glyph; a person, the app,
- * and an MCP server or tool, which the panel marks with a face or a mark of
- * its own, lead with SF Symbols' nearest.
- */
-const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
-  [ENTITY_KIND.PLAN]: GLYPH.TASK,
-  [ENTITY_KIND.SECTION]: GLYPH.HEADING,
-  [ENTITY_KIND.VERSION]: GLYPH.TASK,
-  [ENTITY_KIND.COMMENT]: GLYPH.COMMENT,
-  [ENTITY_KIND.PAGE]: GLYPH.PAGE,
-  [ENTITY_KIND.AGENT]: GLYPH.AGENT,
-  [ENTITY_KIND.WORKER]: GLYPH.AGENT,
-  [ENTITY_KIND.APP]: GLYPH.APP,
-  [ENTITY_KIND.CHANGES]: GLYPH.CHANGES,
-  [ENTITY_KIND.PULL_REQUEST]: GLYPH.PULL_REQUEST,
-  [ENTITY_KIND.PULL_REQUEST_THREAD]: GLYPH.COMMENT,
-  [ENTITY_KIND.ISSUE]: GLYPH.ISSUE,
-  [ENTITY_KIND.LINK]: GLYPH.GLOBE,
-  [ENTITY_KIND.MESSAGE]: GLYPH.COMMENT,
-  [ENTITY_KIND.HOME]: GLYPH.HOME,
-  [ENTITY_KIND.BOARD]: GLYPH.TASK,
-  [ENTITY_KIND.INBOX]: GLYPH.INBOX,
-  [ENTITY_KIND.INBOX_ITEM]: GLYPH.INBOX,
-  [ENTITY_KIND.AUTOMATIONS]: GLYPH.AUTOMATION,
-  [ENTITY_KIND.AUTOMATION]: GLYPH.AUTOMATION,
-  [ENTITY_KIND.AUTOMATION_RUN]: GLYPH.AUTOMATION,
-  [ENTITY_KIND.SETTINGS]: GLYPH.SETTINGS,
-  [ENTITY_KIND.PERSON]: GLYPH.FACE,
-  [ENTITY_KIND.ADMIN]: GLYPH.ADMIN,
-  [ENTITY_KIND.FILE]: GLYPH.FILE,
-  [ENTITY_KIND.FOLDER]: GLYPH.FOLDER,
-  [ENTITY_KIND.SERVER]: GLYPH.MCP_SERVER,
-  [ENTITY_KIND.TOOL]: GLYPH.MCP_TOOL,
-  [ENTITY_KIND.SKILL]: GLYPH.SKILL,
-  [ENTITY_KIND.REPOSITORY]: GLYPH.REPOSITORY,
-  [ENTITY_KIND.WORKSPACE]: GLYPH.WORKSPACE,
-  [ENTITY_KIND.DATE]: GLYPH.DATE,
-  // Note that an app on a Mac is never read from the phone, so it wears an app's shape rather than its icon.
-  [ENTITY_KIND.MAC_APP]: GLYPH.APP,
-  [ENTITY_KIND.COMPUTER]: GLYPH.COMPUTER_USE,
-  // Note that a machine's link names its id alone, and the phone reads no machine for its platform, so it wears a Mac's shape.
-  [ENTITY_KIND.MACHINE]: GLYPH.MAC,
-};
 
 /** Each heading level's size and weight, a step above the body's words, never past a page's own heading. */
 const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
@@ -399,7 +354,7 @@ function MentionChip({
       >
         {mark === undefined ? (
           <ChipSymbol
-            glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
+            glyph={standing?.glyph ?? ENTITY_GLYPH[chip.entity]}
             size={markSize}
             color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
           />
@@ -452,7 +407,7 @@ function SuggestionChip({
         ]}
       >
         <ChipSymbol
-          glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
+          glyph={offered ? SUGGESTION_SYMBOL : ENTITY_GLYPH[ENTITY_KIND.AGENT]}
           size={size * fontScale}
           color={colors.TEXT_MUTED}
         />

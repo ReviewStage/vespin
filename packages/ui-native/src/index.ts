@@ -139,6 +139,8 @@ export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
+export { InlineHost } from "./inline-host.js";
+
 export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
 
 export {
@@ -216,6 +218,8 @@ export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
 export { PersonHead } from "./person-head.js";
 
 export { PictureSet, type SetPicture } from "./picture-set.js";
+
+export { type CaretAtWord, PillField, type PillFieldHandle } from "./pill-field.js";
 
 export { ProblemLine } from "./problem-line.js";
 
