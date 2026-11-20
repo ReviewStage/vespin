@@ -8,6 +8,7 @@ onFlowComplete:
     arguments:
       fixture: ${FIXTURE}
       perfStream: ${STREAM}
+      perfLarge: ${LARGE}
 - assertVisible: "Recorded the invite flow"
 # Cold launch to the Inbox's first thread drawn, the app stopped before each.
 - repeat:
@@ -19,6 +20,7 @@ onFlowComplete:
           arguments:
             fixture: ${FIXTURE}
             perfStream: ${STREAM}
+            perfLarge: ${LARGE}
           label: "T:cold-launch"
       - assertVisible: "Recorded the invite flow"
       - waitForAnimationToEnd:
@@ -194,6 +196,7 @@ onFlowComplete:
     arguments:
       fixture: ${FIXTURE}
       perfStream: ${STREAM}
+      perfLarge: ${LARGE}
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - assertVisible: "Stop"
 - waitForAnimationToEnd:

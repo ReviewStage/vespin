@@ -1,7 +1,7 @@
 #!/bin/zsh -l
 # job.sh TAG [REF...] -- MEASUREMENT ONLY: the probe branch with each REF merged over it, bundled (--no-minify, so components keep their names) into a copy of Nov 12's app, then tap-timing.sh on the iPhone 18 Pro and the landscape iOS 26.5 iPad. Results under ~/vespin-perf/TAG/.
 # It builds in a worktree of its own (WT, default $W/perf-wt) off the rig's checkout (R, default $W/repo), so a failed merge never leaves the shared checkout mid-conflict; node_modules there are pnpm's hard links, and the worktree goes when the job ends.
-# Env: STREAM (true: the fixture sends an Inbox delivery every 500 ms while the flow taps), PROFILE (1, the default: the profiling renderer and per-commit component walk, to find causes; 0: the production renderer, for a PR's before and after timings), W (the iPad agent's rig, default ~/vespin-ipad-agent), BASE (its Vmain.app), IPH and IPAD (UDIDs), DEVICES ("iphone ipad").
+# Env: STREAM (true: the fixture sends an Inbox delivery every 500 ms while the flow taps), LARGE (true: the task list grown to 3,200 tasks and 5,400 agents, one agent moved on each delivery while STREAM is on), PROFILE (1, the default: the profiling renderer and per-commit component walk, to find causes; 0: the production renderer, for a PR's before and after timings), W (the iPad agent's rig, default ~/vespin-ipad-agent), BASE (its Vmain.app), IPH and IPAD (UDIDs), DEVICES ("iphone ipad").
 set -u
 T=$1; shift
 W=${W:-$HOME/vespin-ipad-agent}; BASE=${BASE:-$W/Vmain.app}

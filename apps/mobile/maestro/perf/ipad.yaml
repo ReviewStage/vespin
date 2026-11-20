@@ -8,6 +8,7 @@ onFlowComplete:
     arguments:
       fixture: ${FIXTURE}
       perfStream: ${STREAM}
+      perfLarge: ${LARGE}
 - setOrientation: LANDSCAPE_LEFT
 - assertVisible: "Recorded the invite flow"
 - waitForAnimationToEnd:
@@ -143,6 +144,7 @@ onFlowComplete:
     arguments:
       fixture: ${FIXTURE}
       perfStream: ${STREAM}
+      perfLarge: ${LARGE}
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - assertVisible: "Stop"
 - waitForAnimationToEnd:

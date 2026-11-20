@@ -33,6 +33,8 @@ import { readerZone } from "@repo/features/date-mention";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import type { OpenTerminalSocket } from "@repo/features/relay-socket";
+// MEASUREMENT ONLY: the probe's large task list.
+import { taskAgentsOfLiveRows, taskListOfLiveRows } from "@repo/features/task-list-live";
 import type { TokenVault } from "@repo/host";
 import { runModeFor } from "@repo/host";
 import {
@@ -368,15 +370,101 @@ const servedActPort = (
  * otherwise. The store drops a patch that says nothing new, so laying the
  * same data twice settles rather than loops.
  */
-// MEASUREMENT ONLY (the perf probe): with `-perfStream true`, an Inbox delivery every 500 ms, one holder's newest item moved, as a working agent's posts arrive.
+// MEASUREMENT ONLY (the perf probe): with `-perfLarge true`, the task list grown to the developer's account's size: 3,200 tasks and 5,400 agents, 82% of them archived, in a workspace of their own so the fixture's screens stand as they were.
+function perfLargeLists(state: AppStateStore): void {
+  const plans = Array.from({ length: 3_200 }, (_, at) => ({
+    id: `perf-task-${at}`,
+    workspaceId: "perf-workspace",
+    name: `Perf task ${at}`,
+    repository: null,
+    ownerId: "user-perf",
+    ownerName: "Perf",
+    assigneeId: null,
+    assigneeName: null,
+    pinnedAt: null,
+    pinPosition: null,
+    createdAt: 1_000 + at,
+    updatedAt: 2_000 + at,
+    status: "todo",
+    priority: "none",
+    number: 10_000 + at,
+  }));
+  const agents = Array.from({ length: 5_400 }, (_, at) => ({
+    id: `perf-agent-${at}`,
+    taskId: `perf-task-${(at * 7) % 3_200}`,
+    workspaceId: "perf-workspace",
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    contextWindow: null,
+    title: `Perf agent ${at}`,
+    brief: "plan",
+    repository: "acme/relay",
+    starterId: "user-perf",
+    starterName: "Perf",
+    automationId: null,
+    automationName: null,
+    archivedAt: at % 50 < 41 ? 3_000 + at : null,
+    archivedBy: null,
+    archiverName: null,
+    disabledServers: null,
+    published: null,
+    startedFrom: null,
+    pinnedAt: null,
+    pinPosition: null,
+    createdAt: 1_000 + Math.floor(at / 2),
+    turnId: `perf-turn-${at}`,
+    turnStatus: "settled",
+    cancelRequested: null,
+    queuedAt: 1_000 + at,
+    startedAt: 1_000 + at,
+    settledAt: 1_001 + at,
+    turnSessionEnded: null,
+    awaitingLineAt: null,
+  }));
+  // biome-ignore lint/suspicious/noExplicitAny: measurement only.
+  const rows: any = { tasks: plans, agents };
+  const now = Date.now();
+  const listed = taskListOfLiveRows(rows, now);
+  const held = state.taskList();
+  state.update(
+    {},
+    {
+      ...held,
+      tasks: [...(held.tasks ?? []), ...listed.tasks],
+      taskAgents: [...(held.taskAgents ?? []), ...taskAgentsOfLiveRows(rows, now)],
+    },
+  );
+  globalThis.__perfMark?.("perf-large", {
+    tasks: state.taskList().tasks?.length,
+    agents: state.taskList().taskAgents?.length,
+  });
+}
+
+// MEASUREMENT ONLY (the perf probe): with `-perfStream true`, an Inbox delivery every 500 ms, one holder's newest item moved, as a working agent's posts arrive; with `-perfLarge true` beside it, one unarchived agent of the large list moved on each too, as a working agent's turn moves its row.
 function streamPerfDeliveries(state: AppStateStore): void {
   // @ts-expect-error: the probe's own launch argument.
   const { Settings } = require("react-native");
-  const asked: unknown = Settings.get("perfStream");
+  const on = (value: unknown) => value === true || value === "true" || value === 1;
+  const large = on(Settings.get("perfLarge"));
 
-  if (asked !== true && asked !== "true" && asked !== 1) return;
+  if (large) perfLargeLists(state);
+
+  if (!on(Settings.get("perfStream"))) return;
   let n = 0;
   setInterval(() => {
+    if (large) {
+      const held = state.taskList();
+      const agents = held.taskAgents ?? [];
+      const at = agents.findIndex((agent) => agent.id === `perf-agent-${41 + 50 * (n % 100)}`);
+
+      if (at >= 0) {
+        const next = agents.slice();
+        // biome-ignore lint/suspicious/noExplicitAny: measurement only.
+        next[at] = { ...(agents[at] as any), title: `Perf agent moved ${n}` };
+        state.update({}, { ...held, taskAgents: next });
+        globalThis.__perfMark?.(`perf-agent-moved-${n}`);
+      }
+    }
     const snap = state.snapshot();
     // biome-ignore lint/suspicious/noExplicitAny: measurement only.
     const feed: any = snap["inboxItems" as keyof typeof snap];
