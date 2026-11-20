@@ -58,7 +58,12 @@
     pointer-events: none;
   }
 
+  /* Note that what fades in the row stands as a stacking context of its
+     own at rest too (`isolation`), because a box fading from whole
+     (`opacity: 1`) becomes one and lays its row out again, and its list
+     with it, where a box already one only repaints. */
   .ui-task-row-cell:is([data-under-more="true"], [data-cell="priority"]) {
+    isolation: isolate;
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
@@ -77,7 +82,7 @@
     }
 
     .ui-task-row:is(:hover, :has(:focus-visible), [data-menu-open="true"]):has(
-        .ui-task-row-more:not(:empty)
+        > .ui-task-row-more:not(:empty)
       )
       > .ui-task-row-cell[data-under-more="true"] {
       opacity: 0;
@@ -94,12 +99,16 @@
       pointer-events: auto;
     }
 
-    .ui-task-row:has(.ui-task-row-more:not(:empty)):has(> .ui-task-row-cell[data-under-more="true"])
+    .ui-task-row:has(> .ui-task-row-more:not(:empty)):has(
+        > .ui-task-row-cell[data-under-more="true"]
+      )
       .ui-task-row-after {
       transform: translateX(var(--ui-task-row-aside));
     }
 
-    .ui-task-row:has(.ui-task-row-more:not(:empty)):has(> .ui-task-row-cell[data-under-more="true"])
+    .ui-task-row:has(> .ui-task-row-more:not(:empty)):has(
+        > .ui-task-row-cell[data-under-more="true"]
+      )
       > [data-cell="name"] {
       padding-inline-end: var(--ui-task-row-more-room);
     }
@@ -111,6 +120,7 @@
   }
 
   .ui-task-row-status {
+    isolation: isolate;
     transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
   }
 
