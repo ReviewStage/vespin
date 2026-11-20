@@ -1,0 +1,12 @@
+== bundle PJj10215c base fd33798c30
+  built fd33798c30 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fcomp1021x: fails 0 shots 7 
+iphone-dark-fcomp1021x: fails 0 shots 7 
+ipad27-light-fcomp1021x: fails 0 shots 7 
+ipad27-dark-fcomp1021x: fails 0 shots 7 
+p10218-iphone-light: fails 0 shots 3 
+p10218-iphone-dark: fails 0 shots 3 

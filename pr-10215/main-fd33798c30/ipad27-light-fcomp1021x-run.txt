@@ -1,0 +1,31 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow pad-fcomp1021x
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-empty... COMPLETED
+Tap on id: composer-field... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-empty-focused... COMPLETED
+Input text Looks good, ship it... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-one-line... COMPLETED
+Input text  once the resend button also shows the invite's expiry date and the email copy says when the new link stops working... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-wrapped... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot newtask-empty... COMPLETED
+Tap on "Describe the task"... COMPLETED
+Input text Resend expired invites... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot newtask-one-line... COMPLETED
+Input text  from the members page, with the expiry date beside each pending invite and a confirmation once the new email goes out... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot newtask-wrapped... COMPLETED
