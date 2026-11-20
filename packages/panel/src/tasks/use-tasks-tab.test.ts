@@ -1334,6 +1334,7 @@ it.effect(
           ?.isActive() === true;
 
       const crossed = "7e2f3a4b-5c6d-4e7f-8a9b-0c1d2e3f4a5b";
+      const swept = "3b9c0d1e-2f3a-4b4c-9d5e-6f7a8b9c0d1e";
       const rested = "5d1e2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a";
 
       act(() => tab.control().onPointTask(crossed));
@@ -1341,13 +1342,20 @@ it.effect(
       act(() => tab.control().onPointTask(undefined));
       yield* passing("200 millis");
       assert.equal(held(crossed), false, "a row the pointer left before resting is never read");
+      // Note that the sweep across the rows takes longer than the rest, so the rest runs from the row the pointer stops on.
       act(() => tab.control().onPointTask(crossed));
+      yield* passing("50 millis");
+      act(() => tab.control().onPointTask(swept));
       yield* passing("50 millis");
       act(() => tab.control().onPointTask(rested));
       yield* passing("50 millis");
       assert.equal(held(rested), false, "nothing is read before the pointer rests");
       yield* passing("100 millis");
-      assert.equal(held(crossed), false, "a row the pointer only crossed is never read");
+      assert.equal(
+        held(crossed) || held(swept),
+        false,
+        "a row the pointer only crossed is never read",
+      );
       assert.equal(held(rested), true, "the task the pointer rests on is read ahead of a press");
 
       // Note that the host is never made to open it, so only the press holds it.
