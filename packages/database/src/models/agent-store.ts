@@ -344,6 +344,8 @@ export type NewAgent = AgentPlace & {
   readonly permissionMode?: AgentPermissionMode | undefined;
   /** What the agent is; a coder where none is named. */
   readonly kind?: AgentKind | undefined;
+  /** The face a Manager's creator picked for it; the service's pick where none is named (`manager-faces.ts`), and none for a coder. */
+  readonly face?: ManagerFace | undefined;
 };
 
 /** A repository a Start names for the agent beside its own: `owner/name` as reached, and the branch its checkout is cloned at, none for its default branch. */
@@ -829,6 +831,24 @@ const updateAgentPermissionModeRow = SqlSchema.findOneOption({
         .update(agentTable)
         .set({ permissionMode })
         .where(reachableAgent(userId, agentId))
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
+    ),
+});
+
+/** A Manager's face changed, where the account reaches it; a coder, which wears none, is no row. */
+const updateManagerFaceRow = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    face: managerFaceSchema,
+  }),
+  Result: CommittedAgentRowSchema,
+  execute: ({ userId, agentId, face }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ face })
+        .where(and(reachableAgent(userId, agentId), eq(agentTable.kind, AGENT_KIND.MANAGER)))
         .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
 });
@@ -2412,7 +2432,7 @@ export function createAgent(
         // Note that only a Manager wears a face, so a coder's row is written as it was.
         const made =
           row.kind === AGENT_KIND.MANAGER
-            ? { ...row, face: yield* pickManagerFace(row.id, organizationId) }
+            ? { ...row, face: yield* pickManagerFace(row.id, organizationId, started.face) }
             : row;
 
         // Note that an agent in one repository or none writes no row here, so its rows are as they were.
@@ -3052,6 +3072,18 @@ export function updateAgentPermissionModeCommitted(
 ): AgentStoreEffect<Option.Option<AgentCommitted>> {
   return Effect.map(
     updateAgentPermissionModeRow({ userId, agentId, permissionMode }),
+    Option.map(({ txid, ...agent }) => ({ agent, txid })),
+  );
+}
+
+/** A Manager's face set to the one a member picked, worn by another Manager of its workspace or not; nothing for a coder or an agent out of the account's reach. */
+export function updateManagerFaceCommitted(
+  userId: string,
+  agentId: string,
+  face: ManagerFace,
+): AgentStoreEffect<Option.Option<AgentCommitted>> {
+  return Effect.map(
+    updateManagerFaceRow({ userId, agentId, face }),
     Option.map(({ txid, ...agent }) => ({ agent, txid })),
   );
 }
