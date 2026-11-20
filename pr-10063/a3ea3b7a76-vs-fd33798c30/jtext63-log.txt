@@ -1,0 +1,12 @@
+  STALE BUNDLE, not built
+== bundle PJTEXT63AFTER base fd33798c30
+  built fd33798c30 base app Vmain5.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+after = fd33798c30
+after-iphone-light: fails 0 shots 11 
+after-iphone-dark: fails 0 shots 11 
+after-iphone-light-ax3: fails 0 shots 11 
+after-ipad27-light: fails 0 shots 11 
