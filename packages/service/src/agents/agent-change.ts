@@ -37,6 +37,7 @@ import {
   updateAgentChoiceCommitted,
   updateAgentPermissionModeCommitted,
   updateAgentServersCommitted,
+  updateManagerFaceCommitted,
 } from "@repo/database/models/agent-store";
 import {
   archiveAgentOfDoneTask,
@@ -47,6 +48,7 @@ import type { StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { AGENT_ARCHIVER } from "@repo/features/agent-wire";
+import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { Data, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
@@ -76,6 +78,8 @@ export interface AgentChanges {
   readonly disabledServers?: readonly string[] | undefined;
   /** How its tool calls are answered from its next turn, already held to what its harness takes. */
   readonly permissionMode?: AgentPermissionMode | undefined;
+  /** A Manager's face, as a member picked it; a coder wears none, so asking one of it finds no row. */
+  readonly face?: ManagerFace | undefined;
 }
 
 /** A change that found no row to write: the agent left the account's reach as it was changed, which takes every change back. */
@@ -99,7 +103,7 @@ const writtenChanges = (userId: string, agent: Agent, changes: AgentChanges) =>
             ? Effect.succeed(changed.value)
             : Effect.fail(new AgentChangeLost());
 
-        const { title, choice, pinned, position, disabledServers, permissionMode } = changes;
+        const { title, choice, pinned, position, disabledServers, permissionMode, face } = changes;
         let last: AgentCommitted = { agent };
 
         if (title !== undefined) {
@@ -124,6 +128,10 @@ const writtenChanges = (userId: string, agent: Agent, changes: AgentChanges) =>
           last = yield* kept(
             yield* updateAgentPermissionModeCommitted(userId, agent.id, permissionMode),
           );
+        }
+
+        if (face !== undefined) {
+          last = yield* kept(yield* updateManagerFaceCommitted(userId, agent.id, face));
         }
 
         return last;

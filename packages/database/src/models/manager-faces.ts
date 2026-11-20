@@ -13,7 +13,9 @@
  * the migration that added the column gave every Manager made before it a
  * face by this same walk, in the order they were made
  * (`20261120022411_agent_manager_face`), which is why the seed is one
- * Postgres can compute: the first eight hex digits of the id's MD5.
+ * Postgres can compute: the first eight hex digits of the id's MD5. A
+ * face its creator picked is worn as picked, worn by another Manager or
+ * not: only the service's own pick steps past those worn.
  */
 
 import { createHash } from "node:crypto";
@@ -94,15 +96,22 @@ const storeFace = SqlSchema.void({
 });
 
 /**
- * Gives the workspace's new Manager its face, as above, and answers it.
- * Run inside the transaction that made the agent, which holds the
- * workspace's lock until it commits.
+ * Gives the workspace's new Manager its face, the one its creator picked
+ * or else as above, and answers it. Run inside the transaction that made
+ * the agent, which holds the workspace's lock until it commits.
  */
 export const pickManagerFace = (
   agentId: string,
   workspaceId: string,
+  picked: ManagerFace | undefined,
 ): Effect.Effect<ManagerFace, StoreFailure, DatabaseServices> =>
   Effect.gen(function* () {
+    if (picked !== undefined) {
+      yield* storeFace({ agentId, face: picked });
+
+      return picked;
+    }
+
     const client = yield* SqlClient.SqlClient;
     // Note that the workspace's Manager starts take turns, because two that each read the other's face unworn would both take it.
     yield* client`select pg_advisory_xact_lock(hashtextextended(${workspaceId}, 41))`;

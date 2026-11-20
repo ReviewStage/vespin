@@ -13,7 +13,9 @@
  * and every read carries it as `managerFaceSchema` decodes it: a word this
  * build does not know reads as the set's first, so a service that offers
  * one more character or color than a desktop knows still answers that
- * desktop its Managers, drawn in a face it can draw.
+ * desktop its Managers, drawn in a face it can draw. A face a member picks
+ * travels as `managerFacePickSchema`, which takes only the words it names,
+ * so a pick is stored as it was asked or refused.
  */
 
 import { literalsReadingUnknown } from "@repo/wire";
@@ -57,4 +59,10 @@ export const managerFaceSchema = EffectSchema.Struct({
     MANAGER_FACE_CHARACTER.GHOST,
   ),
   color: literalsReadingUnknown(Object.values(MANAGER_FACE_COLOR), MANAGER_FACE_COLOR.YELLOW),
+});
+
+/** A face a member picks, at New Manager or in a Manager's Settings: a character and a color this build names, refused otherwise. */
+export const managerFacePickSchema = EffectSchema.Struct({
+  character: EffectSchema.Literals(Object.values(MANAGER_FACE_CHARACTER)),
+  color: EffectSchema.Literals(Object.values(MANAGER_FACE_COLOR)),
 });

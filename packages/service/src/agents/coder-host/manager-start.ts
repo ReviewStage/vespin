@@ -8,7 +8,9 @@
  * its title from the start, so no model is asked to name it. It starts
  * blank, handed nothing, so making it opens no session and sends no line:
  * its creator's first words open its first turn, and its instructions
- * (`managerInstructions`) have it introduce itself in that first reply. A workspace the
+ * (`managerInstructions`) have it introduce itself in that first reply. It
+ * wears the face the request picks, or else the store's pick
+ * (`manager-faces.ts`). A workspace the
  * account is not in reads as none before its experiments are read, so no
  * outsider learns whether one has Managers on; one with the experiment off
  * is refused as not permitted. Everything else, the retry under its key
@@ -66,6 +68,7 @@ export const startManager = /* @__PURE__ */ Effect.fnUntraced(function* (
     runsOn: request.runsOn,
     title: request.name,
     kind: AGENT_KIND.MANAGER,
+    face: request.face,
   }).pipe(Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)));
 
   const summary = yield* summaryOf(userId, agent);

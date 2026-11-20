@@ -23,7 +23,7 @@ import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
-import { managerFaceSchema } from "./manager-face.js";
+import { managerFacePickSchema, managerFaceSchema } from "./manager-face.js";
 import { pinPositionSchema } from "./pin-order.js";
 import {
   mergeMethodSchema,
@@ -1061,6 +1061,16 @@ export const agentRenameRequestSchema = EffectSchema.Struct({
 });
 
 export type AgentRenameRequest = typeof agentRenameRequestSchema.Type;
+
+/**
+ * Changing a Manager's face (PATCH), which every place it is drawn then
+ * draws; refused as invalid for a coder, which wears none. A face another
+ * Manager of the workspace wears may be picked: only the face the service
+ * picks for a new Manager steps past those worn.
+ */
+export const agentFaceRequestSchema = EffectSchema.Struct({ face: managerFacePickSchema });
+
+export type AgentFaceRequest = typeof agentFaceRequestSchema.Type;
 
 /**
  * Archiving an agent, or bringing it back (PATCH). Archiving one with a
