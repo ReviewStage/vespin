@@ -180,8 +180,15 @@ interface ColdMark {
   readonly asked: number;
 }
 
-/** The most rows the list's live queries take in one stretch, so a first answer of a large account never holds the process for the whole build. */
-const DRAWN_CHUNK = 500;
+/**
+ * The most rows the list's live queries take in one stretch, so a first
+ * answer of a large account never holds the process for the whole build.
+ * Note that it is a hundred because a row costs the live queries about half a
+ * millisecond on a phone's interpreter (an account of 5,400 agents took 2.4 s
+ * on V8's interpreter alone), so a stretch stays near a tenth of a second
+ * there, short enough for a frame or a tap to come between two.
+ */
+const DRAWN_CHUNK = 100;
 
 /** Hands `keys` to `draw` a chunk at a time, yielding between chunks; at once where they fit one. */
 function inChunks(
@@ -448,21 +455,27 @@ export function taskListCollections(
 
     const ticks = yield* drawnPerTick(drawn);
 
-    // Note that the rows the local database held are the list's own as it stands, drawn at once with any a write laid back made, so its follow's next answer settles them as any it held.
+    // Note that the rows the local database held are the list's own as it stands, so its follow's next answer settles them as any it held.
     const shownAtStand = plans.rows().length + agents.rows().length > 0;
 
     if (plans.loaded || agents.loaded || shownAtStand) {
       planKeys = new Set(plans.synced().map((row) => row.id));
       agentKeys = new Set(agents.synced().map((row) => row.id));
-      yield* inChunks(
-        plans.rows().map((row) => row.id),
-        plansDrawn,
+
+      // Note that they are drawn after the list stands, a chunk at a time, rather than before, because drawing an account of thousands through the live queries held the host's start for seconds on a phone, and the first document waited on it. Each row is read as it stands when its chunk is drawn, so an answer landing between chunks is never drawn over.
+      yield* Effect.forkScoped(
+        Effect.gen(function* () {
+          yield* inChunks(
+            plans.rows().map((row) => row.id),
+            plansDrawn,
+          );
+          yield* inChunks(
+            agents.rows().map((row) => row.id),
+            agentsDrawn,
+          );
+          yield* ticks.drawn;
+        }),
       );
-      yield* inChunks(
-        agents.rows().map((row) => row.id),
-        agentsDrawn,
-      );
-      yield* ticks.drawn;
     }
 
     const mark = (): ColdMark => {
