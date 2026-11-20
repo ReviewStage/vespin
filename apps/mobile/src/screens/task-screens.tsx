@@ -132,6 +132,7 @@ import {
   PATH_PART,
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
+  priorityMarkUnder,
   QUIET_ROW_QUESTION,
   RelationRow,
   ROW_ACTION_TONE,
@@ -1527,6 +1528,7 @@ function priorityChoices(task: TaskSummary, setPriority: TaskWrites["setPriority
     label: TASK_PRIORITY_WORDS[priority],
     symbol: PRIORITY_MARK_SYMBOL[priority],
     tone: PRIORITY_MARK_TONE[priority],
+    under: priorityMarkUnder(priority),
     on: task.priority === priority,
     onPress: () => setPriority(task.id, priority),
   }));

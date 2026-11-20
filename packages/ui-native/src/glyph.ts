@@ -390,3 +390,6 @@ export function glyphSymbol(glyph: Glyph): SfSymbol {
 
 /** A mark's glyph and the tone it is drawn in. */
 export type MarkLook = { readonly symbol: Glyph; readonly tone: StatusTone };
+
+/** A glyph drawn faint under another in the same ink, at `opacity`, as a priority's lit bars stand over every bar it can light. */
+export type MarkLayer = { readonly glyph: Glyph; readonly opacity: number };
