@@ -34,11 +34,12 @@ struct AgentsLiveActivity: Widget {
     } dynamicIsland: { context in
       let state = context.state
       return DynamicIsland {
+        // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
         DynamicIslandExpandedRegion(.leading) {
-          CountLabel(state: state).padding(.leading, 4)
+          CountLabel(state: state).padding(.leading, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          WaitingLabel(state: state).padding(.trailing, 4)
+          WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.bottom) {
           // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
@@ -197,7 +198,7 @@ enum StopTarget {
   static let height: CGFloat = mark + AgentList.spacing
 }
 
-/// How far the expanded island's rows stand in from its sides, in points, clear of the curve of its corners.
+/// How far the expanded island's header and rows stand in from its sides, in points, clear of the curve of its corners.
 enum ExpandedInset {
   static let side: CGFloat = 8
 }
