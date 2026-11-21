@@ -1,0 +1,8 @@
+== bundle PJj10413 base 4f1b7c7f63
+  built 4f1b7c7f63 base app Vmain7.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-tasks: fails 2 shots 4   Tap on "Mark done"... FAILED
+ipad27-light-tasks: fails 2 shots 4   Tap on "Mark done"... FAILED
