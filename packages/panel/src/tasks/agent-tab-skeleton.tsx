@@ -1,6 +1,6 @@
 import { BOOT_WORDS } from "@repo/features/agent-boot-words";
 import { readingWords } from "@repo/features/words";
-import { ComposerFoot, Skeleton, SkeletonRegion } from "@repo/ui";
+import { CHAT_RUN, CHAT_SIDE, ChatBubble, ComposerFoot, Skeleton, SkeletonRegion } from "@repo/ui";
 import { ConversationLead } from "../ai-elements/conversation.js";
 import { Message, MessageContent } from "../ai-elements/message.js";
 import { PromptInputCard } from "../ai-elements/prompt-input.js";
@@ -65,11 +65,11 @@ export function TranscriptSkeleton({
       <SkeletonRegion label={label}>
         <div className="agent-log-skeleton">
           <Message from="user">
-            <MessageContent>
+            <ChatBubble side={CHAT_SIDE.SENT} run={CHAT_RUN.ALONE}>
               {LOG_LINE_WIDTHS.ASKED.map((width) => (
                 <Skeleton key={width} width={width} />
               ))}
-            </MessageContent>
+            </ChatBubble>
           </Message>
           <Message from="assistant">
             <MessageContent>
