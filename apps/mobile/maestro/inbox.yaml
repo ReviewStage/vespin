@@ -45,24 +45,28 @@ env:
 # The thread comes first, before the row's swipes and its long press: a row
 # a swipe opened takes the next tap to close its actions, and its files, the
 # PDF among them, are shot whatever the press below does.
-# Note that the list is brought back to its top every time, rather than only
-# when the row reads as hidden, because a row standing under the bar's
-# translucent glass still reads as visible to Maestro, and a tap there lands
-# on the bar, which scrolls the list to its top and opens nothing. So the
-# first row is scrolled to, which leaves this row under it and clear of the
-# bar, and then a swipe down from this row settles the list at its very top;
-# a swipe from a row, rather than from a point, stays in the list's column in
-# every window. Nor is the list scrolled to the first point this row shows,
-# because the folded Duo then stands it against the top edge, where a tap a
-# point or two higher no longer opens it.
+# Note that the list is brought back to its very top before the row is
+# tapped, because a row standing under the bar's translucent glass still
+# reads as visible to Maestro, and neither a scroll to the first row nor a
+# swipe ever brings this one clear of the bar on an iPhone: a tap meant for
+# it lands on the bar, which scrolls the list to its top and opens nothing.
+# So on an iPhone the bar is tapped on purpose first, at the middle of its
+# empty stretch, which is iOS's own scroll to the top and does nothing where
+# the list stands there already; then the row stands below the large title.
+# A regular window's list column stands the row clear as it is. Nor is the
+# list scrolled to the first point this row shows, because the folded Duo
+# then stands it against the top edge, where a tap a point or two higher no
+# longer opens it.
 - scrollUntilVisible:
     element: "Who can withdraw an invite\\?"
     direction: UP
-- swipe:
-    from:
-      text: "Recorded the invite flow"
-    direction: DOWN
-- waitForAnimationToEnd
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn:
+          point: "50%, 10%"
+      - waitForAnimationToEnd
 # A thread opens named in a compact window's bar, as Messages names a
 # conversation, and under its path and title in a split view's detail, as
 # Mail's message stands; then each message: the agent's tile, name and time
