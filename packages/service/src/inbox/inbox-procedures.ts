@@ -57,6 +57,7 @@ import { titleInboxThread } from "../agents/coder-host/title.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import type { TypedTurn } from "../agents/sessions/agent-sessions.js";
 import { readsTasklessAgents } from "../agents/taskless-reads.js";
+import { readsWorkspaceMachines, servesAgent } from "../agents/workspace-machine-reads.js";
 import { reconsiderRunArchive } from "../automations/run-archive.js";
 import type { HostedEnvironment } from "../environment.js";
 import { recordServerEvent, recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
@@ -881,7 +882,9 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     account: signedIn.account.effect(function* ({ input, context }) {
       const after = input.after ?? INBOX_CURSOR_START;
 
-      return yield* hostedStoreOrUnavailable(accountInboxPast(context.userId, after));
+      return yield* hostedStoreOrUnavailable(
+        accountInboxPast(context.userId, after, readsWorkspaceMachines(context.request)),
+      );
     }),
     task: signedIn.task.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
@@ -890,13 +893,19 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
       if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const after = input.after ?? INBOX_CURSOR_START;
 
-      return yield* hostedStoreOrUnavailable(taskInboxPast(context.userId, taskId, after));
+      return yield* hostedStoreOrUnavailable(
+        taskInboxPast(context.userId, taskId, after, readsWorkspaceMachines(context.request)),
+      );
     }),
     agent: signedIn.agent.effect(function* ({ input, context }) {
       const agentId = yield* pathUuid(input.id);
       const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(context.userId, agentId));
 
-      if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      // Note that an agent on a workspace's machine is not found by a build that reads none, as its own read is not.
+      if (Option.isNone(agent) || !servesAgent(context.request, agent.value)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      }
+
       const after = input.after ?? INBOX_CURSOR_START;
 
       return yield* hostedStoreOrUnavailable(agentInboxPast(context.userId, agent.value.id, after));
@@ -961,6 +970,17 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
       // Note that a build that reads no item on no task is answered as for one that does not exist.
       if (home.value.taskId === null && !readsTasklessAgents(context.request)) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      }
+
+      // Likewise a build that reads no agent on a workspace's machine, for an item of one, whose agent it would read as not found.
+      if (!readsWorkspaceMachines(context.request)) {
+        const agent = yield* hostedStoreOrUnavailable(
+          readVisibleAgent(context.userId, home.value.agentId),
+        );
+
+        if (Option.isSome(agent) && !servesAgent(context.request, agent.value)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+        }
       }
 
       return home.value;

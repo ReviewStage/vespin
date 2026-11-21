@@ -17,7 +17,7 @@ import {
   updateAutomationCommitted,
 } from "@repo/database/models/automation-store";
 import { isWorkspaceMember, personalWorkspaceOf } from "@repo/database/models/workspace-store";
-import { AGENT_STATUS, type AgentRunsOnRequest } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type PersonalRunsOn } from "@repo/features/agent-wire";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_DEFAULT_GUARDS,
@@ -474,7 +474,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   made: typeof automationCreateRequestSchema.Type,
   source: (typeof SERVER_AUTOMATION_SOURCE)[keyof typeof SERVER_AUTOMATION_SOURCE],
-  runsOn: AgentRunsOnRequest | null,
+  runsOn: PersonalRunsOn | null,
 ): Effect.fn.Return<
   AutomationWritten,
   HostedRefusal,
@@ -598,7 +598,7 @@ export const changeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   standing: Automation,
   asked: typeof automationChangeRequestSchema.Type,
   source: (typeof SERVER_AUTOMATION_SOURCE)[keyof typeof SERVER_AUTOMATION_SOURCE],
-  runsOn: AgentRunsOnRequest | undefined,
+  runsOn: PersonalRunsOn | undefined,
 ): Effect.fn.Return<
   AutomationWritten,
   HostedRefusal,

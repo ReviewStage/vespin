@@ -282,10 +282,10 @@ export type AgentSource = typeof agentSourceSchema.Type;
  * device and a workspace's machine both take their work as rows their host
  * follows (`@repo/features/device-agent-wire`).
  *
- * Note that no wire schema carries `WORKSPACE` yet: each one a client
- * decodes names its members one by one, and the service's stores and
- * placement alone read the whole set, because a released client reads an
- * agent's machine only as the cloud or a device.
+ * Note that a build before `HOSTED_API_VERSION` 7 reads an agent's machine
+ * only as the cloud or a device, so the service answers it no agent on a
+ * workspace's machine (`workspace-machine-reads.ts`), and an automation's
+ * place still names the cloud or a device alone (`personalRunsOnSchema`).
  */
 export const AGENT_MACHINE = {
   VERCEL: "vercel",
@@ -732,12 +732,15 @@ const agentStartFromSchema = EffectSchema.Struct({
 export type AgentStartFrom = typeof agentStartFromSchema.Type;
 
 /**
- * Where a Start's agent runs, as a request names it: the cloud, or one of
- * the starting member's own devices (a Mac's desktop app or a host) by its
- * id, which the service checks is theirs, registered, and not away before
- * it makes the agent there.
+ * A place of the cloud or of one member's own: the cloud, or one of their
+ * devices by its id. It is where an automation's runs start
+ * (`automation-wire.ts`) and the place a member's last pick keeps
+ * (`runs-on-pick.ts`), neither of which names a machine a workspace owns:
+ * an automation's place is read by every build in its list, one before
+ * `HOSTED_API_VERSION` 7 reads no such machine, and a pick is read by a
+ * Start in any of the member's workspaces.
  */
-export const agentRunsOnRequestSchema = EffectSchema.Union([
+export const personalRunsOnSchema = EffectSchema.Union([
   EffectSchema.Struct({ machine: EffectSchema.Literal(AGENT_MACHINE.VERCEL) }),
   EffectSchema.Struct({
     machine: EffectSchema.Literal(AGENT_MACHINE.DEVICE),
@@ -745,21 +748,27 @@ export const agentRunsOnRequestSchema = EffectSchema.Union([
   }),
 ]);
 
-export type AgentRunsOnRequest = typeof agentRunsOnRequestSchema.Type;
+export type PersonalRunsOn = typeof personalRunsOnSchema.Type;
 
 /**
- * Where the service places an agent: a place a request names
- * (`agentRunsOnRequestSchema`), or a machine the agent's workspace owns, by
- * its id. Note that no request, tool, or automation names a workspace's
- * machine yet, because no released client reads an agent on one
- * (`AGENT_MACHINE`); only the service's own reads of where an agent ran
- * hand one on.
+ * Where a Start's agent runs, as a request names it: the cloud, one of the
+ * starting member's own devices (a Mac's desktop app or a host) by its id,
+ * which the service checks is theirs, registered, and not away, or a
+ * machine the agent's workspace owns by its id, which the service checks
+ * that workspace owns and is ready to run agents in VMs, before it makes
+ * the agent there.
  */
-export type AgentPlacement =
-  | AgentRunsOnRequest
-  | { readonly machine: typeof AGENT_MACHINE.WORKSPACE; readonly deviceId: string };
+export const agentRunsOnRequestSchema = EffectSchema.Union([
+  ...personalRunsOnSchema.members,
+  EffectSchema.Struct({
+    machine: EffectSchema.Literal(AGENT_MACHINE.WORKSPACE),
+    deviceId: wireUuidSchema,
+  }),
+]);
 
-/** A move of an agent to another place in the same agent: the cloud, or one of its starter's own devices (`coder-host/move.ts`). */
+export type AgentRunsOnRequest = typeof agentRunsOnRequestSchema.Type;
+
+/** A move of an agent to another place in the same agent: the cloud, one of its starter's own devices, or a machine its workspace owns (`coder-host/move.ts`). */
 export const agentMoveRequestSchema = EffectSchema.Struct({ runsOn: agentRunsOnRequestSchema });
 
 export type AgentMoveRequest = typeof agentMoveRequestSchema.Type;
@@ -1291,13 +1300,15 @@ export const agentSummarySchema = EffectSchema.Struct({
   readThrough: EffectSchema.optionalKey(countedNumber),
   /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */
   saidAt: EffectSchema.optionalKey(countedNumber),
-  /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
-  machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
+  /** Where its runner runs, said only of an agent on its starter's device or on a machine its workspace owns; absent for one in a sandbox, and from a service older than it. */
+  machine: EffectSchema.optionalKey(
+    EffectSchema.Literals([AGENT_MACHINE.DEVICE, AGENT_MACHINE.WORKSPACE]),
+  ),
   /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */
   sandboxVcpus: EffectSchema.optionalKey(countedNumber),
   /**
-   * The Mac a local agent runs on, by its own name, and the epoch
-   * milliseconds it last beat, which a reader holds against its own clock
+   * The Mac a local agent runs on, or the workspace's machine an agent on
+   * one runs on, by its own name, and the epoch milliseconds it last beat, which a reader holds against its own clock
    * (`deviceStanding`), though a window judges a device by its shared presence
    * read (`hosts.presence`) rather than by this; absent for an agent in a sandbox,
    * for one whose Mac is gone, from a read that does not name it, and from a

@@ -417,6 +417,27 @@ const findWorkspaceMachineStanding = SqlSchema.findOneOption({
     ),
 });
 
+/** A machine as a read of where agents run names it: its id, its name, and when it last beat. */
+const NamedMachineSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  lastSeenAt: Schema.Date,
+});
+
+export type NamedMachine = typeof NamedMachineSchema.Type;
+
+const findMachinesNamed = SqlSchema.findAll({
+  Request: Schema.Struct({ ids: Schema.Array(Schema.String) }),
+  Result: NamedMachineSchema,
+  execute: ({ ids }) =>
+    Database.use((db) =>
+      db
+        .select({ id: device.id, name: device.name, lastSeenAt: device.lastSeenAt })
+        .from(device)
+        .where(inArray(device.id, [...ids])),
+    ),
+});
+
 const findLayout = SqlSchema.findOneOption({
   Request: OwnedDeviceKeySchema,
   Result: DeviceLaidOutSchema,
@@ -1027,6 +1048,24 @@ export function devicesNamed(ids: readonly string[]): DeviceEffect<ReadonlyMap<s
   return Effect.map(
     findNamed({ ids: [...new Set(ids)] }),
     (devices) => new Map(devices.map((device) => [device.id, device])),
+  );
+}
+
+/**
+ * The machines under these ids, a member's device or a workspace's machine
+ * alike, by id, each by its name and when it last beat, as a read of where
+ * its agents run names them. Note that it is keyed by the machines alone,
+ * as `devicesNamed` is, so its caller hands it only the ids of agents it
+ * already read through their workspaces' gate.
+ */
+export function machinesNamed(
+  ids: readonly string[],
+): DeviceEffect<ReadonlyMap<string, NamedMachine>> {
+  if (ids.length === 0) return Effect.succeed(new Map());
+
+  return Effect.map(
+    findMachinesNamed({ ids: [...new Set(ids)] }),
+    (machines) => new Map(machines.map((machine) => [machine.id, machine])),
   );
 }
 

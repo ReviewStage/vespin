@@ -106,7 +106,7 @@ const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 24 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 28 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -480,6 +480,58 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         assert.deepEqual(
           queue.messages.map((message) => message.text),
           ["And open a pull request"],
+        );
+      }),
+  );
+
+  it.effect(
+    "a Manager is made on a machine its workspace owns through the Manager door, and a member of another workspace naming that machine is refused it as away",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const ours = yield* openConnectedWorkspace;
+        const theirs = yield* openConnectedWorkspace;
+        const box = yield* connectWorkspaceMachine(ours.workspaceId, ours.owner);
+        yield* db
+          .update(device)
+          .set({ capabilities: [DEVICE_CAPABILITY.VM_AGENTS] })
+          .where(eq(device.id, box));
+        const { agentSessions } = fakeAgentSessions();
+
+        const made = (userId: string, workspaceId: string) =>
+          Effect.gen(function* () {
+            yield* setWorkspaceExperiment({
+              organizationId: workspaceId,
+              experiment: EXPERIMENT.MANAGERS,
+              on: true,
+              by: userId,
+            });
+
+            return yield* Effect.result(
+              startManager(agentSessions, userId, {
+                idempotencyKey: randomUUID(),
+                workspaceId,
+                name: "Billing",
+                repositories: [RELAY_REPOSITORY],
+                runsOn: { machine: AGENT_MACHINE.WORKSPACE, deviceId: box },
+                model: AGENT_DEFAULT_CHOICE.model,
+                effort: "high",
+              }).pipe(Effect.provide(services)),
+            );
+          });
+
+        const fromOutside = yield* made(theirs.owner, theirs.workspaceId);
+        const started = yield* made(ours.owner, ours.workspaceId);
+
+        assert.deepEqual(
+          Result.isFailure(fromOutside) && fromOutside.failure,
+          localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY),
+        );
+        assert.ok(Result.isSuccess(started));
+        const agent = Option.getOrThrow(yield* readAgent(ours.owner, started.success.agent.id));
+        assert.deepEqual(
+          [agent.kind, agent.machine, agent.deviceId],
+          [AGENT_KIND.MANAGER, AGENT_MACHINE.WORKSPACE, box],
         );
       }),
   );

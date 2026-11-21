@@ -12,7 +12,7 @@ import {
   RUNNING_TURN_STATUSES,
 } from "@repo/database/models/agent-store";
 import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
-import { devicesNamed } from "@repo/database/models/device-store";
+import { machinesNamed } from "@repo/database/models/device-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { TaskStandingAgent } from "@repo/database/models/task-store";
 import { workspaceSandboxVcpusOf } from "@repo/database/models/workspace-sandbox-size-store";
@@ -142,7 +142,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const standing = yield* standingsOf([agent.conversationId], [agent]);
   const names = yield* hostedStoreOrUnavailable(readAccountNames(summaryAccounts(agent)));
   const continuedBy = yield* continuedByOf(userId, [agent.id]);
-  const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
+  const macs = yield* hostedStoreOrUnavailable(machinesNamed(summaryDevices([agent])));
 
   return agentSummary(
     agent,

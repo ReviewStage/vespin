@@ -60,6 +60,7 @@ import {
   MESSAGE_SENDER,
 } from "@repo/database/storage-vocabulary";
 import {
+  connectWorkspaceMachine,
   DEVICE_LAYOUT,
   joinWorkspace,
   leaveWorkspace,
@@ -1596,13 +1597,13 @@ test("start_agent naming a device by its name runs on the caller's member's own 
   assert.deepEqual([stored.machine, stored.deviceId], [AGENT_MACHINE.DEVICE, studio]);
 });
 
-test("list_machines lists the cloud and the starter's own devices to start on, and only machines the agent's Mac tools may reach, a teammate's in neither", async () => {
+test("list_machines lists the cloud, the starter's own devices, and the workspace's machines to start on, and only machines the agent's Mac tools may reach, a teammate's in neither; a start naming a workspace's machine by a name none has is refused with them listed", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
   const [studio, garage] = [randomUUID(), randomUUID()];
 
-  await database.run(
+  const box = await database.run(
     Effect.gen(function* () {
       yield* registerDevice(agents.caller.userId, { id: studio, name: "Studio", ...DEVICE_LAYOUT });
       yield* registerDevice(agents.teammates.userId, {
@@ -1610,6 +1611,8 @@ test("list_machines lists the cloud and the starter's own devices to start on, a
         name: "Garage",
         ...DEVICE_LAYOUT,
       });
+
+      return yield* connectWorkspaceMachine(workspaceId, agents.teammates.userId);
     }),
   );
 
@@ -1625,12 +1628,40 @@ test("list_machines lists the cloud and the starter's own devices to start on, a
       kind: "mac",
       online: true,
     },
+    {
+      runsOn: { machine: AGENT_MACHINE.WORKSPACE, deviceId: box },
+      id: box,
+      name: "build-box",
+      kind: "host",
+      online: true,
+    },
   ]);
   assert.ok(Array.isArray(listed.macTools), JSON.stringify(listed));
   assert.deepEqual(
     listed.macTools.map((machine) => (isRecord(machine) ? machine.id : undefined)),
     [studio],
   );
+
+  const unnamed = await call(
+    AGENT_TOOL.START_AGENT,
+    {
+      ...CHOSEN,
+      taskId: agents.caller.taskId,
+      branch: DEFAULT_BRANCH,
+      prompt: "Bill by seat.",
+      runsOn: { machine: AGENT_MACHINE.WORKSPACE, name: "Garage" },
+    },
+    "call-unnamed-box",
+  );
+
+  assert.deepEqual(unnamed, {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason:
+      `Not started: no machine of the workspace's is named "Garage". Its machines: "build-box" ` +
+      `(deviceId ${box}, online). Name one by its name or its deviceId, or start it in the cloud ` +
+      'with runsOn {"machine":"vercel"}.',
+  });
+  assert.equal(agentSessions.sent.length, 0, "nothing was started");
 });
 
 test("start_agent hands over a prompt and a note each as long as a start allows, whole in the agent's first message, and refuses either past it, starting nothing", async () => {

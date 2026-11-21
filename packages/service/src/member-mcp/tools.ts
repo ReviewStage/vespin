@@ -237,6 +237,7 @@ import {
   AGENT_TOOL_REFUSAL,
   type AgentCall,
   type AgentReadCall,
+  AUTOMATION_RUNS_ON,
   agentToolRejected,
   callerUserId,
   callerWorkspaceId,
@@ -266,7 +267,6 @@ import {
   START_BRANCH,
   START_LEAVES_TASK_WORDS,
   START_PAYER_WORDS,
-  START_RUNS_ON,
   startAgentToolOf,
   TASKS_LIST_LIMIT,
   TRANSCRIPT_PAGE_WORDS,
@@ -4748,7 +4748,7 @@ const CreateAutomationInputSchema = Schema.Struct({
   repositories: MEMBER_AUTOMATION_FIELDS.repositories.schema,
   slackDelivery: MEMBER_AUTOMATION_FIELDS.slackDelivery.schema,
   runsOn: describeWire(
-    START_RUNS_ON,
+    AUTOMATION_RUNS_ON,
     `Where each run's agent starts: ${JSON.stringify({ machine: AGENT_MACHINE.VERCEL })} for ` +
       `the cloud, or ${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for ` +
       "one of the member's own devices (a Mac or a host) by its name, or " +
