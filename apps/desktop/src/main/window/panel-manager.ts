@@ -42,7 +42,6 @@ interface PanelManagerOptions {
   /** The named development instance this run is, which every window's title then carries; none for the plain one. */
   instance?: string | undefined;
   preloadPath: string;
-  rendererHtmlPath: string;
   rendererUrl: string;
   /** The zoom factor a window is created at: the stored size as it stands. */
   zoomFactor: () => number;
@@ -157,7 +156,6 @@ export class PanelManager {
   readonly #runMode: RunMode;
   readonly #instance: string | undefined;
   readonly #preloadPath: string;
-  readonly #rendererHtmlPath: string;
   readonly #rendererUrl: string;
   readonly #zoomFactor: () => number;
   readonly #onAllClosed: (() => void) | undefined;
@@ -179,7 +177,6 @@ export class PanelManager {
     this.#material = options.material ?? WINDOW_MATERIAL.SIDEBAR;
     this.#instance = options.instance;
     this.#preloadPath = options.preloadPath;
-    this.#rendererHtmlPath = options.rendererHtmlPath;
     this.#rendererUrl = options.rendererUrl;
     this.#zoomFactor = options.zoomFactor;
     this.#onAllClosed = options.onAllClosed;
@@ -498,7 +495,7 @@ export class PanelManager {
   /** Loads the panel's page; a load that fails is heard as `did-fail-load`, so its promise's rejection says nothing more. */
   #load(window: BrowserWindow): void {
     if (window.isDestroyed()) return;
-    window.loadFile(this.#rendererHtmlPath).catch(() => undefined);
+    window.loadURL(this.#rendererUrl).catch(() => undefined);
   }
 
   /**

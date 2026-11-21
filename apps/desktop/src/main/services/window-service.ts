@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { APP_LINK_CLAIM, APP_LINK_SCHEME, appLinkClaim } from "@repo/features/app-links";
 import { LINK_DESTINATION, type ShownLink } from "@repo/features/link-grammar";
 import { PAGE_SCHEME } from "@repo/features/page-frame";
@@ -24,10 +23,12 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent,
   nativeTheme,
+  net,
   powerMonitor,
   screen,
   session,
   type WebContents,
+  WebContentsView,
 } from "electron";
 import type { BuildLabelMenu } from "../app-menu";
 import { whenPageGone } from "../ipc/page-gone";
@@ -39,6 +40,13 @@ import { pageResponse } from "../window/page-protocol";
 import { PanelManager } from "../window/panel-manager";
 import { reportRendererErrors } from "../window/renderer-errors";
 import { followResponsiveness } from "../window/renderer-health";
+import {
+  CALL_RENDERER_URL,
+  PANEL_RENDERER_URL,
+  RENDERER_SCHEME,
+  rendererResponse,
+} from "../window/renderer-protocol";
+import { migrateRendererStorage } from "../window/renderer-storage";
 import { grantWindowPermissions } from "../window/window-permissions";
 import { windowPushes } from "../window/window-pushes";
 import { PanelWindows, zoomFactorOf, zoomSteer } from "../window/zoom";
@@ -130,21 +138,28 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   }
 
   const preloadPath = path.join(config.resourceDirectory, "preload.js");
-  const rendererHtmlPath = path.join(config.resourceDirectory, "renderer", "index.html");
-  // A file this build wrote into the resource directory, and the whole of
-  // what any window here may navigate to or speak from.
-  const rendererUrl = pathToFileURL(rendererHtmlPath).href;
-  // The floating call window's document, on the same terms: its own entry, which reaches no host.
-  const callHtmlPath = path.join(config.resourceDirectory, "renderer", "call.html");
-  const callUrl = pathToFileURL(callHtmlPath).href;
+  const rendererDirectory = path.join(config.resourceDirectory, "renderer");
+
+  async function carryRendererStorage(): Promise<void> {
+    const view = new WebContentsView({
+      webPreferences: { javascript: false, sandbox: true, contextIsolation: true },
+    });
+
+    try {
+      await migrateRendererStorage(view.webContents, path.join(rendererDirectory, "index.html"));
+    } catch {
+      config.report("Could not migrate storage from the previous renderer origin.");
+    } finally {
+      if (!view.webContents.isDestroyed()) view.webContents.close();
+    }
+  }
 
   const panels = new PanelManager({
     runMode,
     material: windowMaterialFor(process.getSystemVersion()),
     instance: config.instance,
     preloadPath,
-    rendererHtmlPath,
-    rendererUrl,
+    rendererUrl: PANEL_RENDERER_URL,
     zoomFactor: () => zoomFactorOf(state.snapshot().settings?.stored.zoom),
     // A capture run opens at the frame its evidence is measured at, and
     // keeps no place of its own.
@@ -164,8 +179,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   const callWindow = new CallWindow({
     runMode,
     preloadPath,
-    rendererHtmlPath: callHtmlPath,
-    rendererUrl: callUrl,
+    rendererUrl: CALL_RENDERER_URL,
     placementPath: path.join(config.stateRoot, "call-window.json"),
   });
 
@@ -399,7 +413,7 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     trustedSender: (event) => {
       const url = event.senderFrame?.url ?? event.sender.getURL();
 
-      return url === rendererUrl || url === callUrl;
+      return url === PANEL_RENDERER_URL || url === CALL_RENDERER_URL;
     },
     applyLoginItem,
     start: async () => {
@@ -440,6 +454,12 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       // posts nothing and macOS asks only once, so a switch turned on later
       // would otherwise leave its first notification to ask, and be refused.
       if (runMode.observesProviders) askForNotifications();
+      session.defaultSession.protocol.handle(RENDERER_SCHEME, (request) =>
+        rendererResponse(request, rendererDirectory, (url) => net.fetch(url)),
+      );
+      await carryRendererStorage();
+
+      if (!launchStanding()) return;
       // A plan's pages are read through the host on the account's bearer, so the frame holds an address alone.
       session.defaultSession.protocol.handle(PAGE_SCHEME, (request) =>
         run(pageResponse(request.url, operator.host.tasksPage)),
@@ -506,6 +526,10 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
 
       if (session.defaultSession.protocol.isProtocolHandled(PAGE_SCHEME)) {
         session.defaultSession.protocol.unhandle(PAGE_SCHEME);
+      }
+
+      if (session.defaultSession.protocol.isProtocolHandled(RENDERER_SCHEME)) {
+        session.defaultSession.protocol.unhandle(RENDERER_SCHEME);
       }
 
       callWindow.closeForGood();
