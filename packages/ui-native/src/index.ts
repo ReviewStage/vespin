@@ -4,6 +4,8 @@ export { useAnnounced, useReduceTransparency } from "./accessibility.js";
 
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
+export { ArchivedBar, ContinueLine } from "./agent-end.js";
+
 export {
   ANSWER_FIELD,
   type AnswerField,

@@ -99,11 +99,14 @@ const WORDS = {
   CANCEL: "Cancel",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
   TRY_AGAIN: "Try again",
-  /** The line over a fork's draft, naming its source where it is known and quoting the message it forks at, as the panel's chip over the box does. */
-  FORK_OF: (agent: string | undefined, opening: string) => {
-    const of = `${FORK_WORDS.OF} ${agent ?? AGENT_WORD}`;
+  /** The line over a fork's draft, naming its source where it is known and quoting the message it forks at, as the panel's chip over the box does; a continue, which names no message, is "Continue of" its source. */
+  FORK_OF: (agent: string | undefined, fork: AgentFork) => {
+    const named = agent ?? AGENT_WORD;
 
-    return opening === "" ? of : `${of} ${FORK_WORDS.AT} “${opening}”`;
+    if (fork.messageId === undefined) return `${FORK_WORDS.CONTINUE_OF} ${named}`;
+    const of = `${FORK_WORDS.OF} ${named}`;
+
+    return fork.opening === "" ? of : `${of} ${FORK_WORDS.AT} “${fork.opening}”`;
   },
   /** The line over a suggestion's draft, naming the agent that suggested it where it is known, as the panel's chip over the box does. */
   SUGGESTED_BY: (agent: string | undefined, label: string) => {
@@ -669,6 +672,9 @@ function offered(skills: SkillsOffered | undefined) {
  * words, on the source's model until another is picked, running where the
  * source runs, so it offers no Runs on and no Talk, and its Start goes with
  * the box empty, the new agent handed the transcript up to that message.
+ * Opened as a continue (`fork` naming no message), it is the panel's
+ * continued draft, headed "Continue of" its source, the new agent handed
+ * the source's whole transcript.
  */
 export function NewAgentScreen({
   taskId,
@@ -798,7 +804,7 @@ export function NewAgentScreen({
       <StartPage
         title={
           fork !== undefined
-            ? WORDS.FORK_OF(source === undefined ? undefined : agentName(source), fork.opening)
+            ? WORDS.FORK_OF(source === undefined ? undefined : agentName(source), fork)
             : opened === undefined
               ? undefined
               : WORDS.SUGGESTED_BY(

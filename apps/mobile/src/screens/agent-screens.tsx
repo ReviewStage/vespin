@@ -1,5 +1,14 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, or Unarchive in its place while it is archived, Continue in new agent over it where only a new agent goes on, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
 
+import {
+  CONTINUE_AGAIN_LABEL,
+  CONTINUE_LABEL,
+  continuedByIds,
+  endLineOffersContinue,
+  endLineReason,
+  failedLineWords,
+  settledFailure,
+} from "@repo/features/agent-continue-model";
 import {
   AGENT_PORTS_WORDS,
   PORT_ACT,
@@ -11,6 +20,7 @@ import {
   AGENT_KIND,
   AGENT_MACHINE,
   type AgentOverviewPullRequest,
+  type AgentStatus,
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
@@ -55,6 +65,7 @@ import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   AgentTranscript,
+  ArchivedBar,
   AskNote,
   AttachedPictures,
   askForName,
@@ -68,6 +79,7 @@ import {
   type ComposerDictation,
   type ComposerMenu,
   ConfirmAsk,
+  ContinueLine,
   DeniesWaiting,
   drawnCallIds,
   EditingLine,
@@ -204,6 +216,7 @@ const MENU_WORDS = {
   PIN: "Pin",
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
+  UNARCHIVE: "Unarchive",
   DELETE: "Permanently delete",
   OVERVIEW: "Overview",
   SETTINGS: "Settings…",
@@ -347,6 +360,53 @@ function CardMergeAsk({
   );
 }
 
+/** Continue in new agent as the agent page offers it: why the turn failed, and what the press says. */
+interface ContinueOffer {
+  readonly words: string;
+  readonly label: string;
+}
+
+/**
+ * Where the agent page offers Continue in new agent, as the panel's failed
+ * end line does (`endLineOffersContinue`): the agent's last turn failed in a
+ * way only a new agent goes on past, or another agent continued it already,
+ * when it says Continue again. Note that the phone draws no end line, so the
+ * press stands over the composer and in ⋯, and that the end line reads a
+ * teammate's refused key as theirs to mend, so it names the starter where
+ * the reader did not start the agent.
+ */
+function continueOffer(
+  agent: FollowedAgent | undefined,
+  status: AgentStatus | undefined,
+  readerId: string | undefined,
+): ContinueOffer | undefined {
+  if (agent === undefined || status === undefined) return undefined;
+  const failure = settledFailure({ status, turn: agent.turn });
+  const { startedBy } = agent;
+
+  const starter =
+    startedBy === undefined || readerId === undefined || startedBy.userId === readerId
+      ? undefined
+      : startedBy.name;
+
+  const continued = continuedByIds(agent, undefined, undefined).length > 0;
+
+  const offered = endLineOffersContinue({
+    status,
+    endReason: endLineReason(failure, starter),
+    failure,
+    continued,
+    boxClosed: false,
+  });
+
+  if (!offered) return undefined;
+
+  return {
+    words: failedLineWords(failure, starter, true),
+    label: continued ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL,
+  };
+}
+
 /** The agent's composer at the page's foot: that a message denies the call waiting, a call waiting that no row draws, the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
 function AgentComposerBar({
   composer,
@@ -356,6 +416,7 @@ function AgentComposerBar({
   note,
   call,
   otherCall,
+  ending,
   tools,
   trailing,
   dictation,
@@ -372,6 +433,8 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** Continue in new agent and why, where only a new agent goes on past the agent's failed turn; none elsewhere. */
+  readonly ending: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -396,8 +459,10 @@ function AgentComposerBar({
     composer.skills === undefined &&
     composer.mentions === undefined &&
     otherCall === undefined &&
+    ending === undefined &&
     note === undefined ? undefined : (
       <>
+        {ending}
         {threads === undefined ? null : (
           <ThreadsLine
             words={threads.line.words}
@@ -493,6 +558,7 @@ function AgentComposerArea({
   note,
   call,
   otherCall,
+  ending,
   tools,
   trailing,
   onOpenThread,
@@ -511,6 +577,7 @@ function AgentComposerArea({
   readonly note: string | undefined;
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  readonly ending: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -538,6 +605,7 @@ function AgentComposerArea({
         note={said}
         call={call}
         otherCall={otherCall}
+        ending={ending}
         tools={tools}
         trailing={trailing}
         dictation={dictated.dictation}
@@ -1146,7 +1214,18 @@ function AgentConversation({
     router.push(onOwnTab(iosRepositoryPullRequestRoute(key, id)));
   };
 
-  const composerBar = (
+  // Note that an archived agent takes no message until it is brought back, so its bar stands in the composer's place, as the panel's note stands in its box's.
+  const archived = shown?.archivedAt !== undefined;
+
+  const continueOf =
+    taskId === undefined || archived ? undefined : continueOffer(shown, status, readerId);
+
+  const continueAgent = () =>
+    router.push({ pathname: "/start-agent", params: { task: taskId, continueOf: id } });
+
+  const composerBar = archived ? (
+    <ArchivedBar unarchiving={actions.unarchiving} note={note} onUnarchive={actions.unarchive} />
+  ) : (
     <AgentComposerArea
       id={id}
       agent={agent}
@@ -1163,6 +1242,15 @@ function AgentConversation({
       note={note}
       call={talk.call}
       otherCall={otherCall}
+      ending={
+        continueOf === undefined ? undefined : (
+          <ContinueLine
+            words={continueOf.words}
+            label={continueOf.label}
+            onContinue={continueAgent}
+          />
+        )
+      }
       tools={
         agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />
       }
@@ -1375,11 +1463,30 @@ function AgentConversation({
                 )}
               </Stack.Toolbar.Menu>
             ) : null}
+            {continueOf === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(GLYPH.CONTINUE)}
+                  onPress={continueAgent}
+                >
+                  {continueOf.label}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
             {agent === undefined || barActs ? null : (
               <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
-                  {MENU_WORDS.ARCHIVE}
-                </Stack.Toolbar.MenuAction>
+                {archived ? (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.UNARCHIVE)}
+                    onPress={actions.unarchive}
+                  >
+                    {MENU_WORDS.UNARCHIVE}
+                  </Stack.Toolbar.MenuAction>
+                ) : (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
+                    {MENU_WORDS.ARCHIVE}
+                  </Stack.Toolbar.MenuAction>
+                )}
               </Stack.Toolbar.Menu>
             )}
             {agent === undefined ? null : (
@@ -1406,9 +1513,9 @@ function AgentConversation({
         )}
         {barActs ? (
           <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.ARCHIVE)}
-            accessibilityLabel={MENU_WORDS.ARCHIVE}
-            onPress={askArchive}
+            icon={glyphSymbol(archived ? GLYPH.UNARCHIVE : GLYPH.ARCHIVE)}
+            accessibilityLabel={archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
+            onPress={archived ? actions.unarchive : askArchive}
           />
         ) : null}
         {barActs ? (

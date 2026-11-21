@@ -304,6 +304,8 @@ const WORDS = {
   UNLISTED_TASK: "Task",
   STOP: "Stop",
   ARCHIVE: "Archive",
+  UNARCHIVE: "Unarchive",
+  ARCHIVED: "Archived",
 } as const;
 
 /** The statuses a row's Status and the page's status chip offer, in the panel's order. */
@@ -1949,13 +1951,17 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
  * An agent row's swipe: Stop while it works, which a full swipe runs, or
  * Archive once it rests, which asks first (`useAgentRowAsk`), as the
  * agent page's menu asks, since the phone has no Undo to offer after; a
- * destructive act never runs on a full swipe.
+ * destructive act never runs on a full swipe. An archived agent's row
+ * offers Unarchive in Archive's place, at once, as the panel's does, since
+ * it stops nothing.
  */
 function agentSwipes(
   agent: TaskAgentLine["agent"],
   acts: ReturnType<typeof useAgentRowActs>,
   onArchive: ((agentId: string) => void) | undefined,
 ): readonly RowSwipe[] {
+  if (agent.archivedAt !== undefined) return [unarchiveAct(agent, acts)];
+
   if (agentStillWriting(agent.status)) {
     return [
       {
@@ -1979,6 +1985,19 @@ function agentSwipes(
   ];
 }
 
+/** An archived agent's Unarchive, on its row's swipe and in its menu. */
+function unarchiveAct(
+  agent: TaskAgentLine["agent"],
+  acts: ReturnType<typeof useAgentRowActs>,
+): RowAction {
+  return {
+    label: WORDS.UNARCHIVE,
+    symbol: GLYPH.UNARCHIVE,
+    tone: ROW_ACTION_TONE.ARCHIVE,
+    onPress: () => acts.unarchive(agent.id),
+  };
+}
+
 /** What an agent row's Rename asks, as the agent page's Rename asks it (`askForName`). */
 const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
 
@@ -1987,7 +2006,7 @@ const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
  * (`agentMenuGroups`) and its row's choice of them: Copy link and Open in
  * browser, once its workspace is known; Rename; Stop while it works and
  * Archive, asked first; and last and alone, Permanently delete, asked
- * always. Copy transcript stays on the agent's page, as the panel's row
+ * always, an archived agent's offering Unarchive in Archive's place. Copy transcript stays on the agent's page, as the panel's row
  * leaves it out too (`NOT_ON_A_ROW`).
  */
 function agentMenu({
@@ -2050,20 +2069,24 @@ function agentMenu({
       ]
     : [];
 
-  if (asking === undefined) return [links, [rename], stop];
+  const archived = agent.archivedAt !== undefined;
+
+  if (asking === undefined) return [links, [rename], archived ? [unarchiveAct(agent, acts)] : stop];
 
   return [
     links,
     [rename],
-    [
-      ...stop,
-      {
-        label: WORDS.ARCHIVE,
-        symbol: GLYPH.ARCHIVE,
-        tone: ROW_ACTION_TONE.ARCHIVE,
-        onPress: asking.archive,
-      },
-    ],
+    archived
+      ? [unarchiveAct(agent, acts)]
+      : [
+          ...stop,
+          {
+            label: WORDS.ARCHIVE,
+            symbol: GLYPH.ARCHIVE,
+            tone: ROW_ACTION_TONE.ARCHIVE,
+            onPress: asking.archive,
+          },
+        ],
     [
       {
         label: WORDS.DELETE,
@@ -2404,6 +2427,47 @@ function OverviewAgents({
           onPress={() => router.navigate("/inbox")}
         />
       )}
+    </ListSection>
+  );
+}
+
+/** Whether the reader left Archived open, one choice for every task's page for as long as the app runs. */
+let archivedUnfolded = false;
+
+/**
+ * The task's archived agents under Archived, after its Agents, as the
+ * panel's phone Overview folds them under its agents: each the same row as
+ * a listed agent's, which opens its page, where its transcript is read and
+ * it is brought back, and offers Unarchive in Archive's place; folded until
+ * opened, then standing as the reader left it on every task's page; none
+ * while the task has none.
+ */
+function OverviewArchived({
+  overview,
+  asking,
+}: {
+  readonly overview: TaskOverview;
+  readonly asking: AgentAsking;
+}) {
+  const [folded, setFolded] = useState(!archivedUnfolded);
+
+  if (overview.archived.length === 0) return null;
+
+  return (
+    <ListSection
+      title={WORDS.ARCHIVED}
+      glyph={GLYPH.ARCHIVE}
+      count={overview.archived.length}
+      foldable
+      folded={folded}
+      onFold={(shut) => {
+        archivedUnfolded = !shut;
+        setFolded(shut);
+      }}
+    >
+      <RowForEach data={overview.archived} keyOf={(line) => line.agent.id}>
+        {(line) => <TaskAgentRow line={line} task={overview.task} asking={asking} />}
+      </RowForEach>
     </ListSection>
   );
 }
@@ -2816,6 +2880,7 @@ function OverviewPage({
       </ListSection>
       {sections ? <OverviewRelations overview={overview} /> : null}
       {sections ? <OverviewAgents overview={overview} asking={asking} /> : null}
+      {sections ? <OverviewArchived overview={overview} asking={asking} /> : null}
       {sections ? <OverviewPages overview={overview} /> : null}
       {!sections || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
