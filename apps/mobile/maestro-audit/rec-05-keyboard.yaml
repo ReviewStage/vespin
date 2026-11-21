@@ -1,4 +1,4 @@
-# rec-05-keyboard.yaml -- a thread's reply field and an agent's composer taking the keyboard, words typed, and the keyboard dragged down with the list, as Messages lowers it.
+# rec-05-keyboard.yaml -- a thread's reply field and an agent's composer taking the keyboard, words typed, two messages sent on the agent page (where the sent line lands against the composer's stack), and the keyboard dragged down with the list, as Messages lowers it.
 appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
@@ -53,6 +53,22 @@ onFlowComplete:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: a05-agent-keyboard
+- tapOn:
+    text: "Send"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a05-agent-sent
+- tapOn:
+    id: "composer-field"
+    optional: true
+- inputText: "One more: log each resend."
+- tapOn:
+    text: "Send"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: a05-agent-sent-again
 - swipe:
     start: "50%, 25%"
     end: "50%, 92%"
