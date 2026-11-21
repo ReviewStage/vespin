@@ -348,8 +348,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   built natively from the same kind of tree (`headerMenu`), a tap folding
   the section and a long press opening the menu. Held SwiftUI or React
   Native views draw `LongPressMenu` through `HeldSwiftMenu` and
-  `HeldMenu`, so wherever the panel opens a right-click menu the app opens
-  the same menu on a long press.
+  `HeldMenu`, its menu built natively from the same kind of tree
+  (`rowMenu`), headed by its `title` where it has one, so wherever the
+  panel opens a right-click menu the app opens the same menu on a long
+  press.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and

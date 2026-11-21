@@ -2,13 +2,10 @@
 
 import {
   Button,
-  ContextMenu,
   DisclosureGroup,
-  Divider,
   HStack,
   Image,
   Menu,
-  Section,
   Spacer,
   Text,
   Toggle,
@@ -57,19 +54,12 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import {
-  createContext,
-  Fragment,
-  type ReactElement,
-  type ReactNode,
-  useContext,
-  useState,
-} from "react";
+import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import { PixelRatio, useColorScheme } from "react-native";
 import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, glyphImage } from "./glyph.js";
-import { actContent, emojiContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { actContent, emojiContent, markContent, menuActContent } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink, rowHeard, rowMenu, rowSwipes } from "./interactions.js";
 import {
@@ -88,7 +78,6 @@ import {
 import { useMinute } from "./minute.js";
 import {
   filledGroups,
-  isSubmenu,
   type LongPressGroup,
   type MenuChoice,
   type MenuInks,
@@ -339,28 +328,6 @@ export function choiceContent(choice: MenuChoice, colors: BrandColors) {
   );
 }
 
-/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks, then its acts. */
-function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
-  return (
-    <Menu
-      key={submenu.label}
-      label={menuLabel(submenu.label, submenu.symbol)}
-      modifiers={ink === undefined ? [] : [tint(ink)]}
-    >
-      {submenu.choices.map((choice) => (
-        <Toggle
-          key={choice.label}
-          {...choiceContent(choice, colors)}
-          isOn={choice.on}
-          onIsOnChange={() => choice.onPress()}
-        />
-      ))}
-      {(submenu.submenus ?? []).map((inner) => rowSubmenu(inner, colors, ink))}
-      {(submenu.actions ?? []).map((action) => actionButton(action, colors))}
-    </Menu>
-  );
-}
-
 /** A row's time, in the time's style, in the muted ink and tabular figures, as the panel's rows end. Note that it keeps its whole width, so a long title is what cuts short, as Mail's date stands whole beside a sender. */
 export function RowTime({ at, now }: { readonly at: number; readonly now: number | undefined }) {
   const colors = useColors();
@@ -462,22 +429,16 @@ export function rowPlacement(
   ];
 }
 
-/** A swiped act as it stands again in the long press menu: in the muted ink a menu's glyph takes, and red through the system's destructive role, since a menu takes no row away. */
-function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
-  return isSubmenu(swipe)
-    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
-    : actionButton(swipe, colors);
-}
-
 /**
  * The one long press menu the app opens on anything held, as the panel opens
  * its right-click menu on the same things: SwiftUI's own menu, its groups in
  * the panel's order, each set apart from the next by a divider, an act red
- * where it takes something away. A section's header draws it through
- * `ListSection`'s `menu`, and SwiftUI or React Native views held through
- * `HeldSwiftMenu` and `HeldMenu`; a row's is built natively from the same
- * groups instead (`RowFrame`, `rowMenu`). The content alone where it offers
- * nothing.
+ * where it takes something away, headed by `title` where it has one. The
+ * native module builds it from the groups' tree only as a long press opens
+ * it (`rowMenu`), as a row's and a section header's are, so the content holds
+ * no view of an item nobody opened; a press comes back as the item's place.
+ * SwiftUI or React Native views are held through `HeldSwiftMenu` and
+ * `HeldMenu`. The content alone where it offers nothing.
  */
 export function LongPressMenu({
   groups,
@@ -489,38 +450,23 @@ export function LongPressMenu({
   readonly title?: string | undefined;
   readonly children: ReactElement;
 }) {
-  const filled = filledGroups(groups);
-
-  if (filled.length === 0) return children;
-
-  const items = <LongPressMenuItems groups={filled} />;
-
-  return (
-    <ContextMenu>
-      <ContextMenu.Items>
-        {title === undefined ? items : <Section title={title}>{items}</Section>}
-      </ContextMenu.Items>
-      <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
-    </ContextMenu>
-  );
-}
-
-/**
- * A long press menu's groups as the system's menu items, in the panel's
- * order, each group after a divider: what `LongPressMenu` opens.
- */
-function LongPressMenuItems({ groups }: { readonly groups: readonly LongPressGroup[] }) {
   const colors = useColors();
 
-  return groups
-    .filter((group) => group.length > 0)
-    .map((group, at) => (
-      // Note that a group is keyed by its first item's words, which a menu holds once.
-      <Fragment key={group[0]?.label ?? at}>
-        {at === 0 ? null : <Divider />}
-        {group.map((item) => swipeMenuButton(item, colors))}
-      </Fragment>
-    ));
+  if (filledGroups(groups).length === 0) return children;
+
+  const tree = JSON.stringify({
+    title,
+    groups: menuTree(groups, {
+      act: colors.TEXT_MUTED,
+      tone: (tone) => toneColor(colors, tone),
+    }),
+  });
+
+  return (
+    <HStack modifiers={[rowMenu(tree, false, (path) => menuPressAt(groups, path)?.())]}>
+      {children}
+    </HStack>
+  );
 }
 
 /** A row's content with the question its acts ask standing by it, where its acts ask any. */
