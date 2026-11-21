@@ -194,6 +194,7 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
   RUN_PROFILE.INBOX,
   RUN_PROFILE.INBOX_LARGE,
   RUN_PROFILE.PERSON,
+  RUN_PROFILE.TASKS_OPEN,
 ]);
 
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
