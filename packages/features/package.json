@@ -201,6 +201,7 @@
     "./link-open": "./src/link-open.js",
     "./link-grammar": "./src/link-grammar.js",
     "./mention-link": "./src/mention-link.js",
+    "./mention-kind": "./src/mention-kind.js",
     "./mention-offer": "./src/mention-offer.js",
     "./mermaid-diagram": "./src/mermaid-diagram.js",
     "./open-address": "./src/open-address.js",
