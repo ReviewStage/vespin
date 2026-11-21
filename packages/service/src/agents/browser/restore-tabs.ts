@@ -28,10 +28,10 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { listAgentBrowserTabs, retargetBrowserTab } from "@repo/database/models/agent-browser-tabs";
-import type { CdpSession } from "@repo/features/browser-cdp";
 import { Effect, Result, type Scope } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
+import type { CdpSession } from "./browser-cdp.js";
 
 /**
  * Reopens each tab kept for the agent whose conversation is named that the

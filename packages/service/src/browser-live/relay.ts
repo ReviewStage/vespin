@@ -60,7 +60,6 @@ import { browserTabDriver } from "@repo/database/models/agent-browser-tabs";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import type { BrowserTabsPlace } from "@repo/features/agent-browser-tab-wire";
 import { BROWSER_SHOWN_MAX_CHARS, isBrowserAddress } from "@repo/features/browser-acts";
-import type { CdpCommand, CdpEvent, CdpFailure, CdpSession } from "@repo/features/browser-cdp";
 import {
   BROWSER_LIVE_CLIENT,
   BROWSER_LIVE_CLOSE_CODE,
@@ -96,6 +95,12 @@ import {
 import { BROWSER_TAKEOVER_HOLD_MS } from "../agents/agent-browser-tabs.js";
 import { controlsAgent } from "../agents/agent-reach.js";
 import { BROWSER_UNREACHABLE, type BrowserUnreachable } from "../agents/browser/agent-browser.js";
+import type {
+  CdpCommand,
+  CdpEvent,
+  CdpFailure,
+  CdpSession,
+} from "../agents/browser/browser-cdp.js";
 import { EXCESS_KEYS, type UnparsedWireValue } from "../core.js";
 import type { ServerAgentTool } from "../events/server-events.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
