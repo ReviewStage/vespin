@@ -1,0 +1,160 @@
+# smolvm-spike.yml -- PR 0 of the workspace-hosts plan: rows 1-9 of the smolvm spike on GitHub's KVM runners.
+#
+# Throwaway: it lives on spike/smolvm-workspace-agents alone, is never merged and never opened as a
+# PR. Each push to that branch (or a dispatch) builds the host agent image for amd64 and arm64,
+# pushes it to GHCR, then runs each row on its own ubuntu-24.04 runner (and the arm64 rows on
+# ubuntu-24.04-arm where it exposes /dev/kvm). Every row writes key=value results to an artifact.
+# Credentials are minted per run and worthless, but GitHub's: the job's own GITHUB_TOKEN, never printed.
+
+name: smolvm spike
+
+on:
+  push:
+    branches: [spike/smolvm-workspace-agents]
+    paths: [spike/smolvm/**, .github/workflows/smolvm-spike.yml]
+  workflow_dispatch:
+    inputs:
+      rows:
+        description: Space-separated row ids to run (empty runs all)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smolvm-spike
+  cancel-in-progress: true
+
+env:
+  IMAGE_REPO: ghcr.io/reviewstage/vespin-smolvm-spike
+
+jobs:
+  image:
+    name: Row 1 image (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-24.04 }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: ./.github/actions/setup
+      - name: Stage the context
+        run: |
+          pnpm --filter @repo/agent-runner build
+          ctx="$RUNNER_TEMP/ctx"
+          mkdir -p "$ctx/agent-runner"
+          cp spike/smolvm/Dockerfile apps/web/agent-image/tmux.conf "$ctx/"
+          cp packages/agent-runner/dist/agent-runner.mjs "$ctx/agent-runner/"
+          ls -la "$ctx" "$ctx/agent-runner"
+      - name: Build and push
+        id: build
+        run: |
+          mkdir -p results
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          tag="$IMAGE_REPO:${GITHUB_SHA::12}-${{ matrix.arch }}"
+          t0=$(date +%s)
+          docker buildx build --platform linux/${{ matrix.arch }} --provenance=false -t "$tag" --load "$RUNNER_TEMP/ctx"
+          echo "build_s=$(( $(date +%s) - t0 ))" >> results/row1-${{ matrix.arch }}.txt
+          docker push "$tag"
+          echo "image.uncompressed_mb=$(( $(docker image inspect "$tag" --format '{{.Size}}') / 1048576 ))" >> results/row1-${{ matrix.arch }}.txt
+          compressed=$(docker buildx imagetools inspect --raw "$tag" | jq '[.layers[].size] | add')
+          echo "image.compressed_mb=$(( compressed / 1048576 ))" >> results/row1-${{ matrix.arch }}.txt
+          echo "image.layers=$(docker buildx imagetools inspect --raw "$tag" | jq '.layers | length')" >> results/row1-${{ matrix.arch }}.txt
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: Every CLI runs on ${{ matrix.arch }}
+        run: |
+          docker run --rm --privileged -v "$PWD/spike/smolvm:/spike:ro" "${{ steps.build.outputs.tag }}" bash /spike/row1-image-clis.sh | tee -a results/row1-${{ matrix.arch }}.txt
+          echo "host.kvm=$([ -e /dev/kvm ] && echo present || echo absent)" >> results/row1-${{ matrix.arch }}.txt
+          cat results/row1-${{ matrix.arch }}.txt
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: results-row1-${{ matrix.arch }}
+          path: results/
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: matrix.arch == 'amd64'
+        with:
+          name: runner-bundle
+          path: packages/agent-runner/dist/agent-runner.mjs
+
+  manifest:
+    needs: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.m.outputs.image }}
+    steps:
+      - id: m
+        run: |
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          s=${GITHUB_SHA::12}
+          docker buildx imagetools create -t "$IMAGE_REPO:$s" "$IMAGE_REPO:$s-amd64" "$IMAGE_REPO:$s-arm64"
+          docker buildx imagetools inspect "$IMAGE_REPO:$s"
+          echo "image=$IMAGE_REPO:$s" >> "$GITHUB_OUTPUT"
+
+  rows:
+    name: ${{ matrix.id }} (${{ matrix.runner }})
+    needs: [image, manifest]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { id: row1-pull, runner: ubuntu-24.04, cmd: "row1-pull.sh", timeout: 30 }
+          - { id: row2, runner: ubuntu-24.04, cmd: "row2-lifecycle.sh", timeout: 30 }
+          - { id: row3-60s, runner: ubuntu-24.04, cmd: "row3-suspend.sh 60", timeout: 30 }
+          - { id: row3-60s-branchable, runner: ubuntu-24.04, cmd: "row3-suspend.sh 60 branchable", timeout: 30 }
+          - { id: row3-2h, runner: ubuntu-24.04, cmd: "row3-suspend.sh 7200", timeout: 160 }
+          - { id: row4-n4, runner: ubuntu-24.04, cmd: "row4-density.sh 4", timeout: 60 }
+          - { id: row4-n8, runner: ubuntu-24.04, cmd: "row4-density.sh 8", timeout: 90 }
+          - { id: row4-n16, runner: ubuntu-24.04, cmd: "row4-density.sh 16", timeout: 120 }
+          - { id: row5, runner: ubuntu-24.04, cmd: "row5-throughput.sh", timeout: 90 }
+          - { id: row6, runner: ubuntu-24.04, cmd: "row6-credentials.sh", timeout: 45 }
+          - { id: row7, runner: ubuntu-24.04, cmd: "row7-egress.sh", timeout: 45 }
+          - { id: row8, runner: ubuntu-24.04, cmd: "row8-docker-ports-chromium.sh", timeout: 45 }
+          - { id: row9, runner: ubuntu-24.04, cmd: "row9-upgrade.sh 1.34.4 1.35.5", timeout: 30 }
+          - { id: arm-row1-pull, runner: ubuntu-24.04-arm, cmd: "row1-pull.sh", timeout: 30 }
+          - { id: arm-row2, runner: ubuntu-24.04-arm, cmd: "row2-lifecycle.sh", timeout: 30 }
+          - { id: arm-row3-60s, runner: ubuntu-24.04-arm, cmd: "row3-suspend.sh 60", timeout: 30 }
+          - { id: arm-row8, runner: ubuntu-24.04-arm, cmd: "row8-docker-ports-chromium.sh", timeout: 45 }
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.timeout }}
+    permissions:
+      contents: write
+      packages: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        if: inputs.rows == '' || contains(format(' {0} ', inputs.rows), format(' {0} ', matrix.id))
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        if: inputs.rows == '' || contains(format(' {0} ', inputs.rows), format(' {0} ', matrix.id))
+        with:
+          name: runner-bundle
+          path: ${{ runner.temp }}/runner
+      - name: Run ${{ matrix.id }}
+        if: inputs.rows == '' || contains(format(' {0} ', inputs.rows), format(' {0} ', matrix.id))
+        run: |
+          mkdir -p results
+          if [ ! -e /dev/kvm ]; then echo "host.kvm=absent" | tee "results/${{ matrix.id }}-nokvm.txt"; exit 0; fi
+          bash spike/smolvm/${{ matrix.cmd }} 2>&1 | tee "results/${{ matrix.id }}.log"
+          for f in results/*.txt; do mv "$f" "results/${{ matrix.id }}--$(basename "$f")"; done
+        env:
+          IMAGE: ${{ needs.manifest.outputs.image }}
+          GHCR_TOKEN: ${{ github.token }}
+          GH_REAL: ${{ github.token }}
+          RUNNER_BUNDLE: ${{ runner.temp }}/runner/agent-runner.mjs
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        if: always()
+        with:
+          name: results-${{ matrix.id }}
+          path: results/
