@@ -1806,6 +1806,9 @@ importers:
       '@repo/features':
         specifier: workspace:*
         version: link:../features
+      '@repo/settings':
+        specifier: workspace:*
+        version: link:../settings
       '@repo/wire':
         specifier: workspace:*
         version: link:../wire

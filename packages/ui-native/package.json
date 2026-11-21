@@ -15,6 +15,7 @@
   "dependencies": {
     "@expo/ui": "catalog:",
     "@repo/features": "workspace:*",
+    "@repo/settings": "workspace:*",
     "@repo/wire": "workspace:*",
     "@shopify/flash-list": "2.3.2",
     "effect": "catalog:",

@@ -23,6 +23,8 @@ export const WORDS_KIND = {
   NAME: "name",
   /** An email address, on the address keyboard. */
   EMAIL: "email",
+  /** A web address, such as a link's, on the address keyboard. */
+  URL: "url",
 } as const;
 
 export type WordsKind = (typeof WORDS_KIND)[keyof typeof WORDS_KIND];
@@ -31,12 +33,14 @@ export type WordsKind = (typeof WORDS_KIND)[keyof typeof WORDS_KIND];
 const KEYBOARD = {
   [WORDS_KIND.NAME]: "default",
   [WORDS_KIND.EMAIL]: "email-address",
+  [WORDS_KIND.URL]: "url",
 } as const satisfies Record<WordsKind, string>;
 
-/** One act beside Cancel, handed the words typed, trimmed and never blank. */
+/** One act beside Cancel, handed the words typed, trimmed, and never blank unless it `takesBlank`, as a link's Remove does. */
 export interface WordsAct {
   readonly label: string;
   readonly onWords: (words: string) => void;
+  readonly takesBlank?: boolean | undefined;
 }
 
 /** What the words alert asks: its question, what it explains, the words its field opens on, what they are, and its acts. */
@@ -70,7 +74,7 @@ export function askForWords({ title, message, initial = "", kind, acts }: WordsA
         onPress: (typed?: string) => {
           const kept = typed?.trim() ?? "";
 
-          if (kept !== "") act.onWords(kept);
+          if (kept !== "" || act.takesBlank === true) act.onWords(kept);
         },
       })),
     ],

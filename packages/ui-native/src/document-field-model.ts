@@ -78,26 +78,45 @@ function codeLines(block: BlockContent): readonly BlockLine[] {
   }));
 }
 
+/** A block's lines as a field holds them, keyed by `key`, naming the block of the document as read it came from, none for one made in the field. */
+function blockLines(
+  block: BlockContent,
+  key: number,
+  from: number | undefined,
+): readonly FieldLine[] {
+  const facts = blockFacts(block);
+
+  const lines =
+    block.kind === BLOCK_KIND.CODE
+      ? codeLines(block)
+      : block.kind === BLOCK_KIND.RULE
+        ? [RULE_LINE]
+        : block.lines;
+
+  return lines.map((line): FieldLine => {
+    const laid: FieldLine = { ...facts, block: key, from, runs: line.runs };
+
+    if (line.checked === undefined) return laid;
+
+    return { ...laid, checked: line.checked };
+  });
+}
+
 /** The document's blocks as a field's lines, each block keyed by its place and naming it as where it came from. */
 export function fieldLines(blocks: readonly DocumentBlock[]): readonly FieldLine[] {
-  return blocks.flatMap((block, index) => {
-    const facts = blockFacts(block);
+  return blocks.flatMap((block, index) => blockLines(block, index, index));
+}
 
-    const lines =
-      block.kind === BLOCK_KIND.CODE
-        ? codeLines(block)
-        : block.kind === BLOCK_KIND.RULE
-          ? [RULE_LINE]
-          : block.lines;
-
-    return lines.map((line): FieldLine => {
-      const laid: FieldLine = { ...facts, block: index, from: index, runs: line.runs };
-
-      if (line.checked === undefined) return laid;
-
-      return { ...laid, checked: line.checked };
-    });
-  });
+/**
+ * The blocks a field's lines were read as (`editedBlocks`), laid out as its
+ * lines again, each naming the block it came from as it did. Note that a
+ * field's own edits are handed back this way rather than read again from the
+ * Markdown they write, since Markdown keeps neither a paragraph's spaces at
+ * its edges nor an empty paragraph, and a field handed lines without them
+ * would take away a space or a line the reader just typed.
+ */
+export function editedLines(blocks: readonly EditedBlock[]): readonly FieldLine[] {
+  return blocks.flatMap((block, index) => blockLines(block, index, block.from));
 }
 
 /** A block's content from its kind's facts and its lines. */

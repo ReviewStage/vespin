@@ -12,6 +12,9 @@
       "path": "../features"
     },
     {
+      "path": "../settings"
+    },
+    {
       "path": "../wire"
     }
   ]

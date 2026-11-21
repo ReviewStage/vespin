@@ -52,10 +52,48 @@ export interface NativeDocumentValue {
   readonly seen: number;
 }
 
+/** What a format act does, as the view reads it: a mark by its look, the link, or the block a line is turned into, a heading by its level. */
+export const FORMAT_ACT = {
+  STRONG: "strong",
+  EMPHASIS: "emphasis",
+  STRIKE: "strike",
+  CODE: "code",
+  LINK: "link",
+  PARAGRAPH: "paragraph",
+  HEADING_1: "heading-1",
+  HEADING_2: "heading-2",
+  HEADING_3: "heading-3",
+  BULLET_LIST: "bullet-list",
+  ORDERED_LIST: "ordered-list",
+  TASK_LIST: "task-list",
+  QUOTE: "quote",
+} as const;
+
+export type FormatAct = (typeof FORMAT_ACT)[keyof typeof FORMAT_ACT];
+
+/** One act the view's edit menu and keyboard bar offer: what it does, its words, and its glyph's name in the asset catalog. */
+export interface NativeFormatAct {
+  readonly act: FormatAct;
+  readonly title: string;
+  readonly glyph: string;
+}
+
+/** The acts the view offers on its selection: its marks, a link, and the blocks a line is turned into, under the menus' words. */
+export interface NativeFormats {
+  readonly title: string;
+  readonly marks: readonly NativeFormatAct[];
+  readonly link?: NativeFormatAct | undefined;
+  readonly blocksTitle: string;
+  readonly blocksGlyph: string;
+  readonly blocks: readonly NativeFormatAct[];
+}
+
 /** The doors the view opens to JavaScript through its ref. */
 export interface NativeDocumentFieldDoors {
   focus(): Promise<void>;
   blur(): Promise<void>;
+  /** Lays the address on the words a link was asked for, or takes their link off where it is empty. */
+  setLink(address: string): Promise<void>;
 }
 
 interface NativeDocumentFieldProps {
@@ -65,7 +103,10 @@ interface NativeDocumentFieldProps {
   readonly look: NativeLook;
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
+  readonly formats?: NativeFormats | undefined;
   readonly testID?: string | undefined;
+  /** A link asked for on the selected words, with the address they hold, empty where none. */
+  readonly onLinkAsk: (event: NativeSyntheticEvent<{ readonly address: string }>) => void;
   readonly onLines: (
     event: NativeSyntheticEvent<{
       readonly lines: readonly NativeToldLine[];

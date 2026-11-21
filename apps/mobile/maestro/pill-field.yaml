@@ -1,4 +1,4 @@
-# pill-field.yaml -- the pill field on its scratch page: laid in with a mention of every kind and a picture's and a file's marker as pills, then cleared, typed into, an `@` word picked into a pill, a picture attached at the caret, and the Markdown it writes shown under it; then the document field a description is edited in, drawn with no syntax, its table and diagram as cards.
+# pill-field.yaml -- the pill field on its scratch page: laid in with a mention of every kind and a picture's and a file's marker as pills, then cleared, typed into, an `@` word picked into a pill, a picture attached at the caret, and the Markdown it writes shown under it; then the document field a description is edited in, drawn with no syntax, its table and diagram as cards, and words typed bold and turned into a heading from the bar over the keyboard.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -74,3 +74,22 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: document-field-cards
 - assertVisible: "(?s).*\\| Role \\| May withdraw \\|\\n\\| - \\| - \\|.*"
+# Formatting comes from the selection, as Notes and Notion offer it: the
+# bar over the keyboard holds the desktop toolbar's marks and its Turn into,
+# each named by the panel's words. Cleared, the field is typed into from its
+# first line: Bold pressed with nothing selected gives the words typed next
+# its look, and Turn into's Heading 1 turns their line into a heading, each
+# written as the panel writes it.
+- scrollUntilVisible:
+    element: "Clear description"
+    direction: UP
+- tapOn: "Clear description"
+- tapOn:
+    id: "document-field"
+- tapOn: "Bold"
+- inputText: "Ship"
+- assertVisible: "(?s).*\\*\\*Ship\\*\\*.*"
+- tapOn: "Turn into"
+- tapOn: "Heading 1"
+- assertVisible: "(?s).*# \\*\\*Ship\\*\\*.*"
+- takeScreenshot: document-field-formatted
