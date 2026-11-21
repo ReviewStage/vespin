@@ -77,13 +77,19 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
     }, [regular, selected, router, tab]),
   );
 
-  return {
-    selected: held !== undefined && held.over === routed ? held.id : routed,
-    select: (id) => {
+  // Note that the pick is the same function until the route's selection moves, so a list handed it redraws for its own rows alone.
+  const select = useCallback(
+    (id: string) => {
       hold({ id, over: routed });
       picked.set(tab, id);
       router.setParams({ selected: id });
     },
+    [routed, tab, router],
+  );
+
+  return {
+    selected: held !== undefined && held.over === routed ? held.id : routed,
+    select,
   };
 }
 

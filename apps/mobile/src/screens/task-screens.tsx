@@ -182,8 +182,10 @@ import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   type ComponentProps,
+  memo,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useDeferredValue,
   useMemo,
   useRef,
@@ -1019,26 +1021,36 @@ function useTreeHoldState(): TreeHold {
   const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
   const [folded, setFoldedSet] = useState<ReadonlySet<string>>(NONE_OPEN);
 
-  const toggleParent = (group: string, taskId: string) =>
-    setOpened((was) => {
-      const parents = new Set(was.get(group) ?? NONE_OPEN);
+  const toggleParent = useCallback(
+    (group: string, taskId: string) =>
+      setOpened((was) => {
+        const parents = new Set(was.get(group) ?? NONE_OPEN);
 
-      if (!parents.delete(taskId)) parents.add(taskId);
+        if (!parents.delete(taskId)) parents.add(taskId);
 
-      return new Map(was).set(group, parents);
-    });
+        return new Map(was).set(group, parents);
+      }),
+    [],
+  );
 
-  const setFolded = (group: string, shut: boolean) =>
-    setFoldedSet((was) => {
-      const next = new Set(was);
+  const setFolded = useCallback(
+    (group: string, shut: boolean) =>
+      setFoldedSet((was) => {
+        const next = new Set(was);
 
-      if (shut) next.add(group);
-      else next.delete(group);
+        if (shut) next.add(group);
+        else next.delete(group);
 
-      return next;
-    });
+        return next;
+      }),
+    [],
+  );
 
-  return { opened, toggleParent, folded, setFolded };
+  // Note that the hold is the same object until a parent opens or a group folds, so the tree it is handed redraws for its own list alone (`TasksTree`).
+  return useMemo(
+    () => ({ opened, toggleParent, folded, setFolded }),
+    [opened, toggleParent, folded, setFolded],
+  );
 }
 
 function groupParents(hold: TreeHold, group: string): OpenedParents {
@@ -1333,9 +1345,20 @@ type TasksTreeProps = {
  * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
  * the member's sections, and the repository groups, each folding under its
  * header and count, a task's sub-tasks folded under it; or, while a search
- * is typed, every task it finds. A pull reads it again.
+ * is typed, every task it finds. A pull reads it again. Note that it
+ * redraws only as its own props move, since its screen draws again on every
+ * delivery to the task list, and the screen hands it the listing deferred
+ * (`useShownTree`).
  */
-function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
+const TasksTree = memo(function TasksTree({
+  listing,
+  hold,
+  look,
+  search,
+  selected,
+  onSelect,
+  onRefresh,
+}: TasksTreeProps) {
   const { tree } = listing;
   const read = useTasksReadStatus();
   const router = useRouter();
@@ -1395,7 +1418,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
       ))}
     </RowList>
   );
-}
+});
 
 /** The Managers section's words: its header, its +, and what it says while it holds none, as the desktop's sidebar says them. */
 const MANAGERS_WORDS = {
@@ -3085,6 +3108,17 @@ function useViewMenu(read: ReadListing): BarMenu {
 /** The list screens' state, held by the tab's root screen above its two layouts. */
 type TasksScreenState = ReturnType<typeof useTasksScreen>;
 
+/**
+ * The listing and the search the tree draws, deferred together
+ * (`useDeferredValue`), so a delivery to the task list or a key typed draws
+ * the screen at once and the tree's rows after it, in slices a press can
+ * come between, and the tree never draws one search's finds under another's
+ * words.
+ */
+function useShownTree(listing: TasksListing, search: string) {
+  return useDeferredValue(useMemo(() => ({ listing, search }), [listing, search]));
+}
+
 // A compact window: the tree, the account's photo opening Settings and the
 // workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
 // row pushing its task as the Stack's next screen.
@@ -3102,6 +3136,13 @@ function TasksStackList({
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
+  const shown = useShownTree(listing, search);
+
+  const onSelect = useCallback(
+    (id: string) =>
+      router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id }))),
+    [router, onOwnTab],
+  );
 
   return (
     <>
@@ -3131,13 +3172,11 @@ function TasksStackList({
       </Stack.Toolbar>
       <Screen>
         <TasksTree
-          listing={listing}
+          listing={shown.listing}
           hold={hold}
           look={LIST_LOOK.PLAIN}
-          search={search}
-          onSelect={(id) =>
-            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })))
-          }
+          search={shown.search}
+          onSelect={onSelect}
           onRefresh={refreshTasks}
         />
       </Screen>
@@ -3244,15 +3283,16 @@ function TasksSplitScreen({
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
 
   const { detail, detailBar } = useTaskDetail(selected, listing);
+  const shown = useShownTree(listing, search);
 
   const list = {
     chosen: selected !== undefined,
     view: (
       <TasksTree
-        listing={listing}
+        listing={shown.listing}
         hold={hold}
         look={LIST_LOOK.PLAIN}
-        search={search}
+        search={shown.search}
         selected={selected}
         onSelect={select}
         onRefresh={refreshTasks}
