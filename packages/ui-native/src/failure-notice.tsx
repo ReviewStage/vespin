@@ -83,10 +83,12 @@ const SWIPE_AWAY = 24;
  * How tall UIKit's navigation bar stands, in points, under the status bar:
  * on an iPad, on an iPhone held upright and on its side, and in a sheet,
  * which draws its own taller bar from its own top. The banner stands under
- * it, so it never covers the bar's title or its buttons.
+ * it, so it never covers the bar's title or its buttons. An iPad's counts
+ * the room iPadOS 26 sets a split view's floating column in from the top
+ * too, since a column's bar stands inside it.
  */
 const NAVIGATION_BAR = {
-  PAD: 50,
+  PAD: 58,
   PHONE: 44,
   PHONE_LANDSCAPE: 32,
   SHEET: 56,
@@ -120,13 +122,17 @@ export interface FailureNotices {
 
 const Notices = createContext<FailureNotices | undefined>(undefined);
 
-/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), and how a layer comes and goes. */
+/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), how a layer comes and goes, and how far down the tab in front starts its bars. */
 interface NoticeStage {
   readonly shown: ShownNotice | undefined;
   readonly top: string | undefined;
   readonly gone: (serial: number) => void;
   readonly enter: (layer: string) => () => void;
+  readonly standBars: (place: string, top: number) => () => void;
 }
+
+/** How far down the tab in front starts its bars, under any tab bar floating over it, or none before a tab says. */
+const BarsTop = createContext<number | undefined>(undefined);
 
 const Stage = createContext<NoticeStage | undefined>(undefined);
 
@@ -240,8 +246,10 @@ function NoticeBody({
  * whose safe area holds it. A sheet draws its own bar from its own top.
  */
 function useBannerTop(sheet: boolean): number {
-  const { top: safeTop } = useSafeAreaInsets();
+  const { top: windowTop } = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
+  // Note that a tab's bars start under the iPad's floating tab bar, which the window's safe area leaves out, so the banner stood over the columns' bars wherever that bar floated.
+  const safeTop = Math.max(windowTop, useContext(BarsTop) ?? 0);
 
   if (sheet) return NAVIGATION_BAR.SHEET;
 
@@ -377,6 +385,7 @@ function NoticeBanner({
 export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
   const [layers, setLayers] = useState<readonly string[]>([]);
+  const [bars, setBars] = useState<readonly { readonly place: string; readonly top: number }[]>([]);
 
   const notices = useMemo<FailureNotices>(
     () => ({
@@ -396,22 +405,31 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
     return () => setLayers((were) => were.filter((was) => was !== layer));
   }, []);
 
+  // Note that the tab that said last is the one in front, since a tab says while it stands in front alone.
+  const standBars = useCallback((place: string, barsTop: number) => {
+    setBars((were) => [...were.filter((was) => was.place !== place), { place, top: barsTop }]);
+
+    return () => setBars((were) => were.filter((was) => was.place !== place));
+  }, []);
+
   const top = layers.at(-1);
 
   const stage = useMemo<NoticeStage>(
-    () => ({ shown: state.shown, top, gone, enter }),
-    [state.shown, top, gone, enter],
+    () => ({ shown: state.shown, top, gone, enter, standBars }),
+    [state.shown, top, gone, enter, standBars],
   );
 
   return (
     <Notices value={notices}>
       <Stage value={stage}>
         {children}
-        <NoticeBanner
-          notice={top === undefined ? state.shown : undefined}
-          onGone={gone}
-          sheet={false}
-        />
+        <BarsTop value={bars.at(-1)?.top}>
+          <NoticeBanner
+            notice={top === undefined ? state.shown : undefined}
+            onGone={gone}
+            sheet={false}
+          />
+        </BarsTop>
       </Stage>
     </Notices>
   );
@@ -446,4 +464,32 @@ export function FailureNoticeLayer({
       <NoticeBanner notice={top === layer ? shown : undefined} onGone={gone} sheet />
     </View>
   );
+}
+
+/**
+ * A tab's word to the notice of how far down its own bars start: its safe
+ * area's top, which on an iPad counts the tab bar floating over its columns
+ * where the system's tab sidebar is folded, as a portrait iPad folds it, and
+ * which the window's own safe area, all the notice over the app's root view
+ * reads, leaves out. Said while the tab stands in front, so the banner drops
+ * in under that tab's column bars rather than over their buttons, as Mail's
+ * and Notes' notices stand clear of the bar.
+ */
+export function FailureNoticeBars({
+  inFront,
+}: {
+  /** Whether the tab is the one shown. */
+  readonly inFront: boolean;
+}) {
+  const stage = useContext(Stage);
+  const place = useId();
+  const { top } = useSafeAreaInsets();
+
+  if (stage === undefined) throw new Error("A tab said its bars outside the notice's provider.");
+
+  const { standBars } = stage;
+
+  useEffect(() => (inFront ? standBars(place, top) : undefined), [standBars, place, top, inFront]);
+
+  return null;
 }

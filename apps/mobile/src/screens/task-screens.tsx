@@ -34,6 +34,7 @@ import {
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
   agentRunsOnWords,
   agentStillWriting,
@@ -94,10 +95,10 @@ import { TASKS_GROUP } from "@repo/features/tasks-page-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
-  CHOOSE_AN_ITEM_WORDS,
   countWords,
   NO_RESULTS_HINT,
   noResultsForWords,
+  noSelectionWords,
   readFailedWords,
   readingWords,
   TERM,
@@ -194,12 +195,14 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePushStood } from "../push-stood.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+
 import { useOnOwnTab } from "../tab-route.js";
 import {
   threadComments,
@@ -2884,6 +2887,7 @@ function OverviewPage({
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
+  useNoteOpened({ kind: SEARCH_FOUND_KIND.TASKS, id: task.id, workspaceId: task.workspaceId });
   const sections = useSectionsShown(task.id) && entered;
 
   const { data: descriptions = false } = useQuery({
@@ -3085,7 +3089,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
         entered
       />
     ) : selected === undefined ? (
-      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
+      <NoSelection title={noSelectionWords(TERM.TASK)} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (

@@ -52,7 +52,8 @@ builds a control of its own.
   opens Settings, never worded "Allow", and Not Now), `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass in one fixed place, dropping in
   under the top bar inside the safe area as the system's banners drop in,
-  swiped up to let go, with the refusal's words and Try again, said aloud by
+  below an iPad's floating tab bar and a tab's column bars, which the tab
+  in front tells it of (`FailureNoticeBars`), swiped up to let go, with the refusal's words and Try again, said aloud by
   VoiceOver, faded rather than slid where the reader reduces motion, standing
   over the app's root view or the sheet on top (`FailureNoticeLayer`; not a
   `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
@@ -75,7 +76,8 @@ builds a control of its own.
   desktop composer does, its field on top, one line until its words wrap,
   and under it one row of the + and the capsules saying where the
   message runs, then at its end the model chip (`trailing`, whose sheet
-  holds the model, effort, Fast and the permission mode, each once),
+  holds the model, effort, Fast and the permission mode, each once, a
+  popover from the chip in a regular window, `ModelChoicePopover`),
   Dictate, and Send, a dictation under way standing its strip in the row's
   place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
   and its head, inside the same glass, holds an agent's
@@ -190,7 +192,9 @@ builds a control of its own.
   stop sign of a blocked task, a thread that needs you, its sub-tasks as a
   ring and "2/5", one mark for its agents, the face of who is on it where
   that is someone other than the reader or the dashed mark where no one is,
-  and when it last moved; a search's finds end in its key; its priority
+  and when it last moved, the agents' mark and then the sub-tasks' progress
+  stepping aside before a long name is cut, as Mail's rows keep the
+  sender's name, `task-row-fit-model.ts`; a search's finds end in its key; its priority
   stands on the task's own Priority chip, not the row; a parent stands as the
   label of `RowDisclosure`, SwiftUI's own `DisclosureGroup`, whose chevron at
   the line's trailing edge folds its sub-tasks, as Files and Notes fold a
