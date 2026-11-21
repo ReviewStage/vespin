@@ -1,0 +1,55 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow new-agent
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "New agent" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "New agent"... COMPLETED
+Assert that "Ask to make changes" is visible... COMPLETED
+Assert that "Opus 5.5.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-agent-sheet... COMPLETED
+Input text Add a Resend button beside each pending invite.... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Tap on "Opus 5.5.*"... COMPLETED
+Assert that "Effort" is visible... COMPLETED
+Assert that ".*Sonnet 5.5" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-agent-models... COMPLETED
+Tap on ".*Sonnet 5.5"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Done"... COMPLETED
+Assert that "Sonnet 5.5.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-agent-picked... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Ask to make changes" is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-agent-started... COMPLETED
