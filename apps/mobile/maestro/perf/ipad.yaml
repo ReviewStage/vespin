@@ -76,9 +76,9 @@ onFlowComplete:
       - assertVisible: "Teammate invitations"
       - waitForAnimationToEnd:
           timeout: 3000
-      # Note that the landscape sidebar's Inbox row is tapped by its point, since the text matches the list column's own title first.
+      # Note that the landscape sidebar's Inbox row is tapped by its words, which only the sidebar holds while the list column shows Tasks.
       - tapOn:
-          point: "8%, 21%"
+          text: "Inbox.*"
           retryTapIfNoChange: false
           label: "T:tab-inbox"
       - assertVisible: "Recorded the invite flow"
