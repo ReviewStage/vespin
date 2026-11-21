@@ -22,20 +22,12 @@ import { keptKey, useKept } from "../use-kept.js";
  *
  * Note that Assigned to is kept as Me where it is absent, so every reader
  * opens on their own tasks, and a later choice of Anyone is kept as one;
- * that the finished sub-tasks are kept hidden where nothing is kept, so a
- * view kept before the choice existed reads as it did; and that a view
- * kept grouped by progress, before that grouping was removed, reads as
- * grouped by repository, the rest of its choices kept.
+ * and that the finished sub-tasks are kept hidden where nothing is kept, so
+ * a view kept before the choice existed reads as it did.
  */
 
-/** A grouping a view may still hold from before it was removed. */
-const RETIRED_GROUPING = { PROGRESS: "progress" } as const;
-
 /** A kept grouping. */
-const storedGrouping = Schema.Literals([
-  ...Object.values(TASK_GROUPING),
-  ...Object.values(RETIRED_GROUPING),
-]);
+const storedGrouping = Schema.Literals(Object.values(TASK_GROUPING));
 
 /** A kept Assigned to. */
 const storedAssignedTo = Schema.Union([
@@ -80,8 +72,7 @@ function viewOf(kept: StoredViews[string] | undefined): TaskListView {
   if (kept === undefined) return DEFAULT_TASK_LIST_VIEW;
 
   return {
-    grouping:
-      kept.grouping === RETIRED_GROUPING.PROGRESS ? DEFAULT_TASK_LIST_VIEW.grouping : kept.grouping,
+    grouping: kept.grouping,
     assignedTo: kept.assignee ?? DEFAULT_TASK_LIST_VIEW.assignedTo,
     finishedSubTasks: kept.finished ?? DEFAULT_TASK_LIST_VIEW.finishedSubTasks,
   };
