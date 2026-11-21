@@ -1,0 +1,6 @@
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-21 05:34:21.988 Df log[90772:0] [com.apple.log:] log run noninteractively, parent: 89642 (launchd_sim), args: 'log' 'show' '--style' 'compact' '--start' '2026-11-21 05:31:44' '--predicate' 'eventMessage CONTAINS "[Vespin] heard"'
+getpwuid_r did not find a match for uid 501
+Timestamp               Ty Process[PID:TID]
+2026-11-21 05:36:31.414 Df log[91414:0] [com.apple.log:] log run noninteractively, parent: 89642 (launchd_sim), args: 'log' 'show' '--style' 'compact' '--start' '2026-11-21 05:34:25' '--predicate' 'eventMessage CONTAINS "[Vespin] heard"'
