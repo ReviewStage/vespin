@@ -337,13 +337,20 @@ export function useCopyLink(
   useHoldChordLinks(firstLink(false), firstLink(true));
   const standing = linksAt(false).find((each) => each.step === true)?.link;
 
-  const placed = linksAtHand(tasks, rows, views, {
-    settings: undefined,
-    underRouted: true,
-    sidePanelFocused: false,
-    narrow: room === SHELL_ROOM.NARROW,
-    inboxTask,
-  }).find((each) => each.step === true)?.link;
+  // Note that the task drawn names no step while another is bound for, as the one before a pressed task stands until that
+  // task opens, because the history would write the step of the task bound for at the address of the one it leaves.
+  const drawn = tasks.region.kind === TASK_REGION.READY ? tasks.region.task.id : undefined;
+
+  const placed =
+    tasks.boundFor !== undefined && drawn !== tasks.boundFor
+      ? undefined
+      : linksAtHand(tasks, rows, views, {
+          settings: undefined,
+          underRouted: true,
+          sidePanelFocused: false,
+          narrow: room === SHELL_ROOM.NARROW,
+          inboxTask,
+        }).find((each) => each.step === true)?.link;
 
   return { linksAt, standing, placed, copy };
 }

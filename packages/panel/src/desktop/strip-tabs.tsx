@@ -680,16 +680,16 @@ export interface TabViews {
   onWorkerStatus: (callId: string, status: AgentStatus) => void;
 }
 
-/** Whether two readings name the same workers by the same titles. */
+/** Whether two readings name the same workers by the same titles; a tab held no reading yet names none, as one naming no worker does. */
 function sameTitles(
   a: ReadonlyMap<string, string> | undefined,
   b: ReadonlyMap<string, string> | undefined,
 ): boolean {
   if (a === b) return true;
 
-  if (a === undefined || b === undefined || a.size !== b.size) return false;
+  if ((a?.size ?? 0) !== (b?.size ?? 0)) return false;
 
-  for (const [key, title] of a) if (b.get(key) !== title) return false;
+  for (const [key, title] of a ?? []) if (b?.get(key) !== title) return false;
 
   return true;
 }
