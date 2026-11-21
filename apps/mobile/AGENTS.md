@@ -100,6 +100,13 @@ once per change you want to see and reuse that build for every session on it.
 Stop every session you start. Never install the Revyl GitHub App or add a
 `pr_review` block to the config: Proof of Changes stays off.
 
+Revyl can't tell a tap from a long press on its iPad Pro 13-inch on iOS 26.2.
+`revyl device tap` and a zero-distance `revyl device drag` both land as long
+presses there: one opened a plain button's context menu, and one opened a menu
+button's menu where its tap should run (STAG-3808). Neither command takes a
+duration, so check a tap against a long press with Maestro's `tapOn` and
+`longPressOn` on the Mac's simulators instead.
+
 ## CI
 
 - **Linux** (`.github/workflows/ci.yml`) runs the typecheck, the lint, the
