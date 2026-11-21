@@ -1,0 +1,7 @@
+{
+  "name": "@repo/bench",
+  "version": "0.24.0",
+  "private": true,
+  "type": "module",
+  "description": "The step bench: what one step of a moving row costs the web client's window, timed in builds side by side, run by hand or by an agent"
+}

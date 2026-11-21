@@ -85,6 +85,10 @@
       "project": ["src/**", "scripts/**"],
       "ignore": ["src/codex-protocol/**"]
     },
+    "tools/bench": {
+      "entry": ["bench.ts"],
+      "ignoreDependencies": ["playwright"]
+    },
     "tools/claude-code-probe": {
       "entry": ["src/sandbox/driver.mjs"],
       "project": ["src/**", "tests/**"],
