@@ -1,23 +1,23 @@
 probe rows 5859, commands 385, frames 11872
-path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
-cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -28 | None | None | -12
-inbox-row | 6 | topTouchEnd | 672 | 0 | 0 | 0 | 0 | None | 0 | 0 | None | None | None | None
-back-from-thread | 5 | topTouchEnd | 698 | 0 | 0 | 0 | 0 | None | 158 | 0 | 158 | 360 | 1061 | 1415
-more-menu | 6 | topTouchEnd | 722 | 0 | 0 | 0 | 0 | None | 101 | 0 | 167 | 414 | 1137 | 1154
-new-task | 6 | topTouchEnd | 679 | 0 | 0 | 0 | 0 | None | 0 | 0 | 226 | None | None | 1190
-new-task-cancel | 5 | topTouchEnd | 637 | 0 | 0 | 0 | 0 | None | 115 | 0 | 51 | 423 | 1071 | 852
-switcher-open | 6 | topTouchEnd | 773 | 0 | 0 | 0 | 0 | None | 123 | 0 | 119 | 365 | 1155 | 1177
-switch-workspace | 5 | topIsOnChange | 642 | 0 | 0 | 0 | 0 | None | 40 | 0 | 182 | 367 | 997 | 1430
-switch-back | 5 | topIsOnChange | 555 | 0 | 0 | 0 | 0 | None | 275 | 0 | 197 | 379 | 927 | 1450
-tab-tasks | 6 | topTouchEnd | 742 | 0 | 0 | 0 | 0 | None | 84 | 0 | 133 | 328 | 1057 | 931
-tab-inbox | 5 | topTouchEnd | 703 | 0 | 0 | 0 | 0 | None | 118 | 0 | 142 | 335 | 1044 | 953
-tasks-row | 6 | topTouchEnd | 630 | 0 | 0 | 0 | 0 | None | 0 | 0 | 34 | None | None | 250
-back-from-task | 5 | topTouchEnd | 859 | 0 | 0 | 0 | 0 | None | 297 | 0 | 63 | 360 | 191 | 1128
-status-chip-open | 7 | topTouchEnd | 746 | 0 | 0 | 0 | 0 | None | 227 | 0 | 52 | 426 | 1216 | 1161
-status-pick | 6 | topWindowChange | 270 | 0 | 0 | 0 | 0 | None | 467 | 0 | 43 | 694 | 1102 | 1946
-send | 4 | topTouchEnd | 996 | 0 | 0 | 0 | 0 | None | 62 | 0 | -11 | 386 | 1372 | 381
-agent-row | 6 | topTouchEnd | 704 | 0 | 0 | 0 | 0 | None | 0 | 0 | 58 | None | None | 210
-back-from-agent | 5 | topTouchEnd | 836 | 0 | 0 | 0 | 0 | None | 739 | 0 | 135 | 357 | 1126 | 1110
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -28 | None | None | -12 | 17
+inbox-row | 6 | topTouchEnd | 672 | 0 | 0 | 0 | 0 | None | 0 | 0 | None | None | None | None | None
+back-from-thread | 5 | topTouchEnd | 698 | 0 | 0 | 0 | 0 | None | 158 | 0 | 158 | 360 | 1061 | 1415 | 28
+more-menu | 6 | topTouchEnd | 722 | 0 | 0 | 0 | 0 | None | 101 | 0 | 167 | 414 | 1137 | 1154 | 33
+new-task | 6 | topTouchEnd | 679 | 0 | 0 | 0 | 0 | None | 0 | 0 | 226 | None | None | 1190 | 23
+new-task-cancel | 5 | topTouchEnd | 637 | 0 | 0 | 0 | 0 | None | 115 | 0 | 51 | 423 | 1071 | 852 | 38
+switcher-open | 6 | topTouchEnd | 773 | 0 | 0 | 0 | 0 | None | 123 | 0 | 119 | 365 | 1155 | 1177 | 58
+switch-workspace | 5 | topIsOnChange | 642 | 0 | 0 | 0 | 0 | None | 40 | 0 | 182 | 367 | 997 | 1430 | 35
+switch-back | 5 | topIsOnChange | 555 | 0 | 0 | 0 | 0 | None | 275 | 0 | 197 | 379 | 927 | 1450 | 28
+tab-tasks | 6 | topTouchEnd | 742 | 0 | 0 | 0 | 0 | None | 84 | 0 | 133 | 328 | 1057 | 931 | 23
+tab-inbox | 5 | topTouchEnd | 703 | 0 | 0 | 0 | 0 | None | 118 | 0 | 142 | 335 | 1044 | 953 | 25
+tasks-row | 6 | topTouchEnd | 630 | 0 | 0 | 0 | 0 | None | 0 | 0 | 34 | None | None | 250 | 226
+back-from-task | 5 | topTouchEnd | 859 | 0 | 0 | 0 | 0 | None | 297 | 0 | 63 | 360 | 191 | 1128 | 35
+status-chip-open | 7 | topTouchEnd | 746 | 0 | 0 | 0 | 0 | None | 227 | 0 | 52 | 426 | 1216 | 1161 | 224
+status-pick | 6 | topWindowChange | 270 | 0 | 0 | 0 | 0 | None | 467 | 0 | 43 | 694 | 1102 | 1946 | 285
+send | 4 | topTouchEnd | 996 | 0 | 0 | 0 | 0 | None | 62 | 0 | -11 | 386 | 1372 | 381 | 50
+agent-row | 6 | topTouchEnd | 704 | 0 | 0 | 0 | 0 | None | 0 | 0 | 58 | None | None | 210 | 213
+back-from-agent | 5 | topTouchEnd | 836 | 0 | 0 | 0 | 0 | None | 739 | 0 | 135 | 357 | 1126 | 1110 | 30
 
 most rendered components per path (summed over its taps):
 cold-launch: 

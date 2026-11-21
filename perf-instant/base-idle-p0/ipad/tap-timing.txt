@@ -1,11 +1,11 @@
 probe rows 856, commands 91, frames 2677
-path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
-inbox-row | 11 | topTouchEnd | 1017 | 0 | 0 | 0 | 0 | None | 107 | 0 | 191 | 191 | 1202 | 429
-more-menu | 6 | topTouchEnd | 1024 | 0 | 0 | 0 | 0 | None | 0 | 0 | -17 | 249 | 1290 | 971
-new-task | 6 | topTouchEnd | 871 | 0 | 0 | 0 | 0 | None | 18 | 0 | -17 | 352 | 1221 | 1013
-new-task-cancel | 5 | topTouchEnd | 870 | 0 | 0 | 0 | 0 | None | 0 | 0 | -21 | 190 | 1190 | 854
-tab-tasks | 2 | None | 785 | 0 | 0 | 0 | 0 | None | 0 | 0 | None | None | None | None
-tab-inbox | 1 | topTouchEnd | 559 | 0 | 0 | 0 | 0 | None | 0 | 0 | 65 | None | None | 4438
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+inbox-row | 11 | topTouchEnd | 1017 | 0 | 0 | 0 | 0 | None | 107 | 0 | 191 | 191 | 1202 | 429 | 57
+more-menu | 6 | topTouchEnd | 1024 | 0 | 0 | 0 | 0 | None | 0 | 0 | -17 | 249 | 1290 | 971 | 32
+new-task | 6 | topTouchEnd | 871 | 0 | 0 | 0 | 0 | None | 18 | 0 | -17 | 352 | 1221 | 1013 | 23
+new-task-cancel | 5 | topTouchEnd | 870 | 0 | 0 | 0 | 0 | None | 0 | 0 | -21 | 190 | 1190 | 854 | 28
+tab-tasks | 2 | None | 785 | 0 | 0 | 0 | 0 | None | 0 | 0 | None | None | None | None | None
+tab-inbox | 1 | topTouchEnd | 559 | 0 | 0 | 0 | 0 | None | 0 | 0 | 65 | None | None | 4438 | 213
 
 most rendered components per path (summed over its taps):
 inbox-row: 
