@@ -145,7 +145,12 @@ env:
     direction: DOWN
 - takeScreenshot: tasks-row-menu
 # Rename asks for the name in the system's alert, opened on the task's name,
-# and Cancel keeps it.
+# and Cancel keeps it. Note that the menu is scrolled back up to it first,
+# because the scroll to its foot above moves an iPhone's menu too, which
+# scrolls inside itself now that it is longer than the window (j10407).
+- scrollUntilVisible:
+    element: "Rename"
+    direction: UP
 - tapOn: "Rename"
 - assertVisible: "Rename task"
 - waitForAnimationToEnd
@@ -486,10 +491,21 @@ env:
 - runFlow:
     when:
       notVisible: "Search tasks"
+      true: ${FLOATING_TABS != 'true'}
     commands:
       - tapOn:
           text: "Search"
           above: "Tab Bar"
+# Note that an iPad turned back upright with a task picked folds its list
+# behind the task, as a portrait split view does, so its field is brought
+# back by the system's Show Sidebar in the task's bar (j10407).
+- runFlow:
+    when:
+      notVisible: "Search tasks"
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Show Sidebar"
+      - waitForAnimationToEnd
 - tapOn: "Search tasks"
 - inputText: "rounding"
 - assertVisible: "Ledger rounding"
