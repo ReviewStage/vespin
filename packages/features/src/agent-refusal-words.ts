@@ -216,6 +216,18 @@ export function billingRequiredWords(
   return manager === true ? words.manager : words.member;
 }
 
+/** What a refused New Manager says where its words differ from a Start's: the workspace unreached, or Managers off for it; none for every other refusal, which says a Start's words. */
+export function managerCreateRefusalWords(failure: AgentCallFailure): string | undefined {
+  switch (failure) {
+    case AGENT_CALL_FAILURE.NOT_FOUND:
+      return "This workspace can't be reached.";
+    case AGENT_CALL_FAILURE.NOT_PERMITTED:
+      return "Managers are off for this workspace.";
+    default:
+      return undefined;
+  }
+}
+
 /** What a Start that did not start says, by why. */
 export function startFailureWords(failure: AgentCallFailure): string {
   switch (failure) {

@@ -192,6 +192,7 @@ const MENU_WORDS = {
   ARCHIVE: "Archive",
   DELETE: "Permanently delete",
   OVERVIEW: "Overview",
+  SETTINGS: "Settings…",
 } as const;
 
 /** What Copy transcript offers, in the panel's words: the transcript concise or whole, copied, and the same words handed to the share sheet. */
@@ -1033,6 +1034,8 @@ function AgentConversation({
   // Note that a Manager's overview stands beside its chat on the desktop; here it is pushed from the bar, where the workspace lists its Managers.
   const overviewShown = useManagersListed(shown?.workspaceId) && chat;
 
+  const openSettings = () => router.push({ pathname: "/manager-settings", params: { agent: id } });
+
   const openOverview = overviewShown
     ? () => router.push({ pathname: onOwnTab("/tasks/agent/[id]/overview"), params: { id } })
     : undefined;
@@ -1251,9 +1254,19 @@ function AgentConversation({
             ) : null}
             {agent === undefined ? null : (
               <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
-                  {MENU_WORDS.RENAME}
-                </Stack.Toolbar.MenuAction>
+                {/* Note that a Manager is named from its Settings, its one place to configure it, as the desktop's menu offers Settings… in Rename's place. */}
+                {chat ? (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.OPTIONS)}
+                    onPress={openSettings}
+                  >
+                    {MENU_WORDS.SETTINGS}
+                  </Stack.Toolbar.MenuAction>
+                ) : (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
+                    {MENU_WORDS.RENAME}
+                  </Stack.Toolbar.MenuAction>
+                )}
                 {barActs ? null : (
                   <Stack.Toolbar.MenuAction
                     icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
