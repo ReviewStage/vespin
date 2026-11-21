@@ -1,5 +1,5 @@
 /**
- * use-agent-actions.ts -- what an agent's ⋯ menu does on its page: Copy link, Rename, Pin or Unpin, Archive, asked first, and Permanently delete, asked always, and why the last of them did not take.
+ * use-agent-actions.ts -- what an agent's ⋯ menu does on its page: Copy link, Rename, Pin or Unpin, Archive, asked first, or Unarchive once archived, and Permanently delete, asked always, and why the last of them did not take.
  *
  * The panel's agent menu (`@repo/panel`'s `agent-actions.tsx`) on the phone,
  * Rewind and Fork left to the desktop and the web. Each act is sent as the
@@ -12,6 +12,8 @@
  * middle of; note that the phone asks of an agent at rest too, as it has no
  * Undo to offer after, and once the agent is archived the page goes back to
  * where it was opened from, since the agent leaves its task's list.
+ * Unarchive brings an archived agent back at once, as the panel's does,
+ * since it stops nothing, its press busy until the service answers.
  * Permanently delete (`AGENTS_DELETE`) always asks, in the panel's words
  * (`deleteAgentWords`), since nothing brings the agent back, and goes back
  * the same way once the service took it; a refusal is said over the
@@ -24,6 +26,7 @@ import {
   DELETE_FAILED,
   PIN_FAILED,
   RENAME_FAILED,
+  UNARCHIVE_FAILED,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { agentStillWriting } from "@repo/features/task-agents-model";
@@ -187,6 +190,10 @@ export interface AgentActions {
   readonly archiveAsk: ArchiveAsk;
   /** Archives the agent, the question answered, and calls `onArchived` as it's sent, a refusal said in the failure notice. */
   readonly archive: (onArchived: () => void) => void;
+  /** Brings the archived agent back, its refusal said over its bar. */
+  readonly unarchive: () => void;
+  /** Whether the Unarchive is out, which holds its press busy. */
+  readonly unarchiving: boolean;
   /** What Permanently delete asks first of the agent, named as its page names it `name`. */
   readonly deleteQuestion: (name: string) => StopAgentsWords;
   /** Deletes the agent for good, the question answered, and calls `onDeleted` once the service took it. */
@@ -204,6 +211,7 @@ export function useAgentActions(agentId: string, address: string | undefined): A
   const select = useMemo(() => selectAgentPinned(agentId), [agentId]);
   const { data: pinned = false } = useQuery({ ...appStateQuery, select });
   const [note, setNote] = useState<string | undefined>(undefined);
+  const [unarchiving, setUnarchiving] = useState(false);
   const archiveAsk = useArchiveAsk(agentId);
 
   /** Sends an act, saying `failed` where the service refused it or never answered, and buzzing as it lands. */
@@ -258,6 +266,18 @@ export function useAgentActions(agentId: string, address: string | undefined): A
       });
       onArchived();
     },
+    unarchive: () => {
+      if (unarchiving) return;
+      setNote(undefined);
+      setUnarchiving(true);
+      void write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: false }), {
+        refused: (answer) => ("failure" in answer ? UNARCHIVE_FAILED : undefined),
+        unanswered: UNARCHIVE_FAILED,
+        inPlace: setNote,
+        went: BUZZ.SUCCESS,
+      }).finally(() => setUnarchiving(false));
+    },
+    unarchiving,
     deleteQuestion: (name) => deleteAgentWords(name, agent?.archivedAt !== undefined),
     remove: (onDeleted) =>
       send(

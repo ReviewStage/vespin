@@ -850,6 +850,8 @@ export interface TaskOverview {
   readonly documentRetry: (() => void) | undefined;
   readonly workspace: Workspace | undefined;
   readonly agents: readonly TaskAgentLine[];
+  /** Its archived agents, oldest started first, which its Agents folds under Archived; each marks no thread waiting, since its Inbox line counts those. */
+  readonly archived: readonly TaskAgentLine[];
   readonly pages: readonly PageLine[];
   /** How many of its threads wait on the reader whose agent no row lists, which its Inbox line counts. */
   readonly waitingElsewhere: number;
@@ -967,6 +969,11 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       agentLine(agent, waiting.byAgent, pullRequests),
     );
 
+    // Note that the list holds the archived agents too, oldest started first, as the panel's phone Overview folds them.
+    const archived = listedAgents
+      .filter((agent) => agent.taskId === task.id && agent.archivedAt !== undefined)
+      .map((agent) => ({ ...agentLine(agent, waiting.byAgent, pullRequests), waiting: 0 }));
+
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
 
@@ -984,6 +991,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       documentRetry,
       workspace: taskWorkspace,
       agents,
+      archived,
       pages: held?.pages ?? [],
       waitingElsewhere: Math.max(0, (waiting.byTask.get(task.id) ?? 0) - listedWaiting),
       tasks: listed,

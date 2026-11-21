@@ -41,4 +41,11 @@ describe("mergeSentence", () => {
       "Auto-merge is on (squash). Ready to merge",
     );
   });
+
+  it("says a draft is a draft even where GitHub's merge state was read before it became one", () => {
+    const { merging: _merging, ...read } = QUEUED;
+    const drafted: AgentOverviewPullRequest = { ...read, state: PULL_REQUEST_STATE.DRAFT };
+
+    expect(mergeSentence(drafted, undefined)).toBe("A draft; mark it ready for review to merge");
+  });
 });

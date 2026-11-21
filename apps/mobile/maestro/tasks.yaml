@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its archive confirmed, the agent then folded under Archived, its page standing Unarchive in the composer's place, and its row's Unarchive bringing it back, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -515,4 +515,54 @@ env:
     file: subflows/dismiss-ask.yaml
     env:
       QUESTION: "Archive agent?"
+- assertVisible: "Fix ledger rounding"
+# Confirmed, the archive is taken, as the fixture takes it, and the agent
+# leaves Agents for Archived after them, folded under its header, as the
+# panel's phone Overview folds archived agents. Opened, the fold shows its
+# row, which opens the agent's page and offers Unarchive in Archive's place, which brings it back at once, asking
+# nothing, and Archived goes with its last agent.
+- swipe:
+    from:
+      text: "Fix ledger rounding"
+    direction: LEFT
+- waitForAnimationToEnd
+- tapOn: "Archive"
+- assertVisible: "Archive agent?"
+- tapOn: "Archive agent"
+- assertNotVisible: "Archive agent?"
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Archived, 1"
+      BESIDE: ${FLOATING_TABS}
+- assertNotVisible: "Fix ledger rounding"
+- tapOn:
+    text: "Archived"
+    childOf: "Archived, [0-9]+"
+- assertVisible: "Fix ledger rounding"
+- waitForAnimationToEnd
+- takeScreenshot: task-agents-archived
+# Its row opens its page, where the composer gives way to the panel's note
+# that the agent is archived, with Unarchive beside it.
+- tapOn: "Fix ledger rounding"
+- extendedWaitUntil:
+    visible: "This agent is archived"
+    timeout: 20000
+- assertVisible:
+    text: "Unarchive"
+    rightOf: "This agent is archived"
+- waitForAnimationToEnd
+- takeScreenshot: agent-archived
+- tapOn:
+    id: "BackButton"
+- assertVisible: "Archived, 1"
+- swipe:
+    from:
+      text: "Fix ledger rounding"
+    direction: LEFT
+- waitForAnimationToEnd
+- takeScreenshot: task-agent-swipe-archived
+- tapOn: "Unarchive"
+- waitForAnimationToEnd
+- assertNotVisible: "Archived, [0-9]+"
 - assertVisible: "Fix ledger rounding"
