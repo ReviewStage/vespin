@@ -4,6 +4,7 @@ import {
   inboxLineKind,
   inboxPreview,
   NEEDS_YOU,
+  threadsWords,
 } from "@repo/features/inbox-list-model";
 import { INBOX_ASK, type InboxItem, knownAsk, openAskOf } from "@repo/features/inbox-wire";
 import {
@@ -26,7 +27,6 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { inboxLineGlyph } from "./inbox-item-parts.js";
-import { threadsWords } from "./inbox-model.js";
 
 /**
  * threads-dock.tsx -- the line docked over an agent's box while it has posted threads: what waits on the developer, or, quiet, how many there are.

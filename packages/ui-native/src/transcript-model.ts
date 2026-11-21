@@ -77,7 +77,13 @@ import {
   type ToolBlock,
   type ToolState,
 } from "@repo/features/tool-call-block";
-import { shownPageVersion, type ToolCallView, toolCallView } from "@repo/features/tool-call-model";
+import {
+  shownPageVersion,
+  TOOL_TARGET,
+  type ToolCallView,
+  toolCallView,
+  toolTarget,
+} from "@repo/features/tool-call-model";
 import { agentMessageOf, suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
@@ -240,6 +246,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly line: CallLine;
       /** What the call made or is about, named after the line's verb as the panel's chip names it. */
       readonly chip: string | undefined;
+      /** The id of the Inbox thread the call posted, withdrew, or read, which its chip opens, as the panel's thread chip does; none for a call about no one thread. */
+      readonly thread: string | undefined;
       /** Where it ran, beside its line, where it ran somewhere the transcript does not say. */
       readonly runOn: string | undefined;
       readonly standing: CallStanding;
@@ -652,6 +660,15 @@ function linePlace(message: string, row: string): TranscriptPlace {
   return { message, row, member: undefined, piece: TRANSCRIPT_PIECE.LINE };
 }
 
+/** The Inbox thread a call names by the id its answer gave it, which its chip opens; none for any other call, a refused one, or one still running. */
+function calledThread(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+): string | undefined {
+  const target = toolTarget(part);
+
+  return target?.kind === TOOL_TARGET.INBOX ? target.item : undefined;
+}
+
 /**
  * How a call's line names what it did, as the panel's row does: a call that
  * made something by that thing's chip after its verb; a read or a write by
@@ -830,6 +847,7 @@ function callItems(
     callKind: view.kind,
     provider: view.provider,
     ...callNaming(view),
+    thread: calledThread(part),
     // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
     runOn: callPlace(view, CALL_MARK.LEADS),
     standing: standingOf(part.state, view.refused === true),

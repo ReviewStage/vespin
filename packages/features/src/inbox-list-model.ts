@@ -988,6 +988,52 @@ export function waitsOnReaderNow(
   return needsReader(item, readerId) && !remindsLater(item, now);
 }
 
+/** What a line of threads none of which waits on the developer says: "1 thread", "4 threads". */
+export function threadsWords(count: number): string {
+  return count === 1 ? "1 thread" : `${count} threads`;
+}
+
+/** What the line over an agent's box says of its threads where one waits on the developer, as the Inbox's tab is named. */
+export const AGENT_THREADS_WAITING_WORDS = "Inbox";
+
+/** The line over an agent's box while it has posted threads: its words, how many wait on the developer, and the thread a press opens. */
+export interface AgentThreadsLine {
+  readonly words: string;
+  readonly waiting: number;
+  readonly opens: InboxItem;
+}
+
+/**
+ * The line over an agent's box, as the panel's threads dock draws it: while
+ * any of the agent's threads waits on the reader, Inbox and how many wait,
+ * opening the oldest posted of them; once none waits, quiet, how many
+ * threads it posted, opening the latest changed; none while it posted none.
+ */
+export function agentThreadsLine(
+  items: readonly InboxItem[],
+  agentId: string,
+  readerId: string | undefined,
+  now: number,
+): AgentThreadsLine | undefined {
+  const posted = items.filter((item) => item.agentId === agentId);
+
+  const waiting = posted
+    .filter((item) => waitsOnReaderNow(item, readerId, now))
+    .toSorted((a, b) => a.postedAt - b.postedAt);
+
+  const oldest = waiting[0];
+
+  if (oldest !== undefined) {
+    return { words: AGENT_THREADS_WAITING_WORDS, waiting: waiting.length, opens: oldest };
+  }
+
+  const latest = posted.toSorted((a, b) => b.updatedAt - a.updatedAt)[0];
+
+  return latest === undefined
+    ? undefined
+    : { words: threadsWords(posted.length), waiting: 0, opens: latest };
+}
+
 /**
  * Whether opening the item acknowledges it, as Got it did: a notice that
  * offers Got it (`awaitsNod`), the reader's own (`needsReader`) by an id already

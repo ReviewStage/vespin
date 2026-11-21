@@ -332,20 +332,34 @@ function CallGlyph({
   );
 }
 
-/** A call's row: its kind's glyph, its verb in the full ink, what it was done to in the muted one, where it ran, and where it stands; pressed, it opens on its body. */
+/** The VoiceOver action a call's row offers to open the thread its chip names, since the chip stands inside the row's one element. */
+const OPEN_THREAD_ACTION = { name: "openThread", label: "Open thread" } as const;
+
+/**
+ * A call's row: its kind's glyph, its verb in the full ink, what it was
+ * done to in the muted one, where it ran, and where it stands; pressed, it
+ * opens on its body. A call about one Inbox thread, such as a post, names
+ * it by its chip, whose press alone opens the thread, as the panel's chip
+ * does, and VoiceOver offers the same as one of the row's actions.
+ */
 function CallRow({
   item,
   held,
   onToggle,
+  onOpenThread,
   placeCall,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>;
   /** The answer the agent holds the call for, where it does. */
   readonly held: HeldCall | undefined;
   readonly onToggle: (item: TranscriptItem) => void;
+  readonly onOpenThread: ((threadId: string) => void) | undefined;
   readonly placeCall: ((callId: string, row: HostInstance | null) => void) | undefined;
 }) {
-  const { callId } = item;
+  const { callId, thread } = item;
+
+  const openThread =
+    thread === undefined || onOpenThread === undefined ? undefined : () => onOpenThread(thread);
 
   // Note that the row hands the transcript its press, so a reader sent to this call lands on it once the list has scrolled it into view.
   const press = useCallback(
@@ -375,6 +389,10 @@ function CallRow({
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
         accessibilityHint={CALL_HINT}
+        accessibilityActions={openThread === undefined ? undefined : [OPEN_THREAD_ACTION]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === OPEN_THREAD_ACTION.name) openThread?.();
+        }}
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
@@ -392,7 +410,9 @@ function CallRow({
             {line.verb}
           </Text>
           {chip === undefined ? null : (
-            <View
+            <Press
+              disabled={openThread === undefined}
+              onPress={openThread}
               style={[
                 styles.chip,
                 { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
@@ -404,7 +424,7 @@ function CallRow({
               >
                 {chip}
               </Text>
-            </View>
+            </Press>
           )}
           {subject === undefined || item.open ? null : (
             <Text
@@ -634,6 +654,8 @@ interface RowDrawing {
   readonly messageLink?: ((messageId: string) => string | undefined) | undefined;
   /** What a sent line's long press or a finished turn's ⋯ offers past copying and sharing it, in the panel's order, such as Edit, Rewind conversation to here, and Fork to new agent; none where messages offer nothing more. */
   readonly messageMore?: ((item: MessageItem) => readonly HeldAct[]) | undefined;
+  /** Opens an Inbox thread by its id, as a press on a call's thread chip asks; none where the app opens no thread from here. */
+  readonly onOpenThread?: ((threadId: string) => void) | undefined;
   /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
@@ -868,6 +890,7 @@ function TranscriptRow({
           item={item}
           held={drawing.heldCall?.(item.callId)}
           onToggle={drawing.onToggle}
+          onOpenThread={drawing.onOpenThread}
           placeCall={drawing.placeCall}
         />
       );
