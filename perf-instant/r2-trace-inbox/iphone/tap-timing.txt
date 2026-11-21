@@ -1,9 +1,9 @@
-probe rows 1707, commands 79, frames 2460
+probe rows 1660, commands 79, frames 2622
 path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
-inbox-row | 6 | topTouchEnd | 665 | 0 | 0 | 0 | 0 | None | 144 | 0 | 330 | 331 | 996 | 1272 | 25
-back-from-thread | 5 | topTouchEnd | 705 | 0 | 0 | 0 | 0 | None | 0 | 0 | -16 | 194 | 899 | 1433 | 57
-inbox-row-plain | 6 | topTouchEnd | 653 | 0 | 0 | 0 | 0 | None | 47 | 0 | 261 | 261 | 907 | 1214 | 20
-back-from-plain | 5 | topTouchEnd | 629 | 0 | 0 | 0 | 0 | None | 0 | 0 | -13 | 189 | 817 | 1398 | 50
+inbox-row | 6 | topTouchEnd | 706 | 0 | 0 | 0 | 0 | None | 130 | 0 | 426 | 432 | 1147 | 1366 | 40
+back-from-thread | 5 | topTouchEnd | 803 | 0 | 0 | 0 | 0 | None | 0 | 0 | 44 | 257 | 1065 | 1422 | 70
+inbox-row-plain | 6 | topTouchEnd | 785 | 0 | 0 | 0 | 0 | None | 64 | 0 | 393 | 393 | 1182 | 1363 | 30
+back-from-plain | 5 | topTouchEnd | 714 | 0 | 0 | 0 | 0 | None | 0 | 0 | 59 | 268 | 981 | 1436 | 47
 
 most rendered components per path (summed over its taps):
 inbox-row: 
@@ -23,5 +23,5 @@ back-from-thread: markdown 0.0, rest 0.0
 inbox-row-plain: markdown 0.0, rest 0.0
 back-from-plain: markdown 0.0, rest 0.0
 
-whole run: 70s, 0 commits, 0 components rendered, 4285 ms of stalls over 14 stalls
-events: topTransitionProgress×1120, topHeaderHeightChange×249, topGlobalEvent×41, topFinishTransitioning×25, topWillAppear×24, topAppear×23, topInsetsChange×22, topWillDisappear×21, topDisappear×21, topTouchStart×20, topTouchEnd×20, topLoad×15, topLoadEnd×15, topLoadStart×15, topWindowChange×12
+whole run: 87s, 0 commits, 0 components rendered, 4775 ms of stalls over 16 stalls
+events: topTransitionProgress×1068, topHeaderHeightChange×252, topGlobalEvent×41, topFinishTransitioning×25, topWillAppear×24, topAppear×23, topInsetsChange×22, topWillDisappear×21, topDisappear×21, topTouchStart×20, topTouchEnd×20, topLoad×15, topLoadEnd×15, topLoadStart×15, topWindowChange×12

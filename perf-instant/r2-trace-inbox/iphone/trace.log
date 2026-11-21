@@ -1,2 +1,12 @@
-NO APP PID
-NO TRACE FILE
+1795255145573 app pid 26146
+1795255152441 Starting recording with the Time Profiler template. Attaching to: Vespin (26146). Time limit: 180.0 s
+1795255153798 Ctrl-C to stop the recording
+1795255235070 Stopping recording...
+1795255244444 Run issues were detected (trace is still ready to be viewed):
+1795255244467 * [Warning] This configuration of instruments creates 1 table without a known input source.
+1795255244491 
+1795255244516 	* [Warning] Recovery Suggestion: This could be due to a missing package, or an error in a package under development.
+1795255244551 
+1795255244591 Recording completed. Saving output file...
+1795255246740 Output file saved as: jinstant2-inbox.trace
+trace 35 MB, time-profile.xml.gz 2044 KB

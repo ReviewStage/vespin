@@ -30,7 +30,7 @@ merging pin2b/agent/ios-status-mark-memo at 2c2d701baf
 merging pin2b/agent/ios-root-reads-narrow at 60be7c1d68
 merging pin2b/agent/ios-new-task-reads at c633a87df0
 Auto-merging apps/mobile/src/screens/start-screens.tsx
-built 4e2b915555 = probe + pin2b/agent/ios-chip-marks-narrow pin2b/agent/ios-inbox-groups-holders pin2b/agent/ios-task-by-key pin2b/agent/ios-mention-lists-on-ask pin2b/agent/ios-task-open-instant pin2b/agent/ios-status-mark-memo pin2b/agent/ios-root-reads-narrow pin2b/agent/ios-new-task-reads (PROFILE=0)
+built f22b11997e = probe + pin2b/agent/ios-chip-marks-narrow pin2b/agent/ios-inbox-groups-holders pin2b/agent/ios-task-by-key pin2b/agent/ios-mention-lists-on-ask pin2b/agent/ios-task-open-instant pin2b/agent/ios-status-mark-memo pin2b/agent/ios-root-reads-narrow pin2b/agent/ios-new-task-reads (PROFILE=0)
 install 0
 export 0
 signed 0
