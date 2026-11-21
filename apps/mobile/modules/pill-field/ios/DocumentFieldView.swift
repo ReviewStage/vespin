@@ -476,7 +476,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
-    if let typed { carryOn(to: typed) }
+    if let typed {
+      carryOn(to: typed)
+      boxNewTask(after: typed)
+    }
     typed = nil
     changes += 1
     placeholderLabel.isHidden = textView.textStorage.length > 0
@@ -500,7 +503,12 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     textView.attributedText = drawn(lines)
     textView.undoManager?.removeAllActions()
     let length = textView.textStorage.length
-    let location = min(selected.location, length)
+    var location = min(selected.location, length)
+    // Note that a caret standing before a task's box goes after it, so the words typed next are the task's.
+    if selected.length == 0, location < length,
+      textView.textStorage.attribute(.attachment, at: location, effectiveRange: nil) is TaskBoxAttachment {
+      location = min(location + 2, length)
+    }
     textView.selectedRange = NSRange(location: location, length: min(selected.length, length - location))
     quiet = false
     placeholderLabel.isHidden = length > 0
@@ -704,6 +712,34 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     quiet = false
   }
 
+  /// Leads a task line a Return opened with its own unchecked box, the caret after it, as a checklist's Return does in Notes and Notion: the line after a typed line break, where its block is a task list and no box leads it.
+  private func boxNewTask(after piece: NSRange) {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    let start = NSMaxRange(piece)
+    guard piece.length > 0, start <= storage.length, string.character(at: start - 1) == 0x0A else { return }
+    let factsAt = start < storage.length ? start : start - 1
+    guard let facts = storage.attribute(lineKey, at: factsAt, effectiveRange: nil) as? LineFacts,
+      facts.drawnKind == .taskList
+    else { return }
+    if start < storage.length, storage.attribute(.attachment, at: start, effectiveRange: nil) is TaskBoxAttachment {
+      return
+    }
+
+    let unchecked = facts.with(checked: false)
+    var attributes = wordAttributes(.taskList, facts.level, [], nil)
+    attributes[lineKey] = unchecked
+    attributes[.paragraphStyle] = storage.attribute(.paragraphStyle, at: factsAt, effectiveRange: nil)
+    let box = NSMutableAttributedString(attachment: TaskBoxAttachment(checked: false, look: look))
+    box.append(NSAttributedString(string: " "))
+    box.addAttributes(attributes, range: NSRange(location: 0, length: box.length))
+
+    quiet = true
+    storage.insert(box, at: start)
+    textView.selectedRange = NSRange(location: start + box.length, length: 0)
+    quiet = false
+  }
+
   // MARK: Telling JavaScript
 
   /// The lines the view holds: each paragraph's block, read from its words or, for an empty one, from the line break before it, and its runs, a task's box read as its line's checked rather than as words.
@@ -742,9 +778,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       held = value
       stop.pointee = true
     }
-    // Note that a task carried on starts unchecked, since its box is drawn only once JavaScript hands the line back.
-    let carried = before.map { $0.drawnKind == .taskList ? $0.with(checked: false) : $0 }
-    var facts = held ?? carried ?? LineFacts(block: -1, kind: DocumentKind.paragraph.rawValue)
+    var facts = held ?? before ?? LineFacts(block: -1, kind: DocumentKind.paragraph.rawValue)
+    // Note that a task is checked only by its own box, so a line a Return opened in a checked task starts unchecked.
+    if facts.drawnKind == .taskList { facts = facts.with(checked: false) }
     var runs: [DocumentRun] = []
 
     storage.enumerateAttributes(in: content) { attributes, range, _ in
