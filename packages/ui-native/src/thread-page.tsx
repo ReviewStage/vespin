@@ -34,7 +34,7 @@ import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
-import type { ReactNode } from "react";
+import { type ReactNode, useDeferredValue, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useReduceMotion } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
@@ -55,7 +55,7 @@ import {
   BarMenuItem,
   barActItems,
 } from "./split-view.js";
-import { threadRuns } from "./thread-group-model.js";
+import { newestRuns, threadRuns } from "./thread-group-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -67,6 +67,9 @@ export const PATH_PART = " › ";
 
 /** Between a writer's face and their name. */
 const WRITER_GAP = SPACE.TIGHT * 2;
+
+/** How many of a thread's newest messages its first frame draws at least, the runs before them a render later: more than most threads hold, so most open whole. */
+const FIRST_DRAWN = 10;
 
 /** Between one message and the next of the same run, closer than between runs, as Messages draws a speaker's bubbles. */
 const RUN_GAP = SPACE.TIGHT * 2;
@@ -666,6 +669,11 @@ export function ThreadPage(props: ThreadPageProps) {
   const footRoom = useDockRoom();
   const reduceMotion = useReduceMotion();
 
+  const runs = useMemo(() => threadRuns(messages), [messages]);
+
+  // Note that a long thread's first frame draws its newest runs alone, and React draws the runs before them in the render after it, above them, while the page holds to its foot, so opening a thread of many messages costs what one of a few does.
+  const shown = useDeferredValue(runs, newestRuns(runs, FIRST_DRAWN));
+
   // Note that the path heading the page wraps, so its words stand uncut, while the bar's keeps to one line.
   const pathTitle = (
     <PathTitle path={path} status={status} actions={pathActions} wrap={pathInHead} />
@@ -707,7 +715,7 @@ export function ThreadPage(props: ThreadPageProps) {
                 <EventLine key={event.key} event={event} now={drawing.now} />
               ))}
               {/* Note that a run's messages stand under its first one's head, and a line of what happened after a message ends its run, so it stands between runs. */}
-              {threadRuns(messages).map((run) => (
+              {shown.map((run) => (
                 <VStack key={run[0]?.id} alignment="leading" spacing={RUN_GAP}>
                   {run.map((message, index) => (
                     <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
