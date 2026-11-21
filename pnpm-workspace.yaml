@@ -219,8 +219,13 @@ patchedDependencies:
 # or a menu item's icon is read as an SF Symbol alone (`systemImageNamed:`),
 # so the Lucide glyphs `@repo/ui-native` draws stood blank in a bar; the patch
 # falls back to the app's asset catalog (`imageNamed:`), as its own tab icons
-# already do. Delete the first when a react-native-screens release carries
-# #4851, and the second when one reads a bar item's symbol from the catalog.
+# already do. And it colors a tab's badge only through the tab bar's
+# appearance, which the iPad's floating top tab bar never draws, so the Inbox's
+# count stood system red there while the iPhone drew it in copper; the patch
+# hands the appearance's badge color to the item itself (`badgeColor`) too.
+# Delete the first when a react-native-screens release carries #4851, the
+# second when one reads a bar item's symbol from the catalog, and the third
+# when one colors the iPad's badge on its own.
   react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
 #
 # `@expo/ui` 58.0.27's `Image` colors a symbol only through a `foregroundStyle`
