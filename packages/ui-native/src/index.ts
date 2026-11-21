@@ -281,9 +281,16 @@ export {
   RowList,
 } from "./row-list.js";
 
-export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./row-preview.js";
-
-export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
+export {
+  agentPreview,
+  latestStep,
+  type PreviewAgent,
+  type PreviewMessage,
+  previewMessages,
+  type RowPreview,
+  taskPreview,
+  threadPreview,
+} from "./row-preview-model.js";
 
 export { NO_GROUND, SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
 

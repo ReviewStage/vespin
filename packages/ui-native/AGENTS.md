@@ -11,7 +11,7 @@ builds a control of its own.
   task on one line, its sub-tasks folded under SwiftUI's own disclosure), each
   row's acts behind a swipe from either edge, a full swipe running the
   first, and in its long press menu, which lifts the row's preview
-  (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
+  (`threadPreview`, `taskPreview`, `agentPreview`) and leads with Open,
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
@@ -331,13 +331,20 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   empty section stands as its header alone rather than a list of add rows;
   a long press on one given a `menu` opens it, as the panel's right-click
   on the sidebar's same header does.
-- **Long press** opens one menu everywhere, `LongPressMenu`: SwiftUI's own
-  context menu, its groups in the panel's order and words, set apart by
-  dividers, red where an act takes something away, lifting a preview where
-  the system's apps lift one. A row draws it through `RowFrame`, a section's
-  header through `ListSection`'s `menu`, and held SwiftUI or React Native
-  views through `HeldSwiftMenu` and `HeldMenu`, so wherever the panel opens
-  a right-click menu the app opens the same menu on a long press.
+- **Long press** opens one menu everywhere: SwiftUI's own context menu,
+  its groups in the panel's order and words, set apart by dividers, red
+  where an act takes something away, lifting a preview where the system's
+  apps lift one. A row's is built by the app's native module from data
+  (`RowFrame`, `rowMenu`): the row hands it one JSON tree of its menu
+  (`menuTree`) and its preview (`previewTree`), which SwiftUI reads only as
+  a long press opens the menu, so a list's rows hold no views of menus
+  nobody opened; a press sends back the item's place (`menuPressAt`), its
+  handler staying in JavaScript, and its swipes are SwiftUI's own swipe
+  actions from the same kind of tree (`swipeTree`, `rowSwipes`). A
+  section's header draws `LongPressMenu` through `ListSection`'s `menu`, and
+  held SwiftUI or React Native views through `HeldSwiftMenu` and
+  `HeldMenu`, so wherever the panel opens a right-click menu the app opens
+  the same menu on a long press.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and

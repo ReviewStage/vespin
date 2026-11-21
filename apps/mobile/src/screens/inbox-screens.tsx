@@ -88,7 +88,7 @@ import {
   type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
-  ThreadPreview,
+  threadPreview,
   type UndeliveredLine,
   useColors,
   useWindowSizeClass,
@@ -447,13 +447,11 @@ function InboxRowView({
         ],
         [mark, remindMenu(item), ...resolve],
       ]}
-      preview={
-        <ThreadPreview
-          title={title}
-          task={{ name: taskName, status: taskStatus }}
-          messages={messages}
-        />
-      }
+      preview={threadPreview({
+        title,
+        task: { name: taskName, status: taskStatus },
+        messages,
+      })}
     />
   );
 }

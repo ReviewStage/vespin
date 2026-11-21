@@ -12,7 +12,7 @@ import {
   INTEGRATION_MARK_TEMPLATE,
   LINK_SITE_MARK_ASSET,
 } from "./integration-marks.js";
-import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./marks.js";
+import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./mark-look.js";
 import { type BrandColors, toneColor } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { tileHue } from "./workspace-tile-model.js";
