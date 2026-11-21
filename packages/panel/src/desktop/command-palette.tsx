@@ -240,7 +240,12 @@ import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/
 import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
-import type { AgentsControl, HeldPeople } from "../tasks/use-agents.js";
+import {
+  type AgentsControl,
+  type HeldPeople,
+  placeAgents,
+  useTaskAgents,
+} from "../tasks/use-agents.js";
 import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
@@ -1027,6 +1032,7 @@ function paletteEntries(entry: AddEntry): readonly AddEntry[] {
  */
 function agentRows(
   tasks: TasksControl,
+  taskAgents: AgentsControl,
   rows: TaskListRows,
   inboxWaiting: readonly AppInboxTask[],
   inboxStanding: InboxStanding,
@@ -1050,10 +1056,10 @@ function agentRows(
 
   // Note that an account keeping no Inbox is offered no task's Inbox to open.
   const inbox = inboxOn
-    ? inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }))
+    ? inboxEntries(taskAgents, waiting, () => tasks.onShowInbox({ taskId }))
     : [];
 
-  const agents = agentEntries(tasks.mainTabs, tasks.agents, directory).map((entry) => ({
+  const agents = agentEntries(tasks.mainTabs, taskAgents, directory).map((entry) => ({
     ...entry,
     onPick: () => tasks.onShowAgent(taskId, entry.row.id),
   }));
@@ -1073,7 +1079,7 @@ function agentRows(
         holder,
         taskId,
         panel: tasks.sidePanel,
-        agents: tasks.agents,
+        agents: taskAgents,
         pages,
         account: doors.account,
         onNewTerminal: doors.onNewTerminal,
@@ -1082,7 +1088,7 @@ function agentRows(
         pullRequests: changes.pullRequests,
         plan: openPlanStanding(tasks, rows),
         cards: {
-          agents: tasks.agents,
+          agents: taskAgents,
           held: NOTHING_HELD,
           pagePlace: { taskId },
           shownAgent: undefined,
@@ -1125,8 +1131,8 @@ function agentRows(
         card ??
         (agent === undefined ? undefined : (
           <AgentCard
-            subject={agentSubject(tasks.agents, agent.id, NOTHING_HELD, false)}
-            models={tasks.agents.models}
+            subject={agentSubject(taskAgents, agent.id, NOTHING_HELD, false)}
+            models={taskAgents.models}
           />
         )),
       terms: [...(row.terms ?? [row.label]), ...named],
@@ -1134,7 +1140,7 @@ function agentRows(
     };
   });
 
-  return [...standing, ...archivedAgentRows(tasks, taskName, show, directory)];
+  return [...standing, ...archivedAgentRows(tasks, taskAgents, taskName, show, directory)];
 }
 
 /**
@@ -1171,12 +1177,11 @@ function runRows(
  */
 function archivedAgentRows(
   tasks: TasksControl,
+  agents: AgentsControl,
   taskName: string | undefined,
   show: (pick: () => void) => void,
   directory: EditReader,
 ): readonly PaletteRow[] {
-  const { agents } = tasks;
-
   return (agents.archived ?? []).map((agent) => {
     const look = tabLook({
       kind: TAB_KIND.AGENT,
@@ -2271,7 +2276,9 @@ export function CommandPalette({
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, tasks.sidePanel, noFocusMove);
   // Note that the task's Pull request rows hang their pull request's people, as their tabs read them.
   const taskPullRequests = useTaskPullRequests(tasks.activeTaskId ?? "");
-  const { agents: taskAgents } = tasks;
+  // Note that the open task's agents' rows are read only while the palette stands open, so a step of their turns draws nothing of it shut.
+  const idleAgents = useMemo(() => placeAgents(tasks.agents), [tasks.agents]);
+  const taskAgents = useTaskAgents(open ? tasks.agents : idleAgents);
 
   const changesPeople = useChangesPeopleOf(
     useMemo(
@@ -2294,7 +2301,7 @@ export function CommandPalette({
 
   const runAgentId = tasks.sidePanel.agent;
 
-  const runAgent = tasks.agents.agents?.find(
+  const runAgent = taskAgents.agents?.find(
     (agent) => agent.id === runAgentId && agent.archivedAt === undefined,
   );
 
@@ -2408,6 +2415,7 @@ export function CommandPalette({
       [
         ...agentRows(
           tasks,
+          taskAgents,
           rows,
           inboxWaiting,
           inboxStanding,

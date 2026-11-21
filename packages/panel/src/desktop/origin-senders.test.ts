@@ -21,7 +21,12 @@ import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  pushedTranscripts,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
@@ -117,11 +122,13 @@ async function mount(input: {
       tab: input.side,
       onChoose: (tab) => chosen.push(tab),
     },
-    agents: agentsControl({
-      agents: [input.agent ?? AGENT],
-      agentIds: [AGENT.id],
-      me: input.reader,
-    }),
+    agents: taskAgentsOf(
+      agentsControl({
+        agents: [input.agent ?? AGENT],
+        agentIds: [AGENT.id],
+        me: input.reader,
+      }),
+    ),
   });
 
   const container = document.body.appendChild(document.createElement("div"));

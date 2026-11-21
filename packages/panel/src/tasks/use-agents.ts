@@ -30,7 +30,6 @@ import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type DraftSuggestion, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
-import type { ListedPullRequest } from "@repo/features/task-wire";
 import type { TranscriptReader } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
@@ -75,7 +74,11 @@ import { useMutationCalls } from "../mutation-calls.js";
 import type { RenameTerms } from "../rename-write.js";
 import { rendererFork } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { useTaskListCollections } from "../task-list-collections.js";
+import {
+  useTaskListCollections,
+  useTaskListRow,
+  useTaskListRowAs,
+} from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import {
   type LocalWrite,
@@ -91,6 +94,7 @@ import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approvals.js";
 import {
+  agentName,
   archivedManyWords,
   archiveWords,
   continueFailureNote,
@@ -184,23 +188,46 @@ export const AGENT_RENAME_TERMS = {
 /** No words to listen for, one array so a render that has none hands down the same one. */
 const NO_KEYWORDS: readonly string[] = [];
 
-/** What the task list's collections carry of one task: its agents in the order started, the archived among them, none where they are not followed, and its agents' pull requests. */
-interface TaskRows {
-  readonly listedHere: readonly AgentSummary[] | undefined;
-  readonly listedPullRequests: readonly ListedPullRequest[] | undefined;
+/** What the window needs of each of the open task's agents: which it is, whether it is archived, and whether it works. */
+interface AgentPlace {
+  readonly id: string;
+  readonly archivedAt?: number | undefined;
+  readonly status: AgentSummary["status"];
 }
 
 /**
- * The task's own rows, each a live query over the collections filtered by
- * the task, so a delivery that moves another task's rows tells none of them
- * and their answers stay the same objects.
+ * What the window needs of each of the open task's agents to lay out its
+ * tabs, in the order started: which it is, whether it is archived, and its
+ * status, a live query over the task's rows picked to these, so a step of
+ * an agent's turn that moves nothing else moves no answer; none while no
+ * task is open.
  */
-function useTaskRows(
+function useAgentPlaces(
   collections: TaskListCollections,
   taskId: string | undefined,
-  followed: boolean,
-): TaskRows {
-  const { data: agents } = useLiveQuery((q) =>
+): readonly AgentPlace[] | undefined {
+  return useLiveQuery((q) =>
+    taskId === undefined
+      ? undefined
+      : q
+          .from({ agent: collections.agents })
+          .where(({ agent }) => eq(agent.taskId, taskId))
+          .orderBy(({ agent }) => agent.createdAt)
+          .orderBy(({ agent }) => agent.id)
+          .select(({ agent }) => ({
+            id: agent.id,
+            archivedAt: agent.archivedAt,
+            status: agent.status,
+          })),
+  ).data;
+}
+
+/** The task's agents' whole rows in the order started, a live query over the task's rows alone; none while no task is open. */
+function useAgentRows(
+  collections: TaskListCollections,
+  taskId: string | undefined,
+): readonly AgentSummary[] | undefined {
+  return useLiveQuery((q) =>
     taskId === undefined
       ? undefined
       : q
@@ -208,9 +235,236 @@ function useTaskRows(
           .where(({ agent }) => eq(agent.taskId, taskId))
           .orderBy(({ agent }) => agent.createdAt)
           .orderBy(({ agent }) => agent.id),
+  ).data;
+}
+
+/**
+ * The task's agents as they stand: those the list carries, and an agent
+ * New task holds beside them until the list first carries it, which leaves
+ * with it once it no longer does, so a tab never leaves between the two.
+ * None before the list follows the task's agents, where the agent held
+ * stands alone.
+ */
+function useStanding<Row extends { readonly id: string }>(
+  taskId: string | undefined,
+  listed: readonly Row[] | undefined,
+  held: readonly Row[] | undefined,
+): readonly Row[] | undefined {
+  const carried = useRef({ subject: taskId, ids: new Set<string>() });
+
+  if (carried.current.subject !== taskId) carried.current = { subject: taskId, ids: new Set() };
+
+  for (const agent of listed ?? []) carried.current.ids.add(agent.id);
+
+  return useMemo(() => {
+    if (listed === undefined) return held;
+    const arriving = held?.filter((agent) => !carried.current.ids.has(agent.id)) ?? [];
+
+    return arriving.length === 0 ? listed : [...listed, ...arriving];
+  }, [listed, held]);
+}
+
+/**
+ * Where the open task's agents' rows are read, which the window's control
+ * carries in their place (`TaskAgentsControl`): the task, whether the list
+ * follows its agents, and the agent New task started on it, held until the
+ * list carries it.
+ */
+export interface TaskAgentRows {
+  readonly taskId: string | undefined;
+  readonly followed: boolean;
+  readonly held: readonly AgentSummary[] | undefined;
+}
+
+/** The rows a place's control lists its agents by, which the window's control of the open task leaves to `useTaskAgents`. */
+type ListedRows = "agents" | "archived" | "pullRequests";
+
+/**
+ * The open task's coding agents as the window holds them: every act, and
+ * the agents' ids, but not their rows, which move on every step of a turn,
+ * so a step redraws none of the window. A component drawing them reads
+ * them through `useTaskAgents`.
+ */
+export type TaskAgentsControl = Omit<AgentsControl, ListedRows> & {
+  readonly rows: TaskAgentRows;
+  /** One of the task's agents' row as it stands at the call, archived or not, the one New task holds among them; none for any other agent. Read at a press or a card's opening, never at a draw that should follow it. */
+  readonly rowNow: (agentId: string) => AgentSummary | undefined;
+  /** One of the task's agents' pull request as the list carries it at the call; none where it opened none. */
+  readonly pullRequestNow: (agentId: string) => AgentPullRequest | undefined;
+  /** The task's archived agents by id, in the order started, whose tabs stand once opened; nothing before the task list carries the task. */
+  readonly archivedIds: readonly string[] | undefined;
+  /** The task's standing agents still writing, by id, whose tabs never close themselves idle. */
+  readonly workingIds: readonly string[] | undefined;
+};
+
+/** No agents' rows, a place's that lists none of its own. */
+const NO_ROWS: Pick<AgentsControl, ListedRows> = {
+  agents: undefined,
+  archived: undefined,
+  pullRequests: new Map(),
+};
+
+/**
+ * A place's control over the window's acts, listing the rows the place
+ * draws itself rather than the open task's: none where it hands none, as
+ * a page of other agents does, whose rows it draws from reads of its own.
+ */
+export function placeAgents(
+  control: TaskAgentsControl,
+  rows: Pick<AgentsControl, ListedRows> = NO_ROWS,
+): AgentsControl {
+  const {
+    rows: _rows,
+    archivedIds: _archived,
+    workingIds: _working,
+    rowNow: _rowNow,
+    pullRequestNow: _pullRequestNow,
+    ...acts
+  } = control;
+
+  return { ...acts, ...rows };
+}
+
+/** A place's agents as a reader of their rows takes them: those the place lists, or the open task's, read where they are drawn. */
+export type HeldAgents = Pick<AgentsControl, ListedRows | "models" | "me"> | TaskAgentsControl;
+
+/** A place's control as a component drawing its agents is handed it: one listing them, or the open task's, whose rows it reads itself (`useTaskAgents`). */
+export type AgentsSource = AgentsControl | TaskAgentsControl;
+
+/** The rows a place lists, by name, which a card naming one of its agents reads. */
+type ListedAgents = Pick<AgentsControl, ListedRows | "models" | "me">;
+
+/**
+ * A place's agents as they stand at the call: those it lists, or the open
+ * task's read by their ids, archived ones apart, with their pull requests,
+ * as a card, a hover, or an `@` list reads them when it opens. Note that
+ * nothing here follows them, so a draw that should is drawn again by a
+ * reader of its own (`useTaskAgent`).
+ */
+export function agentsNow(control: HeldAgents): ListedAgents {
+  if (!("rows" in control)) return control;
+
+  const rowsOf = (ids: readonly string[] | undefined) =>
+    ids?.flatMap((agentId) => control.rowNow(agentId) ?? []);
+
+  const agents = rowsOf(control.agentIds);
+  const archived = rowsOf(control.archivedIds);
+
+  const pullRequests = new Map(
+    [...(agents ?? []), ...(archived ?? [])].flatMap((agent) => {
+      const pullRequest = control.pullRequestNow(agent.id);
+
+      return pullRequest === undefined ? [] : [[agent.id, pullRequest] as const];
+    }),
   );
 
-  const { data: pullRequests } = useLiveQuery((q) =>
+  return { agents, archived, pullRequests, models: control.models, me: control.me };
+}
+
+/**
+ * One of a place's agents by id, archived or not, followed live: the open
+ * task's read by its id alone, so only its own steps draw the reader
+ * again, and a place's own from the rows it lists; none where the place
+ * lists no such agent.
+ */
+export function useTaskAgent(
+  control: HeldAgents | undefined,
+  agentId: string | undefined,
+): AgentSummary | undefined {
+  const collections = useTaskListCollections();
+  const task = control !== undefined && "rows" in control ? control : undefined;
+  const listed = useTaskListRow(collections.agents, task === undefined ? undefined : agentId);
+
+  if (control === undefined || agentId === undefined) return undefined;
+
+  if (!("rows" in control)) {
+    return (
+      control.agents?.find((each) => each.id === agentId) ??
+      control.archived?.find((each) => each.id === agentId)
+    );
+  }
+
+  const { rows } = control;
+
+  if (rows.followed && listed !== undefined && listed.taskId === rows.taskId) return listed;
+
+  return rows.held?.find((each) => each.id === agentId);
+}
+
+/**
+ * What one of the open task's agents is called (`agentName`), archived or
+ * not, read of its row by its id alone, so only a rename draws its reader
+ * again; none for an agent the task does not list, or none given.
+ */
+export function useTaskAgentName(
+  control: TaskAgentsControl,
+  agentId: string | undefined,
+): string | undefined {
+  const collections = useTaskListCollections();
+  const { rows, models } = control;
+
+  const listed = useTaskListRowAs(collections.agents, agentId, (row) =>
+    row === undefined || !rows.followed || row.taskId !== rows.taskId
+      ? undefined
+      : agentName(row, models),
+  );
+
+  const held = rows.held?.find((agent) => agent.id === agentId);
+
+  return listed ?? (held === undefined ? undefined : agentName(held, models));
+}
+
+/**
+ * The open task's control with its agents' rows, as a part drawing one of
+ * them reads it: that agent's row and pull request followed by its id alone,
+ * the others as they stand at each draw (`agentsNow`), so a step of another
+ * agent's turn draws the part nothing. A place's own control is answered as
+ * it is.
+ */
+export function useTaskAgentsFor(
+  control: AgentsSource,
+  agentId: string | undefined,
+): AgentsControl {
+  const collections = useTaskListCollections();
+  const own = useTaskAgent("rows" in control ? control : undefined, agentId);
+  const task = "rows" in control ? control : undefined;
+
+  const ownPullRequest = useTaskListRow(
+    collections.agentPullRequests,
+    task === undefined ? undefined : agentId,
+  )?.pullRequest;
+
+  return useMemo(() => {
+    if (!("rows" in control)) return control;
+    const now = agentsNow(control);
+
+    const withOwn = (rows: readonly AgentSummary[] | undefined) =>
+      own === undefined ? rows : rows?.map((each) => (each.id === own.id ? own : each));
+
+    const pullRequests = new Map(now.pullRequests);
+
+    if (own !== undefined && ownPullRequest !== undefined) pullRequests.set(own.id, ownPullRequest);
+
+    return placeAgents(control, {
+      agents: withOwn(now.agents),
+      archived: withOwn(now.archived),
+      pullRequests,
+    });
+  }, [control, own, ownPullRequest]);
+}
+
+/**
+ * The open task's agents' pull requests, by agent, an archived one's among
+ * them, as the task list carries them, a live query over the task's own,
+ * which a step of a turn never moves; a place's own as it lists them.
+ */
+export function useTaskPullRequestsOf(
+  control: AgentsSource,
+): ReadonlyMap<string, AgentPullRequest> {
+  const collections = useTaskListCollections();
+  const taskId = "rows" in control ? control.rows.taskId : undefined;
+
+  const { data: listed } = useLiveQuery((q) =>
     taskId === undefined
       ? undefined
       : q
@@ -218,16 +472,48 @@ function useTaskRows(
           .where(({ listed }) => eq(listed.taskId, taskId)),
   );
 
-  return {
-    listedHere: followed ? agents : undefined,
-    listedPullRequests: pullRequests,
-  };
+  const pullRequests = useListedPullRequests(listed, taskId);
+
+  return "rows" in control ? pullRequests : control.pullRequests;
+}
+
+/**
+ * The open task's control with its agents' rows: those of the task's agents
+ * standing and archived, and their pull requests, each a live query over
+ * the task's own rows, so only the component reading them is drawn again as
+ * one moves. Note that a place's own control already lists its agents, and
+ * is answered as it is.
+ */
+export function useTaskAgents(control: AgentsSource): AgentsControl {
+  const collections = useTaskListCollections();
+  const rows = "rows" in control ? control.rows : undefined;
+  const taskId = rows?.taskId;
+  const listed = useAgentRows(collections, taskId);
+  const standing = useStanding(taskId, rows?.followed === true ? listed : undefined, rows?.held);
+
+  const pullRequests = useTaskPullRequestsOf(control);
+
+  return useMemo(() => {
+    if (!("rows" in control)) return control;
+
+    return placeAgents(control, {
+      agents: standing?.filter((agent) => agent.archivedAt === undefined),
+      archived: standing?.filter((agent) => agent.archivedAt !== undefined),
+      pullRequests,
+    });
+  }, [control, standing, pullRequests]);
 }
 
 /** How long a read of the models may stay out before it is said as failed, past the host's own ten-second bound on the call it makes. */
 const MODELS_READ_BOUND_MS = 15_000;
 /**
  * use-agents.ts -- the open task's coding agents as one control: the agents and their status, a Start, a draft agent started on a prompt, the Stop, a message to one, a change of one's model, and the models the menus offer.
+ *
+ * The control holds the agents' ids alone, never their rows, which move on
+ * every step of a turn, so a step draws none of the window that holds it:
+ * a part drawing the agents reads their rows itself (`useTaskAgents`,
+ * `useTaskAgentsFor`), and a card or a press reads them as they stand
+ * (`agentsNow`).
  *
  * The agents are the task list's, followed live in the host, which carries
  * every agent of the task, archived ones among them, and draws a rename, an
@@ -901,7 +1187,7 @@ export function useAgents(input: {
   keywords?: readonly string[];
   /** Mints one press's key. */
   mintKey?: () => string;
-}): AgentsControl {
+}): TaskAgentsControl {
   const { taskId, repository } = input;
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation.
   const queryClient = useQueryClient();
@@ -1014,26 +1300,29 @@ export function useAgents(input: {
   // The agent New task just started on the open task, which stands until the list carries it, so its tab draws at once.
   const seed = useMemo(() => (started === undefined ? undefined : [started.agent]), [started]);
   const held = taskId !== undefined && started?.taskId === taskId ? seed : undefined;
-  // The task's agents and their pull requests as the task list's collections carry them, read by the task alone, so a
-  // delivery that moves another task's rows draws nothing here; none where the list does not carry the task.
+  // The task's agents' places as the task list's collections carry them, read by the task alone, so a delivery that
+  // moves another task's rows, or a step that moves only an agent's row, draws nothing here; none where the list does
+  // not carry the task. Their whole rows are read where they are drawn (`useTaskAgents`).
   const collections = useTaskListCollections();
-  const { listedHere, listedPullRequests } = useTaskRows(collections, taskId, input.agentsFollowed);
+  const places = useAgentPlaces(collections, taskId);
+  const standing = useStanding<AgentPlace>(taskId, input.agentsFollowed ? places : undefined, held);
 
-  // Note that an agent New task holds stands beside the list's until the list first carries it,
-  // and leaves with it once it no longer does, so a tab never leaves between the two.
-  const subject = taskId;
-  const carried = useRef({ subject, ids: new Set<string>() });
+  // One of the task's agents' pull request, and its whole row, as they stand at the call, the one New task holds among them.
+  const pullRequestNow = useCallback(
+    (agentId: string) => collections.agentPullRequests.get(agentId)?.pullRequest,
+    [collections],
+  );
 
-  if (carried.current.subject !== subject) carried.current = { subject, ids: new Set() };
+  const rowOf = useCallback(
+    (agentId: string): AgentSummary | undefined => {
+      const listed = collections.agents.get(agentId);
 
-  for (const agent of listedHere ?? []) carried.current.ids.add(agent.id);
-
-  const standing = useMemo(() => {
-    if (listedHere === undefined) return held;
-    const arriving = held?.filter((agent) => !carried.current.ids.has(agent.id)) ?? [];
-
-    return arriving.length === 0 ? listedHere : [...listedHere, ...arriving];
-  }, [listedHere, held]);
+      return listed !== undefined && listed.taskId === taskId
+        ? listed
+        : held?.find((agent) => agent.id === agentId);
+    },
+    [collections, taskId, held],
+  );
 
   const agents = useMemo(
     () => standing?.filter((agent) => agent.archivedAt === undefined),
@@ -1050,9 +1339,19 @@ export function useAgents(input: {
     return pressedHere === undefined ? ids : [...(ids ?? []), pressedHere.key];
   }, [agents, pressedHere]);
 
-  const archivedAgents = useMemo(
-    () => standing?.filter((agent) => agent.archivedAt !== undefined),
+  const archivedIds = useMemo(
+    () => standing?.flatMap((agent) => (agent.archivedAt === undefined ? [] : [agent.id])),
     [standing],
+  );
+
+  const workingIds = useMemo(
+    () => agents?.flatMap((agent) => (agentStillWriting(agent.status) ? [agent.id] : [])),
+    [agents],
+  );
+
+  const rows = useMemo(
+    () => ({ taskId, followed: input.agentsFollowed, held }),
+    [taskId, input.agentsFollowed, held],
   );
 
   const { list } = input;
@@ -1359,7 +1658,7 @@ export function useAgents(input: {
     const id = mintKey();
 
     if (taskId === undefined) return id;
-    const source = standing?.find((agent) => agent.id === fork.agentId);
+    const source = rowOf(fork.agentId);
     moveWords(taskId, id, fork);
     withDraft(taskId, {
       id,
@@ -1386,7 +1685,7 @@ export function useAgents(input: {
     const id = joins && !adds ? draft.id : mintKey();
 
     if (taskId === undefined) return id;
-    const source = standing?.find((agent) => agent.id === sourceId);
+    const source = rowOf(sourceId);
     const fork = continueFork(sourceId);
     moveWords(taskId, id, fork, { text: words.trim(), attachments });
     withDraft(taskId, {
@@ -1448,8 +1747,7 @@ export function useAgents(input: {
     // Note that a fork restored with no servers of its own ran on its source's, so the draft left keeps those rather than the account's choice for new agents.
     const { fork } = draft;
 
-    const source =
-      fork === undefined ? undefined : standing?.find((agent) => agent.id === fork.agentId);
+    const source = fork === undefined ? undefined : rowOf(fork.agentId);
 
     const disabledServers =
       draft.disabledServers ?? (fork === undefined ? undefined : (source?.disabledServers ?? []));
@@ -2043,10 +2341,6 @@ export function useAgents(input: {
     [queryClient],
   );
 
-  // Note that every agent's pull request, an archived one's among them, is the task list's, so
-  // choosing a task reads none of them.
-  const pullRequests = useListedPullRequests(listedPullRequests, taskId);
-
   const answerInbox = useCallback<InboxAnswerer>(
     (params) => sendInboxAnswer(params),
     [sendInboxAnswer],
@@ -2094,8 +2388,11 @@ export function useAgents(input: {
 
   // Handed back steady, so a part drawn from the agents holds while they do (`memo`).
   return useSteadyDoors({
-    agents,
-    archived: archivedAgents,
+    rows,
+    rowNow: rowOf,
+    pullRequestNow,
+    archivedIds,
+    workingIds,
     agentIds,
     heldIds: standing?.map((agent) => agent.id),
     draft,
@@ -2150,7 +2447,6 @@ export function useAgents(input: {
     deleteAgent,
     readAgent,
     readTranscript,
-    pullRequests,
     keywords: input.keywords ?? NO_KEYWORDS,
     readSkills,
     answerInbox,

@@ -1228,7 +1228,7 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
   const listed = { ...OPEN, tasks: [row(TASK.id, 1)] };
   const tab = mount({ shown: true, tasks: listed });
   await settle();
-  assert.equal(tab.control().agents.agents, undefined, "the agents are still being read");
+  assert.equal(tab.control().agents.agentIds, undefined, "the agents are still being read");
   assert.equal(tab.control().mainTabs.tab, undefined, "nothing stands in the agent's place");
 
   tab.stand({ tasks: { ...listed, taskAgents: [listedAgent(RUNNING_AGENT)], listed: true } });
@@ -3757,9 +3757,10 @@ test("an agent profile opens its task on the agent it stages, beside the agent's
   const page = mount({ ...run, profile: RUN_PROFILE.AGENT_PAGE }, {});
   await settle();
 
-  assert.deepEqual(tasks.control().agents.agents, []);
+  assert.deepEqual(tasks.control().agents.agentIds, []);
+  const checksAgents = checks.control().agents;
   assert.deepEqual(
-    checks.control().agents.agents?.map((agent) => agent.title),
+    checksAgents.agentIds?.map((agentId) => checksAgents.rowNow(agentId)?.title),
     ["Add teammate invitations"],
   );
   const fixturePullRequest = { repository: "ada/relay", number: 214 };
@@ -4575,11 +4576,7 @@ test("New task's agent stands on its task before the task's agents or its transc
   await startAgentTask(tab);
 
   const agents = tab.control().agents;
-  assert.deepEqual(
-    agents.agents?.map((agent) => agent.id),
-    [AGENT_ID],
-    "the agent stands as the task's list",
-  );
+  assert.deepEqual(agents.agentIds, [AGENT_ID], "the agent stands as the task's list");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
 });
 

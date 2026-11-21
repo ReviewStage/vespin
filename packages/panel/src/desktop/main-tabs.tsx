@@ -63,7 +63,12 @@ import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import {
+  type AgentsControl,
+  type AgentsSource,
+  useTaskAgents,
+  useTaskAgentsFor,
+} from "../tasks/use-agents.js";
 import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { ActionMenu, type MenuAction, type MenuSubmenu } from "./action-menu.js";
@@ -429,7 +434,10 @@ export function inboxEntries(
  * a draft opened in the column, unavailable while a Start is out, and left
  * out on an archived task.
  */
-export function newAgentStarts(main: MainTabsControl, agents: AgentsControl): MenuAction[] {
+export function newAgentStarts(
+  main: MainTabsControl,
+  agents: Pick<AgentsControl, "onUnarchive" | "start" | "onNewDraft">,
+): MenuAction[] {
   if (agents.onUnarchive !== undefined) return [];
   const reason = agents.start.busy ? NEW_AGENT_STARTING : undefined;
 
@@ -602,7 +610,7 @@ export function TaskTopbar({
 export function MainTabBars({
   task,
   main,
-  agents,
+  agents: agentsSource,
   unread,
   views,
   pins,
@@ -619,7 +627,7 @@ export function MainTabBars({
   /** The task the column is, whose strip's looks the switcher keeps. */
   task: Pick<TaskSummary, "id">;
   main: MainTabsControl;
-  agents: AgentsControl;
+  agents: AgentsSource;
   /** The agents that ended while no one was looking, each in semibold until shown. */
   unread: readonly StripTab[];
   views: TabViews;
@@ -647,6 +655,8 @@ export function MainTabBars({
   /** The threads waiting on the developer, by the agent that posted them (`waitingByAgent`), which each agent's tab counts. */
   waiting?: ReadonlyMap<string, readonly unknown[]> | undefined;
 }): React.JSX.Element {
+  // Note that the open task's agents' rows are read here, where they are drawn, so a step of a turn draws this and not the page around it.
+  const agents = useTaskAgents(agentsSource);
   const drafted = useDraftedAgents();
   const failed = useFailedAgents();
 
@@ -794,18 +804,9 @@ export function MainTabBars({
   );
 }
 
-/** What a tab of the column is called to a reader of it. */
-export function mainTabLabel(tab: MainTab, agents: AgentsControl): string | undefined {
-  return stripTabTitle(tab, {
-    ...UNREAD_TAB_NAMES,
-    agent: (agentId) => {
-      const agent =
-        agents.agents?.find((each) => each.id === agentId) ??
-        agents.archived?.find((each) => each.id === agentId);
-
-      return agent === undefined ? undefined : agentName(agent, agents.models);
-    },
-  });
+/** What a tab of the column is called to a reader of it, its agent by `named`, the name of the agent it shows, where it shows one the task lists (`useTaskAgentName`). */
+export function mainTabLabel(tab: MainTab, named: string | undefined): string | undefined {
+  return stripTabTitle(tab, { ...UNREAD_TAB_NAMES, agent: () => named });
 }
 
 /**
@@ -819,7 +820,7 @@ export function mainTabLabel(tab: MainTab, agents: AgentsControl): string | unde
  */
 export function MainTabContent({
   tab,
-  agents,
+  agents: agentsSource,
   shown,
   views,
   onOpenDelegation,
@@ -832,7 +833,7 @@ export function MainTabContent({
   threads,
 }: {
   tab: Exclude<MainTab, typeof MAIN_TAB.OVERVIEW>;
-  agents: AgentsControl;
+  agents: AgentsSource;
   /** Whether the column is on screen, so an agent's tab knows to follow its transcript. */
   shown: boolean;
   views: TabViews;
@@ -854,6 +855,12 @@ export function MainTabContent({
   /** The threads the agent posted that wait on the developer, docked over its box; none where nothing waits. */
   threads?: AgentThreads | undefined;
 }): React.JSX.Element {
+  // Note that the tab's own agent's row is followed here, the others read as they stand, so a step of another agent's turn draws none of the tab.
+  const agents = useTaskAgentsFor(
+    agentsSource,
+    tab.kind === STRIP_TAB_KIND.AGENT ? tab.agent : undefined,
+  );
+
   switch (tab.kind) {
     case STRIP_TAB_KIND.DRAFT:
       // The tab stands for a draft the task no longer holds only until the

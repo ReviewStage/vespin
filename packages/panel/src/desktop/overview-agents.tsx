@@ -36,7 +36,7 @@ import { useRef, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import { type AgentsControl, type AgentsSource, useTaskAgents } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import { keptKey, useKept } from "../use-kept.js";
 import type { MenuAction } from "./action-menu.js";
@@ -310,7 +310,7 @@ function PlanArchivedAgents({
  * its repository and number.
  */
 export function OverviewAgents({
-  agents,
+  agents: agentsSource,
   held,
   tab,
   folded,
@@ -321,7 +321,7 @@ export function OverviewAgents({
   newAgent,
   phone,
 }: {
-  agents: AgentsControl;
+  agents: AgentsSource;
   /** What the tabs hold, which each row's card reads as its tab's does. */
   held: HeldTranscripts;
   /** The column's chosen tab, whose agent's card follows its run. */
@@ -339,6 +339,8 @@ export function OverviewAgents({
   /** A phone's additions; none elsewhere. */
   phone?: PlanAgentsPhone | undefined;
 }): React.JSX.Element | null {
+  // Note that the open task's agents' rows are read here, where they are drawn, so a step of a turn draws this and not the page around it.
+  const agents = useTaskAgents(agentsSource);
   // Note that an entry's pick chooses its agent's tab, which a row hands the page as that agent's id.
   const directory = useMemberDirectory();
 

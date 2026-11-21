@@ -76,7 +76,12 @@ import {
   writeExperiments,
 } from "../testing/app-state.js";
 import { overEveryTask } from "../testing/history-rows.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  listedAgent,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
@@ -366,16 +371,18 @@ test("a task with no agent tab draws a new agent's draft", () => {
                 tabs: [draftTab(DRAFT_ID)],
                 tab: draftTab(DRAFT_ID),
               },
-              agents: agentsControl({
-                agentIds: [],
-                draft: {
-                  id: DRAFT_ID,
-                  prompt: "",
-                  attachments: [],
-                  choice: undefined,
-                  disabledServers: [],
-                },
-              }),
+              agents: taskAgentsOf(
+                agentsControl({
+                  agentIds: [],
+                  draft: {
+                    id: DRAFT_ID,
+                    prompt: "",
+                    attachments: [],
+                    choice: undefined,
+                    disabledServers: [],
+                  },
+                }),
+              ),
             }),
           }),
         ),
@@ -389,12 +396,13 @@ test("a task with no agent tab draws a new agent's draft", () => {
   assert.ok(page.querySelector(".desktop-agent .agent-composer"), "the draft's composer is drawn");
 });
 
-test("a run's task leads its bar with the path to the automation whose run made it, the task's name last", () => {
+test("a run's task leads its bar with the path to the automation whose run made it, the task's name last", async () => {
   // jsdom lacks the ResizeObserver a trail's folding place measures its fold by.
   vi.stubGlobal(
     "ResizeObserver",
     class {
       observe(): void {}
+      unobserve(): void {}
       disconnect(): void {}
     },
   );
@@ -412,29 +420,38 @@ test("a run's task leads its bar with the path to the automation whose run made 
     automationName: "Daily standup",
   };
 
-  const page = document.createElement("div");
-  page.innerHTML = markupOf(
-    windowRouter().provide(
-      withQueryClient(
-        createElement(DesktopTasks, {
-          looks: NO_LOOKS,
-          tasks: tasksControl({
-            page: TASKS_PAGE.TASK,
-            activeTaskId: TASK.id,
-            region: { kind: TASK_REGION.READY, task: TASK },
-            agents: agentsControl({ agents: [agent], agentIds: [agent.id] }),
-          }),
-        }),
+  // The run's agent stands on the task as the list followed live holds it, which the trail reads it from.
+  const tasks = tasksControl({
+    page: TASKS_PAGE.TASK,
+    activeTaskId: TASK.id,
+    region: { kind: TASK_REGION.READY, task: TASK },
+    agents: taskAgentsOf(agentsControl({ agents: [agent], agentIds: [agent.id] }), TASK.id),
+    listedAgents: [listedAgent(agent)],
+  });
+
+  // Note that the page is mounted, not written to markup, since the run is read through a live query of the list, which answers once mounted.
+  const page = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(page);
+  act(() =>
+    root.render(
+      windowRouter().provide(
+        withQueryClient(
+          overEveryTask(tasks, createElement(DesktopTasks, { looks: NO_LOOKS, tasks })),
+        ),
       ),
     ),
   );
-  vi.unstubAllGlobals();
+  await act(async () => {
+    for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
+  });
 
   const path = page.querySelector(".task-topbar nav[aria-label='Path']") ?? assert.fail("no trail");
   assert.deepEqual(
     [...path.querySelectorAll("li")].map((crumb) => crumb.textContent),
     ["Automations", "Daily standup", TASK.name],
   );
+  act(() => root.unmount());
+  vi.unstubAllGlobals();
 });
 
 test("a wide task's details with no agent offer New agent on its Agents group's head, which opens a draft as the way back to the agents does", async () => {
@@ -460,7 +477,7 @@ test("a wide task's details with no agent offer New agent on its Agents group's 
                 ...tasksControl().mainTabs,
                 onChoose: (tab) => chosen.push(tab),
               },
-              agents: agentsControl({ agents: [], agentIds: [] }),
+              agents: taskAgentsOf(agentsControl({ agents: [], agentIds: [] })),
             }),
           }),
         ),
@@ -640,12 +657,14 @@ async function _narrowTaskInbox(
                 tab: SIDE_PANEL_TAB.INBOX,
               },
               me: reader.me,
-              agents: agentsControl({
-                agentIds: ["8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21"],
-                ...(reader.answerInbox === undefined
-                  ? undefined
-                  : { answerInbox: reader.answerInbox }),
-              }),
+              agents: taskAgentsOf(
+                agentsControl({
+                  agentIds: ["8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21"],
+                  ...(reader.answerInbox === undefined
+                    ? undefined
+                    : { answerInbox: reader.answerInbox }),
+                }),
+              ),
             }),
           }),
         ),
@@ -1014,39 +1033,41 @@ test("a chip in the plan naming a pull request opens a Pull request tab of exact
                 onPullRequestView: (tab, view) => opened.push({ pullRequest: tab.changes, view }),
                 onOpen: (tab) => opened.push(tab),
               },
-              agents: agentsControl({
-                agents: [agent],
-                archived: [archived],
-                agentIds: [agent.id],
-                pullRequests: new Map([
-                  [
-                    agent.id,
-                    {
-                      number: 42,
-                      title: "Send invitations in batches",
-                      url,
-                      state: PULL_REQUEST_STATE.OPEN,
-                      checks: CHECK_SUMMARY.PASSING,
-                      additions: 12,
-                      deletions: 3,
-                      changedFiles: 2,
-                    },
-                  ],
-                  [
-                    archived.id,
-                    {
-                      number: 9,
-                      title: "Send invitations at once",
-                      url: archivedUrl,
-                      state: PULL_REQUEST_STATE.CLOSED,
-                      checks: CHECK_SUMMARY.NONE,
-                      additions: 4,
-                      deletions: 1,
-                      changedFiles: 1,
-                    },
-                  ],
-                ]),
-              }),
+              agents: taskAgentsOf(
+                agentsControl({
+                  agents: [agent],
+                  archived: [archived],
+                  agentIds: [agent.id],
+                  pullRequests: new Map([
+                    [
+                      agent.id,
+                      {
+                        number: 42,
+                        title: "Send invitations in batches",
+                        url,
+                        state: PULL_REQUEST_STATE.OPEN,
+                        checks: CHECK_SUMMARY.PASSING,
+                        additions: 12,
+                        deletions: 3,
+                        changedFiles: 2,
+                      },
+                    ],
+                    [
+                      archived.id,
+                      {
+                        number: 9,
+                        title: "Send invitations at once",
+                        url: archivedUrl,
+                        state: PULL_REQUEST_STATE.CLOSED,
+                        checks: CHECK_SUMMARY.NONE,
+                        additions: 4,
+                        deletions: 1,
+                        changedFiles: 1,
+                      },
+                    ],
+                  ]),
+                }),
+              ),
             }),
           }),
         ),

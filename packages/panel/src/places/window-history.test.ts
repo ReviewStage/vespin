@@ -37,6 +37,7 @@ import {
   agentsControl,
   listedAgent,
   type TasksControlOverrides,
+  taskAgentsOf,
   tasksControl,
 } from "../testing/tasks-control.js";
 import { standWindowEscape } from "../testing/window-escape.js";
@@ -1002,7 +1003,7 @@ test("Back's list names a task and its agent's tab by the names they go by now, 
     {
       ...open,
       tasks: [listedTask("Auth refactor")],
-      agents: agentsControl({ agents: [openAgent("Token refresh")] }),
+      agents: taskAgentsOf(agentsControl({ agents: [openAgent("Token refresh")] })),
     },
     windowRouter(),
     namedAsShown,
@@ -1054,7 +1055,7 @@ test("Back's list names a renamed agent's tab by its name now beside a page's ta
       ...open,
       sidePanel: { ...open.sidePanel, strip: [page] },
       tasks: [listedTask("Auth refactor")],
-      agents: agentsControl({ agents: [openAgent("Token refresh")] }),
+      agents: taskAgentsOf(agentsControl({ agents: [openAgent("Token refresh")] })),
       pages: [{ id: page.page, title: "Notes", version: 1, at: 1 }],
     },
     windowRouter(),

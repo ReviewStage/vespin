@@ -79,7 +79,8 @@ import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { ManagerGlyph } from "../tasks/tab-look.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
+import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
 import { useHeldTaskInbox, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
@@ -172,20 +173,24 @@ function useOwnAgents(
   const control = tasks.agents;
   const { skills, keywords } = place;
 
+  const pullRequest = useListedPullRequest(agent.id);
+
   return useMemo(() => {
     const archived = agent.archivedAt !== undefined;
 
     return {
-      ...control,
-      agents: archived ? [] : [agent],
-      archived: archived ? [agent] : [],
+      ...placeAgents(control, {
+        agents: archived ? [] : [agent],
+        archived: archived ? [agent] : [],
+        pullRequests: new Map(pullRequest === undefined ? [] : [[agent.id, pullRequest]]),
+      }),
       agentIds: [agent.id],
       heldIds: [agent.id],
       // Note that the window's control reads these through the open task, which is none of the agent's.
       readSkills: skills,
       keywords,
     };
-  }, [control, agent, skills, keywords]);
+  }, [control, agent, pullRequest, skills, keywords]);
 }
 
 /**
