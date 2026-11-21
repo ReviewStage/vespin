@@ -684,8 +684,13 @@ export function RowFrame({
     preview === undefined || open === undefined
       ? []
       : [
-          // Note that Open stands as words alone, since it opens the row in the app; the arrow out marks only what leaves it, such as Open in browser.
-          { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
+          // Note that Open leads with its glyph, as every act after it does, so its word starts where theirs do, as Mail's preview menu glyphs every act; its glyph is not the arrow out, which marks only what leaves the app, such as Open in browser.
+          {
+            label: VERB.OPEN,
+            symbol: GLYPH.OPEN,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => open(id),
+          },
         ];
 
   const menu = asking(
