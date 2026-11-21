@@ -21,7 +21,7 @@ mem_flags=()
 base_used=$(host_used_mb)
 record base.host_used_mb "$base_used"
 # Seed the image cache with one start so the N starts measure VMs, not the pull.
-smol machine create --name seed --net --image "$IMAGE" -- sleep infinity > /dev/null
+smol machine create --name seed "${NET_FLAGS[@]}" --image "$IMAGE" -- sleep infinity > /dev/null
 smol machine start --name seed > /dev/null
 smol machine stop --name seed > /dev/null
 smol machine delete --name seed --force > /dev/null
@@ -30,7 +30,7 @@ record base_after_seed.host_used_mb "$base_used"
 
 t0=$(now_ms)
 for i in $(seq 1 "$N"); do
-  smol machine create --name "d$i" --net "${mem_flags[@]}" -v "$SPIKE_ROOT/mirror:/mirror:ro" --image "$IMAGE" -- sleep infinity > /dev/null
+  smol machine create --name "d$i" "${NET_FLAGS[@]}" "${mem_flags[@]}" -v "$SPIKE_ROOT/mirror:/mirror:ro" --image "$IMAGE" -- sleep infinity > /dev/null
   smol machine start --name "d$i" > /dev/null || record "start_fail.d$i" 1
 done
 record start_all_ms $(($(now_ms) - t0))

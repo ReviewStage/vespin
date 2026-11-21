@@ -6,7 +6,7 @@ source "$(dirname "$0")/lib.sh"
 prepare_host
 host_facts
 
-smol machine create --name dk --net --auto-ports -p 13000:3000 -v /var/lib/docker -v /var/lib/containerd --image "$IMAGE" -- sleep infinity > /dev/null
+smol machine create --name dk "${NET_FLAGS[@]}" --auto-ports -p 13000:3000 -v /var/lib/docker -v /var/lib/containerd --image "$IMAGE" -- sleep infinity > /dev/null
 timed start smol machine start --name dk
 x() { smol machine exec --name dk "$@"; }
 record docker.backing_device "$(x -- sh -c 'df /var/lib/docker | tail -1 | cut -d" " -f1')"

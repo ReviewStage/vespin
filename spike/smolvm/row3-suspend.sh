@@ -12,7 +12,7 @@ host_facts
 
 start_flags=()
 [ "$MODE" = branchable ] && start_flags=(--branchable)
-smol machine create --name sus --net -p 18000:8000 --image "$IMAGE" -- sleep infinity > /dev/null
+smol machine create --name sus "${NET_FLAGS[@]}" -p 18000:8000 --image "$IMAGE" -- sleep infinity > /dev/null
 timed start smol machine start --name sus "${start_flags[@]}"
 # A dev server, a tmux shell counting in RAM and on disk, and ~400 MB the guest touches.
 smol machine exec --name sus -d -- sh -c 'cd /vercel && exec python3 -m http.server 8000 > /tmp/http.log 2>&1'

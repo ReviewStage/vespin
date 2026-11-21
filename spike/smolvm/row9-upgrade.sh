@@ -14,7 +14,7 @@ record from "$FROM"
 record to "$TO"
 
 for m in up_stopped up_paused; do
-  smol machine create --name "$m" --net --image "$IMAGE" -- sleep infinity > /dev/null
+  smol machine create --name "$m" "${NET_FLAGS[@]}" --image "$IMAGE" -- sleep infinity > /dev/null
   smol machine start --name "$m" > /dev/null
   smol machine exec --name "$m" -- sh -c 'echo kept > /vercel/marker; sync'
 done

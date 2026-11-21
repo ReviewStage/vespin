@@ -39,7 +39,7 @@ dl() { curl -s -o /dev/null -w '%{speed_download}' --max-time 120 'https://speed
 record bare.download_bytes_per_s "$(dl)"
 
 # The VM, its checkout on its own disk.
-smol machine create --name tp --net --mem 8192 --cpus "$(nproc)" -v "$SPIKE_ROOT/mirror:/mirror:ro" -v "$SPIKE_ROOT:/spike:ro" --image "$IMAGE" -- sleep infinity > /dev/null
+smol machine create --name tp "${NET_FLAGS[@]}" --mem 8192 --cpus "$(nproc)" -v "$SPIKE_ROOT/mirror:/mirror:ro" -v "$SPIKE_ROOT:/spike:ro" --image "$IMAGE" -- sleep infinity > /dev/null
 smol machine start --name tp > /dev/null
 smol machine exec --name tp -- bash /spike/steps.sh /vercel 2>&1 | sed 's/^\([a-z]\)/vm_disk.\1/' | tee -a "$RESULTS_DIR/$ROW.txt"
 record vm_disk.download_bytes_per_s "$(smol machine exec --name tp -- curl -s -o /dev/null -w '%{speed_download}' --max-time 120 'https://speed.cloudflare.com/__down?bytes=100000000')"
@@ -48,7 +48,7 @@ smol machine delete --name tp --force > /dev/null
 
 # The VM, its checkout on a host folder mounted in (virtiofs).
 mkdir -p "$SPIKE_ROOT/share" && chmod 0777 "$SPIKE_ROOT/share"
-smol machine create --name tpm --net --mem 8192 --cpus "$(nproc)" -v "$SPIKE_ROOT/mirror:/mirror:ro" -v "$SPIKE_ROOT:/spike:ro" -v "$SPIKE_ROOT/share:/work" --image "$IMAGE" -- sleep infinity > /dev/null
+smol machine create --name tpm "${NET_FLAGS[@]}" --mem 8192 --cpus "$(nproc)" -v "$SPIKE_ROOT/mirror:/mirror:ro" -v "$SPIKE_ROOT:/spike:ro" -v "$SPIKE_ROOT/share:/work" --image "$IMAGE" -- sleep infinity > /dev/null
 smol machine start --name tpm > /dev/null
 smol machine exec --name tpm -- bash /spike/steps.sh /work 2>&1 | sed 's/^\([a-z]\)/vm_mount.\1/' | tee -a "$RESULTS_DIR/$ROW.txt"
 smol machine stop --name tpm > /dev/null

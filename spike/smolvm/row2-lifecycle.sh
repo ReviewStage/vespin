@@ -7,13 +7,13 @@ prepare_host
 host_facts
 
 # Warm the image cache once, so the create below is "with the image cached".
-smol machine create --name warm --net --image "$IMAGE" -- sleep infinity > /dev/null
+smol machine create --name warm "${NET_FLAGS[@]}" --image "$IMAGE" -- sleep infinity > /dev/null
 timed seed_first_start smol machine start --name warm
 smol machine stop --name warm > /dev/null
 smol machine delete --name warm --force > /dev/null
 
 t0=$(now_ms)
-timed create smol machine create --name life --net --image "$IMAGE" -- sleep infinity
+timed create smol machine create --name life "${NET_FLAGS[@]}" --image "$IMAGE" -- sleep infinity
 timed first_start smol machine start --name life
 probe=$(runner_probe life)
 record first_runner_exit "$probe"

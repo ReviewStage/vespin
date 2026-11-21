@@ -12,6 +12,8 @@ SPIKE_ROOT="${SPIKE_ROOT:-/mnt/smol}"
 RESULTS_DIR="${RESULTS_DIR:-${GITHUB_WORKSPACE:-$PWD}/results}"
 SMOLVM_VERSION="${SMOLVM_VERSION:-1.35.5}"
 IMAGE="${IMAGE:-}"
+# The network every agent VM gets: virtio-net, the backend a credential binding selects anyway.
+NET_FLAGS=(--net --net-backend "${NET_BACKEND:-virtio-net}")
 mkdir -p "$RESULTS_DIR"
 
 export XDG_DATA_HOME="$SPIKE_ROOT/data" XDG_CACHE_HOME="$SPIKE_ROOT/cache" XDG_CONFIG_HOME="$SPIKE_ROOT/config"

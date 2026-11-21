@@ -5,6 +5,7 @@
 set -u
 arch=$(uname -m)
 echo "clis.arch=$arch"
+echo "clis.rootfs_du_mb=$(sudo -n du -smx / 2> /dev/null | cut -f1)"
 v() { "$@" 2>&1 | head -1 | tr -d '\r'; }
 echo "clis.claude=$(v claude --version)"
 echo "clis.codex=$(v codex --version)"
@@ -39,5 +40,7 @@ EOF
 if out=$(PLAYWRIGHT_BROWSERS_PATH=0 node /tmp/shot.mjs 2>&1); then echo "clis.$out"; echo "clis.chromium=PASS"; else echo "clis.chromium=FAIL"; echo "# chromium: $(echo "$out" | tail -2 | tr '\n' ' ')"; fi
 # Docker: the daemon the image ships, a hello-world.
 if sudo -n true 2> /dev/null; then
+  # Under docker run, /var/lib/docker sits on overlayfs, which nested overlay refuses; a tmpfs takes it.
+  sudo -n mkdir -p /var/lib/docker && sudo -n mount -t tmpfs -o size=2g tmpfs /var/lib/docker 2> /dev/null || true
   if docker run --rm hello-world 2>&1 | grep -q "Hello from Docker"; then echo "clis.docker=PASS"; else echo "clis.docker=FAIL"; tail -5 /var/log/dockerd.log 2> /dev/null | sed 's/^/# dockerd: /'; fi
 fi
