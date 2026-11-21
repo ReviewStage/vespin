@@ -12,20 +12,21 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
+import { EMPTY_INBOX_DRAFT, type InboxDraft, inboxThreadSend } from "@repo/features/inbox-draft";
+import { awaitsNod } from "@repo/features/inbox-list-model";
 import {
-  answeredDraft,
-  EMPTY_INBOX_DRAFT,
-  type InboxDraft,
-  inboxThreadSend,
-} from "@repo/features/inbox-draft";
-import { awaitsNod, knownAsk } from "@repo/features/inbox-list-model";
+  BEHIND_UNDELIVERED,
+  filesLost,
+  UNHEARD_UNDELIVERED,
+  type UndeliveredReply,
+  undeliveredDraft,
+  undeliveredOn,
+} from "@repo/features/inbox-undelivered";
 import {
-  INBOX_ASK,
   INBOX_REPLY,
   INBOX_STATUS,
   type InboxAnswers,
   type InboxItem,
-  openAskOf,
 } from "@repo/features/inbox-wire";
 import type { AppInboxItems } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
@@ -58,13 +59,7 @@ import { useSendQueue } from "../send-queue.js";
 import type { InboxAcknowledger } from "./inbox-acknowledge.js";
 import { useInboxArrivals } from "./inbox-arrivals.js";
 import { type InboxBoardView, type InboxNote, inboxBoard } from "./inbox-model.js";
-import {
-  filesLost,
-  UNHEARD_UNDELIVERED,
-  type UndeliveredReply,
-  undeliveredOn,
-  undeliveredReplies,
-} from "./inbox-undelivered.js";
+import { undeliveredReplies } from "./inbox-undelivered.js";
 import { type HeldUpdate, heldUpdateOver, joinedAhead } from "./refused-send.js";
 
 /**
@@ -357,9 +352,6 @@ function queuedReply(itemId: string, sent: ReplySent, key: string): QueuedReply 
   };
 }
 
-/** Why a reply queued behind one that did not go did not go itself. */
-const BEHIND_UNDELIVERED = "Not sent, because the reply before it did not go.";
-
 /** A queued reply that did not go, on the task `taskId`, as its thread keeps it. */
 function undeliveredOf(reply: QueuedReply, taskId: string | null, why: string): UndeliveredReply {
   const { itemId, clientKey: key, text, attachments, answers, revision } = reply.params;
@@ -468,40 +460,9 @@ function withTakenBack(now: Draft, went: Draft): Draft {
   return { ...(holdsPicks(now) ? now : went), ...joinedAhead(went, now) };
 }
 
-/**
- * A reply that did not go as its box held it, at the item's revision: its
- * words and files, and the picks its answer made on the ask, where the
- * thread still carries the ask, so taking it back fills the ask's controls
- * as they stood. Note that a press is kept for a `do` alone, whose Mark done
- * or Couldn't do it it is.
- */
+/** A reply that did not go as its box held it, at the item's revision (`undeliveredDraft`). */
 function draftOfUndelivered(item: InboxItem, reply: UndeliveredReply): Draft {
-  const { answers } = reply;
-  const ask = answers === undefined ? undefined : askAnswered(item, answers);
-
-  const picks =
-    ask === undefined || answers === undefined ? EMPTY_INBOX_DRAFT : answeredDraft(ask, answers);
-
-  const press = ask?.type === INBOX_ASK.DO ? picks.press : undefined;
-
-  return keptDraft(
-    { ...picks, press, note: reply.text, attachments: reply.attachments },
-    item.revision,
-  );
-}
-
-/**
- * The ask an answer answers, where it is still the thread's open ask and
- * this build knows it. Note that an ask the agent has posted over since is
- * none, so its picks never land on the ask standing now, whose options may
- * share their labels.
- */
-function askAnswered(item: InboxItem, answers: InboxAnswers) {
-  const asking = openAskOf(item.thread ?? []);
-
-  return asking !== undefined && asking.message.id === answers.ask && knownAsk(asking.ask)
-    ? asking.ask
-    : undefined;
+  return keptDraft(undeliveredDraft(item.thread ?? [], reply), item.revision);
 }
 
 /** Whether a card holds nothing at all: no words, files, picks, fields, steps, or press. */

@@ -15,7 +15,8 @@ import {
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { RENAME_FAILED_NOTE } from "@repo/features/tasks-model";
+import { RENAME_FAILED_NOTE, type TaskNames } from "@repo/features/tasks-model";
+import { statusOf } from "@repo/features/tasks-page-model";
 import { taskKey } from "@repo/features/workspace-key";
 import {
   ANNOUNCE,
@@ -39,13 +40,13 @@ import {
 } from "@repo/ui";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
-import { statusOf } from "@repo/ui/tasks-page-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useRef } from "react";
 import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
+import { useNamedTask } from "../task-list-collections.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
@@ -141,6 +142,25 @@ function OpenPullRequests({ task }: { task: TaskSummary }): React.JSX.Element | 
       ))}
     </>
   );
+}
+
+/**
+ * Draws a row of the task `handed` as the list holds it now, so a delivery
+ * moving that task alone, as each turn of its agents does, draws this row and
+ * not the list holding it (`useRecentTasks`, `useNamedTasksAtRest`); the task
+ * handed stands until the list holds it, as a row leaving or one not listed
+ * yet does.
+ */
+export function OwnTask({
+  handed,
+  typedNames,
+  children,
+}: {
+  handed: TaskSummary;
+  typedNames: TaskNames;
+  children: (task: TaskSummary) => ReactNode;
+}): React.JSX.Element {
+  return <>{children(useNamedTask(handed.id, typedNames) ?? handed)}</>;
 }
 
 /** One task's row, its cells those its list draws. */

@@ -1,5 +1,6 @@
 import { repositoryLabel } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { type ListColumn, TASK_PROPERTY } from "@repo/features/tasks-page-model";
 import {
   type GroupFold,
   SKELETON_KIND,
@@ -13,7 +14,6 @@ import {
   useMinute,
 } from "@repo/ui";
 import { assigneeFace } from "@repo/ui/actor-model";
-import { type ListColumn, TASK_PROPERTY } from "@repo/ui/tasks-page-model";
 import { type ReactNode, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
@@ -22,7 +22,7 @@ import { useFittedColumns } from "./fitted-columns.js";
 import { SectionSkeleton } from "./person-frame.js";
 import { openedTaskOf, taskRowTab } from "./task-actions.js";
 import { taskCardOf } from "./task-card.js";
-import { TaskListRow } from "./task-list-row.js";
+import { OwnTask, TaskListRow } from "./task-list-row.js";
 import { useStandingDoor } from "./task-row-parts.js";
 
 /**
@@ -151,27 +151,30 @@ export function RecentTasks({
     <>
       <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
         {(cells, more) =>
-          listed.map((task) => (
-            <TaskListRow
-              key={task.id}
-              tasks={rowTab}
-              task={task}
-              opened={opened}
-              workspaceName={workspaceName}
-              cells={cells}
-              repositoryName={
-                task.repository === null ? undefined : repositoryLabel(task.repository, listed)
-              }
-              // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
-              assigneeHeld={face && assigneeFace(task, directory) === undefined}
-              chosen={undefined}
-              more={more}
-              edges={TASK_ROW_EDGES.UNCHOSEN}
-              unread={unread(task)}
-              card={taskCardOf(tasks, task, now)}
-              onOpen={() => onOpen(task.id)}
-              onStanding={(asked) => standing.set(task, asked)}
-            />
+          listed.map((handed) => (
+            <OwnTask key={handed.id} handed={handed} typedNames={tasks.typedNames}>
+              {(task) => (
+                <TaskListRow
+                  tasks={rowTab}
+                  task={task}
+                  opened={opened}
+                  workspaceName={workspaceName}
+                  cells={cells}
+                  repositoryName={
+                    task.repository === null ? undefined : repositoryLabel(task.repository, listed)
+                  }
+                  // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
+                  assigneeHeld={face && assigneeFace(task, directory) === undefined}
+                  chosen={undefined}
+                  more={more}
+                  edges={TASK_ROW_EDGES.UNCHOSEN}
+                  unread={unread(task)}
+                  card={taskCardOf(tasks, task, now)}
+                  onOpen={() => onOpen(task.id)}
+                  onStanding={(asked) => standing.set(task, asked)}
+                />
+              )}
+            </OwnTask>
           ))
         }
       </GlanceRows>

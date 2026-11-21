@@ -1,4 +1,4 @@
-// held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny and Allow under its line in the transcript, the line over the composer saying a message denies it, and a banner there for a call no row draws.
+// held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny, Always allow and Allow under its line in the transcript, the line over the composer saying a message denies it, and a banner there for a call no row draws.
 
 import { HStack, Image, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -11,7 +11,11 @@ import {
   frame,
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
-import { APPROVAL_PRESS_WORDS, DENIES_WAITING } from "@repo/features/agent-approval-model";
+import {
+  ALWAYS_ALLOW_COMMAND_WORDS,
+  APPROVAL_PRESS_WORDS,
+  DENIES_WAITING,
+} from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
@@ -21,9 +25,10 @@ import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** The answers the phone offers a held call: Allow and Deny, as the panel's card offers them first. */
+/** The answers the phone offers a held call, as the panel's card offers them: Allow, Always allow for the agent, and Deny. */
 export const HELD_ANSWER = {
   ALLOW: APPROVAL_ANSWER.ALLOW,
+  ALLOW_FOR_AGENT: APPROVAL_ANSWER.ALLOW_FOR_AGENT,
   DENY: APPROVAL_ANSWER.DENY,
 } as const;
 
@@ -41,22 +46,36 @@ export type HeldCall = {
   readonly answering: HeldAnswer | undefined;
   /** Why the last answer did not go. */
   readonly note: string | undefined;
+  /** The command Always allow keeps for every agent of the member's, as it reads (`pnpm test *`); none where it lasts for this agent alone. */
+  readonly command: string | undefined;
   readonly onAnswer: (answer: HeldAnswer) => void;
 };
 
 /**
- * Deny and Allow side by side, Allow filled as the act a held call is for;
- * the press out reads busy, and neither takes a press meanwhile. Note that
- * at an accessibility size they stack, as an alert's buttons do, because
- * side by side under a call's indented line at AX5 Deny broke into "Den"
- * and "y".
+ * Deny, Always allow and Allow side by side, Allow filled last as the act a
+ * held call is for, Always allow bordered beside it as the panel's outlines
+ * it; the press out reads busy, and none takes a press meanwhile. Where
+ * Always allow keeps a command for every agent, a muted line under them
+ * names it, as the panel's says it. Note that at an accessibility size they
+ * stack, as an alert's buttons do, because side by side under a call's
+ * indented line at AX5 Deny broke into "Den" and "y".
  */
-function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "onAnswer">) {
+function ApprovalPresses({
+  answering,
+  command,
+  onAnswer,
+}: Pick<HeldCall, "answering" | "command" | "onAnswer">) {
   const large = useAccessibilitySize();
+  const colors = useColors();
   const out = answering !== undefined;
 
   const deny =
     answering === HELD_ANSWER.DENY ? APPROVAL_PRESS_WORDS.DENYING : APPROVAL_PRESS_WORDS.DENY;
+
+  const always =
+    answering === HELD_ANSWER.ALLOW_FOR_AGENT
+      ? APPROVAL_PRESS_WORDS.ALLOWING
+      : APPROVAL_PRESS_WORDS.ALLOW_FOR_AGENT;
 
   const allow =
     answering === HELD_ANSWER.ALLOW ? APPROVAL_PRESS_WORDS.ALLOWING : APPROVAL_PRESS_WORDS.ALLOW;
@@ -72,6 +91,13 @@ function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "
         onPress={() => onAnswer(HELD_ANSWER.DENY)}
       />
       <Button
+        key={always}
+        label={always}
+        look={BUTTON_LOOK.BORDERED}
+        disabled={out}
+        onPress={() => onAnswer(HELD_ANSWER.ALLOW_FOR_AGENT)}
+      />
+      <Button
         key={allow}
         label={allow}
         disabled={out}
@@ -80,19 +106,37 @@ function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "
     </>
   );
 
-  return large ? (
+  const row = large ? (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       {presses}
     </VStack>
   ) : (
     <HStack spacing={SPACE.ROW}>{presses}</HStack>
   );
+
+  if (command === undefined) return row;
+
+  return (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+      {row}
+      <Text
+        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+      >
+        <Text>{ALWAYS_ALLOW_COMMAND_WORDS.BEFORE}</Text>
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" })]}>
+          {command}
+        </Text>
+        <Text>{ALWAYS_ALLOW_COMMAND_WORDS.AFTER}</Text>
+      </Text>
+    </VStack>
+  );
 }
 
 /**
  * Under a held call's line in the transcript: where it stands, in the
  * attention ink while it waits and muted once it came out, who asks and
- * why, why an answer did not go, and Deny and Allow while it waits.
+ * why, why an answer did not go, and Deny, Always allow and Allow while it
+ * waits.
  */
 export function HeldCallBody({ held }: { readonly held: HeldCall }) {
   const colors = useColors();
@@ -116,7 +160,11 @@ export function HeldCallBody({ held }: { readonly held: HeldCall }) {
       )}
       {held.note === undefined ? null : <AskNote words={held.note} />}
       {held.waiting ? (
-        <ApprovalPresses answering={held.answering} onAnswer={held.onAnswer} />
+        <ApprovalPresses
+          answering={held.answering}
+          command={held.command}
+          onAnswer={held.onAnswer}
+        />
       ) : null}
     </VStack>
   );
@@ -129,7 +177,7 @@ const SHOW_WAITING_HINT = "Shows the call waiting in the transcript";
  * Over the composer's field while a call waits and a message sent now would
  * deny it, as the panel's composer says it: "Sending a message denies the
  * waiting approval." in the muted ink. A press scrolls the transcript to the
- * call's row, whose Deny and Allow answer it; where no row is drawn it is
+ * call's row, whose presses answer it; where no row is drawn it is
  * words alone.
  */
 export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | undefined }) {
@@ -161,7 +209,7 @@ export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | und
   );
 }
 
-type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "onAnswer"> & {
+type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "command" | "onAnswer"> & {
   /** How many calls wait, as the panel's working line says it: "Waiting on you · 1 approval". */
   readonly waiting: string;
   /** What the oldest call waiting asks, as the agent's CLI put it. */
@@ -172,11 +220,18 @@ type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "onAnswer"> & {
  * What stands over the composer's field, inside its glass, while a call
  * waits that no row of the transcript draws, such as a subagent's, so it is
  * still answered: a raised hand and how many wait in the attention ink,
- * what the oldest asks, and Deny and Allow. A call whose row is drawn is
+ * what the oldest asks, and Deny, Always allow and Allow. A call whose row is drawn is
  * answered there alone, as on the panel. The page tells VoiceOver of every
  * call waiting from its composer, which stands while this comes and goes.
  */
-export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: HeldCallBannerProps) {
+export function HeldCallBanner({
+  waiting,
+  asks,
+  answering,
+  note,
+  command,
+  onAnswer,
+}: HeldCallBannerProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const hand = useScaledSize(MARK_SIZE.GLYPH);
@@ -211,7 +266,7 @@ export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: Hel
         {asks}
       </Text>
       {note === undefined ? null : <AskNote words={note} />}
-      <ApprovalPresses answering={answering} onAnswer={onAnswer} />
+      <ApprovalPresses answering={answering} command={command} onAnswer={onAnswer} />
     </VStack>
   );
 }

@@ -27,6 +27,7 @@ import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { NO_EXPERIMENTS } from "@repo/settings";
 import { changesTab, pageTab, transcriptTab } from "@repo/ui/tab-strip-model";
+import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment } from "react";
@@ -48,7 +49,6 @@ import {
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handInboxItems, handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { holdFrames, settleFrames } from "../testing/frames.js";
 import { restOn } from "../testing/hint-rest.js";
 import { underWindowRouter } from "../testing/link-router.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
@@ -325,8 +325,6 @@ async function inbox(
     const tasks = tasksControl({
       workspace: ACME,
       tasks: [TASK, OTHER],
-      liveAgents: LISTED_AGENTS,
-      listedPullRequests: LISTED_PULL_REQUESTS,
       inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
       sidePanel,
       onShowTask: (taskId) => left.tasks.push(taskId),

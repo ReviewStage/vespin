@@ -23,6 +23,14 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { machineName, THIS_MAC, type ThisMac } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
+  MENTION_BROWSE,
+  MENTION_FROM,
+  MENTION_WIDEN,
+  type MentionFrom,
+  narrowingQuery,
+  typedMentionKind,
+} from "@repo/features/mention-kind";
+import {
   encodeMention,
   isMentionableTool,
   MENTION_KIND,
@@ -122,7 +130,7 @@ import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
-import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { useTaskListCollections, useTaskListRowAs } from "../task-list-collections.js";
 import { appStateQuery, selectMachineCommandDevice, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
@@ -301,29 +309,8 @@ const MENTION_GROUP = {
   /** The machines of the workspace's members, which an agent's commands and computer use may be sent to by id. */
   MACHINES: "Machines",
   SERVERS: MCP_SERVER_LABEL.many,
-  FROM: "Browse",
+  FROM: MENTION_BROWSE,
 } as const;
-
-/** The kinds a list may be narrowed to, each but a server by its own word typed before a colon after the `@`. */
-const MENTION_FROM = {
-  FILES: "files",
-  DESCRIPTION: "description",
-  TASKS: "tasks",
-  PAGES: "pages",
-  AGENTS: "agents",
-  PEOPLE: "people",
-  THREADS: "threads",
-  AUTOMATIONS: "automations",
-  PULL_REQUESTS: "prs",
-  SKILLS: "skills",
-  DATES: "dates",
-  APPS: "apps",
-  MACHINES: "machines",
-  SERVERS: "servers",
-  SERVER: "server",
-} as const;
-
-type MentionFrom = (typeof MENTION_FROM)[keyof typeof MENTION_FROM];
 
 /** The entity each kind of the list lists, whose glyph its row and its crumb wear (`../entities/entity-glyph.tsx`). */
 const KIND_ENTITY = {
@@ -346,11 +333,6 @@ const KIND_ENTITY = {
   >,
   EntityKind
 >;
-
-/** Words that narrow the list as a kind's own word does: `plan`, the description's word before it was renamed. */
-const MENTION_FROM_ALIAS: ReadonlyMap<string, MentionFrom> = new Map([
-  ["plan", MENTION_FROM.DESCRIPTION],
-]);
 
 /** The kind a list is narrowed to: one of the place's own, or one connected server by its connection, wearing its provider's mark. */
 type Narrow =
@@ -436,8 +418,16 @@ const SEARCH_PAUSE = Duration.millis(250);
 /** No workspaces, before the first document arrives. */
 const NO_WORKSPACES: readonly Workspace[] = [];
 
+/** A task as the list offers it to mention: what its row and a thread's row name it by. */
+interface OfferedTask {
+  readonly id: TaskSummary["id"];
+  readonly workspaceId: TaskSummary["workspaceId"];
+  readonly name: TaskSummary["name"];
+  readonly number?: TaskSummary["number"] | undefined;
+}
+
 /** No tasks: what a list not yet read offers rows from. */
-const NO_TASKS: readonly TaskSummary[] = [];
+const NO_TASKS: readonly OfferedTask[] = [];
 
 /** No rows: what a kind not asked for offers. */
 const NO_ROWS: readonly MentionRow[] = [];
@@ -450,7 +440,7 @@ const NO_MATCH = noMatchWords(TERM.RESULT);
 
 /** What a narrowed list's back arrow is read by: back to every kind, or up out of a folder. */
 const BACK_LABEL = {
-  WIDEN: "All kinds",
+  WIDEN: MENTION_WIDEN,
   UP: "Up",
 } as const;
 
@@ -582,19 +572,20 @@ function scopeOf(
     };
   }
 
-  const typed = /^([^\s:]+):/u.exec(query);
-  const typedWord = typed?.[1]?.toLowerCase();
+  const typed = typedMentionKind(query);
+  const kind = typed === undefined ? undefined : kinds.find((each) => each.keyword === typed.word);
 
-  const word =
-    typedWord === undefined ? undefined : (MENTION_FROM_ALIAS.get(typedWord) ?? typedWord);
-
-  const kind = word === undefined ? undefined : kinds.find((each) => each.keyword === word);
-
-  if (typed === null || kind === undefined) {
+  if (typed === undefined || kind === undefined) {
     return { kind: undefined, entry: "", typed: false, walked: [], term: query };
   }
 
-  return { kind, entry: typed[0], typed: true, walked: [], term: query.slice(typed[0].length) };
+  return {
+    kind,
+    entry: typed.entry,
+    typed: true,
+    walked: [],
+    term: query.slice(typed.entry.length),
+  };
 }
 
 /** A step back out of a narrowed list: the narrowing held after it, and what the `@` word is written as where the step deletes the `kind:` it spells; none where the word stands. */
@@ -703,7 +694,7 @@ function pageRows(
 function workspaceTaskRows(
   taskId: string | undefined,
   workspace: Workspace | undefined,
-  tasks: readonly TaskSummary[],
+  tasks: readonly OfferedTask[],
 ): MentionRow[] {
   if (workspace === undefined) return [];
 
@@ -823,12 +814,12 @@ function threadRows(
   feed: AppInboxItems | undefined,
   taskId: string | undefined,
   workspace: Workspace | undefined,
-  tasks: readonly TaskSummary[],
+  tasks: readonly OfferedTask[],
 ): MentionRow[] {
   if (feed === undefined || workspace === undefined) return [];
   const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
   // Note that the workspace's tasks are read by id, because the feed may hold a thread of every task and a scan per task read the whole list each.
-  const named = new Map<string, TaskSummary>();
+  const named = new Map<string, OfferedTask>();
 
   for (const each of tasks) if (each.workspaceId === workspace.id) named.set(each.id, each);
 
@@ -2199,16 +2190,27 @@ export function useMentionPicker({
   // The tasks offered are the workspace's the words stand in: the one that names it, else the plan's, else the one its slug names.
   const collections = useTaskListCollections();
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
-  const ownTask = useTaskListRow(collections.tasks, taskId ?? undefined);
+
+  // Note that the words' own task is read for the three facts the list takes of it, so a turn of its agents, which moves its row, leaves the list as it was.
+  const ownTaskId = taskId ?? undefined;
+
+  const ownWorkspaceId = useTaskListRowAs(
+    collections.tasks,
+    ownTaskId,
+    (task) => task?.workspaceId,
+  );
+
+  const planNumber = useTaskListRowAs(collections.tasks, ownTaskId, (task) => task?.number);
+  const followers = useTaskListRowAs(collections.tasks, ownTaskId, (task) => task?.followers);
 
   const tasksWorkspaceId =
     workspaceId ??
-    ownTask?.workspaceId ??
+    ownWorkspaceId ??
     (source === undefined ? undefined : workspaceOfSlug(workspaces, source.workspace))?.id;
 
   const tasksWorkspace = workspaces.find((each) => each.id === tasksWorkspaceId);
 
-  // The workspace's tasks, newest started first as the list holds them, read only while the list stands open.
+  // The workspace's tasks, newest started first as the list holds them, read only while the list stands open, and only what their rows name them by, so a turn of a task's agents leaves the list as it was.
   const { data: workspaceTasks } = useLiveQuery((q) =>
     !open || tasksWorkspaceId === undefined
       ? undefined
@@ -2216,7 +2218,13 @@ export function useMentionPicker({
           .from({ task: collections.tasks })
           .where(({ task }) => eq(task.workspaceId, tasksWorkspaceId))
           .orderBy(({ task }) => task.createdAt, "desc")
-          .orderBy(({ task }) => task.id, "desc"),
+          .orderBy(({ task }) => task.id, "desc")
+          .select(({ task }) => ({
+            id: task.id,
+            workspaceId: task.workspaceId,
+            name: task.name,
+            number: task.number,
+          })),
   );
 
   // The people offered are the members of that workspace, read while the list stands open wherever the words stand, so every box offers the same people.
@@ -2282,7 +2290,6 @@ export function useMentionPicker({
       : [];
 
   // The plan's own key, which finds the description's row as another task's finds its.
-  const planNumber = ownTask?.number;
 
   const planKey =
     tasksWorkspace === undefined || planNumber === undefined
@@ -2317,7 +2324,6 @@ export function useMentionPicker({
           ownNameOf: (deviceId) => machines.machines.find((each) => each.id === deviceId)?.name,
         });
 
-  const followers = ownTask?.followers;
   const followerIds = new Set((followers ?? []).map((follower) => follower.userId));
 
   const machineRowsOffered = machinesAsked
@@ -2563,13 +2569,13 @@ export function useMentionPicker({
       narrowTo(
         keyword === undefined ? { start, narrow, entry: "", typed: false, walked: [] } : undefined,
       );
-      onRetype(keyword === undefined ? words : `${keyword}:${words}`);
+      onRetype(keyword === undefined ? words : narrowingQuery(keyword, words));
 
       return;
     }
 
     if (!("mention" in row) || row.mention.kind !== MENTION_KIND.FOLDER) return;
-    const entry = `${MENTION_FROM.FILES}:`;
+    const entry = narrowingQuery(MENTION_FROM.FILES, "");
     const within = scope.kind?.narrow.from === MENTION_FROM.FILES;
     const walked = { path: row.mention.path, entry };
     narrowTo({

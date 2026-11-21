@@ -248,6 +248,81 @@ test("Home greets the reader by first name over New task's composer, the items w
   assert.equal(router.history.location.pathname, `${HOME_AT}/inbox/${RETRY_429.id}`);
 });
 
+/** A task's agents as its row counts them: one, `working` at work, its last settled activity at `activityAt`. */
+function withAgents(base: TaskSummary, working: number, activityAt: number): TaskSummary {
+  return { ...base, agents: { total: 1, working, failed: 0, activityAt, pullRequestTotal: 0 } };
+}
+
+/** The names a row's marks are heard by, its state's among them. */
+function marksOf(page: HTMLElement, name: string): string[] {
+  return [...(row(page, name).closest("li")?.querySelectorAll("[aria-label]") ?? [])].map(
+    (mark) => mark.getAttribute("aria-label") ?? "",
+  );
+}
+
+test("Recent counts an agent's turn ending as its task's activity, holds six tasks in a wide room, and a turn that moves nothing else changes only its row", async () => {
+  // Note that the tasks are made ten, the oldest first, so only the six latest fit.
+  const many = Array.from({ length: 10 }, (_, at) =>
+    task(at + 1, `Task ${at + 1}`, (at + 1) * MINUTE),
+  );
+
+  const { page, router } = mount({ tasks: many }, []);
+  await settle();
+
+  const names = () => sections(page).Recent;
+  assert.deepEqual(names(), ["Task 1", "Task 2", "Task 3", "Task 4", "Task 5", "Task 6"]);
+
+  const draw = (tasks: TaskSummary[]) =>
+    act(() =>
+      root?.render(
+        home(
+          router,
+          tasksControl({ me: DEAN.userId, listRead: true, workspace: ACME, tasks }),
+          SHELL_ROOM.WIDE,
+          () => undefined,
+        ),
+      ),
+    );
+
+  // An agent of the oldest task starts: nothing about its place has moved, but its row says it works.
+  const [first, ...rest] = many;
+  const last = rest.at(-1) ?? assert.fail("a last task stands");
+  draw([withAgents(last, 1, NOW - 10 * MINUTE), first ?? last, ...rest.slice(0, -1)]);
+  await settle();
+  assert.deepEqual(names(), ["Task 1", "Task 2", "Task 3", "Task 4", "Task 5", "Task 6"]);
+
+  // Its turn ends: it was active a moment ago, so it leads Recent.
+  draw([withAgents(last, 0, NOW), first ?? last, ...rest.slice(0, -1)]);
+  await settle();
+  assert.deepEqual(names(), ["Task 10", "Task 1", "Task 2", "Task 3", "Task 4", "Task 5"]);
+});
+
+test("a Recent row says its agents stopped once only its agents moved, Recent holding its place", async () => {
+  const { page, router } = mount({ tasks: [withAgents(RETRIES, 1, NOW - 12 * MINUTE), CACHE] }, []);
+  await settle();
+  assert.ok(marksOf(page, RETRIES.name).includes("Working"));
+
+  act(() =>
+    root?.render(
+      home(
+        router,
+        tasksControl({
+          me: DEAN.userId,
+          listRead: true,
+          workspace: ACME,
+          tasks: [withAgents(RETRIES, 0, NOW - 12 * MINUTE), CACHE],
+        }),
+        SHELL_ROOM.WIDE,
+        () => undefined,
+      ),
+    ),
+  );
+  await settle();
+
+  assert.ok(!marksOf(page, RETRIES.name).includes("Working"));
+  assert.deepEqual(sections(page).Recent, [CACHE.name, RETRIES.name]);
+});
+
 test("while the task list is read, Home greets the reader over the composer, asks for no repository, and says it is reading in place of its sections", async () => {
   const base = tasksControl();
 

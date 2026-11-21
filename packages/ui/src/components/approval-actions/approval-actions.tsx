@@ -1,4 +1,7 @@
-import { APPROVAL_PRESS_WORDS } from "@repo/features/agent-approval-model";
+import {
+  ALWAYS_ALLOW_COMMAND_WORDS,
+  APPROVAL_PRESS_WORDS,
+} from "@repo/features/agent-approval-model";
 import { type ReactNode, useState } from "react";
 import type { ShownError } from "../../reported-failure.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
@@ -215,9 +218,9 @@ export function ApprovalActions({
       )}
       {command === undefined || commandPlace !== APPROVAL_COMMAND_PLACE.UNDER || denying ? null : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {`${WORDS.ALLOW_FOR_AGENT} won't ask again for `}
+          {ALWAYS_ALLOW_COMMAND_WORDS.BEFORE}
           <CommandWords variant={TEXT_VARIANT.CAPTION}>{command}</CommandWords>
-          {" in any of your agents."}
+          {ALWAYS_ALLOW_COMMAND_WORDS.AFTER}
         </Text>
       )}
       <ErrorLine error={error} />

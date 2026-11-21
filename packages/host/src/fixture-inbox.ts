@@ -39,6 +39,8 @@ import {
 } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_KIND,
+  AGENT_MACHINE,
   AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentQueueChange,
@@ -47,6 +49,20 @@ import {
   PULL_REQUEST_STATE,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import { nextScheduledRun } from "@repo/features/automation-schedule";
+import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
+import {
+  AUTOMATION_ACTION,
+  AUTOMATION_FIRING,
+  AUTOMATION_RUN_REASON,
+  AUTOMATION_RUN_STATUS,
+  AUTOMATION_SCOPE,
+  AUTOMATION_TARGET,
+  AUTOMATION_TRIGGER,
+  type AutomationRunSummary,
+  type AutomationSummary,
+  GITHUB_TRIGGER_EVENT,
+} from "@repo/features/automation-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import {
   DESCRIPTION_COMMENT_ACTION,
@@ -102,7 +118,11 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
-import type { ManagerFace } from "@repo/features/manager-face";
+import {
+  MANAGER_FACE_CHARACTER,
+  MANAGER_FACE_COLOR,
+  type ManagerFace,
+} from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
@@ -160,6 +180,7 @@ import {
   fixtureAgentPicture,
   fixtureAgentTranscript,
   fixtureLongTranscript,
+  fixtureManagerTranscript,
 } from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
@@ -194,6 +215,7 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
   RUN_PROFILE.INBOX,
   RUN_PROFILE.INBOX_LARGE,
   RUN_PROFILE.PERSON,
+  RUN_PROFILE.TASKS_OPEN,
 ]);
 
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
@@ -222,8 +244,8 @@ const ACCOUNT: AccountSnapshot = {
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
-/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by. Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
-const STAGED_EXPERIMENTS = { [EXPERIMENT.SKILLS]: true } as const;
+/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by, and Move agents', which an agent's Move to › stands behind. Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
+const STAGED_EXPERIMENTS = { [EXPERIMENT.SKILLS]: true, [EXPERIMENT.MOVE_AGENTS]: true } as const;
 
 /** Main's settings with the staged experiments on, one object for each of main's, so a staging that moves nothing of them hands nothing new. */
 const STAGED_SETTINGS = new WeakMap<
@@ -257,6 +279,7 @@ const AGENT = {
   INVITES: "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
   DIGEST: "6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6",
   ROUNDING: "70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7",
+  MANAGER: "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
@@ -898,6 +921,7 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       ),
       permissionMode: AGENT_PERMISSION_MODE.ASK,
       pendingApprovals: [INVITES_HELD],
+      startedByAgentId: AGENT.MANAGER,
     },
   ],
   // Note that the digest's agent runs on Codex, so the agents' marks show both harnesses.
@@ -913,6 +937,7 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       ),
       model: CODEX_MODEL,
       runtime: AGENT_RUNTIME.CODEX,
+      startedByAgentId: AGENT.MANAGER,
     },
   ],
   [
@@ -920,6 +945,25 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
 ]);
+
+/** When the release Manager was started, which its chat counts from. */
+const MANAGER_STARTED = LANDED - 2 * HOUR;
+
+/**
+ * The workspace's one Manager, an agent on no task, which the Tasks list
+ * stands above Pinned and Search finds: at rest, its chat having said
+ * something since the account last read it, so its row stands unread. It
+ * started the invitations and digest agents, which its overview lists with
+ * the invitations agent's pull request.
+ */
+const MANAGER: AgentSummary = {
+  ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.COMPLETED, 2 * HOUR),
+  taskId: null,
+  kind: AGENT_KIND.MANAGER,
+  face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
+  readThrough: MANAGER_STARTED,
+  saidAt: MANAGER_STARTED + 4 * MINUTE,
+};
 
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
@@ -1139,7 +1183,7 @@ const INVITES_PULL_REQUEST = {
   deletions: 37,
 } as const;
 
-/** The fixture's workspace where a list names none, as the panel's tasks fixture names it, with Task descriptions on. */
+/** The fixture's workspace where a list names none, as the panel's tasks fixture names it, with Task descriptions and Managers on. */
 const FIXTURE_WORKSPACE: Workspace = {
   id: FIXTURE_IDS.WORKSPACE,
   name: ADA.name,
@@ -1152,6 +1196,12 @@ const FIXTURE_WORKSPACE: Workspace = {
   experiments: [
     {
       experiment: EXPERIMENT.DESCRIPTIONS,
+      on: true,
+      changedBy: { id: ADA.userId, name: ADA.name },
+      changedAt: LANDED - 30 * DAY,
+    },
+    {
+      experiment: EXPERIMENT.MANAGERS,
       on: true,
       changedBy: { id: ADA.userId, name: ADA.name },
       changedAt: LANDED - 30 * DAY,
@@ -1621,6 +1671,14 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
         ];
   });
 
+  // Note that the Manager works on no task, so it stands in the fixture's workspace by itself.
+  const manager = {
+    ...MANAGER,
+    workspaceId: FIXTURE_IDS.WORKSPACE,
+    repository: null,
+    settledAt: MANAGER.createdAt,
+  };
+
   const invitesAgent = AGENTS.get(TASK.INVITES);
 
   // Note that the staged list is the whole answer, so it stands read, because Search waits on a list still being read before it says nothing matched.
@@ -1630,8 +1688,11 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     listed: true,
     listStatus: TASKS_READ.READY,
     taskAgents: [
-      ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
+      ...(list.taskAgents ?? []).filter(
+        (agent) => agent.id !== manager.id && !followed.some(({ id }) => id === agent.id),
+      ),
       ...followed,
+      manager,
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
@@ -2011,6 +2072,9 @@ const INVITES_TRANSCRIPT = withQueued(
 /** The rounding agent's finished run, long enough that its page opens far below its first row, its words wide in places: a link, a code block, and a table. */
 const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix ledger rounding");
 
+/** The release Manager's run, which its page draws as its chat. */
+const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
+
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
   const queued = [
@@ -2029,7 +2093,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: queued, revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations and rounding agents' laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations and rounding agents' and the Manager's laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -2046,6 +2110,7 @@ function stagedTranscripts(
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
+    [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -2232,8 +2297,15 @@ export function queuedAppState(state: AppStateSnapshot, queues: KeptQueues): App
   return { ...state, [LIVE_READ.TRANSCRIPT]: laid };
 }
 
-/** The models the account may start an agent on, as the service's catalog lists them, and no device of its own. */
+/** The models the account may start an agent on, as the service's catalog lists them, and the account's machines an agent may run or be moved to, as Settings › Machines lists them. */
 const MODELS: ModelsAnswer = {
+  macs: HOSTS.map((host) => ({
+    deviceId: host.id,
+    name: host.name,
+    providers: [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.OPENAI],
+    ...(host.platform === undefined ? undefined : { platform: host.platform }),
+    ...(host.model === undefined ? undefined : { model: host.model }),
+  })),
   models: [
     {
       id: MODEL,
@@ -2858,9 +2930,241 @@ function stagedItem(itemId: string): InboxItem | undefined {
   return [...INBOXES.values()].flat().find((each) => each.id === itemId);
 }
 
-/** One staged agent by its id, on whichever task it works. */
+/** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values()].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+}
+
+/* ----- The automations ----- */
+
+/** The fixture workspace's automations, by id: a digest on a schedule, a fix on each failed check, and a deploy check its webhook calls, turned off. */
+const AUTOMATION = {
+  DIGEST: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c01",
+  CHECKS: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c02",
+  DEPLOY: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c03",
+} as const;
+
+/** The digest's schedule: Mondays at 9:00 AM UTC. */
+const DIGEST_SCHEDULE = { cron: "0 9 * * 1", timezone: "UTC" } as const;
+
+/** The first instant after `after` the digest's schedule is due, as the service reads a schedule. */
+function digestDue(after: number): number {
+  return nextScheduledRun(DIGEST_SCHEDULE, new Date(after))?.getTime() ?? after;
+}
+
+/**
+ * When the digest is due, read off its own schedule from the instant the
+ * fixture landed, so its next run and its runs fall on the Mondays its
+ * schedule names, whichever day a capture is taken: the next one to come,
+ * and the two that came last.
+ */
+const DIGEST_DUE = {
+  NEXT: digestDue(LANDED),
+  LAST: digestDue(LANDED - 7 * DAY),
+  BEFORE: digestDue(LANDED - 14 * DAY),
+} as const;
+
+/** One run of an automation, fired `ago` before the fixture landed and settled a few minutes after, starting `agent` where it names one. */
+function automationRun(
+  n: number,
+  ago: number,
+  firing: AutomationRunSummary["firing"],
+  agent: AutomationRunSummary["agent"],
+  patch: Partial<AutomationRunSummary> = {},
+): AutomationRunSummary {
+  const firedAt = LANDED - ago;
+
+  return {
+    id: fixtureId(0x7000 + n),
+    firing,
+    status: AUTOMATION_RUN_STATUS.STARTED,
+    reason: null,
+    agent,
+    firedAt,
+    settledAt: firedAt + 4 * MINUTE,
+    ...patch,
+  };
+}
+
+/** Each automation's runs, newest first, each run's agent one of the fixture's own, so a run opens an agent page the fixture draws. */
+const AUTOMATION_RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = new Map([
+  [
+    AUTOMATION.DIGEST,
+    [
+      automationRun(
+        1,
+        LANDED - DIGEST_DUE.LAST,
+        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: DIGEST_DUE.LAST },
+        { id: AGENT.DIGEST, title: "Write the weekly digest", status: AGENT_STATUS.COMPLETED },
+      ),
+      automationRun(
+        2,
+        LANDED - DIGEST_DUE.BEFORE,
+        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: DIGEST_DUE.BEFORE },
+        null,
+        { status: AUTOMATION_RUN_STATUS.SKIPPED, reason: AUTOMATION_RUN_REASON.CONCURRENCY },
+      ),
+    ],
+  ],
+  [
+    AUTOMATION.CHECKS,
+    [
+      automationRun(
+        3,
+        20 * MINUTE,
+        { kind: AUTOMATION_FIRING.MANUAL, userId: ADA.userId },
+        { id: AGENT.INVITES, title: "Build teammate invitations", status: AGENT_STATUS.RUNNING },
+        { settledAt: null },
+      ),
+      automationRun(
+        4,
+        DAY,
+        {
+          kind: AUTOMATION_FIRING.GITHUB,
+          event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+          repository: "ada/ledger",
+          branch: "rounding",
+        },
+        { id: AGENT.ROUNDING, title: "Fix ledger rounding", status: AGENT_STATUS.COMPLETED },
+      ),
+    ],
+  ],
+  [
+    AUTOMATION.DEPLOY,
+    [
+      automationRun(5, 3 * HOUR, { kind: AUTOMATION_FIRING.WEBHOOK, bytes: 1824 }, null, {
+        status: AUTOMATION_RUN_STATUS.FAILED,
+        reason: AUTOMATION_RUN_REASON.CREDENTIAL_MISSING,
+      }),
+    ],
+  ],
+]);
+
+/** The newest run of `automationId`, as its row reads it; none for one that never ran. */
+function newestRun(automationId: string): AutomationRunSummary | null {
+  return AUTOMATION_RUNS.get(automationId)?.[0] ?? null;
+}
+
+/** What the fixture's automations share: made on the workspace with no task, each run a new agent. */
+const AUTOMATION_COMMON = {
+  taskId: null,
+  taskName: null,
+  workspaceId: FIXTURE_IDS.WORKSPACE,
+  pausedReason: null,
+  target: { kind: AUTOMATION_TARGET.NEW_AGENT },
+  creatorId: ADA.userId,
+  mine: true,
+} as const;
+
+/** The fixture workspace's automations, newest made first, as its list reads them: two the workspace shares, and one of Ada's own, turned off. */
+const AUTOMATIONS: readonly AutomationSummary[] = [
+  {
+    ...AUTOMATION_COMMON,
+    id: AUTOMATION.DEPLOY,
+    name: "Check each deploy",
+    enabled: false,
+    trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK },
+    action: {
+      kind: AUTOMATION_ACTION.AGENT,
+      prompt:
+        "Open the release the webhook names, read its error rate for an hour, and roll it back if it doubled.",
+    },
+    nextRunAt: null,
+    lastRun: newestRun(AUTOMATION.DEPLOY),
+    createdAt: LANDED - 9 * DAY,
+    scope: AUTOMATION_SCOPE.PERSONAL,
+    repositories: ["ada/relay"],
+  },
+  {
+    ...AUTOMATION_COMMON,
+    id: AUTOMATION.CHECKS,
+    name: "Fix failing checks",
+    enabled: true,
+    trigger: { kind: AUTOMATION_TRIGGER.GITHUB, event: GITHUB_TRIGGER_EVENT.CHECK_FAILED },
+    action: {
+      kind: AUTOMATION_ACTION.AGENT,
+      prompt:
+        "Read the failed check's log, fix what broke on the branch, and push the fix to its pull request.",
+    },
+    nextRunAt: null,
+    lastRun: newestRun(AUTOMATION.CHECKS),
+    createdAt: LANDED - 16 * DAY,
+    scope: AUTOMATION_SCOPE.WORKSPACE,
+    repositories: ["ada/relay", "ada/ledger"],
+  },
+  {
+    ...AUTOMATION_COMMON,
+    id: AUTOMATION.DIGEST,
+    name: "Weekly digest",
+    enabled: true,
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, ...DIGEST_SCHEDULE },
+    action: {
+      kind: AUTOMATION_ACTION.AGENT,
+      prompt:
+        "Summarize what merged and what is still open this week, and post it to the team's digest.",
+    },
+    nextRunAt: DIGEST_DUE.NEXT,
+    lastRun: newestRun(AUTOMATION.DIGEST),
+    createdAt: LANDED - 30 * DAY,
+    scope: AUTOMATION_SCOPE.WORKSPACE,
+    repositories: ["ada/relay"],
+  },
+];
+
+/** Each automation's switch as a run turned it, by the automation's id. */
+export type AutomationSwitches = ReadonlyMap<string, boolean>;
+
+/** The automations with the switches a run turned laid on them, one list for each map of switches, so a stage that turns none draws none again. */
+const SWITCHED = new WeakMap<AutomationSwitches, AppStateSnapshot[typeof LIVE_READ.AUTOMATIONS]>();
+
+/** The automations' runs as the host holds them once read, by the automation. */
+const HELD_RUNS: AppStateSnapshot[typeof LIVE_READ.AUTOMATION_RUNS] = Object.fromEntries(
+  [...AUTOMATION_RUNS].map(([id, runs]) => [id, { rows: runs }]),
+);
+
+/**
+ * The document as the phone's fixture run draws Settings › Automations: the
+ * fixture workspace's automations and each one's runs held as their reads
+ * hold them once read, with each switch the run turned laid on them, as the
+ * host draws a switch turned (`automation-collections.ts`). The desktop's
+ * fixtures stage no automation here, so their sidebar and person page stand
+ * as they did.
+ */
+export function inboxAutomationsAppState(
+  state: AppStateSnapshot,
+  switches: AutomationSwitches,
+): AppStateSnapshot {
+  if (!STAGED_PROFILES.has(state.run.profile)) return state;
+  let held = SWITCHED.get(switches);
+
+  if (held === undefined) {
+    const rows = AUTOMATIONS.map((automation) => {
+      const enabled = switches.get(automation.id);
+
+      return enabled === undefined ? automation : { ...automation, enabled };
+    });
+
+    held = { [FIXTURE_IDS.WORKSPACE]: { rows } };
+    SWITCHED.set(switches, held);
+  }
+
+  return {
+    ...state,
+    [LIVE_READ.AUTOMATIONS]: { ...state[LIVE_READ.AUTOMATIONS], ...held },
+    [LIVE_READ.AUTOMATION_RUNS]: { ...state[LIVE_READ.AUTOMATION_RUNS], ...HELD_RUNS },
+  };
+}
+
+/** The switch an automation's change turns, by the automation, where the change turns one; none for any other act. */
+export function automationSwitchOf(
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): { readonly automationId: string; readonly enabled: boolean } | undefined {
+  if (kind !== ACT_KIND.AUTOMATIONS_CHANGE) return undefined;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { automationId, change } = payload as PortActPayload<typeof ACT_KIND.AUTOMATIONS_CHANGE>;
+
+  return change.enabled === undefined ? undefined : { automationId, enabled: change.enabled };
 }
 
 /** One kind's staged answer: its result. */
@@ -2880,6 +3184,24 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
 const DICTATED_WORDS = "Run the invite tests again.";
 
 const ANSWERS: StagedAnswers = {
+  // Note that an automation's switch is taken as the service takes one, the automation answered turned, though nothing here moves; the iOS run lays it over the list itself (`inboxAutomationsAppState`).
+  [ACT_KIND.AUTOMATIONS_CHANGE]: ({ automationId, change }) => {
+    const automation = AUTOMATIONS.find((each) => each.id === automationId);
+
+    if (automation === undefined) return { failure: AUTOMATION_CALL_FAILURE.NOT_FOUND };
+
+    return { automation: { ...automation, enabled: change.enabled ?? automation.enabled } };
+  },
+  // Note that a Run now is taken as the service takes one, a run queued by Ada, though nothing here starts it.
+  [ACT_KIND.AUTOMATIONS_RUN]: ({ automationId }) =>
+    AUTOMATIONS.some((each) => each.id === automationId)
+      ? {
+          run: automationRun(0, 0, { kind: AUTOMATION_FIRING.MANUAL, userId: ADA.userId }, null, {
+            status: AUTOMATION_RUN_STATUS.QUEUED,
+            settledAt: null,
+          }),
+        }
+      : { failure: AUTOMATION_CALL_FAILURE.NOT_FOUND },
   // Note that a dictated clip is heard as fixed words, though no model hears it, so a simulator's silent microphone still dictates.
   [ACT_KIND.DICTATION_TRANSCRIBE]: () => ({ text: DICTATED_WORDS }),
   // Note that the workspace's cloud environment is read as the service answers it, and a size chosen is taken as the service takes one, though nothing here moves.
@@ -3060,6 +3382,24 @@ const ANSWERS: StagedAnswers = {
 
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
   },
+  // Note that a move is taken as the service takes one, answered with the agent where it now runs, on the device named or in the cloud.
+  [ACT_KIND.AGENTS_MOVE]: ({ agentId, runsOn }) => {
+    const held = stagedAgent(agentId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const { machine: _machine, mac: _mac, ...cloud } = held;
+
+    if (runsOn.machine === AGENT_MACHINE.VERCEL) return { agent: cloud };
+    const host = HOSTS.find((each) => each.id === runsOn.deviceId);
+
+    return {
+      agent: {
+        ...cloud,
+        machine: AGENT_MACHINE.DEVICE,
+        mac: { name: host?.name ?? "", deviceId: runsOn.deviceId },
+      },
+    };
+  },
   // Note that a change of model, of permission mode, of servers, of name, or of pin is taken as the service takes one, answered with the agent as it then stands; the iOS run lays it over the list itself (`chosenTasksView`).
   [ACT_KIND.AGENTS_CHOOSE]: ({ agentId, model, effort }) => {
     const held = stagedAgent(agentId);
@@ -3103,11 +3443,17 @@ const ANSWERS: StagedAnswers = {
 
     return { agent: held };
   },
-  // Note that an archive is taken as the service takes one, though nothing here moves, so the agent stays on its task's list.
-  [ACT_KIND.AGENTS_ARCHIVE]: ({ agentId }) => {
+  // Note that an archive or an unarchive is taken as the service takes one, answered with the agent archived or brought back, though nothing here moves, so the agent stays on its task's list.
+  [ACT_KIND.AGENTS_ARCHIVE]: ({ agentId, archived }) => {
     const held = stagedAgent(agentId);
 
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    if (!archived) {
+      const { archivedAt: _archivedAt, ...back } = held;
+
+      return { agent: back };
+    }
 
     return { agent: { ...held, archivedAt: LANDED } };
   },
@@ -3119,6 +3465,26 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
     return { agent: { ...held, status: AGENT_STATUS.STARTING } };
+  },
+  // A New Manager, answered with a Manager made on what it names, as the service answers one.
+  [ACT_KIND.AGENTS_CREATE_MANAGER]: ({ name, model, effort }) => ({
+    agent: {
+      ...MANAGER,
+      id: fixtureId(97),
+      title: name,
+      model,
+      effort,
+      createdAt: LANDED,
+      status: AGENT_STATUS.STARTING,
+    },
+  }),
+  // Note that a look at a Manager's chat is taken as the service takes one, though nothing here moves.
+  [ACT_KIND.AGENTS_MARK_READ]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    return { agent: held };
   },
   // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({

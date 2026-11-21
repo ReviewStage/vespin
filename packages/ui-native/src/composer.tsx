@@ -5,8 +5,11 @@ import {
   Divider,
   HStack,
   Image,
+  Mask,
   Menu,
   ProgressView,
+  Rectangle,
+  RNHostView,
   ScrollView,
   Spacer,
   Text,
@@ -27,14 +30,23 @@ import {
   font,
   foregroundStyle,
   frame,
+  layoutPriority,
   lineLimit,
   opacity,
   padding,
   tint,
+  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import { longPasteIn } from "@repo/features/long-paste";
 import { TALK_LABEL } from "@repo/features/voice-call-words";
-import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import {
@@ -48,6 +60,7 @@ import {
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
+import { type CaretAtWord, PillField, type PillFieldHandle } from "./pill-field.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -141,6 +154,18 @@ export type ComposerMenu = {
   readonly switches?: BarMenu["choices"] | undefined;
 };
 
+/**
+ * A field whose words hold pills (`PillField`) in place of the system's
+ * plain one: its door, through which its holder puts a picked mention's pill
+ * where the `@` word stands, the `@` word its caret stands in as it moves,
+ * and the files whose markers it draws as pills.
+ */
+export interface ComposerPills {
+  readonly field: RefObject<PillFieldHandle | null>;
+  readonly onAtWord: (word: CaretAtWord | undefined) => void;
+  readonly files?: ReadonlySet<string> | undefined;
+}
+
 type ComposerProps = {
   /** What the field says before anything is typed: "Reply", "Add a note". */
   readonly placeholder: string;
@@ -184,6 +209,8 @@ type ComposerProps = {
   readonly trailing?: ReactNode;
   /** Dictate, just before Send at the row's end, and the strip the row becomes while a dictation records, as the desktop composer's (`dictation-strip.tsx`); none where the composer takes none. */
   readonly dictation?: ComposerDictation | undefined;
+  /** Draws the words with their mentions as pills (`ComposerPills`), as the desktop's box draws its chips; the system's plain field where none is given. */
+  readonly pills?: ComposerPills | undefined;
   /** The names a flow finds the field and the + by, where its holder names its own. */
   readonly testIds?: { readonly field: string; readonly add: string } | undefined;
 };
@@ -590,7 +617,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
 
   const text = useNativeState(held ?? "");
   const field = useRef<TextFieldRef>(null);
-  const { focusAsk } = props;
+  const { focusAsk, pills } = props;
+  const { field: pillDoor, files: pillFiles, onAtWord: onPillAtWord } = pills ?? {};
 
   // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
   const [opened] = useState(() => (held ?? "").length);
@@ -608,12 +636,14 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   // Note that the field takes the keyboard once its holder's words have landed in it, after the effect above lays them in, so the caret stands after them.
   useEffect(() => {
     if (focusAsk === undefined || focusAsk === 0) return;
+
+    if (pillDoor !== undefined) return pillDoor.current?.focus();
     const end = shown.current.length;
     void field.current
       ?.focus()
       .then(() => field.current?.setSelection(end, end))
       .catch(() => undefined);
-  }, [focusAsk]);
+  }, [focusAsk, pillDoor]);
 
   // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
@@ -645,9 +675,43 @@ function useComposerParts(props: ComposerProps): ComposerParts {
           setTyped("");
         };
 
+  const room = padding({
+    vertical: FIELD_INSET,
+    trailing: FIELD_TRAILING,
+    ...((rowed || (addMenu === undefined && onAdd === undefined)) && {
+      leading: FIELD_LEADING,
+    }),
+  });
+
+  // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so its text view is sized at that one width as its words change, rather than asking its ideal width too.
+  const span = frame({
+    minHeight: PRESS_SIZE,
+    maxWidth: Number.POSITIVE_INFINITY,
+    alignment: "leading",
+  });
+
+  // Note that a field of pills is UIKit's text view, which stands in the glass through a host of its own, its width the glass's and its height its words'.
+  const pillsField =
+    pillDoor === undefined ? undefined : (
+      <VStack alignment="leading" modifiers={[room, span]}>
+        <RNHostView matchContents={{ vertical: true }}>
+          <PillField
+            ref={pillDoor}
+            value={words}
+            onChange={type}
+            files={pillFiles}
+            placeholder={placeholder}
+            maxLines={lines}
+            onAtWord={onPillAtWord}
+            testID={testIds?.field ?? "composer-field"}
+          />
+        </RNHostView>
+      </VStack>
+    );
+
   return {
     add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
-    field: (
+    field: pillsField ?? (
       <TextField
         ref={field}
         text={text}
@@ -659,19 +723,8 @@ function useComposerParts(props: ComposerProps): ComposerParts {
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           height,
-          padding({
-            vertical: FIELD_INSET,
-            trailing: FIELD_TRAILING,
-            ...((rowed || (addMenu === undefined && onAdd === undefined)) && {
-              leading: FIELD_LEADING,
-            }),
-          }),
-          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there. It takes every point of width its container leaves it, so SwiftUI sizes its text view at that one width as its words change, rather than asking its ideal width too.
-          frame({
-            minHeight: PRESS_SIZE,
-            maxWidth: Number.POSITIVE_INFINITY,
-            alignment: "leading",
-          }),
+          room,
+          span,
           accessibilityIdentifier(testIds?.field ?? "composer-field"),
         ]}
       />
@@ -710,13 +763,85 @@ function RowPieces({ parts }: { readonly parts: ComposerParts }) {
 /** How far apart the capsules stand in the row under the field. */
 const TOOL_SPACING = SPACE.TIGHT * 2;
 
+/** How far the capsules fade out at an edge of the row they run on past, about one capsule's lead glyph and its gap. */
+const CAPSULE_FADE = SPACE.EDGE * 2;
+
+/** The mask's ink: shown where opaque, hidden where clear; only its alpha is read. */
+const MASK_INK = { SHOWN: "black", HIDDEN: "clear" } as const;
+
+/** How far short of an end the scroll may sit and still be at it, since its offsets are fractional. */
+const SCROLL_END_SLACK = 1;
+
+/** Which ends of the capsule row have more of it beyond them. */
+type CapsuleOverflow = { readonly before: boolean; readonly after: boolean };
+
+/** One end's fade, from hidden at the row's edge to shown inward: `toward` names the edge it fades out at. */
+function CapsuleFade({ toward }: { readonly toward: "leading" | "trailing" }) {
+  const ends = [MASK_INK.SHOWN, MASK_INK.HIDDEN];
+
+  return (
+    <Rectangle
+      modifiers={[
+        frame({ width: CAPSULE_FADE }),
+        foregroundStyle({
+          type: "linearGradient",
+          colors: toward === "trailing" ? ends : [...ends].reverse(),
+          startPoint: { x: 0, y: 0.5 },
+          endPoint: { x: 1, y: 0.5 },
+        }),
+      ]}
+    />
+  );
+}
+
+/**
+ * The capsules saying where a message runs, scrolling sideways where they
+ * outrun the row, and fading out softly at an end while more of them lies
+ * past it, as the system's own scrolling rows of chips do, rather than
+ * cutting a word off hard at the edge. Note that the fade is a mask of the
+ * scroll view's own, which leaves the capsules' presses alone, and that it
+ * is redrawn only as an end's state turns, never on each frame of a scroll.
+ */
+function CapsuleScroll({ children }: { readonly children: ReactNode }) {
+  const [overflow, setOverflow] = useState<CapsuleOverflow>({ before: false, after: false });
+
+  // Note that an end's state is set only when it turns, so a scroll's frames that change neither redraw nothing.
+  const geometry = useScrollGeometryChange((at) => {
+    const before = at.contentOffsetX > SCROLL_END_SLACK;
+    const after = at.contentOffsetX + at.containerWidth < at.contentWidth - SCROLL_END_SLACK;
+    setOverflow((was) => (was.before === before && was.after === after ? was : { before, after }));
+  });
+
+  return (
+    <Mask>
+      <ScrollView
+        axes="horizontal"
+        showsIndicators={false}
+        modifiers={geometry === null ? [] : [geometry]}
+      >
+        <HStack spacing={TOOL_SPACING} modifiers={[padding({ trailing: SPACE.ROW })]}>
+          {children}
+        </HStack>
+      </ScrollView>
+      <Mask.Content>
+        <HStack spacing={0}>
+          {overflow.before ? <CapsuleFade toward="leading" /> : null}
+          <Rectangle modifiers={[foregroundStyle(MASK_INK.SHOWN)]} />
+          {overflow.after ? <CapsuleFade toward="trailing" /> : null}
+        </HStack>
+      </Mask.Content>
+    </Mask>
+  );
+}
+
 /**
  * The row under the field, as the desktop composer's foot stands it: the +
  * at its start and the capsules saying where the message runs after it,
- * scrolling sideways where they outrun the bar, then at its end what is
- * picked for it, such as the model, a call's presses, and Send or Stop,
- * inside the composer's own glass, so the keyboard that lifts the composer
- * never covers them.
+ * scrolling sideways where they outrun the bar and fading where they run on
+ * (`CapsuleScroll`), then at its end what is
+ * picked for it, such as the model, whole, the capsules giving way first, a
+ * call's presses, and Send or Stop, inside the composer's own glass, so the
+ * keyboard that lifts the composer never covers them.
  */
 function ComposerRow({
   props,
@@ -735,12 +860,11 @@ function ComposerRow({
   return (
     <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
       <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} />
-      <ScrollView axes="horizontal" showsIndicators={false}>
-        <HStack spacing={TOOL_SPACING} modifiers={[padding({ trailing: SPACE.ROW })]}>
-          {tools}
-        </HStack>
-      </ScrollView>
-      {trailing}
+      <CapsuleScroll>{tools}</CapsuleScroll>
+      {/* Note that what is picked for the message, such as the model, is offered the row first and takes its whole words, so the capsules before it scroll rather than cut its name short, as Apple's own rows never cut a control's word where they have room. */}
+      {trailing === undefined || trailing === null ? null : (
+        <HStack modifiers={[layoutPriority(1)]}>{trailing}</HStack>
+      )}
       {dictation === undefined ? null : (
         <DictationPress
           glyph={GLYPH.DICTATE}

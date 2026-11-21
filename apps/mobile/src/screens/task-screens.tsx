@@ -1,6 +1,11 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentStatus,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
@@ -29,6 +34,7 @@ import {
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
   agentRunsOnWords,
   agentStillWriting,
@@ -86,19 +92,21 @@ import {
   repositoryPageUrl,
   type StopAgentsWords,
 } from "@repo/features/tasks-model";
+import { TASKS_GROUP } from "@repo/features/tasks-page-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
-  CHOOSE_AN_ITEM_WORDS,
   countWords,
   NO_RESULTS_HINT,
   noResultsForWords,
+  noSelectionWords,
   readFailedWords,
   readingWords,
   TERM,
   VERB,
 } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
+import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   selectInboxReader,
@@ -173,6 +181,7 @@ import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
+  type ComponentProps,
   type ReactElement,
   type ReactNode,
   useDeferredValue,
@@ -182,6 +191,7 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
+import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -190,12 +200,14 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePushStood } from "../push-stood.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+
 import { useOnOwnTab } from "../tab-route.js";
 import {
   threadComments,
@@ -247,6 +259,7 @@ import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
+import { tasksViewMenu } from "./tasks-view-menu.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
@@ -287,6 +300,8 @@ const WORDS = {
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
+  /** How VoiceOver's Actions hear a status of the Status menu, with its verb. */
+  SET_STATUS: "Set status",
   PRIORITY: "Priority",
   ASSIGNEE: "Assignee",
   MORE: { label: "More", symbol: GLYPH.MORE },
@@ -304,6 +319,8 @@ const WORDS = {
   UNLISTED_TASK: "Task",
   STOP: "Stop",
   ARCHIVE: "Archive",
+  UNARCHIVE: "Unarchive",
+  ARCHIVED: "Archived",
 } as const;
 
 /** The statuses a row's Status and the page's status chip offer, in the panel's order. */
@@ -363,6 +380,7 @@ function statusSubmenu(
     symbol: GLYPH.STATUS,
     choices: STATUS_ORDER.map((status) => ({
       label: TASK_STATUS_WORDS[status],
+      heard: `${WORDS.SET_STATUS}: ${TASK_STATUS_WORDS[status]}`,
       symbol: STATUS_MARK_SYMBOL[status],
       tone: TASK_STATUS_TONE[status],
       on: task.status === status,
@@ -926,8 +944,8 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * What a task dropped on a group's header does there, keeping it in one
  * place as the panel's drag does: onto Pinned it leaves the section the
  * member keeps it in, a pinned task's stored entry among them, and is
- * pinned at the same moment, both drawn at once; onto a section it is put in it, and onto a
- * repository group it leaves its section, each unpinning it once the move
+ * pinned at the same moment, both drawn at once; onto a section it is put in it, and onto one
+ * of the reader's tasks' groups, such as a repository's, it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
  * first, while a refused newer one leaves the older to finish. Nothing is
@@ -1098,6 +1116,7 @@ function TaskBranchRows({
 
 /** The words of a section header's long press menu, as the panel's sidebar says them. */
 const SECTION_MENU_WORDS = {
+  NEW_TASK: "New task",
   RENAME_SECTION: "Rename section",
   DELETE_SECTION: "Delete section",
   OPEN_ON_GITHUB: "Open on GitHub",
@@ -1107,13 +1126,17 @@ const SECTION_MENU_WORDS = {
  * What a long press on a group's header offers, as the panel's right-click
  * on the sidebar's same header does: Mark all as read on Pinned, Following
  * and the tasks with no repository, only while one of its tasks is unread;
- * on one of the member's sections, Rename and Mark all as read, then Delete
- * section, its Undo in the notice; and on a repository's group, Open on
- * GitHub, then Mark all as read. Note that the panel's New task, Change
- * icon, and a repository's Keep at top are left out, since the phone starts
- * no task in a section, picks no icon, and keeps no repository at top.
+ * on one of the member's sections, New task, then Rename and Mark all as
+ * read, then Delete section, its Undo in the notice; and on a repository's
+ * group, Open on GitHub, then Mark all as read. Note that the panel's Change
+ * icon and a repository's Keep at top are left out, since the phone picks
+ * no icon and keeps no repository at top.
  */
-function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPressGroup[] {
+function groupMenu(
+  group: TaskTreeGroup,
+  listing: TasksListing,
+  newTaskIn: (sectionId: string) => void,
+): readonly LongPressGroup[] {
   const unread = group.rows.map(({ task }) => task).filter((task) => listing.lookOf(task).unread);
 
   const read: LongPressGroup =
@@ -1136,6 +1159,14 @@ function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPr
     if (section === undefined) return [read];
 
     return [
+      [
+        {
+          label: SECTION_MENU_WORDS.NEW_TASK,
+          symbol: GLYPH.NEW_TASK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => newTaskIn(section.id),
+        },
+      ],
       [
         {
           label: WORDS.RENAME,
@@ -1179,11 +1210,36 @@ function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPr
   return [read];
 }
 
+/** Opens New task on one of the member's sections, which files the task in it once it starts, as the panel's section header's + and New task open its card. */
+function useNewTaskIn(): (sectionId: string) => void {
+  const router = useRouter();
+
+  return (sectionId) => router.push({ pathname: "/start-task", params: { section: sectionId } });
+}
+
+/**
+ * The + a section of the member's ends its header in, as the panel's
+ * sidebar section's does: New task in it (`useNewTaskIn`); none on any
+ * other group, which the panel's sidebar heads with no +.
+ */
+function sectionAdd(
+  group: TaskTreeGroup,
+  newTaskIn: (sectionId: string) => void,
+): ComponentProps<typeof ListSection>["add"] {
+  if (group.kind !== TASK_TREE_GROUP.SECTION) return undefined;
+  const label = `${SECTION_MENU_WORDS.NEW_TASK} in ${group.title ?? ""}`;
+
+  return { label, acts: [{ label, symbol: GLYPH.ADD, onPress: () => newTaskIn(group.key) }] };
+}
+
 /**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
- * heads a repository group the tree draws no heading for. A task's row dragged onto
- * its header, as an iPad drags, moves the task there (`placeIn`).
+ * heads a repository group the tree draws no heading for. A section of the
+ * member's holding no task stands as its header alone, its icon, menu and +
+ * still there, as the panel's sidebar keeps an empty section, and folds
+ * nothing. A task's row dragged onto its header, as an iPad drags, moves
+ * the task there (`placeIn`).
  */
 function GroupSection({
   group,
@@ -1194,9 +1250,11 @@ function GroupSection({
   readonly listing: TasksListing;
   readonly hold: TreeHold;
 }) {
+  const newTaskIn = useNewTaskIn();
+
   return (
     <ListSection
-      menu={groupMenu(group, listing)}
+      menu={groupMenu(group, listing, newTaskIn)}
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
       glyphColor={
@@ -1205,10 +1263,11 @@ function GroupSection({
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
-      foldable
+      foldable={group.rows.length > 0}
       folded={hold.folded.has(group.key)}
       onFold={(shut) => hold.setFolded(group.key, shut)}
       onDropLink={dropOnto(group, listing)}
+      add={sectionAdd(group, newTaskIn)}
     >
       <FoldedRows rows={group.rows} listing={listing} parents={groupParents(hold, group.key)} />
     </ListSection>
@@ -1279,6 +1338,16 @@ type TasksTreeProps = {
 function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree } = listing;
   const read = useTasksReadStatus();
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const managers = useWorkspaceManagers(listing.workspace?.id);
+  const managersListed = useManagersListed(listing.workspace?.id);
+
+  // Note that a Manager's row opens its page over the list in either window, as an agent's row on a task's page does, since the split view's detail stands a task alone.
+  const open = (id: string) => {
+    if (managers.some((agent) => agent.id === id)) router.push(onOwnTab(iosAgentRoute(id)));
+    else onSelect(id);
+  };
 
   const found = listing.found;
 
@@ -1305,28 +1374,94 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   }
 
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) {
+  if (treeEmpty(tree) && managers.length === 0) {
     return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
   }
 
   return (
-    <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
+    <RowList look={look} selected={selected} onSelect={open} onRefresh={onRefresh}>
+      <ManagersSection listed={managersListed} managers={managers} hold={hold} />
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
-      {/* Note that a section holding no task is left out, as Reminders keeps an empty list off a grouped view. */}
-      {tree.sections
-        .filter((group) => group.rows.length > 0)
-        .map((group) => (
-          <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
-        ))}
+      {tree.sections.map((group) => (
+        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+      ))}
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
     </RowList>
+  );
+}
+
+/** The Managers section's words: its header, its +, and what it says while it holds none, as the desktop's sidebar says them. */
+const MANAGERS_WORDS = {
+  HEAD: "Managers",
+  NEW: "New Manager",
+  NONE: "No Managers yet.",
+} as const;
+
+/** The Managers section's key among the tree's groups, by which its fold is held. */
+const MANAGERS_KEY = "managers";
+
+/** Where New Manager opens, as a sheet over the tabs. */
+const NEW_MANAGER_ROUTE = "/new-manager";
+
+/**
+ * The workspace's Managers as the Tasks list's first section, above Pinned,
+ * as the desktop's sidebar stands them (`sidebar-managers.tsx`): each an
+ * agent's row, newest started first, its unread dot standing while its chat
+ * said something the reader has not read, and its press opening its chat
+ * (`TasksTree`), its long press and swipes an agent's own. Its header's +
+ * opens New Manager, and it says so where it holds none yet. It folds under
+ * its header and count as the other groups do, and stands nowhere while the
+ * workspace has the Managers experiment off.
+ */
+function ManagersSection({
+  listed,
+  managers,
+  hold,
+}: {
+  /** Whether the workspace has the Managers experiment on. */
+  readonly listed: boolean;
+  readonly managers: readonly ListedAgent[];
+  readonly hold: TreeHold;
+}) {
+  const router = useRouter();
+  const asking = useAgentRowAsk();
+
+  if (!listed) return null;
+
+  return (
+    <ListSection
+      title={MANAGERS_WORDS.HEAD}
+      count={managers.length}
+      foldable={managers.length > 0}
+      folded={hold.folded.has(MANAGERS_KEY)}
+      onFold={(shut) => hold.setFolded(MANAGERS_KEY, shut)}
+      footer={managers.length === 0 ? MANAGERS_WORDS.NONE : undefined}
+      add={{
+        label: MANAGERS_WORDS.NEW,
+        acts: [
+          {
+            label: MANAGERS_WORDS.NEW,
+            symbol: GLYPH.ADD,
+            onPress: () => router.push(NEW_MANAGER_ROUTE),
+          },
+        ],
+      }}
+    >
+      {managers.map((agent) => (
+        <TaskAgentRow
+          key={agent.id}
+          line={{ agent, waiting: 0, pullRequest: undefined }}
+          asking={asking}
+        />
+      ))}
+    </ListSection>
   );
 }
 
@@ -1335,7 +1470,9 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
  * heads each: Pinned with the pin, Following with the eye, a section with
  * its own icon, a repository with the repository's mark, which stands in
  * until its owner's picture draws (`headPicture`), and the tasks with none
- * with no-repository's.
+ * with no-repository's; under another grouping, as the Tasks page heads its
+ * groups, a status or a priority with its mark, and an assignee with a
+ * person, or no one's mark.
  */
 function groupHeadGlyph(group: TaskTreeGroup): Glyph {
   switch (group.kind) {
@@ -1347,6 +1484,18 @@ function groupHeadGlyph(group: TaskTreeGroup): Glyph {
       return sectionGlyph(group.icon);
     case TASK_TREE_GROUP.REPOSITORY:
       return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+    case TASK_TREE_GROUP.STATUS:
+      return group.head?.kind === TASKS_GROUP.STATUS
+        ? STATUS_MARK_SYMBOL[group.head.status]
+        : GLYPH.STATUS;
+    case TASK_TREE_GROUP.PRIORITY:
+      return group.head?.kind === TASKS_GROUP.PRIORITY
+        ? PRIORITY_MARK_SYMBOL[group.head.priority]
+        : GLYPH.PRIORITY_BARS;
+    case TASK_TREE_GROUP.ASSIGNEE:
+      return group.key === NO_REPOSITORY_KEY ? GLYPH.UNASSIGNED : GLYPH.PERSON;
+    case TASK_TREE_GROUP.ALL:
+      return GLYPH.TASK;
   }
 }
 
@@ -1946,13 +2095,17 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
  * An agent row's swipe: Stop while it works, which a full swipe runs, or
  * Archive once it rests, which asks first (`useAgentRowAsk`), as the
  * agent page's menu asks, since the phone has no Undo to offer after; a
- * destructive act never runs on a full swipe.
+ * destructive act never runs on a full swipe. An archived agent's row
+ * offers Unarchive in Archive's place, at once, as the panel's does, since
+ * it stops nothing.
  */
 function agentSwipes(
   agent: TaskAgentLine["agent"],
   acts: ReturnType<typeof useAgentRowActs>,
   onArchive: ((agentId: string) => void) | undefined,
 ): readonly RowSwipe[] {
+  if (agent.archivedAt !== undefined) return [unarchiveAct(agent, acts)];
+
   if (agentStillWriting(agent.status)) {
     return [
       {
@@ -1976,6 +2129,19 @@ function agentSwipes(
   ];
 }
 
+/** An archived agent's Unarchive, on its row's swipe and in its menu. */
+function unarchiveAct(
+  agent: TaskAgentLine["agent"],
+  acts: ReturnType<typeof useAgentRowActs>,
+): RowAction {
+  return {
+    label: WORDS.UNARCHIVE,
+    symbol: GLYPH.UNARCHIVE,
+    tone: ROW_ACTION_TONE.ARCHIVE,
+    onPress: () => acts.unarchive(agent.id),
+  };
+}
+
 /** What an agent row's Rename asks, as the agent page's Rename asks it (`askForName`). */
 const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
 
@@ -1984,7 +2150,7 @@ const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
  * (`agentMenuGroups`) and its row's choice of them: Copy link and Open in
  * browser, once its workspace is known; Rename; Stop while it works and
  * Archive, asked first; and last and alone, Permanently delete, asked
- * always. Copy transcript stays on the agent's page, as the panel's row
+ * always, an archived agent's offering Unarchive in Archive's place. Copy transcript stays on the agent's page, as the panel's row
  * leaves it out too (`NOT_ON_A_ROW`).
  */
 function agentMenu({
@@ -2047,20 +2213,24 @@ function agentMenu({
       ]
     : [];
 
-  if (asking === undefined) return [links, [rename], stop];
+  const archived = agent.archivedAt !== undefined;
+
+  if (asking === undefined) return [links, [rename], archived ? [unarchiveAct(agent, acts)] : stop];
 
   return [
     links,
     [rename],
-    [
-      ...stop,
-      {
-        label: WORDS.ARCHIVE,
-        symbol: GLYPH.ARCHIVE,
-        tone: ROW_ACTION_TONE.ARCHIVE,
-        onPress: asking.archive,
-      },
-    ],
+    archived
+      ? [unarchiveAct(agent, acts)]
+      : [
+          ...stop,
+          {
+            label: WORDS.ARCHIVE,
+            symbol: GLYPH.ARCHIVE,
+            tone: ROW_ACTION_TONE.ARCHIVE,
+            onPress: asking.archive,
+          },
+        ],
     [
       {
         label: WORDS.DELETE,
@@ -2243,6 +2413,7 @@ export function TaskAgentRow({
       depth={nest?.depth}
       fold={nest?.fold}
       started={nest?.started}
+      unread={managerChatUnread(agent)}
       task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
@@ -2400,6 +2571,47 @@ function OverviewAgents({
           onPress={() => router.navigate("/inbox")}
         />
       )}
+    </ListSection>
+  );
+}
+
+/** Whether the reader left Archived open, one choice for every task's page for as long as the app runs. */
+let archivedUnfolded = false;
+
+/**
+ * The task's archived agents under Archived, after its Agents, as the
+ * panel's phone Overview folds them under its agents: each the same row as
+ * a listed agent's, which opens its page, where its transcript is read and
+ * it is brought back, and offers Unarchive in Archive's place; folded until
+ * opened, then standing as the reader left it on every task's page; none
+ * while the task has none.
+ */
+function OverviewArchived({
+  overview,
+  asking,
+}: {
+  readonly overview: TaskOverview;
+  readonly asking: AgentAsking;
+}) {
+  const [folded, setFolded] = useState(!archivedUnfolded);
+
+  if (overview.archived.length === 0) return null;
+
+  return (
+    <ListSection
+      title={WORDS.ARCHIVED}
+      glyph={GLYPH.ARCHIVE}
+      count={overview.archived.length}
+      foldable
+      folded={folded}
+      onFold={(shut) => {
+        archivedUnfolded = !shut;
+        setFolded(shut);
+      }}
+    >
+      <RowForEach data={overview.archived} keyOf={(line) => line.agent.id}>
+        {(line) => <TaskAgentRow line={line} task={overview.task} asking={asking} />}
+      </RowForEach>
     </ListSection>
   );
 }
@@ -2778,6 +2990,7 @@ function OverviewPage({
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
+  useNoteOpened({ kind: SEARCH_FOUND_KIND.TASKS, id: task.id, workspaceId: task.workspaceId });
   const described = useDescriptionShown(task.id) && entered;
 
   const { data: descriptions = false } = useQuery({
@@ -2813,6 +3026,7 @@ function OverviewPage({
       </ListSection>
       <OverviewRelations overview={overview} />
       <OverviewAgents overview={overview} asking={asking} />
+      <OverviewArchived overview={overview} asking={asking} />
       <OverviewPages overview={overview} />
       {!described || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
@@ -2847,8 +3061,25 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
   const doors = useTaskRowDoors(read.workspace?.id);
   const { listing, status, deletion } = useListingAsks(read, doors);
   const { refreshTasks } = useInboxActs();
+  const viewMenu = useViewMenu(read);
 
-  return { search, setSearch, listing, status, deletion, refreshTasks };
+  return { search, setSearch, listing, status, deletion, refreshTasks, viewMenu };
+}
+
+/** The list's View options, its members' photos read as files for the menu, built anew only as the view or the members change. */
+function useViewMenu(read: ReadListing): BarMenu {
+  const { treeView, setTreeView, shared, members } = read;
+  const pictureOf = useMemberPictures();
+
+  const photoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
+  return useMemo(
+    () => tasksViewMenu({ view: treeView, setView: setTreeView, shared, members, photoOf }),
+    [treeView, setTreeView, shared, members, photoOf],
+  );
 }
 
 /** The list screens' state, held by the tab's root screen above its two layouts. */
@@ -2868,7 +3099,7 @@ function TasksStackList({
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
-  const { search, setSearch, listing, refreshTasks } = screen;
+  const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
 
@@ -2885,16 +3116,19 @@ function TasksStackList({
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
-      {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
-      {PLUS_TAB ? null : (
-        <Stack.Toolbar placement="right">
+      {/* Note that View options stands at the bar's edge, as Mail's filter stands by its list, and a narrow iPad window's tab bar has no round +, so its list's bar offers New task beside it, as its wider windows' bars do. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu icon={glyphSymbol(viewMenu.symbol)} accessibilityLabel={viewMenu.label}>
+          {stackMenuItems(viewMenu)}
+        </Stack.Toolbar.Menu>
+        {PLUS_TAB ? null : (
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
             onPress={compose.onPress}
           />
-        </Stack.Toolbar>
-      )}
+        )}
+      </Stack.Toolbar>
       <Screen>
         <TasksTree
           listing={listing}
@@ -2958,7 +3192,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
         entered
       />
     ) : selected === undefined ? (
-      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
+      <NoSelection title={noSelectionWords(TERM.TASK)} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
@@ -3007,7 +3241,7 @@ function TasksSplitScreen({
   readonly screen: TasksScreenState;
   readonly hold: TreeHold;
 }) {
-  const { search, setSearch, listing, refreshTasks } = screen;
+  const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
 
   const { detail, detailBar } = useTaskDetail(selected, listing);
 
@@ -3026,6 +3260,7 @@ function TasksSplitScreen({
     ),
     bar: {
       title: TASKS_TITLE,
+      menu: viewMenu,
       search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
     },
   };

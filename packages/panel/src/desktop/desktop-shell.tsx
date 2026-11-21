@@ -1,4 +1,5 @@
 import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
+import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
@@ -86,7 +87,6 @@ import {
   AutomationsActsSkeleton,
   AutomationsToolbar,
 } from "./automation-list-frame.js";
-import { READING_AUTOMATIONS } from "./automation-words.js";
 import { awayPlaceOf, backPlaceOf } from "./back-place.js";
 import { AgentRoutePage } from "./desktop-agent-page.js";
 import { DesktopInbox } from "./desktop-inbox.js";
@@ -102,7 +102,7 @@ import { OfflineMark } from "./offline-mark.js";
 import { PaneGlide } from "./pane-motion.js";
 import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
-import { PhoneHead, phoneBar } from "./phone-head.js";
+import { PhoneHead, phoneBar, type TaskHeadBack } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
 import { SidePanelChord, SidePanelToggle, usePanelToggleRoom } from "./side-panel.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -746,6 +746,8 @@ interface ShellPlacesInput {
   readonly shell: RefObject<HTMLDivElement | null>;
   readonly keepOverlay: ReturnType<typeof useFloatDismiss>;
   readonly looks: ReturnType<typeof useTaskLooks>;
+  /** The plan the looks name as the shell is drawn, which the sidebar's rows read unread against (`useUnreadWatching`). */
+  readonly watched: string | undefined;
   readonly mentionedAgents: React.ComponentProps<typeof MentionedAgents>["value"];
   readonly chipCards: React.ComponentProps<typeof ChipCards>["value"];
   readonly newTaskDialog: React.JSX.Element;
@@ -933,8 +935,10 @@ export function DesktopShell({
   // from the mark and the agents' activity its row in the list carries; not while the update screen stands over the window.
   const listedShown = useNamedTask(shownTask?.id, tasks.typedNames);
 
+  const lookedAt = updateNeeded ? undefined : shownTask;
+
   const looks = useTaskLooks(
-    updateNeeded ? undefined : shownTask,
+    lookedAt,
     tasks.me,
     shownTask === undefined ? undefined : (listedShown ?? shownTask),
   );
@@ -1078,6 +1082,7 @@ export function DesktopShell({
     shell,
     keepOverlay,
     looks,
+    watched: lookedAt?.id,
     mentionedAgents,
     chipCards,
     newTaskDialog,
@@ -1129,6 +1134,7 @@ export function ShellPlaces(): React.JSX.Element {
     focusHolder,
     inboxKept,
     phoneAccount,
+    watched,
   } = useShellPlaces();
 
   const { account } = settings;
@@ -1177,6 +1183,7 @@ export function ShellPlaces(): React.JSX.Element {
         onSignOut={settings.onSignOut}
         onPressWithin={keepOverlay}
         room={room}
+        watched={watched}
       />
       {room === SHELL_ROOM.NARROW ? <DrawerScrim open={drawerOver} /> : null}
       <main
@@ -1292,7 +1299,7 @@ export function AgentPlace(): React.JSX.Element {
 
   if (ownPage === undefined) return <StatePlace />;
 
-  return <AgentRoutePage tasks={tasks} away={room === SHELL_ROOM.NARROW ? away : undefined} />;
+  return <AgentRoutePage tasks={tasks} away={phoneAway(room, away)} />;
 }
 
 /**
@@ -1321,6 +1328,15 @@ export function UnknownWorkspacePlace(): React.JSX.Element {
 }
 
 /**
+ * The way back a page's row leads with, which only a phone's draws. Note that
+ * a wider room hands none, because its words name the step behind, which
+ * every step moves, and the page would be drawn again for a row it never shows.
+ */
+function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefined {
+  return room === SHELL_ROOM.NARROW ? away : undefined;
+}
+
+/**
  * What a task's place draws in the places' content slot: the task bound
  * for, or its page in the shape it lands in while the host opens it, as a
  * link to it waits on its task. Every route of a task's draws this one
@@ -1329,7 +1345,7 @@ export function UnknownWorkspacePlace(): React.JSX.Element {
 export function StatePlace(): React.JSX.Element {
   const { tasks, room, looks, away } = useShellPlaces();
 
-  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={phoneAway(room, away)} />;
 }
 
 /**
@@ -1345,7 +1361,7 @@ export function HomePlace(): React.JSX.Element {
   const { account } = settings;
 
   if (tasks.boundFor !== undefined) {
-    return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+    return <DesktopTasks tasks={tasks} looks={looks} room={room} away={phoneAway(room, away)} />;
   }
 
   return (
@@ -1353,7 +1369,7 @@ export function HomePlace(): React.JSX.Element {
       tasks={tasks}
       looks={looks}
       room={room}
-      away={away}
+      away={phoneAway(room, away)}
       accountName={account.status === ACCOUNT_STATUS.SIGNED_IN ? account.name : undefined}
       staged={sidebar.staged}
     />

@@ -12,6 +12,7 @@ import {
   ChatBubble,
   CopyIcon,
   chatRunOf,
+  HeldMessageAction,
   IconButton,
   INLINE_REF_LOOK,
   InlineRef,
@@ -56,9 +57,12 @@ const ADA = (
 /** One sender's run of short messages, as a chat stands them together. */
 const RUN = ["Merged this morning.", "It's behind the Invites flag.", "Turning it on Monday."];
 
+/** A turn's Copy, drawn once the turn's first frame has painted or the pointer comes onto it, a box of its size standing in until then. */
 const COPY = (
   <MessageActions>
-    <IconButton icon={<CopyIcon />} label="Copy" size={BUTTON_SIZE.COMPACT} onClick={() => {}} />
+    <HeldMessageAction>
+      <IconButton icon={<CopyIcon />} label="Copy" size={BUTTON_SIZE.COMPACT} onClick={() => {}} />
+    </HeldMessageAction>
   </MessageActions>
 );
 
@@ -163,7 +167,7 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="chat-bubbles"
-        title="A chat's bubbles: what people sent at the right, the other side's at the left beside its face, one sender's run close, its corners tightened, one time under its last"
+        title="A chat's bubbles: the reader's at the right, the other side's at the left under its name and beside its face, one sender's run close, its corners tightened, one time under its last, and a reply opening on the words it answers"
       >
         <div className="catalog-frame">
           <div className="flex flex-col gap-ui-4">
@@ -179,6 +183,9 @@ function Messages(): React.JSX.Element {
                 revealActionsOnTap
                 className="mr-auto flex flex-col items-start"
               >
+                {index === 0 ? (
+                  <MessageHead inset={MESSAGE_LINE_INSET.AVATAR} sender="Iris" />
+                ) : null}
                 <ChatBubble
                   side={CHAT_SIDE.RECEIVED}
                   run={chatRunOf(index === 0, index === RUN.length - 1)}
@@ -196,6 +203,21 @@ function Messages(): React.JSX.Element {
                 ) : null}
               </MessageFrame>
             ))}
+            <MessageFrame revealActionsOnTap className="ml-auto flex flex-col items-end">
+              <ChatBubble
+                side={CHAT_SIDE.SENT}
+                run={CHAT_RUN.ALONE}
+                beside={COPY}
+                quote={{
+                  words: RUN[RUN.length - 1] ?? "",
+                  label: "Show the message this answers",
+                  onPress: () => {},
+                }}
+              >
+                <Text>Can it go out Friday instead?</Text>
+              </ChatBubble>
+              <MessageLine at={SENT_AT} />
+            </MessageFrame>
           </div>
         </div>
       </CatalogSection>

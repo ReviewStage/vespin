@@ -1,0 +1,90 @@
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose workspace has Managers on and
+# holds one, the release Manager, its chat said something the account has
+# not read (`@repo/host/fixture-inbox`); nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- assertVisible: "Managers"
+- assertVisible: "Release manager"
+- assertVisible: "Pinned"
+- waitForAnimationToEnd
+- takeScreenshot: managers-list
+# The section's + opens New Manager: its name, its repositories, the first
+# picked its checkout, where it runs, and its model; Cancel leaves it.
+- tapOn: "New Manager"
+- extendedWaitUntil:
+    visible: "Repositories"
+    timeout: 10000
+- inputText: "Launch captain"
+- assertVisible: "Machine"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-new
+- tapOn: "Cancel"
+- assertVisible: "Release manager"
+# Its press opens its page on its chat: the two messages it sent the account,
+# and the account's ask, but never the words it wrote to itself.
+- tapOn: "Release manager"
+- extendedWaitUntil:
+    visible: "Left before it ships.*"
+    timeout: 15000
+- assertVisible: "On it. The invitations agent has its pull request open.*"
+- assertNotVisible: "Reading the invitations task before I answer."
+- waitForAnimationToEnd
+- takeScreenshot: managers-chat
+# Its ⋯ offers Settings… in Rename's place: its name and model to change,
+# its checkout and machine standing as it was made.
+- tapOn: "More"
+- tapOn: "Settings…"
+- extendedWaitUntil:
+    visible: "Fixed once the Manager is made."
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-settings
+- tapOn: "Cancel"
+# The bar's Overview opens what the Manager is doing: its counts, the two
+# agents it started, and the pull request the invitations agent opened.
+- tapOn: "Overview"
+- extendedWaitUntil:
+    visible: "At a glance"
+    timeout: 10000
+- assertVisible: "2 agents working.*"
+- assertVisible: "Build teammate invitations"
+- scrollUntilVisible:
+    element: "Invite a teammate by email"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-overview
+# Search finds it among the agents, by its name.
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Search
+- runFlow:
+    when:
+      notVisible: "Search Vespin"
+    commands:
+      - tapOn:
+          text: "Search"
+          rightOf: "Tasks"
+- tapOn: "Search Vespin"
+- inputText: "release manager"
+- extendedWaitUntil:
+    visible: "Release manager"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: managers-search

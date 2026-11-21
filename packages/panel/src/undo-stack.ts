@@ -69,11 +69,11 @@ import type {
   TaskStatus,
   TaskSummary,
 } from "@repo/features/task-wire";
+import { priorityOf, statusOf } from "@repo/features/tasks-page-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { PortActKind } from "@repo/host/contract";
 import { STATUS_TONE } from "@repo/ui";
-import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { Store, useSelector } from "@tanstack/react-store";
 import { Predicate } from "effect";
 import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";

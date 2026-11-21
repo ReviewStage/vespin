@@ -13,6 +13,7 @@
  */
 
 import { useRouter } from "@tanstack/react-router";
+import { useSyncExternalStore } from "react";
 import { type PlaceParams, placeParamsOf } from "./places/place-params.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import type { TaskAt } from "./places/task-step.js";
@@ -59,8 +60,10 @@ export function useTaskRoute(): TaskRoute {
   const access = useRouteAccess();
   const here = useWindowPlace();
   const at = here.place === ROUTED_PLACE.TASK ? taskAtParams(here.params) : undefined;
-  // Note that the entry is read as the address is, the window drawn again on every move of the router's history.
-  const saved = savedTaskOf(router.history.location);
+  // Note that the step the entry saved is followed apart from the address, since the window writes it in place, at the
+  // same address, and only a write that changes the task it names draws the window again.
+  const { history } = router;
+  const saved = useSyncExternalStore(history.subscribe, () => savedTaskOf(history.location));
 
   const atNow = () => {
     const matches = router.matchRoutes(router.history.location.pathname);

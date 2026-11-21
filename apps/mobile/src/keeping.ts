@@ -1,5 +1,5 @@
 /**
- * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a press or a long press asks for: opens it full screen in the system's Quick Look, copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
+ * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a press or a long press asks for: opens a picture full screen in the app's viewer and anything else in the system's Quick Look, copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
  *
  * The desktop and the web copy and save through the window's act port
  * (`WINDOW_COPY_IMAGE`, `WINDOW_COPY_RICH`, `WINDOW_SAVE_FILE`); the phone has the system's
@@ -10,8 +10,9 @@
  * file, as an agent's are, a recording, and a file are taken as the file the
  * app wrote (`cached-media.ts`). Quick Look
  * reads a file too, so a picture is written the same way before it opens,
- * and one drawn from a web address is fetched under the caches first; Quick
- * Look's own share button then offers Copy and Save Image. Photos is
+ * and one drawn from a web address is fetched under the caches first, once,
+ * so it opens again from that file; Quick Look's own share button then
+ * offers Copy and Save Image. Photos is
  * asked for add-only access, once, the first time something is saved, and
  * a refusal says where it is allowed again rather than offering Try again.
  * A draft's Copy message puts its body on the pasteboard as rich text.
@@ -33,14 +34,16 @@ import {
   type Kept,
   NOTICE_KIND,
   useFailureNotices,
+  type ViewedPicture,
 } from "@repo/ui-native";
 import { setImageAsync, setStringAsync } from "expo-clipboard";
-import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from "expo-crypto";
+import { CryptoDigestAlgorithm, digestStringAsync } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
 import { Share } from "react-native";
 import { cachedFile } from "./cached-media.js";
+import { pictureViewerModule } from "./picture-viewer-module.js";
 import { quickLookModule } from "./quick-look-module.js";
 import { richPasteboardModule } from "./rich-pasteboard-module.js";
 
@@ -153,12 +156,37 @@ async function shared(kept: Kept): Promise<void> {
   await Share.share({ url: await fileOf(kept), title: kept.name });
 }
 
-/** A picture drawn from a web address, fetched under the app's caches in a folder of its own, under the name its address ends in. */
-async function fetchedPicture(source: string): Promise<string> {
-  const folder = new Directory(Paths.cache, `${FETCHED_PREFIX}-${randomUUID()}`);
+/** Each fetch of a web picture still under way, by its address, so a second press waits on the first rather than fetching it again. */
+const fetching = new Map<string, Promise<string>>();
+
+/** The picture fetched from `source`: the file in its folder where an earlier fetch left one, or a fetch begun now. */
+async function fetchedFile(source: string): Promise<string> {
+  const digest = await digestStringAsync(CryptoDigestAlgorithm.SHA256, source);
+  const folder = new Directory(Paths.cache, `${FETCHED_PREFIX}-${digest}`);
+  const [fetched] = folder.exists ? folder.list().filter((each) => each instanceof File) : [];
+
+  if (fetched !== undefined) return fetched.uri;
   folder.create({ intermediates: true, idempotent: true });
 
-  return (await File.downloadFileAsync(source, folder)).uri;
+  return (await File.downloadFileAsync(source, folder, { idempotent: true })).uri;
+}
+
+/**
+ * A picture drawn from a web address, fetched under the app's caches in a
+ * folder named by a digest of its address, under the name its address ends
+ * in. Note that a picture already fetched is the file in its folder, so a
+ * second press, or one after a relaunch, opens it with no fetch; and that the
+ * system moves a download into place only once it is whole, so a file there
+ * is never one cut short.
+ */
+function fetchedPicture(source: string): Promise<string> {
+  const under = fetching.get(source);
+
+  if (under !== undefined) return under;
+  const begun = fetchedFile(source).finally(() => fetching.delete(source));
+  fetching.set(source, begun);
+
+  return begun;
 }
 
 /** The file Quick Look reads: a picture written from its bytes or fetched from its address, or the file a recording or a file already is. */
@@ -180,6 +208,31 @@ async function opened(kept: Kept): Promise<void> {
   const shown = await quickLookModule.preview(file, kept.name);
 
   if (!shown) await Share.share({ url: file, title: kept.name });
+}
+
+/**
+ * Opens a picture full screen in the app's viewer (`modules/picture-viewer/`),
+ * grown out of its thumbnail and drawn first from the bitmap the thumbnail
+ * shows, a swipe stepping through the rest of its set. Note that one UIKit
+ * would not present the viewer over opens in Quick Look instead, which asks
+ * the same of UIKit and shares it where refused too.
+ */
+async function viewed(pictures: readonly ViewedPicture[], index: number): Promise<void> {
+  const shown = await pictureViewerModule.show(
+    pictures.map((picture) => ({
+      uri: picture.source,
+      ...picture.place,
+      title: picture.title,
+      subtitle: picture.subtitle ?? null,
+    })),
+    index,
+  );
+
+  const pressed = pictures[index];
+
+  if (!shown && pressed !== undefined) {
+    await opened({ kind: KEPT_KIND.PICTURE, source: pressed.source, name: pressed.title });
+  }
 }
 
 /** Each act's work. */
@@ -219,6 +272,7 @@ export function useKeeping(): Keeping {
 
     return {
       open: (kept) => run(() => opened(kept), OPEN_FAILED, false),
+      view: (pictures, index) => run(() => viewed(pictures, index), OPEN_FAILED, false),
       keep: (kept, act) =>
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>

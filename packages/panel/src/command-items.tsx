@@ -22,10 +22,11 @@ import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { CHANGE_REPOSITORY } from "@repo/features/task-list-model";
+import { ASSIGNED_TO_WORDS, CHANGE_REPOSITORY } from "@repo/features/task-list-model";
 import { REMOVE_PARENT } from "@repo/features/task-relation-model";
 import { MOVE_TO_SECTION } from "@repo/features/task-sections-model";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
 import {
   APP_COMMAND,
   type AppCommand,
@@ -147,9 +148,9 @@ export const PANEL_COMMAND = {
   UNARCHIVE_AGENT: unkeyed("Unarchive", <GLYPH.UNARCHIVE />, NOUN.AGENT),
   DELETE_AGENT: keyedAs(APP_COMMAND.DELETE, "Permanently delete", <GLYPH.DELETE />, NOUN.AGENT),
   MOVE_TO_SECTION: unkeyed(MOVE_TO_SECTION, <GLYPH.MOVE />),
-  GROUP_BY: unkeyed("Group by", <ListIcon />),
-  ORDER_BY: unkeyed("Order by", <ClockIcon />),
-  ASSIGNED_TO: unkeyed("Assigned to", <UserCheckIcon />),
+  GROUP_BY: unkeyed(TASKS_VIEW_WORDS.GROUP_BY, <ListIcon />),
+  ORDER_BY: unkeyed(TASKS_VIEW_WORDS.ORDER_BY, <ClockIcon />),
+  ASSIGNED_TO: unkeyed(ASSIGNED_TO_WORDS.HEAD, <UserCheckIcon />),
   CANCEL_TASK: unkeyed("Cancel task", <TaskStatusMark status={TASK_STATUS.CANCELED} />),
   CHANGE_REPOSITORY: unkeyed(CHANGE_REPOSITORY, <GLYPH.REPOSITORY />),
   MOVE_TO_WORKSPACE: unkeyed("Move to workspace", <GLYPH.MOVE />),

@@ -14,12 +14,15 @@ import {
   Text,
   Toggle,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  accessibilityRemoveTraits,
   accessibilityValue,
   alignmentGuide,
   background,
@@ -29,6 +32,7 @@ import {
   font,
   foregroundStyle,
   frame,
+  hidden,
   lineLimit,
   listRowBackground,
   listRowInsets,
@@ -38,6 +42,7 @@ import {
   menuIndicator,
   menuStyle,
   monospacedDigit,
+  onGeometryChange,
   padding,
   tag,
   tint,
@@ -54,13 +59,20 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { createContext, Fragment, type ReactElement, type ReactNode, useContext } from "react";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import {
+  createContext,
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+  useContext,
+  useState,
+} from "react";
+import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { actContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { cellFocusRingOff, dragLink } from "./interactions.js";
+import { cellFocusRingOff, dragLink, heardActions } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -74,6 +86,7 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { useMinute } from "./minute.js";
+import { heardActs } from "./row-heard-acts.js";
 import {
   RowChoosingContext,
   RowOpenContext,
@@ -81,6 +94,7 @@ import {
   RowSelectedContext,
 } from "./row-open.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
+import { sparedMarksDropped } from "./task-row-fit-model.js";
 import {
   type BrandColors,
   STATUS_TONE,
@@ -185,6 +199,8 @@ export type RowAction = {
   readonly onPress: () => void;
   /** Whether it stands dimmed and takes no press, its `detail` saying why, as the panel's Unfollow stands for the assignee. */
   readonly disabled?: boolean | undefined;
+  /** What VoiceOver's Actions call it where its words lean on the menu it stands in, such as Remind me's "Tomorrow" heard as "Remind me tomorrow"; its menu's name before its label where none is given (`heardActs`). */
+  readonly heard?: string | undefined;
 };
 
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
@@ -205,6 +221,8 @@ export type MenuChoice = {
   readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
+  /** What VoiceOver's Actions call it, such as a status heard as "Set status: Backlog"; its menu's name before its label where none is given (`heardActs`). */
+  readonly heard?: string | undefined;
 };
 
 /** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
@@ -608,7 +626,9 @@ function asking(content: ReactElement, question: RowQuestion | undefined): React
  * then leads with Open. Note that SwiftUI's preview takes no tap of its own,
  * a tap on it closing the menu, so Open is what opens the row from there. A
  * row given what it is heard as reads to VoiceOver as one element, its title
- * then where it stands, rather than each mark and word apart.
+ * then where it stands, rather than each mark and word apart, and offers its
+ * menu's acts once each as its Actions, a submenu's items worded with their
+ * menu (`heardActs`), as Mail's rows offer theirs.
  */
 export function RowFrame({
   id,
@@ -643,9 +663,33 @@ export function RowFrame({
   const disclosed = useContext(RowDisclosedContext);
   const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
+  const voiceOver = useVoiceOver();
   const swiped = [...trailingActions, ...leadingActions];
+  const groups = menuGroups.filter(menuGroupFilled);
 
-  // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
+  const opening: readonly RowAction[] =
+    preview === undefined || open === undefined
+      ? []
+      : [
+          // Note that Open leads with its glyph, as every act after it does, so its word starts where theirs do, as Mail's preview menu glyphs every act; its glyph is not the arrow out, which marks only what leaves the app, such as Open in browser.
+          {
+            label: VERB.OPEN,
+            symbol: GLYPH.OPEN,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => open(id),
+          },
+        ];
+
+  const menuGroupsDrawn: readonly LongPressGroup[] =
+    ordered === undefined
+      ? [
+          opening,
+          [...swiped, ...menuSubmenus, ...menuActions],
+          ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
+        ]
+      : [opening, ...ordered];
+
+  // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu instead (`heardActs`), and Select mode offers none, as it offers no long press.
   const frameModifiers = [
     tag(id),
     ...rowPlacement(
@@ -659,16 +703,17 @@ export function RowFrame({
     ...(heard === undefined
       ? []
       : [
-          accessibilityElement("combine"),
+          accessibilityElement("ignore"),
           accessibilityLabel(heard.label),
           accessibilityValue(heardValue(heard.value)),
+          // Note that a row of a list that opens its rows reads as a button, as Mail's message rows do, whatever it draws, its menu reached through its Actions rather than as a pop-up.
+          ...(open === undefined ? [] : [accessibilityAddTraits(["isButton"])]),
+          heardActions(choosing ? [] : heardActs(menuGroupsDrawn)),
         ]),
     ...(link === undefined ? [] : [dragLink(link)]),
     // Note that a row of a list that opens its rows draws no keyboard focus ring around its cell, as iPadOS's own sidebars draw none, since its selection already stands on the `SELECTED` fill; it's set by whether the row opens at all, not by whether it's selected now, so the modifiers don't change as the selection does.
     ...(open === undefined ? [] : [cellFocusRingOff()]),
   ];
-
-  const groups = menuGroups.filter(menuGroupFilled);
 
   const ownGroup =
     ordered === undefined
@@ -680,34 +725,17 @@ export function RowFrame({
     return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
-  const opening: readonly RowAction[] =
-    preview === undefined || open === undefined
-      ? []
-      : [
-          // Note that Open stands as words alone, since it opens the row in the app; the arrow out marks only what leaves it, such as Open in browser.
-          { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
-        ];
-
   const menu = asking(
-    <LongPressMenu
-      groups={
-        ordered === undefined
-          ? [
-              opening,
-              [...swiped, ...menuSubmenus, ...menuActions],
-              ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
-            ]
-          : [opening, ...ordered]
-      }
-      preview={preview}
-    >
+    <LongPressMenu groups={menuGroupsDrawn} preview={preview}>
       {row}
     </LongPressMenu>,
     question,
   );
 
-  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
-  if (swiped.length === 0) return <HStack modifiers={frameModifiers}>{menu}</HStack>;
+  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal, and so does a heard row while VoiceOver runs: the list's cell offers a swipe's acts as Actions of its own, past the row's, a second copy with a submenu's items unworded, and the menu, which the row's Actions read, already holds each of them.
+  if (swiped.length === 0 || (voiceOver && heard !== undefined)) {
+    return <HStack modifiers={frameModifiers}>{menu}</HStack>;
+  }
 
   return (
     <SwipeActions modifiers={frameModifiers}>
@@ -756,6 +784,12 @@ function TitleWords({
   );
 }
 
+/** What a row fitted to its title is told: its title's whole width, and the room the title has on the line, each in points as the line is laid out. */
+type TitleFit = {
+  readonly onName: (width: number) => void;
+  readonly onRoom: (width: number) => void;
+};
+
 /**
  * A row's first line: the unread dot in the margin, the leading mark in its
  * column, the title, and what ends the line. The line centers its pieces,
@@ -777,6 +811,7 @@ export function RowHead({
   ink,
   end,
   trail,
+  fit,
 }: {
   /** Whether the unread dot stands in the margin; a task's row draws none, its unread name standing in semibold alone, as the panel's task rows do. */
   readonly dot?: boolean | undefined;
@@ -793,6 +828,8 @@ export function RowHead({
   readonly ink: string;
   readonly end: ReactNode;
   readonly trail?: ReactNode;
+  /** Where given, what the title's whole width and its room on the line are told to, so the row can let marks of its end go before the title is cut. */
+  readonly fit?: TitleFit | undefined;
 }) {
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
@@ -808,6 +845,31 @@ export function RowHead({
       ]}
     />
   );
+
+  // Note that a row fitted to its title measures the title's room as the title and the gap after it, and its whole width from an unseen copy that never cuts, which takes no room on the line; at an accessibility size its end stands under it, so nothing needs fitting.
+  const fitted =
+    fit === undefined || stacked ? undefined : (
+      <HStack
+        spacing={0}
+        modifiers={[onGeometryChange(({ width }) => fit.onRoom(width - SPACE.ROW))]}
+      >
+        <ZStack alignment="leading">
+          {words}
+          <HStack modifiers={[frame({ width: 0, height: 0 }), hidden(), accessibilityHidden(true)]}>
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
+                fixedSize(),
+                onGeometryChange(({ width }) => fit.onName(width)),
+              ]}
+            >
+              {title}
+            </Text>
+          </HStack>
+        </ZStack>
+        <Spacer minLength={SPACE.ROW} />
+      </HStack>
+    );
 
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
   const line = (
@@ -827,9 +889,9 @@ export function RowHead({
           {end}
         </VStack>
       ) : (
-        words
+        (fitted ?? words)
       )}
-      <Spacer />
+      {fitted === undefined ? <Spacer /> : null}
       {stacked ? null : end}
       {trail}
     </HStack>
@@ -1154,6 +1216,78 @@ const NO_ASSIGNEE_HEARD = "No assignee";
 /** What a blocked task's row says, the panel's word for its mark (`@repo/ui`'s `BLOCKED_WORDS`). */
 const BLOCKED_WORDS = "Blocked";
 
+/** The marks of a task row's end it lets go before its name is cut, in the order it lets them go: its agents' mark, then its sub-tasks' progress, as Mail's rows keep the sender's name over their marks. */
+const SPARED_MARK = {
+  AGENTS: "agents",
+  SUB_TASKS: "subTasks",
+} as const;
+
+type SparedMark = (typeof SPARED_MARK)[keyof typeof SPARED_MARK];
+
+/** The gap between the marks of a task row's end, in points. */
+const END_GAP = SPACE.TIGHT + 2;
+
+/** What a task row measured of its line, for the task it last drew, since a recycled row holds another task's. */
+type RowFitState = {
+  readonly id: string;
+  readonly name: number | undefined;
+  readonly room: number | undefined;
+  readonly widths: Partial<Record<SparedMark, number>>;
+  readonly dropped: number;
+};
+
+/** Which of a task row's lesser marks stand aside, and what measures its title and each mark. */
+type SparedMarks = {
+  readonly aside: ReadonlySet<SparedMark>;
+  readonly fit: TitleFit | undefined;
+  readonly measured: (mark: SparedMark) => (width: number) => void;
+};
+
+/**
+ * Which of a task row's lesser marks stand aside so its name reads whole, as
+ * the row measures its line (`sparedMarksDropped`), and what its title and
+ * each mark are measured by; none stands aside, and nothing is measured,
+ * where the row has none to let go.
+ */
+function useSparedMarks(id: string, spared: readonly SparedMark[]): SparedMarks {
+  const [state, setState] = useState<RowFitState>({
+    id,
+    name: undefined,
+    room: undefined,
+    widths: {},
+    dropped: 0,
+  });
+
+  const measure = (change: Partial<Pick<RowFitState, "name" | "room" | "widths">>) =>
+    setState((was) => {
+      const base: RowFitState =
+        was.id === id ? was : { id, name: undefined, room: undefined, widths: {}, dropped: 0 };
+
+      const next = { ...base, ...change, widths: { ...base.widths, ...change.widths } };
+
+      if (next.name === undefined || next.room === undefined) return next;
+
+      const dropped = sparedMarksDropped({
+        name: next.name,
+        room: next.room,
+        marks: spared.map((mark, at) => ({ width: next.widths[mark], dropped: at < base.dropped })),
+      });
+
+      return { ...next, dropped };
+    });
+
+  const dropped = state.id === id ? state.dropped : 0;
+
+  return {
+    aside: new Set(spared.slice(0, dropped)),
+    fit:
+      spared.length === 0
+        ? undefined
+        : { onName: (name) => measure({ name }), onRoom: (room) => measure({ room }) },
+    measured: (mark) => (width) => measure({ widths: { [mark]: width + END_GAP } }),
+  };
+}
+
 /** What a task's agents say on its row, as the panel's sidebar row says it in one mark: a failed agent, one at work, or its pull request's state. */
 function TaskAgentsMark({ agents }: Pick<TaskRowProps, "agents">) {
   switch (agents?.kind) {
@@ -1213,6 +1347,8 @@ export function RowDisclosure({
       modifiers={[
         listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
         listRowBackground("clear"),
+        // Note that the system heads a disclosure's label as a heading, which stood a parent task in VoiceOver's Headings rotor beside the list's sections; a parent is a row like any other, and the rows under it are no headings either, so the trait is taken off the whole disclosure.
+        accessibilityRemoveTraits(["isHeader"]),
       ]}
     >
       <DisclosureGroup.Label>
@@ -1405,6 +1541,14 @@ export function TaskRow(props: TaskRowProps) {
   // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, each a column of the lead's scaled width, and by however much the lead has grown.
   const indent = depth * column + lead - MARK_SIZE.LEAD;
 
+  const agentsMarked = props.agents !== undefined && props.agents.kind !== TASK_AGENTS_STATUS.NONE;
+
+  // Note that a narrow column, such as an iPad's 320 pt list, cut a long name to its first word while its marks kept their room, so the agents' mark and then the sub-tasks' progress step aside first.
+  const spared = useSparedMarks(id, [
+    ...(agentsMarked ? [SPARED_MARK.AGENTS] : []),
+    ...(props.subTasks === undefined ? [] : [SPARED_MARK.SUB_TASKS]),
+  ]);
+
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * column })]}>
       <RowHead
@@ -1414,16 +1558,31 @@ export function TaskRow(props: TaskRowProps) {
         lead={<StatusRing status={status} menu={props.statusMenu} edge={ROW_INSET.PLAIN} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
+        fit={spared.fit}
         end={
-          <HStack spacing={SPACE.TIGHT + 2}>
+          <HStack spacing={END_GAP}>
             {props.blocked === true ? (
               <ToneGlyph glyph={GLYPH.BLOCKED_BY} tone={STATUS_TONE.NEUTRAL} hidden />
             ) : null}
             {props.needsYou === true ? <NeedsYouDot /> : null}
-            {props.subTasks === undefined ? null : (
-              <SubTaskProgress done={props.subTasks.finished} total={props.subTasks.total} />
+            {props.subTasks === undefined || spared.aside.has(SPARED_MARK.SUB_TASKS) ? null : (
+              <HStack
+                modifiers={[
+                  onGeometryChange(({ width }) => spared.measured(SPARED_MARK.SUB_TASKS)(width)),
+                ]}
+              >
+                <SubTaskProgress done={props.subTasks.finished} total={props.subTasks.total} />
+              </HStack>
             )}
-            <TaskAgentsMark agents={props.agents} />
+            {!agentsMarked || spared.aside.has(SPARED_MARK.AGENTS) ? null : (
+              <HStack
+                modifiers={[
+                  onGeometryChange(({ width }) => spared.measured(SPARED_MARK.AGENTS)(width)),
+                ]}
+              >
+                <TaskAgentsMark agents={props.agents} />
+              </HStack>
+            )}
             {props.assignee === undefined ? null : (
               <Avatar
                 name={props.assignee.name}

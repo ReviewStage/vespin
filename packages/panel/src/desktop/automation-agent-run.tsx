@@ -8,6 +8,7 @@ import {
 } from "@repo/features/automation-list-model";
 import { automationRun } from "@repo/features/model-label";
 import { momentText, sinceText } from "@repo/features/time-format";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import {
   FiringGlyph,
   GAP,
@@ -27,10 +28,14 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { and, eq, isUndefined, not, or, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { automationsQuery } from "../live-reads.js";
 import type { AutomationsDoor } from "../places/routed-doors.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import { type TaskAgentsControl, useTaskAgent } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 
@@ -55,6 +60,14 @@ import { useAutomationRuns } from "./use-automation-runs.js";
  * them (an automation deleted, or a run older than the runs read) keeps its
  * path and draws no run's bar and no arrows.
  */
+
+/** An agent a run started, as the open task's run reads it: which it is, and its automation. */
+interface RunStarted {
+  readonly id: string;
+  readonly createdAt: number;
+  readonly automationId?: string | undefined;
+  readonly automationName?: string | undefined;
+}
 
 /** What the trail's outer place is called, as the automation editor's names it. */
 const AUTOMATIONS_PLACE = "Automations";
@@ -87,7 +100,7 @@ export function AutomationGlyph({
 
 /** The trail an agent an automation started leads its bar with; none for any other agent. */
 export function automationTrail(
-  agent: Pick<AgentSummary, "automationId" | "automationName">,
+  agent: Pick<RunStarted, "automationId" | "automationName">,
   workspaceId: string | undefined,
   onOpen: AutomationsDoor["open"],
 ): readonly ToolbarPlace[] | undefined {
@@ -123,34 +136,94 @@ export function automationTrail(
  * it yet, which reads it and opens it on its task or says it is not found.
  */
 export function openRunAgent(
-  tasks: Pick<TasksControl, "liveAgents" | "onShowAgent" | "agentView">,
+  tasks: Pick<TasksControl, "agentsCarried" | "onShowAgent" | "agentView">,
+  collections: Pick<TaskListCollections, "agents">,
   agentId: string,
 ): void {
-  const taskId = tasks.liveAgents?.find((each) => each.id === agentId)?.taskId ?? undefined;
+  const listed = tasks.agentsCarried ? collections.agents.get(agentId) : undefined;
+  const taskId = listed?.taskId ?? undefined;
 
   if (taskId === undefined) tasks.agentView.onOpen(agentId);
   else tasks.onShowAgent(taskId, agentId);
 }
 
 /** The agent an automation's run started on its task: the first started of the task's agents a run names, archived ones among them; none on a task no run made. */
-export function runAgentOf(agents: readonly AgentSummary[]): AgentSummary | undefined {
+export function runAgentOf<Agent extends RunStarted>(agents: readonly Agent[]): Agent | undefined {
   return agents
     .filter((agent) => automationRun(agent)?.name !== undefined)
-    .reduce<AgentSummary | undefined>(
+    .reduce<Agent | undefined>(
       (first, agent) => (first === undefined || agent.createdAt < first.createdAt ? agent : first),
       undefined,
     );
 }
 
+/**
+ * The open task's run: the agent an automation's run started on it, as
+ * `runAgentOf` finds it, and whether any of its agents a run started,
+ * archived ones among them, as the automations' directory wants to know;
+ * read of those agents' runs alone, so a step of any turn moves no answer.
+ * None while the list does not follow the task's agents.
+ */
+export function useTaskRun(control: TaskAgentsControl): {
+  readonly agent: RunStarted | undefined;
+  readonly any: boolean;
+} {
+  const collections = useTaskListCollections();
+  const { taskId, followed } = control.rows;
+
+  const { data: started } = useLiveQuery((q) =>
+    taskId === undefined || !followed
+      ? undefined
+      : q
+          .from({ agent: collections.agents })
+          .where(({ agent }) =>
+            and(
+              eq(agent.taskId, taskId),
+              or(not(isUndefined(agent.automationId)), not(isUndefined(agent.automationName))),
+            ),
+          )
+          .select(({ agent }) => ({
+            id: agent.id,
+            createdAt: agent.createdAt,
+            automationId: agent.automationId,
+            automationName: agent.automationName,
+          })),
+  );
+
+  return useMemo(() => {
+    const runs = started ?? [];
+
+    return {
+      agent: runAgentOf(runs),
+      any: runs.some((agent) => agent.automationId !== undefined),
+    };
+  }, [started]);
+}
+
 /** Where the page's agent's run stands among its automation's runs, followed live; none for an agent no automation started, or while its run is not read. */
 export function useAutomationRunPlace(
-  agent: Pick<AgentSummary, "id" | "automationId"> | undefined,
+  agent: Pick<RunStarted, "id" | "automationId"> | undefined,
 ): AutomationRunPlace | undefined {
   const { read } = useAutomationRuns(agent?.automationId);
 
   if (agent === undefined || read === undefined || !("runs" in read)) return undefined;
 
   return automationRunPlace(read.runs, agent.id);
+}
+
+/** The open task's run's bar (`AutomationRunStrip`), its agent's status followed by its id alone, so its steps draw the bar and nothing more. */
+export function TaskRunStrip({
+  agents,
+  agentId,
+  place,
+}: {
+  agents: TaskAgentsControl;
+  agentId: string;
+  place: AutomationRunPlace;
+}): React.JSX.Element | null {
+  const status = useTaskAgent(agents, agentId)?.status;
+
+  return status === undefined ? null : <AutomationRunStrip place={place} status={status} />;
 }
 
 /** The run's bar under the page's, as tall and on the same ground as a tab's: what fired the run, when, and where its agent stands. */

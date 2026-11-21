@@ -56,6 +56,12 @@ import {
 import { automationsAppState, automationsLaunchPlace } from "./automations-fixture.js";
 import type { AutomationsPlace } from "./automations-place.js";
 import {
+  opensTasks,
+  openTasksActAnswer,
+  openTasksAppState,
+  openTasksView,
+} from "./open-tasks-fixture.js";
+import {
   FIXTURE_PERSON,
   settingsActAnswer,
   settingsAppState,
@@ -655,7 +661,10 @@ export function fixtureTasksView(run: {
 
   if (run.profile === RUN_PROFILE.TASKS_WORK) return FIXTURE_OPEN_TASK;
 
-  return settingsTasksView(run.profile, FIXTURE_TASK_LIST) ?? FIXTURE_TASK_LIST;
+  return (
+    settingsTasksView(run.profile, FIXTURE_TASK_LIST) ??
+    openTasksView(run.profile, FIXTURE_TASK_LIST)
+  );
 }
 
 /**
@@ -714,6 +723,7 @@ export function fixtureActAnswer(
   payload: PortActPayload<PortActKind>,
 ): { readonly answer: PortActResult<PortActKind> } | undefined {
   return (
+    openTasksActAnswer(run.profile, kind, payload) ??
     historyActAnswer(kind, payload) ??
     agentActAnswer(run.profile, kind, payload) ??
     settingsActAnswer(run.profile, kind, payload) ??
@@ -781,13 +791,15 @@ export function fixtureAppState(state: AppStateSnapshot): AppStateSnapshot {
   return workspacesAppState(
     repositoriesAppState(
       commentsAppState(
-        automationsAppState(
-          agentAppState(
-            settingsAppState(state.run.profile, plannedAppState(state)),
-            FIXTURE_TASK_ID,
-            FIXTURE_FIRST.id,
+        openTasksAppState(
+          automationsAppState(
+            agentAppState(
+              settingsAppState(state.run.profile, plannedAppState(state)),
+              FIXTURE_TASK_ID,
+              FIXTURE_FIRST.id,
+            ),
+            FIXTURE_WORKSPACE_IDS,
           ),
-          FIXTURE_WORKSPACE_IDS,
         ),
       ),
     ),
@@ -813,6 +825,14 @@ function workspacesAppState(state: AppStateSnapshot): AppStateSnapshot {
   STAGED_WORKSPACES.set(state.tasks, laid);
 
   return { ...state, tasks: laid };
+}
+
+/** Whether a fixture run's window opens the task a select names, as a signed-in window does, rather than binding its own for good. */
+export function fixtureOpensTasks(run: {
+  readonly fixtureMode: boolean;
+  readonly profile: string;
+}): boolean {
+  return run.fixtureMode && opensTasks(run.profile);
 }
 
 /**

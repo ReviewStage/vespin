@@ -25,7 +25,7 @@
  * (`manager-settings-dialog.tsx`), so the two never look apart.
  */
 
-import { startFailureWords } from "@repo/features/agent-refusal-words";
+import { managerCreateRefusalWords, startFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import { AGENT_BOUNDS, type AgentRuntime } from "@repo/features/agent-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
@@ -80,14 +80,7 @@ const REPOSITORY_ASKED = "Choose a repository for the Manager.";
 
 /** What a refused Create says, by why: a Start's words, but for the refusals a Manager's Create means otherwise. */
 function createFailureWords(failure: AgentCallFailure): string {
-  switch (failure) {
-    case AGENT_CALL_FAILURE.NOT_FOUND:
-      return "This workspace can't be reached.";
-    case AGENT_CALL_FAILURE.NOT_PERMITTED:
-      return "Managers are off for this workspace.";
-    default:
-      return startFailureWords(failure);
-  }
+  return managerCreateRefusalWords(failure) ?? startFailureWords(failure);
 }
 
 /** Whether two places are one: the cloud, or the same device. */

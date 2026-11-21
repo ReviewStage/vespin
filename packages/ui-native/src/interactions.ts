@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list's rows set in from its sides, a view dragged out as its link, and pictures or a link dropped on a view.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a view's VoiceOver Actions.
 
 import {
   createModifier,
@@ -12,10 +12,12 @@ const MODIFIER = {
   CELL_FOCUS_RING_OFF: "vespinCellFocusRingOff",
   COLUMN_SUBTITLE: "vespinColumnSubtitle",
   STACK_SUBTITLE: "vespinStackSubtitle",
+  STACK_SCROLL_EDGE: "vespinStackScrollEdge",
   SIDE_MARGINS: "vespinSideMargins",
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
+  HEARD_ACTS: "vespinHeardActs",
 } as const;
 
 /** Which bar a subtitle stands under: a split view column's, SwiftUI's own, or the native stack's a compact screen is pushed under. */
@@ -35,13 +37,26 @@ export function cellFocusRingOff(): ModifierConfig {
  * takes it whether or not it has a subtitle, an empty one drawing none,
  * since adding or removing a modifier redraws everything under the view.
  */
-export function barSubtitle(bar: BarKind, subtitle: string | undefined): ModifierConfig {
+export function barSubtitle(
+  bar: BarKind,
+  subtitle: string | undefined,
+  leading = false,
+): ModifierConfig {
   return createModifier(
     bar === BAR_KIND.COLUMN ? MODIFIER.COLUMN_SUBTITLE : MODIFIER.STACK_SUBTITLE,
-    {
-      subtitle: subtitle ?? "",
-    },
+    { subtitle: subtitle ?? "", leading },
   );
+}
+
+/**
+ * A list the native stack's bar follows as it scrolls, so a tab root's large
+ * title collapses into the bar as Mail's does, which UIKit never finds on
+ * its own inside a hosting controller. Note that it acts only under a stack
+ * bar standing a large title, so every list may carry it, a pushed page's
+ * and a split view's column standing as before.
+ */
+export function stackScrollEdge(): ModifierConfig {
+  return createModifier(MODIFIER.STACK_SCROLL_EDGE, {});
 }
 
 /** A scroll view's content set in from its sides by `length` points, SwiftUI's `contentMargins` for its scroll content, while the scroll view keeps its whole width, so the ground beside the content still scrolls it. */
@@ -62,6 +77,11 @@ const DroppedPicturesSchema = Schema.Struct({
 
 /** What a drop of a link sends: its address. */
 const DroppedLinkSchema = Schema.Struct({ url: Schema.String });
+
+/** What an Action VoiceOver ran sends: its place among the names the view was given. */
+const HeardActSchema = Schema.Struct({ index: Schema.Number });
+
+const decodeHeardAct = Schema.decodeUnknownOption(HeardActSchema);
 
 const decodeDroppedPictures = Schema.decodeUnknownOption(DroppedPicturesSchema);
 const decodeDroppedLink = Schema.decodeUnknownOption(DroppedLinkSchema);
@@ -94,5 +114,24 @@ export function dropLink(onDrop: (url: string) => void): ModifierConfig {
       decodeDroppedLink,
       Option.map(({ url }) => onDrop(url)),
     ),
+  );
+}
+
+/**
+ * A view's VoiceOver Actions, the rotor's list a person flicks through, each
+ * by its name, in order: the press of the one VoiceOver ran is handed on to
+ * it. Note that they stand as the view's own `accessibilityActions`, so a
+ * view that ignores its children's accessibility offers these and no others.
+ */
+export function heardActions(
+  acts: readonly { readonly name: string; readonly onPress: () => void }[],
+): ModifierConfig {
+  return createModifierWithEventListener(
+    MODIFIER.HEARD_ACTS,
+    flow(
+      decodeHeardAct,
+      Option.map(({ index }) => acts[index]?.onPress()),
+    ),
+    { names: acts.map((act) => act.name) },
   );
 }

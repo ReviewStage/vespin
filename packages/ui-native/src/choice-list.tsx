@@ -7,9 +7,11 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
+  lineLimit,
   padding,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
@@ -58,7 +60,7 @@ type ChoiceListProps = {
 /** How thick the card's and the tag's edges are drawn. */
 const HAIRLINE = 0.5;
 
-/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked. */
+/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked; its one word on one line at every size, never broken inside the tag. */
 function RecommendedTag() {
   const colors = useColors();
 
@@ -67,6 +69,9 @@ function RecommendedTag() {
       modifiers={[
         font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
         foregroundStyle(colors.TEXT_MUTED),
+        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
+        lineLimit(1),
+        fixedSize(),
         padding({ horizontal: 5, vertical: 1 }),
         strokeBorder({
           content: colors.CHIP_EDGE,

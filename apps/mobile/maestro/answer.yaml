@@ -1,4 +1,4 @@
-# answer.yaml -- a thread's ask answered from the phone, each kind once: a decide's pick, a refused approval taken back, an answer's fields, a do's steps marked done, an answer in words, a reply, and Resolve.
+# answer.yaml -- a thread's ask answered from the phone, each kind once: a decide's pick, an unanswered approval standing Not delivered with Retry, Edit and Delete, an answer's fields, a do's steps marked done, an answer in words, a reply, and Resolve.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -44,9 +44,12 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: answer-decide-sent
 
-# A refused answer: the approval is drawn answered at once, then taken back
-# as the fixture refuses it, its pick back on the card and the refusal said
-# in the box's head.
+# An answer no reply came back for: the approval is drawn answered at once,
+# then, as the fixture leaves it unanswered, the card stands open again and
+# the answer stays at the thread's foot marked Not delivered, never back on
+# the card, as the panel keeps it. Its mark's menu says why, with Retry,
+# which goes again under the same key and is left unanswered again, Edit,
+# which takes the pick back onto the card, and Delete.
 - launchApp:
     clearState: true
     arguments:
@@ -62,11 +65,41 @@ appId: dev.vespin.ios
 - tapOn: "Approve, Recommended.*"
 - tapOn: "Send"
 - extendedWaitUntil:
-    visible: "No answer came back. Try again."
+    visible: "Not delivered.*"
     timeout: 5000
 - assertVisible: "Decline"
 - waitForAnimationToEnd
 - takeScreenshot: answer-refused
+- tapOn: "Not delivered.*"
+- assertVisible: "Retry"
+- assertVisible: "Edit"
+- assertVisible: "Delete"
+- takeScreenshot: answer-undelivered-menu
+- tapOn: "Retry"
+- extendedWaitUntil:
+    visible: "Not delivered.*"
+    timeout: 5000
+- tapOn: "Not delivered.*"
+- tapOn: "Edit"
+- extendedWaitUntil:
+    notVisible: "Not delivered.*"
+    timeout: 5000
+- assertVisible:
+    text: "Send"
+    enabled: true
+- waitForAnimationToEnd
+- takeScreenshot: answer-undelivered-edited
+# Sent again from the card, it stands Not delivered once more, and Delete
+# lets it go.
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Not delivered.*"
+    timeout: 5000
+- tapOn: "Not delivered.*"
+- tapOn: "Delete"
+- extendedWaitUntil:
+    notVisible: "Not delivered.*"
+    timeout: 5000
 
 # An answer's fields: a select's menu with its recommended option said so, a
 # toggle, and a number on the decimal pad; Send submits what was filled.

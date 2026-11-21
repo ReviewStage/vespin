@@ -1,7 +1,8 @@
-// _layout.tsx -- the Inbox's, Tasks', and Search's native stacks, each mounting the thread, task, and agent screens as its own, so one opened on a tab is pushed onto that tab's stack.
+// _layout.tsx -- the Inbox's, Tasks', and Search's native stacks, each mounting the thread, task, and agent screens as its own, so one opened on a tab is pushed onto that tab's stack, and saying where its bars start to the failure notice.
 
 import { iosTabOfGroup } from "@repo/features/ios-app-links";
-import { useRoute } from "expo-router";
+import { FailureNoticeBars } from "@repo/ui-native";
+import { useIsFocused, useRoute } from "expo-router";
 import { OwnTabContext } from "../../../tab-route.js";
 import { TabStack } from "../../../tab-stack.js";
 
@@ -12,12 +13,14 @@ export const unstable_settings = {
   search: { anchor: "search" },
 };
 
-/** Note that the stack names its tab to its screens by its own route in the tabs (`(inbox)`), since the router reports only the tab shown. */
+/** Note that the stack names its tab to its screens by its own route in the tabs (`(inbox)`), since the router reports only the tab shown. It tells the failure notice where the tab's bars start while it is shown, so a banner stands under them. */
 export default function TabStackLayout() {
   const { name } = useRoute();
+  const shown = useIsFocused();
 
   return (
     <OwnTabContext value={iosTabOfGroup(name)}>
+      <FailureNoticeBars inFront={shown} />
       <TabStack />
     </OwnTabContext>
   );

@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a view's VoiceOver Actions by name; and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -18,12 +18,15 @@ private enum ModifierName {
   static let cellFocusRingOff = "vespinCellFocusRingOff"
   static let columnSubtitle = "vespinColumnSubtitle"
   static let stackSubtitle = "vespinStackSubtitle"
+  static let stackScrollEdge = "vespinStackScrollEdge"
   static let sideMargins = "vespinSideMargins"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
+  static let heardActs = "vespinHeardActs"
   static let all = [
-    cellFocusRingOff, columnSubtitle, stackSubtitle, sideMargins, dragLink, dropPictures, dropLink,
+    cellFocusRingOff, columnSubtitle, stackSubtitle, stackScrollEdge, sideMargins, dragLink, dropPictures,
+    dropLink, heardActs,
   ]
 }
 
@@ -45,6 +48,9 @@ public final class NativeInteractionsModule: Module {
       ViewModifierRegistry.register(ModifierName.stackSubtitle) { params, appContext, _ in
         return try StackSubtitleModifier(from: params, appContext: appContext)
       }
+      ViewModifierRegistry.register(ModifierName.stackScrollEdge) { params, appContext, _ in
+        return try StackScrollEdgeModifier(from: params, appContext: appContext)
+      }
       ViewModifierRegistry.register(ModifierName.sideMargins) { params, appContext, _ in
         return try SideMarginsModifier(from: params, appContext: appContext)
       }
@@ -56,6 +62,9 @@ public final class NativeInteractionsModule: Module {
       }
       ViewModifierRegistry.register(ModifierName.dropLink) { params, appContext, eventDispatcher in
         return try DropLinkModifier(from: params, appContext: appContext, eventDispatcher: eventDispatcher)
+      }
+      ViewModifierRegistry.register(ModifierName.heardActs) { params, appContext, eventDispatcher in
+        return try HeardActsModifier(from: params, appContext: appContext, eventDispatcher: eventDispatcher)
       }
     }
 
@@ -158,23 +167,32 @@ internal struct ColumnSubtitleModifier: ViewModifier, Record {
 /// holds and sets that item's `subtitle` (iOS 26), clearing it as it leaves
 /// only while it still reads what the probe wrote. A probe with an empty
 /// subtitle that has written nothing touches nothing.
+///
+/// Where `leading`, it also stands the item's title at the bar's leading
+/// edge beside the back button (`UINavigationItem.ItemStyle.editor`), in
+/// the bar's own row. Note that a centered title had nowhere to stand on an
+/// iPad whose tab bar floats in the middle of that row, so UIKit dropped it
+/// with its subtitle into a row of its own over the page's content.
 internal struct StackSubtitleModifier: ViewModifier, Record {
   @Field var subtitle: String = ""
+  @Field var leading: Bool = false
 
   func body(content: Content) -> some View {
-    content.background(StackSubtitleProbe(subtitle: subtitle))
+    content.background(StackSubtitleProbe(subtitle: subtitle, leading: leading))
   }
 }
 
 /// The probe a screen carries: an empty view that writes its subtitle to the stack's item each time it's placed or redrawn.
 private struct StackSubtitleProbe: UIViewRepresentable {
   let subtitle: String
+  let leading: Bool
 
   func makeUIView(context: Context) -> StackSubtitleView {
     StackSubtitleView()
   }
 
   func updateUIView(_ view: StackSubtitleView, context: Context) {
+    view.leading = leading
     view.subtitle = subtitle
   }
 
@@ -184,11 +202,16 @@ private struct StackSubtitleProbe: UIViewRepresentable {
 }
 
 private final class StackSubtitleView: UIView {
-  /// The item this probe wrote to, and what it wrote there, so it clears only its own.
+  /// The item this probe wrote to, what it wrote there, and the style it found there before it stood the title at the leading edge, so it clears only its own.
   private weak var item: UINavigationItem?
   private var written: String?
+  private var styleFound: UINavigationItem.ItemStyle?
 
   var subtitle = "" {
+    didSet { write() }
+  }
+
+  var leading = false {
     didSet { write() }
   }
 
@@ -212,8 +235,12 @@ private final class StackSubtitleView: UIView {
     if let item, item.subtitle == written {
       item.subtitle = nil
     }
+    if let item, let styleFound, item.style == .editor {
+      item.style = styleFound
+    }
     item = nil
     written = nil
+    styleFound = nil
   }
 
   /// Sets the subtitle on the item of the nearest view controller a navigation controller holds, moving off an item it wrote to before.
@@ -223,11 +250,24 @@ private final class StackSubtitleView: UIView {
       return
     }
     if item !== held.navigationItem { clear() }
+    stand(held.navigationItem)
     if subtitle.isEmpty && written == nil { return }
     let shown = subtitle.isEmpty ? nil : subtitle
     held.navigationItem.subtitle = shown
     item = held.navigationItem
     written = shown
+  }
+
+  /// Stands the item's title at the leading edge while `leading`, keeping the style it found to put back, and puts that back once it isn't.
+  private func stand(_ held: UINavigationItem) {
+    if leading {
+      if styleFound == nil { styleFound = held.style }
+      held.style = .editor
+      item = held
+    } else if let styleFound {
+      if held.style == .editor { held.style = styleFound }
+      self.styleFound = nil
+    }
   }
 
   /// The view controller above the probe whose parent is a navigation controller: the stack's screen, past the hosting controller standing inside it.
@@ -238,6 +278,103 @@ private final class StackSubtitleView: UIView {
         return controller
       }
       responder = current.next
+    }
+    return nil
+  }
+}
+
+// MARK: - Scroll edge
+
+/// A list handed to the native stack's bar as the scroll view at its top edge, so a large title collapses into the bar as the list scrolls, as Mail's does.
+///
+/// Note that UIKit finds the scroll view a bar follows only as its screen's
+/// view's first descendant, or by the screen's `contentScrollView(for:)`,
+/// and a `Host`'s list stands inside a hosting controller that is the
+/// screen's child, so the bar never followed it: the large title stood still
+/// while the rows scrolled under it. So the list carries a probe that finds
+/// the scroll view it stands beside and sets it on the screen's controller
+/// (`setContentScrollView(_:for:)`). It acts only for a react-native-screens
+/// screen that stands a large title, so a SwiftUI split view's own columns,
+/// which SwiftUI follows itself, and a pushed page's inline bar are left as
+/// they were.
+internal struct StackScrollEdgeModifier: ViewModifier, Record {
+  func body(content: Content) -> some View {
+    content.background(StackScrollEdgeProbe())
+  }
+}
+
+/// The probe a list carries: an empty view behind it that hands the list's scroll view to the stack's screen each time it's placed or laid out.
+private struct StackScrollEdgeProbe: UIViewRepresentable {
+  func makeUIView(context: Context) -> StackScrollEdgeView {
+    StackScrollEdgeView()
+  }
+
+  func updateUIView(_ view: StackScrollEdgeView, context: Context) {
+    view.handOver()
+  }
+}
+
+private final class StackScrollEdgeView: UIView {
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isUserInteractionEnabled = false
+    isAccessibilityElement = false
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    handOver()
+    // Note that the list's own scroll view may be placed after its background, so the probe looks again once this pass settles.
+    DispatchQueue.main.async { [weak self] in self?.handOver() }
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    handOver()
+  }
+
+  /// Sets the list's scroll view as the top edge's on the screen that stands a large title, where it isn't already.
+  func handOver() {
+    guard window != nil, let screen = largeTitleScreen(), let scrollView = nearestScrollView() else { return }
+    if screen.contentScrollView(for: .top) === scrollView { return }
+    screen.setContentScrollView(scrollView, for: .top)
+  }
+
+  /// The react-native-screens screen above the probe, past the hosting controller standing inside it, where its bar stands a large title.
+  private func largeTitleScreen() -> UIViewController? {
+    var responder: UIResponder? = next
+    while let current = responder {
+      if let controller = current as? UIViewController, let stack = controller.parent as? UINavigationController {
+        let native = NSStringFromClass(type(of: stack)).hasPrefix("RNS")
+        return native && controller.navigationItem.largeTitleDisplayMode == .always ? controller : nil
+      }
+      responder = current.next
+    }
+    return nil
+  }
+
+  /// The scroll view nearest the probe: the first found under the closest of its ancestors that holds one, which is the list it stands behind.
+  private func nearestScrollView() -> UIScrollView? {
+    var ancestor = superview
+    while let current = ancestor {
+      if let found = firstScrollView(under: current) { return found }
+      if current.next is UIViewController { return nil }
+      ancestor = current.superview
+    }
+    return nil
+  }
+
+  /// The first scroll view under `view`, breadth first, passing over the probe itself.
+  private func firstScrollView(under view: UIView) -> UIScrollView? {
+    var queue = view.subviews.filter { $0 !== self }
+    while !queue.isEmpty {
+      let next = queue.removeFirst()
+      if let scrollView = next as? UIScrollView { return scrollView }
+      queue.append(contentsOf: next.subviews)
     }
     return nil
   }
@@ -378,6 +515,38 @@ internal struct DropLinkModifier: ViewModifier, Record {
         }
       }
       return true
+    }
+  }
+}
+
+// MARK: - VoiceOver
+
+/// A view's VoiceOver Actions, the rotor's list, each by its name in order, which hand JavaScript the place of the one VoiceOver ran (`heardActions` in `interactions.ts`).
+///
+/// Note that SwiftUI's own rows offer a swipe's acts and each item of a
+/// context menu as Actions on their own, the same act twice and a
+/// submenu's items with no verb; a row that ignores its children's
+/// accessibility offers these alone, read once from its menu.
+internal struct HeardActsModifier: ViewModifier, Record {
+  @Field var names: [String] = []
+  var eventDispatcher: EventDispatcher?
+
+  init() {}
+
+  init(from params: Dict, appContext: AppContext, eventDispatcher: EventDispatcher) throws {
+    try self = .init(from: params, appContext: appContext)
+    self.eventDispatcher = eventDispatcher
+  }
+
+  func body(content: Content) -> some View {
+    let dispatcher = eventDispatcher
+    // Note that the names are handed over last first, because the Actions SwiftUI makes of them stood in reverse, Open last (seen on the iOS 27.2 simulator's accessibility tree); each still sends its own place.
+    return content.accessibilityActions {
+      ForEach(Array(names.enumerated()).reversed(), id: \.offset) { index, name in
+        Button(name) {
+          dispatcher?([ModifierName.heardActs: ["index": index]])
+        }
+      }
     }
   }
 }

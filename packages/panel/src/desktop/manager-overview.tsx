@@ -60,8 +60,9 @@ import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
-import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
+import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { useListedAgentPullRequests, useListedAgents } from "../tasks/use-workspace-agents.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { PersonSectionFrame } from "./person-frame.js";
 
@@ -174,7 +175,7 @@ function ManagerAgents({
   const queryClient = useQueryClient();
 
   const control: AgentsControl = {
-    ...tasks.agents,
+    ...placeAgents(tasks.agents),
     readAgent: (agentId: string) => readAgentById(queryClient, agentId),
   };
 
@@ -314,7 +315,9 @@ export function ManagerOverview({
 }): React.JSX.Element {
   const now = useMinute();
   const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
-  const { liveAgents, listedPullRequests } = tasks;
+  // Note that every agent is read only while the overview stands, since it counts the Manager's agents among them.
+  const liveAgents = useListedAgents(tasks.agentsCarried);
+  const listedPullRequests = useListedAgentPullRequests(tasks.agentsCarried);
 
   const overview = useMemo(
     () =>

@@ -65,6 +65,9 @@ export const STOP_FAILED = "The agent could not be stopped. Try again.";
 /** What an agent's archive the service refused says, wherever it was pressed. */
 export const ARCHIVE_FAILED = "The agent could not be archived.";
 
+/** What an agent's unarchive the service refused says, wherever it was pressed. */
+export const UNARCHIVE_FAILED = "The agent could not be unarchived.";
+
 /** What an agent's rename the service refused says, wherever it was asked. */
 export const RENAME_FAILED = "The agent could not be renamed.";
 
@@ -214,6 +217,18 @@ export function billingRequiredWords(
   const words = BILLING_REQUIRED_WORDS[refusal ?? BILLING_REFUSAL.SET_UP];
 
   return manager === true ? words.manager : words.member;
+}
+
+/** What a refused New Manager says where its words differ from a Start's: the workspace unreached, or Managers off for it; none for every other refusal, which says a Start's words. */
+export function managerCreateRefusalWords(failure: AgentCallFailure): string | undefined {
+  switch (failure) {
+    case AGENT_CALL_FAILURE.NOT_FOUND:
+      return "This workspace can't be reached.";
+    case AGENT_CALL_FAILURE.NOT_PERMITTED:
+      return "Managers are off for this workspace.";
+    default:
+      return undefined;
+  }
 }
 
 /** What a Start that did not start says, by why. */

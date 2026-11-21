@@ -793,6 +793,22 @@ export function selectIntegrations(
   return accountId === undefined ? undefined : state[LIVE_READ.INTEGRATIONS][accountId];
 }
 
+/** The automations the host holds for one workspace, newest made first, with every switch turned and run started drawn over them (`ACT_KIND.AUTOMATIONS_FOLLOW`), as a `select`; none before they are read. */
+export function selectWorkspaceAutomations(
+  workspaceId: string,
+): (state: AppStateSnapshot) => AppStateSnapshot[typeof LIVE_READ.AUTOMATIONS][string] | undefined {
+  return (state) => state[LIVE_READ.AUTOMATIONS][workspaceId];
+}
+
+/** The runs the host holds for one automation, newest fired first (`ACT_KIND.AUTOMATIONS_FOLLOW`), as a `select`; none before they are read. */
+export function selectAutomationRuns(
+  automationId: string,
+): (
+  state: AppStateSnapshot,
+) => AppStateSnapshot[typeof LIVE_READ.AUTOMATION_RUNS][string] | undefined {
+  return (state) => state[LIVE_READ.AUTOMATION_RUNS][automationId];
+}
+
 /** The memories the host holds for one workspace, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
 export function selectWorkspaceMemories(
   workspaceId: string,

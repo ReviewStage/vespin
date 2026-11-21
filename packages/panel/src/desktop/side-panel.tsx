@@ -182,7 +182,14 @@ import {
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
-import type { AgentsControl, HeldPeople } from "../tasks/use-agents.js";
+import {
+  type AgentsControl,
+  type AgentsSource,
+  agentsNow,
+  type HeldAgents,
+  type HeldPeople,
+  useTaskAgents,
+} from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { OnLeavingHere, PullRequestsOnGitHub } from "../tasks/use-open-link.js";
 import {
@@ -613,7 +620,7 @@ type PullRequestNames = (pullRequest: NumberedAddress) => NamedPullRequest | und
  * agent beside the pull request on its card, and never what a tab opens.
  */
 export function listedAgentOf(
-  agents: AgentsControl,
+  agents: Pick<AgentsControl, "agents" | "archived" | "pullRequests">,
   pullRequest: NumberedAddress,
 ): { readonly agent: AgentSummary; readonly pullRequest: AgentPullRequest } | undefined {
   for (const agent of everyTaskAgent(agents)) {
@@ -2015,7 +2022,7 @@ interface DelegationChoices {
 function delegationChoices(
   delegation: NonNullable<SubagentStripTab["delegation"]>,
   subagent: string,
-  agents: AgentsControl,
+  agents: Pick<AgentsControl, "agents">,
   held: HeldTranscripts,
 ): DelegationChoices {
   const parent = agents.agents?.find((agent) => agent.id === delegation.agent);
@@ -2033,7 +2040,7 @@ function delegationChoices(
  */
 function subagentCardReading(
   drawn: DrawnSubagent,
-  agents: AgentsControl,
+  agents: Pick<AgentsControl, "agents">,
   held: HeldTranscripts,
   chosen: boolean,
 ): () => CardReading {
@@ -2112,7 +2119,8 @@ export interface TaskCards {
  * it opens, so a kind added to `TOOL_TARGET` is a choice made here.
  */
 export function taskCards(input: {
-  agents: AgentsControl;
+  /** The task's agents, the open task's read as each card or tile is asked for (`agentsNow`). */
+  agents: HeldAgents;
   held: HeldTranscripts;
   chosen: (tab: StripTab) => boolean;
   /** The task the transcript stands on, which a page's row reads its card from and a plan's row names; none where its rows open neither. */
@@ -2120,16 +2128,24 @@ export function taskCards(input: {
   /** The description's task, which an agent's description card names as its sender. */
   task?: BriefTask | undefined;
 }): TaskCards {
-  const { agents, held, chosen, pages, task } = input;
+  const { held, chosen, pages, task } = input;
+  const { models } = input.agents;
+  // Note that the agents are read as each card or tile is drawn, so the cards stand the same value across a step of a turn.
+  const agentsAt = () => agentsNow(input.agents);
   // The task the transcript stands on, whose Plan tab a row opens.
   const taskId = pages?.taskId;
 
   const subjectOf = (opened: ToolTarget, name: string | undefined): CardSubject | undefined => {
     switch (opened.kind) {
       case TOOL_TARGET.AGENT: {
-        const subject = agentSubject(agents, opened.agent, held, chosen(agentTab(opened.agent)));
+        const subject = agentSubject(
+          agentsAt(),
+          opened.agent,
+          held,
+          chosen(agentTab(opened.agent)),
+        );
 
-        return { kind: TAB_KIND.AGENT, subject, models: agents.models };
+        return { kind: TAB_KIND.AGENT, subject, models };
       }
 
       case TOOL_TARGET.PAGE:
@@ -2155,7 +2171,7 @@ export function taskCards(input: {
 
   // An agent the plan lists is named on a call's row as its tab wears it; one it does not is left to the call's answer.
   const agent = (agentId: string) => {
-    const subject = agentSubject(agents, agentId, held, false);
+    const subject = agentSubject(agentsAt(), agentId, held, false);
 
     return subject.agent === undefined ? undefined : subject.tile;
   };
@@ -2165,8 +2181,8 @@ export function taskCards(input: {
       <AgentTabCard
         name={drawn.label}
         untitled={drawn.untitled}
-        models={agents.models ?? []}
-        read={subagentCardReading(drawn, agents, held, chosen(drawn.tab))}
+        models={models ?? []}
+        read={subagentCardReading(drawn, agentsAt(), held, chosen(drawn.tab))}
       />
     );
 
@@ -2820,7 +2836,7 @@ export function SidePanel({
   taskId,
   repository,
   pages,
-  agents,
+  agents: agentsSource,
   openAgents,
   shownAgent,
   views,
@@ -2844,7 +2860,7 @@ export function SidePanel({
   repository: string | null;
   /** The pages agents wrote for the plan, each by its newest version; none where it has none. */
   pages: readonly PageLine[] | undefined;
-  agents: AgentsControl;
+  agents: AgentsSource;
   /** The task's agents whose tabs stand open in the task's column, whose workers' tabs stand here; nothing while unread. */
   openAgents: readonly string[] | undefined;
   /** The agent whose tab follows its run in the plan's column, whose card previews its latest step (`followedAgent`); none while another tab is shown or the column is out of sight. */
@@ -2893,6 +2909,8 @@ export function SidePanel({
   /** The tasks a page or a file of another task shown here is named by under the bar, with the door that opens it there; none where no such line stands. */
   taskOfTab?: TaskOfTab | undefined;
 }): React.JSX.Element | null {
+  // Note that the open task's agents' rows are read here, where they are drawn, so a step of a turn draws this and not the page around it.
+  const agents = useTaskAgents(agentsSource);
   // A phone's panel over a page other than a task's keeps its own Activity: whether it lists its tabs, and the tab shown.
   const [ownListed, setOwnListed] = useState(false);
   const [ownShown, setOwnShown] = useState<ShownTab | undefined>(undefined);

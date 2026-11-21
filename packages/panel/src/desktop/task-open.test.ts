@@ -18,7 +18,12 @@ import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, tasksControl, tellingTranscripts } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  taskAgentsOf,
+  tasksControl,
+  tellingTranscripts,
+} from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
@@ -115,10 +120,12 @@ function opened(input: { read: boolean; listed: boolean }): TasksControl {
       tab: agentTab(AGENT.id),
       openAgents: input.listed ? [AGENT.id] : undefined,
     },
-    agents: agentsControl({
-      agents: input.listed ? [AGENT] : undefined,
-      agentIds: input.listed ? [AGENT.id] : undefined,
-    }),
+    agents: taskAgentsOf(
+      agentsControl({
+        agents: input.listed ? [AGENT] : undefined,
+        agentIds: input.listed ? [AGENT.id] : undefined,
+      }),
+    ),
   });
 }
 

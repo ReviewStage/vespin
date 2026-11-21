@@ -1224,7 +1224,7 @@ test("a message another agent sent draws as its sender's bubble at the left, nam
     /Invite expiry/u,
   );
   assert.equal(
-    bubble.querySelector(".message-content")?.textContent?.trim(),
+    bubble.querySelector(".ui-chat-bubble")?.textContent?.trim(),
     "Rebase before you push.",
   );
 });
@@ -1295,10 +1295,7 @@ test("a teammate's message on a thread is headed by who sent it, what they did a
     /^Ada Lovelace\s*wrote in.*Which PRs first\?/u,
     "who sent it heads the line, over its words",
   );
-  assert.equal(
-    container.querySelector(".message-content")?.textContent?.trim(),
-    "Which PRs first?",
-  );
+  assert.equal(container.querySelector(".ui-chat-bubble")?.textContent?.trim(), "Which PRs first?");
 });
 
 test("a comment that reached the agent is headed as a comment on the page it is on, its member's words under what it is on, never the instructions the agent was handed", () => {
@@ -1331,7 +1328,7 @@ test("a comment that reached the agent is headed as a comment on the page it is 
 
   const head = container.querySelector<HTMLElement>("[data-comment-line]");
   assert.match(head?.textContent ?? "", /^commented on.*Invite funnel/u);
-  const content = container.querySelector(".message-content")?.textContent ?? "";
+  const content = container.querySelector(".ui-chat-bubble")?.textContent ?? "";
   assert.match(content, /Expired 9\s*Can this row say how many were sent again\?/u);
   assert.doesNotMatch(content, /read_page/u, "the instructions stay the agent's");
 });

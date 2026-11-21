@@ -14,7 +14,7 @@
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, type SendingMessage } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
@@ -28,7 +28,12 @@ import {
   type TaskListParts,
 } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
+import {
+  type AppStateSnapshot,
+  OWN_TRANSCRIPT,
+  RUN_PROFILE,
+  type RunProfile,
+} from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type {
   ActPortClient,
@@ -38,13 +43,16 @@ import type {
 } from "@repo/host/contract";
 import {
   type AgentChoices,
+  type AutomationSwitches,
   agentChangeOf,
+  automationSwitchOf,
   chosenTasksView,
   type InboxReadMarks,
   type InboxReminders,
   type InboxSentReplies,
   inboxActAnswer,
   inboxAppState,
+  inboxAutomationsAppState,
   inboxReadMarksAppState,
   inboxRemindersAppState,
   inboxSentFile,
@@ -67,6 +75,7 @@ import {
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
+import { sentLineId } from "@repo/wire/host-ids";
 import { Predicate } from "effect";
 
 /** The one workspace a fixture run's account is in. */
@@ -179,6 +188,12 @@ const MEMORY_WORDS = new WeakMap<object, SavedMemoryWords>();
 /** No memory's words saved yet. */
 const NO_MEMORY_WORDS: SavedMemoryWords = new Map();
 
+/** The switches each run turned on the fixture's automations, by the store the run stages, each map replaced whole as one is turned. */
+const SWITCHES = new WeakMap<object, AutomationSwitches>();
+
+/** No automation's switch turned yet. */
+const NO_SWITCHES: AutomationSwitches = new Map();
+
 /** What each run changed of the fixture's agents, by the store the run stages, each map replaced whole as one is changed. */
 const CHOICES = new WeakMap<object, AgentChoices>();
 
@@ -268,6 +283,84 @@ function stagedKeys(held: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.P
   return { ...keys, [accountId]: { rows: { keys: [], subscriptions: [] } } };
 }
 
+/** The messages to an agent the run sent, by the agent, in the order sent: on their way where the run took them, and left unanswered where `-refuseWrites` refused them, kept as the host keeps a refused line. */
+const KEPT_SENDS = new WeakMap<object, ReadonlyMap<string, readonly SendingMessage[]>>();
+
+/** No messages sent. */
+const NO_KEPT_SENDS: ReadonlyMap<string, readonly SendingMessage[]> = new Map();
+
+/**
+ * The document with each message the run sent standing in its agent's
+ * transcript as the host draws one (`AppTranscript.sending`): one taken on
+ * its way, since nothing the run stages moves and the host lays its own
+ * lines over no transcript it did not read, and one refused marked Not
+ * delivered with Retry, Edit, and Delete, which the fixture answers at the
+ * act port before the host's own record could keep it.
+ */
+function sendsAppState(
+  state: AppStateSnapshot,
+  sends: ReadonlyMap<string, readonly SendingMessage[]>,
+): AppStateSnapshot {
+  if (sends.size === 0) return state;
+  const held = state[LIVE_READ.TRANSCRIPT];
+  const laid = { ...held };
+
+  for (const [agentId, lines] of sends) {
+    const rows = held[agentId]?.[OWN_TRANSCRIPT]?.rows;
+
+    if (rows !== undefined)
+      laid[agentId] = { ...held[agentId], [OWN_TRANSCRIPT]: { rows: { ...rows, sending: lines } } };
+  }
+
+  return { ...state, [LIVE_READ.TRANSCRIPT]: laid };
+}
+
+/**
+ * Keeps a message to an agent as a line under its key, refused where
+ * `-refuseWrites` left it unanswered and on its way where the run took it,
+ * in place of one sent before under the same key, as a Retry is, or lets one
+ * go on its Unsend, and lays them over the document at once; answers whether
+ * the act was one of those.
+ */
+function keepSend(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+  refused: boolean,
+): boolean {
+  const held = KEPT_SENDS.get(state) ?? NO_KEPT_SENDS;
+
+  if (kind === ACT_KIND.AGENTS_UNSEND) {
+    // SAFETY: the payload is the kind's, which the guard above names.
+    const { agentId, lineId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_UNSEND>;
+    const lines = (held.get(agentId) ?? []).filter((line) => line.id !== lineId);
+    KEPT_SENDS.set(state, new Map(held).set(agentId, lines));
+    stageFixture(state);
+
+    return true;
+  }
+
+  if (kind !== ACT_KIND.AGENTS_MESSAGE) return false;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const sent = payload as PortActPayload<typeof ACT_KIND.AGENTS_MESSAGE>;
+  const id = sentLineId(sent.clientKey);
+
+  const line: SendingMessage = {
+    id,
+    clientKey: sent.clientKey,
+    text: sent.text,
+    sentAt: Date.now(),
+    steers: sent.steers === true,
+    ...(refused ? { refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } } : undefined),
+  };
+
+  const lines = [...(held.get(sent.agentId) ?? []).filter((each) => each.id !== id), line];
+  KEPT_SENDS.set(state, new Map(held).set(sent.agentId, lines));
+  stageFixture(state);
+
+  return true;
+}
+
 /**
  * Lays the fixture profile's data over the host's document; nothing in a
  * live run. Where `updateNeeded`, as `-updateNeeded true` asks, the network
@@ -318,9 +411,12 @@ export function stageFixture(
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
 
+  const sendsKept = sendsAppState(saved, KEPT_SENDS.get(state) ?? NO_KEPT_SENDS);
+  const switched = inboxAutomationsAppState(sendsKept, SWITCHES.get(state) ?? NO_SWITCHES);
+
   const reminded = MACHINE_ASKED.has(state)
-    ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
-    : saved;
+    ? machineAskAppState(switched, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
+    : switched;
 
   const listed = stagedTasks(
     held,
@@ -461,6 +557,20 @@ function keepMemory(
   stageFixture(state);
 }
 
+/** Keeps an automation's switch the fixture turned, and lays it over the list at once, as the host draws a switch turned (`inboxAutomationsAppState`); nothing for any other act. */
+function keepAutomationSwitch(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  const turned = automationSwitchOf(kind, payload);
+
+  if (turned === undefined) return;
+  const switches = new Map(SWITCHES.get(state) ?? NO_SWITCHES);
+  SWITCHES.set(state, switches.set(turned.automationId, turned.enabled));
+  stageFixture(state);
+}
+
 /** Keeps a change of one of its agents the fixture took, its model, mode, servers, name, or pin, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepChoice(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
@@ -583,8 +693,9 @@ function editConflict({
  * agent's notice with Try again once its sheet has closed, and a follower
  * added, a memory deleted or a thread's reminder or reply unanswered, so a
  * flow sees the notice over Add a follower's sheet, Settings', and a
- * thread's composer, the keyboard up or down, and a refused reply's words
- * and pictures put back on its box, and a description's edit met by the
+ * thread's composer, the keyboard up or down, and a reply standing on its
+ * thread marked Not delivered, a message to an agent standing in its
+ * transcript marked Not delivered (`keepSend`), and a description's edit met by the
  * invitations agent's note written meanwhile over the same lines, so a flow
  * sees Edit description's conflict ask.
  */
@@ -606,7 +717,7 @@ const REFUSED_WRITES: ReadonlyMap<
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.AGENTS_INBOX_REMIND, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
-  // Note that a thread's reply is unanswered too, so a flow sees its words and pictures put back on the box with the refusal's note.
+  // Note that a thread's reply is unanswered too, so a flow sees it stand on its thread marked Not delivered.
   [ACT_KIND.AGENTS_INBOX_MESSAGE, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
@@ -637,9 +748,10 @@ function memberAt<Member>(
  * mark and a task's each move their row's dot (`keepInboxReadMark`,
  * `keepReadMark`), and a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
- * would, so a screen draws it merged or out of the queue, and a reminder
- * set or cleared moves its item there, as the host draws one, so the Inbox
- * puts it away under Reminders, and a change of an agent's model, permission
+ * would, so a screen draws it merged, out of the queue, closed, or a
+ * draft, and a reminder set or cleared moves its item there, as the host draws one, so the Inbox
+ * puts it away under Reminders, an automation's switch turned moves it on
+ * the list there, and a change of an agent's model, permission
  * mode, servers, name, or pin moves the agent there, as the host draws one,
  * and a change to its queue moves the queue there, a Stop pausing it, so a
  * flow may move a queued message and Resume.
@@ -664,6 +776,16 @@ export function fixtureActs(
         const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
 
         if (refused !== undefined) return Promise.resolve(refused(payload));
+
+        // Note that a message to an agent is left unanswered too, and kept as the host keeps a refused line, so a flow sees it stand Not delivered.
+        // SAFETY: the port is keyed by act kind.
+        if (refusesWrites && keepSend(state, kind as PortActKind, payload, true)) {
+          return Promise.resolve(
+            kind === ACT_KIND.AGENTS_UNSEND
+              ? undefined
+              : { failure: AGENT_CALL_FAILURE.UNANSWERED },
+          );
+        }
 
         // SAFETY: the port is keyed by act kind.
         const startRefused = refusesWrites
@@ -701,9 +823,14 @@ export function fixtureActs(
         // SAFETY: as above.
         keepMemory(state, kind as PortActKind, payload);
         // SAFETY: as above.
+        keepAutomationSwitch(state, kind as PortActKind, payload);
+        // SAFETY: as above.
         keepMachineAnswer(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepSentReply(state, kind as PortActKind, payload, staged.answer);
+        // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
+        // SAFETY: as above.
+        keepSend(state, kind as PortActKind, payload, false);
 
         return Promise.resolve(staged.answer);
       };

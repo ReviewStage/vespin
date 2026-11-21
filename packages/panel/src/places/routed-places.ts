@@ -25,7 +25,7 @@ import { TASK_REGION } from "@repo/features/tasks-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { SETTINGS_PAGE_TITLE } from "@repo/settings/settings-views";
 import type { StripTab } from "@repo/ui/tab-strip-model";
-import { type HistoryLocation, useRouter } from "@tanstack/react-router";
+import { type HistoryLocation, type RouterHistory, useRouter } from "@tanstack/react-router";
 import { useMemo, useSyncExternalStore } from "react";
 import { adminLinkFields, adminViewWords } from "../admin/routing.js";
 import {
@@ -725,7 +725,7 @@ export type RoutedPlace = (typeof ROUTED_PLACE)[keyof typeof ROUTED_PLACE];
 const PLACES: readonly RoutedPlace[] = Object.values(ROUTED_PLACE);
 
 /** What a place's gate reads of a match: its route and the params it was matched with. */
-interface RouteMatchSeen {
+export interface RouteMatchSeen {
   readonly routeId: string;
   readonly params: PlaceParams;
 }
@@ -814,11 +814,34 @@ export function routedStepStands(
   return !place.listedOnly || params.workspace === undefined || there.listed(params.workspace);
 }
 
-/** The location the router's history stands on, redrawn as it moves. */
+/** The entry each router's history stood on as the readers of its address last read it. */
+const entriesRead = new WeakMap<RouterHistory, HistoryLocation>();
+
+/**
+ * The entry the router's history stands on, as the readers of its address
+ * read it: a step pushed or gone to is another entry, and so is a write in
+ * place at another address. Note that a write in place at the same address,
+ * as the window's own step saved into the entry standing
+ * (`window-history.ts`), reads as the entry it wrote over, because a reader
+ * drawn again for it would draw every page under it again for nothing, while
+ * a link opened again, pushed at the same address, is a new entry, which a
+ * page reads as opened again.
+ */
+function entryOf(history: RouterHistory): HistoryLocation {
+  const now = history.location;
+  const read = entriesRead.get(history);
+
+  if (read?.href === now.href && read.state.__TSR_index === now.state.__TSR_index) return read;
+  entriesRead.set(history, now);
+
+  return now;
+}
+
+/** The entry the router's history stands on, redrawn as it moves to another (`entryOf`). */
 function useHistoryLocation(): HistoryLocation {
   const { history } = useRouter();
 
-  return useSyncExternalStore(history.subscribe, () => history.location);
+  return useSyncExternalStore(history.subscribe, () => entryOf(history));
 }
 
 /** Where the window stands by the router: the routed place there, where one is, the address, the route its address ends on, and the params and query its routes read. */
@@ -830,6 +853,22 @@ export interface WindowPlace {
   readonly params: PlaceParams;
   /** The keys its query carries, each the string it is, as the router reads them (`panel-router.tsx`). */
   readonly search: Readonly<Record<string, string>>;
+}
+
+/** Where the window stands at `href`, by the routes `matches` names of its path and the reader's `access`. */
+function windowPlaceOf(
+  matches: readonly RouteMatchSeen[],
+  access: RouteAccess,
+  href: string,
+  search: string,
+): WindowPlace {
+  return {
+    place: routedPlaceOf(matches, access),
+    href,
+    leaf: matches.at(-1)?.routeId,
+    params: matches.at(-1)?.params ?? {},
+    search: Object.fromEntries(new URLSearchParams(search)),
+  };
 }
 
 /**
@@ -847,13 +886,41 @@ export function useWindowPlace(): WindowPlace {
   const matches = useMemo(() => router.matchRoutes(pathname), [router, pathname]);
 
   return useMemo(
-    () => ({
-      place: routedPlaceOf(matches, access),
-      href,
-      leaf: matches.at(-1)?.routeId,
-      params: matches.at(-1)?.params ?? {},
-      search: Object.fromEntries(new URLSearchParams(search)),
-    }),
+    () => windowPlaceOf(matches, access, href, search),
     [matches, access, href, search],
   );
+}
+
+/**
+ * What a part draws of where the window stands, `select`ed from it (`useWindowPlace`),
+ * a value compared by identity: the part is drawn again only as that answer moves,
+ * so one drawing which place stands, not the address, holds as the window moves
+ * from one task's address to another's.
+ */
+export function useWindowPlaceOf<Answer>(select: (here: WindowPlace) => Answer): Answer {
+  const router = useRouter();
+  const access = useRouteAccess();
+  const { history } = router;
+
+  return useSyncExternalStore(history.subscribe, () => {
+    const { pathname, href, search } = entryOf(history);
+
+    return select(windowPlaceOf(router.matchRoutes(pathname), access, href, search));
+  });
+}
+
+/**
+ * Where the window stands as it is called, as `useWindowPlace` reads it, for
+ * a door that acts on it at a press: its holder draws nothing of it, so is
+ * drawn again for no move of the window.
+ */
+export function useWindowPlaceNow(): () => WindowPlace {
+  const router = useRouter();
+  const access = useRouteAccess();
+
+  return () => {
+    const { pathname, href, search } = router.history.location;
+
+    return windowPlaceOf(router.matchRoutes(pathname), access, href, search);
+  };
 }

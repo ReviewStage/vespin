@@ -31,7 +31,7 @@ import { ActorRef, PersonCard } from "../actor-ref.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { agentName, providerOf } from "./agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
-import type { AgentsControl } from "./use-agents.js";
+import { agentsNow, type HeldAgents, useTaskAgent } from "./use-agents.js";
 
 /**
  * edit-ref.tsx -- who wrote a description's edit, named on their own face wherever the window says it: the "Edited by" line over the description, each section's byline, and the task's ⋯ menu.
@@ -57,7 +57,8 @@ const ACTOR_OF_GLYPH = {
 
 /** The task's coding agents, among which an agent's edit is found, and what opens one's tab where the place offers it. */
 export interface EditAgents {
-  readonly control: Pick<AgentsControl, "agents" | "archived" | "models" | "me" | "pullRequests">;
+  /** The place's agents, the open task's read by id where it is theirs (`useTaskAgent`). */
+  readonly control: HeldAgents;
   readonly onOpen: ((agentId: string) => void) | undefined;
 }
 
@@ -85,6 +86,8 @@ function agentOf(
 
   if (agentId === undefined || agents === undefined) return undefined;
   const { control } = agents;
+
+  if ("rows" in control) return control.rowNow(agentId);
 
   return (
     control.agents?.find((each) => each.id === agentId) ??
@@ -172,6 +175,8 @@ function WriterRef({
   sentence: boolean;
   faceOnly: boolean;
 }): React.JSX.Element | null {
+  // Note that the agent is followed by its id alone, so a step of its turn draws this line again and no other agent's does.
+  useTaskAgent(place.agents?.control, edit.agentId);
   const agent = agentOf(edit, place.agents);
   const actor = writerOf(edit, place);
 
@@ -187,7 +192,7 @@ function WriterRef({
   }
 
   const { control, onOpen } = place.agents;
-  const subject = agentSubject(control, agent.id, NOTHING_HELD, false);
+  const subject = agentSubject(agentsNow(control), agent.id, NOTHING_HELD, false);
 
   return (
     <ActorRef

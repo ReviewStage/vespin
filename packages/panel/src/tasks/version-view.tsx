@@ -5,6 +5,7 @@ import {
   versionDiff,
 } from "@repo/features/description-version-diff";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { Description } from "@repo/features/task-wire";
 import { dayAndTimeText, momentText } from "@repo/features/time-format";
 import { readFailedWords } from "@repo/features/words";
 import type { PortActKind } from "@repo/host/contract";
@@ -212,6 +213,29 @@ function VersionSkeleton({
   );
 }
 
+const DIFFS = new WeakMap<object, { previous: object | null; diff: VersionDiff }>();
+
+/**
+ * A version's changes against the one before it, compared once per pair:
+ * the page and the history's section list both draw it on every render,
+ * and the comparison parses both bodies. Note that the read's descriptions
+ * are the query's own objects, so they hold their identity between renders
+ * and a new read, which is a new pair, misses.
+ */
+export function versionDiffOf(read: {
+  previous: Description | null;
+  description: Description;
+}): VersionDiff {
+  const kept = DIFFS.get(read.description);
+
+  if (kept !== undefined && kept.previous === read.previous) return kept.diff;
+
+  const diff = versionDiff(read.previous, read.description);
+  DIFFS.set(read.description, { previous: read.previous, diff });
+
+  return diff;
+}
+
 /** What the page says where the version's read did not answer. */
 const VERSION_FAILED = readFailedWords("the version");
 
@@ -247,7 +271,7 @@ function VersionContent({
     );
   }
 
-  const diff = versionDiff(read.previous, read.description);
+  const diff = versionDiffOf(read);
   // Note that the first version is compared with nothing, so it is never said to have changed nothing.
   const unchanged = read.previous !== null && !diff.changed;
 

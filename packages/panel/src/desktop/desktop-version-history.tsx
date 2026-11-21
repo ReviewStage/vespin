@@ -6,7 +6,6 @@ import {
   type ChangedSection,
   changedSections,
   VERSION_CHANGE,
-  versionDiff,
 } from "@repo/features/description-version-diff";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
@@ -87,6 +86,7 @@ import {
   sourceLabel,
 } from "../tasks/description-history-model.js";
 import type { MentionedTask } from "../tasks/task-mentions.js";
+import { useTaskAgents } from "../tasks/use-agents.js";
 import {
   type DescriptionHistoryControl,
   HISTORY_READ,
@@ -100,6 +100,7 @@ import {
   VersionPageSkeleton,
   type VersionRestore,
   VersionView,
+  versionDiffOf,
 } from "../tasks/version-view.js";
 import { type MenuAction, rowMenu } from "./action-menu.js";
 import { backPlaceOf } from "./back-place.js";
@@ -648,7 +649,7 @@ function openedSections(
 
   if (read.kind !== HISTORY_READ.READY) return undefined;
 
-  return changedSections(versionDiff(read.previous, read.description), read.previous === null);
+  return changedSections(versionDiffOf(read), read.previous === null);
 }
 
 /** Whether the open revision's version failed to read, so its sections will not stand until it is read again. */
@@ -735,7 +736,10 @@ const VERSION_LIST = "Versions";
 const VERSION_LIST_PLACE = "versions";
 
 /** The open plan's history as the view's subject: its name, its agents, and the places in the window its revisions were written. */
-export function taskVersionSubject(tasks: TasksControl): VersionSubject {
+export function taskVersionSubject(
+  tasks: TasksControl,
+  agents: readonly AgentSummary[] | undefined,
+): VersionSubject {
   const { region, boundFor } = tasks;
   const task = region.kind === TASK_REGION.READY ? region.task : undefined;
   const workspace = tasks.workspaces.find((each) => each.id === task?.workspaceId);
@@ -757,7 +761,7 @@ export function taskVersionSubject(tasks: TasksControl): VersionSubject {
           },
     versions: tasks.history,
     title: task?.name,
-    agents: tasks.agents.agents ?? [],
+    agents: agents ?? [],
     summary: revisionSummary,
     onShowSource:
       boundFor === undefined ? undefined : (source) => tasks.onShowSource(boundFor, source),
@@ -1159,5 +1163,8 @@ export function TaskVersionHistory({
 }: Omit<Parameters<typeof DesktopVersionHistory>[0], "subject"> & {
   tasks: TasksControl;
 }): React.JSX.Element {
-  return <DesktopVersionHistory {...view} subject={taskVersionSubject(tasks)} />;
+  // Note that the open task's agents are read while its history stands, which names a revision's harness by its agent.
+  const { agents } = useTaskAgents(tasks.agents);
+
+  return <DesktopVersionHistory {...view} subject={taskVersionSubject(tasks, agents)} />;
 }

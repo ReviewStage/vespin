@@ -63,6 +63,7 @@ import {
   handInbox,
   listedAgent,
   type TasksControlOverrides,
+  taskAgentsOf,
   tasksControl,
   waitingOf,
 } from "../testing/tasks-control.js";
@@ -434,7 +435,7 @@ function mountWith(
 
   const control = (more: TasksControlOverrides) =>
     tasksControl({
-      liveAgents: followedOf(more.tasks ?? overrides.tasks ?? TASKS),
+      listedAgents: followedOf(more.tasks ?? overrides.tasks ?? TASKS),
       me: DEAN.userId,
       workspace: { ...ACME, memberCount },
       tasks: TASKS,
@@ -1390,14 +1391,16 @@ test("archiving chosen agents where a teammate's still works asks once before an
   const { page } = mountWith(
     {
       tasks,
-      agents: agentsControl({
-        me: DEAN.userId,
-        onArchive: (agentId, _, how) => {
-          archived.push([agentId, how?.asked === true]);
+      agents: taskAgentsOf(
+        agentsControl({
+          me: DEAN.userId,
+          onArchive: (agentId, _, how) => {
+            archived.push([agentId, how?.asked === true]);
 
-          return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
-        },
-      }),
+            return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
+          },
+        }),
+      ),
     },
     CHARLES.userId,
   );

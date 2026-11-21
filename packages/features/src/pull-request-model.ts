@@ -130,6 +130,68 @@ export function mergeQueueStage(state: MergeQueueEntryState): MergeQueueStage {
 export const QUEUE_WARNING =
   "Removing this pull request from the queue could impact other pull requests in the queue.";
 
+/** The changes to where a pull request stands that every client offers beside its merge, never a review. */
+export type PullRequestStateAction =
+  | typeof PULL_REQUEST_ACTION.READY_FOR_REVIEW
+  | typeof PULL_REQUEST_ACTION.CONVERT_TO_DRAFT
+  | typeof PULL_REQUEST_ACTION.CLOSE
+  | typeof PULL_REQUEST_ACTION.REOPEN;
+
+/** What each change to where a pull request stands says on its menu, and, with an ellipsis, while it is out. */
+export const PULL_REQUEST_STATE_ACTION_WORDS = {
+  [PULL_REQUEST_ACTION.READY_FOR_REVIEW]: "Ready for review",
+  [PULL_REQUEST_ACTION.CONVERT_TO_DRAFT]: "Convert to draft",
+  [PULL_REQUEST_ACTION.CLOSE]: "Close pull request",
+  [PULL_REQUEST_ACTION.REOPEN]: "Reopen pull request",
+} as const satisfies Record<PullRequestStateAction, string>;
+
+/** Whether a change out is one of the changes to where a pull request stands. */
+export function isStateAction(
+  action: PullRequestAction | undefined,
+): action is PullRequestStateAction {
+  return action !== undefined && action in PULL_REQUEST_STATE_ACTION_WORDS;
+}
+
+/**
+ * The changes that may be made from where a pull request stands, as
+ * GitHub offers them: Ready for review for a draft and Convert to draft for
+ * one open, each with Close, and Reopen for one closed; one in the merge
+ * queue may be closed but not turned back to a draft, and a merged one
+ * offers nothing.
+ */
+export function pullRequestStateActions(
+  state: PullRequestState,
+  queued: boolean,
+): readonly PullRequestStateAction[] {
+  if (queued && state === PULL_REQUEST_STATE.OPEN) return [PULL_REQUEST_ACTION.CLOSE];
+
+  switch (state) {
+    case PULL_REQUEST_STATE.DRAFT:
+      return [PULL_REQUEST_ACTION.READY_FOR_REVIEW, PULL_REQUEST_ACTION.CLOSE];
+    case PULL_REQUEST_STATE.OPEN:
+      return [PULL_REQUEST_ACTION.CONVERT_TO_DRAFT, PULL_REQUEST_ACTION.CLOSE];
+    case PULL_REQUEST_STATE.CLOSED:
+      return [PULL_REQUEST_ACTION.REOPEN];
+    case PULL_REQUEST_STATE.MERGED:
+      return [];
+  }
+}
+
+/**
+ * What Close asks of an open pull request that is, or may be, in the merge
+ * queue, since reopening it does not queue it again (`QUEUED` where the
+ * queue holds it, `UNKNOWN` where its place could not be read), and what a
+ * Close that acted at once says, with its one way back.
+ */
+export const CLOSE_WORDS = {
+  QUESTION: "Close this pull request?",
+  QUEUED: `Closing it takes it out of the merge queue, and reopening it does not queue it again. ${QUEUE_WARNING}`,
+  UNKNOWN: `Could not read whether this pull request is in the merge queue. If it is, closing it takes it out, and reopening it does not queue it again. ${QUEUE_WARNING}`,
+  RUNNING: "Closing",
+  CLOSED: "Pull request closed",
+  REOPEN: "Reopen",
+} as const;
+
 /** Where a reviewer stands, in the words their face's pill, a comment's line, and their row say it. */
 export const REVIEW_WORDS = {
   [REVIEW_STATE.APPROVED]: "Approved",
@@ -318,7 +380,12 @@ export function mergeSentence(
   action: MergeAction | undefined,
   { queueShown = false }: { readonly queueShown?: boolean } = {},
 ): string {
-  const { merge, merging } = pullRequest;
+  const { merging } = pullRequest;
+
+  // Note that a draft says so whatever merge state was read with it, as its chip and its merge press read its state, so the three never disagree.
+  const merge =
+    pullRequest.state === PULL_REQUEST_STATE.DRAFT ? MERGE_STATE.DRAFT : pullRequest.merge;
+
   const line = mergeWords(merge, pullRequest.base);
   const blocked = merge === MERGE_STATE.BLOCKED;
   const standing = (blocked ? blockedWords(merging, action === undefined) : undefined) ?? line;

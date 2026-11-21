@@ -10,8 +10,8 @@
 // pressed, since grown from one Quick Look stood in its immersive mode, its
 // bar and Done hidden until a tap, on the iOS 27.2 iPhone as on the iPad, and
 // on the 27.2 runtimes a zoom it began on its own never stood at all. A
-// file Quick Look can't read, or one UIKit would not present it over, answers
-// false, and the app shares it instead.
+// file Quick Look can't read, or a screen UIKit would not present it over,
+// answers false, and the app shares it instead.
 
 import ExpoModulesCore
 import QuickLook
@@ -91,6 +91,17 @@ public final class QuickLookModule: Module {
         return false
       }
 
+      // Note that a refusal is told before presenting, since UIKit refuses a presentation only in its log, such as over a controller whose view stands in no window or that is still dismissing another; and that it can't be told after, because Quick Look delays its own presentation until it has read its item, so the presenter presents nothing yet for a moment after every press that goes. Told after, each press read as refused, dropped the preview's data source, and asked for the share sheet, which UIKit refused only because Quick Look was still coming.
+      guard presenter.viewIfLoaded?.window != nil, presenter.presentedViewController == nil else {
+        NSLog(
+          "Quick Look would not be presented over %@ (in a window: %@), which presents %@.",
+          String(describing: type(of: presenter)),
+          presenter.viewIfLoaded?.window == nil ? "no" : "yes",
+          presenter.presentedViewController.map { String(describing: type(of: $0)) } ?? "nothing"
+        )
+        return false
+      }
+
       let preview = Preview(item: item) { [weak self] closed in
         self?.shown.removeAll { $0 === closed }
       }
@@ -104,18 +115,6 @@ public final class QuickLookModule: Module {
       shown.append(preview)
       presenter.present(controller, animated: true) {
         NSLog("Quick Look stands over %@.", String(describing: type(of: presenter)))
-      }
-
-      // Note that UIKit refuses a presentation only in its log, such as over a controller whose view stands in no window or that already presents another, so a refusal is told here, and the app shares the file rather than nothing opening.
-      guard presenter.presentedViewController === controller else {
-        NSLog(
-          "Quick Look was not presented over %@ (in a window: %@), which presents %@.",
-          String(describing: type(of: presenter)),
-          presenter.viewIfLoaded?.window == nil ? "no" : "yes",
-          presenter.presentedViewController.map { String(describing: type(of: $0)) } ?? "nothing"
-        )
-        shown.removeAll { $0 === preview }
-        return false
       }
 
       return true

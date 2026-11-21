@@ -1,6 +1,14 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
 import {
+  CONTINUE_AGAIN_LABEL,
+  CONTINUE_LABEL,
+  continuedByIds,
+  continuedByTitles,
+  endLineOffersContinue,
+  endLineReason,
+} from "@repo/features/agent-continue-model";
+import {
   GOAL_REACH,
   goalConditions,
   goalControlLine,
@@ -67,6 +75,7 @@ import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import {
+  type ChatReply,
   type ChatRunPlace,
   type ManagerChatRuns,
   managerChatLines,
@@ -170,6 +179,7 @@ import {
   MESSAGE_LINE_INSET,
   MessageHead,
   MessageLine,
+  type MessageLineInset,
   MovedLine,
   NewSessionLine,
   OneLine,
@@ -187,6 +197,7 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
+import { land } from "@repo/ui/landed";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
@@ -217,7 +228,9 @@ import {
   useState,
 } from "react";
 import {
+  ACTOR_SIZE,
   ActorLine,
+  ActorMark,
   ActorRef,
   AutomationCard,
   automationActor,
@@ -252,6 +265,7 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
@@ -282,17 +296,11 @@ import {
   agentLines,
   agentName,
   agentWorkingSince,
-  CONTINUE_AGAIN_LABEL,
-  CONTINUE_LABEL,
-  continuedByIds,
-  continuedByTitles,
   dockedPullRequests,
   type EndLineParts,
-  endLineOffersContinue,
   endLineOffersOtherModel,
   endLineOffersTryAgain,
   endLineParts,
-  endLineReason,
   finishedReplyLead,
   lastTurnEnding,
   lineSender,
@@ -333,6 +341,14 @@ import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ArchivedComposerNote } from "./archived-note.js";
+import {
+  ChatReplyProvider,
+  ChatShowProvider,
+  ReplyChip,
+  ReplyMessageAction,
+  useChatMessageMenu,
+  useChatReplyQuote,
+} from "./chat-reply.js";
 import { ComputerDock } from "./computer-dock.js";
 import { ComputerPermissionNote } from "./computer-permission-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
@@ -364,6 +380,7 @@ import {
   agentMessagePlace,
   MESSAGE_GONE,
   MessagePlaceProvider,
+  messageElement,
   useMessageReveal,
 } from "./message-links.js";
 import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
@@ -405,6 +422,7 @@ import {
   useUndeliveredLines,
   useUnsentLines,
 } from "./undelivered-mark.js";
+import type { ChatReplyTarget } from "./use-agent-composer.js";
 import {
   type HeldComposer,
   type MessageSender as MessageWriter,
@@ -660,13 +678,72 @@ const LiveDoors = createContext<Pick<DelegationDoors, "cards"> | undefined>(unde
 /** A Manager's chat in runs (`managerChatRuns`), where the transcript is one (`managerChatLines`), whose messages are drawn as bubbles in their runs; none for every other agent. */
 const ChatRuns = createContext<ManagerChatRuns | undefined>(undefined);
 
-/** A Manager's face, which stands beside each run of its chat's messages (`ChatBubble`'s `avatar`); none for every other agent, and for a Manager a service older than faces answers. */
-const ChatFace = createContext<ManagerFaceValue | undefined>(undefined);
+/** A Manager as its chat draws it: its name over each run of its messages, and its face beside the run (`ChatBubble`'s `avatar`), none where a service older than faces answers. */
+interface ChatManagerLook {
+  readonly name: string;
+  readonly face: ManagerFaceValue | undefined;
+}
+
+/** The Manager whose chat a transcript is; none for every other agent. */
+const ChatManager = createContext<ChatManagerLook | undefined>(undefined);
+
+/** A Manager's chat's doors: the Manager whose chat it is, and the press that brings one of its messages into view, as a reply's quote asks (`chat-reply.tsx`). */
+function ChatDoors({
+  manager,
+  show,
+  children,
+}: {
+  manager: ChatManagerLook | undefined;
+  show: (messageId: string) => void;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <ChatManager value={manager}>
+      <ChatShowProvider show={show}>{children}</ChatShowProvider>
+    </ChatManager>
+  );
+}
+
+/** What a transcript's replies are laid into the box through: words selected in a message, laid in as a quote (`reply-to-selection.tsx`), and a Manager's message the next send answers (`chat-reply.tsx`); either none while the box takes none. */
+function ReplyDoors({
+  selection,
+  chat,
+  children,
+}: {
+  selection: ((words: string) => void) | undefined;
+  chat: ((target: ChatReplyTarget) => void) | undefined;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <ReplyDoorProvider value={selection}>
+      <ChatReplyProvider replyTo={chat}>{children}</ChatReplyProvider>
+    </ReplyDoorProvider>
+  );
+}
 
 /** The face beside a Manager's bubbles, at a message's seat; none where it wears none. */
 function chatAvatar(face: ManagerFaceValue | undefined): React.JSX.Element | undefined {
   return face === undefined ? undefined : (
     <ManagerFace face={face} size={MANAGER_FACE_SIZE.MESSAGE} />
+  );
+}
+
+/** Where a run's head and the line under it start: past the face beside its bubbles, or at the bubble's inset where none stands. */
+function chatInset(face: ManagerFaceValue | undefined): MessageLineInset {
+  return face === undefined ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR;
+}
+
+/** A Manager's name over a run of its messages, as a group chat names a speaker over theirs. */
+function ManagerChatHead({ manager }: { manager: ChatManagerLook }): React.JSX.Element {
+  return (
+    <MessageHead
+      inset={chatInset(manager.face)}
+      sender={
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
+          {manager.name}
+        </Text>
+      }
+    />
   );
 }
 
@@ -714,9 +791,9 @@ function AgentMessageRow({ message }: { message: AgentTranscriptMessage }): Reac
         }
       />
       {words === "" ? null : (
-        <MessageContent>
+        <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
           <TranscriptWords text={words} />
-        </MessageContent>
+        </ChatBubble>
       )}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
@@ -2040,16 +2117,21 @@ export function AgentMessage({
     // A line sent from a suggestion is headed by the agent that suggested it, its words without the lead that names that agent to the agent reading them.
     const suggested = suggestedByOf(message);
 
+    // A line in a Manager's chat that answers one of its messages draws the quote over its bubble, its words alone inside.
+    const reply = chatRuns?.replies.get(message.id);
+
     const shown =
-      comment !== undefined
-        ? commentLineWords(comment)
-        : slack !== undefined
-          ? slack.words
-          : suggested !== undefined
-            ? suggestionWords(words)
-            : thread === undefined
-              ? words
-              : threadLineWords(words, thread.event);
+      reply !== undefined
+        ? reply.words
+        : comment !== undefined
+          ? commentLineWords(comment)
+          : slack !== undefined
+            ? slack.words
+            : suggested !== undefined
+              ? suggestionWords(words)
+              : thread === undefined
+                ? words
+                : threadLineWords(words, thread.event);
 
     // A line open for writing again is written where it stands.
     if (drawnEditor !== undefined) {
@@ -2061,7 +2143,12 @@ export function AgentMessage({
             data-leaving={editing.leaving ? "" : undefined}
             inert={editing.leaving}
           >
-            <EditComposer message={message} words={shown} edit={drawnEditor} />
+            {/* Note that a reply is written again with its quote, so the line sent in its place still answers the message. */}
+            <EditComposer
+              message={message}
+              words={reply === undefined ? shown : words}
+              edit={drawnEditor}
+            />
           </div>
         </Message>
       );
@@ -2113,7 +2200,8 @@ export function AgentMessage({
         <ChatLine
           message={message}
           runs={chatRuns}
-          named={named}
+          reply={reply}
+          sender={sender}
           subject={subject}
           shown={shown}
           words={sentWords}
@@ -2125,7 +2213,7 @@ export function AgentMessage({
       );
     }
 
-    const content = <MessageContent>{sentWords}</MessageContent>;
+    const mark = marked ? <UndeliveredMark messageId={message.id} /> : null;
 
     return (
       <MessageFiles message={message} words={shown} sending={sending}>
@@ -2137,17 +2225,18 @@ export function AgentMessage({
         >
           {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
           <MessageFileChips message={message} sending={sending} />
-          {shown === "" ? null : marked ? (
-            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>
-              {content}
-            </MessageBeside>
-          ) : (
-            content
+          {shown !== "" ? (
+            <ChatBubble
+              side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+              run={CHAT_RUN.ALONE}
+              beside={mark}
+            >
+              {sentWords}
+            </ChatBubble>
+          ) : mark === null ? null : (
+            // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
+            <MessageBeside mark={mark}>{null}</MessageBeside>
           )}
-          {/* A line of files alone stands its mark on a row of its own, kept clear of the files' fade. */}
-          {shown === "" && marked ? (
-            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{null}</MessageBeside>
-          ) : null}
           <MessageLine
             align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
             status={status}
@@ -2259,10 +2348,10 @@ export function AgentMessage({
 /** A Manager's greeting, drawn as its first message though no one sent it and nothing stores it (`@repo/features/manager-greeting`). */
 function ManagerGreetingMessage({
   words,
-  face,
+  manager,
 }: {
   readonly words: string;
-  readonly face: ManagerFaceValue | undefined;
+  readonly manager: ChatManagerLook | undefined;
 }): React.JSX.Element {
   return (
     <Message
@@ -2270,7 +2359,8 @@ function ManagerGreetingMessage({
       className={RECEIVED_MESSAGE_CLASS}
       data-manager-greeting=""
     >
-      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(face)}>
+      {manager === undefined ? null : <ManagerChatHead manager={manager} />}
+      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(manager?.face)}>
         <TranscriptWords text={words} />
       </ChatBubble>
     </Message>
@@ -2278,17 +2368,18 @@ function ManagerGreetingMessage({
 }
 
 /**
- * A person's line in a Manager's chat: a bubble at the column's right,
- * whoever sent it, the Manager's standing at the left, shaped by where it
- * stands in its sender's run, its Copy and Edit, and its mark where it did
- * not go, beside it, and when it was sent under the run's last. Note that
- * a sender is named over their run only where more than one person writes
- * in the chat, and the reader never, as a group chat names its speakers.
+ * A person's line in a Manager's chat, as a group chat draws it: the
+ * reader's own in a bubble at the column's right, and anyone else's at its
+ * left, as the Manager's stand, under their name over their run and beside
+ * their picture at the run's foot. Each bubble is shaped by where it stands
+ * in its sender's run, its Copy and Edit, and its mark where it did not go,
+ * beside it, and when it was sent stands under the run's last.
  */
 function ChatLine({
   message,
   runs,
-  named,
+  reply,
+  sender,
   subject,
   shown,
   words,
@@ -2299,8 +2390,10 @@ function ChatLine({
 }: {
   message: AgentTranscriptMessage;
   runs: ManagerChatRuns;
-  /** Who sent it, as the transcript names them; none for the reader's own. */
-  named: ReactNode;
+  /** The Manager's message the line answers, whose quote its bubble opens on; none for a line that answers none. */
+  reply: ChatReply | undefined;
+  /** Who sent it; none for the reader's own. */
+  sender: Actor | undefined;
   /** What heads the line, such as the suggestion it was sent from; none where nothing does. */
   subject: ReactNode;
   /** Its words as drawn, empty for a line of files alone. */
@@ -2312,10 +2405,14 @@ function ChatLine({
   status: string | undefined;
 }): React.JSX.Element {
   const place = runs.places.get(message.id) ?? LONE_RUN;
+  const received = sender !== undefined;
+  const quote = useChatReplyQuote(reply);
 
   const head =
-    place.opens && runs.people > 1 && named !== null ? (
-      <MessageHead sender={named}>{subject}</MessageHead>
+    received && place.opens ? (
+      <MessageHead inset={MESSAGE_LINE_INSET.AVATAR} sender={<ActorRef actor={sender} nameOnly />}>
+        {subject}
+      </MessageHead>
     ) : (
       subject
     );
@@ -2325,7 +2422,8 @@ function ChatLine({
   return (
     <MessageFiles message={message} words={shown} sending={sending}>
       <Message
-        from={MESSAGE_ROLE.USER}
+        from={received ? MESSAGE_ROLE.ASSISTANT : MESSAGE_ROLE.USER}
+        className={received ? RECEIVED_MESSAGE_CLASS : undefined}
         data-message-id={message.id}
         data-undelivered={marked ? "" : undefined}
       >
@@ -2333,8 +2431,10 @@ function ChatLine({
         <MessageFileChips message={message} sending={sending} />
         {shown !== "" ? (
           <ChatBubble
-            side={CHAT_SIDE.SENT}
+            side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
             run={chatRunOf(place.opens, place.closes)}
+            avatar={received ? <ActorMark actor={sender} size={ACTOR_SIZE.CARD} /> : undefined}
+            quote={quote}
             beside={
               <>
                 {mark}
@@ -2349,6 +2449,8 @@ function ChatLine({
           <MessageBeside mark={mark}>{null}</MessageBeside>
         )}
         <MessageLine
+          align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+          inset={received ? MESSAGE_LINE_INSET.AVATAR : MESSAGE_LINE_INSET.BUBBLE}
           status={status}
           at={place.closes ? message.sentAt : undefined}
           actions={shown === "" ? copy : undefined}
@@ -2360,7 +2462,8 @@ function ChatLine({
 
 /**
  * One of a Manager's chat messages (`managerChatLines`): its words in a
- * bubble at the column's left, shaped by where it stands in its run, its
+ * bubble at the column's left, under the Manager's name where it opens its
+ * run, shaped by where it stands in its run, its
  * Copy beside it once it is whole, and when it was sent under the run's
  * last where its turn has ended. Note that it offers no link, rewind, or
  * fork, because a message after its turn's first stands under its call's
@@ -2379,7 +2482,10 @@ function ChatSent({
   moving: boolean;
   children: ReactNode;
 }): React.JSX.Element {
-  const face = useContext(ChatFace);
+  const manager = useContext(ChatManager);
+  const face = manager?.face;
+  const target = { id: message.id, words: moving ? "" : words };
+  const menu = useChatMessageMenu(target);
 
   return (
     <Message
@@ -2387,17 +2493,24 @@ function ChatSent({
       className={RECEIVED_MESSAGE_CLASS}
       data-message-id={message.id}
     >
+      {place.opens && manager !== undefined ? <ManagerChatHead manager={manager} /> : null}
       <ChatBubble
         side={CHAT_SIDE.RECEIVED}
         run={chatRunOf(place.opens, place.closes)}
         avatar={chatAvatar(face)}
-        beside={moving || words === "" ? null : <CopyMessageAction words={words} />}
+        contextMenu={menu.contextMenu}
+        beside={
+          moving || words === "" ? null : (
+            <CopyMessageAction words={words} lead={<ReplyMessageAction target={target} />} />
+          )
+        }
       >
         {children}
       </ChatBubble>
+      {menu.menu}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
-        inset={face === undefined ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR}
+        inset={chatInset(face)}
         at={place.closes && !moving ? message.finishedAt : undefined}
       />
     </Message>
@@ -3068,7 +3181,7 @@ function AgentTranscriptView({
   olderFailed = false,
   fromStart,
   greeting,
-  face,
+  manager,
   chat = false,
   overComposer = false,
   overEnd,
@@ -3142,8 +3255,8 @@ function AgentTranscriptView({
   fromStart: boolean;
   /** The greeting a Manager's conversation opens on, drawn above its first line; none for every other agent. */
   greeting?: string | undefined;
-  /** A Manager's face, beside each run of its chat (`ChatFace`); none for every other agent, and for a Manager a service older than faces answers. */
-  face?: ManagerFaceValue | undefined;
+  /** The Manager whose chat this is, named over each run of its messages and its face beside it (`ChatManager`); none for every other agent. */
+  manager?: ChatManagerLook | undefined;
   /** Whether the messages are a Manager's chat (`managerChatLines`), drawn as bubbles in their runs. */
   chat?: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
@@ -3323,6 +3436,27 @@ function AgentTranscriptView({
     bringIn.current = bringMessage;
   });
 
+  // A reply's quote brings the message it answers into view and lights it, as a link to a message does; one the log draws whole is scrolled to here.
+  const showMessage = useCallback(
+    (messageId: string) => {
+      const brought = bringMessage(messageId, (row) => land(messageElement(row, messageId) ?? row));
+
+      const element =
+        brought || log.current === null ? undefined : messageElement(log.current, messageId);
+
+      if (element === undefined) return;
+      const scroller = scrollerOf(element);
+
+      if (scroller !== undefined) {
+        centerWithin(scroller, element);
+        scroller.dispatchEvent(new Event("scroll"));
+      }
+
+      land(element);
+    },
+    [bringMessage],
+  );
+
   // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
   const railLines = useMemo(() => {
     const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
@@ -3405,7 +3539,7 @@ function AgentTranscriptView({
             </div>
           )}
           {!working || waitingNotice ? null : chat ? (
-            <ChatWorking words={workingWords} face={face} />
+            <ChatWorking words={workingWords} face={manager?.face} />
           ) : (
             <WorkingLine startedAt={startedAt} words={workingWords} />
           )}
@@ -3460,7 +3594,7 @@ function AgentTranscriptView({
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ChatRuns value={chatRuns}>
-            <ChatFace value={face}>
+            <ChatDoors manager={manager} show={showMessage}>
               <ConnectionNames needed={callsServer}>
                 <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
                   {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
@@ -3510,7 +3644,7 @@ function AgentTranscriptView({
                         return (
                           <>
                             {at === 0 && fromStart && greeting !== undefined ? (
-                              <ManagerGreetingMessage words={greeting} face={face} />
+                              <ManagerGreetingMessage words={greeting} manager={manager} />
                             ) : null}
                             {heads ? (
                               <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
@@ -3584,7 +3718,7 @@ function AgentTranscriptView({
                   <ConversationScrollButton />
                 </Conversation>
               </ConnectionNames>
-            </ChatFace>
+            </ChatDoors>
           </ChatRuns>
         </LiveDoors>
       </TranscriptAgentOn>
@@ -3622,11 +3756,13 @@ function AgentTranscriptView({
 
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {greeting === undefined ? null : <ManagerGreetingMessage words={greeting} face={face} />}
+        {greeting === undefined ? null : (
+          <ManagerGreetingMessage words={greeting} manager={manager} />
+        )}
         {starting ??
           (greeting !== undefined && working ? (
             // Note that a Manager's chat says only that it works, whatever its turn holds, even while nothing it sent stands yet.
-            <ChatWorking words={workingLineWords(phase, waitsUntil)} face={face} />
+            <ChatWorking words={workingLineWords(phase, waitsUntil)} face={manager?.face} />
           ) : greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
             <WorkingLine startedAt={undefined} words={leadLine} />
           ))}
@@ -4027,6 +4163,17 @@ function AgentTabView({
   // The door the box hands Reply, which lays a quote in at its caret.
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
   const replyThroughBox = useCallback((words: string) => replyDoor.current?.(words), []);
+  // The door the box hands a Manager's message's Reply, which puts the caret in it once the reply stands over it.
+  const focusDoor = useRef<(() => void) | undefined>(undefined);
+  const { replyTo } = composer;
+
+  const replyInChat = useCallback(
+    (target: ChatReplyTarget) => {
+      replyTo(target);
+      focusDoor.current?.();
+    },
+    [replyTo],
+  );
 
   // Note that Reply stands only while the box takes a change, as a file's + does.
   const replies =
@@ -4091,7 +4238,10 @@ function AgentTabView({
                 <UndeliveredLines value={marks}>
                   <RewindProvider value={rewind}>
                     <TurnFilesOn value={turnLines}>
-                      <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
+                      <ReplyDoors
+                        selection={replies ? replyThroughBox : undefined}
+                        chat={chat && replies ? replyInChat : undefined}
+                      >
                         <AutomationsWanted wanted={automationLines}>
                           <ApprovalsProvider asks={approvals.asks}>
                             <GoalConditions value={conditions}>
@@ -4170,7 +4320,7 @@ function AgentTabView({
                                 olderFailed={transcript.olderFailed}
                                 fromStart={transcript.pages > 0 && !transcript.hasOlder}
                                 greeting={chat ? managerGreeting(agent.title) : undefined}
-                                face={chat ? agent.face : undefined}
+                                manager={chat ? { name, face: agent.face } : undefined}
                                 chat={chat}
                                 overComposer
                                 overEnd={appsRoom}
@@ -4180,7 +4330,7 @@ function AgentTabView({
                             </GoalConditions>
                           </ApprovalsProvider>
                         </AutomationsWanted>
-                      </ReplyDoorProvider>
+                      </ReplyDoors>
                     </TurnFilesOn>
                   </RewindProvider>
                 </UndeliveredLines>
@@ -4259,6 +4409,9 @@ function AgentTabView({
           continuedNote
         ) : (
           <>
+            {composer.replyingTo === undefined ? null : (
+              <ReplyChip target={composer.replyingTo} onDrop={composer.dropReply} />
+            )}
             {composer.suggestion === undefined ? null : (
               <SuggestionChip
                 suggestion={composer.suggestion}
@@ -4289,6 +4442,7 @@ function AgentTabView({
                     keywords={keywords}
                     skills={skills}
                     replyDoor={replyDoor}
+                    focusDoor={focusDoor}
                     closedRemedy={closedRemedy}
                     sendsEmpty={sendsEmpty}
                     onContinueInCloud={onMoveToCloud}

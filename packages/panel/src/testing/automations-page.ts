@@ -180,10 +180,18 @@ export function tasksView(): WrittenTasksView {
         ...read,
         listStatus: TASKS_READ.READY,
         listed: true,
-        taskAgents: world.workspaceAgents,
+        taskAgents: carriedAgents(),
       };
 
   return world.workspacesRefused ? { ...listed, workspacesStatus: TASKS_READ.FAILED } : listed;
+}
+
+/** The agents the document's task list carries: the workspace's, and those a test says the list followed live carries (`liveAgents`) in place of any of the same id. */
+function carriedAgents(): readonly ListedAgent[] {
+  const live = world.liveAgents ?? [];
+  const ids = new Set(live.map((agent) => agent.id));
+
+  return [...world.workspaceAgents.filter((agent) => !ids.has(agent.id)), ...live];
 }
 
 /** Every workspace whose list was read, by a hold or a Try again, in order. */
@@ -812,7 +820,7 @@ export function mountPages(start: AutomationsPlace, workspace: Workspace = WORKS
         onOpen: (agentId: string) =>
           arriveAt(`/${WORKSPACE.slug}/agent/${agentId}`, () => world.agentsOpened.push(agentId)),
       },
-      liveAgents: world.liveAgents,
+      agentsCarried: world.liveAgents !== undefined,
       onShowAgent: (taskId: string, agentId: string) =>
         world.agentsShown.push(`${taskId} ${agentId}`),
       workspace: listed,

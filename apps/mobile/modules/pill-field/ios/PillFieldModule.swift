@@ -54,8 +54,8 @@ public final class PillFieldModule: Module {
         view.editable = editable ?? true
       }
 
-      AsyncFunction("insertPill") { (view: PillFieldView, start: Int, end: Int, pill: PillRecord, seen: Int) in
-        view.insertPill(Pill(pill), replacing: NSRange(location: start, length: end - start), seen: seen)
+      AsyncFunction("insertPills") { (view: PillFieldView, start: Int, end: Int, pills: [PillRecord], seen: Int) in
+        view.insertPills(pills.map(Pill.init), replacing: NSRange(location: start, length: end - start), seen: seen)
       }
 
       AsyncFunction("focus") { (view: PillFieldView) in
@@ -418,27 +418,31 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     redraw(runs, force: false)
   }
 
-  /// Puts the pill in place of the range of the drawn words, such as the `@` word a pick answers, with a space after it unless one stands there, once JavaScript has heard every change typed, so the range is the words it was read from.
-  func insertPill(_ pill: Pill, replacing range: NSRange, seen: Int) {
+  /// Puts the pills in place of the range of the drawn words, such as the `@` word a pick answers or the caret a picture is attached at, each followed by a space, the last unless one stands there, once JavaScript has heard every change typed, so the range is the words it was read from.
+  func insertPills(_ pills: [Pill], replacing range: NSRange, seen: Int) {
     let storage = textView.textStorage
-    guard editable, seen >= changes, range.location >= 0, range.length >= 0, NSMaxRange(range) <= storage.length else { return }
+    guard editable, !pills.isEmpty, seen >= changes, range.location >= 0, range.length >= 0, NSMaxRange(range) <= storage.length else { return }
     guard let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
       let end = textView.position(from: start, offset: range.length),
       let replaced = textView.textRange(from: start, to: end)
     else { return }
     let string = storage.string as NSString
     let next = NSMaxRange(range) < string.length ? string.character(at: NSMaxRange(range)) : nil
-    // Note that a space standing after the word is kept and stepped over, and a line's end needs none.
+    // Note that a space standing after the last is kept and stepped over, and a line's end needs none.
     let spaced = next == space || next == lineBreak
-    let pillCharacter = NSRange(location: range.location, length: 1)
+    let words = Array(repeating: "\u{FFFC} ", count: pills.count).joined()
+    let typed = spaced ? String(words.dropLast()) : words
 
-    // Note that the words are replaced through the text view's own editing, so undo takes the pick back, and the pill is then laid on its character, which moves no words undo knows of.
+    // Note that the words are replaced through the text view's own editing, so undo takes the pick back, and each pill is then laid on its character, which moves no words undo knows of.
     quiet = true
-    textView.replace(replaced, withText: spaced ? "\u{FFFC}" : "\u{FFFC} ")
-    storage.setAttributes(baseAttributes(), range: pillCharacter)
-    storage.addAttribute(.attachment, value: PillAttachment(pill: pill, look: look), range: pillCharacter)
+    textView.replace(replaced, withText: typed)
+    for (index, pill) in pills.enumerated() {
+      let character = NSRange(location: range.location + index * 2, length: 1)
+      storage.setAttributes(baseAttributes(), range: character)
+      storage.addAttribute(.attachment, value: PillAttachment(pill: pill, look: look), range: character)
+    }
     quiet = false
-    let after = range.location + (spaced ? 1 : 2) + (next == space ? 1 : 0)
+    let after = range.location + (typed as NSString).length + (next == space ? 1 : 0)
     textView.selectedRange = NSRange(location: after, length: 0)
     textView.typingAttributes = baseAttributes()
     changed()
@@ -568,14 +572,21 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     let held = heldRuns()
     guard force || runs != held else { return }
     let selected = textView.selectedRange
+    let atEnd = selected.length == 0 && selected.location == textView.textStorage.length
     let selectionStart = markdownOffset(of: selected.location, in: held)
     let selectionEnd = markdownOffset(of: NSMaxRange(selected), in: held)
     textView.attributedText = drawn(runs)
     // Note that words laid in whole leave nothing for undo's earlier steps to stand on, so they are let go rather than landing on the wrong words.
     textView.undoManager?.removeAllActions()
-    let start = drawnOffset(of: selectionStart, in: runs)
-    let end = max(drawnOffset(of: selectionEnd, in: runs), start)
-    textView.selectedRange = NSRange(location: start, length: end - start)
+
+    // Note that a caret at the words' end stays at their end, so words added there, as dictation's or a picked skill's, leave it after them.
+    if atEnd {
+      textView.selectedRange = NSRange(location: textView.textStorage.length, length: 0)
+    } else {
+      let start = drawnOffset(of: selectionStart, in: runs)
+      let end = max(drawnOffset(of: selectionEnd, in: runs), start)
+      textView.selectedRange = NSRange(location: start, length: end - start)
+    }
     textView.typingAttributes = baseAttributes()
     placeholderLabel.isHidden = textView.textStorage.length > 0
     setNeedsLayout()

@@ -8,8 +8,9 @@
  * reads them as it reads a live run's. A fixture run asks GitHub nothing, so
  * a change a screen makes is answered as made (`fixture-inbox.ts`'s act
  * door) and handed back here as a move (`pullRequestMoveOf`), which the run
- * keeps and lays over the parts: merged, out of the merge queue, or into
- * it. Every person, repository, and line here is invented.
+ * keeps and lays over the parts: merged, out of the merge queue, into it,
+ * closed, reopened, or turned to a draft and back. Every person, repository,
+ * and line here is invented.
  */
 
 import {
@@ -70,6 +71,10 @@ export const PULL_REQUEST_MOVE = {
   MERGED: "merged",
   DEQUEUED: "dequeued",
   QUEUED: "queued",
+  CLOSED: "closed",
+  REOPENED: "reopened",
+  READY: "ready",
+  DRAFTED: "drafted",
 } as const;
 
 export type PullRequestMove = (typeof PULL_REQUEST_MOVE)[keyof typeof PULL_REQUEST_MOVE];
@@ -86,6 +91,14 @@ export function pullRequestMoveOf(request: PullRequestActionRequest): PullReques
       return PULL_REQUEST_MOVE.DEQUEUED;
     case PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE:
       return PULL_REQUEST_MOVE.QUEUED;
+    case PULL_REQUEST_ACTION.CLOSE:
+      return PULL_REQUEST_MOVE.CLOSED;
+    case PULL_REQUEST_ACTION.REOPEN:
+      return PULL_REQUEST_MOVE.REOPENED;
+    case PULL_REQUEST_ACTION.READY_FOR_REVIEW:
+      return PULL_REQUEST_MOVE.READY;
+    case PULL_REQUEST_ACTION.CONVERT_TO_DRAFT:
+      return PULL_REQUEST_MOVE.DRAFTED;
     default:
       return undefined;
   }
@@ -331,7 +344,7 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
   ],
 ]);
 
-/** A pull request as a move left it: merged, out of the queue and ready to queue again, or into the queue last. */
+/** A pull request as a move left it: merged, out of the queue and ready to queue again, into the queue last, closed and out of the queue, open again and still out of it, since GitHub never queues a reopened one again, or a draft and open again. */
 function moved(
   pullRequest: AgentOverviewPullRequest,
   move: PullRequestMove | undefined,
@@ -347,6 +360,21 @@ function moved(
       return { ...pullRequest, merging: { ...merging, queued: null } };
     case PULL_REQUEST_MOVE.QUEUED:
       return { ...pullRequest, merging: { ...merging, queued: { position: 3 } } };
+    case PULL_REQUEST_MOVE.CLOSED:
+      return {
+        ...pullRequest,
+        state: PULL_REQUEST_STATE.CLOSED,
+        merging: { ...merging, queued: null },
+      };
+    case PULL_REQUEST_MOVE.REOPENED:
+    case PULL_REQUEST_MOVE.READY:
+      return {
+        ...pullRequest,
+        state: PULL_REQUEST_STATE.OPEN,
+        merging: { ...merging, queued: null },
+      };
+    case PULL_REQUEST_MOVE.DRAFTED:
+      return { ...pullRequest, state: PULL_REQUEST_STATE.DRAFT };
   }
 }
 

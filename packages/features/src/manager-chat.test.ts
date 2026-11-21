@@ -3,7 +3,7 @@ import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
 import { AGENT_PART, agentParts } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
-import { managerChatLines, managerChatRuns } from "./manager-chat.js";
+import { chatReplyText, managerChatLines, managerChatRuns } from "./manager-chat.js";
 
 /**
  * manager-chat.test.ts -- a Manager's transcript as its chat: people's lines
@@ -113,7 +113,7 @@ test("a line that reached a turn while it ran stands between the messages it arr
   assert.equal(chat[1]?.arrivedIn, undefined);
 });
 
-test("a Manager's chat runs one sender's messages together until another sender writes or ten minutes pass, and counts the people who wrote", () => {
+test("a Manager's chat runs one sender's messages together until another sender writes or ten minutes pass", () => {
   const minute = 60_000;
 
   const chat = [
@@ -142,5 +142,32 @@ test("a Manager's chat runs one sender's messages together until another sender 
       ["later", true, true],
     ],
   );
-  assert.equal(runs.people, 2);
+});
+
+test("a reply sends the Manager's message as one quoted line over the person's words, and reads back as a reply to the nearest message it quotes, whole or cut short", () => {
+  const long = `${"word ".repeat(80)}end`;
+
+  assert.equal(
+    chatReplyText("**Done**: opened [the PR](https://example.com/pr)\n\nAnything else?", "Ship it"),
+    "> Done: opened the PR Anything else?\n\nShip it",
+  );
+
+  const said = (text: string) => [{ type: "text", text }];
+
+  const chat = [
+    turn("early", said("Ship it?")),
+    line("first", { parts: said("Yes") }),
+    turn("asked", said("Ship it?")),
+    turn("long", said(long)),
+    line("answer", { parts: said("> Ship it?\n\nYes, now") }),
+    line("cut", { parts: said(`> ${"word ".repeat(55)}word…\n\nok`) }),
+    line("unknown", { parts: said("> Something no one said\n\nHm") }),
+  ];
+
+  const { replies } = managerChatRuns(chat, undefined);
+
+  assert.deepEqual(replies.get("answer"), { to: "asked", quote: "Ship it?", words: "Yes, now" });
+  assert.equal(replies.get("cut")?.to, "long");
+  assert.equal(chatReplyText(long, "ok"), `> ${"word ".repeat(55)}word…\n\nok`);
+  assert.deepEqual([...replies.keys()], ["answer", "cut"]);
 });

@@ -18,21 +18,21 @@ import type { InboxItem } from "@repo/features/inbox-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import type { AppInboxTaskHolding } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
+import { afterPaint } from "@repo/ui/after-paint";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
 import { useInboxView } from "../inbox-route.js";
 import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import {
-  NAMED_ORDER,
   type TaskListRows,
   useNamedTask,
-  useNamedTasks,
+  useTaskListCollections,
+  useTaskListRow,
   useTaskListRows,
 } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
-import { useAgents } from "./use-agents.js";
+import { useAgents, useTaskAgents } from "./use-agents.js";
 import { useHeldInboxList } from "./use-held-inbox-list.js";
 import { taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
@@ -289,7 +289,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   const { groups: taskless, ...tasklessFeed } = useTasklessInboxGroups(
     tasks.workspace?.id,
-    tasks.liveAgents,
+    tasks.agentsCarried,
     tasks.agents.models,
   );
 
@@ -304,17 +304,20 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [taskless, taskId, askedItemId],
   );
 
-  const agents = useAgents({
-    taskId,
-    repository: chosenTask?.repository ?? null,
-    agentsFollowed: tasks.liveAgents !== undefined,
-    list: { failed: tasks.listFailed, onRetry: tasks.onRetryList },
-    // The Inbox draws no agent's composer, so nothing here opens Settings.
-    onOpenIntegrations: () => undefined,
-    onOpenApiKeys: () => undefined,
-    onStarted: () => undefined,
-    me: tasks.me,
-  });
+  // Note that the Inbox draws the chosen task's agents where it reads them, so their rows are read here.
+  const agents = useTaskAgents(
+    useAgents({
+      taskId,
+      repository: chosenTask?.repository ?? null,
+      agentsFollowed: tasks.agentsCarried,
+      list: { failed: tasks.listFailed, onRetry: tasks.onRetryList },
+      // The Inbox draws no agent's composer, so nothing here opens Settings.
+      onOpenIntegrations: () => undefined,
+      onOpenApiKeys: () => undefined,
+      onStarted: () => undefined,
+      me: tasks.me,
+    }),
+  );
 
   const liveScope = { taskId };
 
@@ -335,13 +338,9 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const models = agents.models ?? tasks.agents.models;
   const askedAgentId = askedAgent?.id;
 
-  const ownAgent = useMemo(
-    () =>
-      askedAgentId === undefined
-        ? undefined
-        : tasks.liveAgents?.find((agent) => agent.id === askedAgentId),
-    [askedAgentId, tasks.liveAgents],
-  );
+  // Note that the agent is read by its id alone, so a step of any other agent's turn draws the listing nothing.
+  const askedRow = useTaskListRow(useTaskListCollections().agents, askedAgentId);
+  const ownAgent = tasks.agentsCarried ? askedRow : undefined;
 
   const named = useMemo(() => {
     if (ownAgent === undefined) return { ...agents, models };
@@ -376,12 +375,18 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   );
 
   // Note that every read here draws the window's own marks, answers, and messages already, as the host draws them into each (`@repo/host`'s `inbox-collections.ts`).
-  const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED);
+  // Note that only the tasks holding items are read, each by its id with its name as it is being typed, which is all the grouping looks up, so a task that holds none moving, as each turn of its agents does, groups nothing again.
+  const holderRows = useTaskListRows(tasks.typedNames);
 
-  const everyItem: readonly InboxGroup<InboxAnyHolder>[] = useMemo(
-    () => [...inboxGroups(held, { tasks: holdings, listed: everyTask }), ...taskless],
-    [held, holdings, everyTask, taskless],
-  );
+  const everyItem: readonly InboxGroup<InboxAnyHolder>[] = useMemo(() => {
+    const holders = holdings.flatMap(({ taskId }) => {
+      const task = holderRows.task(taskId);
+
+      return task === undefined ? [] : [task];
+    });
+
+    return [...inboxGroups(held, { tasks: holdings, listed: holders }), ...taskless];
+  }, [held, holdings, holderRows, taskless]);
 
   // Note that a reminder is weighed on the window's clock, since no read of the service's may read one, so an item comes back within the minute its reminder comes due.
   const now = useMinute();

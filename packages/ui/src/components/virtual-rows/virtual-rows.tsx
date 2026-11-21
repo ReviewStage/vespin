@@ -18,6 +18,7 @@ import {
   type ReactNode,
   type Ref,
   type RefObject,
+  startTransition,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -26,6 +27,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { afterPaint } from "../../after-paint.js";
 import { joinRefs } from "../../join-refs.js";
 import { offsetWithin } from "../../offset-within.js";
 import { motionRows } from "../list-motion/list-motion.js";
@@ -41,6 +43,10 @@ import {
  * virtual-rows.tsx -- a long run of rows in a scroller of the caller's, drawing only those near the view, anchored to its last.
  *
  * A row is drawn while it stands within the view or `overscan` rows of it,
+ * the rows past the view waiting, where the caller names no `overscan` of
+ * its own, until the frame the run first drew in has painted, so a run
+ * opened in a press mounts only the rows its first frame shows
+ * (`useFirstFramePainted`),
  * placed as TanStack Virtual's docs place a row: absolutely, inside a block
  * as tall as every row would stand (`containerRef`), the virtualizer
  * writing each row's top and the block's height itself
@@ -173,6 +179,9 @@ interface Bringing {
 /** How many rows past each edge of the view are drawn, so a short scroll shows rows already laid out. */
 const DEFAULT_OVERSCAN = 4;
 
+/** How many rows past each edge of the view are drawn until the run's first frame has painted: none, since no reader scrolls before it. */
+const FIRST_FRAME_OVERSCAN = 0;
+
 /** The keys that scroll a scroller the reader is in, each of which takes over from a scroll the run is bringing to its target. */
 const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
@@ -237,6 +246,13 @@ function windowRect(): Rect {
   if (typeof window === "undefined") return SERVER_RECT;
 
   return { width: window.innerWidth, height: window.innerHeight };
+}
+
+/** Where a run stands at its end: its whole height but a view's, by what its rows measured or are estimated at, in the view it lays its rows out in. */
+function endOffsetOf(virtualizer: Virtualizer<HTMLElement, HTMLElement>): number {
+  const view = virtualizer.scrollRect ?? virtualizer.options.initialRect ?? windowRect();
+
+  return Math.max(virtualizer.getTotalSize() - view.height, 0);
 }
 
 /** Whether two runs of keys name the same rows in the same order. */
@@ -432,12 +448,28 @@ export function useVirtualRuns(): VirtualRuns {
   return runs;
 }
 
+/**
+ * Whether the frame a run first drew in has painted, answered in a
+ * transition, so the rows past the view it then draws give way to anything
+ * the reader does meanwhile.
+ */
+function useFirstFramePainted(): boolean {
+  const [painted, setPainted] = useState(false);
+  useEffect(() => {
+    if (painted) return undefined;
+
+    return afterPaint(() => startTransition(() => setPainted(true)));
+  }, [painted]);
+
+  return painted;
+}
+
 export function VirtualRows({
   scroller,
   keys,
   estimate,
   gap = 0,
-  overscan = DEFAULT_OVERSCAN,
+  overscan,
   anchor = VIRTUAL_ROWS_ANCHOR.END,
   listItems = false,
   options = false,
@@ -465,6 +497,7 @@ export function VirtualRows({
   estimate: number;
   /** The room between two rows, in pixels. */
   gap?: number;
+  /** How many rows past each edge of the view are drawn, from the run's first frame on; unsaid, none until that frame has painted, and a few from then on. */
   overscan?: number | undefined;
   /** Which end keeps the reader's place: the last row, as a log's, unless said. */
   anchor?: VirtualRowsAnchor;
@@ -503,17 +536,30 @@ export function VirtualRows({
 }): ReactNode {
   const block = useRef<HTMLElement | null>(null);
   const [margin, setMargin] = useState(0);
+  const painted = useFirstFramePainted();
+  const drawnPast = overscan ?? (painted ? DEFAULT_OVERSCAN : FIRST_FRAME_OVERSCAN);
+  // Whether the run draws on to its last row, which a run anchored to its end does until its first frame has painted (`rangeExtractor`).
+  const drawsToEnd = useRef(false);
   const latestKeys = useRef(keys);
   latestKeys.current = keys;
   // Note that the key reader changes as the keys do, because the virtualizer reads every row's key again only when it does: a row moved to another place, the run as long as before, would otherwise stand under the key of the row that stood there, and two rows under one key leave a row drawn that no row is any longer.
   const steady = useSteadyKeys(keys);
   const getItemKey = useCallback((index: number) => steady[index] ?? index, [steady]);
   const fromEnd = anchor === VIRTUAL_ROWS_ANCHOR.END;
+  drawsToEnd.current = fromEnd && overscan === undefined && !painted;
   // The row holding the keyboard, by its key, which is drawn wherever the run is scrolled.
   const focused = useRef<string | undefined>(undefined);
 
+  // Note that a run anchored to its end draws on to its last row until its
+  // first frame has painted, because it opens there by the window's height
+  // (`initialRect`), and once its scroller, shorter than the window, is
+  // measured, the rows under the view it was first laid out in would be let
+  // go and drawn again as its scroll to its end is heard.
   const rangeExtractor = useCallback((range: Range) => {
-    const drawn = defaultRangeExtractor(range);
+    const drawn = defaultRangeExtractor(
+      drawsToEnd.current ? { ...range, endIndex: range.count - 1 } : range,
+    );
+
     const key = focused.current;
     const at = key === undefined ? -1 : latestKeys.current.indexOf(key);
 
@@ -541,6 +587,8 @@ export function VirtualRows({
 
   // What the run measured when last drawn, taken once, as the virtualizer reads it once.
   const [seed] = useState(() => [...measurements]);
+  // The virtualizer, once made, which the run's first offset is read from.
+  const made = useRef<Virtualizer<HTMLElement, HTMLElement> | null>(null);
 
   const virtualizer = useVirtualizer<HTMLElement, HTMLElement>({
     count: keys.length,
@@ -548,7 +596,7 @@ export function VirtualRows({
     estimateSize: () => estimate,
     getItemKey,
     gap,
-    overscan,
+    overscan: drawnPast,
     rangeExtractor,
     scrollMargin: margin,
     anchorTo: fromEnd ? "end" : "start",
@@ -556,8 +604,13 @@ export function VirtualRows({
     scrollEndThreshold: END_THRESHOLD_PX,
     paddingEnd,
     initialMeasurementsCache: seed,
-    // Note that the run opens wherever its scroller stands, kept as the reader left it, since several runs may share it; one anchored to its end then takes it there.
-    initialOffset: () => scroller.current?.scrollTop ?? 0,
+    // Note that a run anchored to its start opens wherever its scroller stands, kept as the reader left it, since several runs may share it.
+    // One anchored to its end opens at its end, by what its rows measured or are estimated at, so its first draw is of the rows it opens on,
+    // rather than of its first rows, drawn and measured and then let go as its scroll to its end lands.
+    initialOffset: () =>
+      fromEnd && made.current !== null
+        ? endOffsetOf(made.current)
+        : (scroller.current?.scrollTop ?? 0),
     measureElement: measured,
     observeElementRect: sizeWhileShown,
     initialRect: windowRect(),
@@ -565,6 +618,8 @@ export function VirtualRows({
     directDomUpdates: true,
     directDomUpdatesMode: "position",
   });
+
+  made.current = virtualizer;
 
   // What the run measured is handed back as it is let go, the rows it measured alone (`takeSnapshot()`).
   const heard = useRef(onMeasurements);

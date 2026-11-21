@@ -41,6 +41,7 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
+  scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { searchTokens } from "@repo/features/search-tokens";
@@ -61,7 +62,7 @@ import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropLink, sideMargins } from "./interactions.js";
+import { dropLink, sideMargins, stackScrollEdge } from "./interactions.js";
 import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
@@ -342,6 +343,9 @@ export function RowList({
         ...(look === LIST_LOOK.DETAIL ? [listSectionSpacing("compact")] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
+        // Note that the stack's bar follows the list, so a tab root's large title collapses as it scrolls, and the rows fade under the bar's glass, as they do wherever a bar doesn't follow them, rather than meet a hard edge and a rule, which the bar drew once it followed them.
+        stackScrollEdge(),
+        scrollEdgeEffectStyle("soft", "top"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
         // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
         ...(choosing === undefined ? [] : [tint(colors.ACCENT)]),
@@ -485,7 +489,7 @@ function progressKey({ done, total }: SectionProgress): number {
   return ((done + total) * (done + total + 1)) / 2 + total;
 }
 
-/** A section's header: its fold chevron where it folds, its title in the group header's style, medium, and its count, all muted. */
+/** A section's header: its title in the group header's style, medium, and its count, then at its trailing end its fold chevron where it folds, all muted. */
 function GroupHeader({
   title,
   count,
@@ -524,14 +528,6 @@ function GroupHeader({
         accessibilityAddTraits(["isHeader"]),
       ]}
     >
-      {folded === undefined ? null : (
-        <Image
-          {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
-          size={chevron}
-          color={colors.TEXT_MUTED}
-          modifiers={[frame({ width: chevron + 2 })]}
-        />
-      )}
       {repository !== undefined ? (
         <RepositoryPicture repository={repository} size={glyphSize} />
       ) : emoji !== undefined ? (
@@ -582,6 +578,15 @@ function GroupHeader({
         </Text>
       )}
       <Spacer />
+      {/* Note that the fold chevron stands at the header's trailing end, as Mail's mailboxes, Files' sidebar and Reminders' groups fold, and as a parent row's disclosure stands its own. */}
+      {folded === undefined ? null : (
+        <Image
+          {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
+          size={chevron}
+          color={colors.TEXT_MUTED}
+          modifiers={[frame({ width: chevron + 2 })]}
+        />
+      )}
     </HStack>
   );
 }
@@ -692,7 +697,7 @@ function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
  * caption. A foldable section folds in place on a press of its header, its
- * chevron turning to say so; it opens unfolded. A header given `onDropLink`
+ * chevron at its trailing end turning to say so; it opens unfolded. A header given `onDropLink`
  * takes a row dragged onto it, on an iPad, and hands on the row's link. A
  * header given `add` ends in a + that adds to the section, so an empty
  * section stands as its header alone rather than a list of add rows. A

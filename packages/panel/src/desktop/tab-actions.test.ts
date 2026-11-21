@@ -42,7 +42,7 @@ import {
 } from "../testing/app-state.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { onSideBundles, unlandedBundles } from "../testing/side-bundles.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, taskAgentsOf, tasksControl } from "../testing/tasks-control.js";
 // Note that a Pull request tab is loaded as the side panel loads it, on first use
 // (`pages-on-demand.ts`), so the module is read here first and its load settles
 // within the test's own ticks.
@@ -156,24 +156,34 @@ async function mountEveryTab(
       tab: chosen.side,
     },
     pages: [{ id: PAGE_ID, title: "Invite flow", version: 1, at: 1 }],
-    agents: agentsControl({
-      agents: [AGENT],
-      agentIds: [AGENT.id],
-      pullRequests,
-      draft: {
-        id: "draft-1",
-        prompt: "",
-        attachments: [],
-        choice: undefined,
-        disabledServers: [],
-      },
-    }),
+    agents: taskAgentsOf(
+      agentsControl({
+        agents: [AGENT],
+        agentIds: [AGENT.id],
+        draft: {
+          id: "draft-1",
+          prompt: "",
+          attachments: [],
+          choice: undefined,
+          disabledServers: [],
+        },
+      }),
+      TASK.id,
+    ),
   });
 
   // The host holds the Pull request tab's parts, answered as a service that did not answer.
   const unanswered = () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED } as const);
   // The task list holds the task, whose workspace the Pull request tab reads its pull request through.
-  followListedTasks({ tasks: [TASK] });
+  // And its agent's pull requests, which the Pull request tab names its pull request by.
+  followListedTasks({
+    tasks: [TASK],
+    agentPullRequests: [...pullRequests].map(([agentId, pullRequest]) => ({
+      agentId,
+      taskId: TASK.id,
+      pullRequest,
+    })),
+  });
   holdRepositoryPullRequestParts(handHostReads({}).deliverParts, {
     [PULL_REQUEST_PART.PULL_REQUEST]: unanswered,
     [PULL_REQUEST_PART.CHECKS]: unanswered,

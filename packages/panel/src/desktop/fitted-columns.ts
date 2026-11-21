@@ -14,7 +14,11 @@
  * nothing, folds nothing.
  */
 
-import { LIST_FOLD_ORDER, type ListColumn, listPropertiesFitting } from "@repo/ui/tasks-page-model";
+import {
+  LIST_FOLD_ORDER,
+  type ListColumn,
+  listPropertiesFitting,
+} from "@repo/features/tasks-page-model";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 /** Whether two runs of columns are the same, in the same order. */

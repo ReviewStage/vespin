@@ -42,7 +42,7 @@ import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useRelatableTasks } from "../task-list-collections.js";
 import { appStateQuery, selectExperiment, selectNewAgentServersOff } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
@@ -85,10 +85,9 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * image pasted or files dropped taken too, MCP servers, which opens the
  * servers popover beside the menu (`agent-servers.tsx`), and, on a task's
  * card, Task relation, which opens the task search beside it
- * (`new-task-relation.tsx`), dictation, the model chip, which `/model` opens as in an agent's box, and the round Start agent button, with File for
- * later before it, drawing the backlog's mark alone where the card is too
- * narrow for its words, as on a phone, where the model chip's words are cut
- * short too, so Start stays at the row's end in the card.
+ * (`new-task-relation.tsx`), dictation, the model chip, which `/model` opens as in an agent's box, and the round Start agent button,
+ * which stays at the row's end in the card: where the card is too narrow,
+ * as on a phone, the model chip's words are cut short instead.
  * New task's repository chip stands in a head row over the card, the same in the
  * dialog and on Home: the repository the task is about
  * (`repository-chip.tsx`), its title, "New task", named to a reader alone,
@@ -512,7 +511,7 @@ export function NewTaskComposer({
   // The last agent press's key and what it asked, until a start lands.
   const pressed = useRef<NewTaskPress | undefined>(refused?.card.press);
   // Task relation offers the tasks of the card's workspace, in the sidebar's order.
-  const relatable = useNamedTasks(newTask.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
+  const relatable = useRelatableTasks(newTask.typedNames, workspaceId);
 
   // Runs on stands on every card but an automation's agent's.
   const runsOnStands = !forAutomation;

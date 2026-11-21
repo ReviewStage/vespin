@@ -21,17 +21,17 @@ onFlowComplete:
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
-# A regular window in portrait stands "Choose an item" beside the Inbox's
+# A regular window in portrait stands "No item selected" beside the Inbox's
 # list; a compact one stands the list alone, and skips the rest.
 - runFlow:
     when:
-      visible: "Choose an item"
+      visible: "No item selected"
     commands:
       - setOrientation: PORTRAIT
       - waitForAnimationToEnd:
           timeout: 5000
-      # Each tab opens on its list beside "Choose an item" while nothing is
-      # picked, the Inbox's and Tasks' alike, never on the detail alone with
+      # Each tab opens on its list beside "No item selected" or "No task
+      # selected" while nothing is picked, the Inbox's and Tasks' alike, never on the detail alone with
       # its list folded behind the sidebar button.
       - assertVisible: "Recorded the invite flow"
       - takeScreenshot: portrait-inbox
@@ -40,7 +40,7 @@ onFlowComplete:
           env:
             TAB: Tasks
       - assertVisible: "Pinned"
-      - assertVisible: "Choose an item"
+      - assertVisible: "No task selected"
       - takeScreenshot: portrait-tasks
       - tapOn: "Teammate invitations"
       - assertVisible: "Agents"

@@ -42,12 +42,14 @@ appId: dev.vespin.ios
 - tapOn:
     point: "50%, 10%"
 - waitForAnimationToEnd
-# The picture opens in the system's Quick Look, whose share sheet copies and
-# saves it as the system's own wording names those acts.
+# The picture opens full screen in the app's viewer, whose share sheet copies
+# and saves it as the system's own wording names those acts.
 - tapOn: "The invite page"
-- assertVisible: "Done"
+- assertVisible:
+    id: "picture-viewer-close"
 - waitForAnimationToEnd
-- tapOn: "Share"
+- tapOn:
+    id: "picture-viewer-share"
 - assertVisible: "Save Image"
 - assertVisible: "Copy"
 - waitForAnimationToEnd
@@ -55,4 +57,5 @@ appId: dev.vespin.ios
 - tapOn:
     point: "50%, 10%"
 - waitForAnimationToEnd
-- tapOn: "Done"
+- tapOn:
+    id: "picture-viewer-close"

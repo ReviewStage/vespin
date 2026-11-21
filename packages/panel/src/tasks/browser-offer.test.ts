@@ -16,7 +16,7 @@ import { handHostReads, handState, holdBrowserTabs } from "../testing/app-state.
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, taskAgentsOf, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { SIDE_PANEL_TAB } from "./task-tab-model.js";
 import type { SidePanelTab } from "./use-side-panel.js";
@@ -124,7 +124,7 @@ async function mount(
       },
       ...(strip === undefined ? undefined : { strip }),
     },
-    agents: agentsControl({ agents, agentIds: agents.map((agent) => agent.id) }),
+    agents: taskAgentsOf(agentsControl({ agents, agentIds: agents.map((agent) => agent.id) })),
   });
 
   act(() =>

@@ -191,6 +191,7 @@ import {
   type KnownSteps,
   type ListedSteps,
   MOUSE_BUTTON,
+  matchesAt,
   nearest,
   type Place,
   pathOf,
@@ -322,6 +323,15 @@ export interface TaskVisits {
    * writes none, and the door goes to the task as any other door does.
    */
   onVisitTask: (at: TaskAt, step: LinkStep) => boolean;
+  /**
+   * Writes the step a door opens on the own place of a task not standing, at
+   * `at`, as one move with the router's: the task alone, which the window's
+   * own write fills in place once the task stands, so the entry names the task
+   * it opens from the press on and nothing reads it naming another between.
+   * Answers whether it wrote it: only a step of its own after the one
+   * standing is, and any other the door writes through the router as before.
+   */
+  onOpenTask: (at: TaskAt, taskId: string) => boolean;
   /**
    * Takes the step the window stands on as the page of a task New task is
    * starting, which a door moved it to as the start was pressed: the task
@@ -594,8 +604,12 @@ function useWindowSteps(input: {
   away: AwayStep | undefined;
   /** Goes back to that step, answering whether one stood there to go to. */
   stepAway: () => boolean;
-  /** Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`), answering whether the window held a step to write it after; it writes none where it holds none yet. */
-  visit: (to: Place) => boolean;
+  /**
+   * Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`),
+   * answering whether the window held a step to write it after; it writes none where it holds none yet, nor, `pushOnly`,
+   * where that write would be any but a step of its own after the one standing.
+   */
+  visit: (to: Place, pushOnly?: boolean) => boolean;
   /** Takes the step standing as a task's start's page (`StepRecord.standIn`). */
   standIn: () => void;
   /** Answers whether the window stands on a task's start's page, letting it go. */
@@ -782,7 +796,7 @@ function useWindowSteps(input: {
 
   // Note that a link's step is written as the window would write it on arriving, read from the opens heard since the last
   // write, so the window arriving there finds it standing and writes nothing more.
-  const visit = (to: Place): boolean => {
+  const visit = (to: Place, pushOnly = false): boolean => {
     // Note that a window that has written no step yet, as a link said as the page loads finds it, leaves the loaded entry to its own first write.
     if (standingStep(record) === undefined) return false;
     const opens = latest.current.opened !== openedWritten.current;
@@ -795,6 +809,8 @@ function useWindowSteps(input: {
       opens,
       latest.current.onTaskRoute,
     );
+
+    if (pushOnly && write?.kind !== STEP_WRITE.PUSH) return false;
 
     if (write !== undefined) wrote(write);
 
@@ -924,7 +940,7 @@ export function useWindowHistory(input: {
     | "agents"
     | "pages"
     | "workspaces"
-    | "liveAgents"
+    | "agentsCarried"
     | "agentThreads"
   >;
 }): WindowHistory & TaskVisits & HistoryBehind & RecentSteps {
@@ -1090,7 +1106,7 @@ export function useWindowHistory(input: {
 
   // The task the version history standing is of, by its address, which it is counted as from the moment it stands, before that task opens under it.
   const routedHistory =
-    routed === undefined ? undefined : historyTaskOf(router.matchRoutes(pathOf(routed.address)));
+    routed === undefined ? undefined : historyTaskOf(matchesAt(router, routed.address));
 
   // Each surface the place shows is counted as it opens, from here rather than from the doors that open it, as the history is written.
   useSurfaceOpen(
@@ -1133,7 +1149,7 @@ export function useWindowHistory(input: {
       return;
     }
 
-    const matches = router.matchRoutes(pathOf(to.address));
+    const matches = matchesAt(router, to.address);
 
     if (routedPlaceOf(matches, access)?.overThePlan !== true) return;
     // An Inbox item's step stands the side panel beside it as it stood, on the item's own task.
@@ -1201,8 +1217,7 @@ export function useWindowHistory(input: {
 
   // Whether an address is on a task's own place, whose entry the router wrote before the window wrote the task's step in it.
   const onTaskRoute = useCallback(
-    (address: string) =>
-      routedPlaceOf(router.matchRoutes(pathOf(address)), access) === ROUTED_PLACE.TASK,
+    (address: string) => routedPlaceOf(matchesAt(router, address), access) === ROUTED_PLACE.TASK,
     [router, access],
   );
 
@@ -1210,7 +1225,7 @@ export function useWindowHistory(input: {
   const samePlace = useCallback(
     (one: Place, other: Place) => {
       const onSettings = (to: Place) =>
-        routedPlaceOf(router.matchRoutes(pathOf(to.address)), access) === ROUTED_PLACE.SETTINGS;
+        routedPlaceOf(matchesAt(router, to.address), access) === ROUTED_PLACE.SETTINGS;
 
       return samePage(one, other) || (onSettings(one) && onSettings(other));
     },
@@ -1273,7 +1288,7 @@ export function useWindowHistory(input: {
       const standingNow = standingPlace();
 
       return recent().map((place) => {
-        const matches = router.matchRoutes(pathOf(place.address));
+        const matches = matchesAt(router, place.address);
 
         return {
           place,
@@ -1320,6 +1335,14 @@ export function useWindowHistory(input: {
       if (wrote) setLinked({ taskId: step.taskId, address });
 
       return wrote;
+    },
+    onOpenTask: (at: TaskAt, taskId: string) => {
+      const address = addressOf({
+        workspace: at.workspace,
+        place: { kind: LINK_DESTINATION.TASK, taskId: at.task },
+      });
+
+      return visit(taskPlace(address, { taskId }), true);
     },
     behind: {
       backTo: (to) => backTo(placeOf(to)),
