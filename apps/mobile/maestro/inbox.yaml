@@ -30,43 +30,14 @@ env:
 - takeScreenshot: inbox-more
 - runFlow:
     file: subflows/dismiss.yaml
-# The scopes stand in the ⋯ menu, on every window, as Mail's filter does:
-# All lists the settled threads too. Note that All is picked while Open
-# stands, so the bar names no scope yet and its "All" is the menu's alone.
-- tapOn: "More"
-- tapOn: "All"
-- scrollUntilVisible:
-    element: "Which day the digest goes out"
-    direction: DOWN
-- waitForAnimationToEnd
-- takeScreenshot: inbox-all
-- tapOn: "More"
-- tapOn: "Open.*"
 # The thread comes first, before the row's swipes and its long press: a row
 # a swipe opened takes the next tap to close its actions, and its files, the
 # PDF among them, are shot whatever the press below does.
-# Note that the list is brought back to its very top before the row is
-# tapped, because a row standing under the bar's translucent glass still
-# reads as visible to Maestro, and neither a scroll to the first row nor a
-# swipe ever brings this one clear of the bar on an iPhone: a tap meant for
-# it lands on the bar, which scrolls the list to its top and opens nothing.
-# So on an iPhone the bar is tapped on purpose first, at the middle of its
-# empty stretch, which is iOS's own scroll to the top and does nothing where
-# the list stands there already; then the row stands below the large title.
-# A regular window's list column stands the row clear as it is. Nor is the
-# list scrolled to the first point this row shows, because the folded Duo
-# then stands it against the top edge, where a tap a point or two higher no
-# longer opens it.
-- scrollUntilVisible:
-    element: "Who can withdraw an invite\\?"
-    direction: UP
-- runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - tapOn:
-          point: "50%, 10%"
-      - waitForAnimationToEnd
+# Note that the thread is opened before anything scrolls the list, so its
+# row stands where the list opened, below the large title and clear of the
+# bar, as a tap by hand opens it; brought back up after the scopes' pass,
+# now below, the row stood under the bar or took the flow's tap without
+# opening, though a tap by hand on the same row at the same place opened it.
 # A thread opens named in a compact window's bar, as Messages names a
 # conversation, and under its path and title in a split view's detail, as
 # Mail's message stands; then each message: the agent's tile, name and time
@@ -272,6 +243,19 @@ env:
 - tapOn: "More"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
+# The scopes stand in the ⋯ menu, on every window, as Mail's filter does:
+# All lists the settled threads too. It comes after every press on a row,
+# since it scrolls the list down. Note that All is picked while Open
+# stands, so the bar names no scope yet and its "All" is the menu's alone.
+- tapOn: "More"
+- tapOn: "All"
+- scrollUntilVisible:
+    element: "Which day the digest goes out"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: inbox-all
+- tapOn: "More"
+- tapOn: "Open.*"
 # The search, a round glass button in the bar, narrows the list to
 # the threads whose words hold every word typed. It comes last, since its
 # keyboard stands over the rows.
