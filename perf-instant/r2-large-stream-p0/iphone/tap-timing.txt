@@ -1,0 +1,11 @@
+probe rows 11, commands 5, frames 239
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+
+most rendered components per path (summed over its taps):
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+
+whole run: 32s, 0 commits, 0 components rendered, 31821 ms of stalls over 5 stalls
+events: 

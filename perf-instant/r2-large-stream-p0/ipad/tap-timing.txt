@@ -1,0 +1,9 @@
+/Users/deanstratakos/vespin-ipad-agent/perf-wt/apps/mobile/scripts/perf/tap-timing.sh:15: no matches found: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/BAD5C9D5-2CB3-466D-8272-09ADD64A74E8/data/Containers/Data/Application/C55D6CDD-CDE4-4C75-A810-C3483A13F1DB/Documents/perf-probe-*.jsonl
+probe rows 0, commands 6, frames 364
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+
+most rendered components per path (summed over its taps):
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+
+markdown vs the rest (React render ms per tap, from the components' own times):
