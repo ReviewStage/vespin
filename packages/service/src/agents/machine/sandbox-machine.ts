@@ -171,13 +171,11 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
   GROUP_WRITES,
   REPOSITORY_REFUSAL,
-  type RepositoryFirewall,
   type RepositorySandbox,
   runInSandbox,
 } from "../repository-shell.js";
 import {
   type FirewallEntry,
-  type FirewallSession,
   type FirewallSources,
   type LaunchSwapKind,
   newPlaceholder,
