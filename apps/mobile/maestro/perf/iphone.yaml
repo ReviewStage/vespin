@@ -191,31 +191,6 @@ onFlowComplete:
       - assertVisible: "Status, Backlog"
       - waitForAnimationToEnd:
           timeout: 3000
-# An agent's row on its task's page to the agent's page, and back.
-- scrollUntilVisible:
-    element: "Build teammate invitations"
-    direction: DOWN
-- waitForAnimationToEnd:
-    timeout: 3000
-- repeat:
-    times: 5
-    commands:
-      - tapOn:
-          text: "Build teammate invitations"
-          retryTapIfNoChange: false
-          label: "T:agent-row"
-      - extendedWaitUntil:
-          visible: "Add a way to resend an invite that expired."
-          timeout: 10000
-      - waitForAnimationToEnd:
-          timeout: 3000
-      - tapOn:
-          id: "BackButton"
-          retryTapIfNoChange: false
-          label: "T:back-from-agent"
-      - assertVisible: "Agents"
-      - waitForAnimationToEnd:
-          timeout: 3000
 # Send on an agent's page, whose turn runs, so each wait is capped.
 - launchApp:
     arguments:
@@ -244,3 +219,44 @@ onFlowComplete:
           timeout: 5000
       - waitForAnimationToEnd:
           timeout: 2000
+# An agent's row on its task's page to the agent's page, and back, last, so a step that fails loses no other path.
+- launchApp:
+    arguments:
+      fixture: ${FIXTURE}
+      perfStream: ${STREAM}
+      perfLarge: ${LARGE}
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn:
+    id: "tasks-tab"
+- runFlow:
+    file: ../subflows/to-row.yaml
+    env:
+      ROW: "Teammate invitations"
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- scrollUntilVisible:
+    element: "Build teammate invitations"
+    direction: DOWN
+- waitForAnimationToEnd:
+    timeout: 3000
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Build teammate invitations"
+          retryTapIfNoChange: false
+          label: "T:agent-row"
+      - extendedWaitUntil:
+          visible: "Add a way to resend an invite that expired."
+          timeout: 10000
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-agent"
+      - assertVisible: "Agents"
+      - waitForAnimationToEnd:
+          timeout: 3000
