@@ -18,9 +18,11 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  accessibilityRemoveTraits,
   accessibilityValue,
   alignmentGuide,
   background,
@@ -704,6 +706,8 @@ export function RowFrame({
           accessibilityElement("ignore"),
           accessibilityLabel(heard.label),
           accessibilityValue(heardValue(heard.value)),
+          // Note that a row of a list that opens its rows reads as a button, as Mail's message rows do, whatever it draws, its menu reached through its Actions rather than as a pop-up.
+          ...(open === undefined ? [] : [accessibilityAddTraits(["isButton"])]),
           heardActions(choosing ? [] : heardActs(menuGroupsDrawn)),
         ]),
     ...(link === undefined ? [] : [dragLink(link)]),
@@ -1343,6 +1347,8 @@ export function RowDisclosure({
       modifiers={[
         listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
         listRowBackground("clear"),
+        // Note that the system heads a disclosure's label as a heading, which stood a parent task in VoiceOver's Headings rotor beside the list's sections; a parent is a row like any other, and the rows under it are no headings either, so the trait is taken off the whole disclosure.
+        accessibilityRemoveTraits(["isHeader"]),
       ]}
     >
       <DisclosureGroup.Label>
