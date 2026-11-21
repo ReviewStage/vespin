@@ -12,6 +12,7 @@ import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-s
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useListedInboxGroups } from "../tasks/use-waiting-items.js";
 import { useInboxViewChoices } from "./folded-groups.js";
+import type { SidebarTasksControl } from "./sidebar-open.js";
 
 /**
  * places-waiting.ts -- what the places that count the Inbox draw from: the
@@ -79,7 +80,7 @@ const SHOW_TONE = {
  * what they are not done with, read with that scope's words and tone; it
  * follows the view as the Inbox's menu changes it. None while signed out.
  */
-export function useInboxViewCount(tasks: TasksControl): BarCount {
+export function useInboxViewCount(tasks: SidebarTasksControl): BarCount {
   const now = useMinute();
   const { show, whose } = useInboxViewChoices();
   const { groups } = useListedInboxGroups(tasks);

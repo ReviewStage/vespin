@@ -78,6 +78,7 @@ import { NewTaskInButton } from "./new-task-button.js";
 import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
 import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
+import { type OpenMarks, type SidebarTasksControl, useUnreadAmong } from "./sidebar-open.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import { useFormDialog } from "./use-form-dialog.js";
 import { useRowDrag, useRunRowDrag } from "./use-row-drag.js";
@@ -626,14 +627,14 @@ export function moveToSectionEntry(
 
 /** What every section is drawn with. */
 interface SectionContext {
-  readonly tasks: TasksControl;
+  readonly tasks: SidebarTasksControl;
   readonly dialogs: SectionDialogs;
   /** What the sidebar names in place. */
   readonly edits: SectionEdits;
-  /** Whether a task is the open one, which a fold leaves standing. */
+  /** Whether a task is the open one where a fold would leave it out, which stands under the fold. */
   readonly current: (task: TaskSummary) => boolean;
-  /** Whether a task is unread, as its row's weight says. */
-  readonly unread: (task: TaskSummary) => boolean;
+  /** How a row reads its marks of the task opening, unread among them, as its weight says (`sidebar-open.tsx`). */
+  readonly marks: OpenMarks;
   /** Whether the sidebar is in sight, which the menus close without. */
   readonly inSight: boolean;
   readonly folded: (sectionId: string) => boolean;
@@ -678,6 +679,7 @@ interface SectionDoors {
 function sectionActionGroups(
   drawn: DrawnSection,
   context: SectionContext,
+  unread: readonly TaskSummary[],
   doors: SectionDoors,
 ): MenuEntry[][] {
   const { section } = drawn;
@@ -704,9 +706,10 @@ function sectionActionGroups(
     },
   ];
 
-  const read: MenuEntry[] = drawn.tasks.some(context.unread)
-    ? [{ label: "Mark all as read", icon: <MailOpenIcon />, onSelect: doors.onMarkRead }]
-    : [];
+  const read: MenuEntry[] =
+    unread.length > 0
+      ? [{ label: "Mark all as read", icon: <MailOpenIcon />, onSelect: doors.onMarkRead }]
+      : [];
 
   return [start, [...edit, ...read], remove];
 }
@@ -850,7 +853,7 @@ function SectionFoot({
   tasks,
 }: {
   drawn: DrawnSection;
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
 }): React.JSX.Element | null {
   if (drawn.tasks.length > 0 || tasks.listFailed) return null;
 
@@ -881,12 +884,12 @@ function SidebarSection({
   const menu = useMenu(tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
-  const held = drawn.tasks;
+  const unread = useUnreadAmong(drawn.tasks, context.marks);
 
-  const groups = sectionActionGroups(drawn, context, {
+  const groups = sectionActionGroups(drawn, context, unread, {
     opener: ellipsis,
     onMarkRead: () => {
-      for (const task of held.filter(context.unread)) markRead(task, false);
+      for (const task of unread) markRead(task, false);
     },
   });
 

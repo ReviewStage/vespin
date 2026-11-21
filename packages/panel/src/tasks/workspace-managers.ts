@@ -27,11 +27,10 @@ import {
   type TaskAgentsControl,
 } from "./use-agents.js";
 
-/** The workspace's Managers as the sidebar draws them, and the agents control a Manager's row acts through. */
+/** The workspace's Managers as the sidebar draws them. */
 interface WorkspaceManagers {
   /** The Managers; none while the live list carries no agents yet. */
   readonly managers: readonly ListedAgent[] | undefined;
-  readonly agents: AgentsControl;
 }
 
 /**
@@ -56,18 +55,15 @@ export function pinnedManagersOf<Agent extends AgentSummary>(
 
 /**
  * The Managers of `workspaceId` while `listed` (the Managers experiment on
- * for it) and the window's live task list carries its agents (`carried`),
- * each row acting through `control`, the window's agents control. Note that
- * the live query holds the workspace's unarchived Managers alone, so a step
- * of any other agent's turn tells it nothing.
+ * for it) and the window's live task list carries its agents (`carried`).
+ * Note that the live query holds the workspace's unarchived Managers alone,
+ * so a step of any other agent's turn tells it nothing.
  */
 export function useWorkspaceManagers(
   workspaceId: string | undefined,
   listed: boolean,
   carried: boolean,
-  control: TaskAgentsControl,
 ): WorkspaceManagers {
-  const queryClient = useQueryClient();
   const collections = useTaskListCollections();
 
   const { data: held } = useLiveQuery((q) =>
@@ -93,14 +89,19 @@ export function useWorkspaceManagers(
     [held, workspaceId],
   );
 
+  return { managers };
+}
+
+/** The agents control a Manager's row acts through, over `control`, the window's agents control. */
+export function useManagerAgents(control: TaskAgentsControl): AgentsControl {
+  const queryClient = useQueryClient();
+
   // Note that a Manager is read again by its own id before it is archived, because the window's control reads only the open task's agents.
-  const agents = useMemo(
+  return useMemo(
     (): AgentsControl => ({
       ...placeAgents(control),
       readAgent: (agentId: string) => readAgentById(queryClient, agentId),
     }),
     [control, queryClient],
   );
-
-  return { managers, agents };
 }

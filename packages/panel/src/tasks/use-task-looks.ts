@@ -254,16 +254,20 @@ export function useUnreadWatching({
   watched: string | undefined;
 }): (task: TaskSummary) => boolean {
   // Note that the answer stands while the plan watched does, so a list derived from it is derived again only when it moves.
-  return useCallback(
-    (task) => {
-      if (staged) return false;
+  return useCallback((task) => unreadWatching(task, staged, watched), [staged, watched]);
+}
 
-      if (task.markedUnread === true) return true;
+/** Whether a plan is unread, as `useUnreadWatching` answers, against the plan `watched` at the call. */
+export function unreadWatching(
+  task: TaskSummary,
+  staged: boolean,
+  watched: string | undefined,
+): boolean {
+  if (staged) return false;
 
-      return task.id !== watched && readsUnread(task, newestChangeOf(task));
-    },
-    [staged, watched],
-  );
+  if (task.markedUnread === true) return true;
+
+  return task.id !== watched && readsUnread(task, newestChangeOf(task));
 }
 
 /** Whether the developer marked a plan unread, and the mark a menu sets either way. */
