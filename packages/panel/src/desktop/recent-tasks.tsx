@@ -14,16 +14,18 @@ import {
   useMinute,
 } from "@repo/ui";
 import { assigneeFace } from "@repo/ui/actor-model";
-import { type ReactNode, useState } from "react";
+import { memo, type ReactNode, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useSteadyDoor } from "../steady-door.js";
+import { useNamedTask } from "../task-list-collections.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { SectionSkeleton } from "./person-frame.js";
 import { openedTaskOf, taskRowTab } from "./task-actions.js";
 import { taskCardOf } from "./task-card.js";
-import { OwnTask, TaskListRow } from "./task-list-row.js";
-import { useStandingDoor } from "./task-row-parts.js";
+import { TaskListRow } from "./task-list-row.js";
+import { type StandingDoor, useStandingDoor } from "./task-row-parts.js";
 
 /**
  * recent-tasks.tsx -- tasks listed for a glance, as Home's Recent and a person's page list them: each the Tasks page's own row, its status, its name, its repository, who is on it, how its agents stand, and when it last moved, hanging its card.
@@ -113,6 +115,61 @@ function GlanceRows({
   );
 }
 
+/**
+ * One task at a glance, the task `handed` as the list holds it now, so a
+ * delivery moving that task alone, as each turn of its agents does, draws
+ * this row and not the list (`useRecentTasks`). It holds while what it is
+ * handed does (`memo`), each door steady, so a list moving one row to its
+ * head draws that row alone; the task handed stands until the list holds
+ * it, as a row leaving does.
+ */
+const GlanceTaskRow = memo(function GlanceTaskRow({
+  handed,
+  tasks,
+  cells,
+  more,
+  face,
+  repositoryName,
+  unread,
+  onOpen,
+  onStanding,
+}: {
+  handed: TaskSummary;
+  tasks: TasksControl;
+  cells: readonly TaskRowCell[];
+  more: boolean;
+  face: boolean;
+  /** The task's repository as its menu's head says it, beside the others the list draws. */
+  repositoryName: string | undefined;
+  unread: (task: TaskSummary) => boolean;
+  onOpen: (taskId: string) => void;
+  onStanding: StandingDoor["set"];
+}): React.JSX.Element {
+  const task = useNamedTask(handed.id, tasks.typedNames) ?? handed;
+  const now = useMinute();
+  const directory = useMemberDirectory();
+
+  return (
+    <TaskListRow
+      tasks={taskRowTab(tasks)}
+      task={task}
+      opened={openedTaskOf(tasks)}
+      workspaceName={tasks.workspace?.name ?? ""}
+      cells={cells}
+      repositoryName={repositoryName}
+      // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
+      assigneeHeld={face && assigneeFace(task, directory) === undefined}
+      chosen={undefined}
+      more={more}
+      edges={TASK_ROW_EDGES.UNCHOSEN}
+      unread={unread(task)}
+      card={taskCardOf(tasks, task, now)}
+      onOpen={() => onOpen(task.id)}
+      onStanding={(asked) => onStanding(task, asked)}
+    />
+  );
+});
+
 /** Tasks at a glance, newest first as their owner lists them, each opening its task. */
 export function RecentTasks({
   tasks,
@@ -140,41 +197,29 @@ export function RecentTasks({
   /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion`. */
   moves?: boolean | undefined;
 }): React.JSX.Element {
-  const now = useMinute();
-  const directory = useMemberDirectory();
   const standing = useStandingDoor(tasks);
-  const rowTab = taskRowTab(tasks);
-  const opened = openedTaskOf(tasks);
-  const workspaceName = tasks.workspace?.name ?? "";
+  const open = useSteadyDoor(onOpen);
+  const setStanding = useSteadyDoor(standing.set);
 
   return (
     <>
       <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
         {(cells, more) =>
           listed.map((handed) => (
-            <OwnTask key={handed.id} handed={handed} typedNames={tasks.typedNames}>
-              {(task) => (
-                <TaskListRow
-                  tasks={rowTab}
-                  task={task}
-                  opened={opened}
-                  workspaceName={workspaceName}
-                  cells={cells}
-                  repositoryName={
-                    task.repository === null ? undefined : repositoryLabel(task.repository, listed)
-                  }
-                  // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
-                  assigneeHeld={face && assigneeFace(task, directory) === undefined}
-                  chosen={undefined}
-                  more={more}
-                  edges={TASK_ROW_EDGES.UNCHOSEN}
-                  unread={unread(task)}
-                  card={taskCardOf(tasks, task, now)}
-                  onOpen={() => onOpen(task.id)}
-                  onStanding={(asked) => standing.set(task, asked)}
-                />
-              )}
-            </OwnTask>
+            <GlanceTaskRow
+              key={handed.id}
+              handed={handed}
+              tasks={tasks}
+              cells={cells}
+              more={more}
+              face={face}
+              repositoryName={
+                handed.repository === null ? undefined : repositoryLabel(handed.repository, listed)
+              }
+              unread={unread}
+              onOpen={open}
+              onStanding={setStanding}
+            />
           ))
         }
       </GlanceRows>

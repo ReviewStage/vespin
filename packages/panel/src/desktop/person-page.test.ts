@@ -824,6 +824,18 @@ test("a task whose agents' turn ended stands first among theirs, with nothing el
   assert.deepEqual(sections(page).Created, ["Retry budget dashboard", "Relay retries on 502"]);
 });
 
+test("a task a service names only by its owner is listed as theirs, as one naming its creator is", async () => {
+  const { createdBy: _createdBy, ...owned } = task(10, "Owned shim audit", CHARLES, 3 * MINUTE);
+  const { page } = mountWith({ tasks: [...TASKS, owned] }, CHARLES.userId);
+  await settle();
+
+  assert.deepEqual(sections(page).Created, [
+    "Owned shim audit",
+    "Relay retries on 502",
+    "Retry budget dashboard",
+  ]);
+});
+
 test("an agent's row takes its new name once only its name moved", async () => {
   const { page, redraw } = mount(CHARLES.userId);
   await settle();
