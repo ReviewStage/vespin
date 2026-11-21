@@ -67,7 +67,10 @@ interface NativeDocumentFieldProps {
   readonly editable?: boolean | undefined;
   readonly testID?: string | undefined;
   readonly onLines: (
-    event: NativeSyntheticEvent<{ readonly lines: readonly NativeToldLine[]; readonly changes: number }>,
+    event: NativeSyntheticEvent<{
+      readonly lines: readonly NativeToldLine[];
+      readonly changes: number;
+    }>,
   ) => void;
   readonly onFocusChange: (event: NativeSyntheticEvent<{ readonly focused: boolean }>) => void;
 }

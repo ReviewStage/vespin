@@ -99,6 +99,8 @@ export {
   ThreadsLine,
 } from "./composer-head.js";
 
+export { DocumentField, type DocumentFieldHandle } from "./document-field.js";
+
 export { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
 
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
