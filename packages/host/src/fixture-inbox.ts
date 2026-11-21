@@ -48,6 +48,7 @@ import {
   PULL_REQUEST_STATE,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import { nextScheduledRun } from "@repo/features/automation-schedule";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
   AUTOMATION_ACTION,
@@ -2935,6 +2936,26 @@ const AUTOMATION = {
   DEPLOY: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c03",
 } as const;
 
+/** The digest's schedule: Mondays at 9:00 AM UTC. */
+const DIGEST_SCHEDULE = { cron: "0 9 * * 1", timezone: "UTC" } as const;
+
+/** The first instant after `after` the digest's schedule is due, as the service reads a schedule. */
+function digestDue(after: number): number {
+  return nextScheduledRun(DIGEST_SCHEDULE, new Date(after))?.getTime() ?? after;
+}
+
+/**
+ * When the digest is due, read off its own schedule from the instant the
+ * fixture landed, so its next run and its runs fall on the Mondays its
+ * schedule names, whichever day a capture is taken: the next one to come,
+ * and the two that came last.
+ */
+const DIGEST_DUE = {
+  NEXT: digestDue(LANDED),
+  LAST: digestDue(LANDED - 7 * DAY),
+  BEFORE: digestDue(LANDED - 14 * DAY),
+} as const;
+
 /** One run of an automation, fired `ago` before the fixture landed and settled a few minutes after, starting `agent` where it names one. */
 function automationRun(
   n: number,
@@ -2964,14 +2985,14 @@ const AUTOMATION_RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = ne
     [
       automationRun(
         1,
-        2 * HOUR,
-        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: LANDED - 2 * HOUR },
+        LANDED - DIGEST_DUE.LAST,
+        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: DIGEST_DUE.LAST },
         { id: AGENT.DIGEST, title: "Write the weekly digest", status: AGENT_STATUS.COMPLETED },
       ),
       automationRun(
         2,
-        7 * DAY,
-        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: LANDED - 7 * DAY },
+        LANDED - DIGEST_DUE.BEFORE,
+        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: DIGEST_DUE.BEFORE },
         null,
         { status: AUTOMATION_RUN_STATUS.SKIPPED, reason: AUTOMATION_RUN_REASON.CONCURRENCY },
       ),
@@ -3068,13 +3089,13 @@ const AUTOMATIONS: readonly AutomationSummary[] = [
     id: AUTOMATION.DIGEST,
     name: "Weekly digest",
     enabled: true,
-    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1", timezone: "UTC" },
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, ...DIGEST_SCHEDULE },
     action: {
       kind: AUTOMATION_ACTION.AGENT,
       prompt:
         "Summarize what merged and what is still open this week, and post it to the team's digest.",
     },
-    nextRunAt: LANDED + 3 * DAY,
+    nextRunAt: DIGEST_DUE.NEXT,
     lastRun: newestRun(AUTOMATION.DIGEST),
     createdAt: LANDED - 30 * DAY,
     scope: AUTOMATION_SCOPE.WORKSPACE,
