@@ -2,7 +2,7 @@
  * cloud-browser-cursor.tsx -- the agent's pointer over a cloud Browser tab's live view: an arrow the panel draws over the page, never in it, gliding to each point the agent clicks or types at.
  *
  * The agent's actions report each point a beat before their input lands
- * (`@repo/features/browser-agent-cdp`'s `BROWSER_CURSOR_BEAT`), in the page's
+ * (`@repo/service`'s `browser-agent-cdp.ts`, its `BROWSER_CURSOR_BEAT`), in the page's
  * CSS pixels of its visible area, and the tab's live read carries the last
  * one (`AgentBrowserTab.cursor`). It is drawn as `@repo/ui`'s `AgentPointer`
  * at that point's share of the page, which glides there about the beat, so

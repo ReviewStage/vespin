@@ -1,9 +1,9 @@
 /**
  * browser-agent-cdp.ts -- an agent's browser actions run on a DevTools protocol session: each action as the commands it sends, a sequence run in order up to its first failure, and what each step answers.
  *
- * The vocabulary is `browser-agent-actions.ts`; this is its one
+ * The vocabulary is `@repo/features/browser-agent-actions`; this is its one
  * implementation over CDP (`browser-cdp.ts`), which the browser in an
- * agent's sandbox speaks (`packages/service`'s `agent-browser.ts`). A tab
+ * agent's sandbox speaks (`agent-browser.ts`). A tab
  * is a page target, reached through a session
  * of its own attached flattened (`Target.attachToTarget`) the first time a
  * sequence acts on it and detached as the sequence ends. Clicks, keys, and
@@ -44,22 +44,6 @@
  * is asked again for a moment before it fails.
  */
 
-import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
-import {
-  Clock,
-  Data,
-  Deferred,
-  Duration,
-  Effect,
-  Option,
-  Predicate,
-  Result,
-  Schedule,
-  Schema,
-  type Scope,
-  Stream,
-} from "effect";
 import {
   BROWSER_AGENT_ACTION,
   BROWSER_AGENT_LIMITS,
@@ -80,7 +64,23 @@ import {
   type BrowserRecordingStopped,
   backendNodeIdOf,
   cutBrowserText,
-} from "./browser-agent-actions.js";
+} from "@repo/features/browser-agent-actions";
+import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
+import { readEither } from "@repo/wire/effect";
+import {
+  Clock,
+  Data,
+  Deferred,
+  Duration,
+  Effect,
+  Option,
+  Predicate,
+  Result,
+  Schedule,
+  Schema,
+  type Scope,
+  Stream,
+} from "effect";
 import { snapshotTextOf } from "./browser-agent-snapshot.js";
 import {
   CDP_FAILURE,

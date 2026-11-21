@@ -15,7 +15,7 @@
  */
 
 import { BRAND_PALETTE } from "@repo/brand";
-import { BROWSER_RECORDING_POINTER_MARK } from "@repo/features/browser-agent-cdp";
+import { BROWSER_RECORDING_POINTER_MARK } from "./browser-agent-cdp.js";
 import { RECORDING_CURSOR_FONT } from "./recording-cursor-font.js";
 
 // The pointer's copper over a light page and a dark one, the brand's accent in either theme.
@@ -33,7 +33,7 @@ function rgba(hex: string, alpha: string): string {
  * panel's amber arrow with its white edge, in a closed shadow root on the document's
  * root, hidden from the accessibility tree and taking no pointer events. It
  * follows the input the agent sends, which a page hears as a person's
- * (`@repo/features/browser-agent-cdp`), gliding to each point on the panel's
+ * (`browser-agent-cdp.ts`), gliding to each point on the panel's
  * spring (`--ui-spring-fast` over `--ui-duration-fast`). A press ripples at
  * its point at once, as the page reacts, and presses the arrow once it
  * arrives: the browser tool moves the pointer a beat before it presses, so the
