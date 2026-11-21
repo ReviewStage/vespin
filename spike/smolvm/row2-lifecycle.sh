@@ -61,3 +61,29 @@ fi
 smol machine stop --name life > /dev/null
 timed delete smol machine delete --name life --force
 check deleted $(smol machine ls --json | jq -e 'map(select(.name=="life")) | length == 0' > /dev/null; echo $?)
+
+# Disk per VM: 8 VMs from the cached image, each writing 100 MiB, against what the cache held before.
+# Row 4's 16 busy VMs grew the cache to 55 GB (3.4 GB each); this tells the image's share from the VMs' writes.
+cache_kb() { du -sk "$XDG_CACHE_HOME/smolvm" | cut -f1; }
+cache_app_kb() { du -sk --apparent-size "$XDG_CACHE_HOME/smolvm" | cut -f1; }
+before=$(cache_kb)
+record disk.cache_before_mb $((before / 1024))
+for i in 1 2 3 4 5 6 7 8; do
+  smol machine create --name "k$i" "${NET_FLAGS[@]}" --image "$IMAGE" -- sleep infinity > /dev/null
+  smol machine start --name "k$i" > /dev/null
+done
+sync
+after_start=$(cache_kb)
+record disk.per_vm_after_start_mb $(((after_start - before) / 8 / 1024))
+for i in 1 2 3 4 5 6 7 8; do
+  smol machine exec --name "k$i" -- sh -c 'head -c 104857600 /dev/urandom > /vercel/blob && sync'
+done
+sync
+after_write=$(cache_kb)
+record disk.per_vm_after_100mb_write_mb $(((after_write - before) / 8 / 1024))
+record disk.cache_apparent_mb $(($(cache_app_kb) / 1024))
+record disk.vm_dirs "$(du -sm "$XDG_CACHE_HOME"/smolvm/vms/* 2> /dev/null | sort -n | awk '{print $1}' | tr '\n' ' ')"
+record disk.vm_dir_files "$(ls -la "$(ls -d "$XDG_CACHE_HOME"/smolvm/vms/* | head -1)" | awk '{print $5, $9}' | tr '\n' ';' | cut -c1-400)"
+record disk.vm_dir_du_detail "$(du -sm "$(ls -d "$XDG_CACHE_HOME"/smolvm/vms/* | head -1)"/* 2> /dev/null | tr '\t\n' ' ;' | cut -c1-400)"
+check disk_near_written $([ $(((after_write - before) / 8 / 1024)) -lt 400 ] && echo 0 || echo 1)
+for i in 1 2 3 4 5 6 7 8; do smol machine stop --name "k$i" > /dev/null; smol machine delete --name "k$i" --force > /dev/null; done

@@ -33,12 +33,14 @@ case "$(uname -m)" in x86_64) na=x64 ;; aarch64) na=arm64 ;; esac
 nf=$(curl -fsSL https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt | awk -v a="linux-$na.tar.xz" '$2 ~ a"$" {print $2}')
 curl -fsSL "https://nodejs.org/dist/latest-v24.x/$nf" | sudo tar -xJ -C /usr/local --strip-components=1
 hash -r
-sudo /usr/local/bin/npm install --global --prefix /usr/local --no-audit --no-fund pnpm@10.34.5 > /dev/null 2>&1
-export PATH=/usr/local/bin:$PATH
+# pnpm into a prefix of our own, by the Node just unpacked (a global install left none on PATH twice).
+mkdir -p "$SPIKE_ROOT/pnpm"
+/usr/local/bin/node /usr/local/bin/npm install --prefix "$SPIKE_ROOT/pnpm" --no-audit --no-fund pnpm@10.34.5 2>&1 | tail -3 | sed 's/^/# pnpm install: /' | tee -a "$RESULTS_DIR/$ROW.txt"
+export PATH="$SPIKE_ROOT/pnpm/node_modules/.bin:/usr/local/bin:$PATH"
 record bare.node "$(node --version) pnpm $(pnpm --version)"
 sudo mkdir -p /mirror && sudo mount --bind "$SPIKE_ROOT/mirror" /mirror
 mkdir -p "$SPIKE_ROOT/bare"
-PATH=/usr/local/bin:$PATH bash "$SPIKE_ROOT/steps.sh" "$SPIKE_ROOT/bare" 2>&1 | sed 's/^\([a-z]\)/bare.\1/' | tee -a "$RESULTS_DIR/$ROW.txt"
+bash "$SPIKE_ROOT/steps.sh" "$SPIKE_ROOT/bare" 2>&1 | sed 's/^\([a-z]\)/bare.\1/' | tee -a "$RESULTS_DIR/$ROW.txt"
 rm -rf "$SPIKE_ROOT/bare"
 
 # Network: a 100 MB download on the box.

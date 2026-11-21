@@ -63,12 +63,27 @@ r=$(x -- sh -c 'curl -s https://httpbin.org/headers -H "Authorization: Bearer $E
 record refuse.two_placeholders "$(tr -d '\n' <<< "$r" | cut -c1-90)"
 n_red=$(grep -E '^echo\.[a-z-]+\.[a-z-]+\.redacted_seen=' "$RESULTS_DIR/$ROW.txt" | cut -d= -f2 | paste -sd+ | bc)
 n_real=$(grep -E '^echo\.[a-z-]+\.[a-z-]+\.real_value_seen=' "$RESULTS_DIR/$ROW.txt" | cut -d= -f2 | paste -sd+ | bc)
-check substitution_curl $([ "$n_red" -gt 0 ] && echo 0 || echo 1)
+# The echo shows the placeholder again: smolvm maps a reflected value back to its placeholder
+# (scrub.rs), so an echo cannot prove substitution from inside the guest; GitHub's rate limit can.
 check response_scrubbed $([ "$n_real" -eq 0 ] && echo 0 || echo 1)
+export GH_BEARER="$GH_REAL"
+smol machine create --name credb --block-private --credential ghb=GH_BEARER@api.github.com --image "$IMAGE" -- sleep infinity > /dev/null
+smol machine start --name credb > /dev/null
+lim=$(smol machine exec --name credb -- sh -c 'curl -s https://api.github.com/rate_limit -H "Authorization: Bearer $GH_BEARER" | jq .resources.core.limit')
+record substitution.github_bearer_placeholder_rate_limit "$lim"
+check substitution_curl $([ "${lim:-0}" -gt 60 ] 2> /dev/null && echo 0 || echo 1)
+lim=$(smol machine exec --name credb -- node -e 'fetch("https://api.github.com/rate_limit",{headers:{authorization:"Bearer "+process.env.GH_BEARER,"user-agent":"spike"}}).then(r=>r.json()).then(j=>console.log(j.resources.core.limit),e=>console.log("ERR",e.cause?.code||e.message))')
+record substitution.github_bearer_node_fetch_rate_limit "$lim"
+check substitution_node_fetch_undici $([ "${lim:-0}" -gt 60 ] 2> /dev/null && echo 0 || echo 1)
+smol machine exec --name credb -u root -- sh -c 'for f in /proc/[0-9]*/environ; do tr "\0" "\n" < $f; done 2>/dev/null' > "$SPIKE_ROOT/credb.environ"
+record leak.credb.environ "$(LC_ALL=C grep -cF -- "$GH_REAL" "$SPIKE_ROOT/credb.environ")"
+smol machine stop --name credb > /dev/null
+record leak.credb.data_dir "$(for f in $(find "$(smol machine data-dir --name credb)" -type f); do LC_ALL=C grep -qaF -- "$GH_REAL" "$f" && echo "$f"; done | wc -l)"
+smol machine delete --name credb --force > /dev/null
 # Node's fetch (undici), the runner's client, trusts the machine CA through NODE_EXTRA_CA_CERTS.
 r=$(x -- node -e 'fetch("https://httpbin.org/headers",{headers:{authorization:"Bearer "+process.env.ECHO_KEY}}).then(async r=>console.log(r.status, await r.text()),e=>console.log("ERR",e.cause?.code||e.message))')
 record echo.node_fetch_status "$(head -c 3 <<< "$r")"
-check substitution_node_fetch $([ "$(grep -cF '[smolvm-redacted]' <<< "$r")" -gt 0 ] && [ "$(grep -cF "$ECHO_KEY" <<< "$r")" -eq 0 ] && echo 0 || echo 1)
+record echo.node_fetch_real_value_seen "$(grep -cF "$ECHO_KEY" <<< "$r")"
 # Refusals: in a query string, in a JSON body, to a host the binding does not name.
 record refuse.query "$(x -- sh -c 'curl -s -o /dev/null -w %{http_code} "https://postman-echo.com/get?k=$ECHO_KEY"')"
 record refuse.json_body "$(x -- sh -c 'curl -s -o /dev/null -w %{http_code} https://postman-echo.com/post -H content-type:application/json -d "{\"k\":\"$ECHO_KEY\"}"')"
@@ -79,10 +94,10 @@ record stream.drip_ttfb_total "$(x -- sh -c 'curl -s -o /dev/null -H "Authorizat
 
 # 2. Claude Code, plan token then API key, through the interceptor: a real auth refusal, not TLS.
 cc() { x --timeout 90s -- sh -c "$1" 2>&1 | tr '\n' ' ' | cut -c1-400; }
-out=$(cc 'cd /tmp && env -u ANTHROPIC_API_KEY claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -oE "\"error_status\":[0-9]+,\"error\":\"[a-z_]+\"|CERT[A-Z_]*|certificate[^\"]*|ECONNREFUSED|ENOTFOUND" | sort | uniq -c')
+out=$(cc 'cd /tmp && env -u ANTHROPIC_API_KEY claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -oE "\"error_status\":[0-9]+,\"error\":\"[a-z_]+\"|\"result\":\"[^\"]{0,100}|CERT[A-Z_]*|certificate[^\"]{0,60}|ECONNREFUSED|ENOTFOUND" | sort | uniq -c')
 record claude.oauth_out "$out"
 check claude_oauth_reaches_anthropic $(grep -qiE '401|authentication|invalid|OAuth' <<< "$out" && ! grep -qiE 'certificate|self.signed|UNABLE_TO|ECONNREFUSED|ENOTFOUND' <<< "$out"; echo $?)
-out=$(cc 'cd /tmp && env -u CLAUDE_CODE_OAUTH_TOKEN claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -oE "\"error_status\":[0-9]+,\"error\":\"[a-z_]+\"|CERT[A-Z_]*|certificate[^\"]*|ECONNREFUSED|ENOTFOUND" | sort | uniq -c')
+out=$(cc 'cd /tmp && env -u CLAUDE_CODE_OAUTH_TOKEN claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -oE "\"error_status\":[0-9]+,\"error\":\"[a-z_]+\"|\"result\":\"[^\"]{0,100}|CERT[A-Z_]*|certificate[^\"]{0,60}|ECONNREFUSED|ENOTFOUND" | sort | uniq -c')
 record claude.apikey_out "$out"
 check claude_apikey_reaches_anthropic $(grep -qiE '401|authentication|invalid|api key' <<< "$out" && ! grep -qiE 'certificate|self.signed|UNABLE_TO|ECONNREFUSED|ENOTFOUND' <<< "$out"; echo $?)
 

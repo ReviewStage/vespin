@@ -39,8 +39,10 @@ EOF
 )
 record complement.count "$(wc -w <<< "$complement" | awk '{print $1/2}')"
 
-export ECHO_KEY="spike-echo-$(openssl rand -hex 16)"
-cred=(--credential echo=ECHO_KEY@httpbin.org)
+# Substitution is proven by GitHub's rate limit under a placeholder bearer (an echo shows the
+# placeholder again: smolvm maps reflected values back to it).
+export GH_BEARER="${GH_REAL:?the job token}"
+cred=(--credential ghb=GH_BEARER@api.github.com)
 declare -A FLAGS=(
   [a_block_private]="--block-private"
   [b_private_on]="--block-private --allow-private 172.16.0.0/12"
@@ -57,8 +59,8 @@ probe() { # machine
   record "$m.public_https" "$(hc https://example.com/)"
   record "$m.public_http" "$(hc http://example.com/)"
   local r
-  r=$(x sh -c 'curl -s --compressed --max-time 10 https://httpbin.org/headers -H "Authorization: Bearer $ECHO_KEY"')
-  record "$m.substitution" "$([ "$(grep -cF '[smolvm-redacted]' <<< "$r")" -gt 0 ] && echo yes || echo no)"
+  r=$(x sh -c 'curl -s --max-time 10 https://api.github.com/rate_limit -H "Authorization: Bearer $GH_BEARER" | jq .resources.core.limit')
+  record "$m.substitution" "$([ "${r:-0}" -gt 60 ] 2> /dev/null && echo yes || echo no)"
   record "$m.imds" "$(hc -H Metadata:true 'http://169.254.169.254/metadata/instance?api-version=2021-02-01')"
   record "$m.wireserver" "$(hc 'http://168.63.129.16/?comp=versions')"
   record "$m.box_eth0" "$(hc "http://$ETH0:18080/")"
