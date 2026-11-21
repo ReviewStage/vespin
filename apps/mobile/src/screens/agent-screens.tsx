@@ -68,7 +68,6 @@ import {
   AgentTranscript,
   ArchivedBar,
   AskNote,
-  AttachedPictures,
   askForName,
   BAR_TITLE,
   type BarSubtitle,
@@ -463,7 +462,6 @@ function AgentComposerBar({
     !denies &&
     banner === undefined &&
     composer.cancelMessageEdit === undefined &&
-    composer.attached.length === 0 &&
     composer.skills === undefined &&
     composer.mentions === undefined &&
     otherCall === undefined &&
@@ -500,7 +498,6 @@ function AgentComposerBar({
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies && !picking ? <DeniesWaiting onShow={onShowWaiting} /> : null}
-        <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
         {note === undefined ? null : <AskNote words={note} />}
       </>
     );

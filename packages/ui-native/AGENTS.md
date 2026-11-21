@@ -98,8 +98,10 @@ builds a control of its own.
   in the app's native pill field (`pill-field-native.ts`, UIKit's text view
   on TextKit 2), its value the wire's Markdown read through
   `@repo/features/pill-words`. It grows from one line to `maxLines` and then
-  scrolls, tells the `@` word the caret stands in (`onAtWord`), and puts a
-  picked pill in that word's place (`pick`).
+  scrolls, tells the `@` word the caret stands in (`onAtWord`), puts a
+  picked pill in that word's place (`pick`), and puts pills at the caret,
+  such as a file's marker as it is attached (`place`); an agent's composer
+  stands its files so, in the words, rather than in a row over them.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
