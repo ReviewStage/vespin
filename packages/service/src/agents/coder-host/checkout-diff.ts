@@ -7,7 +7,7 @@
  * for the last turn recorded, to the working tree as it stands, untracked
  * files included and ignored ones left out, read the way a snapshot reads
  * them. The one script here runs in the checkout, in a cloud sandbox through
- * the service (`packages/service`'s `coder-host/checkout-restore.ts`) and on
+ * the service (`checkout-restore.ts`) and on
  * a Mac through its host, with the two commits in its variables, the second
  * empty for the working tree, so neither splices a commit into shell text
  * and the two can never diff differently. It prints git's own unified diff,
@@ -27,8 +27,8 @@ import {
   CHANGES_BOUNDS,
   type ChangedFileStatus,
   PATCH_OMITTED,
-} from "./agent-wire.js";
-import { isSecretFile } from "./task-wire.js";
+} from "@repo/features/agent-wire";
+import { isSecretFile } from "@repo/features/task-wire";
 
 /** The files a diff names, as the Changes view draws them, and whether the diff was cut short of some. */
 export interface CheckoutDiffFiles {

@@ -120,6 +120,7 @@ import {
 import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { NotificationAsk } from "../notification-ask.js";
+import { useOpenDrawnCount } from "../open-drawn.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useReplyDrawnCount } from "../reply-drawn.js";
 import { useNoteOpened } from "../search/recent-opened.js";
@@ -1553,6 +1554,7 @@ export function InboxThreadScreen() {
   const steps = useThreadSteps(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
+  useOpenDrawnCount(handed ? undefined : PRODUCT_SURFACE.THREAD);
 
   return (
     <>

@@ -7,7 +7,7 @@ import {
   type InboxWhose,
   MINE,
 } from "@repo/features/inbox-list-model";
-import { Schema, SchemaTransformation } from "effect";
+import { Schema } from "effect";
 import { useCallback, useMemo, useState } from "react";
 import { useSteadyDoor } from "../steady-door.js";
 import { keptKey, useKept } from "../use-kept.js";
@@ -31,17 +31,9 @@ import { keptKey, useKept } from "../use-kept.js";
  * whom the items it lists are addressed to, a teammate by their account's
  * id, whether its pinned tasks' items stand first, and which of those runs
  * are folded, and so is its list's width; a task's own Inbox lists every item it holds, and keeps no
- * choice. A choice kept before its scope was is read
- * as the scope that now lists what it listed: a tab kept before the scopes, Needs you or
- * Unread, as Open, and All open or Everything as All; and the Needs you
- * button's press, kept before the tabs, as Open where it was pressed and
- * All where it was not. Open is kept under the value To do was, so a
- * scope kept as To do reads as Open. A grouping or a sort kept before the
- * list was always one run, the latest first, is left where it was and
- * read by nothing, and so is the scope a task's own Inbox kept before it
- * listed everything, and so are the folds and scopes kept for the Inbox's
- * channels before they were removed, and the folds kept for the sidebar's
- * groups by progress before that grouping was removed. A fixture run draws no inbox, so it has nothing staged to keep apart. An automation's Runs panel keeps its width and whether it
+ * choice. A choice kept under a value this build no longer names reads as
+ * none, the default, until the next choice is kept. A fixture run draws no
+ * inbox, so it has nothing staged to keep apart. An automation's Runs panel keeps its width and whether it
  * stands on the same terms, one for every automation, as the side panel
  * keeps one for every plan, and so does the tree beside every File and
  * Changes tab, one width for them all, a page's comments pane, one
@@ -157,21 +149,8 @@ const storedWhose = Schema.fromJsonString(
   ]),
 );
 
-/** The scope Reminders was kept under while it was named Snoozed. */
-const EARLIER_SNOOZED = "snoozed";
-
-/** Which scope the Inbox shows: a scope, or Snoozed read as Reminders. */
-const storedShow = Schema.fromJsonString(
-  Schema.Literals([...Object.values(INBOX_SHOW), EARLIER_SNOOZED]).pipe(
-    Schema.decodeTo(
-      Schema.Literals(Object.values(INBOX_SHOW)),
-      SchemaTransformation.transform({
-        decode: (kept) => (kept === EARLIER_SNOOZED ? INBOX_SHOW.REMINDERS : kept),
-        encode: (show) => show,
-      }),
-    ),
-  ),
-);
+/** Which scope the Inbox shows. */
+const storedShow = Schema.fromJsonString(Schema.Literals(Object.values(INBOX_SHOW)));
 
 /** The Inbox's view choices, each kept on this Mac under its own key. */
 const KEPT = {

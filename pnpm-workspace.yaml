@@ -230,7 +230,10 @@ patchedDependencies:
 # symbol's own image (`withTintColor`, rendering kept original), as Mail's Flag
 # menu hands its colored flags to the menu; and `photoSize`, which draws a `file://`
 # `uiImage` round at a menu glyph's size with its rendering kept original, so
-# the Assignee menu leads each member with their face. And it hands
+# the Assignee menu leads each member with their face; and `emoji` with
+# `emojiSize`, which draws an emoji into a square image at a menu glyph's
+# size, its rendering kept original, so Move to leads an emoji section with
+# its emoji in the glyph's place and its name lines up. And it hands
 # a `List` its edit mode as a binding (`editing`, `onEditingChange`), so a
 # two-finger drag down a list can switch Select mode on. And it gives a
 # `ToolbarItem` a `spacerBefore`, which stands the item after a `Spacer` in
@@ -240,7 +243,7 @@ patchedDependencies:
 # which Metro and TypeScript read, never `src/`; a modifier alone goes in the
 # app's own `modules/native-interactions` instead, as `sideMargins` does.
 # 58.0.29 changes none of the files it patches. Delete it when an `@expo/ui`
-# release offers a tinted image and a photo a menu keeps, a list's edit mode
+# release offers a tinted image, a photo and an emoji a menu keeps, a list's edit mode
 # as a binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #

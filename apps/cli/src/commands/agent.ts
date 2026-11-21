@@ -41,8 +41,10 @@ import {
   wholeCallLines,
 } from "@repo/features/cli-transcript";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
+import { cleanMachineName } from "@repo/features/machine-name";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FORWARD_PORT } from "@repo/features/sandbox-tunnel-wire";
+import { agentRunsOnWords } from "@repo/features/task-agents-model";
 import { Duration, Effect, Option, Ref, Result, Schedule } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { checkoutFromOrigin, originHasBranch, originRepository, treeIsClean } from "../git.js";
@@ -149,21 +151,16 @@ function continueAgent(choice: AgentContinueChoice) {
   });
 }
 
-/** Where `--cloud` or `--on` says the agent runs, the device by its id or its name among the member's hosts; none for where a Start naming none runs. */
-function runsOnOf(cloud: boolean, on: Option.Option<string>) {
+/** The places a start's flags may name, one at most: the cloud, one of the member's devices, or one of the workspace's machines. */
+interface PlaceFlags {
+  readonly cloud: boolean;
+  readonly on: Option.Option<string>;
+  readonly machine: Option.Option<string>;
+}
+
+/** Where `--on` says the agent runs: one of the member's own devices, by its id or its name among their hosts. */
+function deviceRunsOn(named: string) {
   return Effect.gen(function* () {
-    if (cloud && Option.isSome(on)) {
-      return yield* new CommandFailed({
-        exit: CLI_EXIT.USAGE,
-        message: "Name one place to run: --cloud or --on <device>.",
-      });
-    }
-
-    if (cloud) return { machine: AGENT_MACHINE.VERCEL } satisfies AgentRunsOnRequest;
-
-    if (Option.isNone(on)) return undefined;
-    const named = on.value;
-
     if (isWireUuid(named)) {
       return { machine: AGENT_MACHINE.DEVICE, deviceId: named } satisfies AgentRunsOnRequest;
     }
@@ -183,6 +180,79 @@ function runsOnOf(cloud: boolean, on: Option.Option<string>) {
         ...hosts.map((each) => `  ${each.id}  ${each.name}`),
       ].join("\n"),
     });
+  });
+}
+
+/**
+ * Where `--machine` says the agent runs: one of the machines the workspace
+ * owns, by its id, which the service checks the workspace owns, or by its
+ * name among the machines of the workspace `workspaceOf` reads, any case,
+ * as `start_agent` matches one. A name that matches none of them, or more
+ * than one, is refused with them listed.
+ */
+function workspaceMachineRunsOn<E, R>(named: string, workspaceOf: Effect.Effect<string, E, R>) {
+  return Effect.gen(function* () {
+    if (isWireUuid(named)) {
+      return { machine: AGENT_MACHINE.WORKSPACE, deviceId: named } satisfies AgentRunsOnRequest;
+    }
+
+    const workspaceId = yield* workspaceOf;
+    const { hosted } = yield* session;
+    const { machines } = yield* askService(hosted.workspaceMachines.list, { workspaceId });
+    const wanted = cleanMachineName(named).toLowerCase();
+    const matched = machines.filter((each) => cleanMachineName(each.name).toLowerCase() === wanted);
+    const [only] = matched;
+
+    if (matched.length === 1 && only !== undefined) {
+      return { machine: AGENT_MACHINE.WORKSPACE, deviceId: only.id } satisfies AgentRunsOnRequest;
+    }
+
+    if (machines.length === 0) {
+      return yield* new CommandFailed({
+        exit: CLI_EXIT.USAGE,
+        message:
+          "The workspace owns no machine to run agents on. Run it with --cloud, or ask a workspace admin to connect one in Settings › Machines.",
+      });
+    }
+
+    const why =
+      matched.length === 0
+        ? `${named} is none of the workspace's machines.`
+        : `${matched.length} of the workspace's machines are named ${named}.`;
+
+    return yield* new CommandFailed({
+      exit: CLI_EXIT.USAGE,
+      message: [
+        `${why} Name one by its name or its id:`,
+        ...machines.map((each) => `  ${each.id}  ${each.name}`),
+      ].join("\n"),
+    });
+  });
+}
+
+/** Where `--cloud`, `--on`, or `--machine` says the agent runs, a workspace's machine named by its name among those of the workspace `workspaceOf` reads; none for where a Start naming none runs. */
+function runsOnOf<E, R>(flags: PlaceFlags, workspaceOf: Effect.Effect<string, E, R>) {
+  return Effect.gen(function* () {
+    const named = [flags.cloud, Option.isSome(flags.on), Option.isSome(flags.machine)].filter(
+      (chosen) => chosen,
+    );
+
+    if (named.length > 1) {
+      return yield* new CommandFailed({
+        exit: CLI_EXIT.USAGE,
+        message: "Name one place to run: --cloud, --on <device>, or --machine <machine>.",
+      });
+    }
+
+    if (flags.cloud) return { machine: AGENT_MACHINE.VERCEL } satisfies AgentRunsOnRequest;
+
+    if (Option.isSome(flags.on)) return yield* deviceRunsOn(flags.on.value);
+
+    if (Option.isSome(flags.machine)) {
+      return yield* workspaceMachineRunsOn(flags.machine.value, workspaceOf);
+    }
+
+    return undefined;
   });
 }
 
@@ -435,6 +505,11 @@ const onFlag = Flag.String("on").pipe(
   Flag.withDescription("Run on one of your devices, by its name or id"),
 );
 
+const machineFlag = Flag.String("machine").pipe(
+  Flag.optional,
+  Flag.withDescription("Run on one of the machines the workspace owns, by its name or id"),
+);
+
 const followFlag = Flag.Boolean("follow").pipe(
   Flag.withDefault(false),
   Flag.withDescription("Stream the agent's turn until it ends"),
@@ -445,15 +520,16 @@ const waitFlag = Flag.Boolean("wait").pipe(
   Flag.withDescription("Wait until the turn ends; the exit code says how"),
 );
 
-/** What a start's flags name beside its words: the model and effort, both or neither, where it runs, and how its turn is waited on, one way at most. */
-function startFlagsOf(flags: {
-  readonly model: Option.Option<string>;
-  readonly effort: Option.Option<string>;
-  readonly cloud: boolean;
-  readonly on: Option.Option<string>;
-  readonly follow: boolean;
-  readonly wait: boolean;
-}) {
+/** What a start's flags name beside its words: the model and effort, both or neither, where it runs, a workspace's machine by its name among those of the workspace `workspaceOf` reads, and how its turn is waited on, one way at most. */
+function startFlagsOf<E, R>(
+  flags: PlaceFlags & {
+    readonly model: Option.Option<string>;
+    readonly effort: Option.Option<string>;
+    readonly follow: boolean;
+    readonly wait: boolean;
+  },
+  workspaceOf: Effect.Effect<string, E, R>,
+) {
   return Effect.gen(function* () {
     if (flags.follow && flags.wait) {
       return yield* new CommandFailed({
@@ -469,7 +545,7 @@ function startFlagsOf(flags: {
       });
     }
 
-    const runsOn = yield* runsOnOf(flags.cloud, flags.on);
+    const runsOn = yield* runsOnOf(flags, workspaceOf);
 
     return {
       ...(Option.isSome(flags.model) ? { model: flags.model.value } : undefined),
@@ -508,6 +584,7 @@ const startCommand = Command.make(
     effort: effortFlag,
     cloud: cloudFlag,
     on: onFlag,
+    machine: machineFlag,
     branch: Flag.String("branch").pipe(
       Flag.optional,
       Flag.withDescription(
@@ -519,9 +596,16 @@ const startCommand = Command.make(
   },
   ({ task, file, branch, ...flags }) =>
     Effect.gen(function* () {
-      const chosen = yield* startFlagsOf(flags);
-      const prompt = Option.isSome(file) ? yield* readInput(file.value) : undefined;
       const taskId = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+
+      const taskWorkspace = Effect.map(
+        askService(hosted.tasks.open, { id: taskId }),
+        (opened) => opened.task.workspaceId,
+      );
+
+      const chosen = yield* startFlagsOf(flags, taskWorkspace);
+      const prompt = Option.isSome(file) ? yield* readInput(file.value) : undefined;
 
       const agent = yield* startAgent(taskId, {
         ...(prompt === undefined ? undefined : { prompt }),
@@ -541,6 +625,10 @@ const startCommand = Command.make(
     {
       command: "vespin agent start ACME-42 --branch fix/login --cloud",
       description: "An agent in the cloud, on a branch already on GitHub",
+    },
+    {
+      command: "vespin agent start ACME-42 --machine build-box",
+      description: "An agent on one of the machines the workspace owns",
     },
     {
       command: 'echo "Add a test for the redirect" | vespin agent start ACME-42 -F - --wait',
@@ -581,12 +669,24 @@ const continueCommand = Command.make(
         "Run on one of your devices, by its name or id (default: where the agent runs)",
       ),
     ),
+    machine: machineFlag.pipe(
+      Flag.withDescription(
+        "Run on one of the machines the workspace owns, by its name or id (default: where the agent runs)",
+      ),
+    ),
     follow: followFlag,
     wait: waitFlag,
   },
   ({ agent: sourceId, file, at, ...flags }) =>
     Effect.gen(function* () {
-      const chosen = yield* startFlagsOf(flags);
+      const { hosted } = yield* session;
+
+      const sourceWorkspace = Effect.map(
+        askService(hosted.agents.read, { id: sourceId }),
+        (read) => read.agent.workspaceId,
+      );
+
+      const chosen = yield* startFlagsOf(flags, sourceWorkspace);
       const note = Option.isSome(file) ? yield* readInput(file.value) : undefined;
 
       const agent = yield* continueAgent({
@@ -716,6 +816,7 @@ const viewCommand = Command.make("view", { agent: agentArgument }, ({ agent: id 
         ...columns([
           ["Status", agent.status],
           ["Model", `${agent.model} (${agent.effort})`],
+          ["Runs on", agentRunsOnWords(agent)],
           ["Repository", agent.repository ?? "none"],
           ["Sandbox branch", agent.branch ?? "none"],
           ["Pushed branch", pushedBranch ?? "none"],

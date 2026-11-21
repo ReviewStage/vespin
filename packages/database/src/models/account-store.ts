@@ -358,45 +358,16 @@ type PreferenceWrite = typeof PreferenceWriteSchema.Type;
 
 /** The columns a write replaces: each part the write carries, the instant with the shared preferences part alone. */
 function writtenColumns(write: PreferenceWrite) {
+  const { userId: _userId, agent, ...parts } = write;
+
   return {
-    ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),
-    ...(write.linkOpen === undefined ? undefined : { linkOpen: write.linkOpen }),
-    ...(write.pullRequestOpen === undefined
-      ? undefined
-      : { pullRequestOpen: write.pullRequestOpen }),
-    ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
-    ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
-    ...(write.agentPermissionMode === undefined
-      ? undefined
-      : { agentPermissionMode: write.agentPermissionMode }),
-    ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),
-    ...(write.setupPlace === undefined ? undefined : { setupPlace: write.setupPlace }),
-    ...(write.soundWhen === undefined ? undefined : { soundWhen: write.soundWhen }),
-    ...(write.completionSound === undefined
-      ? undefined
-      : { completionSound: write.completionSound }),
-    ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
-    ...(write.voice === undefined ? undefined : { voice: write.voice }),
-    ...(write.turnNotifications === undefined
-      ? undefined
-      : { turnNotifications: write.turnNotifications }),
-    ...(write.onboardingSurvey === undefined
-      ? undefined
-      : { onboardingSurvey: write.onboardingSurvey }),
-    ...(write.introsSeen === undefined ? undefined : { introsSeen: write.introsSeen }),
-    ...(write.githubWakesOff === undefined ? undefined : { githubWakesOff: write.githubWakesOff }),
-    ...(write.newAgentServersOff === undefined
-      ? undefined
-      : { newAgentServersOff: write.newAgentServersOff }),
-    ...(write.inbox === undefined ? undefined : { inbox: write.inbox }),
-    ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
-    ...(write.updatedAt === undefined ? undefined : { updatedAt: write.updatedAt }),
-    ...(write.agent === undefined
+    ...parts,
+    ...(agent === undefined
       ? undefined
       : {
-          agentModel: write.agent.model,
-          agentEffort: write.agent.effort,
-          agentContextWindow: write.agent.contextWindow ?? null,
+          agentModel: agent.model,
+          agentEffort: agent.effort,
+          agentContextWindow: agent.contextWindow ?? null,
         }),
   };
 }
@@ -461,43 +432,12 @@ export function writeAccountPreferences(
     const updatedAt = yield* DateTime.nowAsDate;
 
     // Note that the shared part holds no preference since the voice went, so its write moves the instant alone.
+    const { preferences, ...parts } = write;
+
     const stored: PreferenceWrite = {
       userId,
-      ...(write.preferences === undefined ? undefined : { updatedAt }),
-      ...(write.linkOpen === undefined ? undefined : { linkOpen: write.linkOpen }),
-      ...(write.pullRequestOpen === undefined
-        ? undefined
-        : { pullRequestOpen: write.pullRequestOpen }),
-      ...(write.agentEnter === undefined ? undefined : { agentEnter: write.agentEnter }),
-      ...(write.commitAuthor === undefined ? undefined : { commitAuthor: write.commitAuthor }),
-      ...(write.agentPermissionMode === undefined
-        ? undefined
-        : { agentPermissionMode: write.agentPermissionMode }),
-      ...(write.setupFinished === undefined ? undefined : { setupFinished: write.setupFinished }),
-      ...(write.setupPlace === undefined ? undefined : { setupPlace: write.setupPlace }),
-      ...(write.soundWhen === undefined ? undefined : { soundWhen: write.soundWhen }),
-      ...(write.completionSound === undefined
-        ? undefined
-        : { completionSound: write.completionSound }),
-      ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
-      ...(write.voice === undefined ? undefined : { voice: write.voice }),
-      ...(write.turnNotifications === undefined
-        ? undefined
-        : { turnNotifications: write.turnNotifications }),
-      ...(write.onboardingSurvey === undefined
-        ? undefined
-        : { onboardingSurvey: write.onboardingSurvey }),
-      ...(write.introsSeen === undefined ? undefined : { introsSeen: write.introsSeen }),
-      ...(write.githubWakesOff === undefined
-        ? undefined
-        : { githubWakesOff: write.githubWakesOff }),
-      ...(write.newAgentServersOff === undefined
-        ? undefined
-        : { newAgentServersOff: write.newAgentServersOff }),
-      ...(write.inbox === undefined ? undefined : { inbox: write.inbox }),
-      ...(write.agent === undefined ? undefined : { agent: write.agent }),
-      ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
-      ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),
+      ...parts,
+      ...(preferences === undefined ? undefined : { updatedAt }),
     };
 
     const row = yield* upsertPreference(stored).pipe(

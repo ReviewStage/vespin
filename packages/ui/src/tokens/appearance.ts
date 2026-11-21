@@ -12,17 +12,13 @@
  * chosen theme draws its canvases in that theme whatever the machine says.
  */
 
-import { Schema } from "effect";
-import { THEME, type Theme } from "./surface.js";
+import { isTheme, THEME, type Theme } from "@repo/settings";
 
 /** The machine's dark appearance, which a theme of `system` follows. */
 const MACHINE_DARK = "(prefers-color-scheme: dark)";
 
 /** The attribute a root wears its theme in (`surfaceAttributes`). */
 const THEME_ATTRIBUTE = "data-ui-theme";
-
-/** Every theme a root may wear, to read the attribute by. */
-const isTheme = Schema.is(Schema.Literals(Object.values(THEME)));
 
 /** A theme as it is drawn, `system` resolved to the machine's appearance. */
 export type DrawnTheme = Exclude<Theme, typeof THEME.SYSTEM>;

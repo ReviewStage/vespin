@@ -304,26 +304,27 @@ env:
     timeout: 5000
 - takeScreenshot: agent-pinned
 # Move to › lists where the agent may be moved, as the panel's does: the
-# fixture's cloud agent goes to either of Ada's machines, each saying it
+# fixture's cloud agent goes to one of Ada's machines, each saying it
 # stops the agent first, since it still works. Note that a compact window's
 # ⋯ still stands open from Unpin, where a regular window's must be opened;
-# a tap off the menu puts it away.
+# a tap off the menu puts it away. Note too that each item is heard as one
+# element, its machine and its subtitle together ("build-box, Stops the
+# agent first"), so a step names the machine at the start of its words.
 - runFlow:
     when:
       notVisible: "Move to"
     commands:
       - tapOn: "More"
 - tapOn: "Move to"
-- assertVisible: "Ada's MacBook Pro"
-- assertVisible: "build-box"
-- assertVisible: "Stops the agent first"
+- assertVisible: "Ada's MacBook Pro, Stops the agent first"
+- assertVisible: "build-box, Stops the agent first"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-move-to
 - tapOn:
     point: "50%, 20%"
 - waitForAnimationToEnd
-- assertNotVisible: "build-box"
+- assertNotVisible: "build-box.*"
 # Archive asks first, in the panel's words, since the agent still works and
 # archiving it stops it; putting the question away (a tap off the iPhone's
 # action sheet, the iPad alert's Cancel) leaves it.

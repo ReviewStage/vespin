@@ -17,7 +17,7 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { Effect } from "effect";
 import { QUEUE_ACKNOWLEDGED } from "../queues/queue-consumer.js";
 import { githubReaching } from "../testing/github-app-fake.js";
-import type { SandboxRunner } from "./machine/sandbox-machine.js";
+import type { SandboxRunner } from "./machine/sandbox-checkout.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import { WorkspaceDriveFills } from "./workspace-drive.js";
 import { consumeWorkspaceDriveCleanup } from "./workspace-drive-builds.js";

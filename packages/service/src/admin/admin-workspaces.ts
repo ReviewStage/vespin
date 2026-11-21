@@ -12,6 +12,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { INVITATION_STATUS } from "@repo/database/models/invitation-store";
 import type {
   AdminWorkspaceInstallation,
   AdminWorkspaceList,
@@ -41,16 +42,6 @@ export const ADMIN_WORKSPACES_LIMIT = 200;
 
 /** The trailing run of UTC days a row's activity counts and the active tile cover. */
 export const ADMIN_WORKSPACES_ACTIVITY_DAYS = ADMIN_METRICS_WINDOW.WEEK;
-
-/**
- * Where an invitation stands, as the organization plugin writes it. Only
- * pending and accepted are reachable while rejecting and canceling stay
- * shut (`auth-policy.ts`); any other status still counts as settled.
- */
-export const INVITATION_STATUS = {
-  PENDING: "pending",
-  ACCEPTED: "accepted",
-} as const;
 
 /** A workspace as the main read answers it, before its owner and connections are folded on. */
 type AdminWorkspaceSourceRow = Omit<AdminWorkspaceRow, "owner" | "installations">;

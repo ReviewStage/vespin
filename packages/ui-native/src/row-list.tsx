@@ -62,11 +62,12 @@ import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropLink, sideMargins, stackScrollEdge } from "./interactions.js";
-import { type LongPressGroup, LongPressMenu } from "./list-row.js";
+import { dropLink, heardActions, sideMargins, stackScrollEdge } from "./interactions.js";
+import { type LongPressGroup, LongPressMenuItems } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
+import { heardActs } from "./row-heard-acts.js";
 import {
   RowChoosingContext,
   RowOpenContext,
@@ -704,7 +705,7 @@ function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
  * header given `more` ends in a Show all that opens every row of a section
  * the list cut short, as Mail's search sections do, and one given `act`,
  * where it has no Show all, ends in the act's words, such as Edit. A header
- * given `menu` opens it on a long press (`LongPressMenu`), as the panel's
+ * given `menu` opens it on a long press, the system's menu with the fold as its tap, as the panel's
  * right-click on a sidebar section's header does. Its rows fold away and
  * come back with the system's default animation, or at once where the reader
  * reduces motion. Note that SwiftUI's own `Section(isExpanded:)` is not used,
@@ -760,27 +761,37 @@ export function ListSection({
       />
     );
 
-  const pressable =
-    label === undefined || !foldable ? (
-      label
-    ) : (
-      <Button
-        onPress={() => setFolded(!folded)}
-        modifiers={[
-          buttonStyle("plain"),
-          accessibilityAddTraits(["isHeader"]),
-          accessibilityLabel(`${title}${shown === undefined ? "" : `, ${shown}`}`),
+  const heard = `${title}${shown === undefined ? "" : `, ${shown}`}`;
+  const fold = foldable ? () => setFolded(!folded) : undefined;
+
+  const heading = [
+    accessibilityAddTraits(["isHeader"]),
+    accessibilityLabel(heard),
+    ...(foldable
+      ? [
           accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
           accessibilityHint(FOLD_HINT),
-        ]}
+        ]
+      : []),
+  ];
+
+  // Note that a header with a menu is the system's menu button, its primary action the fold, so a tap folds it and a long press opens its menu, as Reminders' and Files' headers do; SwiftUI's context menu on a list's section header never opened, its long press lost to the fold's button or dropped. Its VoiceOver Actions are read from the same menu (`heardActs`). The long press holds the header's title, never its +, Show all or Edit, which take their own presses.
+  const pressed =
+    label === undefined ? undefined : menu.some((group) => group.length > 0) ? (
+      <Menu
+        label={label}
+        {...(fold === undefined ? {} : { onPrimaryAction: fold })}
+        modifiers={[buttonStyle("plain"), ...heading, heardActions(heardActs(menu))]}
       >
+        <LongPressMenuItems groups={menu} />
+      </Menu>
+    ) : fold === undefined ? (
+      label
+    ) : (
+      <Button onPress={fold} modifiers={[buttonStyle("plain"), ...heading]}>
         {label}
       </Button>
     );
-
-  // Note that the long press holds the header's title, never its +, Show all or Edit, which take their own presses.
-  const pressed =
-    pressable === undefined ? undefined : <LongPressMenu groups={menu}>{pressable}</LongPressMenu>;
 
   const dropped =
     pressed === undefined || onDropLink === undefined ? (

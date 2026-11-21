@@ -6,7 +6,7 @@
  * call names one to ten actions of the shared vocabulary
  * (`@repo/features/browser-agent-actions`) and runs them in order on the
  * Chromium in the agent's own sandbox (`agent-browser.ts`,
- * `@repo/features/browser-agent-cdp`). Every call is routed to its browser here alone
+ * `browser-agent-cdp.ts`). Every call is routed to its browser here alone
  * (`browserFor`).
  *
  * The agent's tabs are kept in the service under the conversation whose
@@ -25,7 +25,7 @@
  * While it runs, the agent's pointer is written to the tab it points at
  * (`pointBrowserTab`), one write just before each click, type, or wheel
  * turn reaches the page, so a member's window draws it gliding there
- * (`@repo/features/browser-agent-cdp`'s `BrowserCursor`), at one pace
+ * (`browser-agent-cdp.ts`'s `BrowserCursor`), at one pace
  * whoever watches. The point and its kind are no page content and are never
  * logged.
  *
@@ -67,13 +67,6 @@ import {
   cutBrowserText,
 } from "@repo/features/browser-agent-actions";
 import {
-  type BrowserCursor,
-  type BrowserRecorder,
-  isRecordingAction,
-  runBrowserActions,
-} from "@repo/features/browser-agent-cdp";
-import type { CdpSession, PageTarget } from "@repo/features/browser-cdp";
-import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
   type KeptPicture,
@@ -89,6 +82,13 @@ import { DateTime, Duration, Effect, Option, Predicate, Result, Schema } from "e
 import { logStoreFailure } from "../../http/store-failure.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "../recording-keep.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
+import {
+  type BrowserCursor,
+  type BrowserRecorder,
+  isRecordingAction,
+  runBrowserActions,
+} from "./browser-agent-cdp.js";
+import type { CdpSession, PageTarget } from "./browser-cdp.js";
 import { connectRestoring } from "./restore-tabs.js";
 import { RECORDING_START_EXIT } from "./sandbox-recorder.js";
 

@@ -10,13 +10,6 @@ import {
   type BrowserAgentStep,
   type BrowserCursorMove,
 } from "@repo/features/browser-agent-actions";
-import {
-  BROWSER_CURSOR_BEAT,
-  BROWSER_RECORDING_POINTER_MARK,
-  type BrowserCursor,
-  runBrowserActions,
-} from "@repo/features/browser-agent-cdp";
-import type { CdpEvent, PageTarget } from "@repo/features/browser-cdp";
 import type { WireValue } from "@repo/wire";
 import { Duration, Effect, Fiber, Predicate } from "effect";
 import { TestClock } from "effect/testing";
@@ -30,6 +23,13 @@ import {
   fakeSandboxApi,
 } from "../../testing/agent-browser-fake.js";
 import { agentBrowserOver } from "./agent-browser.js";
+import {
+  BROWSER_CURSOR_BEAT,
+  BROWSER_RECORDING_POINTER_MARK,
+  type BrowserCursor,
+  runBrowserActions,
+} from "./browser-agent-cdp.js";
+import type { CdpEvent, PageTarget } from "./browser-cdp.js";
 
 /**
  * An agent's browser actions over a fake Chromium behind the real CDP
