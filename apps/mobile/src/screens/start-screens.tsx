@@ -75,6 +75,7 @@ import { useAttachedPictures } from "../use-attached-pictures.js";
 import { useDictation } from "../use-dictation.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { type MentionOffer, useMentionOffer } from "../use-mention-offer.js";
+import { usePillField } from "../use-pill-field.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
 import { type NewAgentTalk, useNewAgentTalk } from "../voice-call.js";
@@ -1086,8 +1087,17 @@ export function NewTaskScreen({
         : { workspaceId, repository: skillsRepository },
   );
 
-  const mentions = useMentionOffer(prompt, setPrompt, { workspaceId, taskId: undefined });
-  // The prompt as it is sent, each picked mention written as its link.
+  // The field, which draws each mention and each picture attached as its pill.
+  const pillField = usePillField(prompt, setPrompt, pictures);
+
+  const mentions = useMentionOffer(
+    prompt,
+    setPrompt,
+    { workspaceId, taskId: undefined },
+    pillField.mentions,
+  );
+
+  // The prompt as it is sent, each mention already its link in the field of pills.
   const sendablePrompt = () => mentions.sendable(prompt.trim());
 
   const unreached =
@@ -1186,6 +1196,7 @@ export function NewTaskScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
+        pills={pillField.pills}
         trailing={<ModelChip pick={pick} onOpen={() => setModelsShown(true)} />}
         chips={
           <>
