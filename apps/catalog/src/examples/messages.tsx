@@ -12,6 +12,7 @@ import {
   ChatBubble,
   CopyIcon,
   chatRunOf,
+  HeldMessageAction,
   IconButton,
   INLINE_REF_LOOK,
   InlineRef,
@@ -56,9 +57,12 @@ const ADA = (
 /** One sender's run of short messages, as a chat stands them together. */
 const RUN = ["Merged this morning.", "It's behind the Invites flag.", "Turning it on Monday."];
 
+/** A turn's Copy, drawn once the turn's first frame has painted or the pointer comes onto it, a box of its size standing in until then. */
 const COPY = (
   <MessageActions>
-    <IconButton icon={<CopyIcon />} label="Copy" size={BUTTON_SIZE.COMPACT} onClick={() => {}} />
+    <HeldMessageAction>
+      <IconButton icon={<CopyIcon />} label="Copy" size={BUTTON_SIZE.COMPACT} onClick={() => {}} />
+    </HeldMessageAction>
   </MessageActions>
 );
 
