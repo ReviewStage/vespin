@@ -53,9 +53,33 @@ export interface HeldAct {
   readonly onPress: () => void;
 }
 
+/** Where a pressed thumbnail stands in the window, in points, which a picture's viewer grows out of. */
+export interface PicturePlace {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A picture opened full screen: what it is drawn from, the words its viewer's bar holds, and the thumbnail it grows out of. */
+export interface ViewedPicture {
+  readonly source: string;
+  readonly title: string;
+  /** When it was shown, under the title; none where nothing says. */
+  readonly subtitle: string | undefined;
+  readonly place: PicturePlace;
+}
+
+/** Who showed the pictures under it and when, which a picture's viewer names in its bar, as Photos names a photo's day. */
+export interface PictureOrigin {
+  readonly by: string;
+  readonly at: number | undefined;
+}
+
 /**
- * What the app does with what is held: opens a picture or a file full
- * screen in the system's Quick Look;
+ * What the app does with what is held: opens a picture full screen in the
+ * app's own viewer, grown out of its thumbnail, and a file in the system's
+ * Quick Look;
  * copies a picture or a text file's words, saves a picture or a recording to
  * Photos, or shares any of them in the system's share sheet; copies a
  * message's words; and copies a draft's body as rich text, its marks and
@@ -65,6 +89,7 @@ export interface HeldAct {
  */
 export interface Keeping {
   readonly open: (kept: Kept) => void;
+  readonly view: (picture: ViewedPicture) => void;
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
   /** Shares words in the system's share sheet, such as a message's. */
@@ -73,6 +98,8 @@ export interface Keeping {
 }
 
 const KeepingDoor = createContext<Keeping | undefined>(undefined);
+
+const OriginDoor = createContext<PictureOrigin | undefined>(undefined);
 
 /** Whether the message around a view has its words selected in place, and what ends it, as `MessageWords` reads it; none outside a message's menu. */
 const SelectingDoor = createContext<
@@ -88,6 +115,41 @@ export function KeepingProvider({
   readonly children: ReactNode;
 }) {
   return <KeepingDoor value={keeping}>{children}</KeepingDoor>;
+}
+
+/** Names who showed the pictures under it and when, for their viewer's bar. */
+export function PictureOriginProvider({
+  origin,
+  children,
+}: {
+  readonly origin: PictureOrigin;
+  readonly children: ReactNode;
+}) {
+  return <OriginDoor value={origin}>{children}</OriginDoor>;
+}
+
+/**
+ * A thumbnail's press that opens its picture full screen in the app's
+ * viewer, grown out of the thumbnail's place, its bar naming who showed it
+ * and when where a message says, and the picture's own words otherwise; none
+ * where nothing is drawn yet or no app answers it.
+ */
+export function usePictureView(
+  source: string | null | undefined,
+  name: string,
+): ((place: PicturePlace) => void) | undefined {
+  const keeping = useContext(KeepingDoor);
+  const origin = useContext(OriginDoor);
+
+  if (keeping === undefined || source == null) return undefined;
+
+  return (place) =>
+    keeping.view({
+      source,
+      title: origin?.by ?? name,
+      subtitle: origin?.at === undefined ? undefined : dayAndTimeText(origin.at),
+      place,
+    });
 }
 
 /** Copies words to the pasteboard through the app's keeping, as a held link's Copy link does; none where no app answers it. */
@@ -109,8 +171,8 @@ export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
 }
 
 /**
- * A thumbnail's press that opens a picture or a file full screen in the
- * system's Quick Look, as Messages and Mail open one; none where nothing is
+ * A file chip's press that opens its file full screen in the system's
+ * Quick Look, as Messages and Mail open one; none where nothing is
  * held yet or no app answers it. Note that the preview opens with the
  * system's plain transition rather than growing from the thumbnail, since
  * grown from it Quick Look stood in its immersive mode, its bar and Done
