@@ -93,6 +93,7 @@ import {
   type ModelChoice,
   modelChoiceSchema,
 } from "@repo/features/models-wire";
+import { READ_PAGE_VERSION } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
@@ -382,11 +383,6 @@ export const STOP_AGENT_REFUSAL = {
 
 /** The most characters of a page's HTML a read answers, about ten thousand tokens: the rest is counted, never sent. */
 export const READ_PAGE_CHARS = 40_000;
-
-/** The version a page read names in words rather than by its number. */
-export const READ_PAGE_VERSION = {
-  NEWEST: "newest",
-} as const;
 
 /** Why a page read answered nothing, in words the model can act on. */
 export const READ_PAGE_REFUSAL = {

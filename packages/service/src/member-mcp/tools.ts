@@ -121,6 +121,7 @@ import {
   type ModelProvider,
   modelChoiceSchema,
 } from "@repo/features/models-wire";
+import { READ_PAGE_VERSION } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { modelApiProviderSchema } from "@repo/features/provider-key-wire";
 import {
@@ -250,7 +251,6 @@ import {
   READ_PAGE_CHARS,
   READ_PAGE_REFUSAL,
   READ_PAGE_TOOL,
-  READ_PAGE_VERSION,
   runArchiveAgent,
   runListAgents,
   runListMemberModels,
