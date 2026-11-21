@@ -5,15 +5,17 @@ import { VERSION_CHANGE, versionDiff } from "./description-version-diff.js";
 const described = (body: string) => ({ body, assumptions: [] });
 
 describe("versionDiff", () => {
-  it("gives a section the version's reference definitions, so it reads a link defined in another section", () => {
-    const shown = described(
-      "## Goal\n\nRead [the guide][g].\n\n## References\n\n[g]: https://example.com/guide",
-    );
+  // Note that a definition may be written with no space after its colon, so a body is never taken to hold none by a narrower reading of it.
+  it.each(["[g]: https://example.com/guide", "[g]:https://example.com/guide"])(
+    "gives a section the version's reference definitions, so it reads a link defined in another section (%s)",
+    (definition) => {
+      const shown = described(`## Goal\n\nRead [the guide][g].\n\n## References\n\n${definition}`);
 
-    expect(versionDiff(null, shown).units[0]?.plain).toBe(
-      "## Goal\n\nRead [the guide][g].\n\n[g]: https://example.com/guide",
-    );
-  });
+      expect(versionDiff(null, shown).units[0]?.plain).toBe(
+        `## Goal\n\nRead [the guide][g].\n\n${definition}`,
+      );
+    },
+  );
 
   it("reads a struck section through the definitions of the version it was struck from", () => {
     const base = described(
