@@ -1,0 +1,199 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow iphone
+  > On Flow Complete
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}, perfLarge=${LARGE}})...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Repeat 3 times...
+  Stop dev.vespin.ios... COMPLETED
+  T:cold-launch... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+Repeat 3 times... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Repeat 5 times...
+  T:inbox-row... COMPLETED
+  Assert that ".*walked the invite flow.*" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:back-from-thread... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:more-menu... COMPLETED
+  Assert that "Mark all as read" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  Run ../subflows/dismiss.yaml...
+    Tap on point (${POINT})... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run ../subflows/dismiss.yaml... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:new-task... COMPLETED
+  Assert that "Describe the task" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:new-task-cancel... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:switcher-open... COMPLETED
+  Assert that "Relay, 6 members" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:switch-workspace... COMPLETED
+  Assert that "Recorded the invite flow" is not visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  Tap on id: workspace-switcher... COMPLETED
+  Assert that "Ada Lovelace, Personal workspace" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:switch-back... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:tab-tasks... COMPLETED
+  Assert that "Teammate invitations" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:tab-inbox... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Tap on id: tasks-tab... COMPLETED
+Run ../subflows/to-row.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run clear-of-tabs.yaml...
+    Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+    Run flow when "Teammate invitations", Above id: search-tab is not visible and true is true... SKIPPED
+    Wait for animation to end... COMPLETED
+  Run clear-of-tabs.yaml... COMPLETED
+Run ../subflows/to-row.yaml... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times...
+  T:tasks-row... COMPLETED
+  Assert that "Created by .*" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:back-from-task... COMPLETED
+  Assert that "Teammate invitations" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Run ../subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run ../subflows/scroll-in.yaml... COMPLETED
+Repeat 3 times...
+  T:status-chip-open... COMPLETED
+  Assert that "Backlog" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-pick... COMPLETED
+  Assert that "Status, Todo" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-chip-open... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-pick... COMPLETED
+  Assert that "Status, Backlog" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}, perfLarge=${LARGE}, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Stop" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times...
+  Tap on id: composer-field... COMPLETED
+  Input text Show the expiry too.... COMPLETED
+  Assert that "Send" is visible... COMPLETED
+  Wait for animation to end within 2000 ms... COMPLETED
+  T:send... COMPLETED
+  Assert that "Stop" is visible... COMPLETED
+  Wait for animation to end within 2000 ms... COMPLETED
+Repeat 3 times... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}, perfLarge=${LARGE}})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on id: tasks-tab... COMPLETED
+Run ../subflows/to-row.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run clear-of-tabs.yaml...
+    Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+    Run flow when "Teammate invitations", Above id: search-tab is not visible and true is true... SKIPPED
+    Wait for animation to end... COMPLETED
+  Run clear-of-tabs.yaml... COMPLETED
+Run ../subflows/to-row.yaml... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "Build teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times...
+  T:agent-row... COMPLETED
+  Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:back-from-agent... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}, perfLarge=${LARGE}})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Run ../subflows/to-row.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run clear-of-tabs.yaml...
+    Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+    Run flow when "Invite limits", Above id: search-tab is not visible and true is true... SKIPPED
+    Wait for animation to end... COMPLETED
+  Run clear-of-tabs.yaml... COMPLETED
+Run ../subflows/to-row.yaml... COMPLETED
+Repeat 5 times...
+  T:inbox-row-plain... COMPLETED
+  Assert that "A few values the invite flow needs.*" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:back-from-plain... COMPLETED
+  Assert that "Invite limits" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Run ../subflows/to-row.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run clear-of-tabs.yaml...
+    Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+    Run flow when "Perf long thread", Above id: search-tab is not visible and true is true... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run clear-of-tabs.yaml... COMPLETED
+Run ../subflows/to-row.yaml... COMPLETED
+Repeat 5 times...
+  T:inbox-row-long... COMPLETED
+  Assert that "Looks right for step 19.*" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:back-from-long... COMPLETED
+  Assert that "Perf long thread" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Set orientation PORTRAIT... COMPLETED
