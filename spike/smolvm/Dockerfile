@@ -40,9 +40,15 @@ RUN case "$TARGETARCH" in amd64) node_arch=x64 ;; arm64) node_arch=arm64 ;; *) e
  && npm install --global --no-audit --no-fund "pnpm@${PNPM_VERSION}" \
  && node --version && pnpm --version
 
+# GitHub's CLI from GitHub's own apt repository: Ubuntu's (2.45) has no `pr create --dry-run`.
+RUN install -d -m 0755 /etc/apt/keyrings \
+ && curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+ && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list
+
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      python3 python3-pip python-is-python3 tmux gh \
+      python3 python3-pip python-is-python3 tmux gh iproute2 \
       jq ripgrep unzip zstd procps bind9-dnsutils ffmpeg \
       poppler-utils libheif-examples libheif-plugin-libde265 \
  && rm -rf /var/lib/apt/lists/*

@@ -44,13 +44,21 @@ for v in ECHO_KEY ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN OPENAI_API_KEY CURSO
 done
 record guest.ssl_cert_file "$(x -- sh -c 'echo $SSL_CERT_FILE $NODE_EXTRA_CA_CERTS')"
 
-# 1. Substitution, by an echo host, in the header shapes the CLIs use.
-r=$(x -- sh -c 'curl -s https://postman-echo.com/headers -H "Authorization: Bearer $ECHO_KEY" -H "x-api-key: $ECHO_KEY"')
-record echo.curl_real_value_seen_times "$(grep -oF "$ECHO_KEY" <<< "$r" | wc -l)"
-record echo.curl_placeholder_seen "$(grep -o 'SMOL_PLACEHOLDER' <<< "$r" | wc -l)"
-check substitution_curl $([ "$(grep -cF "$ECHO_KEY" <<< "$r")" -gt 0 ] && echo 0 || echo 1)
+# 1. Substitution, by an echo host, in the header shapes the CLIs use. The first run found
+# neither value in what curl printed: the response is now decompressed and its status kept.
+for echo_url in https://postman-echo.com/headers https://httpbin.org/headers; do
+  host=$(cut -d/ -f3 <<< "$echo_url" | cut -d. -f1)
+  r=$(x -- sh -c 'curl -s --compressed -D /tmp/h.txt "$0" -H "Authorization: Bearer $ECHO_KEY" -H "x-api-key: $ECHO_KEY"; echo; echo "STATUS $(head -1 /tmp/h.txt | tr -d "\r")"; grep -i "^content-encoding" /tmp/h.txt | tr -d "\r"' "$echo_url")
+  record "echo.$host.status" "$(grep '^STATUS' <<< "$r" | cut -c8-)"
+  record "echo.$host.real_value_seen_times" "$(grep -oF "$ECHO_KEY" <<< "$r" | wc -l)"
+  record "echo.$host.placeholder_seen_times" "$(grep -o 'SMOL_PLACEHOLDER' <<< "$r" | wc -l)"
+  record "echo.$host.has_authorization_key" "$(grep -ci '"authorization"' <<< "$r")"
+  record "echo.$host.body_bytes" "$(wc -c <<< "$r")"
+done
+check substitution_curl $([ "$(grep -E '^echo\.[a-z-]+\.real_value_seen_times=' "$RESULTS_DIR/$ROW.txt" | cut -d= -f2 | paste -sd+ | bc)" -gt 0 ] && echo 0 || echo 1)
 # Node's fetch (undici), the runner's client, trusts the machine CA through NODE_EXTRA_CA_CERTS.
-r=$(x -- node -e 'fetch("https://postman-echo.com/headers",{headers:{authorization:"Bearer "+process.env.ECHO_KEY}}).then(r=>r.text()).then(console.log,e=>console.log("ERR",e.cause?.code||e.message))')
+r=$(x -- node -e 'fetch("https://httpbin.org/headers",{headers:{authorization:"Bearer "+process.env.ECHO_KEY}}).then(async r=>console.log(r.status, await r.text()),e=>console.log("ERR",e.cause?.code||e.message))')
+record echo.node_fetch_status "$(head -c 3 <<< "$r")"
 check substitution_node_fetch $([ "$(grep -cF "$ECHO_KEY" <<< "$r")" -gt 0 ] && echo 0 || echo 1)
 # Refusals: in a query string, in a JSON body, to a host the binding does not name.
 record refuse.query "$(x -- sh -c 'curl -s -o /dev/null -w %{http_code} "https://postman-echo.com/get?k=$ECHO_KEY"')"
@@ -62,10 +70,10 @@ record stream.drip_ttfb_total "$(x -- sh -c 'curl -s -o /dev/null -H "Authorizat
 
 # 2. Claude Code, plan token then API key, through the interceptor: a real auth refusal, not TLS.
 cc() { x --timeout 90s -- sh -c "$1" 2>&1 | tr '\n' ' ' | cut -c1-400; }
-out=$(cc 'cd /tmp && env -u ANTHROPIC_API_KEY claude -p "say ok" --output-format stream-json --verbose 2>&1 | tail -3')
+out=$(cc 'cd /tmp && env -u ANTHROPIC_API_KEY claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -E "api_retry|\"type\":\"result\"|rror" | tail -2')
 record claude.oauth_out "$out"
 check claude_oauth_reaches_anthropic $(grep -qiE '401|authentication|invalid|OAuth' <<< "$out" && ! grep -qiE 'certificate|self.signed|UNABLE_TO|ECONNREFUSED|ENOTFOUND' <<< "$out"; echo $?)
-out=$(cc 'cd /tmp && env -u CLAUDE_CODE_OAUTH_TOKEN claude -p "say ok" --output-format stream-json --verbose 2>&1 | tail -3')
+out=$(cc 'cd /tmp && env -u CLAUDE_CODE_OAUTH_TOKEN claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -E "api_retry|\"type\":\"result\"|rror" | tail -2')
 record claude.apikey_out "$out"
 check claude_apikey_reaches_anthropic $(grep -qiE '401|authentication|invalid|api key' <<< "$out" && ! grep -qiE 'certificate|self.signed|UNABLE_TO|ECONNREFUSED|ENOTFOUND' <<< "$out"; echo $?)
 
@@ -78,13 +86,12 @@ record codex.curl_models_status "$out"
 
 # 4. Cursor's SDK with its key on api2.cursor.sh (HTTP/2 upstream, HTTP/1.1 guest side).
 cat > "$SPIKE_ROOT/cursor-probe.mjs" <<'EOF'
-const sdk = await import("/opt/agent/cursor-sdk/node_modules/@cursor/sdk/dist/index.js").catch(async () => {
-  const { createRequire } = await import("node:module");
-  return import(createRequire("/opt/agent/cursor-sdk/package.json").resolve("@cursor/sdk"));
-});
+const { createRequire } = await import("node:module");
+const mod = await import(createRequire("/opt/agent/cursor-sdk/package.json").resolve("@cursor/sdk"));
+const sdk = mod.Agent ? mod : mod.default;
 const timer = setTimeout(() => { console.log("TIMEOUT"); process.exit(0); }, 60000);
 try {
-  const agent = await sdk.Agent.create({ apiKey: process.env.CURSOR_API_KEY, local: { cwd: "/tmp" } });
+  const agent = await sdk.Agent.create({ apiKey: process.env.CURSOR_API_KEY, model: { id: "auto" }, local: { cwd: "/tmp" } });
   const run = await agent.send({ type: "user", text: "say ok" }, {});
   for await (const event of run) { console.log("EVENT", JSON.stringify(event).slice(0, 120)); break; }
 } catch (error) { console.log("ERR", String(error?.message ?? error).slice(0, 300)); }
@@ -119,6 +126,7 @@ out=$(x --timeout 300s -- sh -c '
   git push -q origin --delete '"$branch"' 2>&1 && echo DELETE_OK
 ' 2>&1 | tr '\n' ' ')
 record github.flow "$out"
+record github.gh_version "$(x -- /usr/bin/gh --version | head -1)"
 check github_push $(grep -q PUSH_OK <<< "$out"; echo $?)
 check github_pr_dry_run $(grep -q PR_DRY_RUN_OK <<< "$out"; echo $?)
 

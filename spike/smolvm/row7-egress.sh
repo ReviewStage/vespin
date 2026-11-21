@@ -14,6 +14,7 @@ host_facts
 ETH0=$(ip -4 route get 1.1.1.1 | grep -oP 'src \K\S+')
 record host.eth0 "$ETH0"
 python3 -m http.server 18080 --bind 0.0.0.0 > /dev/null 2>&1 &
+python3 -m http.server 18082 --bind 127.0.0.1 > /dev/null 2>&1 &
 docker run -d --rm --name lan -p 127.0.0.1:18081:80 nginx:alpine > /dev/null
 LAN=$(docker inspect -f '{{.NetworkSettings.IPAddress}}' lan)
 DOCKER0=$(ip -4 addr show docker0 | grep -oP 'inet \K[0-9.]+')
@@ -39,7 +40,7 @@ EOF
 record complement.count "$(wc -w <<< "$complement" | awk '{print $1/2}')"
 
 export ECHO_KEY="spike-echo-$(openssl rand -hex 16)"
-cred=(--credential echo=ECHO_KEY@postman-echo.com)
+cred=(--credential echo=ECHO_KEY@httpbin.org)
 declare -A FLAGS=(
   [a_block_private]="--block-private"
   [b_private_on]="--block-private --allow-private 172.16.0.0/12"
@@ -56,13 +57,17 @@ probe() { # machine
   record "$m.public_https" "$(hc https://example.com/)"
   record "$m.public_http" "$(hc http://example.com/)"
   local r
-  r=$(x sh -c 'curl -s --max-time 10 https://postman-echo.com/headers -H "Authorization: Bearer $ECHO_KEY"')
+  r=$(x sh -c 'curl -s --compressed --max-time 10 https://httpbin.org/headers -H "Authorization: Bearer $ECHO_KEY"')
   record "$m.substitution" "$([ "$(grep -cF "$ECHO_KEY" <<< "$r")" -gt 0 ] && echo yes || echo no)"
   record "$m.imds" "$(hc -H Metadata:true 'http://169.254.169.254/metadata/instance?api-version=2021-02-01')"
   record "$m.wireserver" "$(hc 'http://168.63.129.16/?comp=versions')"
   record "$m.box_eth0" "$(hc "http://$ETH0:18080/")"
   record "$m.box_docker0" "$(hc "http://$DOCKER0:18080/")"
-  [ -n "$gw" ] && record "$m.box_via_gateway" "$(hc "http://$gw:18080/")"
+  if [ -n "$gw" ]; then
+    record "$m.box_via_gateway" "$(hc "http://$gw:18080/")"
+    record "$m.box_loopback_via_gateway" "$(hc "http://$gw:18082/")"
+  fi
+  record "$m.guest_addr" "$(x sh -c "ip -4 -o addr show scope global 2>/dev/null | awk '{print \$4}' | head -1")"
   record "$m.lan" "$(hc "http://$LAN/")"
   record "$m.dns_public" "$(x sh -c 'getent hosts example.com > /dev/null && echo ok || echo fail')"
 }
@@ -96,7 +101,7 @@ smol machine start --name a_block_private > /dev/null 2>&1 && record update_stop
 g() { grep "^$1=" "$RESULTS_DIR/$ROW.txt" | tail -1 | cut -d= -f2; }
 closed() { case "$1" in 000 | 403 | "") return 0 ;; *) return 1 ;; esac; }
 ok=0
-for k in imds box_eth0 box_docker0 lan; do closed "$(g a_block_private.$k)" || ok=1; done
+for k in imds box_eth0 box_docker0 box_via_gateway box_loopback_via_gateway lan; do closed "$(g a_block_private.$k)" || ok=1; done
 [ "$(g a_block_private.public_https)" = 200 ] && [ "$(g a_block_private.substitution)" = yes ] || ok=1
 check block_private_with_credentials $ok
 ok=0
@@ -105,10 +110,10 @@ closed "$(g b_private_on.imds)" || ok=1
 check private_switch_on $ok
 ok=0
 [ "$(g c_private_on_box_denied.lan)" = 200 ] || ok=1
-for k in imds box_eth0 box_docker0; do closed "$(g c_private_on_box_denied.$k)" || ok=1; done
+for k in imds box_eth0 box_docker0 box_via_gateway box_loopback_via_gateway; do closed "$(g c_private_on_box_denied.$k)" || ok=1; done
 check private_on_box_still_denied $ok
 ok=0
-for k in imds box_eth0 box_docker0 lan; do closed "$(g d_allow_complement.$k)" || ok=1; done
+for k in imds box_eth0 box_docker0 box_via_gateway box_loopback_via_gateway lan; do closed "$(g d_allow_complement.$k)" || ok=1; done
 [ "$(g d_allow_complement.substitution)" = yes ] || ok=1
 check allow_complement_with_credentials $ok
 for m in a_block_private b_private_on c_private_on_box_denied d_allow_complement e_net_only; do

@@ -69,3 +69,25 @@ timed pause2 smol machine pause --name sus
 timed resume2 smol machine resume --name sus
 smol machine stop --name sus > /dev/null 2>&1
 smol machine delete --name sus --force > /dev/null
+
+# Does resume scale with the VM's memory size? The same pause and resume at 2 GiB and at 1 GiB, idle.
+if [ "$MODE" = plain ] && [ "$WAIT" -le 60 ]; then
+  for mem in 2048 1024; do
+    smol machine create --name "sus$mem" "${NET_FLAGS[@]}" --mem "$mem" --image "$IMAGE" -- sleep infinity > /dev/null
+    smol machine start --name "sus$mem" > /dev/null
+    smol machine exec --name "sus$mem" -- tmux new-session -d -s shell 'sleep infinity'
+    timed "mem$mem.pause" smol machine pause --name "sus$mem" > /dev/null
+    record "mem$mem.checkpoint_mb" "$(du -sm "$(smol machine data-dir --name "sus$mem")" | cut -f1)"
+    timed "mem$mem.resume" smol machine resume --name "sus$mem" > /dev/null
+    record "mem$mem.tmux_after" "$(smol machine exec --name "sus$mem" -- tmux ls 2>&1 | cut -c1-40)"
+    smol machine stop --name "sus$mem" > /dev/null 2>&1
+    smol machine delete --name "sus$mem" --force > /dev/null
+  done
+  # And the plain stop then start, for comparison: what a cut-1 agent pays between turns without suspend.
+  smol machine create --name cold "${NET_FLAGS[@]}" --image "$IMAGE" -- sleep infinity > /dev/null
+  smol machine start --name cold > /dev/null
+  smol machine stop --name cold > /dev/null
+  timed cold.start smol machine start --name cold > /dev/null
+  smol machine stop --name cold > /dev/null
+  smol machine delete --name cold --force > /dev/null
+fi

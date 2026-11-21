@@ -103,36 +103,43 @@ host_facts() {
 
 host_used_mb() { free -m | awk '/^Mem:/{print $3}'; }
 
-# The VMM processes' summed PSS in MiB (libkrun names its process "libkrun VM" or "VM:<name>").
-vmm_pss_mb() {
-  local total=0 p comm kb
-  for p in /proc/[0-9]*; do
-    comm=$(cat "$p/comm" 2>/dev/null) || continue
-    case "$comm" in "libkrun VM" | VM:*) ;; *) continue ;; esac
-    kb=$(awk '/^Pss:/{print $2}' "$p/smaps_rollup" 2>/dev/null || echo 0)
+# The VMM processes: each machine's pid as `machine ls --json` reports it, and their children.
+vmm_pids() {
+  local p
+  for p in $(smol machine ls --json 2> /dev/null | jq -r '.[] | .pid // empty'); do
+    [ -d "/proc/$p" ] || continue
+    echo "$p"
+    pgrep -P "$p" 2> /dev/null
+  done | sort -u
+}
+
+pss_of_pids() {
+  local total=0 p kb
+  for p in "$@"; do
+    kb=$(awk '/^Pss:/{print $2}' "/proc/$p/smaps_rollup" 2> /dev/null)
     total=$((total + ${kb:-0}))
   done
   echo $((total / 1024))
 }
 
-vmm_count() {
-  local n=0 p comm
-  for p in /proc/[0-9]*; do
-    comm=$(cat "$p/comm" 2>/dev/null) || continue
-    case "$comm" in "libkrun VM" | VM:*) n=$((n + 1)) ;; esac
-  done
-  echo "$n"
+# The VMM processes' summed PSS in MiB.
+vmm_pss_mb() {
+  # shellcheck disable=SC2046 # one pid per word
+  pss_of_pids $(vmm_pids)
 }
 
-# One VMM's PSS by machine name, MiB.
+vmm_count() { smol machine ls --json 2> /dev/null | jq '[.[] | select(.pid != null)] | length'; }
+
+# One machine's VMM PSS, MiB.
 vmm_pss_of() {
-  local name=$1 p comm kb
-  for p in /proc/[0-9]*; do
-    comm=$(cat "$p/comm" 2>/dev/null) || continue
-    case "$comm" in "VM:$name"*) kb=$(awk '/^Pss:/{print $2}' "$p/smaps_rollup" 2>/dev/null); echo $((${kb:-0} / 1024)); return ;; esac
-  done
-  echo -1
+  local p
+  p=$(smol machine ls --json 2> /dev/null | jq -r --arg n "$1" '.[] | select(.name == $n) | .pid // empty')
+  [ -n "$p" ] || { echo -1; return; }
+  # shellcheck disable=SC2046
+  pss_of_pids "$p" $(pgrep -P "$p")
 }
+
+host_avail_mb() { free -m | awk '/^Mem:/{print $7}'; }
 
 # Start of the runner bundle: node loads it and, with no config line on stdin, exits 3
 # (RUNNER_EXIT.UNCONFIGURED) — the earliest point a launch could hand it its config.

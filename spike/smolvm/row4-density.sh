@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
 # row4-density.sh -- row 4: RAM that N agent VMs commit idle, under pnpm install each, and after (the balloon).
 #
-# usage: row4-density.sh <N> [mem-mib]
+# usage: row4-density.sh <N> [mem-mib | host-default]
+# Default: N=4 runs at smolvm's own default memory (half the host's RAM, at most 8 GiB, per VM), the
+# case that lost its runner; 8 and 16 run at 4096 MiB each.
+# The first run (default memory, half the host's RAM, 8 GiB, per VM) lost its runner a minute into
+# the installs at every N; each VM now gets MEM, and a guard stops every VM before the host runs out.
 # Each VM clones vespin from the box's mirror (mounted read-only) onto its own disk and runs
 # `pnpm install --frozen-lockfile --filter @repo/agent-runner...` (the runner's slice of the
 # workspace: a real install that fits 16 disks on a runner), all at once.
 
 N=${1:-4}
-MEM=${2:-}
+MEM=${2:-$([ "$N" = 4 ] && echo host-default || echo 4096)}
 ROW=row4-n$N
 source "$(dirname "$0")/lib.sh"
 prepare_host
 host_facts
+record mem_per_vm "$MEM"
 
 mirror=$SPIKE_ROOT/mirror/vespin.git
 [ -d "$mirror" ] || git clone --mirror -q "${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-ReviewStage/vespin}.git" "$mirror"
 mem_flags=()
-[ -n "$MEM" ] && mem_flags=(--mem "$MEM")
+[ "$MEM" != host-default ] && mem_flags=(--mem "$MEM")
 
 base_used=$(host_used_mb)
 record base.host_used_mb "$base_used"
@@ -46,8 +51,21 @@ record idle.guest_used_mb_d1 "$(smol machine exec --name d1 -- free -m | awk '/^
 record idle.stats_d1 "$(stats_line d1)"
 check idle_under_300mb_each $([ $((idle_pss / N)) -lt 300 ] && echo 0 || echo 1)
 
-# Sample host memory every 2 s while every VM installs.
-( while :; do echo "$(now_ms) $(host_used_mb) $(vmm_pss_mb) $(free -m | awk '/^Swap:/{print $3}')"; sleep 2; done ) > "$RESULTS_DIR/$ROW.samples" &
+ps -eo pid,ppid,rss,comm,args --sort=-rss | head -8 | cut -c1-160 | sed 's/^/# ps: /' | tee -a "$RESULTS_DIR/$ROW.txt"
+# Sample host memory every 2 s while every VM installs, into the job log too (a lost runner keeps
+# no artifact); below 600 MiB available, stop every VM so the runner and its results survive.
+( while :; do
+    line="$(now_ms) $(host_used_mb) $(vmm_pss_mb) $(free -m | awk '/^Swap:/{print $3}') $(host_avail_mb)"
+    echo "$line" >> "$RESULTS_DIR/$ROW.samples"
+    echo "# sample $line"
+    if [ "$(host_avail_mb)" -lt 600 ]; then
+      echo "guard.host_exhausted_at_ms=$(now_ms)" | tee -a "$RESULTS_DIR/$ROW.txt"
+      for i in $(seq 1 "$N"); do smol machine stop --name "d$i" > /dev/null 2>&1 & done
+      wait
+      break
+    fi
+    sleep 2
+  done ) &
 sampler=$!
 t0=$(now_ms)
 for i in $(seq 1 "$N"); do
@@ -62,10 +80,11 @@ for i in $(seq 1 "$N"); do
   ' > "$SPIKE_ROOT/install-d$i.out" 2>&1 &
 done
 wait_fail=0
-for job in $(jobs -p | grep -v "^$sampler\$"); do wait "$job" || wait_fail=$((wait_fail + 1)); done
+for job in $(jobs -p); do [ "$job" = "$sampler" ] && continue; wait "$job" || wait_fail=$((wait_fail + 1)); done
 record install_all_ms $(($(now_ms) - t0))
 record install_failures "$wait_fail"
 for i in $(seq 1 "$N"); do record "install.d$i" "$(tail -1 "$SPIKE_ROOT/install-d$i.out" | tr '\n' ' ')"; done
+record install.min_avail_mb "$(awk 'BEGIN{m=1e9}{if($5<m)m=$5}END{print m}' "$RESULTS_DIR/$ROW.samples")"
 peak=$(awk 'BEGIN{m=0}{if($2>m)m=$2}END{print m}' "$RESULTS_DIR/$ROW.samples")
 peak_pss=$(awk 'BEGIN{m=0}{if($3>m)m=$3}END{print m}' "$RESULTS_DIR/$ROW.samples")
 record install.peak_host_used_mb "$peak"
