@@ -1,0 +1,12 @@
+# probe-press.yaml -- for measurement only, never merged: scrolls the row `ROW` names into the middle of the screen and long presses it, at any text size. Note that it asks only part of the row to show, since at AX5 a thread's row wraps taller than to-row.yaml's whole-row check ever finds in time.
+appId: dev.vespin.ios
+---
+- scrollUntilVisible:
+    element: "${ROW}"
+    direction: DOWN
+    visibilityPercentage: 40
+    centerElement: true
+    timeout: 45000
+- waitForAnimationToEnd
+- longPressOn: "${ROW}"
+- waitForAnimationToEnd

@@ -13,7 +13,7 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - runFlow:
-    file: row-menu.yaml
+    file: probe-press.yaml
     env:
       ROW: acceptInvite can add a member twice
       ITEM: Open
@@ -27,7 +27,7 @@ appId: dev.vespin.ios
     env:
       TAB: Tasks
 - runFlow:
-    file: row-menu.yaml
+    file: probe-press.yaml
     env:
       ROW: Weekly digest email
       ITEM: Open
@@ -37,14 +37,14 @@ appId: dev.vespin.ios
     env:
       POINT: 50%, 8%
 - runFlow:
-    file: open-row.yaml
+    file: probe-open.yaml
     env:
       ROW: Teammate invitations
 - extendedWaitUntil:
     visible: "Build teammate invitations"
     timeout: 10000
 - runFlow:
-    file: row-menu.yaml
+    file: probe-press.yaml
     env:
       ROW: Build teammate invitations
       ITEM: Open
