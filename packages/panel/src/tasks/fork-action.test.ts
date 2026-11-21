@@ -283,6 +283,8 @@ async function forkedAtInTab(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+  // The pointer comes onto the messages, as a reader's does to reach their actions.
+  pointAtTurns(container);
 
   for (const button of container.querySelectorAll<HTMLButtonElement>(
     `button[aria-label="${FORK_LABEL}"]`,
