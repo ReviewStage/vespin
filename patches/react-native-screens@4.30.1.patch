@@ -29,10 +29,49 @@ index 12f2272070030a771ca521140d99a3cfc854bf5f..a9f93619ba3eefe8ba3ef4049b1b794e
    }
  }
 diff --git a/ios/tabs/RNSTabBarAppearanceCoordinator.mm b/ios/tabs/RNSTabBarAppearanceCoordinator.mm
-index b3bc98dd720850ed88344368162360493957f0b9..9ecfee3d991e4fa29020bef83d1df6d855d8910f 100644
+index b3bc98dd720850ed88344368162360493957f0b9..9b4f1a02f972a3ddebc60215a3be63c2497d8ce8 100644
 --- a/ios/tabs/RNSTabBarAppearanceCoordinator.mm
 +++ b/ios/tabs/RNSTabBarAppearanceCoordinator.mm
-@@ -65,6 +65,8 @@ static UIImage *_Nullable RNSImageWithSymbolRenderingMode(UIImage *_Nullable ima
+@@ -24,6 +24,16 @@ static UIImage *_Nullable RNSImageWithSymbolRenderingMode(UIImage *_Nullable ima
+   }
+ }
+ 
++static UITabBarAppearance *RNSAppearanceWithBadgeColor(UITabBarAppearance *appearance, UIColor *badgeColor)
++{
++  UITabBarAppearance *colored = [appearance copy];
++  for (UITabBarItemAppearance *item in @[ colored.stackedLayoutAppearance, colored.inlineLayoutAppearance, colored.compactInlineLayoutAppearance ]) {
++    item.normal.badgeBackgroundColor = badgeColor;
++    item.selected.badgeBackgroundColor = badgeColor;
++  }
++  return colored;
++}
++
+ @implementation RNSTabBarAppearanceCoordinator
+ 
+ - (void)updateAppearanceOfTabBar:(nullable UITabBar *)tabBar
+@@ -56,6 +66,21 @@ static UIImage *_Nullable RNSImageWithSymbolRenderingMode(UIImage *_Nullable ima
+ 
+     [self configureTabBarItemForTabScreenController:tabScreenCtrl imageLoader:imageLoader];
+   }
++
++  // Step 3 - the badge's color on the bar's own appearance, which the iPad's floating top tab bar reads where it reads no item's.
++  UIColor *badgeColor = nil;
++  for (RNSTabsScreenViewController *tabScreenCtrl in tabScreenCtrls) {
++    badgeColor = tabScreenCtrl.tabBarItem.standardAppearance.stackedLayoutAppearance.normal.badgeBackgroundColor;
++    if (badgeColor != nil) {
++      break;
++    }
++  }
++  if (badgeColor != nil) {
++    tabBar.standardAppearance = RNSAppearanceWithBadgeColor(tabBar.standardAppearance, badgeColor);
++    if (tabBar.scrollEdgeAppearance != nil) {
++      tabBar.scrollEdgeAppearance = RNSAppearanceWithBadgeColor(tabBar.scrollEdgeAppearance, badgeColor);
++    }
++  }
+ }
+ 
+ - (void)configureTabBarItemForTabScreenController:(nonnull RNSTabsScreenViewController *)tabScreenCtrl
+@@ -65,6 +90,8 @@ static UIImage *_Nullable RNSImageWithSymbolRenderingMode(UIImage *_Nullable ima
  
    tabBarItem.standardAppearance = tabScreenCtrl.tabScreenComponentView.standardAppearance;
    tabBarItem.scrollEdgeAppearance = tabScreenCtrl.tabScreenComponentView.scrollEdgeAppearance;
