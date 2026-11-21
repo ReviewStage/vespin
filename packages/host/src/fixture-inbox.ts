@@ -3396,11 +3396,17 @@ const ANSWERS: StagedAnswers = {
 
     return { agent: held };
   },
-  // Note that an archive is taken as the service takes one, though nothing here moves, so the agent stays on its task's list.
-  [ACT_KIND.AGENTS_ARCHIVE]: ({ agentId }) => {
+  // Note that an archive or an unarchive is taken as the service takes one, answered with the agent archived or brought back, though nothing here moves, so the agent stays on its task's list.
+  [ACT_KIND.AGENTS_ARCHIVE]: ({ agentId, archived }) => {
     const held = stagedAgent(agentId);
 
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+
+    if (!archived) {
+      const { archivedAt: _archivedAt, ...back } = held;
+
+      return { agent: back };
+    }
 
     return { agent: { ...held, archivedAt: LANDED } };
   },

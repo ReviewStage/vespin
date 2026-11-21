@@ -208,6 +208,7 @@ export const GLYPH = {
   EDIT_MESSAGE: lucide(LUCIDE_SYMBOL.PENCIL),
   REWIND: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
   FORK: lucide(LUCIDE_SYMBOL.SPLIT),
+  CONTINUE: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
   UPDATE: lucide(LUCIDE_SYMBOL.CIRCLE_ARROW_UP),
   RUN: lucide(LUCIDE_SYMBOL.PLAY),
   // A sound clip's play and pause, as the panel's audio player draws them.

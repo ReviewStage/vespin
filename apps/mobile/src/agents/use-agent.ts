@@ -20,6 +20,7 @@ import {
   PIN_FAILED,
   RENAME_FAILED,
   STOP_FAILED,
+  UNARCHIVE_FAILED,
 } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
@@ -212,6 +213,7 @@ export function useAgentRowActs(): {
   readonly stop: (agentId: string) => void;
   readonly rename: (agentId: string, title: string) => void;
   readonly archive: (agentId: string) => void;
+  readonly unarchive: (agentId: string) => void;
   readonly remove: (agentId: string) => void;
   readonly pin: (agentId: string, pinned: boolean) => void;
 } {
@@ -242,6 +244,14 @@ export function useAgentRowActs(): {
         write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: true }), {
           refused: (answer) => ("failure" in answer ? ARCHIVE_FAILED : undefined),
           unanswered: ARCHIVE_FAILED,
+          retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+      unarchive: (agentId) => {
+        write(() => acts[ACT_KIND.AGENTS_ARCHIVE]({ agentId, archived: false }), {
+          refused: (answer) => ("failure" in answer ? UNARCHIVE_FAILED : undefined),
+          unanswered: UNARCHIVE_FAILED,
           retry: true,
           went: BUZZ.SUCCESS,
         });

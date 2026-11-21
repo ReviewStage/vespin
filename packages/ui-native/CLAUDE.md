@@ -90,7 +90,12 @@ builds a control of its own.
   its link, since the field draws no chip), its `QueuedLines` (Steer and
   Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
-  taking the keyboard through `focusAsk`), and an `AskNote`.
+  taking the keyboard through `focusAsk`), an `AskNote`, and an agent's
+  `ContinueLine` (why its turn failed and Continue in new agent, where only a
+  new agent goes on, as the panel's failed end line offers it). While the
+  agent is archived, `ArchivedBar` stands in the composer's place, in the
+  same glass, saying so beside Unarchive, as the panel's note stands in its
+  box's.
 - **`PillField`** is the one field whose words hold pills: each mention and
   each marker of a held file drawn as the chip it becomes once sent
   (`pill-look.ts`), selected and deleted as one, copied as its Markdown,

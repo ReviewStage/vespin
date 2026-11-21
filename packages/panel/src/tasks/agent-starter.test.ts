@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { endLineReason } from "@repo/features/agent-continue-model";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
@@ -27,7 +28,6 @@ import { restOn } from "../testing/hint-rest.js";
 import {
   agentActor,
   endLineParts,
-  endLineReason,
   lineSender,
   macOwnerOf,
   teammateStarter,
