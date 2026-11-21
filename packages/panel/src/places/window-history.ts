@@ -324,6 +324,15 @@ export interface TaskVisits {
    */
   onVisitTask: (at: TaskAt, step: LinkStep) => boolean;
   /**
+   * Writes the step a door opens on the own place of a task not standing, at
+   * `at`, as one move with the router's: the task alone, which the window's
+   * own write fills in place once the task stands, so the entry names the task
+   * it opens from the press on and nothing reads it naming another between.
+   * Answers whether it wrote it: only a step of its own after the one
+   * standing is, and any other the door writes through the router as before.
+   */
+  onOpenTask: (at: TaskAt, taskId: string) => boolean;
+  /**
    * Takes the step the window stands on as the page of a task New task is
    * starting, which a door moved it to as the start was pressed: the task
    * the start lands on takes that step in place (`onLeaveStart`), so Back
@@ -595,8 +604,12 @@ function useWindowSteps(input: {
   away: AwayStep | undefined;
   /** Goes back to that step, answering whether one stood there to go to. */
   stepAway: () => boolean;
-  /** Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`), answering whether the window held a step to write it after; it writes none where it holds none yet. */
-  visit: (to: Place) => boolean;
+  /**
+   * Writes the window's step on `to` before it stands there, as its watch would write it once it does (`visitWrite`),
+   * answering whether the window held a step to write it after; it writes none where it holds none yet, nor, `pushOnly`,
+   * where that write would be any but a step of its own after the one standing.
+   */
+  visit: (to: Place, pushOnly?: boolean) => boolean;
   /** Takes the step standing as a task's start's page (`StepRecord.standIn`). */
   standIn: () => void;
   /** Answers whether the window stands on a task's start's page, letting it go. */
@@ -783,7 +796,7 @@ function useWindowSteps(input: {
 
   // Note that a link's step is written as the window would write it on arriving, read from the opens heard since the last
   // write, so the window arriving there finds it standing and writes nothing more.
-  const visit = (to: Place): boolean => {
+  const visit = (to: Place, pushOnly = false): boolean => {
     // Note that a window that has written no step yet, as a link said as the page loads finds it, leaves the loaded entry to its own first write.
     if (standingStep(record) === undefined) return false;
     const opens = latest.current.opened !== openedWritten.current;
@@ -796,6 +809,8 @@ function useWindowSteps(input: {
       opens,
       latest.current.onTaskRoute,
     );
+
+    if (pushOnly && write?.kind !== STEP_WRITE.PUSH) return false;
 
     if (write !== undefined) wrote(write);
 
@@ -1320,6 +1335,14 @@ export function useWindowHistory(input: {
       if (wrote) setLinked({ taskId: step.taskId, address });
 
       return wrote;
+    },
+    onOpenTask: (at: TaskAt, taskId: string) => {
+      const address = addressOf({
+        workspace: at.workspace,
+        place: { kind: LINK_DESTINATION.TASK, taskId: at.task },
+      });
+
+      return visit(taskPlace(address, { taskId }), true);
     },
     behind: {
       backTo: (to) => backTo(placeOf(to)),

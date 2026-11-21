@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_BOUNDS,
   DEVICE_AGENT_LINE_KIND,
@@ -11,6 +11,7 @@ import {
   type DeviceAgentAnswer,
   type DeviceLaunchStep,
   HOST_UPDATE,
+  MACHINE_OWNER,
 } from "@repo/features/device-agent-wire";
 import { eq, sql } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
@@ -20,7 +21,13 @@ import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { deviceAgentLine, deviceAgentRequest } from "../../schemas/device-agent.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
-import { DEVICE_LAYOUT, getTestDB, startTask } from "../../testing/index.js";
+import {
+  connectWorkspaceMachine,
+  DEVICE_LAYOUT,
+  getTestDB,
+  joinWorkspace,
+  startTask,
+} from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import {
   answerDeviceAgentRequest,
@@ -30,11 +37,13 @@ import {
   deviceAgentLineQueuedAfter,
   deviceAgentLineSettlement,
   deviceAgentLinesWaiting,
+  deviceAgentPin,
   deviceAgentRequestAnswer,
   deviceAgentRequestsWaiting,
   latestDeviceAgentLaunch,
   liveDeviceAgents,
   openDeviceAgentLaunches,
+  ownDeviceHost,
   queueDeviceAgentLine,
   queueDeviceAgentRequest,
   queueGoneDeviceAgentDiscard,
@@ -46,6 +55,7 @@ import {
   withdrawUnclaimedDeviceAgentLine,
 } from "../device-agent-store.js";
 import { beatDevice, registerDevice } from "../device-store.js";
+import { createTask } from "../task-store.js";
 
 /**
  * The work queued for a local agent's Mac, over a real dialect: a line is
@@ -69,7 +79,12 @@ import { beatDevice, registerDevice } from "../device-store.js";
  * its run ended before the bound, or before the grace on a device waiting to
  * update; and whether an agent's device waits to update, and whether a
  * line was queued after its launch line, are read for its own account
- * alone. Synthetic accounts, agents, and Macs throughout.
+ * alone. A workspace-machine agent queues only to a machine its own
+ * workspace owns, whichever member connected it, and no local agent queues
+ * to one. A workspace's machine lists, claims, and settles every line on it,
+ * and names its workspace's agents live, while no other workspace's host,
+ * nor a member's own principal on it, reads or takes any. Synthetic
+ * accounts, agents, and Macs throughout.
  */
 
 const SEALED = "sealed:v1:not-a-real-secret";
@@ -79,11 +94,24 @@ const FILE_ANSWER: DeviceAgentAnswer = {
   bytes: new TextEncoder().encode("line one\n"),
 };
 
-/** An agent of the account's on a task of its own, pinned to the Mac given, or running in a sandbox where none is; its id. */
-const startAgent = (userId: string, deviceId?: string) =>
+/**
+ * An agent of the account's on a task of its own, or on one in the
+ * workspace given, pinned to the machine given as the kind of machine
+ * given, or running in a sandbox where none is; its id.
+ */
+const startAgent = (
+  userId: string,
+  deviceId?: string,
+  machine: AgentMachineKind = AGENT_MACHINE.DEVICE,
+  workspaceId?: string,
+) =>
   Effect.gen(function* () {
     const db = yield* Database;
-    const task = yield* startTask(userId, { name: "Invitations" });
+
+    const task =
+      workspaceId === undefined
+        ? yield* startTask(userId, { name: "Invitations" })
+        : yield* createTask(userId, { name: "Invitations", organizationId: workspaceId });
 
     const started = yield* createAgent(userId, {
       taskId: task.id,
@@ -99,10 +127,7 @@ const startAgent = (userId: string, deviceId?: string) =>
     const agentId = Option.getOrThrow(started).agent.id;
 
     if (deviceId !== undefined) {
-      yield* db
-        .update(agentTable)
-        .set({ machine: AGENT_MACHINE.DEVICE, deviceId })
-        .where(eq(agentTable.id, agentId));
+      yield* db.update(agentTable).set({ machine, deviceId }).where(eq(agentTable.id, agentId));
     }
 
     return agentId;
@@ -167,19 +192,29 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const { userId, deviceId, agentId } = yield* openAccount();
         const queued = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
 
-        const waiting = yield* deviceAgentLinesWaiting(userId, deviceId);
+        const waiting = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
 
         const claims = yield* Effect.all(
           [
-            claimDeviceAgentLine(userId, deviceId, queued.id),
-            claimDeviceAgentLine(userId, deviceId, queued.id),
+            claimDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id),
+            claimDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id),
           ],
           { concurrency: "unbounded" },
         );
 
         const settledBeforeExit = yield* deviceAgentLineSettlement(userId, queued.id);
-        const settled = yield* settleDeviceAgentLine(userId, deviceId, queued.id, 137);
-        const settledAgain = yield* settleDeviceAgentLine(userId, deviceId, queued.id, 0);
+
+        const settled = yield* settleDeviceAgentLine(
+          ownDeviceHost(userId, deviceId),
+          queued.id,
+          137,
+        );
+
+        const settledAgain = yield* settleDeviceAgentLine(
+          ownDeviceHost(userId, deviceId),
+          queued.id,
+          0,
+        );
 
         assert.deepEqual(
           waiting.map((line) => Object.keys(line).includes("sealedSecrets")),
@@ -191,7 +226,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           [Option.some(SEALED), Option.none()],
         );
         assert.equal(yield* storedSecrets(queued.id), null, "the claim cleared the secrets");
-        assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+        assert.deepEqual(yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId)), []);
         assert.deepEqual(settledBeforeExit, Option.none());
         assert.equal(Option.isSome(settled), true);
         assert.equal(Option.isNone(settledAgain), true, "the first settle stands");
@@ -214,12 +249,32 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
 
         const token = randomUUID();
 
-        const first = yield* claimDeviceAgentLine(userId, deviceId, queued.id, token);
-        const again = yield* claimDeviceAgentLine(userId, deviceId, queued.id, token);
-        const underAnother = yield* claimDeviceAgentLine(userId, deviceId, queued.id, randomUUID());
-        const underNone = yield* claimDeviceAgentLine(userId, deviceId, queued.id);
-        yield* settleDeviceAgentLine(userId, deviceId, queued.id);
-        const afterSettle = yield* claimDeviceAgentLine(userId, deviceId, queued.id, token);
+        const first = yield* claimDeviceAgentLine(
+          ownDeviceHost(userId, deviceId),
+          queued.id,
+          token,
+        );
+
+        const again = yield* claimDeviceAgentLine(
+          ownDeviceHost(userId, deviceId),
+          queued.id,
+          token,
+        );
+
+        const underAnother = yield* claimDeviceAgentLine(
+          ownDeviceHost(userId, deviceId),
+          queued.id,
+          randomUUID(),
+        );
+
+        const underNone = yield* claimDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id);
+        yield* settleDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id);
+
+        const afterSettle = yield* claimDeviceAgentLine(
+          ownDeviceHost(userId, deviceId),
+          queued.id,
+          token,
+        );
 
         const expected = {
           id: queued.id,
@@ -249,8 +304,8 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
 
         const claims = yield* Effect.all(
           [
-            claimDeviceAgentLine(userId, deviceId, queued.id, token),
-            claimDeviceAgentLine(userId, deviceId, queued.id, token),
+            claimDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id, token),
+            claimDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id, token),
           ],
           { concurrency: "unbounded" },
         );
@@ -281,11 +336,11 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           id: string,
           step: DeviceLaunchStep = DEVICE_LAUNCH_STEP.PREPARING,
           mac = deviceId,
-        ) => Effect.map(stepDeviceAgentLaunch(userId, mac, id, step), Option.isSome);
+        ) => Effect.map(stepDeviceAgentLaunch(ownDeviceHost(userId, mac), id, step), Option.isSome);
 
         const waiting = yield* stepped(queued.id);
-        yield* claimDeviceAgentLine(userId, deviceId, queued.id);
-        yield* claimDeviceAgentLine(userId, deviceId, said.id);
+        yield* claimDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id);
+        yield* claimDeviceAgentLine(ownDeviceHost(userId, deviceId), said.id);
         const onAnotherMac = yield* stepped(queued.id, DEVICE_LAUNCH_STEP.PREPARING, otherMac);
         const onAMessage = yield* stepped(said.id);
 
@@ -304,7 +359,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           .where(eq(deviceAgentLine.id, queued.id));
         yield* stepped(queued.id, DEVICE_LAUNCH_STEP.STARTING);
         const newer = yield* latestDeviceAgentLaunch(userId, agentId);
-        yield* settleDeviceAgentLine(userId, deviceId, queued.id, 0);
+        yield* settleDeviceAgentLine(ownDeviceHost(userId, deviceId), queued.id, 0);
         const settled = yield* stepped(queued.id, DEVICE_LAUNCH_STEP.STARTING);
 
         assert.equal(waiting, false, "a launch no Mac claimed has no step");
@@ -366,7 +421,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       yield* queueDeviceAgentLine(userId, message(agentId, "first"));
       yield* queueDeviceAgentLine(userId, message(agentId, "second"));
 
-      const waiting = yield* deviceAgentLinesWaiting(userId, deviceId);
+      const waiting = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
 
       assert.deepEqual(
         waiting.map((line) => [line.kind, line.payload.text]),
@@ -397,10 +452,11 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         queued.push(Option.getOrThrow(yield* queueDeviceAgentLine(userId, files(bytes))).id);
       }
 
-      const first = yield* deviceAgentLinesWaiting(userId, deviceId);
+      const first = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
 
-      for (const line of first) yield* claimDeviceAgentLine(userId, deviceId, line.id);
-      const rest = yield* deviceAgentLinesWaiting(userId, deviceId);
+      for (const line of first)
+        yield* claimDeviceAgentLine(ownDeviceHost(userId, deviceId), line.id);
+      const rest = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
 
       assert.deepEqual(
         first.map((line) => line.id),
@@ -420,12 +476,12 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       const first = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
       const cutoff = yield* fiveMinutesOn;
       yield* TestClock.adjust("10 minutes");
-      yield* withdrawExpiredDeviceAgentRows(userId, cutoff);
+      yield* withdrawExpiredDeviceAgentRows({ kind: MACHINE_OWNER.USER, userId }, cutoff);
 
       const next = Option.getOrThrow(yield* queueDeviceAgentLine(userId, message(agentId, "back")));
 
       assert.deepEqual(
-        (yield* deviceAgentLinesWaiting(userId, deviceId)).map((line) => line.id),
+        (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).map((line) => line.id),
         [next.id],
       );
       assert.ok(next.seq > first.seq, "a withdrawn line's place is never handed out again");
@@ -463,43 +519,43 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           args: { path: "/etc/hosts" },
         });
 
-        const linesOnOwnersMac = yield* deviceAgentLinesWaiting(other.userId, owner.deviceId);
-        const requestsOnOwnersMac = yield* deviceAgentRequestsWaiting(other.userId, owner.deviceId);
+        const linesOnOwnersMac = yield* deviceAgentLinesWaiting(
+          ownDeviceHost(other.userId, owner.deviceId),
+        );
+
+        const requestsOnOwnersMac = yield* deviceAgentRequestsWaiting(
+          ownDeviceHost(other.userId, owner.deviceId),
+        );
 
         const lineClaimedByOther = yield* claimDeviceAgentLine(
-          other.userId,
-          other.deviceId,
+          ownDeviceHost(other.userId, other.deviceId),
           line.id,
         );
 
         const lineClaimedOnOwnersMac = yield* claimDeviceAgentLine(
-          other.userId,
-          owner.deviceId,
+          ownDeviceHost(other.userId, owner.deviceId),
           line.id,
         );
 
         const requestClaimedByOther = yield* claimDeviceAgentRequest(
-          other.userId,
-          owner.deviceId,
+          ownDeviceHost(other.userId, owner.deviceId),
           requestId,
         );
 
-        yield* claimDeviceAgentLine(owner.userId, owner.deviceId, line.id);
-        yield* claimDeviceAgentRequest(owner.userId, owner.deviceId, requestId);
+        yield* claimDeviceAgentLine(ownDeviceHost(owner.userId, owner.deviceId), line.id);
+        yield* claimDeviceAgentRequest(ownDeviceHost(owner.userId, owner.deviceId), requestId);
 
         const steppedByOther = [
           Option.isSome(
             yield* stepDeviceAgentLaunch(
-              other.userId,
-              owner.deviceId,
+              ownDeviceHost(other.userId, owner.deviceId),
               line.id,
               DEVICE_LAUNCH_STEP.STARTING,
             ),
           ),
           Option.isSome(
             yield* stepDeviceAgentLaunch(
-              other.userId,
-              other.deviceId,
+              ownDeviceHost(other.userId, other.deviceId),
               line.id,
               DEVICE_LAUNCH_STEP.STARTING,
             ),
@@ -507,20 +563,22 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         ];
 
         const settledByOther = yield* settleDeviceAgentLine(
-          other.userId,
-          owner.deviceId,
+          ownDeviceHost(other.userId, owner.deviceId),
           line.id,
           0,
         );
 
         const answeredByOther = yield* answerDeviceAgentRequest(
-          other.userId,
-          owner.deviceId,
+          ownDeviceHost(other.userId, owner.deviceId),
           requestId,
           FILE_ANSWER,
         );
 
-        yield* answerDeviceAgentRequest(owner.userId, owner.deviceId, requestId, FILE_ANSWER);
+        yield* answerDeviceAgentRequest(
+          ownDeviceHost(owner.userId, owner.deviceId),
+          requestId,
+          FILE_ANSWER,
+        );
 
         assert.deepEqual(queuedByOther, Option.none());
         assert.equal(requestedByOther, false);
@@ -540,6 +598,129 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         assert.deepEqual(
           yield* deviceAgentRequestAnswer(owner.userId, requestId),
           Option.some(FILE_ANSWER),
+        );
+      }),
+  );
+
+  it.effect(
+    "a workspace's machine lists, claims, and settles the lines on it, and no other host reads or takes them",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const member = yield* openAccount();
+        const other = yield* openAccount();
+
+        const workspaceOf = (agentId: string) =>
+          Effect.map(
+            db
+              .select({ organizationId: agentTable.organizationId })
+              .from(agentTable)
+              .where(eq(agentTable.id, agentId)),
+            ([row]) => row?.organizationId ?? "",
+          );
+
+        const workspace = yield* workspaceOf(member.agentId);
+        const elsewhere = yield* workspaceOf(other.agentId);
+        const box = yield* connectWorkspaceMachine(workspace, member.userId);
+        yield* db
+          .update(agentTable)
+          .set({ machine: AGENT_MACHINE.WORKSPACE, deviceId: box })
+          .where(eq(agentTable.id, member.agentId));
+
+        const lineId = Option.getOrThrow(
+          yield* queueDeviceAgentLine(member.userId, launch(member.agentId)),
+        ).id;
+
+        const host = {
+          deviceId: box,
+          owner: { kind: MACHINE_OWNER.WORKSPACE, workspaceId: workspace },
+        } as const;
+
+        const otherWorkspace = {
+          deviceId: box,
+          owner: { kind: MACHINE_OWNER.WORKSPACE, workspaceId: elsewhere },
+        } as const;
+
+        const asMember = ownDeviceHost(member.userId, box);
+
+        const outsiders = [
+          yield* deviceAgentLinesWaiting(otherWorkspace),
+          yield* deviceAgentLinesWaiting(asMember),
+          yield* liveDeviceAgents(otherWorkspace),
+          yield* liveDeviceAgents(asMember),
+        ];
+
+        const outsiderClaims = [
+          Option.isSome(yield* claimDeviceAgentLine(otherWorkspace, lineId)),
+          Option.isSome(yield* claimDeviceAgentLine(asMember, lineId)),
+        ];
+
+        const listed = (yield* deviceAgentLinesWaiting(host)).map((waiting) => waiting.id);
+        const live = yield* liveDeviceAgents(host);
+        const claimed = yield* claimDeviceAgentLine(host, lineId);
+        const settled = yield* settleDeviceAgentLine(host, lineId, 0);
+
+        assert.deepEqual(outsiders, [[], [], [], []]);
+        assert.deepEqual(outsiderClaims, [false, false]);
+        assert.deepEqual(listed, [lineId]);
+        assert.deepEqual(live, [member.agentId]);
+        assert.deepEqual(
+          Option.map(claimed, (taken) => taken.sealedSecrets),
+          Option.some(SEALED),
+        );
+        assert.ok(Option.isSome(settled));
+      }),
+  );
+
+  it.effect(
+    "a member's agent queues to a machine its workspace owns, connected by a teammate, and is pinned there to its starter, and nothing is queued there for another workspace's agent or a local agent",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const admin = yield* openAccount();
+        const outsider = yield* openAccount();
+
+        const [row] = yield* db
+          .select({ organizationId: agentTable.organizationId })
+          .from(agentTable)
+          .where(eq(agentTable.id, admin.agentId));
+
+        const workspace = row?.organizationId ?? "";
+        const box = yield* connectWorkspaceMachine(workspace, admin.userId);
+        const teammate = `user-${randomUUID()}`;
+        yield* db
+          .insert(user)
+          .values({ id: teammate, name: "Teammate", email: `${teammate}@app.test` });
+        yield* joinWorkspace(workspace, teammate);
+
+        const teammates = yield* startAgent(teammate, box, AGENT_MACHINE.WORKSPACE, workspace);
+        const outsiders = yield* startAgent(outsider.userId, box, AGENT_MACHINE.WORKSPACE);
+        const localOnBox = yield* startAgent(admin.userId, box, AGENT_MACHINE.DEVICE);
+        const onOwnMac = yield* startAgent(admin.userId, admin.deviceId, AGENT_MACHINE.WORKSPACE);
+
+        const queued = yield* queueDeviceAgentLine(teammate, launch(teammates));
+
+        const refused = [
+          yield* queueDeviceAgentLine(outsider.userId, launch(outsiders)),
+          yield* queueDeviceAgentLine(admin.userId, launch(localOnBox)),
+          yield* queueDeviceAgentLine(admin.userId, launch(onOwnMac)),
+        ];
+
+        const host = {
+          deviceId: box,
+          owner: { kind: MACHINE_OWNER.WORKSPACE, workspaceId: workspace },
+        } as const;
+
+        assert.ok(Option.isSome(queued));
+        assert.deepEqual(refused, [Option.none(), Option.none(), Option.none()]);
+        assert.deepEqual(
+          (yield* deviceAgentLinesWaiting(host)).map((line) => line.agentId),
+          [teammates],
+        );
+        assert.deepEqual(
+          yield* deviceAgentPin(teammates),
+          Option.some({ userId: teammate, agentId: teammates, deviceId: box }),
+          "a host's line is read back to the agent's own starter",
         );
       }),
   );
@@ -569,7 +750,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       assert.deepEqual(beforeCapability, Option.none(), "a Mac from before discard is queued none");
       assert.equal(Option.isSome(afterCapability), true);
       assert.deepEqual(
-        (yield* deviceAgentLinesWaiting(userId, deviceId)).map((line) => line.kind),
+        (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).map((line) => line.kind),
         [DEVICE_AGENT_LINE_KIND.DISCARD],
       );
     }),
@@ -601,7 +782,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         assert.equal(byOther, false);
         assert.equal(byOwner, true);
         assert.deepEqual(
-          (yield* deviceAgentLinesWaiting(owner.userId, owner.deviceId)).map(
+          (yield* deviceAgentLinesWaiting(ownDeviceHost(owner.userId, owner.deviceId))).map(
             ({ agentId, kind }) => ({ agentId, kind }),
           ),
           [{ agentId: owner.agentId, kind: DEVICE_AGENT_LINE_KIND.DISCARD }],
@@ -621,20 +802,24 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         args: { path: "shot.png" },
       });
 
-      const answeredUnclaimed = yield* answerDeviceAgentRequest(userId, deviceId, id, {
+      const answeredUnclaimed = yield* answerDeviceAgentRequest(
+        ownDeviceHost(userId, deviceId),
+        id,
+        {
+          kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
+          bytes,
+        },
+      );
+
+      const claimed = yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), id);
+      const claimedAgain = yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), id);
+
+      const answered = yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), id, {
         kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
         bytes,
       });
 
-      const claimed = yield* claimDeviceAgentRequest(userId, deviceId, id);
-      const claimedAgain = yield* claimDeviceAgentRequest(userId, deviceId, id);
-
-      const answered = yield* answerDeviceAgentRequest(userId, deviceId, id, {
-        kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
-        bytes,
-      });
-
-      const answeredAgain = yield* answerDeviceAgentRequest(userId, deviceId, id, {
+      const answeredAgain = yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), id, {
         kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
         bytes: null,
       });
@@ -667,8 +852,8 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
             kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
             args: { from: "0123", to: null },
           });
-          yield* claimDeviceAgentRequest(userId, deviceId, id);
-          yield* answerDeviceAgentRequest(userId, deviceId, id, {
+          yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), id);
+          yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), id, {
             kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
             ...answer,
           });
@@ -694,8 +879,8 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
         args: { from: "0123", to: null },
       });
-      yield* claimDeviceAgentRequest(userId, deviceId, id);
-      yield* answerDeviceAgentRequest(userId, deviceId, id, {
+      yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), id);
+      yield* answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), id, {
         kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
         bytes: null,
       });
@@ -733,10 +918,15 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         });
 
         assert.deepEqual(
-          (yield* deviceAgentRequestsWaiting(userId, deviceId)).map((request) => request.id),
+          (yield* deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId))).map(
+            (request) => request.id,
+          ),
           [id],
         );
-        assert.deepEqual(yield* claimDeviceAgentRequest(userId, deviceId, retired), Option.none());
+        assert.deepEqual(
+          yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), retired),
+          Option.none(),
+        );
       }),
   );
 
@@ -751,10 +941,10 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
 
       const id = randomUUID();
       yield* queueDeviceAgentRequest(userId, { id, agentId, kind: oversized.kind, args: {} });
-      yield* claimDeviceAgentRequest(userId, deviceId, id);
+      yield* claimDeviceAgentRequest(ownDeviceHost(userId, deviceId), id);
 
       const answered = yield* Effect.exit(
-        answerDeviceAgentRequest(userId, deviceId, id, oversized),
+        answerDeviceAgentRequest(ownDeviceHost(userId, deviceId), id, oversized),
       );
 
       assert.equal(answered._tag, "Failure");
@@ -767,14 +957,14 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       const { userId, deviceId, agentId } = yield* openAccount();
       const other = yield* openAccount();
       const running = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
-      yield* claimDeviceAgentLine(userId, deviceId, running.id);
+      yield* claimDeviceAgentLine(ownDeviceHost(userId, deviceId), running.id);
 
       const left = Option.getOrThrow(
         yield* queueDeviceAgentLine(userId, message(agentId, "never taken")),
       );
 
       yield* withdrawUnclaimedDeviceAgentLine(other.userId, left.id);
-      const stillWaiting = yield* deviceAgentLinesWaiting(userId, deviceId);
+      const stillWaiting = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
       yield* withdrawUnclaimedDeviceAgentLine(userId, left.id);
       yield* withdrawUnclaimedDeviceAgentLine(userId, running.id);
 
@@ -783,9 +973,9 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         [left.id],
         "another account withdraws nothing",
       );
-      assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+      assert.deepEqual(yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId)), []);
       assert.equal(
-        Option.isSome(yield* settleDeviceAgentLine(userId, deviceId, running.id, 0)),
+        Option.isSome(yield* settleDeviceAgentLine(ownDeviceHost(userId, deviceId), running.id, 0)),
         true,
         "the claimed line is still there to settle",
       );
@@ -797,7 +987,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       const { userId, deviceId, agentId } = yield* openAccount();
       const cutoff = yield* fiveMinutesOn;
       const running = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
-      yield* claimDeviceAgentLine(userId, deviceId, running.id);
+      yield* claimDeviceAgentLine(ownDeviceHost(userId, deviceId), running.id);
       yield* queueDeviceAgentLine(userId, message(agentId, "never taken"));
       yield* queueDeviceAgentRequest(userId, {
         id: randomUUID(),
@@ -808,15 +998,15 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       yield* TestClock.adjust("10 minutes");
       const fresh = Option.getOrThrow(yield* queueDeviceAgentLine(userId, message(agentId, "new")));
 
-      yield* withdrawExpiredDeviceAgentRows(userId, cutoff);
+      yield* withdrawExpiredDeviceAgentRows({ kind: MACHINE_OWNER.USER, userId }, cutoff);
 
       assert.deepEqual(
-        (yield* deviceAgentLinesWaiting(userId, deviceId)).map((line) => line.id),
+        (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).map((line) => line.id),
         [fresh.id],
       );
-      assert.deepEqual(yield* deviceAgentRequestsWaiting(userId, deviceId), []);
+      assert.deepEqual(yield* deviceAgentRequestsWaiting(ownDeviceHost(userId, deviceId)), []);
       assert.equal(
-        Option.isSome(yield* settleDeviceAgentLine(userId, deviceId, running.id, 0)),
+        Option.isSome(yield* settleDeviceAgentLine(ownDeviceHost(userId, deviceId), running.id, 0)),
         true,
         "the running launch line is still there to settle",
       );
@@ -834,7 +1024,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           yield* queueDeviceAgentLine(away.userId, launch(away.agentId)),
         );
 
-        yield* claimDeviceAgentLine(away.userId, away.deviceId, claimed.id);
+        yield* claimDeviceAgentLine(ownDeviceHost(away.userId, away.deviceId), claimed.id);
 
         const waiting = Option.getOrThrow(
           yield* queueDeviceAgentLine(away.userId, launch(away.agentId)),
@@ -850,12 +1040,14 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           yield* queueDeviceAgentLine(settledByDevice.userId, launch(settledByDevice.agentId)),
         );
 
-        yield* claimDeviceAgentLine(settledByDevice.userId, settledByDevice.deviceId, exited.id);
+        yield* claimDeviceAgentLine(
+          ownDeviceHost(settledByDevice.userId, settledByDevice.deviceId),
+          exited.id,
+        );
         yield* TestClock.adjust("10 minutes");
-        yield* beatDevice(back.userId, back.deviceId);
+        yield* beatDevice(ownDeviceHost(back.userId, back.deviceId));
         yield* settleDeviceAgentLine(
-          settledByDevice.userId,
-          settledByDevice.deviceId,
+          ownDeviceHost(settledByDevice.userId, settledByDevice.deviceId),
           exited.id,
           0,
         );
@@ -874,12 +1066,16 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         assert.deepEqual(settled, Option.some({ agentId: away.agentId }));
         assert.ok(Option.isNone(again), "a line settled once is not settled again");
         assert.deepEqual(
-          (yield* deviceAgentLinesWaiting(away.userId, away.deviceId)).map((line) => line.id),
+          (yield* deviceAgentLinesWaiting(ownDeviceHost(away.userId, away.deviceId))).map(
+            (line) => line.id,
+          ),
           [],
           "a waiting launch taken from its device is no longer listed",
         );
         assert.ok(
-          Option.isNone(yield* claimDeviceAgentLine(away.userId, away.deviceId, waiting.id)),
+          Option.isNone(
+            yield* claimDeviceAgentLine(ownDeviceHost(away.userId, away.deviceId), waiting.id),
+          ),
         );
         assert.equal(yield* storedSecrets(waiting.id), null);
         assert.ok(Option.isNone(beaten), "a device that beat since keeps its launch");
@@ -901,14 +1097,14 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
 
-        yield* claimDeviceAgentLine(owner.userId, owner.deviceId, exited.id);
-        yield* settleDeviceAgentLine(owner.userId, owner.deviceId, exited.id, 0);
+        yield* claimDeviceAgentLine(ownDeviceHost(owner.userId, owner.deviceId), exited.id);
+        yield* settleDeviceAgentLine(ownDeviceHost(owner.userId, owner.deviceId), exited.id, 0);
 
         const stopped = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
 
-        yield* claimDeviceAgentLine(owner.userId, owner.deviceId, stopped.id);
+        yield* claimDeviceAgentLine(ownDeviceHost(owner.userId, owner.deviceId), stopped.id);
         yield* queueDeviceAgentLine(owner.userId, {
           agentId: owner.agentId,
           kind: DEVICE_AGENT_LINE_KIND.STOP,
@@ -919,17 +1115,20 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
 
-        yield* claimDeviceAgentLine(owner.userId, owner.deviceId, running.id);
+        yield* claimDeviceAgentLine(ownDeviceHost(owner.userId, owner.deviceId), running.id);
 
         const waiting = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
 
-        assert.deepEqual(yield* openDeviceAgentLaunches(owner.userId, owner.deviceId), [
-          running.id,
-          waiting.id,
-        ]);
-        assert.deepEqual(yield* openDeviceAgentLaunches(other.userId, owner.deviceId), []);
+        assert.deepEqual(
+          yield* openDeviceAgentLaunches(ownDeviceHost(owner.userId, owner.deviceId)),
+          [running.id, waiting.id],
+        );
+        assert.deepEqual(
+          yield* openDeviceAgentLaunches(ownDeviceHost(other.userId, owner.deviceId)),
+          [],
+        );
       }),
   );
   it.effect(
@@ -947,8 +1146,12 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const onOtherMac = yield* startAgent(owner.userId, otherMac);
         yield* startAgent(owner.userId);
 
-        assert.deepEqual(yield* liveDeviceAgents(owner.userId, owner.deviceId), [owner.agentId]);
-        assert.deepEqual(yield* liveDeviceAgents(owner.userId, otherMac), [onOtherMac]);
+        assert.deepEqual(yield* liveDeviceAgents(ownDeviceHost(owner.userId, owner.deviceId)), [
+          owner.agentId,
+        ]);
+        assert.deepEqual(yield* liveDeviceAgents(ownDeviceHost(owner.userId, otherMac)), [
+          onOtherMac,
+        ]);
       }),
   );
   it.effect(
@@ -957,13 +1160,13 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAccount();
         const other = yield* openAccount();
-        yield* beatDevice(owner.userId, owner.deviceId, {
+        yield* beatDevice(ownDeviceHost(owner.userId, owner.deviceId), {
           update: HOST_UPDATE.WAITING,
         });
 
         const waiting = yield* deviceAgentAwaitsUpdate(owner.userId, owner.agentId);
         const readByOther = yield* deviceAgentAwaitsUpdate(other.userId, owner.agentId);
-        yield* beatDevice(owner.userId, owner.deviceId, {
+        yield* beatDevice(ownDeviceHost(owner.userId, owner.deviceId), {
           update: HOST_UPDATE.UPDATING,
         });
         const switching = yield* deviceAgentAwaitsUpdate(owner.userId, owner.agentId);
@@ -1001,7 +1204,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       const owner = yield* openAccount();
       const other = yield* openAccount();
 
-      assert.deepEqual(yield* liveDeviceAgents(other.userId, owner.deviceId), []);
+      assert.deepEqual(yield* liveDeviceAgents(ownDeviceHost(other.userId, owner.deviceId)), []);
     }),
   );
 });

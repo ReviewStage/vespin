@@ -4,7 +4,7 @@ import {
   PORTS_LOOK_EVERY_MS,
   type SharedPort,
 } from "@repo/features/agent-ports-model";
-import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentSummary, agentMachineOf } from "@repo/features/agent-wire";
 import {
   type AgentSharedPortAnswerView,
   PORT_FORWARD_STATE,
@@ -250,7 +250,7 @@ function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): UseForwardi
     true;
 
   const forwarding = useQuery({ ...appStateQuery, select: selectPortForwarding }).data;
-  const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
+  const cloud = agentMachineOf(agent) === AGENT_MACHINE.VERCEL;
 
   return {
     cloud,

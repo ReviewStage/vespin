@@ -49,7 +49,7 @@ import {
   readVisibleAgentWorkspace,
   updateAgentTargetDevice,
 } from "@repo/database/models/agent-store";
-import { devicesNamed } from "@repo/database/models/device-store";
+import { machinesNamed } from "@repo/database/models/device-store";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -150,6 +150,7 @@ import {
   startedWaking,
 } from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
+import { readsWorkspaceMachines, servesAgent } from "./workspace-machine-reads.js";
 import { defaultMachineChoices, runOnMacStanding } from "./workspace-tools.js";
 
 export interface AgentsProcedureSeams extends PublishedReach, SandboxDeleteReach {
@@ -192,7 +193,7 @@ const listedSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
     agents.map((agent) => agent.id),
   );
 
-  const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices(agents)));
+  const macs = yield* hostedStoreOrUnavailable(machinesNamed(summaryDevices(agents)));
   const now = yield* Clock.currentTimeMillis;
 
   return {
@@ -341,6 +342,7 @@ export function agentsProcedures(
           ...(words === undefined ? undefined : { words }),
           includeArchived: listsArchived(input.archived),
           onTaskOnly: !readsTasklessAgents(context.request),
+          offWorkspaceMachinesOnly: !readsWorkspaceMachines(context.request),
           offset,
           // One past the bound tells whether a next page stands.
           limit: AGENT_BOUNDS.MAX_WORKSPACE_AGENTS + 1,
@@ -365,7 +367,10 @@ export function agentsProcedures(
         }),
       );
 
-      return yield* listedSummaries(context.userId, agents);
+      return yield* listedSummaries(
+        context.userId,
+        agents.filter((agent) => servesAgent(context.request, agent)),
+      );
     }),
     /**
      * An agent started on the task, or the one a retry under the same key
@@ -380,7 +385,10 @@ export function agentsProcedures(
         context.userId,
         { taskId },
         input.body,
-        yield* summaryModelOf,
+        {
+          summaryModel: yield* summaryModelOf,
+          readsWorkspaceMachines: readsWorkspaceMachines(context.request),
+        },
       );
 
       return startAnswer(started);
@@ -436,7 +444,10 @@ export function agentsProcedures(
         context.userId,
         placeOfAgent(source),
         input.body,
-        yield* summaryModelOf,
+        {
+          summaryModel: yield* summaryModelOf,
+          readsWorkspaceMachines: readsWorkspaceMachines(context.request),
+        },
       );
 
       return startAnswer(started);
@@ -460,8 +471,11 @@ export function agentsProcedures(
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
 
-      // Note that an agent on no task is not found by a build that cannot read one.
-      if (agent.taskId === null && !readsTasklessAgents(context.request)) {
+      // Note that an agent on no task, or on a workspace's machine, is not found by a build that cannot read one.
+      if (
+        (agent.taskId === null && !readsTasklessAgents(context.request)) ||
+        !servesAgent(context.request, agent)
+      ) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       }
 
@@ -475,7 +489,7 @@ export function agentsProcedures(
       const standing = yield* standingsOf([agent.conversationId], [agent]);
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
-      const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
+      const macs = yield* hostedStoreOrUnavailable(machinesNamed(summaryDevices([agent])));
       const now = yield* Clock.currentTimeMillis;
 
       return {

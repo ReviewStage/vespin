@@ -12,8 +12,8 @@ import { workspaceSlackInstallation } from "@repo/database/models/slack-installa
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_MACHINE,
-  type AgentRunsOnRequest,
   disabledServersSchema,
+  type PersonalRunsOn,
 } from "@repo/features/agent-wire";
 import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
@@ -68,13 +68,13 @@ import {
   AGENT_TOOL_REFUSAL,
   type AgentCall,
   type AgentReadCall,
+  AUTOMATION_RUNS_ON,
   agentToolRejected,
   callerAgent,
   callerUserId,
   callerWorkspace,
   choiceRefusal,
   orStoreRefusal,
-  START_RUNS_ON,
 } from "./agent-tools.js";
 import { calledId } from "./called-id.js";
 import { acceptedAgentChoice } from "./coder-host/start.js";
@@ -338,7 +338,7 @@ const SERVERS = describeWire(
 );
 
 const RUNS_ON = describeWire(
-  START_RUNS_ON,
+  AUTOMATION_RUNS_ON,
   `Where each run's agent starts: ${IN_THE_CLOUD_WORDS} for the cloud, or ` +
     `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for one of the ` +
     "automation's creator's own devices (a Mac or a host) by its name, or " +
@@ -573,9 +573,9 @@ function machineNameKey(name: string): string {
  */
 const runsOnOfAutomation = Effect.fnUntraced(function* (
   creatorId: string,
-  runsOn: typeof START_RUNS_ON.Type,
+  runsOn: typeof AUTOMATION_RUNS_ON.Type,
   lead: string,
-): Effect.fn.Return<Result.Result<AgentRunsOnRequest, string>, StoreFailure, DatabaseServices> {
+): Effect.fn.Return<Result.Result<PersonalRunsOn, string>, StoreFailure, DatabaseServices> {
   if (runsOn.machine === AGENT_MACHINE.VERCEL) return Result.succeed(runsOn);
   const devices = yield* devicesSeenSince(creatorId, new Date(0));
 

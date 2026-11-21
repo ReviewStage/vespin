@@ -15,7 +15,11 @@
  * answered from any device, the first answer standing, and one the account
  * does not hold is not found; and a pairing's read, approve, or deny refuses a
  * code no pending pairing has as not found and an account past its guesses
- * as held, with until when.
+ * as held, with until when. An approve for a workspace refuses one the
+ * account is not in as not found, one it neither owns nor admins as not
+ * permitted, and a box whose daemon cannot be a workspace's machine as
+ * invalid; and an approve of a Mac that already stands as another owner's
+ * host, a member's own or a workspace's, as owned elsewhere.
  */
 
 import { openapi } from "@orpc/openapi";
@@ -27,6 +31,7 @@ import {
   hostIdRequestSchema,
   hostPairingAnswerSchema,
   hostPairingApproveAnswerSchema,
+  hostPairingApproveRequestSchema,
   hostPairingCodeRequestSchema,
   hostsAnswerSchema,
   machineAllowedAppsAnswerSchema,
@@ -87,10 +92,17 @@ export const hostsContract = {
     .input(exactInput(hostPairingCodeRequestSchema))
     .output(EffectSchema.flip(hostPairingAnswerSchema)),
   approvePairing: declaredProcedure
-    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.HOST_PAIRING_HELD))
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.HOST_PAIRING_HELD,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.MACHINE_OWNED_ELSEWHERE,
+      ),
+    )
     .meta(bodyCap(BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.HOST_PAIRING_APPROVE }))
-    .input(exactInput(hostPairingCodeRequestSchema))
+    .input(exactInput(hostPairingApproveRequestSchema))
     .output(EffectSchema.flip(hostPairingApproveAnswerSchema)),
   denyPairing: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.HOST_PAIRING_HELD))

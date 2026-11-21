@@ -5,7 +5,7 @@ import { BUTTON_SIZE, ComposeIcon, IconButton, PlusIcon, Tooltip } from "@repo/u
 import { memo } from "react";
 import { useSteadyDoor } from "../steady-door.js";
 import type { QuickAddInto } from "../tasks/use-new-task.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import type { SidebarTasksControl } from "./sidebar-open.js";
 
 /**
  * new-task-button.tsx -- New task as a glyph: the sidebar's at its workspace row's end, and the title bar's while the sidebar is folded, opening New task's dialog; and a group's +: a sidebar repository's, opening it on the repository, and a Tasks page group's, adding a task in the group in place (`quick-add.tsx`).
@@ -43,7 +43,7 @@ export function NewTaskButton({
   current = false,
   onNewTask = tasks.newTask.onOpen,
 }: {
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
   /** Whether New task's words are in sight: its card open, or Home shown. */
   current?: boolean;
   onNewTask?: () => void;

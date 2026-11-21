@@ -79,7 +79,8 @@ import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { ManagerGlyph } from "../tasks/tab-look.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
+import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
 import { useHeldTaskInbox, useInboxCardDrafts } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
@@ -172,20 +173,24 @@ function useOwnAgents(
   const control = tasks.agents;
   const { skills, keywords } = place;
 
+  const pullRequest = useListedPullRequest(agent.id);
+
   return useMemo(() => {
     const archived = agent.archivedAt !== undefined;
 
     return {
-      ...control,
-      agents: archived ? [] : [agent],
-      archived: archived ? [agent] : [],
+      ...placeAgents(control, {
+        agents: archived ? [] : [agent],
+        archived: archived ? [agent] : [],
+        pullRequests: new Map(pullRequest === undefined ? [] : [[agent.id, pullRequest]]),
+      }),
       agentIds: [agent.id],
       heldIds: [agent.id],
       // Note that the window's control reads these through the open task, which is none of the agent's.
       readSkills: skills,
       keywords,
     };
-  }, [control, agent, skills, keywords]);
+  }, [control, agent, pullRequest, skills, keywords]);
 }
 
 /**
@@ -362,10 +367,12 @@ function OwnAgentPage({
   tasks,
   agent,
   away,
+  staged,
 }: {
   tasks: TasksControl;
   agent: ListedAgent;
   away: TaskHeadBack | undefined;
+  staged: boolean;
 }): React.JSX.Element {
   const place = useOwnAgentPlace(tasks, agent, tasks.agents.models);
   const agents = useOwnAgents(tasks, agent, place);
@@ -423,7 +430,7 @@ function OwnAgentPage({
           <OwnAgentHead tasks={tasks} agents={agents} agent={agent} label={label} away={away} />
           {overview ? (
             <Fill flow={FILL_FLOW.ROW} className="manager-page">
-              <ManagerOverview tasks={tasks} manager={agent} threads={threads} />
+              <ManagerOverview tasks={tasks} manager={agent} threads={threads} staged={staged} />
               <div
                 className="manager-page-chat"
                 style={cssCustomProperties({ "--manager-chat-width": `${chatWidth.width}px` })}
@@ -459,10 +466,13 @@ function OwnAgentPage({
 export function AgentRoutePage({
   tasks,
   away,
+  staged = false,
 }: {
   tasks: TasksControl;
   /** A phone's way back out of the page, the window's Back; none elsewhere. */
   away?: TaskHeadBack | undefined;
+  /** Whether a fixture stages the window, whose tasks' looks are its own rather than kept (`useUnreadTasks`). */
+  staged?: boolean | undefined;
 }): React.JSX.Element {
   const { agentId } = useParams({ from: "/places/$workspace/agent/$agentId" });
   const found = useAgentFound(tasks, agentId);
@@ -483,7 +493,9 @@ export function AgentRoutePage({
   }
 
   if ("agent" in found)
-    return <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} />;
+    return (
+      <OwnAgentPage key={agentId} tasks={tasks} agent={found.agent} away={away} staged={staged} />
+    );
 
   // In the page's own frame, so its row and sheet stand where the task's agent tab will.
   return (

@@ -233,3 +233,42 @@ export const TASK_PRIORITY_MARK = {
     },
   ],
 } as const;
+
+// No one's mark: a ring of dashes measured along a path counted
+// 40 long, stroked 1.25 wide on a 16-unit square, and a seat
+// drawn at 0.62 of it.
+
+export const UNASSIGNED_MARK_BOX = 16;
+
+export const UNASSIGNED_MARK_LINE_WIDTH = 1.25;
+
+export const UNASSIGNED_RING_PATH_LENGTH = 40;
+
+export const UNASSIGNED_SEAT_OPACITY = 0.62;
+
+export const UNASSIGNED_MARK = {
+  RING: [
+    {
+      role: "line",
+      element: "circle",
+      cx: 8,
+      cy: 8,
+      r: 7.3,
+      dash: [3.2, 1.8],
+    },
+  ],
+  SEAT: [
+    {
+      role: "fill",
+      element: "circle",
+      cx: 8,
+      cy: 6.6,
+      r: 2.1,
+    },
+    {
+      role: "fill",
+      element: "path",
+      d: "M4.158 11.795A5.2 5.2 0 0 1 11.842 11.795A5.4 5.4 0 0 1 4.158 11.795Z",
+    },
+  ],
+} as const;

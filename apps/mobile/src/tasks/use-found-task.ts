@@ -21,9 +21,10 @@ import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useListedTasks } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
 
 /** The key a number's find is held under, by the account, the workspace and the number. */
 const TASK_BY_NUMBER_QUERY = "task-by-number";
@@ -46,6 +47,15 @@ const NOT_FOUND: FoundTask = { taskId: undefined, seeking: false };
 
 const SEEKING: FoundTask = { taskId: undefined, seeking: true };
 
+/** A held task as a route's name finds it: its id, and the workspace its number counts in. */
+export interface HeldTaskNamed {
+  readonly id: string;
+  readonly workspaceId: string;
+}
+
+/** No held task named: what a route naming none, or one the list doesn't hold, answers. */
+const NONE_NAMED: readonly HeldTaskNamed[] = [];
+
 /**
  * Whether a task's own description read hasn't answered with it or with its
  * absence, by its id. Note that a read that failed is still sought, since the
@@ -61,6 +71,35 @@ function selectAccountId(state: AppStateSnapshot): string | undefined {
 }
 
 /**
+ * The held tasks `named` names, newest first: the one with that id, or each
+ * with that number, a number counting within each workspace. Note that the
+ * list is read by that key alone, so a caller is drawn again only as such a
+ * task comes, goes, or moves workspace, never as any other of the account's
+ * tasks moves, as a working agent's turn moves its task.
+ */
+export function useHeldTasksNamed(named: string | undefined): readonly HeldTaskNamed[] {
+  const { tasks } = useTaskListCollections();
+
+  const number =
+    named === undefined ? undefined : taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId: named });
+
+  const { data } = useLiveQuery((q) =>
+    named === undefined
+      ? undefined
+      : q
+          .from({ task: tasks })
+          .where(({ task }) =>
+            number === undefined ? eq(task.id, named) : eq(task.number, number),
+          )
+          .orderBy(({ task }) => task.createdAt, "desc")
+          .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+          .select(({ task }) => ({ id: task.id, workspaceId: task.workspaceId })),
+  );
+
+  return data ?? NONE_NAMED;
+}
+
+/**
  * The task `named` names, by its id or its number, with `workspace` the
  * workspace a link names a number in. Note that a number with no workspace
  * is handed on as it stands, for the held list to match, as a route that
@@ -68,7 +107,7 @@ function selectAccountId(state: AppStateSnapshot): string | undefined {
  */
 export function useFoundTask(named: string | undefined, workspace: string | undefined): FoundTask {
   const acts = useHostActs();
-  const tasks = useListedTasks();
+  const held = useHeldTasksNamed(named);
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
 
@@ -79,11 +118,8 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
 
   const listed =
     number === undefined
-      ? tasks.find((task) => task.id === named)
-      : tasks.find(
-          (task) =>
-            task.number === number && (workspace === undefined || task.workspaceId === home?.id),
-        );
+      ? held[0]
+      : held.find((task) => workspace === undefined || task.workspaceId === home?.id);
 
   const finds = number !== undefined && workspace !== undefined && listed === undefined;
 

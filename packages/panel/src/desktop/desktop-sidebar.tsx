@@ -1,5 +1,5 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
-import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -133,9 +133,19 @@ import {
   sum,
   useLiveQuery,
 } from "@tanstack/react-db";
-import { createContext, memo, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  memo,
+  use,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
-import { useAutomationsPlace } from "../automations-route.js";
+import { useAutomationsPlaceOf } from "../automations-route.js";
 import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
@@ -153,20 +163,29 @@ import {
 } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import {
+  type AdminDoor,
+  type AutomationsDoor,
+  type BoardDoor,
+  type InboxDoor,
+  type MergeQueueDoor,
   useAdminDoor,
   useAutomationsDoor,
   useBoardDoor,
   useInboxDoor,
   useMergeQueueDoor,
 } from "../places/routed-doors.js";
-import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
+import { ROUTED_PLACE, useWindowPlaceOf } from "../places/routed-places.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
-import { useSteadyDoors, useSteadyList } from "../steady-door.js";
-import { useTaskListCollections, useTaskListRows } from "../task-list-collections.js";
+import { useSteadyDoor, useSteadyDoors, useSteadyList } from "../steady-door.js";
+import {
+  type NamedAgentRow,
+  useTaskListCollections,
+  useTaskListRows,
+} from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
@@ -182,7 +201,7 @@ import {
   samePin,
 } from "../tasks/use-side-panel.js";
 import { useSubTaskReads } from "../tasks/use-sub-task-reads.js";
-import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
+import { useReadMark, useUnreadWatching } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
@@ -218,6 +237,17 @@ import {
   SidebarManagers,
   usePinnedManagers,
 } from "./sidebar-managers.js";
+import {
+  type OpenMarks,
+  openMarks,
+  type SidebarOpen,
+  SidebarOpenProvider,
+  type SidebarTasksControl,
+  sameItems,
+  useHeldSidebarTasks,
+  useSidebarOpen,
+  useUnreadAmong,
+} from "./sidebar-open.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
@@ -346,7 +376,7 @@ const SidebarHistoryButtons = memo(function SidebarHistoryButtons({
   return history === undefined ? null : <HistoryButtons history={history} room={room} />;
 });
 
-/** The steps a list names a step by where nothing named it as the window stood on it. */
+/** The label of a step the window gave no title. */
 const UNNAMED_STEP = "Earlier page";
 
 /**
@@ -411,8 +441,7 @@ function HistoryButton({
   };
 
   return (
-    // A press held, the mouse's as a touch's, opens the list, as a browser's Back does, and so
-    // does a right-click, which opens no list a hold already opened.
+    // Note that a right-click opens no list a hold already opened.
     <HoldPress
       mouse
       disabled={!able}
@@ -452,22 +481,16 @@ function HistoryButton({
 }
 
 /** The tab as the sidebar reads it, the pins and sections beside it (`use-pin-writes.ts`). */
-type SidebarTasks = TasksControl & Pins;
+type SidebarTasks = SidebarTasksControl & Pins;
 
 /** What every row of the tasks is drawn with, whichever section it stands in. */
 interface RowContext {
   readonly tasks: SidebarTasks;
-  /** Whether a task is the one open, which a fold still leaves standing. */
-  readonly current: (taskId: string) => boolean;
-  /** Whether a row is the one the sidebar marks: the pin the open task was opened from, else the open task's own row. */
-  readonly marked: (taskId: string, pin: SidebarPin | undefined) => boolean;
-  /** Whether a pin is the one the open place was opened from, which the sidebar marks in its holder's place. */
-  readonly markedPin: (pin: SidebarPin) => boolean;
+  /** How each row reads its marks of the task opening: the row marked, the plan open, and unread (`sidebar-open.tsx`). */
+  readonly marks: OpenMarks;
   readonly onOpen: (taskId: string) => void;
-  /** Whether a task is the one standing: the open plan. */
+  /** Whether a task is the open plan where that changes what the lists draw: one a fold or a finished run would leave out, which stands (`standingOpen`). */
   readonly currentTask: (task: TaskSummary) => boolean;
-  /** Whether a task was saved since the developer last looked at it on this Mac. */
-  readonly unread: (task: TaskSummary) => boolean;
   /** The time each row's last update is counted back from. */
   readonly now: number;
   /** Which faces a task's row may wear: no assignee's while the list holds those assigned to one member. */
@@ -667,7 +690,7 @@ interface ListedTasks {
  * delivery moves only the lists holding the tasks it changed, and a task
  * pinned or unpinned leaves one list in the same frame it joins the other.
  */
-function useListedTasks(tasks: TasksControl): ListedTasks {
+function useListedTasks(tasks: SidebarTasksControl): ListedTasks {
   const collections = useTaskListCollections();
   const workspaceId = tasks.workspace?.id;
   const pinnedRows = useListedPart(workspaceId, true);
@@ -778,12 +801,12 @@ function TaskRows({
   repository?: (task: TaskSummary) => React.ReactNode;
 }): React.JSX.Element {
   const { faces } = context;
-  // Note that the rows keep the view's order, so a row is dragged only out of them, into a section or Pinned.
   const { dropOut } = context;
   const nested = useNestedRows(tasks, context.opened, context.currentTask, context.every);
   const drawn = useLeaving(nested, ({ task }) => task.id);
   const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
 
+  // Note that the rows keep the view's order, so a row is dragged only out of them, into a section or Pinned.
   const drag = useRunRowDrag(undefined, {
     onDropOut:
       dropOut === undefined
@@ -813,9 +836,7 @@ function TaskRows({
             key={task.id}
             tasks={context.tasks}
             task={task}
-            current={context.marked(task.id, undefined)}
-            open={context.current(task.id)}
-            unread={context.unread}
+            marks={context.marks}
             now={context.now}
             repository={repository?.(task)}
             faces={faces}
@@ -873,8 +894,8 @@ function accountPinOf(
 function agentPinOf(
   pin: TaskAgentPin,
   task: TaskSummary,
-  agent: AgentSummary,
-  tasks: TasksControl,
+  agent: NamedAgentRow,
+  tasks: SidebarTasksControl,
 ): AgentPin {
   const drawn = {
     task: task.id,
@@ -902,7 +923,7 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
 function pinnedRows(
   pinned: readonly TaskSummary[],
   listed: (taskId: string) => TaskSummary | undefined,
-  listedAgent: (agentId: string) => ListedAgent | undefined,
+  listedAgent: (agentId: string) => NamedAgentRow | undefined,
   tasks: SidebarTasks,
 ): PinnedRow[] {
   const taskRows = pinned.map(
@@ -1082,6 +1103,46 @@ function pinnedTaskRows(drawn: readonly PinnedDrawn[]): TaskSummary[] {
   });
 }
 
+/** No pinned rows standing, one list, so an open Pinned reads the same answer each move. */
+const NO_PINNED_ROWS: readonly PinnedRow[] = [];
+
+/**
+ * Whether a pinned row stands under a folded Pinned: a plan's while it is
+ * open, and a tab's while its holder is open and its column shows it, an
+ * agent's in the task's own column and any other in the side panel, or
+ * while it is the pin marked, so a fold never hides the row the sidebar
+ * marks.
+ */
+function pinnedShown(open: SidebarOpen, row: PinnedRow, marks: OpenMarks): boolean {
+  const { pin, task } = row;
+  const holderOpen = marks.current(open, task.id);
+
+  if (pin === undefined) return holderOpen;
+  const { mainTabs, sidePanel } = open.tasks;
+
+  return (
+    marks.marked(open, task.id, pin) ||
+    (holderOpen &&
+      (isAgentPin(pin)
+        ? sameTab(mainTabs.tab, pin.tab)
+        : sidePanel.open && sidePanel.tab !== undefined && sameTab(sidePanel.tab, pin.tab)))
+  );
+}
+
+/** A tab pinned on a listed plan, drawn from the tab as it stands, since its row names what the open task holds, and marked where the open place was opened from it. */
+function MarkedPinnedTab({
+  marks,
+  ...drawn
+}: Omit<React.ComponentProps<typeof SidebarPinnedTab>, "tasks" | "current"> & {
+  marks: OpenMarks;
+}): React.JSX.Element {
+  const holder = drawn.on.task.id;
+  const tasks = useSidebarOpen((open) => open.tasks);
+  const current = useSidebarOpen((open) => marks.marked(open, holder, drawn.pin));
+
+  return <SidebarPinnedTab {...drawn} tasks={tasks} current={current} />;
+}
+
 /**
  * The Pinned section's rows, each a plan's, an agent's, or a tab's, a
  * plan's child tasks nested under it. A tab's row is keyed by when it was
@@ -1196,9 +1257,7 @@ function PinnedRows({
               key={key}
               tasks={context.tasks}
               task={child}
-              current={context.marked(child.id, undefined)}
-              open={context.current(child.id)}
-              unread={context.unread}
+              marks={context.marks}
               now={context.now}
               depth={held.depth}
               nest={nest}
@@ -1218,9 +1277,7 @@ function PinnedRows({
               <SidebarTask
                 tasks={context.tasks}
                 task={task}
-                current={context.marked(task.id, undefined)}
-                open={context.current(task.id)}
-                unread={context.unread}
+                marks={context.marks}
                 now={context.now}
                 nest={nest}
                 place={place}
@@ -1229,13 +1286,12 @@ function PinnedRows({
                 onOpen={() => context.onOpen(task.id)}
               />
             ) : (
-              <SidebarPinnedTab
-                tasks={context.tasks}
+              <MarkedPinnedTab
                 pin={pin}
                 on={{ task }}
                 nest={nest}
                 place={place}
-                current={context.marked(task.id, pin)}
+                marks={context.marks}
                 inSight={context.inSight}
                 onOpen={() => onOpenTab(pin)}
                 onOpenHolder={() => context.onOpen(task.id)}
@@ -1279,7 +1335,6 @@ function PinnedSection({
   onOpenManager,
   adopted,
   folds,
-  shown,
   context,
   onOpenTab,
   onDropOut,
@@ -1293,8 +1348,6 @@ function PinnedSection({
   /** The child tasks standing under its plans (`homedTaskRows`). */
   adopted: readonly TaskSummary[];
   folds: FoldedGroups;
-  /** Whether a row is the plan open, the agent whose page stands, or the pinned tab on show, which a fold leaves standing. */
-  shown: (row: PinnedRow) => boolean;
   context: RowContext;
   onOpenTab: (pin: SidebarPin) => void;
   /** Hears a row let go over a section or Tasks, while the account keeps sections, which makes Pinned a drop zone too; none while it does not. */
@@ -1306,8 +1359,16 @@ function PinnedSection({
   const { taskOpened } = folds;
   const drawn = pinnedDrawn(rows, adopted, taskOpened, context.currentTask, context.every);
 
+  const { marks } = context;
+
+  // The rows a fold leaves standing, the plan open and the pinned tab on show, read only while folded, so an open draws Pinned only then.
+  const shown = useSidebarOpen(
+    (open) => (folded ? rows.filter((row) => pinnedShown(open, row, marks)) : NO_PINNED_ROWS),
+    sameItems,
+  );
+
   const standing = pinnedDrawn(
-    rows.filter(shown),
+    shown,
     adopted.filter(context.currentTask),
     taskOpened,
     context.currentTask,
@@ -1324,7 +1385,6 @@ function PinnedSection({
     drawn.length === 0 ? null : (
       <ManagerRows
         managers={drawn}
-        agents={managers.agents}
         tasks={context.tasks}
         shown={rowsShown}
         onOpen={onOpenManager}
@@ -1334,7 +1394,11 @@ function PinnedSection({
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
-  const actionGroups = pinnedActionGroups(rows, context, markRead);
+
+  const actionGroups = markAllReadGroups(
+    useUnreadAmong(pinnedTasksOf(rows), context.marks),
+    markRead,
+  );
 
   return (
     <nav
@@ -1374,7 +1438,7 @@ function PinnedSection({
               {managerRows(standingManagers)}
               {standing.length === 0 ? null : (
                 <PinnedRows
-                  rows={rows.filter(shown)}
+                  rows={shown}
                   drawn={standing}
                   context={context}
                   onOpenTab={onOpenTab}
@@ -1440,7 +1504,7 @@ function FollowingSection({
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
-  const actionGroups = markAllReadGroups(tasks, context, markRead);
+  const actionGroups = markAllReadGroups(useUnreadAmong(tasks, context.marks), markRead);
 
   return (
     <nav className="sidebar-group" aria-label={FOLLOWING_HEAD} {...motionKey(FOLLOWING_KEY)}>
@@ -1484,14 +1548,11 @@ function FollowingSection({
   );
 }
 
-/** Mark all as read over a group's unread tasks, in one group of its own; none where every task in it is read. */
+/** Mark all as read over a group's unread tasks (`useUnreadAmong`), in one group of its own; none where every task in it is read. */
 function markAllReadGroups(
-  tasks: readonly TaskSummary[],
-  context: RowContext,
+  unread: readonly TaskSummary[],
   markRead: (task: TaskSummary, unread: boolean) => void,
 ): MenuEntry[][] {
-  const unread = tasks.filter(context.unread);
-
   if (unread.length === 0) return [];
 
   const read: MenuAction = {
@@ -1505,15 +1566,9 @@ function markAllReadGroups(
   return [[read]];
 }
 
-/** Pinned's actions, offered alike from its ⋯ and a right-click on its head: Mark all as read over the pinned tasks, a pinned tab's task aside, since its row is the tab's. */
-function pinnedActionGroups(
-  rows: readonly PinnedRow[],
-  context: RowContext,
-  markRead: (task: TaskSummary, unread: boolean) => void,
-): MenuEntry[][] {
-  const tasks = rows.flatMap((row) => (row.pin === undefined ? [row.task] : []));
-
-  return markAllReadGroups(tasks, context, markRead);
+/** The tasks Pinned's actions mark read, offered alike from its ⋯ and a right-click on its head (`markAllReadGroups`): the pinned tasks, a pinned tab's task aside, since its row is the tab's. */
+function pinnedTasksOf(rows: readonly PinnedRow[]): TaskSummary[] {
+  return rows.flatMap((row) => (row.pin === undefined ? [row.task] : []));
 }
 
 /**
@@ -1531,11 +1586,12 @@ function pinnedActionGroups(
 function repositoryActionGroups(
   group: RepositoryGroup,
   context: RowContext,
+  unread: readonly TaskSummary[],
   markRead: (task: TaskSummary, unread: boolean) => void,
 ): MenuEntry[][] {
   const { repository } = group;
   const { tasks } = context;
-  const read = markAllReadGroups(group.tasks, context, markRead);
+  const read = markAllReadGroups(unread, markRead);
 
   if (repository === null) return read;
 
@@ -1616,7 +1672,13 @@ function RepositorySection({
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
-  const actionGroups = repositoryActionGroups(group, context, markRead);
+
+  const actionGroups = repositoryActionGroups(
+    group,
+    context,
+    useUnreadAmong(group.tasks, context.marks),
+    markRead,
+  );
 
   return (
     <div className="sidebar-repository" {...motionKey(repositoryGroupKey(group))}>
@@ -1933,12 +1995,7 @@ function SidebarSearchRow({ onOpen }: { onOpen: () => void }): React.JSX.Element
   );
 }
 
-/**
- * Home's row, between Search and the Inbox and drawn as they are: the
- * house, its name, and its chord at its end while the row is hovered or
- * reached from the keyboard. A press goes to Home from wherever the window
- * stands, and the row is the place shown while Home is.
- */
+/** Home's row, between Search and the Inbox. A press goes to Home from wherever the window stands. */
 function SidebarHomeRow({
   current,
   disabled,
@@ -1968,10 +2025,9 @@ function SidebarHomeRow({
 
 /**
  * The Tasks page's row, under the Inbox's. A press opens the listed
- * workspace's tasks as a List or a Board (`tasks-page.tsx`), as its chord
- * does, and the row is the place shown while it stands. It is always offered.
- * The page's chunk is read once the signed-in window is idle, or as the
- * pointer comes onto the row, so the first press finds it landed.
+ * workspace's tasks as a List or a Board (`tasks-page.tsx`). The page's chunk
+ * is read once the signed-in window is idle, or as the pointer comes onto
+ * the row, so the first press finds it landed.
  */
 function SidebarTasksRow({
   current,
@@ -2009,12 +2065,11 @@ function SidebarTasksRow({
 }
 
 /**
- * The Automations page's row, after the Tasks page's and drawn as it is: the
- * zap, its name, and its chord. A press opens the window's Automations page
- * (`automations-page.tsx`), and the row is the place shown while it stands.
- * While a run of the account's own automation failed to start since that
- * automation was opened, the row wears the failed mark at its end, where the
- * Inbox's count stands on its row, giving way to the chord as that does.
+ * The Automations page's row, after the Tasks page's. A press opens the
+ * window's Automations page (`automations-page.tsx`). While a run of the
+ * account's own automation failed to start since that automation was
+ * opened, the row wears the failed mark at its end, where the Inbox's count
+ * stands on its row, giving way to the chord as that does.
  * While agents its workspace's automations started still work, it counts
  * them in the working tone beside that mark, as the Runs tab does.
  */
@@ -2053,10 +2108,9 @@ function SidebarAutomationsRow({
 }
 
 /**
- * The Merge queue page's row, after the Automations page's and drawn as it
- * is: the queue's glyph and its name, with no count, since counting would
- * read every repository's queue as the window opens. A press opens the
- * window's Merge queue page, and the row is the place shown while it stands.
+ * The Merge queue page's row, after the Automations page's. It draws no
+ * count, since counting would read every repository's queue as the window
+ * opens.
  */
 function SidebarMergeQueueRow({
   current,
@@ -2090,15 +2144,169 @@ const HeldAutomationsRow = memo(SidebarAutomationsRow);
 const HeldMergeQueueRow = memo(SidebarMergeQueueRow);
 const HeldSidebarFoot = memo(SidebarFoot);
 
-/** What the sidebar is drawn from. */
-interface DesktopSidebarProps extends SidebarColumnProps {
-  history: NavigationHistory;
+/** The doors of the places the column's rows open, as the window stands now. */
+interface PlaceDoors {
+  readonly board: BoardDoor;
+  readonly admin: AdminDoor;
+  readonly automations: AutomationsDoor;
+  readonly mergeQueue: MergeQueueDoor;
+  readonly inbox: InboxDoor;
 }
 
-/** What the sidebar's column is drawn from: all but the history, which only its Back and Forward read. */
+/**
+ * Keeps the places' doors (`keep`) as they stand after each move of the
+ * window. Note that each follows where the window stands, which moves with
+ * every task opened, so this part is drawn again for each, and the column,
+ * which only presses them, is not.
+ */
+function SidebarDoors({
+  tasks,
+  keep,
+}: {
+  tasks: SidebarTasksControl;
+  keep: (doors: PlaceDoors) => void;
+}): null {
+  const doors: PlaceDoors = {
+    board: useBoardDoor(tasks),
+    admin: useAdminDoor(tasks),
+    automations: useAutomationsDoor(tasks),
+    mergeQueue: useMergeQueueDoor(tasks),
+    inbox: useInboxDoor(tasks),
+  };
+
+  useLayoutEffect(() => keep(doors));
+
+  return null;
+}
+
+/** No task standing open, which the lists are first drawn with. */
+const NONE_STANDING = (): boolean => false;
+
+/** The lists the column draws, homed: Pinned's, the sections', Following's, and the Tasks head's groups. */
+interface ColumnLists {
+  readonly pinnedSection: readonly PinnedRow[];
+  readonly pinnedAdopted: readonly TaskSummary[];
+  readonly homedSections: readonly DrawnSection[];
+  readonly homedTasks: TaskSections;
+  readonly homedFollowing: readonly TaskSummary[];
+}
+
+/** What the column draws of its lists: Pinned's rows, the tasks the Tasks head heads, and every task's row in the order they read, which ⌥↑ and ⌥↓ walk. */
+interface ListsDrawn {
+  readonly pinnedDrawn: readonly PinnedDrawn[];
+  readonly tasksHeaded: readonly TaskSummary[];
+  readonly walked: readonly TaskSummary[];
+}
+
+/**
+ * The rows the lists draw, the pinned, the followed, then each group not
+ * folded away, child tasks nested, and the task `standing` standing in its
+ * place even under a fold; and the tasks the Tasks head heads, the sections'
+ * and the list's, which its fold folds together.
+ */
+function listsDrawnOf(
+  lists: ColumnLists,
+  folds: FoldedGroups,
+  standing: (task: TaskSummary) => boolean,
+  every: TasksById,
+): ListsDrawn {
+  const { homedSections, homedTasks, homedFollowing } = lists;
+
+  const pinned = pinnedDrawn(
+    lists.pinnedSection,
+    lists.pinnedAdopted,
+    folds.taskOpened,
+    standing,
+    every,
+  );
+
+  const pinnedWalked = pinnedTaskRows(pinned);
+
+  const headed = [
+    ...homedSections.flatMap((drawn) => drawn.tasks),
+    ...taskSectionLists(homedTasks).flat(),
+  ];
+
+  const sectionsDrawn = homedSections.flatMap(({ section, tasks: held }) =>
+    nestedRows(
+      folds.tasksFolded || folds.sectionFolded(section.id) ? held.filter(standing) : held,
+      folds,
+      standing,
+      every,
+    ),
+  );
+
+  const followingDrawn = nestedRows(
+    folds.followingFolded ? homedFollowing.filter(standing) : homedFollowing,
+    folds,
+    standing,
+    every,
+  );
+
+  const tasksDrawn =
+    folds.tasksFolded && headed.length > 0
+      ? nestedRows(taskSectionLists(homedTasks).flat().filter(standing), folds, standing, every)
+      : drawnTasks(homedTasks, folds, standing, every);
+
+  return {
+    pinnedDrawn: pinned,
+    tasksHeaded: headed,
+    walked: [
+      ...(folds.pinnedFolded ? pinnedWalked.filter(standing) : pinnedWalked),
+      ...followingDrawn,
+      ...sectionsDrawn,
+      ...tasksDrawn,
+    ],
+  };
+}
+
+/**
+ * Moving up and down the list as it reads (⌥↑ and ⌥↓): down from the home
+ * page, where no row is open, is the first row. The ends go no further.
+ * Note that we step from the task the window last asked for (`boundFor`),
+ * not the one the host has open, because presses faster than its round trip
+ * would otherwise each step from the same row; and that it is a part of its
+ * own, so the task asked for moving draws it and not the column.
+ */
+function SidebarWalk({
+  walked,
+  listed,
+  onOpen,
+}: {
+  walked: readonly TaskSummary[];
+  listed: boolean;
+  onOpen: (taskId: string) => void;
+}): null {
+  const boundFor = useSidebarOpen((open) => open.tasks.boundFor);
+  const at = walked.findIndex((task) => task.id === boundFor);
+
+  const step = (by: number) => {
+    const task = walked[at + by];
+
+    if (task !== undefined) onOpen(task.id);
+  };
+
+  useAppCommand(APP_COMMAND.PREVIOUS_TASK, listed && at > 0 ? () => step(-1) : undefined);
+  useAppCommand(
+    APP_COMMAND.NEXT_TASK,
+    listed && at < walked.length - 1 ? () => step(1) : undefined,
+  );
+
+  return null;
+}
+
+/** What the sidebar is drawn from. */
+interface DesktopSidebarProps extends Omit<SidebarColumnProps, "tasks"> {
+  history: NavigationHistory;
+  tasks: TasksControl;
+  /** The plan the window's look names as the shell is drawn (`useTaskLooks`), which its row draws read. */
+  watched: string | undefined;
+}
+
+/** What the sidebar's column is drawn from: all but the history, which only its Back and Forward read, and the task opening, which only the parts that show it read (`sidebar-open.tsx`). */
 interface SidebarColumnProps {
   sidebar: SidebarCollapse;
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
   tab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
   account: AccountSnapshot;
@@ -2119,7 +2327,7 @@ interface SidebarColumnProps {
  * developer's Retry. Note that a window opening signed out is not left,
  * because every window opens so until the account's session is restored.
  */
-function useFirstUsableSpan(tasks: TasksControl): void {
+function useFirstUsableSpan(tasks: SidebarTasksControl): void {
   const { listRead, listFailed } = tasks;
   const collections = useTaskListCollections();
   // Note that the count is read as the span ends, since the collections hold the read the moment it answers.
@@ -2133,45 +2341,33 @@ function useFirstUsableSpan(tasks: TasksControl): void {
 }
 
 /**
- * The window's left column: at its head the workspace chosen, by its tile
- * and name and who shares it, with the menu that chooses another
- * (`workspace-switcher.tsx`) and New task's glyph at its end, or the app's identity while no workspace is read;
- * Search, which opens the command palette, every task of the
- * workspace chosen, and the account's
- * row, whose menu and gear lead to Settings and the rest. Home's row, the
- * Inbox's, and the Automations page's follow Search above the rule: Home's
- * goes to Home (`desktop-home.tsx`), the Inbox's counts what waits on the
- * developer and opens the window's Inbox, and the Automations page's opens the window's Automations page. The pinned tasks, and the side panel tabs
- * pinned to the sidebar, stand in the Pinned section while any are pinned,
- * newest pinned first, under a head that folds it, every row one line whose
- * hover card says the rest; whatever the list's view says, they stand as
- * pinned. The rest stand in the Tasks section, grouped and ordered as its
- * View options say and the workspace keeps on this Mac
- * (`task-list-view.ts`): under their repositories' headers by default, the
- * pinned repositories first, newest pinned first, then the group updated
- * most recently first; under their creators'; or in one run. A task
- * archived by an older build, before archiving went, stands nowhere.
- * It is where the developer moves between things; what they work on is the
- * column beside it. On a phone it is the Tasks page (`mobile-bar.tsx`),
- * whose bar already holds New task, Search, the Inbox, and Tasks, and whose
- * phone opens on the Inbox rather than Home, so it leaves those rows to the bar,
- * and heads itself as every phone place does, its workspaces and account
- * behind the reader's face (`phone-account.tsx`) rather than at its head and foot.
- * The open task's row is marked, or, where the task was opened from a pin,
- * that pin's row, while the task stays open.
- * A task's actions are a right-click on it away, whether or not it is open.
- * The strip above the head is the window's drag handle and the traffic lights'
- * room, with back and forward at its right. Its right edge resizes it, and a drag well past its least width
- * folds it away. Folded away, it is inert as well as out of sight, so no key
- * reaches a row nobody can see, until it floats open over the work
- * (`sidebar-collapse.ts`). A floating sidebar is put away by a choice in it,
- * by Escape, by a press outside, or once the pointer leaves a peek, a press
- * in it or not, though not for a menu it raised, nor while a popup raised
- * from it, as Resources' card, stands open (`hover-pane.ts`). Opened
- * from away, it takes the keyboard at the row it marks, else at Search,
- * holds it there against Tab, and Escape gives the keyboard back where it
- * was. Floating, it has no edge to drag, since only a pinned sidebar is
- * resized.
+ * The window's left column. Pinned shows its pins whatever the list's view
+ * filters, since a pin is already the reader's own choice. The Tasks
+ * section is grouped and ordered as its View options say and the workspace
+ * keeps on this Mac (`task-list-view.ts`): by default under repository
+ * headers, the pinned repositories first, newest pinned first, then the
+ * group updated most recently first. A task archived by an older build,
+ * before archiving went, is drawn nowhere.
+ *
+ * Note that the open task's row is marked, or the pin's row where the task
+ * was opened from a pin, for as long as the task stays open.
+ *
+ * On a phone the column is the Tasks page (`mobile-bar.tsx`). The bar
+ * already holds New task, Search, the Inbox, and Tasks, and the phone opens
+ * on the Inbox rather than Home, so the column leaves those rows to the bar.
+ * Its workspaces and account sit behind the reader's face
+ * (`phone-account.tsx`), as on every phone place.
+ *
+ * Its right edge resizes it, and a drag well past its least width folds it
+ * away. Folded, it is inert as well as hidden, so no key reaches a row
+ * nobody can see, until it floats open over the work (`sidebar-collapse.ts`).
+ * A floating sidebar is put away by a choice in it, by Escape, by a press
+ * outside, or once the pointer leaves a peek. It stays for a menu it raised
+ * and while a popup raised from it is open, such as Resources' card
+ * (`hover-pane.ts`). Opened from away, it takes the keyboard at the row it
+ * marks, else at Search, and holds it against Tab; Escape gives the keyboard
+ * back where it was. Floating, it has no edge to drag, since only a pinned
+ * sidebar is resized.
  */
 function SidebarColumn({
   sidebar,
@@ -2236,24 +2432,29 @@ function SidebarColumn({
   });
 
   const bodyRef = useMemo(() => joinRefs(body, roving.ref), [roving.ref]);
-  // The window's Inbox, an agent's or a person's page, the Automations page, the Board, and Admin stand in the task's place, so while one does no task is the place shown.
-  // Note that Admin, the Board, a person's page, and the Automations pages stand over the window's state, which stays as it was under them, so no place of that state is shown then.
-  const { place } = useWindowPlace();
-  const board = useBoardDoor(tasks);
-  const admin = useAdminDoor(tasks);
-  const automations = useAutomationsDoor(tasks);
-  const mergeQueue = useMergeQueueDoor(tasks);
+  // Note that the column reads which place stands, not the address, so a move from one task's address to another's draws it nothing.
+  const place = useWindowPlaceOf((here) => here.place);
+  // Note that the places' doors follow where the window stands, which moves with every task opened, so they are kept by a part of their own (`SidebarDoors`) and the column reads them only as one is pressed.
+  const doors = useRef<PlaceDoors | undefined>(undefined);
+
+  const keepDoors = useCallback((kept: PlaceDoors) => {
+    doors.current = kept;
+  }, []);
+
   const mergeQueueOn = useMergeQueueOn();
-  const inbox = useInboxDoor(tasks);
-  const automationsStanding = useAutomationsPlace();
+  const automationsOpen = useAutomationsPlaceOf((standing) => standing.open);
+
+  // Opening an automation sees its failed run, which the Automations row is marked for until then.
+  const automationOpen = useAutomationsPlaceOf(({ open, place: page }) =>
+    open && page.kind === AUTOMATIONS_PAGE.EDIT ? page.automationId : undefined,
+  );
+
   const inAdmin = place === ROUTED_PLACE.ADMIN;
   const inInbox = onTasks && !inAdmin && place === ROUTED_PLACE.INBOX;
-  const inAutomations = onTasks && automationsStanding.open;
+  const inAutomations = onTasks && automationsOpen;
   const inBoard = onTasks && !inAdmin && place === ROUTED_PLACE.BOARD;
   const inPerson = onTasks && !inAdmin && place === ROUTED_PLACE.PERSON;
   const inMergeQueue = onTasks && !inAdmin && place === ROUTED_PLACE.MERGE_QUEUE;
-  // Opening an automation sees its failed run, which the Automations row is marked for until then.
-  const { place: automationsPlace } = automationsStanding;
 
   // The workspace's runs, followed while the sidebar stands, as the Runs tab follows them, for the row to count the ones still at work.
   const { read: workspaceRuns } = useWorkspaceRuns(
@@ -2266,12 +2467,12 @@ function SidebarColumn({
   const automationFailed = useFailedRunsMark(
     failedRuns,
     tasks.workspace?.id,
-    inAutomations && automationsPlace.kind === AUTOMATIONS_PAGE.EDIT
-      ? automationsPlace.automationId
-      : undefined,
+    onTasks ? automationOpen : undefined,
     sidebar.staged,
   );
 
+  // The window's Inbox, an agent's or a person's page, the Automations page, the Board, and Admin stand in the task's place, so while one does no task is the place shown.
+  // Note that Admin, the Board, a person's page, and the Automations pages stand over the window's state, which stays as it was under them, so no place of that state is shown then.
   const standingIn =
     inInbox ||
     inAutomations ||
@@ -2284,12 +2485,9 @@ function SidebarColumn({
   const inboxCount = useInboxViewCount(tasks);
   const inboxOn = useInboxOn();
 
-  // A press in the list is always about tasks, so it brings the Tasks tab
-  // forward from Settings as well as choosing; a task's row goes back to work
-  // on it, on the agent waiting on the developer where one does (`onResume`).
-  // A press for a place of the window's state leaves a routed place standing for it, Settings or Admin (`panel-router.tsx`).
-  // Note that the row's door moves the window first, which asks while a page holds unsaved work, and the Tasks tab is
-  // brought forward once it lands there, so a move kept at the ask changes nothing (`places/place-leave.ts`'s `arrive`).
+  // A press in the list brings the Tasks tab forward from Settings as well as choosing. Note that the row's door
+  // moves the window first, which asks while a page holds unsaved work, and the Tasks tab comes forward once it
+  // lands, so a move kept at the ask changes nothing (`places/place-leave.ts`'s `arrive`).
   const arriveFor = (door: () => void) =>
     tasks.placeLeave.arrive(door, () => onTabChange(PANEL_TAB.TASKS));
 
@@ -2304,11 +2502,13 @@ function SidebarColumn({
   const newTask = () => newTaskOver(() => tasks.newTask.onOpen());
   const openPinnedTab = (pin: SidebarPin) => arriveFor(() => tasks.onOpenPinnedTab(pin));
   // Note that the Inbox, the Board, and the Automations pages are the router's places, which their navigation stands from wherever the window stands, as Admin's does.
-  const openInbox = () => inbox.open();
-  const openBoard = () => board.open();
-  const openAutomations = () => automations.open();
-  const openMergeQueue = () => mergeQueue.open();
-  const openAdmin = () => admin.open();
+  const openInbox = () => doors.current?.inbox.open();
+  const openBoard = () => doors.current?.board.open();
+  const openAutomations = () => doors.current?.automations.open();
+  const openMergeQueue = () => doors.current?.mergeQueue.open();
+  const openAdmin = () => doors.current?.admin.open();
+  const preloadBoard = () => doors.current?.board.preload();
+  const preloadAdmin = () => doors.current?.admin.preload();
   // A Manager stands on no task, so its row opens its own page.
   const openManager = (agentId: string) => arriveFor(() => tasks.agentView.onOpen(agentId));
   const goHome = () => arriveFor(() => tasks.onGoHome());
@@ -2335,21 +2535,13 @@ function SidebarColumn({
     control: taskView,
     shared,
   });
-  const unread = useUnreadTasks({ staged: sidebar.staged });
   const listedPullRequests = useListedTaskPullRequests();
   const activityOrder = useActivityOrder();
   const now = useMinute();
   const edge = useSidebarEdge(sidebar, sidebar.onToggle);
 
-  // Note that the task asked for is current while the host opens it, as the address the window stands at already names it.
-  const { taskPlaceStands, boundFor } = tasks;
-
-  const current = useCallback(
-    (taskId: string) => onTasks && !standingIn && taskPlaceStands && taskId === boundFor,
-    [onTasks, standingIn, taskPlaceStands, boundFor],
-  );
-
-  const currentTask = useCallback((task: TaskSummary) => current(task.id), [current]);
+  // Note that the task asked for is current while the host opens it, as the address the window stands at already names it; the column marks it only while the task's own place stands on the Tasks tab.
+  const marking = onTasks && !standingIn && tasks.taskPlaceStands;
   const listedInbox = useListedInbox(tasks);
   // The list is the chosen workspace's; the unread marks above read every task.
   const listedTasks = useListedTasks(tasks);
@@ -2360,19 +2552,51 @@ function SidebarColumn({
   const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, rows.agent, tasks);
   const pinnedManagers = usePinnedManagers(tasks, tasks.taskAgentPins);
   // The pin the open task was opened from is marked in its task's place,
-  // whichever of the task's tabs is shown, while its row still stands.
+  // whichever of the task's tabs is shown, while its row still stands and its holder is open.
   const { chosenPin } = tasks;
-  const holderOpen = (row: PinnedRow) => current(row.task.id);
 
-  const markedPin = pinnedSection.find(
-    (row) =>
-      row.pin !== undefined &&
-      chosenPin !== undefined &&
-      holderOpen(row) &&
-      samePin(row.pin, chosenPin),
-  )?.pin;
+  const chosenRow =
+    chosenPin === undefined
+      ? undefined
+      : pinnedSection.find((row) => row.pin !== undefined && samePin(row.pin, chosenPin));
 
-  // The account's own sections stand while a workspace is listed.
+  const chosenMark = chosenRow?.pin;
+  const chosenHolder = chosenRow?.task.id;
+  const { staged } = sidebar;
+
+  // Note that the rows read their marks of the task opening themselves (`sidebar-open.tsx`), so an open draws the rows it moves and holds the column.
+  const marks = useMemo(
+    () =>
+      openMarks(
+        marking,
+        chosenMark === undefined || chosenHolder === undefined
+          ? undefined
+          : { pin: chosenMark, holder: chosenHolder },
+        staged,
+      ),
+    [marking, chosenMark, chosenHolder, staged],
+  );
+
+  // The task open, which the lists below read only where it changes what they hold: a task an automation's run made stays while it is open, and unread while it is not the plan watched (`withoutFinishedRunTasks`).
+  const runTasks = useMemo(
+    () =>
+      new Set(listedTasks.unpinned.flatMap((task) => (task.madeByRun === true ? [task.id] : []))),
+    [listedTasks.unpinned],
+  );
+
+  const runOpen = useSidebarOpen((open) => {
+    const { boundFor } = open.tasks;
+
+    return marking && boundFor !== undefined && runTasks.has(boundFor) ? boundFor : undefined;
+  });
+
+  const runWatched = useSidebarOpen((open) =>
+    open.watched !== undefined && runTasks.has(open.watched) ? open.watched : undefined,
+  );
+
+  const unread = useUnreadWatching({ staged, watched: runWatched });
+  const runShown = useCallback((taskId: string) => taskId === runOpen, [runOpen]);
+
   const sectionsShown = tasks.signedIn && tasks.workspace !== undefined;
 
   const sectionedIn = sectionsShown ? tasks.workspace?.id : undefined;
@@ -2391,7 +2615,7 @@ function SidebarColumn({
   const sectionDialogs = useSectionDialogs(tasks, tasks.shown && overlay.inSight);
   const sectionEdits = useSectionEdits();
 
-  // A slot a row is let go at in an open section, counted among its rows as drawn, child tasks nested, read back in the section's own order; a folded one takes it on top, as it always has.
+  // A slot a row is let go at in an open section, counted among its rows as drawn, child tasks nested, read back in the section's own order; a folded one takes it on top.
   const sectionSlot = (target: DrawnSection, at: number) =>
     folds.sectionFolded(target.section.id)
       ? at
@@ -2475,59 +2699,18 @@ function SidebarColumn({
   // Note that the count reads every listed task, not the rows the view draws, which hides the finished ones by default.
   const { childCounts } = listedTasks;
 
-  const context: RowContext = {
-    tasks,
-    current,
-    marked: (taskId, pin) =>
-      markedPin === undefined ? pin === undefined && current(taskId) : pin === markedPin,
-    markedPin: (pin) => pin === markedPin,
-    onOpen: chosen(openTask),
-    currentTask,
-    unread,
-    now,
-    faces: { creator: true, assignee: assignedTo.kind !== ASSIGNED_TO.MEMBER },
-    inSight: overlay.inSight,
-    dropOut: sectionsShown ? dropRow : undefined,
-    onCarried: setCarrying,
-    childCount: (taskId) => childCounts.get(taskId),
-    opened: folds.taskOpened,
-    every: everyTask,
-    onFoldTask: folds.toggleTask,
-    runs: runsPlace,
-  };
-
-  // A pinned tab is on show where its holder is open and its column shows it:
-  // an agent's in the task's own column, any other in the side panel. The
-  // pin marked stands too, so a fold never hides the row the sidebar marks.
-  const pinnedShown = (row: PinnedRow) => {
-    const { pin } = row;
-
-    if (pin === undefined) return holderOpen(row);
-
-    return (
-      pin === markedPin ||
-      (holderOpen(row) &&
-        (isAgentPin(pin)
-          ? sameTab(tasks.mainTabs.tab, pin.tab)
-          : tasks.sidePanel.open &&
-            tasks.sidePanel.tab !== undefined &&
-            sameTab(tasks.sidePanel.tab, pin.tab)))
-    );
-  };
-
-  // Note that the pins are never filtered, because a pin is already the
-  // reader's own choice. A task an automation's run made leaves Tasks too, once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
-  // Note that the list stands as it was while the open task or the one watched moves and no row comes or goes, as they do on each move between tasks.
   const { inbox: waitingInbox } = listedInbox;
 
+  // A task an automation's run made leaves Tasks once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
+  // Note that the list stands as it was while the open task or the one watched moves and no row comes or goes, as they do on each move between tasks.
   const unpinnedTasks = useSteadyList(
     useMemo(
       () =>
         withoutFinishedRunTasks(
           listedTasks.unpinned.filter((task) => !sectioned.taskIds.has(task.id)),
-          { unread, inbox: waitingInbox, shown: current, pullRequests: listedPullRequests },
+          { unread, inbox: waitingInbox, shown: runShown, pullRequests: listedPullRequests },
         ),
-      [listedTasks.unpinned, sectioned.taskIds, unread, waitingInbox, current, listedPullRequests],
+      [listedTasks.unpinned, sectioned.taskIds, unread, waitingInbox, runShown, listedPullRequests],
     ),
   );
 
@@ -2661,14 +2844,6 @@ function SidebarColumn({
     listedTasks.unpinned,
   ]);
 
-  const pinnedDrawnRows = pinnedDrawn(
-    pinnedSection,
-    pinnedAdopted,
-    folds.taskOpened,
-    currentTask,
-    everyTask,
-  );
-
   const pinnedTasks = useSteadyList(pinnedSection.map((pin) => pin.task));
 
   // The tasks are chosen together across Pinned, the sections, and Tasks, only those the view draws staying chosen, a child task homed nowhere among those it does not.
@@ -2688,85 +2863,80 @@ function SidebarColumn({
 
   const selection = useTasksSelection(tasks, choosable);
 
-  // The rows as the list draws them: the pinned, the followed, then each group not folded
-  // away, the open row standing in its place even under a fold, so walking
-  // the list still moves from it.
-  const pinnedWalked = pinnedTaskRows(pinnedDrawnRows);
-
-  // The tasks the Tasks head heads, the sections' and the list's, which its fold folds together, the open one standing,
-  // and the rows Following, the sections, and Tasks draw, derived again only as the lists, the folds, or the open task move.
-  const { tasksHeaded, listsDrawn } = useMemo(() => {
-    const headed = [
-      ...homedSections.flatMap((drawn) => drawn.tasks),
-      ...taskSectionLists(homedTasks).flat(),
-    ];
-
-    const sectionsDrawn = homedSections.flatMap(({ section, tasks: held }) =>
-      nestedRows(
-        folds.tasksFolded || folds.sectionFolded(section.id) ? held.filter(currentTask) : held,
+  // The rows the lists draw with no task open, derived again only as the lists or the folds move.
+  const bare = useMemo(
+    () =>
+      listsDrawnOf(
+        { pinnedSection, pinnedAdopted, homedSections, homedTasks, homedFollowing },
         folds,
-        currentTask,
+        NONE_STANDING,
         everyTask,
       ),
-    );
+    [pinnedSection, pinnedAdopted, homedSections, homedTasks, homedFollowing, folds, everyTask],
+  );
 
-    const followingDrawn = nestedRows(
-      folds.followingFolded ? homedFollowing.filter(currentTask) : homedFollowing,
-      folds,
-      currentTask,
-      everyTask,
-    );
+  const bareDrawn = useMemo(() => new Set(bare.walked.map((task) => task.id)), [bare]);
 
-    const tasksDrawn =
-      folds.tasksFolded && headed.length > 0
-        ? nestedRows(
-            taskSectionLists(homedTasks).flat().filter(currentTask),
+  // The open task where a fold would leave it out, which stands under the fold, the open row
+  // standing in its place so walking the list still moves from it. Note that a task the lists
+  // draw anyway changes nothing they hold, so an open onto one draws the column nothing.
+  const standingOpen = useSidebarOpen((open) => {
+    const { boundFor } = open.tasks;
+
+    return marking && boundFor !== undefined && !bareDrawn.has(boundFor) ? boundFor : undefined;
+  });
+
+  const currentTask = useCallback((task: TaskSummary) => task.id === standingOpen, [standingOpen]);
+
+  // The rows as the lists draw them, the open one standing, and the tasks the Tasks head heads, the sections' and the list's, which its fold folds together.
+  const shownLists = useMemo(
+    () =>
+      standingOpen === undefined
+        ? bare
+        : listsDrawnOf(
+            { pinnedSection, pinnedAdopted, homedSections, homedTasks, homedFollowing },
             folds,
             currentTask,
             everyTask,
-          )
-        : drawnTasks(homedTasks, folds, currentTask, everyTask);
+          ),
+    [
+      bare,
+      standingOpen,
+      currentTask,
+      pinnedSection,
+      pinnedAdopted,
+      homedSections,
+      homedTasks,
+      homedFollowing,
+      folds,
+      everyTask,
+    ],
+  );
 
-    return {
-      tasksHeaded: headed,
-      listsDrawn: [...followingDrawn, ...sectionsDrawn, ...tasksDrawn],
-    };
-  }, [
-    homedSections,
-    homedTasks,
-    homedFollowing,
-    folds,
-    currentTask,
-    everyTask,
-    listedTasks.pinned,
-    listedTasks.unpinned,
-  ]);
-
-  const pinnedShownDrawn = folds.pinnedFolded ? pinnedWalked.filter(currentTask) : pinnedWalked;
-  const drawn = [...pinnedShownDrawn, ...listsDrawn];
-
+  const { pinnedDrawn: pinnedDrawnRows, tasksHeaded, walked: drawn } = shownLists;
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
   const chooseOrder = drawn.map((task) => task.id);
-  // Moving up and down the list as it reads: down from the home page, where
-  // no row is open, is the first row. The ends go no further. Note that we
-  // step from the task the window last asked for (`boundFor`), not the one the
-  // host has open, because presses faster than its round trip would otherwise
-  // each step from the same row.
-  const at = drawn.findIndex((task) => task.id === tasks.boundFor);
-
-  const step = (by: number) => {
-    const task = drawn[at + by];
-
-    if (task !== undefined) openTask(task.id);
-  };
-
   const listed = tasks.signedIn && drawn.length > 0;
-  useAppCommand(APP_COMMAND.PREVIOUS_TASK, listed && at > 0 ? () => step(-1) : undefined);
-  useAppCommand(APP_COMMAND.NEXT_TASK, listed && at < drawn.length - 1 ? () => step(1) : undefined);
+
+  const context: RowContext = {
+    tasks,
+    marks,
+    onOpen: chosen(openTask),
+    currentTask,
+    now,
+    faces: { creator: true, assignee: assignedTo.kind !== ASSIGNED_TO.MEMBER },
+    inSight: overlay.inSight,
+    dropOut: sectionsShown ? dropRow : undefined,
+    onCarried: setCarrying,
+    childCount: (taskId) => childCounts.get(taskId),
+    opened: folds.taskOpened,
+    every: everyTask,
+    onFoldTask: folds.toggleTask,
+    runs: runsPlace,
+  };
 
   // Whether New task's words are in sight; a person's page stands in Home's place without leaving its page, and draws no composer.
   const newTaskShown = tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON);
-  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
   const phone = room === SHELL_ROOM.NARROW;
 
   // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
@@ -2785,7 +2955,7 @@ function SidebarColumn({
     onInboxInTab: inTab({ kind: LINK_DESTINATION.INBOX }),
     onBoard: chosen(openBoard),
     onBoardInTab: inTab({ kind: LINK_DESTINATION.BOARD }),
-    onBoardPreload: board.preload,
+    onBoardPreload: preloadBoard,
     onAutomations: chosen(openAutomations),
     onAutomationsInTab: inTab({ kind: LINK_DESTINATION.AUTOMATIONS }),
     onMergeQueue: chosen(openMergeQueue),
@@ -2793,6 +2963,7 @@ function SidebarColumn({
     onSignOut,
   });
 
+  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
   const places = (
     <>
       <SidebarPlaces>
@@ -2861,6 +3032,8 @@ function SidebarColumn({
     >
       <div className="desktop-drag-strip" />
       <SidebarHistoryButtons room={room} />
+      <SidebarWalk walked={drawn} listed={listed} onOpen={openTask} />
+      <SidebarDoors tasks={tasks} keep={keepDoors} />
       {/* The workspace heads the sidebar once one is read, as everything under it is that
           workspace's; the app's own head stands until then. A phone heads it as it heads
           every place, the reader's face opening their workspaces and account (`phone-account.tsx`). */}
@@ -2893,7 +3066,7 @@ function SidebarColumn({
           tasks={tasks}
           inSight={overlay.inSight}
           newTask={{ shown: newTaskShown, onOpen: chosen(newTask) }}
-          admin={{ onOpen: chosen(openAdmin), onPreload: admin.preload }}
+          admin={{ onOpen: chosen(openAdmin), onPreload: preloadAdmin }}
         />
       ) : (
         // New task stands at the app's head until a workspace's row takes it, so it is never out of reach.
@@ -2902,12 +3075,9 @@ function SidebarColumn({
         />
       )}
 
-      {/* One scroller for the pages' rows and both sections, so neither the
-          rows nor the pinned tasks hold the column above the rest: on an
-          iPad's or a short window's column they left the tasks a strip. It
-          reaches the column's end edge and its body pads the rows back in,
-          so the strip its fade keeps whole for the scroll bar stands in the
-          column's inset rather than over the rows' ends. */}
+      {/* One scroller for the pages' rows and both sections, so a short column still leaves the tasks room.
+          It reaches the column's end edge and its body pads the rows back in, so the strip its fade keeps
+          for the scroll bar stands in the column's inset rather than over the rows' ends. */}
       <ReplayUnmask>
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
           <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
@@ -2953,7 +3123,6 @@ function SidebarColumn({
                           onOpenManager={chosen(openManager)}
                           adopted={pinnedAdopted}
                           folds={folds}
-                          shown={pinnedShown}
                           context={context}
                           onOpenTab={chosen(openPinnedTab)}
                           onDropOut={sectionsShown ? dropPinned : undefined}
@@ -2961,7 +3130,6 @@ function SidebarColumn({
                         />
                       )}
                     />
-                    {/* Following stands while it holds a task, and leaves after its exit once it holds none. */}
                     <LeavingGroups
                       groups={
                         tasks.signedIn && homedFollowing.length > 0
@@ -2978,7 +3146,7 @@ function SidebarColumn({
                         />
                       )}
                     />
-                    {/* The Tasks head heads what its view filters, the sections and the list, Pinned standing above it unfiltered, and folds them together as Pinned's head folds its pins, while they hold a task, so a note saying the list is empty or still read never folds away; a row let go on it leaves its section, as one let go on the list does. */}
+                    {/* The Tasks head folds the sections and the list together only while they hold a task, so a note saying the list is empty or still read never folds away. A row let go on it leaves its section. */}
                     <div
                       className="sidebar-group sidebar-tasks-head"
                       data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
@@ -3038,7 +3206,7 @@ function SidebarColumn({
                             dialogs: sectionDialogs,
                             edits: sectionEdits,
                             current: currentTask,
-                            unread,
+                            marks,
                             inSight: overlay.inSight,
                             folded: folds.sectionFolded,
                             onToggle: folds.toggleSection,
@@ -3052,9 +3220,7 @@ function SidebarColumn({
                                   key={task.id}
                                   tasks={tasks}
                                   task={task}
-                                  current={context.marked(task.id, undefined)}
-                                  open={current(task.id)}
-                                  unread={unread}
+                                  marks={marks}
                                   now={now}
                                   faces={context.faces}
                                   depth={held.depth}
@@ -3178,18 +3344,26 @@ const HeldSidebarColumn = memo(SidebarColumn);
  */
 export const DesktopSidebar = memo(function DesktopSidebar({
   history,
+  tasks,
+  watched,
+  onTabChange,
   ...column
 }: DesktopSidebarProps): React.JSX.Element {
-  const { workspace } = column.tasks;
+  const { workspace } = tasks;
   // Note that the window makes its history afresh on each of its draws, so Back and Forward are handed only what they read, held while it reads the same.
   const { canGoBack, canGoForward, onBack, onForward, steps, onGoTo } = history;
   const buttons = useSteadyDoors({ canGoBack, canGoForward, onBack, onForward, steps, onGoTo });
+  // Note that the column is handed the tab held while only the task opening moves, and the window's tab change steady, so an open draws only the parts that show it (`sidebar-open.tsx`).
+  const held = useHeldSidebarTasks(tasks);
+  const tabChange = useSteadyDoor(onTabChange);
 
   return (
     <LinkWorkspaceProvider value={workspace?.slug ?? workspace?.id}>
-      <MemberDirectory workspace={workspace} readerId={column.tasks.me}>
+      <MemberDirectory workspace={workspace} readerId={tasks.me}>
         <SidebarHistoryContext value={buttons}>
-          <HeldSidebarColumn {...column} />
+          <SidebarOpenProvider tasks={tasks} watched={watched}>
+            <HeldSidebarColumn {...column} tasks={held} onTabChange={tabChange} />
+          </SidebarOpenProvider>
         </SidebarHistoryContext>
       </MemberDirectory>
     </LinkWorkspaceProvider>

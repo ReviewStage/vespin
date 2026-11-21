@@ -118,6 +118,7 @@ import { agentFailureSaid, agentLogIds } from "./agent-log.js";
 import {
   type AccountKeyRows,
   AgentCredentialMissing,
+  type AskedMachine,
   accountFastOffer,
   agentMachineChoice,
   agentRuntimeChoice,
@@ -280,7 +281,7 @@ export type StartAsk = StartPlace & {
   readonly reached?: StartReach | undefined;
   /** The task the task's own start made in the same request, as it was made, which the agent's Start lands on rather than reading it again; none for every other Start. */
   readonly landed?: StoredTask | undefined;
-  /** Where the agent runs, the cloud or one of the starter's devices; none for where `machineOfStart` defaults it. */
+  /** Where the agent runs, the cloud, one of the starter's devices, or a machine its workspace owns; none for where `machineOfStart` defaults it. */
   readonly runsOn?: AgentRunsOnRequest | undefined;
   /** The mode the agent starts in, as a new-agent menu picked it; none for the starter's Default permissions. */
   readonly permissionMode?: AgentPermissionMode | undefined;
@@ -288,6 +289,13 @@ export type StartAsk = StartPlace & {
   readonly suggestedBy?: SuggestedBy | undefined;
   /** Whether a tool's call asks (`start_agent`), which leaves the task's assignee and status as they stand and keeps no Runs on pick; none for a Start by hand or an automation's. */
   readonly byTool?: boolean | undefined;
+  /**
+   * False where the build asking reads no agent on a workspace's machine
+   * (`readsWorkspaceMachines`), so a Start naming no place is never placed
+   * on one for it (`machineOfStart`); none for a Start no build asks, a
+   * tool's, an automation's, or one from outside the app.
+   */
+  readonly readsWorkspaceMachines?: boolean | undefined;
 };
 
 /** A repository as a task's start reached it: the full name its row keeps, and how it was reached. */
@@ -706,7 +714,8 @@ const starterOf = (ask: Pick<StartAsk, "startedBy" | "automationOrigin">) =>
  * The runtime a new agent's conversation is recorded on, with its payer: on
  * a device, the model's harness on that machine's own login
  * (`localAgentRuntimeChoice`), which needs no credential of the account's;
- * in the cloud, by the account's routing (`agentRuntimeChoice`): the
+ * in the cloud or on a workspace's machine, which holds no login of the
+ * starter's, by the account's routing (`agentRuntimeChoice`): the
  * credential Settings chose, a blank Start, a continue and a fork alike.
  * Where no credential of the account's pays for a cloud agent, the Start is
  * refused by name, the provider beside it, and nothing is written.
@@ -727,17 +736,16 @@ function startRuntimeOf(
 }
 
 /**
- * Where a new agent runs (`agentMachineChoice`): a sandbox, or the starter's
+ * Where a new agent runs (`agentMachineChoice`): a sandbox; the starter's
  * Mac the Start names where it is one Start offers them, and one that works
- * in a repository where its host does so on its own GitHub sign-in; refused
- * by name where it is not, and nothing is written.
+ * in a repository where its host does so on its own GitHub sign-in; or a
+ * machine its workspace owns where it is there and ready to run agents in
+ * VMs; refused by name where it is not, and nothing is written. A move onto
+ * a workspace's machine is admitted by the same choice (`move.ts`).
  */
-function startMachineOf(
+export function startMachineOf(
   userId: string,
-  asked: {
-    readonly machine?: AgentMachineKind | undefined;
-    readonly deviceId?: string | undefined;
-  },
+  asked: AskedMachine,
   runtime: NativeRuntime,
   inRepository: boolean,
 ) {
@@ -813,10 +821,10 @@ function openingOf(
 
 /** Where a Start's agent runs, as `machineOfStart` decides it: the machine and device it asks the runtime and machine choices for. */
 interface StartMachine {
-  readonly asked: { readonly machine: AgentMachineKind; readonly deviceId?: string | undefined };
+  readonly asked: AskedMachine;
 }
 
-/** A place a Start reads before it is checked: the cloud, or a device by its id, null once that device's row is gone. */
+/** A place a Start reads before it is checked: the cloud, or a device or workspace's machine by its id, null once that machine's row is gone. */
 interface PlaceRead {
   readonly machine: AgentMachineKind;
   readonly deviceId?: string | null | undefined;
@@ -835,12 +843,15 @@ const IN_THE_CLOUD: StartMachine = { asked: { machine: AGENT_MACHINE.VERCEL } };
  * machine reads neither of the starter's own and runs in the cloud, because
  * no member is
  * there to have chosen for it, and a Mac its owner last picked may be asleep
- * when the run fires, which would fail the run rather than start it.
+ * when the run fires, which would fail the run rather than start it. A
+ * newest agent on a workspace's machine is passed over where the build
+ * asking does not read one (`readsWorkspace`).
  */
 const defaultPlaceOf = Effect.fnUntraced(function* (
   userId: string,
   task: Task | undefined,
   automated: boolean,
+  readsWorkspace: boolean,
 ): Effect.fn.Return<PlaceRead, HostedRefusal, DatabaseServices> {
   if (automated) return { machine: AGENT_MACHINE.VERCEL };
 
@@ -849,7 +860,13 @@ const defaultPlaceOf = Effect.fnUntraced(function* (
       ? Option.none()
       : yield* hostedStoreOrUnavailable(readNewestAgentPlace(userId, task.id));
 
-  if (Option.isSome(newest)) return newest.value;
+  if (
+    Option.isSome(newest) &&
+    (readsWorkspace || newest.value.machine !== AGENT_MACHINE.WORKSPACE)
+  ) {
+    return newest.value;
+  }
+
   const pick = yield* hostedStoreOrUnavailable(readRunsOnPick(userId));
 
   return Option.getOrElse(pick, (): PlaceRead => ({ machine: AGENT_MACHINE.VERCEL }));
@@ -869,26 +886,56 @@ const defaultPlaceOf = Effect.fnUntraced(function* (
  * whose it is; a device whose row is gone is refused as away, a host its
  * starter removed is refused by name, and one that is the starter's goes on
  * to the runtime and machine choices, which refuse it by name where it is
- * away, the experiment is off, or it runs no harness for the model. Nothing
- * falls back to the cloud on its own.
+ * away, the experiment is off, or it runs no harness for the model. A
+ * workspace's machine runs the agents of every member of the workspace that
+ * owns it, and of no other, so it goes on to the machine choice asked for
+ * the workspace the agent lands in (`workspaceId`), which refuses it as away
+ * where that workspace does not own it; one whose row is gone is refused as
+ * away here. Nothing falls back to the cloud on its own. A build that reads
+ * no agent on a workspace's machine (`readsWorkspaceMachines`) never has
+ * its Start placed on one it did not name, since it could not read the
+ * agent it made: a Start from a source there is not found, and its
+ * starter's newest agent there is passed over for their pick.
  */
 const machineOfStart = Effect.fnUntraced(function* (
   userId: string,
-  ask: Pick<StartAsk, "runsOn" | "automationOrigin">,
+  ask: Pick<StartAsk, "runsOn" | "automationOrigin" | "readsWorkspaceMachines">,
   source: Agent | undefined,
   task: Task | undefined,
+  workspaceId: string,
 ): Effect.fn.Return<StartMachine, HostedRefusal, DatabaseServices> {
+  const readsWorkspace = ask.readsWorkspaceMachines !== false;
+
+  // Note that a source there is one the build never read, so it is not found, as its read by id is not.
+  if (source?.machine === AGENT_MACHINE.WORKSPACE && !readsWorkspace) {
+    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  }
+
   const place: PlaceRead =
     ask.runsOn ??
     (source !== undefined
       ? inheritedPlaceOf(userId, source)
-      : yield* defaultPlaceOf(userId, task, ask.automationOrigin !== undefined));
+      : yield* defaultPlaceOf(userId, task, ask.automationOrigin !== undefined, readsWorkspace));
 
-  if (place.machine === AGENT_MACHINE.VERCEL) return IN_THE_CLOUD;
+  switch (place.machine) {
+    case AGENT_MACHINE.VERCEL:
+      return IN_THE_CLOUD;
+    case AGENT_MACHINE.DEVICE: {
+      const { deviceId } = yield* ownDeviceOf(userId, place.deviceId);
 
-  const { deviceId } = yield* ownDeviceOf(userId, place.deviceId);
+      return { asked: { machine: AGENT_MACHINE.DEVICE, deviceId } };
+    }
 
-  return { asked: { machine: AGENT_MACHINE.DEVICE, deviceId } };
+    case AGENT_MACHINE.WORKSPACE: {
+      const { deviceId } = place;
+
+      if (deviceId === null || deviceId === undefined) {
+        return yield* Effect.fail(localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY));
+      }
+
+      return { asked: { machine: AGENT_MACHINE.WORKSPACE, deviceId, workspaceId } };
+    }
+  }
 });
 
 /**
@@ -942,13 +989,18 @@ export const ownDeviceOf = Effect.fnUntraced(function* (
  * The place a Start named, kept as its starter's last pick, which a later
  * Start naming none and a task an agent makes for them run at; nothing for
  * a Start that named none, for a tool's call (`start_agent`), whose
- * place is the caller's for that one agent and never the member's pick, or
- * for an automation's run, whose place is the automation's own.
+ * place is the caller's for that one agent and never the member's pick,
+ * for an automation's run, whose place is the automation's own, or for a
+ * workspace's machine, because the pick is read by a Start in any of the
+ * member's workspaces and that machine runs only its own workspace's agents.
  * Note that a pick that fails to keep fails nothing, because the agent
  * already stands.
  */
 const keptPick = (userId: string, ask: Pick<StartAsk, "runsOn" | "byTool" | "automationOrigin">) =>
-  ask.runsOn === undefined || ask.byTool === true || ask.automationOrigin !== undefined
+  ask.runsOn === undefined ||
+  ask.runsOn.machine === AGENT_MACHINE.WORKSPACE ||
+  ask.byTool === true ||
+  ask.automationOrigin !== undefined
     ? Effect.void
     : keepRunsOnPick(userId, ask.runsOn).pipe(
         Effect.catch((failure) =>
@@ -1078,7 +1130,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   );
 
   // Where it runs, the runtime, and the payer are decided as the agent is made, by the place it names or else its source or its starter's default, and its model, and never change.
-  const where = yield* machineOfStart(userId, ask, rules.source, landing.task);
+  const where = yield* machineOfStart(userId, ask, rules.source, landing.task, landing.workspaceId);
   const runtime = yield* startRuntimeOf(userId, choice.model, keys, where.asked.machine);
 
   const placed = yield* startMachineOf(
@@ -1088,7 +1140,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     landing.repository !== null,
   );
 
-  // A cloud agent's Start alone asks the billing gate, before anything is written; a Mac's never does.
+  // A cloud agent's Start alone asks the billing gate, before anything is written; a device's or a workspace machine's never does.
   if (placed.machine === AGENT_MACHINE.VERCEL) yield* cloudStartGate(userId, landing.workspaceId);
 
   const started = yield* hostedStoreOrUnavailable(
@@ -1327,6 +1379,21 @@ export const requestedChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * What a requested Start is handed beside its request, none of which a
+ * request names itself: how a replay's summary is written, the repository
+ * and the task a task's own start reached and made, the suggestion it was
+ * sent from (`reply-buttons/press.ts`), so no client can claim one, and
+ * whether the build asking reads an agent on a workspace's machine.
+ */
+export interface RequestedStartAround {
+  readonly summaryModel?: SummaryModelOf | undefined;
+  readonly reached?: StartReach | undefined;
+  readonly landed?: StoredTask | undefined;
+  readonly suggestedBy?: SuggestedBy | undefined;
+  readonly readsWorkspaceMachines?: boolean | undefined;
+}
+
+/**
  * The account's agent started on the task, or in the workspace with no
  * task, as a request asks it, through `startAgent`: the agent's own
  * Start (`POST /api/tasks/{id}/agents`), a Start from an agent in its own
@@ -1346,12 +1413,9 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   where: StartWhere,
   request: AgentStartRequest,
-  summaryModel?: SummaryModelOf,
-  reached?: StartReach,
-  landed?: StoredTask,
-  /** The suggestion the request was sent from, which no request names itself, so no client can claim one (`reply-buttons/press.ts`). */
-  suggestedBy?: SuggestedBy,
+  around: RequestedStartAround = {},
 ): Effect.fn.Return<RequestedStart, HostedRefusal, StartServices> {
+  const { summaryModel, reached, landed, suggestedBy, readsWorkspaceMachines } = around;
   const { note } = request;
   const choice = yield* requestedChoice(request);
 
@@ -1374,6 +1438,7 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     reached,
     landed,
     suggestedBy,
+    readsWorkspaceMachines,
   }).pipe(Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)));
 
   const summary = yield* summaryOf(userId, agent);

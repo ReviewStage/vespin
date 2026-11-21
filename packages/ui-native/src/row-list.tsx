@@ -41,6 +41,7 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
+  scrollEdgeEffectStyle,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { searchTokens } from "@repo/features/search-tokens";
@@ -61,7 +62,7 @@ import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropLink, sideMargins } from "./interactions.js";
+import { dropLink, sideMargins, stackScrollEdge } from "./interactions.js";
 import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
@@ -342,6 +343,9 @@ export function RowList({
         ...(look === LIST_LOOK.DETAIL ? [listSectionSpacing("compact")] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
+        // Note that the stack's bar follows the list, so a tab root's large title collapses as it scrolls, and the rows fade under the bar's glass, as they do wherever a bar doesn't follow them, rather than meet a hard edge and a rule, which the bar drew once it followed them.
+        stackScrollEdge(),
+        scrollEdgeEffectStyle("soft", "top"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
         // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
         ...(choosing === undefined ? [] : [tint(colors.ACCENT)]),

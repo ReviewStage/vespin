@@ -23,7 +23,8 @@
  *
  * Two machines answer it: a cloud sandbox (`sandbox-machine.ts`) and the
  * starter's Mac (`device-machine.ts`), which the agent's row picks between
- * (`agent.machine`, `agent-machines.ts`).
+ * (`agent.machine`, `agent-machines.ts`); an agent on a machine its
+ * workspace owns is answered by none yet, and every call for it is refused.
  *
  * A place is named by our own runtime session id, which the conversation
  * records and every machine can find its place by, and by where the session
@@ -288,6 +289,8 @@ export class LaunchRefused extends Data.TaggedError("LaunchRefused")<{
   readonly deviceAway?: true | undefined;
   /** Whether the agent's mode asks before it acts and its device's runner would run it with full access (`MachineLayout`'s `permissionModes`). */
   readonly modesUnsupported?: true | undefined;
+  /** Whether the agent runs on a machine its workspace owns, which no machine of ours answers yet (`agent-machines.ts`). */
+  readonly workspaceMachinesPending?: true | undefined;
 }> {}
 
 /** What an open asks: the session the place is opened under, the agent whose repository it checks out, and the reads run beside it. */

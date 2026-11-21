@@ -16,6 +16,7 @@ import { IDLE_TASKS_VIEW, type ListedTasksView, TASKS_READ } from "@repo/feature
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind, PortActPayload } from "@repo/host/contract";
 import { taskListFollowing } from "@repo/host/task-list-following";
+import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
 import type { WireBoundaryInput } from "@repo/wire";
 import { MutationObserver } from "@tanstack/react-query";
 import { act, createElement, Fragment, useState } from "react";
@@ -26,11 +27,10 @@ import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import { type FakeActPort, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads } from "../testing/app-state.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
-import { holdFrames, settleFrames } from "../testing/frames.js";
 import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
-import { type AgentsControl, MODELS_READ, useAgents } from "./use-agents.js";
+import { type AgentsControl, MODELS_READ, useAgents, useTaskAgents } from "./use-agents.js";
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
@@ -192,19 +192,21 @@ function mount(initial: Standing, keyPrefix = "key") {
   function Probe() {
     const [held, setHeld] = useState(initial);
     restand = setHeld;
-    control = useAgents({
-      taskId: held.taskId,
-      repository: held.repository,
-      agentsFollowed: true,
-      onOpenIntegrations: () => undefined,
-      onOpenApiKeys: () => undefined,
-      onStarted: (agentId) => started.push(agentId),
-      mintKey: () => {
-        keys += 1;
+    control = useTaskAgents(
+      useAgents({
+        taskId: held.taskId,
+        repository: held.repository,
+        agentsFollowed: true,
+        onOpenIntegrations: () => undefined,
+        onOpenApiKeys: () => undefined,
+        onStarted: (agentId) => started.push(agentId),
+        mintKey: () => {
+          keys += 1;
 
-        return `${keyPrefix}-${keys}`;
-      },
-    });
+          return `${keyPrefix}-${keys}`;
+        },
+      }),
+    );
 
     return null;
   }

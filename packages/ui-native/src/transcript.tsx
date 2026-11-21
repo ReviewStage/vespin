@@ -35,6 +35,8 @@ import {
   type HeldAct,
   MessageMenu,
   MessageWords,
+  PictureOriginProvider,
+  PictureSetProvider,
   TurnActs,
   useCopyWords,
 } from "./held-menu.js";
@@ -66,6 +68,9 @@ import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
 /** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
+/** Who the reader's own line is from, as a picture's viewer names it. */
+const SENT_BY_YOU = "You";
+
 const RUN_GAP = 1;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
@@ -833,16 +838,19 @@ function TranscriptRow({
             </Text>
           )}
           {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
-          <PictureSet
-            atEnd={!item.received}
-            pictures={(item.pictures ?? []).map((picture) => ({
-              key: picture.key,
-              source: picture.url ?? saidSource(drawing, picture.pictureId),
-              alt: picture.name,
-              onRetry:
-                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
-            }))}
-          />
+          {/* Note that a line's pictures name who sent it and when in their viewer's bar, the reader's own as theirs. */}
+          <PictureOriginProvider origin={{ by: item.sender ?? SENT_BY_YOU, at: item.at }}>
+            <PictureSet
+              atEnd={!item.received}
+              pictures={(item.pictures ?? []).map((picture) => ({
+                key: picture.key,
+                source: picture.url ?? saidSource(drawing, picture.pictureId),
+                alt: picture.name,
+                onRetry:
+                  picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+              }))}
+            />
+          </PictureOriginProvider>
           {/* Note that the other files a line carried, such as a PDF, stand under its pictures as their chips, as the panel stands a message's files over its bubble. */}
           {(item.files ?? []).map((file) => (
             <FileChip
@@ -1390,8 +1398,11 @@ export function AgentTranscript({
           data={items}
           keyExtractor={itemKey}
           // Note that each row is keyed by its item, so a cell FlashList recycles for another item mounts that item's row afresh rather than keeping the last one's state, such as a fold left open or a picture's measured size.
+          // Note that each row's pictures are one set its viewer swipes through, a message's or a showing's own, since rows scrolled away are drawn no longer.
           renderItem={({ item }) => (
-            <TranscriptRow key={itemKey(item)} item={item} drawing={rowDrawing} />
+            <PictureSetProvider key={itemKey(item)}>
+              <TranscriptRow item={item} drawing={rowDrawing} />
+            </PictureSetProvider>
           )}
           ListHeaderComponent={
             <>

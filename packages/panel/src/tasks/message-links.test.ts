@@ -8,6 +8,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -161,6 +162,8 @@ function messageNamed(container: HTMLElement, id: string): HTMLElement {
 
 test("a message offers Copy link beside its Copy, copying its link under the agent, and says Link copied", async () => {
   const { container } = await drawn(undefined);
+  // The pointer comes onto the messages, as a reader's does to reach their actions.
+  pointAtTurns(container);
 
   const copyLink = messageNamed(container, "msg-7").querySelector<HTMLButtonElement>(
     '[aria-label="Copy link"]',

@@ -5,8 +5,10 @@ import {
   Divider,
   HStack,
   Image,
+  Mask,
   Menu,
   ProgressView,
+  Rectangle,
   RNHostView,
   ScrollView,
   Spacer,
@@ -33,6 +35,7 @@ import {
   opacity,
   padding,
   tint,
+  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import { longPasteIn } from "@repo/features/long-paste";
 import { TALK_LABEL } from "@repo/features/voice-call-words";
@@ -760,10 +763,82 @@ function RowPieces({ parts }: { readonly parts: ComposerParts }) {
 /** How far apart the capsules stand in the row under the field. */
 const TOOL_SPACING = SPACE.TIGHT * 2;
 
+/** How far the capsules fade out at an edge of the row they run on past, about one capsule's lead glyph and its gap. */
+const CAPSULE_FADE = SPACE.EDGE * 2;
+
+/** The mask's ink: shown where opaque, hidden where clear; only its alpha is read. */
+const MASK_INK = { SHOWN: "black", HIDDEN: "clear" } as const;
+
+/** How far short of an end the scroll may sit and still be at it, since its offsets are fractional. */
+const SCROLL_END_SLACK = 1;
+
+/** Which ends of the capsule row have more of it beyond them. */
+type CapsuleOverflow = { readonly before: boolean; readonly after: boolean };
+
+/** One end's fade, from hidden at the row's edge to shown inward: `toward` names the edge it fades out at. */
+function CapsuleFade({ toward }: { readonly toward: "leading" | "trailing" }) {
+  const ends = [MASK_INK.SHOWN, MASK_INK.HIDDEN];
+
+  return (
+    <Rectangle
+      modifiers={[
+        frame({ width: CAPSULE_FADE }),
+        foregroundStyle({
+          type: "linearGradient",
+          colors: toward === "trailing" ? ends : [...ends].reverse(),
+          startPoint: { x: 0, y: 0.5 },
+          endPoint: { x: 1, y: 0.5 },
+        }),
+      ]}
+    />
+  );
+}
+
+/**
+ * The capsules saying where a message runs, scrolling sideways where they
+ * outrun the row, and fading out softly at an end while more of them lies
+ * past it, as the system's own scrolling rows of chips do, rather than
+ * cutting a word off hard at the edge. Note that the fade is a mask of the
+ * scroll view's own, which leaves the capsules' presses alone, and that it
+ * is redrawn only as an end's state turns, never on each frame of a scroll.
+ */
+function CapsuleScroll({ children }: { readonly children: ReactNode }) {
+  const [overflow, setOverflow] = useState<CapsuleOverflow>({ before: false, after: false });
+
+  // Note that an end's state is set only when it turns, so a scroll's frames that change neither redraw nothing.
+  const geometry = useScrollGeometryChange((at) => {
+    const before = at.contentOffsetX > SCROLL_END_SLACK;
+    const after = at.contentOffsetX + at.containerWidth < at.contentWidth - SCROLL_END_SLACK;
+    setOverflow((was) => (was.before === before && was.after === after ? was : { before, after }));
+  });
+
+  return (
+    <Mask>
+      <ScrollView
+        axes="horizontal"
+        showsIndicators={false}
+        modifiers={geometry === null ? [] : [geometry]}
+      >
+        <HStack spacing={TOOL_SPACING} modifiers={[padding({ trailing: SPACE.ROW })]}>
+          {children}
+        </HStack>
+      </ScrollView>
+      <Mask.Content>
+        <HStack spacing={0}>
+          {overflow.before ? <CapsuleFade toward="leading" /> : null}
+          <Rectangle modifiers={[foregroundStyle(MASK_INK.SHOWN)]} />
+          {overflow.after ? <CapsuleFade toward="trailing" /> : null}
+        </HStack>
+      </Mask.Content>
+    </Mask>
+  );
+}
+
 /**
  * The row under the field, as the desktop composer's foot stands it: the +
  * at its start and the capsules saying where the message runs after it,
- * scrolling sideways where they outrun the bar, then at its end what is
+ * scrolling sideways where they outrun the bar and fading where they run on
+ * (`CapsuleScroll`), then at its end what is
  * picked for it, such as the model, whole, the capsules giving way first, a
  * call's presses, and Send or Stop, inside the composer's own glass, so the
  * keyboard that lifts the composer never covers them.
@@ -785,11 +860,7 @@ function ComposerRow({
   return (
     <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
       <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} />
-      <ScrollView axes="horizontal" showsIndicators={false}>
-        <HStack spacing={TOOL_SPACING} modifiers={[padding({ trailing: SPACE.ROW })]}>
-          {tools}
-        </HStack>
-      </ScrollView>
+      <CapsuleScroll>{tools}</CapsuleScroll>
       {/* Note that what is picked for the message, such as the model, is offered the row first and takes its whole words, so the capsules before it scroll rather than cut its name short, as Apple's own rows never cut a control's word where they have room. */}
       {trailing === undefined || trailing === null ? null : (
         <HStack modifiers={[layoutPriority(1)]}>{trailing}</HStack>

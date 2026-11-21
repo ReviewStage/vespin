@@ -1,4 +1,4 @@
-// accessibility.ts -- the system's accessibility settings a component draws by (Reduce Motion, Reduce Transparency, Increase Contrast), the reader's text size past which a layout stacks rather than crowds, and what VoiceOver is told as it happens.
+// accessibility.ts -- the system's accessibility settings a component draws by (Reduce Motion, Reduce Transparency, Increase Contrast, VoiceOver running), the reader's text size past which a layout stacks rather than crowds, and what VoiceOver is told as it happens.
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { AccessibilityInfo, useWindowDimensions } from "react-native";
@@ -9,6 +9,7 @@ const SETTING = {
   REDUCE_MOTION: "reduceMotionChanged",
   REDUCE_TRANSPARENCY: "reduceTransparencyChanged",
   INCREASE_CONTRAST: "darkerSystemColorsChanged",
+  VOICE_OVER: "screenReaderChanged",
 } as const;
 
 type Setting = (typeof SETTING)[keyof typeof SETTING];
@@ -18,6 +19,7 @@ const FIRST_READ = {
   [SETTING.REDUCE_MOTION]: () => AccessibilityInfo.isReduceMotionEnabled(),
   [SETTING.REDUCE_TRANSPARENCY]: () => AccessibilityInfo.isReduceTransparencyEnabled(),
   [SETTING.INCREASE_CONTRAST]: () => AccessibilityInfo.isDarkerSystemColorsEnabled(),
+  [SETTING.VOICE_OVER]: () => AccessibilityInfo.isScreenReaderEnabled(),
 } as const satisfies Record<Setting, () => Promise<boolean>>;
 
 /**
@@ -62,6 +64,7 @@ const STORES = {
   [SETTING.REDUCE_MOTION]: settingStore(SETTING.REDUCE_MOTION),
   [SETTING.REDUCE_TRANSPARENCY]: settingStore(SETTING.REDUCE_TRANSPARENCY),
   [SETTING.INCREASE_CONTRAST]: settingStore(SETTING.INCREASE_CONTRAST),
+  [SETTING.VOICE_OVER]: settingStore(SETTING.VOICE_OVER),
 } as const satisfies Record<Setting, ReturnType<typeof settingStore>>;
 
 function useSetting(setting: Setting): boolean {
@@ -83,6 +86,11 @@ export function useReduceTransparency(): boolean {
 /** Whether the reader asked for more contrast (Increase Contrast, iOS's darker system colors): `useColors` strengthens the quiet inks and the hairlines where it is on. */
 export function useIncreaseContrast(): boolean {
   return useSetting(SETTING.INCREASE_CONTRAST);
+}
+
+/** Whether VoiceOver is running: a row then offers its acts as its Actions alone, rather than also behind swipes it cannot make. */
+export function useVoiceOver(): boolean {
+  return useSetting(SETTING.VOICE_OVER);
 }
 
 /**

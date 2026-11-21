@@ -1,4 +1,4 @@
-// tab-stack.tsx -- a tab's native stack: inline titles in the ink and round glass back buttons, its items in the brand's copper, its bar clear over the brand's ground.
+// tab-stack.tsx -- a tab's native stack: a large title in the ink on its root and inline ones on its pages, round glass back buttons, its items in the brand's copper, its bar clear over the brand's ground.
 
 import { BAR_TITLE, useBarScheme, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
@@ -22,15 +22,23 @@ const SPLIT_ROOT = {
 
 const SPLIT_ROOTS: ReadonlySet<string> = new Set(Object.values(SPLIT_ROOT));
 
+/** Every tab's root, by its route in the stack: the split roots and Search's, the screens that stand a large title. */
+const TAB_ROOT = { ...SPLIT_ROOT, SEARCH: "search/index" } as const;
+
+const TAB_ROOTS: ReadonlySet<string> = new Set(Object.values(TAB_ROOT));
+
 /**
  * Every tab's stack: the system's own headers with no ground of their own
- * and no rule under them, never a large title, each screen's name small and
- * inline in the bar, and the back button the system's round glass chevron
- * alone, its items in the brand's tint. Note that the bar is left without a
+ * and no rule under them, and the back button the system's round glass
+ * chevron alone, its items in the brand's tint. A tab's root names itself
+ * in a large title under its bar, which collapses into the bar as its list
+ * scrolls, as Mail, Notes and Reminders stand theirs (the developer, Nov 20,
+ * 2026); a page pushed over it keeps its name small and inline. Note that the bar is left without a
  * ground, the screen's showing through it, because a bar painted opaque has
  * the system draw its buttons as flat discs rather than glass in the dark.
- * Note that a title is set in the ink rather than the tint, which colors it
- * too, because a page's name is words, not something to press.
+ * Note that a title, large or inline, is set in the ink rather than the
+ * tint, which colors it too, because a page's name is words, not something
+ * to press.
  *
  * A screen covered by pages pushed over it stands in React's Activity, as
  * Expo Router offers it (`activityEnabled`, SDK 58's replacement for
@@ -59,6 +67,11 @@ export function TabStack() {
         headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.GROUND },
+        ...(TAB_ROOTS.has(route.name) && {
+          headerLargeTitleEnabled: true,
+          headerLargeTitleStyle: { color: colors.TEXT },
+          headerLargeTitleShadowVisible: false,
+        }),
         ...(SPLIT_ROOTS.has(route.name) && { headerShown: false }),
       })}
     />

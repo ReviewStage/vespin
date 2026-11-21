@@ -648,7 +648,7 @@ function actsOf(
     // Note that the apps are asked afresh each time a window lists them, and kept nowhere here.
     HOSTS_ALLOWED_APPS: () => asked(client.machineAllowedApps()),
     HOSTS_PAIRING_READ: ({ code }) => asked(client.readHostPairing(code)),
-    HOSTS_PAIRING_APPROVE: ({ code }) => asked(client.approveHostPairing(code)),
+    HOSTS_PAIRING_APPROVE: ({ code, target }) => asked(client.approveHostPairing(code, target)),
     HOSTS_PAIRING_DENY: ({ code }) => asked(client.denyHostPairing(code)),
     // The hosts are held for the windows while Settings › Hosts draws them, under the account signed in; a removal is drawn gone over them the moment it is asked.
     HOSTS_FOLLOW: {

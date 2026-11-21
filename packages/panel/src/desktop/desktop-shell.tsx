@@ -746,6 +746,8 @@ interface ShellPlacesInput {
   readonly shell: RefObject<HTMLDivElement | null>;
   readonly keepOverlay: ReturnType<typeof useFloatDismiss>;
   readonly looks: ReturnType<typeof useTaskLooks>;
+  /** The plan the looks name as the shell is drawn, which the sidebar's rows read unread against (`useUnreadWatching`). */
+  readonly watched: string | undefined;
   readonly mentionedAgents: React.ComponentProps<typeof MentionedAgents>["value"];
   readonly chipCards: React.ComponentProps<typeof ChipCards>["value"];
   readonly newTaskDialog: React.JSX.Element;
@@ -933,8 +935,10 @@ export function DesktopShell({
   // from the mark and the agents' activity its row in the list carries; not while the update screen stands over the window.
   const listedShown = useNamedTask(shownTask?.id, tasks.typedNames);
 
+  const lookedAt = updateNeeded ? undefined : shownTask;
+
   const looks = useTaskLooks(
-    updateNeeded ? undefined : shownTask,
+    lookedAt,
     tasks.me,
     shownTask === undefined ? undefined : (listedShown ?? shownTask),
   );
@@ -1078,6 +1082,7 @@ export function DesktopShell({
     shell,
     keepOverlay,
     looks,
+    watched: lookedAt?.id,
     mentionedAgents,
     chipCards,
     newTaskDialog,
@@ -1129,6 +1134,7 @@ export function ShellPlaces(): React.JSX.Element {
     focusHolder,
     inboxKept,
     phoneAccount,
+    watched,
   } = useShellPlaces();
 
   const { account } = settings;
@@ -1177,6 +1183,7 @@ export function ShellPlaces(): React.JSX.Element {
         onSignOut={settings.onSignOut}
         onPressWithin={keepOverlay}
         room={room}
+        watched={watched}
       />
       {room === SHELL_ROOM.NARROW ? <DrawerScrim open={drawerOver} /> : null}
       <main
@@ -1287,12 +1294,12 @@ export function InboxPlace(): null {
  * Changes', or a message's, which a step on a task's tab is written at.
  */
 export function AgentPlace(): React.JSX.Element {
-  const { tasks, room, away } = useShellPlaces();
+  const { tasks, room, away, sidebar } = useShellPlaces();
   const ownPage = useMatch({ from: "/places/$workspace/agent/$agentId/", shouldThrow: false });
 
   if (ownPage === undefined) return <StatePlace />;
 
-  return <AgentRoutePage tasks={tasks} away={phoneAway(room, away)} />;
+  return <AgentRoutePage tasks={tasks} away={phoneAway(room, away)} staged={sidebar.staged} />;
 }
 
 /**

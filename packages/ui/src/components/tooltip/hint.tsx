@@ -108,13 +108,12 @@ import {
   useContext,
   useEffect,
   useId,
+  useInsertionEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
-import { createPortal } from "react-dom";
 import { isComposingKey } from "../../composing-key.js";
 import { useDisclosure } from "../../use-disclosure.js";
 import { useStateWithRef } from "../../use-state-with-ref.js";
@@ -123,7 +122,7 @@ import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { useTouchHold } from "../menu/touch-hold.js";
 import type { OneLineHint } from "../one-line/clipped-line.js";
 import { Shortcut } from "../shortcut/shortcut.js";
-import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
+import { VISUALLY_HIDDEN_CLASS } from "../visually-hidden/visually-hidden.js";
 import { type CardBox, TOOLTIP_CHORD, TooltipCard, TooltipPill } from "./tooltip.js";
 
 /**
@@ -346,6 +345,12 @@ const NO_LINGER: Linger = { leave: () => undefined, stop: () => undefined };
 
 /** What the tooltip adds to its control's props. */
 interface AnchorProps {
+  /** The control's own name, where its props give one, which its first draw reads (`heardByProps`). */
+  "aria-label"?: string | undefined;
+  /** The name an IconButton is given, or whatever else a control calls its label, read only where it is words. */
+  label?: unknown;
+  /** What the control holds, read only where it is words alone. */
+  children?: unknown;
   "aria-describedby"?: string | undefined;
   "aria-keyshortcuts"?: string | undefined;
   onPointerEnter?: PointerEventHandler<HTMLElement> | undefined;
@@ -475,8 +480,24 @@ function heardOver(element: HTMLElement, label: string): Heard {
   return spoken ? HEARD.SPOKEN : HEARD.DESCRIBED;
 }
 
-/** Hears no change, since whether this is a window never changes once drawn. */
-const noChange = () => () => {};
+/**
+ * How a reader hears `label` over `control` as its own props name it, before
+ * it is drawn: named, where its `aria-label`, the `label` an IconButton is
+ * named by, or the words it holds alone already say it, else described.
+ * Note that it is only the first guess, which the control drawn corrects
+ * (`heardOver`) before it paints, so a control its props name rightly is
+ * drawn once rather than drawn again as it is first read.
+ */
+function heardByProps(control: ReactElement<AnchorProps>, label: string | undefined): Heard {
+  const { "aria-label": named, label: own, children: words } = control.props;
+  const name = named ?? own ?? words;
+
+  if (label === undefined || !Predicate.isString(name)) return HEARD.DESCRIBED;
+
+  return name.replace(SPACING, "").includes(label.replace(SPACING, ""))
+    ? HEARD.NAMED
+    : HEARD.DESCRIBED;
+}
 
 /** The one element at the window body's end that every hint's words stand in, made with the first. */
 let wordsHome: HTMLElement | undefined;
@@ -496,42 +517,35 @@ function wordsHomeNow(): HTMLElement {
 }
 
 /**
- * A hint's words as a reader hears them, from the control's first render
+ * A hint's words as a reader hears them, from the control's first commit
  * rather than once the hint is drawn: its description (`aria-describedby`),
  * heard as focus lands on it, hidden; or, `spoken`, words of a control that
  * takes no focus, which it owns (`aria-owns`) so a reader's cursor reads them
  * at its end, drawn nowhere. Either stands at the window body's end rather
  * than in or beside the control, so the control's own words, and the row or bar
- * around it, are as they were. Note that a server, which has no body, draws
- * none, and the window then draws them as it takes the page over.
+ * around it, are as they were; `words` undefined writes none.
+ *
+ * Note that the words are written into their home by hand rather than drawn
+ * through a portal, because a portal would mount a component of its own
+ * under every described control in the window for words no one sees. They
+ * are written as the commit writes the page, before any layout effect reads
+ * it, as a portal's would be, so no layout is read between two of them. A
+ * server runs no effect, so it writes none, and the window writes them as it
+ * takes the page over.
  */
-function HintWords({
-  id,
-  words,
-  spoken,
-}: {
-  id: string;
-  words: string;
-  spoken: boolean;
-}): React.ReactNode {
-  const inWindow = useSyncExternalStore(
-    noChange,
-    () => true,
-    () => false,
-  );
+function useHintWords(id: string, words: string | undefined, spoken: boolean): void {
+  useInsertionEffect(() => {
+    if (words === undefined) return undefined;
+    const element = document.createElement("span");
+    element.id = id;
+    element.textContent = words;
 
-  if (!inWindow) return null;
+    if (spoken) element.className = VISUALLY_HIDDEN_CLASS;
+    else element.hidden = true;
+    wordsHomeNow().append(element);
 
-  return createPortal(
-    spoken ? (
-      <VisuallyHidden id={id}>{words}</VisuallyHidden>
-    ) : (
-      <span id={id} hidden>
-        {words}
-      </span>
-    ),
-    wordsHomeNow(),
-  );
+    return () => element.remove();
+  }, [id, words, spoken]);
 }
 
 /** Hands `node` to a ref of any shape, as a control's own ref is handed beside the tooltip's. */
@@ -883,14 +897,16 @@ export function Tooltip({
   // How a reader hears the label, read off the control once it is drawn and
   // again as it draws anew, ahead of any focus landing on it.
   const wordsId = useId();
-  const [heard, setHeard] = useState<Heard>(HEARD.DESCRIBED);
+  const [heard, setHeard] = useState<Heard>(() => heardByProps(children, label));
   useLayoutEffect(() => {
     if (label === undefined) return;
     // Note that a control the tooltip hands no ref is found by the
-    // description it was first drawn with, which every control starts on.
-    let element = control.current;
+    // description it was drawn with, so the window is searched only while it
+    // is described, because one its props name carries no such description
+    // and a search for it would walk the whole page on every draw to find nothing.
+    let element = control.current?.isConnected === true ? control.current : null;
 
-    if (element === null || !element.isConnected) {
+    if (element === null && heard === HEARD.DESCRIBED) {
       element = document.querySelector<HTMLElement>(`[aria-describedby~="${wordsId}"]`);
     }
 
@@ -1013,6 +1029,8 @@ export function Tooltip({
     .filter((each) => each !== undefined && each !== "")
     .join(" ");
 
+  useHintWords(wordsId, described || spoken ? label : undefined, spoken);
+
   const anchor = cloneElement(children, {
     ...(describedBy === "" ? undefined : { "aria-describedby": describedBy }),
     ...(owns === "" ? undefined : { "aria-owns": owns }),
@@ -1097,7 +1115,6 @@ export function Tooltip({
   return (
     <>
       {anchor}
-      {described || spoken ? <HintWords id={wordsId} words={label} spoken={spoken} /> : null}
       {/* Note that a hint whose control is gone draws no exit, which would fade out at the window's corner. */}
       {!pill.mounted || drawn === undefined || !drawn.shown.anchor.isConnected ? null : (
         <Hint

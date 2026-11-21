@@ -14,7 +14,7 @@ import { useToast } from "../toast.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 import { TerminalPicker } from "./terminal-picker.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
-import type { AgentsControl } from "./use-agents.js";
+import type { AgentsSource } from "./use-agents.js";
 import type { SidePanelControl } from "./use-side-panel.js";
 import { useOpenTerminalTab } from "./use-terminal-session.js";
 
@@ -53,7 +53,7 @@ export function TerminalCommands({
 }: {
   /** The agent whose own tab, Changes tab, or Terminal tab holds the developer, if any. */
   here: string | undefined;
-  agents: AgentsControl;
+  agents: AgentsSource;
   sidePanel: Pick<
     SidePanelControl,
     "onChoose" | "terminals" | "locals" | "viewedAt" | "lastTerminal"
@@ -61,6 +61,12 @@ export function TerminalCommands({
   /** Hands the keyboard to the side panel, where the terminal now stands. */
   onShown: () => void;
 }): React.JSX.Element {
+  // Note that only the task's agents' ids are read, never their rows, so a step of a turn draws nothing here.
+  const agentIds =
+    "rows" in agents
+      ? agents.agentIds?.filter((agentId) => agentId !== agents.start.pending?.key)
+      : agents.agents?.map((agent) => agent.id);
+
   const toast = useToast();
   const repositoryRemedy = useRepositoryRemedy();
   const [asking, setAsking] = useState<TerminalAsk | undefined>(undefined);
@@ -69,7 +75,7 @@ export function TerminalCommands({
   const target = () =>
     terminalTarget({
       here,
-      agents: (agents.agents ?? []).map((agent) => agent.id),
+      agents: agentIds ?? [],
       lastUsed: sidePanel.lastTerminal,
     });
 
@@ -82,7 +88,7 @@ export function TerminalCommands({
   };
 
   // The task's agents read while the command waits on them: it lands on one where there is one.
-  const waiting = asking !== undefined && agents.agents !== undefined && agents.agents.length > 0;
+  const waiting = asking !== undefined && agentIds !== undefined && agentIds.length > 0;
   useEffect(() => {
     if (!waiting) return;
     setAsking(undefined);
@@ -127,7 +133,7 @@ export function TerminalCommands({
   return (
     <TerminalPicker
       open={asking !== undefined && !waiting}
-      agents={agents}
+      read={agentIds !== undefined}
       onStartAgent={startAgent}
       start={agents.start}
       onClose={() => setAsking(undefined)}

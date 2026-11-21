@@ -126,6 +126,7 @@ export {
   runsOnGlyph,
   sectionEmoji,
   sectionGlyph,
+  UNASSIGNED_UNDER,
 } from "./glyph.js";
 
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
@@ -138,7 +139,12 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
-export { type HeldAct, type Keeping, KeepingProvider } from "./held-menu.js";
+export {
+  type HeldAct,
+  type Keeping,
+  KeepingProvider,
+  type ViewedPicture,
+} from "./held-menu.js";
 
 export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 

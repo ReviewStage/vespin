@@ -7,11 +7,11 @@ import { ShieldUserIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
 import { useOpenSettings } from "../open-settings.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { useOpenNewWorkspace } from "./new-workspace.js";
+import type { SidebarTasksControl } from "./sidebar-open.js";
 import { useWorkspaceChords } from "./workspace-keys.js";
 import { WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
 import { WorkspaceTile } from "./workspace-tile.js";
@@ -78,7 +78,7 @@ export function useWorkspaceMenuDoors(admin: AdminMenuDoor): WorkspaceMenuDoors 
 /** The menu's items: every workspace by its tile, with who shares it under its name, the listed one checked, and the chord that switches to it at its end; then New workspace, Workspace settings, which opens Settings on the listed workspace's page, and Admin where its door is given. */
 export function workspaceMenuGroups(
   listed: Workspace,
-  tasks: TasksControl,
+  tasks: SidebarTasksControl,
   doors: WorkspaceMenuDoors,
 ): MenuAction[][] {
   const first = tasks.workspaces[0]?.id;
@@ -147,7 +147,7 @@ export function WorkspaceSwitcher({
   newTask,
   admin,
 }: {
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
   /** Whether the sidebar is in sight, so the menu closes with it folding away. */
   inSight: boolean;
   newTask: WorkspaceRowNewTask;

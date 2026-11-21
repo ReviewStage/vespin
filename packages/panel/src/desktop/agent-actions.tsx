@@ -6,6 +6,7 @@ import {
   type AgentAttachment,
   type AgentBrief,
   type AgentSummary,
+  agentMachineOf,
 } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import type { DraftSuggestion } from "@repo/features/suggestion-model";
@@ -433,18 +434,25 @@ export function useAgentActions(
 
   const { mutate: openMacTerminal } = useMutation(pressMutation(ACT_KIND.MAC_TERMINAL_LOCAL_AGENT));
   const thisMac = useThisMac();
-  const local = agent.machine === AGENT_MACHINE.DEVICE;
+  const machine = agentMachineOf(agent);
+  const local = machine !== AGENT_MACHINE.VERCEL;
   // Note that a local agent runs in a worktree on its device, which no relayed tab reaches, so its
   // Terminal opens the Mac's own Terminal there, offered only where that device is This Mac.
   const onThisMac = thisMac?.deviceId !== undefined && agent.mac?.deviceId === thisMac.deviceId;
 
-  const terminal = local
-    ? macTerminal && onThisMac
-      ? () => openMacTerminal({ agentId: agent.id })
-      : undefined
-    : onOpenTerminal === undefined
-      ? undefined
-      : () => onOpenTerminal(agent.id);
+  const terminal = terminalOf();
+
+  /** The agent's Terminal by where it runs: the cloud's relayed tab, This Mac's own Terminal, and none on a workspace's machine, which opens no terminal to its agents. */
+  function terminalOf(): (() => void) | undefined {
+    switch (machine) {
+      case AGENT_MACHINE.VERCEL:
+        return onOpenTerminal === undefined ? undefined : () => onOpenTerminal(agent.id);
+      case AGENT_MACHINE.DEVICE:
+        return macTerminal && onThisMac ? () => openMacTerminal({ agentId: agent.id }) : undefined;
+      case AGENT_MACHINE.WORKSPACE:
+        return undefined;
+    }
+  }
 
   const read = agentTranscriptRead(agents.readTranscript, agent.id, label, agent.brief);
   const slackUrl = agent.source?.kind === AGENT_SOURCE.SLACK ? agent.source.url : undefined;
@@ -456,12 +464,12 @@ export function useAgentActions(
       onSettings: manager && agents.onUnarchive === undefined ? settings.ask : undefined,
       // Note that an archived agent's sandbox takes no shell, so it offers no terminal.
       onOpenTerminal: agent.archivedAt !== undefined ? undefined : terminal,
-      // Note that only a cloud agent has a mirror, so an agent on a Mac offers no Local tab.
+      // Note that only a cloud agent has a mirror, so an agent on a Mac or a workspace's machine offers no Local tab.
       onOpenLocal:
         agent.archivedAt !== undefined || local || onOpenLocal === undefined
           ? undefined
           : () => onOpenLocal(agent.id),
-      // Note that only a cloud sandbox runs a browser, so an agent on a Mac offers none.
+      // Note that only a cloud sandbox runs a browser, so an agent on a Mac or a workspace's machine offers none.
       onOpenBrowser:
         agent.archivedAt !== undefined || local || onOpenBrowser === undefined
           ? undefined
