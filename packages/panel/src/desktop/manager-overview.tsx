@@ -56,13 +56,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { MemberDirectory } from "../member-directory.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useTaskListCollections, useTaskListRow, useTasksAbout } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
 import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useListedAgentPullRequests, useListedAgents } from "../tasks/use-workspace-agents.js";
+import {
+  agentTaskIds,
+  useAgentsStartedBy,
+  useListedAgentPullRequests,
+} from "../tasks/use-workspace-agents.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { PersonSectionFrame } from "./person-frame.js";
 
@@ -153,6 +157,47 @@ function openPullRequest(tasks: TasksControl, taskId: string, url: string | unde
 }
 
 /**
+ * One agent the Manager started, as its row: the row a task's own agents
+ * stand in (`agent-list-row.tsx`), reading its own agent, since the
+ * overview's are held still while a step of its turn moves nothing the
+ * overview lays out (`useAgentsStartedBy`).
+ */
+function ManagerAgentRow({
+  each,
+  tasks,
+  agents,
+  pullRequests,
+  more,
+}: {
+  each: PersonAgent;
+  tasks: TasksControl;
+  agents: AgentsControl;
+  pullRequests: ReadonlyMap<string, AgentPullRequest>;
+  more: boolean;
+}): React.JSX.Element {
+  const { task, agent: handed, at } = each;
+  const agent = useTaskListRow(useTaskListCollections().agents, handed.id) ?? handed;
+  const { models } = agents;
+  const subject = listedRowSubject(agent, at, { models, me: tasks.me, pullRequests });
+
+  return (
+    <AgentListRow
+      agent={agent}
+      agents={agents}
+      shown={tasks.shown}
+      subject={subject}
+      at={at}
+      card={<AgentCard subject={subject} models={models} />}
+      pullRequest={pullRequests.get(agent.id)}
+      chosen={undefined}
+      more={more}
+      onPress={() => tasks.onShowAgent(task.id, agent.id)}
+      onOpenPullRequest={() => openPullRequest(tasks, task.id, pullRequests.get(agent.id)?.url)}
+    />
+  );
+}
+
+/**
  * Agents: the agents the Manager started, at work first, each the row a
  * task's agents and a person's page stand in (`AgentListRow`), its menu the
  * agent's own, a press opening it on its task and its pull request's chip
@@ -181,8 +226,6 @@ function ManagerAgents({
 
   if (agents.length === 0) return null;
 
-  const { models } = control;
-
   return (
     <PersonSectionFrame
       label={OVERVIEW_WORDS.AGENTS}
@@ -192,32 +235,16 @@ function ManagerAgents({
     >
       <ReplayMask>
         <TaskRows label={OVERVIEW_WORDS.AGENTS} cells={AGENT_ROW_CELLS} more={more} moves>
-          {shown.map(({ task, agent, at }) => {
-            const subject = listedRowSubject(agent, at, {
-              models,
-              me: tasks.me,
-              pullRequests,
-            });
-
-            return (
-              <AgentListRow
-                key={agent.id}
-                agent={agent}
-                agents={control}
-                shown={tasks.shown}
-                subject={subject}
-                at={at}
-                card={<AgentCard subject={subject} models={models} />}
-                pullRequest={pullRequests.get(agent.id)}
-                chosen={undefined}
-                more={more}
-                onPress={() => tasks.onShowAgent(task.id, agent.id)}
-                onOpenPullRequest={() =>
-                  openPullRequest(tasks, task.id, pullRequests.get(agent.id)?.url)
-                }
-              />
-            );
-          })}
+          {shown.map((each) => (
+            <ManagerAgentRow
+              key={each.agent.id}
+              each={each}
+              tasks={tasks}
+              agents={control}
+              pullRequests={pullRequests}
+              more={more}
+            />
+          ))}
         </TaskRows>
         {foot}
       </ReplayMask>
@@ -314,9 +341,16 @@ export function ManagerOverview({
   threads: AgentThreads | undefined;
 }): React.JSX.Element {
   const now = useMinute();
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
-  // Note that every agent is read only while the overview stands, since it counts the Manager's agents among them.
-  const liveAgents = useListedAgents(tasks.agentsCarried);
+  // Note that only the agents the Manager started are read, and those only for what lays the overview out, so a step of another's turn draws no overview (`useAgentsStartedBy`).
+  const liveAgents = useAgentsStartedBy(tasks.agentsCarried, { agentId: manager.id });
+  const workedOn = useMemo(() => agentTaskIds(liveAgents), [liveAgents]);
+
+  // The tasks its agents work on and those it made, of the listed workspace, as the sidebar lists them.
+  const listed = useTasksAbout(tasks.typedNames, tasks.workspace?.id, {
+    agentId: manager.id,
+    taskIds: workedOn,
+  });
+
   const listedPullRequests = useListedAgentPullRequests(tasks.agentsCarried);
 
   const overview = useMemo(

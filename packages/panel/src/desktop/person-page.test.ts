@@ -807,6 +807,38 @@ test("a waiting item is the Inbox's own row: its task named on a line of its own
   assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, RETRY_429.title);
 });
 
+test("a task whose agents' turn ended stands first among theirs, with nothing else of it moved", async () => {
+  const { page, redraw } = mount(CHARLES.userId);
+  await settle();
+  assert.deepEqual(sections(page).Created, ["Relay retries on 502", "Retry budget dashboard"]);
+
+  redraw({
+    tasks: TASKS.map((each) =>
+      each.id === DASHBOARD.id
+        ? { ...each, agents: { total: 1, working: 0, pullRequestTotal: 0, activityAt: NOW } }
+        : each,
+    ),
+  });
+  await settle();
+
+  assert.deepEqual(sections(page).Created, ["Retry budget dashboard", "Relay retries on 502"]);
+});
+
+test("an agent's row takes its new name once only its name moved", async () => {
+  const { page, redraw } = mount(CHARLES.userId);
+  await settle();
+  assert.ok(button(page, "Jittered backoff"));
+
+  redraw({
+    listedAgents: followedOf(TASKS).map((each) =>
+      each.id === BACKOFF.id ? { ...each, title: "Jittered backoff, capped" } : each,
+    ),
+  });
+  await settle();
+
+  assert.ok(button(page, "Jittered backoff, capped"));
+});
+
 test("an agent's row says its failure at its end and hangs the agent's card while rested on, as the sidebar's row does", async () => {
   const broken = agent(9, "Flaky retry", CHARLES, AGENT_STATUS.FAILED, 5 * MINUTE);
   const failing = task(9, "Retry flake hunt", CHARLES, 5 * MINUTE, [broken]);
