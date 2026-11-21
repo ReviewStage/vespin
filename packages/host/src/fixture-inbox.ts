@@ -643,6 +643,26 @@ const INVITES_ITEMS: readonly InboxItem[] = [
     ],
     { unread: true },
   ),
+  // MEASUREMENT ONLY (chore/probe-tap-instant): a thread of twenty messages, the agent and the account by turns, oldest in the list, for the probe to time a long thread's open.
+  item(
+    8999,
+    AGENT.INVITES,
+    "perf-long-thread",
+    "Perf long thread",
+    Array.from({ length: 20 }, (_, at) =>
+      at % 2 === 0
+        ? agentSaid(
+            9000 + at,
+            3 * DAY - at * 20 * MINUTE,
+            `Step ${at + 1} of the invite review. I checked the **expiry**, the resend path, and the audit line:\n\n- the token's lifetime stands at seven days\n- a resend mints a new token and voids the old one\n- the audit line names who sent it and when`,
+          )
+        : adaSaid(
+            9000 + at,
+            3 * DAY - at * 20 * MINUTE,
+            `Looks right for step ${at}. Keep the old token's row for the audit, and say in the email when the new one expires.`,
+          ),
+    ),
+  ),
 ];
 
 /** The digest task's items: steps to do, an answer in words, and one answered. */

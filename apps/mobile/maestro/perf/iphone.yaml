@@ -292,3 +292,27 @@ onFlowComplete:
       - assertVisible: "Invite limits"
       - waitForAnimationToEnd:
           timeout: 3000
+# A thread of twenty messages, the fixture's oldest, opened at its newest message: its first frame and whether its foot holds as the older messages land; last, so a step that fails loses no other path.
+- runFlow:
+    file: ../subflows/to-row.yaml
+    env:
+      ROW: "Perf long thread"
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Perf long thread"
+          retryTapIfNoChange: false
+          label: "T:inbox-row-long"
+      - extendedWaitUntil:
+          visible: "Looks right for step 19.*"
+          timeout: 10000
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-long"
+      - assertVisible: "Perf long thread"
+      - waitForAnimationToEnd:
+          timeout: 3000
