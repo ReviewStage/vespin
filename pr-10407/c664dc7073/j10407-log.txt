@@ -1,0 +1,10 @@
+== bundle PJj10407 base c664dc7073
+  built c664dc7073 base app Vmain7.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-tasks: fails 1 shots 6 Tap on "Rename"... FAILED
+iphone-light-tasks-view: fails 1 shots 2 Assert that "Canceled" is visible... FAILED
+ipad27-light-tasks: fails 2 shots 30   Tap on "Search", Above "Tab Bar"... FAILED
+ipad27-light-tasks-view: fails 1 shots 3 Assert that "Todo" is not visible... FAILED
