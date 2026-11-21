@@ -7,7 +7,6 @@ import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import {
-  type MarksShown,
   type NativePill,
   NativePillField,
   type NativePillFieldDoors,
@@ -60,8 +59,8 @@ interface PillFieldProps {
   readonly editable?: boolean | undefined;
   /** Whether the field takes the keyboard as it first stands, as a page that starts work opens on its words. */
   readonly autoFocus?: boolean | undefined;
-  /** Draws the words in the looks the page draws them in as they are written, as a document edited whole is, its syntax's marks shown as `marks` says; plain words, as a message's, where none is given. */
-  readonly styled?: { readonly marks: MarksShown } | undefined;
+  /** Whether the words are drawn in the looks the page draws them in as they are written, as a document edited whole is, the marks that only spell a look faded; plain words, as a message's, where not. */
+  readonly styled?: boolean | undefined;
   /** The `@` word the caret stands in as it changes, which a mention offer reads; none once the caret stands in none. */
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
@@ -138,8 +137,6 @@ export function PillField({
   const told = useRef({ markdown: value });
   const atWord = useRef<CaretAtWord | undefined>(undefined);
 
-  const marks = styled?.marks;
-
   const handed = useMemo((): NativeValue => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
 
@@ -149,7 +146,7 @@ export function PillField({
 
     // Note that the looks are read only for a field that draws them, so a message's box never parses its words on each key.
     const runs =
-      marks === undefined
+      styled !== true
         ? pillRuns(value, files).map((run) =>
             run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
           )
@@ -158,7 +155,7 @@ export function PillField({
           );
 
     return { runs, seen };
-  }, [value, files, repository, seen, marks]);
+  }, [value, files, repository, seen, styled]);
 
   const look = {
     text: colors.TEXT,
@@ -210,7 +207,6 @@ export function PillField({
       placeholder={placeholder}
       maxLines={maxLines}
       editable={editable}
-      marks={marks}
       testID={testID}
       onWords={onWords}
       onHeight={({ nativeEvent }) => {

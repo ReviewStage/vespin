@@ -17,14 +17,6 @@ type NativeRun =
   | { readonly text: string; readonly styles?: readonly string[] }
   | { readonly pill: NativePill };
 
-/** How a field drawing its words' looks draws the marks that only spell one (`**`, a heading's `#`): faded, or hidden but on the line the caret stands on, as a live preview stands them. */
-export const MARKS_SHOWN = {
-  FADED: "faded",
-  CARET: "caret",
-} as const;
-
-export type MarksShown = (typeof MARKS_SHOWN)[keyof typeof MARKS_SHOWN];
-
 /** The words handed to the view, and how many of its changes JavaScript had heard as it handed them, so words typed since are never set back. */
 export interface NativeValue {
   readonly runs: readonly NativeRun[];
@@ -75,7 +67,6 @@ interface NativePillFieldProps {
   readonly placeholder?: string | undefined;
   readonly maxLines?: number | undefined;
   readonly editable?: boolean | undefined;
-  readonly marks?: MarksShown | undefined;
   readonly testID?: string | undefined;
   readonly onWords: (event: NativeSyntheticEvent<NativeWords>) => void;
   readonly onHeight: (event: NativeSyntheticEvent<{ readonly height: number }>) => void;

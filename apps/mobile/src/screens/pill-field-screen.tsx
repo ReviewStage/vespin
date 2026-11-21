@@ -1,4 +1,4 @@
-// pill-field-screen.tsx -- the pill field's scratch page: the field laid in with a mention of every kind and a picture's and a file's marker, the acts that put a pill in, and the Markdown it writes, so a flow shoots the field and its value side by side; and under them a document's field drawn in its looks as it is written, its syntax shown only on the caret's line.
+// pill-field-screen.tsx -- the pill field's scratch page: the field laid in with a mention of every kind and a picture's and a file's marker, the acts that put a pill in, and the Markdown it writes, so a flow shoots the field and its value side by side; and under them a document's field drawn in its looks as it is written.
 
 import { nextPictureName } from "@repo/features/file-marker";
 import { filePill, mentionPill } from "@repo/features/pill-words";
@@ -8,7 +8,6 @@ import {
   Button,
   type CaretAtWord,
   InlineHost,
-  MARKS_SHOWN,
   Markdown,
   PillField,
   type PillFieldHandle,
@@ -50,9 +49,6 @@ const DOCUMENT = [
   "const days = 7;",
   "```",
 ].join("\n");
-
-/** How the styled field draws its syntax's marks: only on the caret's line, as a live preview does. */
-const STYLED = { marks: MARKS_SHOWN.CARET } as const;
 
 /** What the page's acts say. */
 const WORDS = {
@@ -160,7 +156,7 @@ export function PillFieldScreen() {
           repository={REPOSITORY}
           placeholder={WORDS.PLACEHOLDER}
           maxLines={16}
-          styled={STYLED}
+          styled
           testID="pill-field-styled"
         />
       </View>

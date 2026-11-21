@@ -30,9 +30,8 @@
 // still the Markdown; the looks are drawn over them and kept on the text as
 // an attribute of their own, so they move with every edit until JavaScript
 // hands them again for the words now standing, which restyles in place and
-// leaves the caret and undo alone. The syntax's marks are drawn faded, or,
-// where JavaScript asks, hidden but on the line the caret stands on, as a
-// live preview stands them.
+// leaves the caret and undo alone. The marks that only spell a look are
+// drawn faded.
 
 import ExpoModulesCore
 import UIKit
@@ -46,10 +45,6 @@ public final class PillFieldModule: Module {
 
       Prop("value") { (view: PillFieldView, value: ValueRecord) in
         view.take(StyledRuns(value.runs), seen: value.seen)
-      }
-
-      Prop("marks") { (view: PillFieldView, marks: String?) in
-        view.marks = MarksShown(rawValue: marks ?? "") ?? .faded
       }
 
       Prop("look") { (view: PillFieldView, look: LookRecord) in
@@ -217,12 +212,6 @@ enum MarkStyle: String {
   case listMark = "list-mark"
   case rule
   case syntax
-}
-
-/// How the marks that only spell a look are drawn: faded, or hidden but on the line the caret stands on.
-enum MarksShown: String {
-  case faded
-  case caret
 }
 
 /// The looks laid on the words as an attribute of their own, so they move with each edit.
@@ -477,18 +466,8 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     didSet { textView.isEditable = editable }
   }
 
-  var marks = MarksShown.faded {
-    didSet {
-      guard marks != oldValue else { return }
-      drawStyles()
-    }
-  }
-
   /// The looks last handed, laid again where the words are drawn anew, such as at a new text size.
   private var spans: [(range: NSRange, styles: [String])] = []
-
-  /// The line the caret stood on when the marks were last drawn, whose marks a live preview shows.
-  private var revealed: NSRange?
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -621,20 +600,14 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
 
   func textViewDidChangeSelection(_ textView: UITextView) {
     guard !quiet else { return }
-
-    if marks == .caret, caretLine() != revealed { drawStyles() }
-
     tell()
   }
 
   func textViewDidBeginEditing(_ textView: UITextView) {
-    if marks == .caret { drawStyles() }
     onFocusChange(["focused": true])
   }
 
   func textViewDidEndEditing(_ textView: UITextView) {
-    // Note that a live preview hides every mark once the caret has left the words, as the page draws them.
-    if marks == .caret { drawStyles() }
     onFocusChange(["focused": false])
   }
 
@@ -823,32 +796,19 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     drawStyles()
   }
 
-  /// The line the caret stands on, whose marks a live preview shows; none where the marks are all drawn faded.
-  private func caretLine() -> NSRange? {
-    guard marks == .caret, textView.isFirstResponder else { return nil }
-    let string = textView.textStorage.string as NSString
-    let caret = textView.selectedRange
-    guard NSMaxRange(caret) <= string.length else { return nil }
-
-    return string.paragraphRange(for: caret)
-  }
-
   /// Draws each span of the words in the looks laid on it, and plain words in the body's face.
   private func drawStyles() {
     let storage = textView.textStorage
     let whole = NSRange(location: 0, length: storage.length)
-    let line = caretLine()
-    revealed = line
 
     quiet = true
     storage.beginEditing()
     storage.enumerateAttribute(markStylesKey, in: whole) { value, range, _ in
       let styles = Set(((value as? [String]) ?? []).compactMap(MarkStyle.init))
-      let shown = marks == .faded || line.map { NSIntersectionRange($0, range).length > 0 } ?? false
       storage.removeAttribute(.strikethroughStyle, range: range)
       storage.removeAttribute(.underlineStyle, range: range)
       storage.removeAttribute(.backgroundColor, range: range)
-      storage.addAttributes(lookAttributes(styles, shown: shown), range: range)
+      storage.addAttributes(lookAttributes(styles), range: range)
     }
     // Note that a pill keeps the body's face whatever words it stands among, so its line keeps its height and it its size.
     storage.enumerateAttribute(.attachment, in: whole) { value, range, _ in
@@ -860,12 +820,8 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     setNeedsLayout()
   }
 
-  /// The attributes a span is drawn with: its face, sized by the reader's text size, and its color, a mark of syntax faded, or hidden where it is not shown.
-  private func lookAttributes(_ styles: Set<MarkStyle>, shown: Bool) -> [NSAttributedString.Key: Any] {
-    if styles.contains(.syntax), !shown {
-      return [.font: UIFont.systemFont(ofSize: 0.01), .foregroundColor: UIColor.clear]
-    }
-
+  /// The attributes a span is drawn with: its face, sized by the reader's text size, and its color, a mark of syntax faded.
+  private func lookAttributes(_ styles: Set<MarkStyle>) -> [NSAttributedString.Key: Any] {
     var attributes: [NSAttributedString.Key: Any] = [
       .font: lookFont(styles),
       .foregroundColor: styles.isDisjoint(with: [MarkStyle.syntax, .quote, .listMark, .rule]) ? look.text : look.placeholder,

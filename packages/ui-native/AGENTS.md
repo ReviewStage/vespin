@@ -108,9 +108,8 @@ builds a control of its own.
   field handed `styled` draws a document's words in the looks the page
   draws them in as they are written (`@repo/features/markdown-styles`): a
   heading larger, bold and code in their faces, a list's marks and a quote
-  muted, its words still the Markdown it saves; the marks that only spell a
-  look are faded, or hidden but on the caret's line (`MARKS_SHOWN`), as a
-  live preview stands them.
+  muted, its words still the Markdown it saves, the marks that only spell a
+  look faded.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
