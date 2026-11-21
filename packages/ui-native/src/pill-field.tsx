@@ -56,6 +56,8 @@ interface PillFieldProps {
   /** The most lines it grows to before it scrolls. */
   readonly maxLines?: number | undefined;
   readonly editable?: boolean | undefined;
+  /** Whether the field takes the keyboard as it first stands, as a page that starts work opens on its words. */
+  readonly autoFocus?: boolean | undefined;
   /** The `@` word the caret stands in as it changes, which a mention offer reads; none once the caret stands in none. */
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
@@ -115,6 +117,7 @@ export function PillField({
   placeholder,
   maxLines,
   editable,
+  autoFocus,
   onAtWord,
   onFocusChange,
   testID,
@@ -122,6 +125,8 @@ export function PillField({
   const colors = useColors();
   const native = useRef<NativePillFieldDoors>(null);
   const [height, setHeight] = useState<number | undefined>(undefined);
+  // Whether the field has asked for the keyboard as it first stood, which `autoFocus` asks once.
+  const focusedFirst = useRef(false);
   // How many changes the field has told, which the words handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
   // What the field last told: its Markdown, and its `@` word.
@@ -192,7 +197,15 @@ export function PillField({
       editable={editable}
       testID={testID}
       onWords={onWords}
-      onHeight={({ nativeEvent }) => setHeight(nativeEvent.height)}
+      onHeight={({ nativeEvent }) => {
+        setHeight(nativeEvent.height);
+
+        // Note that the field asks for the keyboard once it has first laid out, because UIKit grants it only to a view standing in a window, which its first measure says it is.
+        if (autoFocus !== true || focusedFirst.current) return;
+
+        focusedFirst.current = true;
+        void native.current?.focus();
+      }}
       onFocusChange={({ nativeEvent }) => onFocusChange?.(nativeEvent.focused)}
     />
   );

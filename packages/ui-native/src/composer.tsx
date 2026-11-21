@@ -703,6 +703,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
             placeholder={placeholder}
             maxLines={lines}
             onAtWord={onPillAtWord}
+            autoFocus={props.autoFocus === true}
             testID={testIds?.field ?? "composer-field"}
           />
         </RNHostView>
