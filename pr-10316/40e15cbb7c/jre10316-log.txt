@@ -1,0 +1,12 @@
+== bundle PJjre10316 base 40e15cbb7c
+  built 40e15cbb7c base app Vp10316.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-new-agent: fails 0 shots 4 
+iphone-light-ffastpick10307: fails 0 shots 1 
+iphone-light-new-task: fails 1 shots 2 Assert that "ada/ledger" is visible... FAILED
+iphone-light-agent: fails 1 shots 22 Assert that "Ada's MacBook Pro" is visible... FAILED
+iphone-light-inbox: fails 1 shots 4 Assert that ".*walked the invite flow.*" is visible... FAILED
+iphone-light-freply10314: fails 1 shots 2 Tap on "Invite limits"... FAILED
