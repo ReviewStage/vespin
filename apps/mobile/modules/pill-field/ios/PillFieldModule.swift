@@ -868,7 +868,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
 
     var attributes: [NSAttributedString.Key: Any] = [
       .font: lookFont(styles),
-      .foregroundColor: styles.isDisjoint(with: [.syntax, .quote, .listMark, .rule]) ? look.text : look.placeholder,
+      .foregroundColor: styles.isDisjoint(with: [MarkStyle.syntax, .quote, .listMark, .rule]) ? look.text : look.placeholder,
     ]
 
     if styles.contains(.strike) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
@@ -885,9 +885,9 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
       : styles.contains(.heading2) ? .preferredFont(forTextStyle: .title3)
       : styles.contains(.heading3) ? .preferredFont(forTextStyle: .headline)
       : bodyFont()
-    let bold = styles.contains(.strong) || !styles.isDisjoint(with: [.heading1, .heading2])
+    let bold = styles.contains(.strong) || !styles.isDisjoint(with: [MarkStyle.heading1, .heading2])
 
-    if !styles.isDisjoint(with: [.code, .codeBlock]) {
+    if !styles.isDisjoint(with: [MarkStyle.code, .codeBlock]) {
       return .monospacedSystemFont(ofSize: base.pointSize * 0.92, weight: bold ? .semibold : .regular)
     }
 
