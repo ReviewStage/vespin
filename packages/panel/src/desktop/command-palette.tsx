@@ -2115,9 +2115,8 @@ export function CommandPalette({
   const automationsDoor = useAutomationsDoor(tasks);
   const inboxDoor = useInboxDoor(tasks);
   const inboxStanding = useInboxView(tasks);
-  // The task list's rows read by id, and every task for the task rows, each name as it is being typed.
+  // The task list's rows read by id, each name as it is being typed.
   const rows = useTaskListRows(tasks.typedNames);
-  const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
   const { placeLeave } = tasks;
@@ -2228,7 +2227,10 @@ export function CommandPalette({
   const tasksShown =
     open && tasks.signedIn && (filter === PALETTE_FILTER.ALL || filter === PALETTE_FILTER.TASKS);
 
-  // Note that who made each task is read only while the rows are, because the palette stands drawn while shut.
+  // Note that every task is read only while the rows are, because the palette stands drawn while shut and a task's change would draw it.
+  const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED, undefined, tasksShown);
+
+  // Note that who made each task is read only while the rows are, for the same reason.
   const originOf = useTaskOrigin(tasksShown);
 
   // Note that the tasks the list holds not are asked of the service as typing pauses, and again once the list is first read, and join the list the rows below are built from.
