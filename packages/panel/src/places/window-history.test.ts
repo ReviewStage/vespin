@@ -812,6 +812,31 @@ test("a workspace's slug or a task's number read after the visit moves the stand
   }
 });
 
+test("a task pressed while another is drawn stands at its own address until it opens, never written at the address of the task it leaves", async () => {
+  const drawn = { ...DOCUMENT_TASK, workspaceId: ACME.id, number: 42 };
+  const pressed = { ...drawn, id: TASK_ID, name: "Billing export", number: 43 };
+
+  const open = (task: typeof drawn): Standing => ({
+    ...onTask([ACME]),
+    activeTaskId: task.id,
+    boundFor: task.id,
+    region: { kind: TASK_REGION.READY, task },
+    tasks: [drawn, pressed],
+  });
+
+  const window = mount(open(drawn));
+  // The press binds the window to the task asked for at once and stands its own place, the task before it still drawn.
+  window.leaveFor({ ...open(drawn), boundFor: pressed.id });
+  await settle();
+  assert.deepEqual(window.addresses(), ["/acme/task/42", "/acme/task/43"]);
+
+  // The host opens it.
+  window.stand(open(pressed));
+  await settle();
+  assert.deepEqual(window.addresses(), ["/acme/task/42", "/acme/task/43"]);
+  assert.equal(window.at(), "/acme/task/43");
+});
+
 test("a link loaded before the workspaces are read writes no Home step: its task takes the entry it loaded on, and Back on that one entry stays on the task", () => {
   const loaded = `/acme/task/${DOCUMENT_TASK.id}`;
   const held = windowRouter(createMemoryHistory({ initialEntries: [loaded] }));

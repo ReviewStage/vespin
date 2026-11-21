@@ -16,7 +16,7 @@ import {
   withoutViewedAt,
 } from "@repo/ui/tab-strip-model";
 import { absurd, Option, Schema } from "effect";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { stripTabKept, stripTabStays } from "./strip-tab-kinds.js";
 import { MAIN_TAB } from "./task-tab-model.js";
 
@@ -754,9 +754,14 @@ export function useMainTabs(
     [update],
   );
 
+  // Note that the state is read as it stands at the call, so the reader stays one function while the tabs move, and a
+  // tab stamped viewed, which every open does, hands the task's page nothing new to draw.
+  const stateNow = useRef(state);
+  stateNow.current = state;
+
   const remembers = useCallback(
-    (on: string) => (choicesOn(state, on).recent?.length ?? 0) > 0,
-    [state],
+    (on: string) => (choicesOn(stateNow.current, on).recent?.length ?? 0) > 0,
+    [],
   );
 
   return {

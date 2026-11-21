@@ -28,14 +28,15 @@ import { TASK_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { useAdminRoute } from "../admin/admin-route.js";
 import type { AdminView } from "../admin/routing.js";
-import { useAutomationsRoute } from "../automations-route.js";
+import { useAutomationsOpen } from "../automations-route.js";
 import { type InboxAt, useInboxRoute } from "../inbox-route.js";
 import { useMergeQueueRoute } from "../merge-queue-route.js";
 import { beginPanelSpan, PANEL_SPAN } from "../panel-spans.js";
+import { useSteadyDoor } from "../steady-door.js";
 import { useTaskListCollections } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
-import { useVersionHistoryRoute } from "../version-history-route.js";
+import { useVersionHistoryExits } from "../version-history-route.js";
 import { useBoardRoute, usePersonRoute } from "../workspace-routes.js";
 import { useBackOr } from "./narrow-backs.js";
 
@@ -166,8 +167,8 @@ export interface AutomationsDoor {
 export function useAutomationsDoor(
   tasks: Pick<TasksControl, "placeLeave" | "workspace">,
 ): AutomationsDoor {
-  // Note that the room reaches only the pages' runs, which no door here turns (`TasksControl.onAutomationRuns`).
-  const route = useAutomationsRoute({ narrow: false });
+  // Note that the doors read where the window stands as they are pressed, so the page holding them is drawn again for no move of the window.
+  const route = useAutomationsOpen();
   const { placeLeave, workspace } = tasks;
   const backOr = useBackOr();
 
@@ -179,12 +180,16 @@ export function useAutomationsDoor(
       if (under !== undefined) route.onOpen(place, under, inPlace);
     }, NOTHING);
 
+  // Note that the doors are steady, so a place holding them, as the window's automations around every page, holds too.
   return {
-    open: (place = { kind: AUTOMATIONS_PAGE.LIST }) => open(place, listed, false),
+    open: useSteadyDoor((place: AutomationsPlace = { kind: AUTOMATIONS_PAGE.LIST }) =>
+      open(place, listed, false),
+    ),
     // Note that a page linked to while the workspaces could not be read lists none, so its back opens the list under the
     // workspace its address names, rather than nowhere.
-    back: () =>
-      backOr(() => open({ kind: AUTOMATIONS_PAGE.LIST }, listed ?? route.standingIn, true)),
+    back: useSteadyDoor(() =>
+      backOr(() => open({ kind: AUTOMATIONS_PAGE.LIST }, listed ?? route.standingInNow(), true)),
+    ),
   };
 }
 
@@ -271,8 +276,8 @@ export interface VersionHistoryDoor {
 export function useVersionHistoryDoor(
   tasks: Pick<TasksControl, "region" | "workspaces" | "workspace">,
 ): VersionHistoryDoor {
-  // Note that the room reaches only the moves within the history standing, which no door here makes.
-  const route = useVersionHistoryRoute({ narrow: false });
+  // Note that the doors read where the history stands as they are pressed, so the page holding them is drawn again for no move of the window.
+  const route = useVersionHistoryExits();
   const listed = useTaskListCollections().tasks;
   const backOr = useBackOr();
 
