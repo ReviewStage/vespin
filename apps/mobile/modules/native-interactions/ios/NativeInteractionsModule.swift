@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -18,12 +18,14 @@ private enum ModifierName {
   static let cellFocusRingOff = "vespinCellFocusRingOff"
   static let columnSubtitle = "vespinColumnSubtitle"
   static let stackSubtitle = "vespinStackSubtitle"
+  static let stackScrollEdge = "vespinStackScrollEdge"
   static let sideMargins = "vespinSideMargins"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
   static let all = [
-    cellFocusRingOff, columnSubtitle, stackSubtitle, sideMargins, dragLink, dropPictures, dropLink,
+    cellFocusRingOff, columnSubtitle, stackSubtitle, stackScrollEdge, sideMargins, dragLink, dropPictures,
+    dropLink,
   ]
 }
 
@@ -44,6 +46,9 @@ public final class NativeInteractionsModule: Module {
       }
       ViewModifierRegistry.register(ModifierName.stackSubtitle) { params, appContext, _ in
         return try StackSubtitleModifier(from: params, appContext: appContext)
+      }
+      ViewModifierRegistry.register(ModifierName.stackScrollEdge) { params, appContext, _ in
+        return try StackScrollEdgeModifier(from: params, appContext: appContext)
       }
       ViewModifierRegistry.register(ModifierName.sideMargins) { params, appContext, _ in
         return try SideMarginsModifier(from: params, appContext: appContext)
@@ -238,6 +243,103 @@ private final class StackSubtitleView: UIView {
         return controller
       }
       responder = current.next
+    }
+    return nil
+  }
+}
+
+// MARK: - Scroll edge
+
+/// A list handed to the native stack's bar as the scroll view at its top edge, so a large title collapses into the bar as the list scrolls, as Mail's does.
+///
+/// Note that UIKit finds the scroll view a bar follows only as its screen's
+/// view's first descendant, or by the screen's `contentScrollView(for:)`,
+/// and a `Host`'s list stands inside a hosting controller that is the
+/// screen's child, so the bar never followed it: the large title stood still
+/// while the rows scrolled under it. So the list carries a probe that finds
+/// the scroll view it stands beside and sets it on the screen's controller
+/// (`setContentScrollView(_:for:)`). It acts only for a react-native-screens
+/// screen that stands a large title, so a SwiftUI split view's own columns,
+/// which SwiftUI follows itself, and a pushed page's inline bar are left as
+/// they were.
+internal struct StackScrollEdgeModifier: ViewModifier, Record {
+  func body(content: Content) -> some View {
+    content.background(StackScrollEdgeProbe())
+  }
+}
+
+/// The probe a list carries: an empty view behind it that hands the list's scroll view to the stack's screen each time it's placed or laid out.
+private struct StackScrollEdgeProbe: UIViewRepresentable {
+  func makeUIView(context: Context) -> StackScrollEdgeView {
+    StackScrollEdgeView()
+  }
+
+  func updateUIView(_ view: StackScrollEdgeView, context: Context) {
+    view.handOver()
+  }
+}
+
+private final class StackScrollEdgeView: UIView {
+  override init(frame: CGRect) {
+    super.init(frame: frame)
+    isUserInteractionEnabled = false
+    isAccessibilityElement = false
+  }
+
+  required init?(coder: NSCoder) {
+    nil
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    handOver()
+    // Note that the list's own scroll view may be placed after its background, so the probe looks again once this pass settles.
+    DispatchQueue.main.async { [weak self] in self?.handOver() }
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    handOver()
+  }
+
+  /// Sets the list's scroll view as the top edge's on the screen that stands a large title, where it isn't already.
+  func handOver() {
+    guard window != nil, let screen = largeTitleScreen(), let scrollView = nearestScrollView() else { return }
+    if screen.contentScrollView(for: .top) === scrollView { return }
+    screen.setContentScrollView(scrollView, for: .top)
+  }
+
+  /// The react-native-screens screen above the probe, past the hosting controller standing inside it, where its bar stands a large title.
+  private func largeTitleScreen() -> UIViewController? {
+    var responder: UIResponder? = next
+    while let current = responder {
+      if let controller = current as? UIViewController, let stack = controller.parent as? UINavigationController {
+        let native = NSStringFromClass(type(of: stack)).hasPrefix("RNS")
+        return native && controller.navigationItem.largeTitleDisplayMode == .always ? controller : nil
+      }
+      responder = current.next
+    }
+    return nil
+  }
+
+  /// The scroll view nearest the probe: the first found under the closest of its ancestors that holds one, which is the list it stands behind.
+  private func nearestScrollView() -> UIScrollView? {
+    var ancestor = superview
+    while let current = ancestor {
+      if let found = firstScrollView(under: current) { return found }
+      if current.next is UIViewController { return nil }
+      ancestor = current.superview
+    }
+    return nil
+  }
+
+  /// The first scroll view under `view`, breadth first, passing over the probe itself.
+  private func firstScrollView(under view: UIView) -> UIScrollView? {
+    var queue = view.subviews.filter { $0 !== self }
+    while !queue.isEmpty {
+      let next = queue.removeFirst()
+      if let scrollView = next as? UIScrollView { return scrollView }
+      queue.append(contentsOf: next.subviews)
     }
     return nil
   }
