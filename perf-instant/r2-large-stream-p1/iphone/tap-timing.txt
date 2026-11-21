@@ -1,9 +1,99 @@
-/Users/deanstratakos/vespin-ipad-agent/perf-wt/apps/mobile/scripts/perf/tap-timing.sh:15: no matches found: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/E7F4E0A9-ED66-46C9-8B37-1E691BC476CE/Documents/perf-probe-*.jsonl
-probe rows 0, commands 5, frames 202
+probe rows 14364, commands 474, frames 14309
 path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | 21 | None | None | 26 | 5
+inbox-row | 6 | topTouchEnd | 670 | 18 | 204 | 18797 | 3528 | 1179 | 270 | 22 | 280 | 286 | 956 | 1254 | 28
+back-from-thread | 5 | topTouchEnd | 690 | 24 | 151 | 26083 | 2900 | 1450 | 170 | 32 | -21 | 122 | 824 | 1500 | 67
+more-menu | 6 | topTouchEnd | 710 | 14 | 93 | 16658 | 1932 | 1042 | 151 | 19 | -16 | 191 | 898 | 1037 | 37
+new-task | 6 | topTouchEnd | 621 | 23 | 337 | 21084 | 2842 | 1328 | 394 | 24 | -25 | 462 | 1094 | 1201 | 32
+new-task-cancel | 5 | topTouchEnd | 567 | 15 | 86 | 17073 | 1932 | 820 | 107 | 16 | -17 | 193 | 760 | 753 | 23
+switcher-open | 6 | topTouchEnd | 720 | 14 | 91 | 16734 | 3720 | 1069 | 107 | 17 | -25 | 140 | 847 | 1054 | 42
+switch-workspace | 5 | topIsOnChange | 612 | 11 | 36 | 1659 | 35 | 986 | 97 | 3 | -16 | 117 | 727 | 1295 | 30
+switch-back | 5 | topIsOnChange | 556 | 21 | 222 | 33520 | 16927 | 1395 | 299 | 33 | -23 | 134 | 692 | 1297 | 30
+tab-tasks | 6 | topTouchEnd | 729 | 16 | 97 | 17249 | 2682 | 903 | 113 | 23 | -22 | 82 | 814 | 904 | 23
+tab-inbox | 5 | topTouchEnd | 749 | 17 | 98 | 17357 | 3720 | 844 | 128 | 17 | -21 | 92 | 841 | 875 | 28
+tasks-row | 6 | topTouchEnd | 787 | 12 | 173 | 19378 | 6280 | 333 | 290 | 20 | -8 | 476 | 1213 | 733 | 282
+back-from-task | 5 | topTouchEnd | 906 | 19 | 173 | 31499 | 3344 | 960 | 344 | 32 | -21 | 115 | 1015 | 1026 | 72
+status-chip-open | 7 | topTouchEnd | 739 | 14 | 153 | 26054 | 2328 | 1204 | 246 | 29 | 76 | 183 | 925 | 1256 | 28
+status-pick | 6 | topWindowChange | 256 | 27 | 303 | 52930 | 5656 | 2107 | 538 | 66 | 118 | 490 | 858 | 2120 | 144
+send | 4 | topTouchEnd | 952 | 13 | 82 | 12270 | 1214 | 404 | 76 | 12 | -16 | 179 | 1166 | 294 | 115
+agent-row | 6 | topTouchEnd | 1117 | 32 | 256 | 30600 | 4602 | 1198 | 330 | 34 | 40 | 190 | 1358 | 1192 | 75
+back-from-agent | 5 | topTouchEnd | 739 | 5 | 60 | 9698 | 1047 | 530 | 60 | 12 | -22 | 125 | 867 | 1017 | 33
+inbox-row-plain | 6 | topTouchEnd | 641 | 22 | 134 | 19075 | 2633 | 1047 | 160 | 20 | 189 | 193 | 849 | 1158 | 27
+back-from-plain | 5 | topTouchEnd | 647 | 22 | 136 | 25703 | 3225 | 1333 | 186 | 30 | -22 | 128 | 778 | 1427 | 60
+inbox-row-long | 6 | topTouchEnd | 727 | 10 | 192 | 16432 | 5195 | 313 | 266 | 17 | None | None | None | None | None
+back-from-long | 5 | topTouchEnd | 786 | 24 | 152 | 27692 | 3240 | 1358 | 200 | 34 | -21 | 127 | 911 | 1412 | 33
 
 most rendered components per path (summed over its taps):
+cold-launch: 
+inbox-row: Button×7450, Slot×6672, SlotView×6672, Image×5935, ImageView×5853, obj×5471, GlyphImage×5014, Text×4537, Label×4274, GlyphLabel×4268, LabelView×4268, TextView×4008
+back-from-thread: Slot×9635, SlotView×9635, Button×9020, Image×8355, ImageView×8260, GlyphImage×7260, Label×6510, GlyphLabel×6495, LabelView×6495, Text×4670, TextView×4585, obj×4272
+more-menu: Slot×6738, SlotView×6738, Button×6516, Image×5924, ImageView×5858, GlyphImage×5142, Label×4554, GlyphLabel×4544, LabelView×4544, Text×3462, TextView×3462, HStack×1686, RoundedRectangle×392
+new-task: Slot×8207, SlotView×8207, Button×7230, Image×7093, ImageView×6999, GlyphImage×6088, Label×5526, LabelView×5513, GlyphLabel×5441, obj×4451, Text×3615, TextView×3615
+new-task-cancel: Slot×5902, SlotView×5902, Button×5284, Image×5076, ImageView×5022, GlyphImage×4438, Label×4026, GlyphLabel×4016, LabelView×4016, obj×2733, Text×2618, TextView×2618
+switcher-open: Slot×5688, SlotView×5688, Button×5310, Image×5058, ImageView×5004, GlyphImage×4311, Label×3861, GlyphLabel×3852, LabelView×3852, Text×2736, TextView×2736, RoundedRectangle×1176, HStack×552
+switch-workspace: obj×3056, Screen×202, SceneView×200, NavigationProvider×200, anon×173, Slot×160, SlotView×160, View×149, Image×120, Button×120, NavigationActivityProvider×90, ImageView×60, PreventRemovalProvider×42
+switch-back: Slot×12044, SlotView×12044, Button×11147, Image×10694, ImageView×10563, GlyphImage×9000, Label×8114, LabelView×8095, GlyphLabel×8075, Text×5680, TextView×5680, HStack×2235, Toggle×704, obj×602
+tab-tasks: Slot×7584, SlotView×7584, Button×7080, Image×6667, ImageView×6595, GlyphImage×5748, Label×5148, GlyphLabel×5136, LabelView×5136, Text×3648, TextView×3648, obj×3030, HStack×368
+tab-inbox: Slot×8002, SlotView×8002, Button×7696, Image×7104, ImageView×7026, GlyphImage×6100, Label×5412, GlyphLabel×5400, LabelView×5400, Text×4070, TextView×4070, obj×3783
+tasks-row: Slot×14093, SlotView×14093, Image×11863, ImageView×11783, GlyphImage×10537, Button×10074, GlyphLabel×9965, Label×9952, LabelView×9941, Toggle×5516, ToggleView×5516, Text×3619, obj×1519
+back-from-task: Slot×11935, SlotView×11935, Button×10340, Image×10201, ImageView×10106, GlyphImage×8955, Label×8160, GlyphLabel×8145, LabelView×8145, Text×5416, TextView×5071, obj×5060
+status-chip-open: Slot×15283, SlotView×15283, Image×12820, ImageView×12711, Button×12562, GlyphImage×11270, Label×10380, GlyphLabel×10370, LabelView×10370, Text×6979, TextView×5875, obj×2799, Toggle×2282
+status-pick: Slot×25382, SlotView×25382, Image×21065, ImageView×20889, Button×19966, GlyphImage×18559, Label×17305, GlyphLabel×17290, LabelView×17290, Text×10622, Toggle×8592, TextView×4906, ToggleView×3934
+send: Button×2742, Slot×2527, SlotView×2527, Image×2169, ImageView×2151, GlyphImage×1773, Label×1659, LabelView×1656, GlyphLabel×1620, obj×1579, Text×1356, View×1036
+agent-row: obj×9396, Button×8871, Slot×7931, SlotView×7931, Image×6739, ImageView×6699, View×5953, Text×5570, GlyphImage×5307, Label×5032, LabelView×5032, GlyphLabel×4812, RoundedRectangle×48, RoundedRectangleView×48
+back-from-agent: Slot×3140, SlotView×3140, obj×3085, Button×2870, Image×2630, ImageView×2610, GlyphImage×2185, Text×2150, Label×2020, LabelView×2020, GlyphLabel×2000, TextView×1445
+inbox-row-plain: Slot×6699, SlotView×6699, Button×6268, Image×5761, ImageView×5701, GlyphImage×4909, Label×4409, GlyphLabel×4399, LabelView×4399, obj×4337, Text×3486, TextView×3424
+back-from-plain: Slot×8709, SlotView×8709, Button×8022, Image×7546, ImageView×7465, GlyphImage×6555, Label×5899, GlyphLabel×5885, LabelView×5885, Text×4140, TextView×4130, obj×3823
+inbox-row-long: obj×6124, Text×5536, Button×5384, View×5001, Slot×4666, SlotView×4666, Image×4116, ImageView×3880, GlyphImage×3221, Label×2769, GlyphLabel×2767, TextView×1770, LabelView×1462
+back-from-long: Slot×9283, SlotView×9283, Button×8700, Image×8044, ImageView×7910, GlyphImage×6921, Label×6221, GlyphLabel×6207, LabelView×6207, Text×5066, obj×4598, TextView×4466
 
 slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch: 
+inbox-row: Video 18.8, ThreadDetail 17.4, Markdown 8.6, GuardedScreens 3.7, SlotView 3.6, SceneView 3.5, Button 3.1, BaseNavigationContainer 2.7, Text 2.7, LabelView 2.4
+back-from-thread: Button 6.3, SlotView 5.5, SceneView 5.4, TasksListScreen 5.3, GuardedScreens 5.0, ImageView 4.8, Text 4.6, Image 4.0, LabelView 3.8, MenuCommands 3.2
+more-menu: Image 3.8, SlotView 3.5, TasksListScreen 3.0, Button 2.8, ImageView 2.7, LabelView 2.7, Text 1.9, RowFrame 1.8, GuardedScreens 1.4, SceneView 1.4
+new-task: NewTaskScreen 188.0, BaseNavigationContainer 5.7, TabsScreen 5.4, SlotView 4.6, SceneView 4.0, TasksListScreen 3.8, ImageView 3.6, Button 3.3, Image 2.5, LabelView 2.1
+new-task-cancel: SlotView 3.9, Button 3.7, GuardedScreens 3.7, TasksListScreen 3.4, ImageView 3.1, SceneView 2.5, Image 2.4, StandardRouterNavigator 2.4, LabelView 2.3, Text 2.2
+switcher-open: SlotView 3.5, TextView 3.2, GuardedScreens 2.9, TasksListScreen 2.8, Button 2.7, ImageView 2.6, LabelView 2.4, Text 2.1, Image 1.9, GlyphImage 1.6
+switch-workspace: TasksListScreen 5.7, SceneView 3.5, GuardedScreens 3.5, KeptScreens 2.3, MenuCommands 2.3, StandardRouterNavigator 1.9, InboxStackList 1.4, Animated(Anonymous) 1.2, obj 1.1, TasksStackList 0.8
+switch-back: SlotView 8.1, Button 7.8, TasksListScreen 7.8, ImageView 7.7, Image 6.3, LabelView 5.8, TextView 5.7, KeptScreens 4.7, InboxRowView 4.2, Text 4.0
+tab-tasks: SlotView 4.5, ImageView 3.8, SceneView 3.5, TasksListScreen 3.5, Button 3.5, GuardedScreens 2.7, LabelView 2.4, Image 2.3, RowFrame 1.7, Text 1.7
+tab-inbox: SceneView 4.8, SlotView 4.6, Button 4.2, TasksListScreen 4.0, GuardedScreens 3.9, ImageView 3.8, LabelView 3.1, Image 2.8, GlyphImage 2.1, Text 1.9
+tasks-row: TaskScreen 23.3, OverviewDescription 17.7, Markdown 13.2, MenuCommands 8.5, SlotView 7.8, ImageView 6.5, Button 5.7, LabelView 5.2, SceneView 4.9, Image 3.1
+back-from-task: SlotView 8.7, SceneView 7.9, Button 7.8, TasksListScreen 5.5, ImageView 5.4, Image 5.4, LabelView 5.1, Text 4.3, StandardRouterNavigator 2.8, GuardedScreens 2.7
+status-chip-open: SlotView 6.9, Button 6.1, LabelView 5.4, ImageView 5.3, DividerView 4.7, SceneView 4.6, Image 4.4, TabsScreen 4.3, TasksListScreen 3.9, Text 3.6
+status-pick: SlotView 12.6, LabelView 11.3, Button 10.3, ImageView 10.0, TasksListScreen 9.2, DividerView 8.8, Image 8.6, SceneView 8.3, GlyphImage 8.2, TaskScreen 7.4
+send: AgentConversation 3.5, SlotView 3.2, Markdown 2.9, CircleView 2.2, Text 2.2, Button 1.8, PillField 1.7, SceneView 1.5, Image 1.5, TasksListScreen 1.0
+agent-row: AgentComposerArea 23.9, Markdown 21.3, AgentConversation 9.1, SceneView 7.5, Button 5.3, SlotView 4.2, Text 3.8, HStackView 3.7, ImageView 2.6, ThreadLine 2.1
+back-from-agent: MenuCommands 5.2, SlotView 2.6, GuardedScreens 2.3, HStackView 2.1, Text 2.1, SceneView 2.0, Button 1.4, ImageView 1.4, TaskScreen 1.3, ThreadLine 1.3
+inbox-row-plain: ThreadDetail 14.4, ThreadLine 7.3, Text 5.1, BaseNavigationContainer 4.4, SceneView 3.6, TasksListScreen 3.0, SlotView 2.8, Button 2.7, ImageView 2.2, Image 2.1
+back-from-plain: ThreadLine 11.4, Text 7.7, Button 5.5, SceneView 5.3, SlotView 5.0, TasksListScreen 4.9, ImageView 4.7, GuardedScreens 3.8, LabelView 3.8, Image 3.6
+inbox-row-long: Markdown 51.4, ThreadDetail 30.5, Avatar 3.6, Text 3.6, BaseNavigationContainer 3.2, Image 2.8, SlotView 2.7, SceneView 2.5, Button 2.3, GuardedScreens 2.2
+back-from-long: SlotView 5.4, TasksListScreen 5.3, Button 4.9, ImageView 4.7, GuardedScreens 4.6, LabelView 4.6, SceneView 4.1, Text 3.6, Image 3.5, StandardRouterNavigator 2.8
 
 markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch: markdown 0.0, rest 0.0
+inbox-row: markdown 8.6, rest 70.9
+back-from-thread: markdown 0.0, rest 57.5
+more-menu: markdown 0.0, rest 31.5
+new-task: markdown 0.0, rest 232.9
+new-task-cancel: markdown 0.0, rest 36.0
+switcher-open: markdown 0.0, rest 33.4
+switch-workspace: markdown 0.0, rest 25.9
+switch-back: markdown 0.0, rest 78.8
+tab-tasks: markdown 0.0, rest 37.5
+tab-inbox: markdown 0.0, rest 46.7
+tasks-row: markdown 13.2, rest 100.8
+back-from-task: markdown 0.0, rest 67.1
+status-chip-open: markdown 0.0, rest 61.9
+status-pick: markdown 0.0, rest 108.4
+send: markdown 2.9, rest 24.4
+agent-row: markdown 21.3, rest 75.9
+back-from-agent: markdown 0.0, rest 27.9
+inbox-row-plain: markdown 0.4, rest 55.6
+back-from-plain: markdown 0.0, rest 65.9
+inbox-row-long: markdown 51.8, rest 58.7
+back-from-long: markdown 0.8, rest 52.4
+
+whole run: 476s, 5856 commits, 7878747 components rendered, 93696 ms of stalls over 1018 stalls
+events: topTransitionProgress×3352, topHeaderHeightChange×851, topGlobalEvent×346, topWindowChange×274, topLoad×211, topLoadEnd×211, topLoadStart×211, topWillAppear×123, topWords×123, topFinishTransitioning×114, topWillDisappear×106, topTouchStart×103, topTouchEnd×103, topAppear×101, topDisappear×84
