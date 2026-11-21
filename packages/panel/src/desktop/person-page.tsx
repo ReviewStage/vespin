@@ -6,6 +6,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
+import { automationNextText } from "@repo/features/automation-words";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
@@ -125,7 +126,7 @@ import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
-import { automationNextText } from "./automation-words.js";
+
 import {
   PERSON_SECTION_FOLD,
   PersonBody,

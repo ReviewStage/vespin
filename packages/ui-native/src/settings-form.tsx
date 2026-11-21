@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a script read whole, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a script read whole, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, a connection such as an integration, and an automation or one of its runs.
 
 import {
   ContextMenu,
@@ -31,6 +31,7 @@ import {
   font,
   foregroundStyle,
   frame,
+  lineLimit,
   listRowBackground,
   listSectionSpacing,
   menuIndicator,
@@ -41,6 +42,10 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import {
+  AUTOMATION_RUN_STANDING,
+  type AutomationRunStanding,
+} from "@repo/features/automation-list-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -48,11 +53,12 @@ import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
-import { LongPressMenu, ROW_ACTION_TONE } from "./list-row.js";
-import { Avatar, HarnessMark } from "./marks.js";
+import { actionButton, LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
+import { Avatar, FailedMark, HarnessMark, WorkingMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { SYSTEM_COLOR, useSystemColors } from "./tokens/swipe-colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
@@ -1509,6 +1515,134 @@ export function ConnectionRow({
         {swiped.map((each) => (
           <SwipeRemove key={each.label} label={each.label} onPress={each.onPress} colors={colors} />
         ))}
+      </SwipeActions.Actions>
+    </SwipeActions>
+  );
+}
+
+type AutomationRowProps = {
+  /** Its name, or a run's title. */
+  readonly title: string;
+  /** What fires it and when it runs next, or why a run stands as it does. */
+  readonly line: string;
+  /** Where its newest run stands, which its lead wears: the working or failed mark, else its glyph. */
+  readonly standing: AutomationRunStanding;
+  /** A last line, such as how its newest run went ("Last run: Finished"); none for a run's own row, whose line already says it. */
+  readonly standingWords?: string | undefined;
+  /** The glyph its lead stands at rest. */
+  readonly symbol: Glyph;
+  /** When it last moved, at its end in the muted ink, such as a run's "2h"; none for none. */
+  readonly when?: string | undefined;
+  /** Whether its words stand muted, as an automation turned off does. */
+  readonly faded?: boolean | undefined;
+  /** Opens it: an automation's page, or a run's agent, the chevron at its end; none for a run that started no agent, which takes no press. */
+  readonly onPress?: (() => void) | undefined;
+  /** Its acts, such as Run now and Turn off, behind a swipe from the leading edge, the first run by a full swipe, and in the menu a long press opens; none for none. */
+  readonly acts?: readonly RowAction[] | undefined;
+  /** The name a flow finds it by, where its words are not its own. */
+  readonly testId?: string | undefined;
+};
+
+/**
+ * An automation, or one of its runs, as Settings lists them, as the panel's
+ * Automations rows draw them on a phone: its lead wearing where its newest
+ * run stands (the working mark, the failed mark, else its glyph), its name,
+ * the line of what fires it and when it runs next under it, and how its
+ * newest run went; then when that run fired, and the
+ * chevron where a press opens it. Its acts, such as Run now, stand behind
+ * a swipe from the leading edge, as Mail's Read stands there, and in the
+ * menu a long press opens. VoiceOver hears it as one element, its name then
+ * its lines, and offers its acts among its actions.
+ */
+export function AutomationRow({
+  title,
+  line,
+  standing,
+  standingWords,
+  symbol,
+  when,
+  faded = false,
+  onPress,
+  acts = [],
+  testId,
+}: AutomationRowProps) {
+  const colors = useColors();
+  const fills = useSystemColors();
+  const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
+  const ink = faded ? colors.TEXT_MUTED : colors.TEXT;
+
+  const lead =
+    standing === AUTOMATION_RUN_STANDING.WORKING ? (
+      <WorkingMark />
+    ) : standing === AUTOMATION_RUN_STANDING.FAILED ? (
+      <FailedMark />
+    ) : (
+      <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
+    );
+
+  const content = (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+    >
+      <HStack modifiers={[frame({ width: leadSize })]}>{lead}</HStack>
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={SPACE.TIGHT}>
+            <Text modifiers={[foregroundStyle(ink), lineLimit(2)]}>{title}</Text>
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                lineLimit(2),
+              ]}
+            >
+              {line}
+            </Text>
+            {standingWords === undefined ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                  foregroundStyle(colors.TEXT_MUTED),
+                  lineLimit(2),
+                ]}
+              >
+                {standingWords}
+              </Text>
+            )}
+          </VStack>
+        }
+        end={
+          when === undefined ? null : (
+            <Text modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(VALUE_INK)]}>
+              {when}
+            </Text>
+          )
+        }
+      />
+      {onPress === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
+    </HStack>
+  );
+
+  const placed = [
+    listRowBackground(colors.RAISED),
+    accessibilityElement("combine"),
+    accessibilityLabel(title),
+    ...spokenValue(line, standingWords, when),
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+  ];
+
+  const drawn =
+    onPress === undefined ? content : <SwiftUIButton onPress={onPress}>{content}</SwiftUIButton>;
+
+  if (acts.length === 0) return <HStack modifiers={placed}>{drawn}</HStack>;
+  const gray = fills[SYSTEM_COLOR.GRAY];
+
+  return (
+    <SwipeActions modifiers={placed}>
+      <LongPressMenu groups={[acts]}>{drawn}</LongPressMenu>
+      <SwipeActions.Actions edge="leading" allowsFullSwipe>
+        {acts.map((act) => actionButton(act, colors, gray, false))}
       </SwipeActions.Actions>
     </SwipeActions>
   );

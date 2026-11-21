@@ -63,6 +63,7 @@
 
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import { fileName } from "@repo/features/code-ref-words";
 import { type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
@@ -261,7 +262,6 @@ import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { actingCommand } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
-import { READING_AUTOMATIONS } from "./automation-words.js";
 import { inboxEntries } from "./main-tabs.js";
 import {
   ADD_SECTION,
