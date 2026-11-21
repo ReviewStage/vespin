@@ -26,9 +26,17 @@ import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import { eq, useLiveQuery } from "@tanstack/react-db";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { actMutation } from "./act-mutations.js";
 import { useAdminRoute } from "./admin/admin-route.js";
 import { adminViewOfLink } from "./admin/routing.js";
@@ -60,6 +68,7 @@ import { LinkMenu } from "./link-menu.js";
 import { useCopyLink } from "./links-at-hand.js";
 import { MachineAskCard } from "./machine-ask-card.js";
 import { MachineCommandAskDialog } from "./machine-command-ask.js";
+import { useMutationCalls } from "./mutation-calls.js";
 import { useOfflineRefusedToast } from "./offline-refused-toast.js";
 import { OpenFeedbackProvider } from "./open-feedback.js";
 import { OpenSettingsProvider } from "./open-settings.js";
@@ -244,6 +253,34 @@ function ExpiredServerToasts(): null {
 }
 
 /**
+ * What the window says over whatever it shows, none of it handed anything:
+ * its toasts and the notices said in them, its live regions, the asks held
+ * for an answer, and the link menu. Note that it is held (`memo`), because
+ * the window is drawn again on every step between tasks, which none of it
+ * reads, and the toast standing is a few dozen parts of its own.
+ */
+const WindowNotices = memo(function WindowNotices(): React.JSX.Element {
+  return (
+    <>
+      {/* The window's passing notice: the thank-you after a note lands, what came of a change made from a menu, and an update arrived. */}
+      <ToastHost />
+      {/* The window's one pair of live regions, which the panel's live words are read aloud through. */}
+      <Announcer />
+      {/* A command an agent asks to run on this Mac, while main holds it for an answer. */}
+      <MachineCommandAskDialog />
+      {/* An ask another of the developer's machines holds for an agent, over the window whatever it shows. */}
+      <MachineAskCard />
+      {/* The menu a right-click on any link in the window hangs. */}
+      <LinkMenu />
+      <UpdatedToast />
+      <ReadyToast />
+      <OfflineRefusedToast />
+      <ExpiredServerToasts />
+    </>
+  );
+});
+
+/**
  * The window, drawn once a fixture run's synthetic tasks have landed. They are
  * imported apart from the bundle every launch parses, and drawn from the first
  * frame so that a capture, and the history entry the window's first place
@@ -273,10 +310,10 @@ export function App(): React.JSX.Element {
 }
 
 function AppWindow(): React.JSX.Element {
-  const { mutateAsync: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
-  const { mutateAsync: sendSignOut } = useMutation(actMutation(ACT_KIND.ACCOUNT_SIGN_OUT));
+  const { mutateAsync: updateSetting } = useMutationCalls(actMutation(ACT_KIND.SETTING_UPDATE));
+  const { mutateAsync: sendSignOut } = useMutationCalls(actMutation(ACT_KIND.ACCOUNT_SIGN_OUT));
 
-  const { mutateAsync: requestMicrophoneAccess } = useMutation(
+  const { mutateAsync: requestMicrophoneAccess } = useMutationCalls(
     actMutation(ACT_KIND.MICROPHONE_REQUEST),
   );
 
@@ -496,6 +533,7 @@ function AppWindow(): React.JSX.Element {
   const linkReads = useLinkReads();
   // The history's door for a link's step on a task's own place, made after the tab it is handed to, read as a link opens.
   const visitTask = useRef<TaskVisits["onVisitTask"]>(() => false);
+  const openTaskStep = useRef<TaskVisits["onOpenTask"]>(() => false);
   const startStands = useRef<TaskVisits["onStartStands"]>(() => undefined);
   const leaveStart = useRef<TaskVisits["onLeaveStart"]>(() => false);
 
@@ -520,6 +558,7 @@ function AppWindow(): React.JSX.Element {
     arrivals,
     linkReads,
     visitTask: (at, step) => visitTask.current(at, step),
+    openTask: (at, taskId) => openTaskStep.current(at, taskId),
     startStands: () => startStands.current(),
     leaveStart: () => leaveStart.current(),
   });
@@ -740,6 +779,7 @@ function AppWindow(): React.JSX.Element {
   // Note that a door asking for the place already standing tells the leave guard its move stays, so a Leave of it keeps the page's ask.
   routedExits.stay = placeLeave.stays;
   visitTask.current = history.onVisitTask;
+  openTaskStep.current = history.onOpenTask;
   startStands.current = history.onStartStands;
   leaveStart.current = history.onLeaveStart;
   // The place standing and the task the host binds follow each other, each on the other's edge (`places/place-binding.ts`).
@@ -986,21 +1026,7 @@ function AppWindow(): React.JSX.Element {
                               onKind={setFeedbackKind}
                               onClose={() => setFeedbackKind(undefined)}
                             />
-                            {/* The window's passing notice: the thank-you after a note lands, what
-          came of a change made from a menu, and an update arrived. */}
-                            <ToastHost />
-                            {/* The window's one pair of live regions, which the panel's live words are read aloud through. */}
-                            <Announcer />
-                            {/* A command an agent asks to run on this Mac, while main holds it for an answer. */}
-                            <MachineCommandAskDialog />
-                            {/* An ask another of the developer's machines holds for an agent, over the window whatever it shows. */}
-                            <MachineAskCard />
-                            {/* The menu a right-click on any link in the window hangs. */}
-                            <LinkMenu />
-                            <UpdatedToast />
-                            <ReadyToast />
-                            <OfflineRefusedToast />
-                            <ExpiredServerToasts />
+                            <WindowNotices />
                             {/* The plans, the open plan's agents and files, every command the
           window can run now, and the settings, behind ⌘K, past the sign-in
           alone. */}

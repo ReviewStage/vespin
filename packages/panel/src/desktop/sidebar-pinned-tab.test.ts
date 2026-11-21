@@ -30,7 +30,12 @@ import { handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { type StandingTaskList, standingTaskList } from "../testing/history-rows.js";
-import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  listedAgent,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 
 /**
@@ -224,11 +229,13 @@ test("a pinned agent's tab of a task not open says its agent's name as the list 
     turnId: null,
   });
 
-  const live = drawPin(PIN, renamed, tasksControl({ tasks: [renamed], liveAgents: [followed] }));
+  listed.stand({ tasks: [renamed], taskAgents: [followed] });
+  const live = drawPin(PIN, renamed, tasksControl({ tasks: [renamed] }));
   assert.equal(live.textContent, "Expire stale invitations");
 
   act(() => root?.unmount());
   document.body.replaceChildren();
+  listed.stand({ tasks: [TASK], taskAgents: [] });
   const unnamed = drawPin(PIN, TASK);
   assert.equal(unnamed.textContent, "Expiry job");
 });
@@ -291,14 +298,18 @@ describe("a pinned Pull request tab's card", () => {
     changedFiles: 3,
   };
 
-  /** The open task, which has read its agent's pull request. */
+  /** The open task, whose agent's pull request the task list holds. */
   const openTask = (agents: readonly AgentSummary[]): TasksControl => {
     const base = tasksControl({ tasks: [TASK] });
+    listed.stand({
+      tasks: [],
+      agentPullRequests: [{ agentId: AGENT, taskId: TASK.id, pullRequest: read }],
+    });
 
     return {
       ...base,
       activeTaskId: TASK.id,
-      agents: agentsControl({ agents, pullRequests: new Map([[AGENT, read]]) }),
+      agents: taskAgentsOf(agentsControl({ agents }), TASK.id),
     };
   };
 

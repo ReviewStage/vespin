@@ -6,6 +6,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
+import { automationNextText } from "@repo/features/automation-words";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
@@ -116,16 +117,17 @@ import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { InboxListSkeleton } from "../tasks/inbox-list.js";
 import { DeviceStandingGlyph, STANDING_WORDS } from "../tasks/runs-on.js";
-import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
+import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems } from "../tasks/use-waiting-items.js";
+import { useListedAgentPullRequests, useListedAgents } from "../tasks/use-workspace-agents.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
-import { automationNextText } from "./automation-words.js";
+
 import {
   PERSON_SECTION_FOLD,
   PersonBody,
@@ -346,7 +348,7 @@ function PersonAgentsSection({
   const queryClient = useQueryClient();
 
   const control: AgentsControl = {
-    ...tasks.agents,
+    ...placeAgents(tasks.agents),
     readAgent: (agentId: string) => readAgentById(queryClient, agentId),
   };
 
@@ -1007,7 +1009,10 @@ function PersonColumn({
   const known = opened === undefined ? undefined : { userId, name: opened };
   // Note that someone who left having only revised or answered is named by the former members read alone, since a link to them opens with no name.
   const left = former?.find((each) => each.userId === userId);
-  const ref = personRef(userId, listed, tasks.liveAgents) ?? member ?? known ?? left;
+  // Note that every agent is read only while the page stands, since it lists the person's agents among them.
+  const liveAgents = useListedAgents(tasks.agentsCarried);
+  const listedPullRequests = useListedAgentPullRequests(tasks.agentsCarried);
+  const ref = personRef(userId, listed, liveAgents) ?? member ?? known ?? left;
   const person = personActor(ref, members, readerId, former);
   // The sidebar's own view, so their tasks are listed there as its Assigned to lists them, whoever created them.
   const taskView = useTaskListView(tasks.workspace?.id, staged);
@@ -1020,7 +1025,6 @@ function PersonColumn({
     );
 
   // Note that the page keeps one identity while the list stands, because each of its lists follows its rows (`useLeaving`).
-  const { liveAgents, listedPullRequests } = tasks;
   const page = useMemo(() => personPage(userId, listed, liveAgents), [userId, listed, liveAgents]);
   // Each section counts what the list holds and what the service counted past it.
   const held = personHeld(page);

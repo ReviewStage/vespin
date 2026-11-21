@@ -30,6 +30,11 @@ import {
   READING_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
+import {
+  filesLost,
+  UNDELIVERED_FILES_LOST,
+  type UndeliveredReply,
+} from "@repo/features/inbox-undelivered";
 import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
@@ -37,14 +42,16 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
-  CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
   noResultsForWords,
+  noSelectionWords,
   PATH_OPENS,
   SELECTION_WORDS,
   selectedWords,
+  TERM,
 } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -82,6 +89,7 @@ import {
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
+  type UndeliveredLine,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -103,17 +111,24 @@ import {
   useStandFrontSteps,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
-import { pendingThreadFile, useThreadAnswer } from "../inbox/use-thread-answer.js";
+import {
+  pendingThreadFile,
+  type ThreadAnswer,
+  useThreadAnswer,
+  useUndeliveredShown,
+} from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { NotificationAsk } from "../notification-ask.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useReplyDrawnCount } from "../reply-drawn.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+
 import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -304,17 +319,28 @@ export function InboxItemRows({
 }: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
   return (
     <RowForEach data={listed} keyOf={(each) => each.item.id}>
-      {({ holder: { task }, item }) => (
-        <InboxRow
-          item={item}
-          taskId={task.id}
-          workspaceId={task.workspaceId}
-          taskName={task.name}
-          taskStatus={task.status}
-          {...acts}
-        />
-      )}
+      {(each) => <InboxItemRow listed={each} {...acts} />}
     </RowForEach>
+  );
+}
+
+/** One Inbox item's row, under its task, as every list of Inbox items draws it, Search's Recent among them, where it stands among other kinds' rows. */
+export function InboxItemRow({
+  listed: {
+    holder: { task },
+    item,
+  },
+  ...acts
+}: InboxRowActs & { readonly listed: InboxListed }) {
+  return (
+    <InboxRow
+      item={item}
+      taskId={task.id}
+      workspaceId={task.workspaceId}
+      taskName={task.name}
+      taskStatus={task.status}
+      {...acts}
+    />
   );
 }
 
@@ -707,9 +733,12 @@ function ThreadDetail({
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
+  // Note that the reader's replies that did not go stand at the thread's foot as their own messages, marked Not delivered, as the panel keeps them.
+  const undelivered = useUndeliveredShown(item);
+
   const messages = useMemo(
-    () => inboxThreadMessages(item, agentName, readerId),
-    [item, agentName, readerId],
+    () => inboxThreadMessages(undelivered.item, agentName, readerId),
+    [undelivered.item, agentName, readerId],
   );
 
   const hostActs = useHostActs();
@@ -794,6 +823,11 @@ function ThreadDetail({
   useReplyDrawnCount(item.thread);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
+  useNoteOpened({
+    kind: SEARCH_FOUND_KIND.INBOX,
+    id: item.id,
+    workspaceId: holder.task.workspaceId,
+  });
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
 
@@ -870,9 +904,12 @@ function ThreadDetail({
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
+  const undeliveredLines = new Map(undelivered.lines.map((line) => [line.key, line]));
+
   const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
     ...message,
     after: events.get(index),
+    undelivered: undeliveredOf(undeliveredLines.get(message.id), answer),
     writer: {
       ...message.writer,
       id: message.writer.agent ? undefined : message.writer.userId,
@@ -1074,6 +1111,24 @@ function ThreadDetail({
       {remind.sheet}
     </>
   );
+}
+
+/** What a reply that did not go says under its words and offers, Retry where it can go as it stands; none for a message that went. */
+function undeliveredOf(
+  line: UndeliveredReply | undefined,
+  answer: Pick<ThreadAnswer, "retryUndelivered" | "editUndelivered" | "deleteUndelivered">,
+): UndeliveredLine | undefined {
+  if (line === undefined) return undefined;
+  const { key } = line;
+  const lost = filesLost(line);
+
+  return {
+    why: lost ? UNDELIVERED_FILES_LOST : line.why,
+    newThread: line.startsThread === true,
+    onRetry: lost ? undefined : () => answer.retryUndelivered(key),
+    onEdit: () => answer.editUndelivered(key),
+    onDelete: () => answer.deleteUndelivered(key),
+  };
 }
 
 /** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Try again, or that no such thread is the account's to read. */
@@ -1400,7 +1455,7 @@ function InboxSplitScreen({
 
   const detail =
     selected === undefined ? (
-      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
+      <NoSelection title={noSelectionWords(TERM.INBOX_ITEM)} />
     ) : (
       <ThreadColumn key={selected} id={selected} remindMenu={remind.itemMenu} onOpen={select} />
     );

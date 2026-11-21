@@ -52,6 +52,12 @@ import {
   PULL_REQUEST_MOMENT,
   type PullRequestMoment,
 } from "@repo/features/automation-wire";
+import {
+  AUTOMATION_RUN_REFUSAL_WORDS,
+  AUTOMATION_SAVE_REFUSAL_WORDS,
+  automationOwnerName,
+  automationToggleRefusal,
+} from "@repo/features/automation-words";
 import { readerZone } from "@repo/features/date-mention";
 import { INTEGRATION_NAME, integrationConnectionOf } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -187,7 +193,7 @@ import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { OWNER_MARK_SIZE, OwnerMark } from "./automation-owner.js";
 import { AutomationPrompt } from "./automation-prompt.js";
 import { AutomationRunsPanel, AutomationRunsScreen } from "./automation-runs-panel.js";
-import { automationDeleteQuestion, automationOwnerName } from "./automation-words.js";
+import { automationDeleteQuestion } from "./automation-words.js";
 import { useRunsPanel } from "./folded-groups.js";
 import { type NarrowColumns, useNarrowFocus } from "./narrow-focus.js";
 import { PaneGlide } from "./pane-motion.js";
@@ -355,37 +361,6 @@ const NO_MATCH = {
   AGENTS: noMatchWords(TERM.AGENT),
 } as const;
 
-/** Why a save the service refused did not land, as the line under the name says it. */
-const SAVE_REFUSAL_WORDS = {
-  [AUTOMATION_CALL_FAILURE.UNANSWERED]: "The automation could not be saved. Try again.",
-  [AUTOMATION_CALL_FAILURE.NOT_FOUND]: "This automation, or its workspace, is gone.",
-  [AUTOMATION_CALL_FAILURE.NO_REPOSITORY]: "Choose the repository whose events start it.",
-  [AUTOMATION_CALL_FAILURE.REPOSITORY_NOT_REACHABLE]: `${PRODUCT_NAME} cannot reach that repository from this workspace on GitHub.`,
-  [AUTOMATION_CALL_FAILURE.INVALID]:
-    "The automation could not be saved as written. Check its schedule and prompt.",
-  [AUTOMATION_CALL_FAILURE.NOT_PERMITTED]:
-    "Only its creator, or the workspace's owners and admins, can change it.",
-} as const satisfies Record<AutomationCallFailure, string>;
-
-/** Why a Run now did not start a run, as the line under the name says it. */
-export const RUN_REFUSAL_WORDS = {
-  ...SAVE_REFUSAL_WORDS,
-  [AUTOMATION_CALL_FAILURE.UNANSWERED]: "Could not run it now. Try again.",
-  [AUTOMATION_CALL_FAILURE.NOT_PERMITTED]:
-    "Only its creator, or the workspace's owners and admins, can run it.",
-} as const satisfies Record<AutomationCallFailure, string>;
-
-/** Why a switch did not move, as its toast says it. */
-function toggleRefusal(answer: AutomationWriteAnswer, enabled: boolean): string | undefined {
-  if (!("failure" in answer)) return undefined;
-
-  if (answer.failure === AUTOMATION_CALL_FAILURE.NOT_PERMITTED) {
-    return SAVE_REFUSAL_WORDS[AUTOMATION_CALL_FAILURE.NOT_PERMITTED];
-  }
-
-  return enabled ? "Could not turn it on. Try again." : "Could not turn it off. Try again.";
-}
-
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
 /**
@@ -407,7 +382,7 @@ export function AutomationSwitch({
 
   const turn = (enabled: boolean) => {
     write(enabled).then((answer) => {
-      const reason = toggleRefusal(answer, enabled);
+      const reason = automationToggleRefusal(answer, enabled);
 
       if (reason !== undefined) {
         toast({
@@ -1649,7 +1624,7 @@ function SentryRows({
 
 /** Why a new secret could not be made, as its dialog says it. */
 const NEW_SECRET_REFUSAL_WORDS = {
-  ...SAVE_REFUSAL_WORDS,
+  ...AUTOMATION_SAVE_REFUSAL_WORDS,
   [AUTOMATION_CALL_FAILURE.UNANSWERED]: "The secret could not be made. Try again.",
 } as const satisfies Record<AutomationCallFailure, string>;
 
@@ -2798,7 +2773,7 @@ export function AutomationEditor({
 
   // What a landed write leaves the page: why it was refused, or nothing once it saved.
   const landed = (answer: AutomationWriteAnswer): string | undefined => {
-    if ("failure" in answer) return SAVE_REFUSAL_WORDS[answer.failure];
+    if ("failure" in answer) return AUTOMATION_SAVE_REFUSAL_WORDS[answer.failure];
     // Note that the draft is kept rather than replaced by the answer, so what was typed while the save was out stands, unsaved.
     setShownProblems(false);
 
@@ -2845,7 +2820,9 @@ export function AutomationEditor({
     void starting.run(() =>
       runs
         .runNow()
-        .then((answer) => ("failure" in answer ? RUN_REFUSAL_WORDS[answer.failure] : undefined)),
+        .then((answer) =>
+          "failure" in answer ? AUTOMATION_RUN_REFUSAL_WORDS[answer.failure] : undefined,
+        ),
     );
   };
 

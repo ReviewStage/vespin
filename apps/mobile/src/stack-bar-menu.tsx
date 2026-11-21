@@ -4,9 +4,19 @@ import { type BarMenu, type BarMenuGroup, glyphSymbol, groupKey } from "@repo/ui
 import { Stack } from "expo-router";
 import type { ReactElement } from "react";
 
-/** A menu's acts, then the menus within it, as the stack bar's menu items. */
+/** A group's switches, each checked as the system checks it, then its acts, then the menus within it, as the stack bar's menu items. */
 function groupItems(group: BarMenuGroup): ReactElement[] {
   return [
+    ...(group.choices ?? []).map((choice) => (
+      <Stack.Toolbar.MenuAction
+        key={choice.id ?? choice.label}
+        {...(choice.symbol === undefined ? {} : { icon: glyphSymbol(choice.symbol) })}
+        isOn={choice.on}
+        onPress={choice.onPress}
+      >
+        {choice.label}
+      </Stack.Toolbar.MenuAction>
+    )),
     ...group.actions.map((action) => (
       <Stack.Toolbar.MenuAction
         key={action.label}
@@ -51,7 +61,7 @@ export function stackMenuItems(menu: BarMenu): ReactElement[] {
         {choice.label}
       </Stack.Toolbar.MenuAction>
     )),
-    ...groupItems(menu),
+    ...groupItems({ actions: menu.actions, submenus: menu.submenus }),
     ...(menu.groups ?? []).map((group) => (
       <Stack.Toolbar.Menu key={groupKey(group)} inline>
         {groupItems(group)}

@@ -118,6 +118,7 @@ async function mount() {
       arrivals: NO_ARRIVALS,
       linkReads: UNMOVED_LINK_READS,
       visitTask: () => false,
+      openTask: () => false,
       startStands: () => undefined,
       leaveStart: () => false,
     });

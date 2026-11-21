@@ -12,7 +12,7 @@ import type { HistoryRows } from "../places/history-rows.js";
 import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { TaskRows } from "../undo-stack.js";
-import { listedTasksOf } from "./tasks-control.js";
+import { listedAgentsOf, listedTasksOf } from "./tasks-control.js";
 
 /** The rows of `tasks` and `agents` by id, each task among them the only ones ever listed: for a name read once, where no task is deleted between reads. */
 export function listedRows(
@@ -87,32 +87,41 @@ export function standingTaskList(initial: ListedTasks | undefined): StandingTask
 /** `children` over the window's task collections standing on every task `tasks` holds, and the pull requests their lines name, written again as each draw hands another list, before the frame is painted. */
 function StandingEvery({
   tasks,
+  taskAgents,
   taskPullRequests,
+  agentPullRequests,
   children,
 }: {
   tasks: readonly TaskSummary[];
+  taskAgents: ListedTasks["taskAgents"];
   taskPullRequests: ListedTasks["taskPullRequests"];
+  agentPullRequests: ListedTasks["agentPullRequests"];
   children: ReactNode;
 }): ReactElement {
-  const [taskList] = useState(() => standingTaskList({ tasks, taskPullRequests }));
+  const [taskList] = useState(() =>
+    standingTaskList({ tasks, taskAgents, taskPullRequests, agentPullRequests }),
+  );
 
   useLayoutEffect(
-    () => taskList.stand({ tasks, taskPullRequests }),
-    [taskList, tasks, taskPullRequests],
+    () => taskList.stand({ tasks, taskAgents, taskPullRequests, agentPullRequests }),
+    [taskList, tasks, taskAgents, taskPullRequests, agentPullRequests],
   );
 
   return taskList.provide(children);
 }
 
-/** `element` over task collections holding every task a test's tab lists (`listedTasks`), and the pull requests their lines name where given, as the window's root feeds them beside the tab it draws. */
+/** `element` over task collections holding every task and agent a test's tab lists (`listedTasks`, `listedAgents`), and the pull requests their lines and their agents name where given, as the window's root feeds them beside the tab it draws. */
 export function overEveryTask(
   tasks: TasksControl,
   element: ReactNode,
   taskPullRequests?: ListedTasks["taskPullRequests"],
+  agentPullRequests?: ListedTasks["agentPullRequests"],
 ): ReactElement {
   return createElement(StandingEvery, {
     tasks: listedTasksOf(tasks),
+    taskAgents: listedAgentsOf(tasks),
     taskPullRequests,
+    agentPullRequests,
     children: element,
   });
 }

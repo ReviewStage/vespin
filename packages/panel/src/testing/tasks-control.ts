@@ -12,6 +12,7 @@ import {
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import type {
@@ -34,6 +35,7 @@ import {
   agentRenameMutation,
   agentsArchiveMutation,
   MODELS_READ,
+  type TaskAgentsControl,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
 import type { NewTask } from "../tasks/use-new-task.js";
@@ -283,6 +285,31 @@ export const NO_REPOSITORIES = {
   manages: true,
 } as const satisfies RepositoryChooser;
 
+/**
+ * The window's control of the open task (`TaskAgentsControl`) over a
+ * control listing its agents, which stand as the agents New task holds
+ * until the list carries them, so a test needs no collection to draw them.
+ * Their pull requests and runs are read from the collections by `taskId`,
+ * where a test stands them.
+ */
+export function taskAgentsOf(
+  control: AgentsControl = agentsControl(),
+  taskId?: string,
+): TaskAgentsControl {
+  const { agents, archived, pullRequests, ...acts } = control;
+  const held = agents === undefined ? undefined : [...agents, ...(archived ?? [])];
+
+  return {
+    ...acts,
+    // Note that a task named is followed, its agents standing beside whatever the collections list of it.
+    rows: { taskId, followed: taskId !== undefined, held },
+    rowNow: (agentId) => held?.find((agent) => agent.id === agentId),
+    pullRequestNow: (agentId) => pullRequests.get(agentId),
+    archivedIds: archived?.map((agent) => agent.id),
+    workingIds: agents?.flatMap((agent) => (agentStillWriting(agent.status) ? [agent.id] : [])),
+  };
+}
+
 /** A task with no agents and no repository, every press ignored. */
 export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsControl {
   const onArchive: AgentsControl["onArchive"] =
@@ -410,6 +437,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
     move(true);
     landed();
   },
+  free: () => true,
   stays: ignore,
   stayed: () => false,
   along: ignore,
@@ -493,13 +521,17 @@ export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
   };
 }
 
-/** What a test sets of a Tasks tab, and the tasks its window's task list holds (`tasks`), which the tab itself never carries. */
+/** What a test sets of a Tasks tab, and the tasks and agents its window's task list holds (`tasks`, `listedAgents`), which the tab itself never carries. */
 export type TasksControlOverrides = Partial<TasksControl> & {
   readonly tasks?: readonly TaskSummary[];
+  readonly listedAgents?: readonly ListedAgent[];
 };
 
-/** A Tasks tab a test draws, and the tasks its window's task list holds, which `overEveryTask` stands the window's collections on. */
-export type ListingTasksControl = TasksControl & { readonly listedTasks: readonly TaskSummary[] };
+/** A Tasks tab a test draws, and the tasks and agents its window's task list holds, which `overEveryTask` and `overListedTasks` stand the window's collections on. */
+export type ListingTasksControl = TasksControl & {
+  readonly listedTasks: readonly TaskSummary[];
+  readonly listedAgents?: readonly ListedAgent[];
+};
 
 /** No task listed: what a tab built otherwise than by `tasksControl` lists. */
 const NO_LISTED: readonly TaskSummary[] = [];
@@ -509,12 +541,19 @@ export function listedTasksOf(tasks: TasksControl): readonly TaskSummary[] {
   return "listedTasks" in tasks && Array.isArray(tasks.listedTasks) ? tasks.listedTasks : NO_LISTED;
 }
 
+/** The agents a test's tab lists (`tasksControl`'s `listedAgents`), carried along any copy spread from it; none where it lists none. */
+export function listedAgentsOf(tasks: TasksControl): readonly ListedAgent[] | undefined {
+  return "listedAgents" in tasks && Array.isArray(tasks.listedAgents)
+    ? tasks.listedAgents
+    : undefined;
+}
+
 /**
  * A signed-in Tasks tab on screen on Home with no tasks, every
  * press ignored, bound for whichever task it is given as open.
  */
 export function tasksControl(overrides: TasksControlOverrides = {}): ListingTasksControl {
-  const { tasks: listedTasks = [], ...set } = overrides;
+  const { tasks: listedTasks = [], listedAgents, ...set } = overrides;
   const onMoveTask: TasksControl["onMoveTask"] = set.onMoveTask ?? (() => Promise.resolve(false));
 
   return {
@@ -611,7 +650,7 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
     },
     unreadTabs: [],
     pages: undefined,
-    agents: agentsControl(),
+    agents: taskAgentsOf(),
     history: versionHistoryControl(),
     onSelect: ignore,
     onResume: ignore,
@@ -670,11 +709,11 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
     onUnbindTask: ignore,
     typedNamesNow: () => set.typedNames ?? new Map(),
     onDraftName: ignore,
-    liveAgents: [],
-    listedPullRequests: undefined,
+    agentsCarried: true,
     placeLeave: NO_LEAVE_ASK,
     ...set,
     // Note that the tasks given are laid last, over those a tab spread into `overrides` listed.
     listedTasks,
+    ...(listedAgents === undefined ? undefined : { listedAgents }),
   };
 }

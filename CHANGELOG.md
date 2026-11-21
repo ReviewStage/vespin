@@ -76,12 +76,13 @@ published.
 
 ## 0.40.0 — 2026-11-20
 
-### Agents talk in Slack
+### Vespin in Slack
 
-Agents now speak for themselves in Slack: they reply in their thread in a few
-short messages, hear plain replies there without an @mention, react to what
-you send, and share files from their work. They can post in any channel the
-Vespin bot is in, and DM you unless you turned Slack notifications off.
+Add Vespin to your Slack from Settings › Workspace, then @Vespin in a channel
+or DM to start an agent. Agents speak for themselves there: they reply in their
+thread in a few short messages, hear plain replies without an @mention, react
+to what you send, and share files from their work. They can post in any channel
+the Vespin bot is in, and DM you unless you turned Slack notifications off.
 
 [#9497](https://github.com/ReviewStage/vespin/pull/9497),
 [#9499](https://github.com/ReviewStage/vespin/pull/9499),
@@ -93,6 +94,8 @@ Vespin bot is in, and DM you unless you turned Slack notifications off.
 [#10114](https://github.com/ReviewStage/vespin/pull/10114),
 [#10176](https://github.com/ReviewStage/vespin/pull/10176),
 [#10182](https://github.com/ReviewStage/vespin/pull/10182)
+
+![A mockup of acme's Slack, its #relay-eng thread open: Dana asks Vespin to name the workspace in the invite email, and the agent answers in short messages, shares a picture of the new email, links the pull request with checks passing, then takes Dana's plain reply about the button's color, reacting 👍 and pushing the change, with 👀 and ✅ on her first message](apps/web/public/changelog/0.40.0/vespin-in-slack.png)
 
 ### A Settings page for everything
 
@@ -736,8 +739,8 @@ sessions. Manage the list in Settings › Agents › Always allowed.
 
 ### PDFs and HEIC photos
 
-PDFs now open in the file viewer, and agents can read PDFs you paste or share
-in Slack. HEIC photos are converted to JPEG automatically.
+PDFs now open in the file viewer, and agents can read PDFs you paste. HEIC
+photos are converted to JPEG automatically.
 ([#8552](https://github.com/ReviewStage/vespin/pull/8552),
 [#8642](https://github.com/ReviewStage/vespin/pull/8642),
 [#8528](https://github.com/ReviewStage/vespin/pull/8528),
@@ -844,8 +847,6 @@ Zoom pages that agents show with ⌘+, ⌘−, ⌘0, a pinch, or the tab's menu.
   ([#8594](https://github.com/ReviewStage/vespin/pull/8594))
 - Fixed a setup script's last run naming an agent you can't see
   ([#8586](https://github.com/ReviewStage/vespin/pull/8586))
-- Fixed the Slack bot connecting for people outside its Slack team
-  ([#8588](https://github.com/ReviewStage/vespin/pull/8588))
 - Fixed While plugged in not explaining it keeps your Mac awake
   ([#8480](https://github.com/ReviewStage/vespin/pull/8480))
 - Fixed inconsistent button wording across the app
@@ -984,7 +985,7 @@ off once it can.
   ([#8092](https://github.com/ReviewStage/vespin/pull/8092),
   [#8128](https://github.com/ReviewStage/vespin/pull/8128),
   [#8129](https://github.com/ReviewStage/vespin/pull/8129))
-- Preferences now has its own settings page, including Slack notifications
+- Preferences now has its own settings page
   ([#8197](https://github.com/ReviewStage/vespin/pull/8197),
   [#8156](https://github.com/ReviewStage/vespin/pull/8156))
 - Shared ports show what's running on them
@@ -1682,9 +1683,6 @@ together in New task's repository chip.
 - The Inbox's questions-only view is now called Questions
   ([#7269](https://github.com/ReviewStage/vespin/pull/7269),
   [#7246](https://github.com/ReviewStage/vespin/pull/7246))
-- Answer a thread's question from Slack, or jump to it with Open in Vespin
-  ([#7241](https://github.com/ReviewStage/vespin/pull/7241),
-  [#7266](https://github.com/ReviewStage/vespin/pull/7266))
 - Choose which model writes a pull request's chapters
   ([#7027](https://github.com/ReviewStage/vespin/pull/7027),
   [#7179](https://github.com/ReviewStage/vespin/pull/7179),
@@ -1832,10 +1830,6 @@ back online.
   ([#6947](https://github.com/ReviewStage/vespin/pull/6947))
 - Agents on a Mac run in git worktrees of a shared clone
   ([#6786](https://github.com/ReviewStage/vespin/pull/6786))
-- Slack threads link to their agent right away, and DMs show open asks
-  ([#6758](https://github.com/ReviewStage/vespin/pull/6758),
-  [#6825](https://github.com/ReviewStage/vespin/pull/6825),
-  [#6951](https://github.com/ReviewStage/vespin/pull/6951))
 - Send feedback now sits beside the settings gear
   ([#6772](https://github.com/ReviewStage/vespin/pull/6772))
 - Menu bar items that can't run right now are dimmed
@@ -1861,8 +1855,6 @@ back online.
   ([#6823](https://github.com/ReviewStage/vespin/pull/6823))
 - Fixed scrolling up over an inline page in the transcript
   ([#6843](https://github.com/ReviewStage/vespin/pull/6843))
-- Fixed replies to an automation's Slack result not reaching its agent
-  ([#6774](https://github.com/ReviewStage/vespin/pull/6774))
 
 ### Misc
 
@@ -1927,8 +1919,8 @@ time you pick. It comes back unread, or sooner if someone replies.
 
 ### Every agent works on a task
 
-Automation runs, Slack requests, and agents started by other agents now each get
-their own task, keeping their work together. Run tasks mark themselves Done when
+Automation runs and agents started by other agents now each get their own
+task, keeping their work together. Run tasks mark themselves Done when
 they finish cleanly.
 ([#6673](https://github.com/ReviewStage/vespin/pull/6673),
 [#6676](https://github.com/ReviewStage/vespin/pull/6676),
@@ -1976,12 +1968,6 @@ back online. ⌘Z undoes your last change to a task or agent, and ⇧⌘Z redoes
   [#6587](https://github.com/ReviewStage/vespin/pull/6587))
 - New Runs on chip shows where an agent runs and whether it's online
   ([#6734](https://github.com/ReviewStage/vespin/pull/6734))
-- Answer multi-choice asks and to-dos right from Slack DMs
-  ([#6724](https://github.com/ReviewStage/vespin/pull/6724),
-  [#6735](https://github.com/ReviewStage/vespin/pull/6735),
-  [#6738](https://github.com/ReviewStage/vespin/pull/6738))
-- Agents started from Slack offer Open in Slack
-  ([#6732](https://github.com/ReviewStage/vespin/pull/6732))
 - Agents re-queue pull requests the merge queue drops, or tell you why they
   can't ([#6568](https://github.com/ReviewStage/vespin/pull/6568))
 - Agents' pointers are amber and show their keypresses in recordings
@@ -2030,8 +2016,6 @@ back online. ⌘Z undoes your last change to a task or agent, and ⇧⌘Z redoes
   ([#6761](https://github.com/ReviewStage/vespin/pull/6761))
 - Fixed failed turns offering Continue in new agent when not needed
   ([#6757](https://github.com/ReviewStage/vespin/pull/6757))
-- Fixed HEIC images from Slack not reaching agents
-  ([#6759](https://github.com/ReviewStage/vespin/pull/6759))
 - Fixed hover cards opening off screen on phones
   ([#6760](https://github.com/ReviewStage/vespin/pull/6760))
 - Fixed the web app failing to load after a dropped connection
@@ -2107,21 +2091,6 @@ Linear and Slack. Anything you skip waits on Home as Finish setting up.
   ([#6394](https://github.com/ReviewStage/vespin/pull/6394))
 - New task on Home focuses Home's own message box
   ([#6498](https://github.com/ReviewStage/vespin/pull/6498))
-- Vespin reacts with 👀 in Slack instead of replying "On it", and skips link
-  previews ([#6483](https://github.com/ReviewStage/vespin/pull/6483),
-  [#6493](https://github.com/ReviewStage/vespin/pull/6493))
-- Slack-started agents are named from your message and show Slack's mark
-  ([#6503](https://github.com/ReviewStage/vespin/pull/6503),
-  [#6506](https://github.com/ReviewStage/vespin/pull/6506),
-  [#6508](https://github.com/ReviewStage/vespin/pull/6508))
-- Replying in a Slack thread revives or continues its agent
-  ([#6518](https://github.com/ReviewStage/vespin/pull/6518))
-- Pictures now go both ways between Slack and agents
-  ([#6511](https://github.com/ReviewStage/vespin/pull/6511))
-- Slack agents stop offering Mac commands once others join the thread
-  ([#6512](https://github.com/ReviewStage/vespin/pull/6512))
-- Slack settings now match GitHub's, with Add channel and per-channel rows
-  ([#6505](https://github.com/ReviewStage/vespin/pull/6505))
 - GitHub lines in transcripts show the sender's avatar
   ([#6482](https://github.com/ReviewStage/vespin/pull/6482))
 - Windows that fail to load show a clean error with Reload
@@ -2137,13 +2106,8 @@ Linear and Slack. Anything you skip waits on Home as Finish setting up.
   ([#6440](https://github.com/ReviewStage/vespin/pull/6440))
 - Fixed agents failing to start on empty repositories
   ([#6504](https://github.com/ReviewStage/vespin/pull/6504))
-- Fixed Slack replies saying only "The agent finished."
-  ([#6507](https://github.com/ReviewStage/vespin/pull/6507),
-  [#6510](https://github.com/ReviewStage/vespin/pull/6510))
 - Fixed failed Settings pages sitting off center
   ([#6491](https://github.com/ReviewStage/vespin/pull/6491))
-- Fixed replies to Slack DMs starting stray agents
-  ([#6550](https://github.com/ReviewStage/vespin/pull/6550))
 - Fixed old sub-tasks lingering after switching tasks
   ([#6548](https://github.com/ReviewStage/vespin/pull/6548))
 
@@ -2214,26 +2178,6 @@ replies. Mention another agent to bring it in.
 [#6378](https://github.com/ReviewStage/vespin/pull/6378))
 
 ![Relay's Invite teammates page full screen in the side panel, a comment pin on Send invite and another on Pending invites, and the comment column open on Dean's question about the button, answered by the Add teammate invitations agent, above Dana's comment on the pending list.](apps/web/public/changelog/0.25.0/comments-on-pages.png)
-
-### Vespin in Slack
-
-Connect Vespin's Slack bot to get threads that need you as Slack DMs, with
-buttons to answer. @Vespin in a channel or DM to start an agent, and it posts
-back in the thread.
-([#6406](https://github.com/ReviewStage/vespin/pull/6406),
-[#6414](https://github.com/ReviewStage/vespin/pull/6414),
-[#6420](https://github.com/ReviewStage/vespin/pull/6420),
-[#6422](https://github.com/ReviewStage/vespin/pull/6422),
-[#6429](https://github.com/ReviewStage/vespin/pull/6429),
-[#6431](https://github.com/ReviewStage/vespin/pull/6431),
-[#6438](https://github.com/ReviewStage/vespin/pull/6438),
-[#6442](https://github.com/ReviewStage/vespin/pull/6442),
-[#6443](https://github.com/ReviewStage/vespin/pull/6443),
-[#6446](https://github.com/ReviewStage/vespin/pull/6446),
-[#6463](https://github.com/ReviewStage/vespin/pull/6463),
-[#6469](https://github.com/ReviewStage/vespin/pull/6469))
-
-![A mockup of acme's Slack: Vespin's DM holds yesterday's notice that #231 is ready for review, a to-do rewritten "Answered in Vespin", and the Invite emails agent's question of how long an invite link should last, with a button for 24 hours, 7 days in green as recommended, 30 days, and Open in Vespin; beside it, a #relay-eng thread where Vespin answers Dean's @Vespin with "On it in acme/relay" and later reports the change on #219.](apps/web/public/changelog/0.25.0/vespin-in-slack.png)
 
 ### Improvements
 
@@ -2390,8 +2334,6 @@ back in the thread.
   [#6412](https://github.com/ReviewStage/vespin/pull/6412))
 - Fixed links in automation Inbox items navigating away
   ([#6379](https://github.com/ReviewStage/vespin/pull/6379))
-- Fixed raw Markdown in Slack and Slack buttons sometimes failing
-  ([#6463](https://github.com/ReviewStage/vespin/pull/6463))
 - Fixed disconnecting an integration's only account not saying what's removed
   ([#6179](https://github.com/ReviewStage/vespin/pull/6179))
 

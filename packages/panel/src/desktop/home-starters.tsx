@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DRAFT_PLACE, useDraftWriter } from "../composer-drafts.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { repositoryListsQuery } from "../live-reads.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useTaskCountUpTo } from "../task-list-collections.js";
 import { useRepositoryMend } from "../tasks/no-repositories-banner.js";
 import { useNewTaskRunsOn } from "../tasks/runs-on.js";
 import {
@@ -64,7 +64,8 @@ export function HomeStarters({
   onFilled: () => void;
 }): React.JSX.Element | null {
   const { workspaceId, devices } = tasks.newTask;
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  // Note that only how many tasks the workspace holds is read, up to where the starters go, so no change to a task row draws them.
+  const held = useTaskCountUpTo(tasks.workspace?.id, STARTER_BOUNDS.UNTIL_TASKS);
   const repositories = useQuery(repositoryListsQuery(workspaceId)).data?.repositories;
   const mend = useRepositoryMend(tasks.newTask.repositoriesIn(workspaceId));
   const offered = devices ?? [];
@@ -74,7 +75,7 @@ export function HomeStarters({
 
   if (!tasks.signedIn || !tasks.listRead || workspaceId === undefined) return null;
 
-  if (listed.length >= STARTER_BOUNDS.UNTIL_TASKS) return null;
+  if (held >= STARTER_BOUNDS.UNTIL_TASKS) return null;
 
   const starters = startersFor({
     repository: (repositories?.length ?? 0) > 0,

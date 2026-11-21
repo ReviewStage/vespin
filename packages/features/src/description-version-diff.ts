@@ -243,6 +243,8 @@ function unitsAgainst(
 
 /** The reference definitions a description holds, as written, one to a line; none where it holds none. */
 function definitionsOf(body: string): string {
+  // Note that a body with no `]:` holds no definition, since each closes its label with it, so a long description's tree, most of the diff's cost, is built only where one may stand.
+  if (!body.includes("]:")) return "";
   const found: string[] = [];
 
   const walk = (node: Nodes) => {

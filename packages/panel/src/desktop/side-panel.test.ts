@@ -19,7 +19,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl, SidePanelTab } from "../tasks/use-side-panel.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, tasksControl } from "../testing/tasks-control.js";
 import {
   ActivityList,
   changesOffers,
@@ -67,7 +67,7 @@ function agents(): AgentsControl {
   const shared = pullRequest(41, "Teammate invitations");
 
   return {
-    ...tasksControl().agents,
+    ...agentsControl(),
     agents: [FIRST, SECOND, THIRD],
     agentIds: [FIRST.id, SECOND.id, THIRD.id],
     pullRequests: new Map([

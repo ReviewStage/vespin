@@ -67,8 +67,9 @@ export type BarMenuAction = {
   readonly onPress: () => void;
 };
 
-/** One group of a menu's acts, set apart from the rest by the system's rule, as Mail's ⋯ groups Reply apart from Move: its acts, then the menus within it. */
+/** One group of a menu's acts, set apart from the rest by the system's rule, as Mail's ⋯ groups Reply apart from Move: its switches, such as a list's Show sub-tasks, checked as the system checks them, then its acts, then the menus within it. */
 export type BarMenuGroup = {
+  readonly choices?: readonly MenuChoice[] | undefined;
   readonly actions: readonly BarMenuAction[];
   readonly submenus?: readonly BarMenu[] | undefined;
 };
@@ -107,8 +108,9 @@ export type BarPath = {
 };
 
 /**
- * What a column's bar holds: its title, small and inline as every screen's
- * stands, which the back button and the reader name it by; what leads it
+ * What a column's bar holds: its title, large under the list's bar as a tab
+ * root's stands and leading the detail's, which the back button and the
+ * reader name it by; what leads it
  * (a SwiftUI view such as the workspace switcher), a page's path in its
  * middle, its menu and its act at its trailing edge, such as Select mode's
  * Done, a search field over its list, and the acts at its foot, in its
@@ -150,15 +152,25 @@ type SplitViewProps = {
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
 
-/** What a group is told apart by, since it has no name of its own: the words of its first act, or of its first menu. */
+/** What a group is told apart by, since it has no name of its own: the words of its first act, of its first menu, or of its first switch. */
 export function groupKey(group: BarMenuGroup): string {
-  return group.actions[0]?.label ?? group.submenus?.[0]?.label ?? "";
+  return group.actions[0]?.label ?? group.submenus?.[0]?.label ?? group.choices?.[0]?.label ?? "";
 }
 
-/** A menu's acts and the menus within it, as SwiftUI's buttons and menus. */
+/** A menu's switches, acts, and the menus within it, as SwiftUI's toggles, buttons, and menus. */
 function MenuActs({ group }: { readonly group: BarMenuGroup }) {
+  const colors = useColors();
+
   return (
     <>
+      {(group.choices ?? []).map((choice) => (
+        <Toggle
+          key={choice.id ?? choice.label}
+          {...choiceContent(choice, colors)}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
       {group.actions.map((action) => (
         <SwiftUIButton
           key={action.label}
@@ -209,7 +221,7 @@ export const BarMenuButton = memo(function BarMenuButton({
         />
       ))}
       {menu.actions.length === 0 ? null : <Divider />}
-      <MenuActs group={menu} />
+      <MenuActs group={{ actions: menu.actions, submenus: menu.submenus }} />
       {(menu.groups ?? []).map((group) => (
         <Fragment key={groupKey(group)}>
           <Divider />
@@ -261,15 +273,23 @@ export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMen
   const barred = new Set(acts.map((act) => act.label));
 
   const kept = (group: BarMenuGroup): BarMenuGroup => ({
+    choices: group.choices,
     actions: group.actions.filter((action) => !barred.has(action.label)),
     submenus: group.submenus?.filter((submenu) => !barred.has(submenu.label)),
   });
 
   const groups = menu.groups
     ?.map(kept)
-    .filter((group) => group.actions.length > 0 || (group.submenus ?? []).length > 0);
+    .filter(
+      (group) =>
+        group.actions.length > 0 ||
+        (group.submenus ?? []).length > 0 ||
+        (group.choices ?? []).length > 0,
+    );
 
-  return { ...menu, ...kept(menu), groups };
+  const { actions, submenus } = kept(menu);
+
+  return { ...menu, actions, submenus, groups };
 }
 
 /**
@@ -334,12 +354,9 @@ function Column({
         // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
         background(colors.GROUND),
-        // Note that the list keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        // Note that the list stands its title large under its bar, collapsing into it as the list scrolls, as Mail's list column does, rather than leading the bar (`inlineLarge`), because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
-          ? [
-              navigationTitle(bar.title),
-              toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
-            ]
+          ? [navigationTitle(bar.title), toolbarTitleDisplayMode(sidebar ? "large" : "inlineLarge")]
           : [toolbarTitleDisplayMode("inline")]),
       ]}
     >

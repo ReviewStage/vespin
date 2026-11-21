@@ -32,6 +32,7 @@ import {
   agentsControl,
   NO_REPOSITORIES,
   newTaskControl,
+  taskAgentsOf,
   tasksControl,
 } from "../testing/tasks-control.js";
 
@@ -144,37 +145,39 @@ async function mountSidebar(
   const tasks = tasksControl({
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    liveAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
+    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
     agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
-    agents: agentsControl({
-      rename: {
-        ...AGENT_RENAME_TERMS,
-        options: agentRenameMutation((asked) => {
-          renamed.push(asked);
+    agents: taskAgentsOf(
+      agentsControl({
+        rename: {
+          ...AGENT_RENAME_TERMS,
+          options: agentRenameMutation((asked) => {
+            renamed.push(asked);
 
-          return Promise.resolve({ agent: { ...MANAGER, title: asked.title } });
-        }),
-      },
-      models: [
-        {
-          id: MANAGER.model,
-          name: "Claude Opus 5.5",
-          provider: MODEL_PROVIDER.ANTHROPIC,
-          efforts: ["high"],
+            return Promise.resolve({ agent: { ...MANAGER, title: asked.title } });
+          }),
         },
-        {
-          id: SONNET,
-          name: "Claude Sonnet 5.5",
-          provider: MODEL_PROVIDER.ANTHROPIC,
-          efforts: ["high"],
-        },
-      ],
-      onChoose: (agentId, choice) => {
-        chosen.push({ agentId, model: choice.model });
+        models: [
+          {
+            id: MANAGER.model,
+            name: "Claude Opus 5.5",
+            provider: MODEL_PROVIDER.ANTHROPIC,
+            efforts: ["high"],
+          },
+          {
+            id: SONNET,
+            name: "Claude Sonnet 5.5",
+            provider: MODEL_PROVIDER.ANTHROPIC,
+            efforts: ["high"],
+          },
+        ],
+        onChoose: (agentId, choice) => {
+          chosen.push({ agentId, model: choice.model });
 
-        return Promise.resolve({ agent: { ...MANAGER, model: choice.model } });
-      },
-    }),
+          return Promise.resolve({ agent: { ...MANAGER, model: choice.model } });
+        },
+      }),
+    ),
   });
 
   const container = document.body.appendChild(document.createElement("div"));

@@ -35,6 +35,8 @@ import {
   type HeldAct,
   MessageMenu,
   MessageWords,
+  PictureOriginProvider,
+  PictureSetProvider,
   TurnActs,
   useCopyWords,
 } from "./held-menu.js";
@@ -62,9 +64,13 @@ import {
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
+import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
 /** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
+/** Who the reader's own line is from, as a picture's viewer names it. */
+const SENT_BY_YOU = "You";
+
 const RUN_GAP = 1;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
@@ -151,6 +157,7 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  undelivered: { alignSelf: "flex-end", paddingTop: SPACE.TIGHT },
   // Note that a line anyone but the reader sent stands at the column's leading edge, its pictures, files and bubble with it, as the panel stands a received line at its left.
   received: { alignItems: "flex-start" },
   // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
@@ -211,6 +218,39 @@ function fromEnd({
 /** An item's key in the list: its place, written out whole, since the list keys each row by a string. */
 function itemKey(item: TranscriptItem): string {
   return JSON.stringify(item.place satisfies TranscriptPlace);
+}
+
+/** The message id of the reader's own newest line, a line on its way among them; none where they sent none. */
+function newestOwnLine(items: readonly TranscriptItem[]): string | undefined {
+  return items.findLast((item) => item.kind === TRANSCRIPT_ITEM.SAID && !item.received)?.place
+    .message;
+}
+
+/**
+ * Tells `onSent` each time a line of the reader's own lands as the
+ * transcript's newest, as a send of theirs does: never for the lines the
+ * transcript opens on or reads in later, nor for an older line of theirs
+ * becoming the newest again once a refused one is deleted.
+ */
+function useOwnSend(items: readonly TranscriptItem[], onSent: () => void): void {
+  const newest = newestOwnLine(items);
+  const hasRows = items.length > 0;
+  // The reader's lines already seen, and whether the list stood rows when it last looked, so the lines it opens on never count as sent.
+  const seen = useRef(new Set(newest === undefined ? [] : [newest]));
+  const stood = useRef(hasRows);
+  const told = useRef(onSent);
+  useEffect(() => {
+    told.current = onSent;
+  }, [onSent]);
+
+  useEffect(() => {
+    const sent = newest !== undefined && stood.current && !seen.current.has(newest);
+
+    if (newest !== undefined) seen.current.add(newest);
+    stood.current = hasRows;
+
+    if (sent) told.current();
+  }, [newest, hasRows]);
 }
 
 type InsetResult = { readonly paddingLeft: number };
@@ -332,20 +372,34 @@ function CallGlyph({
   );
 }
 
-/** A call's row: its kind's glyph, its verb in the full ink, what it was done to in the muted one, where it ran, and where it stands; pressed, it opens on its body. */
+/** The VoiceOver action a call's row offers to open the thread its chip names, since the chip stands inside the row's one element. */
+const OPEN_THREAD_ACTION = { name: "openThread", label: "Open thread" } as const;
+
+/**
+ * A call's row: its kind's glyph, its verb in the full ink, what it was
+ * done to in the muted one, where it ran, and where it stands; pressed, it
+ * opens on its body. A call about one Inbox thread, such as a post, names
+ * it by its chip, whose press alone opens the thread, as the panel's chip
+ * does, and VoiceOver offers the same as one of the row's actions.
+ */
 function CallRow({
   item,
   held,
   onToggle,
+  onOpenThread,
   placeCall,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>;
   /** The answer the agent holds the call for, where it does. */
   readonly held: HeldCall | undefined;
   readonly onToggle: (item: TranscriptItem) => void;
+  readonly onOpenThread: ((threadId: string) => void) | undefined;
   readonly placeCall: ((callId: string, row: HostInstance | null) => void) | undefined;
 }) {
-  const { callId } = item;
+  const { callId, thread } = item;
+
+  const openThread =
+    thread === undefined || onOpenThread === undefined ? undefined : () => onOpenThread(thread);
 
   // Note that the row hands the transcript its press, so a reader sent to this call lands on it once the list has scrolled it into view.
   const press = useCallback(
@@ -375,6 +429,10 @@ function CallRow({
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
         accessibilityHint={CALL_HINT}
+        accessibilityActions={openThread === undefined ? undefined : [OPEN_THREAD_ACTION]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === OPEN_THREAD_ACTION.name) openThread?.();
+        }}
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
@@ -392,7 +450,9 @@ function CallRow({
             {line.verb}
           </Text>
           {chip === undefined ? null : (
-            <View
+            <Press
+              disabled={openThread === undefined}
+              onPress={openThread}
               style={[
                 styles.chip,
                 { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
@@ -404,7 +464,7 @@ function CallRow({
               >
                 {chip}
               </Text>
-            </View>
+            </Press>
           )}
           {subject === undefined || item.open ? null : (
             <Text
@@ -605,6 +665,19 @@ function FoldRow({
   );
 }
 
+/** The mark a line of the reader's that did not go stands under its bubble at the column's trailing edge, as Messages marks one; nothing for a line that went. */
+function UndeliveredUnder({ line }: { readonly line: UndeliveredLine | undefined }) {
+  if (line === undefined) return null;
+
+  return (
+    <View style={styles.undelivered}>
+      <InlineHost matchContents>
+        <UndeliveredMark line={line} />
+      </InlineHost>
+    </View>
+  );
+}
+
 /** What drawing the list's rows needs beyond the rows. */
 interface RowDrawing {
   readonly repository: string | null | undefined;
@@ -634,6 +707,8 @@ interface RowDrawing {
   readonly messageLink?: ((messageId: string) => string | undefined) | undefined;
   /** What a sent line's long press or a finished turn's ⋯ offers past copying and sharing it, in the panel's order, such as Edit, Rewind conversation to here, and Fork to new agent; none where messages offer nothing more. */
   readonly messageMore?: ((item: MessageItem) => readonly HeldAct[]) | undefined;
+  /** Opens an Inbox thread by its id, as a press on a call's thread chip asks; none where the app opens no thread from here. */
+  readonly onOpenThread?: ((threadId: string) => void) | undefined;
   /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
@@ -646,6 +721,8 @@ interface RowDrawing {
     | undefined;
   /** Hands the transcript a call's row as it stands and as it goes, so a reader sent to the call lands on it. */
   readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
+  /** That a line of the reader's did not go, by the id it is drawn under, with what mends it; none for a line that went. */
+  readonly undelivered?: ((lineId: string) => UndeliveredLine | undefined) | undefined;
 }
 
 /** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
@@ -761,16 +838,19 @@ function TranscriptRow({
             </Text>
           )}
           {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
-          <PictureSet
-            atEnd={!item.received}
-            pictures={(item.pictures ?? []).map((picture) => ({
-              key: picture.key,
-              source: picture.url ?? saidSource(drawing, picture.pictureId),
-              alt: picture.name,
-              onRetry:
-                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
-            }))}
-          />
+          {/* Note that a line's pictures name who sent it and when in their viewer's bar, the reader's own as theirs. */}
+          <PictureOriginProvider origin={{ by: item.sender ?? SENT_BY_YOU, at: item.at }}>
+            <PictureSet
+              atEnd={!item.received}
+              pictures={(item.pictures ?? []).map((picture) => ({
+                key: picture.key,
+                source: picture.url ?? saidSource(drawing, picture.pictureId),
+                alt: picture.name,
+                onRetry:
+                  picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+              }))}
+            />
+          </PictureOriginProvider>
           {/* Note that the other files a line carried, such as a PDF, stand under its pictures as their chips, as the panel stands a message's files over its bubble. */}
           {(item.files ?? []).map((file) => (
             <FileChip
@@ -812,6 +892,7 @@ function TranscriptRow({
             </MessageMenu>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
+          <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:
@@ -868,6 +949,7 @@ function TranscriptRow({
           item={item}
           held={drawing.heldCall?.(item.callId)}
           onToggle={drawing.onToggle}
+          onOpenThread={drawing.onOpenThread}
           placeCall={drawing.placeCall}
         />
       );
@@ -1122,9 +1204,10 @@ const REVEAL_POSITION = 0.35;
  * since SwiftUI has no piece for its rows: FlashList's own chat list, which
  * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
  * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
- * while one that lands as they read back holds their place; a reader scrolled
- * back is offered Jump to latest. Only the rows near the screen are drawn,
- * however long the transcript runs.
+ * while one that lands as they read back holds their place; a line the reader
+ * sends brings it into view wherever they stood, just over the composer's
+ * stack, as Messages' does; a reader scrolled back is offered Jump to latest.
+ * Only the rows near the screen are drawn, however long the transcript runs.
  */
 export function AgentTranscript({
   items,
@@ -1154,6 +1237,8 @@ export function AgentTranscript({
   const list = useRef<FlashListRef<TranscriptItem>>(null);
   // Whether the reader stands at the newest row, which the keyboard's rise keeps in view; it opens there.
   const anchored = useRef(true);
+  // Whether the list keeps its end in view each time its content grows, since the reader sent a line and has neither scrolled nor opened a row since.
+  const following = useRef(false);
   const [away, setAway] = useState(false);
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
@@ -1194,7 +1279,18 @@ export function AgentTranscript({
     [focusSentTo],
   );
 
-  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), column, placeCall };
+  // Note that a row the reader opens lets the end go, so the call or fold they opened stays where they pressed it rather than scrolling away under the body it opens.
+  const rowDrawing: RowDrawing = {
+    ...drawing,
+    now: now ?? Date.now(),
+    column,
+    placeCall,
+    onToggle: (item) => {
+      following.current = false;
+      drawing.onToggle(item);
+    },
+  };
+
   // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
   const measured = width > 0;
   const hasRows = items.length > 0;
@@ -1206,9 +1302,21 @@ export function AgentTranscript({
   // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
   const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
+  // Note that a line the reader sends brings the end into view, wherever they stood, as Messages' does, and holds it there as the line's row is measured, takes its Not delivered mark, and the composer's stack changes under it, which FlashList's own autoscroll leaves behind the stack: it scrolls once as the row lands, before the row is measured, and skips a growth that follows a scroll within 100 ms.
+  useOwnSend(items, () => {
+    anchored.current = true;
+    following.current = true;
+    list.current?.scrollToEnd({ animated: !reduceMotion });
+  });
+
+  const onContentSize = useCallback(() => {
+    if (following.current && anchored.current) list.current?.scrollToEnd({ animated: false });
+  }, []);
+
   // Note that only the reader's own scroll moves the anchor, never the list's own: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
+    following.current = false;
   }, []);
 
   // The older pages as they stand now, which the scroll reads without being made anew for each.
@@ -1290,8 +1398,11 @@ export function AgentTranscript({
           data={items}
           keyExtractor={itemKey}
           // Note that each row is keyed by its item, so a cell FlashList recycles for another item mounts that item's row afresh rather than keeping the last one's state, such as a fold left open or a picture's measured size.
+          // Note that each row's pictures are one set its viewer swipes through, a message's or a showing's own, since rows scrolled away are drawn no longer.
           renderItem={({ item }) => (
-            <TranscriptRow key={itemKey(item)} item={item} drawing={rowDrawing} />
+            <PictureSetProvider key={itemKey(item)}>
+              <TranscriptRow item={item} drawing={rowDrawing} />
+            </PictureSetProvider>
           )}
           ListHeaderComponent={
             <>
@@ -1330,6 +1441,7 @@ export function AgentTranscript({
           keyboardDismissMode="interactive"
           onScroll={onScroll}
           onScrollBeginDrag={onScrollBegin}
+          onContentSizeChange={onContentSize}
           onScrollEndDrag={onDragEnd}
           onMomentumScrollEnd={(event) => {
             onScrollSettled(event);

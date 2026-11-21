@@ -27,6 +27,13 @@ import {
   sentStamp,
 } from "@repo/features/inbox-list-model";
 import {
+  filesLost,
+  UNDELIVERED_FILES_LOST,
+  UNDELIVERED_WORDS,
+  UNHEARD_UNDELIVERED,
+  type UndeliveredReply,
+} from "@repo/features/inbox-undelivered";
+import {
   fieldValueWords,
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -160,7 +167,6 @@ import {
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
-import { filesLost, UNHEARD_UNDELIVERED, type UndeliveredReply } from "./inbox-undelivered.js";
 import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
@@ -473,18 +479,6 @@ function PendingReply({
   );
 }
 
-/** What a reply that did not go says at its head's end, and its mark's acts. */
-/** What a reply's mark says where a relaunch took the files it went with. */
-const FILES_LOST = "Its files didn't survive a relaunch. Edit to attach them again, then send it.";
-
-const UNDELIVERED_WORDS = {
-  NOT_DELIVERED: "Not delivered",
-  RETRY: "Retry",
-  EDIT: "Edit",
-  DELETE: "Delete",
-  NEW_THREAD: "New thread",
-} as const;
-
 /** What a reply that did not go is pressed through: Retry, Edit, and Delete on it alone; no Retry for a thread's start where the page starts none. */
 interface UndeliveredDoors {
   /** None where a relaunch took the reply's files, which Edit attaches again. */
@@ -545,7 +539,7 @@ function UndeliveredReplyRow({
           </Text>
           <MessageFailedMark
             label={UNDELIVERED_WORDS.NOT_DELIVERED}
-            reason={filesLost(reply) ? FILES_LOST : reply.why}
+            reason={filesLost(reply) ? UNDELIVERED_FILES_LOST : reply.why}
             replayUnmasked
             groups={[
               [

@@ -135,11 +135,6 @@ export function keyedItem(
     );
 }
 
-/** What a line of threads none of which waits on the developer says: "1 thread", "4 threads". */
-export function threadsWords(count: number): string {
-  return count === 1 ? "1 thread" : `${count} threads`;
-}
-
 /**
  * Whether an open item main lists holds an ask open rather than being a
  * notice. One from a service before it, which says nothing, counts as

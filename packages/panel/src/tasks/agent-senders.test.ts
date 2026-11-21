@@ -29,6 +29,7 @@ import {
 } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ACTOR_KIND } from "@repo/ui/actor-model";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -292,6 +293,8 @@ async function drawnFor(
   before?: string,
 ): Promise<readonly Element[]> {
   const container = await drawTab(reader, opened, agent, messages, automations, hosted, before);
+  // The pointer comes onto the messages, as a reader's does to reach their actions.
+  pointAtTurns(container);
   const drawn = [...container.querySelectorAll(".is-user, .is-received")];
   assert.equal(drawn.length, messages.length);
 
@@ -557,8 +560,8 @@ function sent(callId: string, text: string): WireRecord {
   };
 }
 
-test("in a Manager's chat each person's line stands at the right, a teammate's named over their run once two people write, and each message the Manager sent stands at the left on a bubble of its own", async () => {
-  const manager: AgentSummary = { ...AGENT, kind: AGENT_KIND.MANAGER };
+test("in a Manager's chat the reader's line stands at the right, and a teammate's and the Manager's at the left, each named over their run, with each message the Manager sent on a bubble of its own", async () => {
+  const manager: AgentSummary = { ...AGENT, kind: AGENT_KIND.MANAGER, title: "Iris" };
 
   const chat: readonly AgentTranscriptMessage[] = [
     { ...line("dean", "Ship the invite flow.", { ...DEAN, kind: MEMBER }), sentAt: 1_000 },
@@ -582,14 +585,14 @@ test("in a Manager's chat each person's line stands at the right, a teammate's n
   const drawn = [...container.querySelectorAll(".is-user, .is-received")].map((message) => [
     message.classList.contains("is-user") ? "right" : "left",
     message.querySelector(".ui-chat-bubble")?.textContent ?? "",
-    message.querySelector(`${SENDER} .ui-inline-ref-label`)?.textContent ?? null,
+    message.querySelector(".ui-message-head-sender")?.textContent?.trim() ?? null,
   ]);
 
   assert.deepEqual(drawn.slice(-5), [
     ["right", "Ship the invite flow.", null],
-    ["right", "Seven days.", CHARLES.name],
-    ["right", "Not five.", null],
-    ["left", "On it.", null],
+    ["left", "Seven days.", CHARLES.name],
+    ["left", "Not five.", null],
+    ["left", "On it.", "Iris"],
     ["left", "Seven days it is.", null],
   ]);
 });

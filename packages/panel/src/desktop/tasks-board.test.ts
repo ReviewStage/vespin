@@ -10,16 +10,16 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
-import { ACT_KIND } from "@repo/host/acts";
-import { CARD_PRESS_SELECTOR, CHIP_LOOK } from "@repo/ui";
 import {
   COMPLETED_WINDOW,
   DEFAULT_BOARD_DISPLAY,
   NO_TASKS_FILTER,
   TASKS_GROUPING,
   type TasksDisplay,
-} from "@repo/ui/tasks-page-model";
+} from "@repo/features/tasks-page-model";
+import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
+import { CARD_PRESS_SELECTOR, CHIP_LOOK } from "@repo/ui";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";

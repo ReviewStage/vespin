@@ -15,6 +15,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   TaskListCollectionsProvider,
   useNamedTask,
+  useSteppedTasks,
   useTaskListRows,
 } from "./task-list-collections.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
@@ -149,7 +150,7 @@ async function readingById(
       }),
     ),
   );
-  // Note that the lookup follows the ids it was asked once committed, which the live query then answers.
+  // Note that the lookup follows the ids it was asked once committed.
   await act(async () => {
     for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
   });
@@ -272,5 +273,54 @@ describe("a surface reading the task list by id", () => {
 
     expect(read().named?.name).toBe("Invites, typed");
     expect(read().looked?.name).toBe("Invites, typed");
+  });
+});
+
+describe("a surface reading the tasks an address's step names", () => {
+  it("finds the tasks the number names as deliveries number them, and holds them across a delivery moving another task", async () => {
+    const first = documentAt(1, { ...LISTED, tasks: [{ ...INVITES, number: 7 }, BILLING, SEARCH] });
+    const { window, push } = await following(first);
+    stops.push(window.stop);
+    let stepped: readonly TaskSummary[] = [];
+
+    function Surface(): null {
+      stepped = useSteppedTasks("7");
+
+      return null;
+    }
+
+    const root = createRoot(document.body.appendChild(document.createElement("div")));
+    act(() =>
+      root.render(
+        createElement(TaskListCollectionsProvider, {
+          collections: window.taskList,
+          children: createElement(Surface),
+        }),
+      ),
+    );
+    stops.push(() => act(() => root.unmount()));
+    expect(stepped.map((each) => each.id)).toEqual([INVITES.id]);
+    const held = stepped;
+
+    const searchRenamed = documentAt(2, {
+      ...first.tasks,
+      tasks: [{ ...INVITES, number: 7 }, BILLING, { ...SEARCH, name: "Search" }],
+    });
+
+    await act(async () => push(deliveryBetween(first, searchRenamed)));
+    expect(stepped).toBe(held);
+
+    // Note that the number moves from one task to another in one delivery, as a task moved to another workspace takes a new one.
+    const renumbered = documentAt(3, {
+      ...first.tasks,
+      tasks: [
+        { ...INVITES, number: 8 },
+        { ...BILLING, number: 7 },
+        { ...SEARCH, name: "Search" },
+      ],
+    });
+
+    await act(async () => push(deliveryBetween(searchRenamed, renumbered)));
+    expect(stepped.map((each) => each.id)).toEqual([BILLING.id]);
   });
 });

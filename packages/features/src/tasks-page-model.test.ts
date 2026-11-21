@@ -1,3 +1,4 @@
+import { expect, test } from "vitest";
 import {
   DESCRIPTION_ACTOR,
   TASK_PRIORITY,
@@ -5,8 +6,7 @@ import {
   type TaskPriority,
   type TaskStatus,
   type TaskSummary,
-} from "@repo/features/task-wire";
-import { expect, test } from "vitest";
+} from "./task-wire.js";
 import {
   COMPLETED_WINDOW,
   clearedField,

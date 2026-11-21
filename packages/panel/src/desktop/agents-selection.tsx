@@ -118,7 +118,7 @@ export interface AgentsSelection {
  */
 export function useAgentsSelection(
   agents: AgentsControl,
-  listed: readonly AgentSummary[],
+  listed: readonly Pick<AgentSummary, "id" | "status" | "archivedAt" | "startedBy">[],
   shown: boolean,
 ): AgentsSelection {
   const toast = useToast();

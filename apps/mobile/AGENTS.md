@@ -179,12 +179,12 @@ a thread's file read, a reply or a resolve, an agent's message, queue
 change, Stop, change of model, permission mode, or MCP servers, rename, pin,
 or archive, its task's skills, or a New agent or New task start, answered by the fixture,
 the models and repositories those sheets pick among staged, the
-migration's approval refused so a flow sees a refused answer taken back
+migration's approval unanswered so a flow sees an answer standing Not delivered
 (`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
 flows run with no server. A change to one of the fixture agent's pull
 requests is taken as GitHub would take it and moves it on the document,
-merged or out of the queue (`pullRequestPartsAppState`), so a flow sees its
-press land. A `-authServer stub` launch argument
+merged, out of the queue, closed, reopened, or a draft
+(`pullRequestPartsAppState`), so a flow sees its press land. A `-authServer stub` launch argument
 instead signs in against an account service the app answers itself
 (`src/host/stub-auth-server.ts`), whose authorization page grants at once,
 which is how `maestro/sign-in.yaml` signs in, relaunches signed in, and
@@ -257,7 +257,9 @@ What `@expo/ui` has no modifier for, drag and drop, is the app's own native modu
 screen names one. A row drags out as its vespin.dev link, a task's onto a
 group's header in the Tasks list, or onto Pinned or a section in the iPad's sidebar, moves it there, and pictures dropped on
 an agent's composer or a sheet that starts work are kept as JPEGs and
-attached. A view handed a modifier the build does not register draws as it
+attached. A list hands its scroll view to the native stack's bar
+(`stackScrollEdge`), which UIKit never finds inside a `Host`'s hosting
+controller, so a tab root's large title collapses as the list scrolls. A view handed a modifier the build does not register draws as it
 would without it. A pointer's hover is the system's own on each button, with
 none added, since an added highlight drew a second platter of glass over a
 button's own on iPadOS 26. No Maestro flow can drag or hover, so these are

@@ -5,18 +5,17 @@ import {
   type AgentPullRequestViewedAnswerView,
   type AgentPullRequestWriteAnswerView,
 } from "@repo/features/agent-view";
-import {
-  type AgentPullRequest,
-  PULL_REQUEST_STATE,
-  type PullRequestState,
-} from "@repo/features/agent-wire";
+import { type AgentPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { saidWords } from "@repo/features/integration-health";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  CLOSE_WORDS,
+  PULL_REQUEST_STATE_ACTION_WORDS,
   PULL_REQUEST_STATE_LABEL,
   PULL_REQUEST_WRITE_WORDS,
-  QUEUE_WARNING,
+  type PullRequestStateAction,
+  pullRequestStateActions,
   queuedLabel,
 } from "@repo/features/pull-request-model";
 import {
@@ -123,8 +122,10 @@ import { useOpenWorkspaceGitHub } from "./repository-remedy.js";
 
 /** What each change says on the menu, and while it is out. */
 const ACTION_WORDS = {
-  [PULL_REQUEST_ACTION.READY_FOR_REVIEW]: "Ready for review",
-  [PULL_REQUEST_ACTION.CONVERT_TO_DRAFT]: "Convert to draft",
+  [PULL_REQUEST_ACTION.READY_FOR_REVIEW]:
+    PULL_REQUEST_STATE_ACTION_WORDS[PULL_REQUEST_ACTION.READY_FOR_REVIEW],
+  [PULL_REQUEST_ACTION.CONVERT_TO_DRAFT]:
+    PULL_REQUEST_STATE_ACTION_WORDS[PULL_REQUEST_ACTION.CONVERT_TO_DRAFT],
   [PULL_REQUEST_ACTION.SUBMIT_REVIEW]: "Submit review",
   [PULL_REQUEST_ACTION.REPLY_TO_THREAD]: "Reply",
   [PULL_REQUEST_ACTION.RESOLVE_THREAD]: "Resolve conversation",
@@ -140,8 +141,8 @@ const ACTION_WORDS = {
   [PULL_REQUEST_ACTION.DISCARD_REVIEW]: "Discard review",
   [PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT]: "Edit pending comment",
   [PULL_REQUEST_ACTION.DELETE_REVIEW_COMMENT]: "Delete pending comment",
-  [PULL_REQUEST_ACTION.CLOSE]: "Close pull request",
-  [PULL_REQUEST_ACTION.REOPEN]: "Reopen pull request",
+  [PULL_REQUEST_ACTION.CLOSE]: PULL_REQUEST_STATE_ACTION_WORDS[PULL_REQUEST_ACTION.CLOSE],
+  [PULL_REQUEST_ACTION.REOPEN]: PULL_REQUEST_STATE_ACTION_WORDS[PULL_REQUEST_ACTION.REOPEN],
   [PULL_REQUEST_ACTION.EDIT_TITLE]: "Edit title",
   [PULL_REQUEST_ACTION.EDIT_DESCRIPTION]: "Edit description",
   [PULL_REQUEST_ACTION.REQUEST_REVIEW]: "Request review",
@@ -398,43 +399,20 @@ export function usePullRequestWrites(onWritten: ReadAgain): PullRequestWrites {
   return { pending, note, write, dismiss: reset, confirmAct };
 }
 
-/** The changes the pill's menu offers: where the pull request stands, never a review. */
-type StateAction =
-  | typeof PULL_REQUEST_ACTION.READY_FOR_REVIEW
-  | typeof PULL_REQUEST_ACTION.CONVERT_TO_DRAFT
-  | typeof PULL_REQUEST_ACTION.CLOSE
-  | typeof PULL_REQUEST_ACTION.REOPEN;
-
-/** The changes the pill's menu offers from where the pull request stands; one in the merge queue may be closed but not turned back to a draft, as on GitHub. */
-function actionsFrom(state: PullRequestState, queued: boolean): readonly StateAction[] {
-  if (queued && state === PULL_REQUEST_STATE.OPEN) return [PULL_REQUEST_ACTION.CLOSE];
-
-  switch (state) {
-    case PULL_REQUEST_STATE.DRAFT:
-      return [PULL_REQUEST_ACTION.READY_FOR_REVIEW, PULL_REQUEST_ACTION.CLOSE];
-    case PULL_REQUEST_STATE.OPEN:
-      return [PULL_REQUEST_ACTION.CONVERT_TO_DRAFT, PULL_REQUEST_ACTION.CLOSE];
-    case PULL_REQUEST_STATE.CLOSED:
-      return [PULL_REQUEST_ACTION.REOPEN];
-    case PULL_REQUEST_STATE.MERGED:
-      return [];
-  }
-}
-
 /** The glyph each change leads its item with. */
 const ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.READY_FOR_REVIEW]: <GitPullRequestIcon aria-hidden="true" />,
   [PULL_REQUEST_ACTION.CONVERT_TO_DRAFT]: <GitPullRequestDraftIcon aria-hidden="true" />,
   [PULL_REQUEST_ACTION.CLOSE]: <GitPullRequestClosedIcon aria-hidden="true" />,
   [PULL_REQUEST_ACTION.REOPEN]: <GitPullRequestIcon aria-hidden="true" />,
-} as const satisfies Record<StateAction, React.JSX.Element>;
+} as const satisfies Record<PullRequestStateAction, React.JSX.Element>;
 
 /** The question Close asks of a pull request in the merge queue, since reopening it does not queue it again. */
 const CLOSE_QUEUED_QUESTION: DialogQuestion = {
-  title: "Close this pull request?",
-  body: `Closing it takes it out of the merge queue, and reopening it does not queue it again. ${QUEUE_WARNING}`,
+  title: CLOSE_WORDS.QUESTION,
+  body: CLOSE_WORDS.QUEUED,
   verb: ACTION_WORDS[PULL_REQUEST_ACTION.CLOSE],
-  running: "Closing",
+  running: CLOSE_WORDS.RUNNING,
   loss: CONFIRM_LOSS.AFFECTS_OTHERS,
   replayUnmasked: true,
 };
@@ -442,17 +420,11 @@ const CLOSE_QUEUED_QUESTION: DialogQuestion = {
 /** The question Close asks of an open pull request whose place in the merge queue could not be read, since it may be in it. */
 const CLOSE_UNKNOWN_QUESTION: DialogQuestion = {
   ...CLOSE_QUEUED_QUESTION,
-  body: `Could not read whether this pull request is in the merge queue. If it is, closing it takes it out, and reopening it does not queue it again. ${QUEUE_WARNING}`,
+  body: CLOSE_WORDS.UNKNOWN,
 };
 
 /** What the pill's menu offers to open the Merge queue page on a queued pull request. */
 const VIEW_QUEUE_WORDS = "View merge queue";
-
-/** What the toast says once a pull request is closed, and its one way back. */
-const CLOSED_TOAST = {
-  WORDS: "Pull request closed",
-  REOPEN: "Reopen",
-} as const;
 
 /**
  * The pill saying where the pull request stands, its mark in its tone; a press
@@ -488,7 +460,7 @@ export function PullRequestStateMenu({
   const inQueue =
     queued !== null && queued !== undefined && pullRequest.state === PULL_REQUEST_STATE.OPEN;
 
-  const actions = actionsFrom(pullRequest.state, inQueue);
+  const actions = pullRequestStateActions(pullRequest.state, inQueue);
   const menu = useMenu(actions.length > 0);
   const toast = useToast();
   const withdrawToast = useWithdrawToast();
@@ -542,7 +514,7 @@ export function PullRequestStateMenu({
   }
 
   // Note that a Close that may leave the queue asks first, and every other change acts at once, a Close offering Reopen in a toast since it can be taken back.
-  const select = (action: StateAction) => {
+  const select = (action: PullRequestStateAction) => {
     if (action === PULL_REQUEST_ACTION.REOPEN) withdrawToast(toastSubject);
 
     if (action === PULL_REQUEST_ACTION.CLOSE && mayBeQueued) {
@@ -558,11 +530,11 @@ export function PullRequestStateMenu({
         ? () =>
             toast({
               replayUnmasked: true,
-              words: CLOSED_TOAST.WORDS,
+              words: CLOSE_WORDS.CLOSED,
               tone: STATUS_TONE.COMPLETE,
               subject: toastSubject,
               action: {
-                label: CLOSED_TOAST.REOPEN,
+                label: CLOSE_WORDS.REOPEN,
                 replayUnmasked: true,
                 onPress: () =>
                   void newestWrites.current.write({ action: PULL_REQUEST_ACTION.REOPEN }),

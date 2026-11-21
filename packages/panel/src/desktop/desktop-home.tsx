@@ -1,7 +1,5 @@
 import { type InboxListed, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { TASK_ORDER, taskTime } from "@repo/features/task-list-model";
-import type { TaskSummary } from "@repo/features/task-wire";
 import { TERM } from "@repo/features/words";
 import {
   Arrival,
@@ -23,7 +21,7 @@ import { unreadShown } from "../failure-report.js";
 import { useInboxOn } from "../inbox-on.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useRecentTasks } from "../task-list-collections.js";
 import { NOTICE_LOOK } from "../tasks/connect-agent-banner.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
@@ -125,13 +123,6 @@ function greeting(name: string | undefined, fresh: boolean): React.JSX.Element {
   );
 }
 
-/** The listed workspace's tasks with the latest activity, their own saves and their agents' alike. */
-function recentTasks(tasks: readonly TaskSummary[], room: ShellRoom): TaskSummary[] {
-  return tasks
-    .toSorted((a, b) => taskTime(b, TASK_ORDER.UPDATED) - taskTime(a, TASK_ORDER.UPDATED))
-    .slice(0, RECENT_COUNT[room]);
-}
-
 /**
  * Whether Home's sections are still arriving: while the task list is read,
  * and, where the page opened on a list still being read, until the Inbox's
@@ -213,9 +204,8 @@ function HomeRecent({
 }): React.JSX.Element | null {
   // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
   const unread = useUnreadTasks({ staged });
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
-  // Note that the list is sorted once per move of the tasks, so a render that moves none sorts nothing.
-  const recent = useMemo(() => recentTasks(listed, room), [listed, room]);
+  // Note that the read holds only each task's place among the latest, so a turn of an agent moving none of them draws no Recent but the row of its task (`RecentTasks`).
+  const recent = useRecentTasks(tasks.workspace?.id, RECENT_COUNT[room]);
 
   if (recent.length === 0 && !tasks.listFailed) return null;
 

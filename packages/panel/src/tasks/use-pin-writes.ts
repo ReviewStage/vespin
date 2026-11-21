@@ -32,10 +32,11 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { askKept, firstNotKept, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { useToast } from "../toast.js";
 import { pressRows, ROW_WRITE } from "../undo-stack.js";
 import {
@@ -187,7 +188,7 @@ function usePinViews(): PinViews {
 export function useSectionWrites(): PinWrites["onWriteSections"] {
   const toast = useToast();
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
-  const { mutateAsync: sendSections } = useMutation(actMutation(ACT_KIND.TASKS_WRITE_SECTION));
+  const { mutateAsync: sendSections } = useMutationCalls(actMutation(ACT_KIND.TASKS_WRITE_SECTION));
 
   return (writes) => {
     const [first, ...rest] = writes;
@@ -307,7 +308,7 @@ export function usePinWrites(typedNames: () => TaskNames): PinWrites {
   const sendTaskPin = taskPinDoors.send;
   const sendAgentPin = agentPinDoors.send;
 
-  const { mutateAsync: sendRepositoryPin } = useMutation(
+  const { mutateAsync: sendRepositoryPin } = useMutationCalls(
     actMutation(ACT_KIND.TASKS_PIN_REPOSITORY),
   );
 

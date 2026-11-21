@@ -16,6 +16,7 @@ import {
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure, remedyLabel } from "@repo/features/failure-remedy";
+import { chatReplyText } from "@repo/features/manager-chat";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DraftSuggestion, SuggestionSendResult } from "@repo/features/suggestion-model";
 import { STATUS_TONE } from "@repo/ui";
@@ -104,6 +105,12 @@ export type MessageUnsender = (agentId: string, lineId: string) => void;
 /** Why a message did not go, with the answer that said so, which the shown failure reports in its place. */
 export type ComposerNote = Failure & { readonly cause?: unknown };
 
+/** One of a Manager's messages a send answers, by its chat id, and its words, which the send quotes (`chatReplyText`). */
+export interface ChatReplyTarget {
+  readonly id: string;
+  readonly words: string;
+}
+
 /** Everything the composer draws and presses. */
 export interface AgentComposerControl {
   /** The words in the box and the files that go with them, in the order attached, as the box's draft keeps them. */
@@ -151,6 +158,8 @@ interface Held {
   turn: AgentTurn | undefined;
   /** The sends this tab made whose calls have not answered, by their keys, which hold the working line after their rows land and until their answers name the turn. */
   asking: ReadonlySet<string>;
+  /** The Manager's message the next send answers, which it quotes; none while the box answers none. */
+  replying: ChatReplyTarget | undefined;
 }
 
 /** A tab's composer as it opens on an agent: nothing of its own; what it sent stands in the host's record. */
@@ -164,6 +173,7 @@ function fresh(agentId: string): Held {
     revertFailed: undefined,
     turn: undefined,
     asking: NOTHING_ASKING,
+    replying: undefined,
   };
 }
 
@@ -303,6 +313,12 @@ export interface HeldComposer extends AgentComposerControl {
   readonly suggestion: DraftSuggestion | undefined;
   /** Lets the box's suggestion go, its words kept, so the box sends them as a line of the developer's own. */
   readonly dropSuggestion: () => void;
+  /** The Manager's message the next send answers, which the box names over itself; none while it answers none. */
+  readonly replyingTo: ChatReplyTarget | undefined;
+  /** Makes the next send a reply to one of the Manager's messages, in place of any it answered. */
+  readonly replyTo: (target: ChatReplyTarget) => void;
+  /** Lets the reply go, the box's words kept, so the next send answers nothing. */
+  readonly dropReply: () => void;
 }
 
 export function useAgentComposer(input: {
@@ -519,13 +535,18 @@ export function useAgentComposer(input: {
   const sendDraft = (clientKey: string = crypto.randomUUID()) => {
     const { lead, onLeadSent } = latest.current;
 
-    const text = [kept.draft.text.trim(), lead?.trim() ?? ""]
+    const words = [kept.draft.text.trim(), lead?.trim() ?? ""]
       .filter((each) => each !== "")
       .join("\n\n");
 
     const { attachments, suggestion } = kept.draft;
 
-    if (!hasWordsOrFiles(text, attachments) || closed !== undefined) return;
+    if (!hasWordsOrFiles(words, attachments) || closed !== undefined) return;
+    const { replying } = held;
+    // A reply sends the message it answers quoted over the words, and goes with the send.
+    const text = replying === undefined ? words : chatReplyText(replying.words, words).trim();
+
+    if (replying !== undefined) setHeld((was) => ({ ...was, replying: undefined }));
 
     if (suggestion !== undefined) {
       sendThroughSuggestion(suggestion, text, kept.draft, lead);
@@ -780,6 +801,9 @@ export function useAgentComposer(input: {
     unsent: { words: unsent.text, attachments: unsent.attachments },
     suggestion: closed === undefined ? kept.draft.suggestion : undefined,
     dropSuggestion: () => kept.update((was) => ({ ...was, suggestion: undefined })),
+    replyingTo: closed === undefined ? held.replying : undefined,
+    replyTo: (target) => setHeld((was) => ({ ...was, replying: target })),
+    dropReply: () => setHeld((was) => ({ ...was, replying: undefined })),
     editing: held.editing,
     edit: (messageId) => setHeld((was) => ({ ...was, editing: messageId })),
     dropEdit: () => setHeld((was) => ({ ...was, editing: undefined })),

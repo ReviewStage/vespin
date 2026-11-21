@@ -1,8 +1,13 @@
 import {
+  type MovedAgent,
+  moveDetail,
+  movePlaces,
+  TO_THE_CLOUD,
+} from "@repo/features/agent-move-model";
+import {
   AGENT_MACHINE,
   type AgentAttachment,
   type AgentRunsOnRequest,
-  type AgentSummary,
 } from "@repo/features/agent-wire";
 import { machineName } from "@repo/features/machine-name";
 import type { MacOffer } from "@repo/features/models-wire";
@@ -61,18 +66,8 @@ function useMoveAgentsOn(): boolean {
   );
 }
 
-/** What Move to says beyond the places' names. */
-const MOVE_WORDS = {
-  PUSHED_ONLY: "Only pushed work comes along",
-  STOPS_FIRST: "Stops the agent first",
-  STOPS_FIRST_PUSHED_ONLY: "Stops the agent first; only pushed work comes along",
-} as const;
-
 /** No devices, held steady for a member with none, or while the menu offers no move. */
 const NO_DEVICES: readonly MacOffer[] = [];
-
-/** The cloud, as a move names it. */
-const TO_THE_CLOUD: AgentRunsOnRequest = { machine: AGENT_MACHINE.VERCEL };
 
 /**
  * The agents a move is out for in this window, from its Stop to its
@@ -82,9 +77,6 @@ const TO_THE_CLOUD: AgentRunsOnRequest = { machine: AGENT_MACHINE.VERCEL };
  * shares it.
  */
 const MOVING = new Set<string>();
-
-/** The agent a move is offered on, as Move to reads it. */
-type MovedAgent = Pick<AgentSummary, "id" | "status" | "archivedAt" | "machine" | "mac">;
 
 /** What Move to reads of the control: where a continue could start, the agents it lists, the member's devices, the move, and the Stop a move of an agent still writing presses first. */
 type MoveDoors = Pick<
@@ -100,15 +92,6 @@ function useMoveOffered(agent: MovedAgent | undefined, agents: MoveDoors): boole
     agents.agents?.some((each) => each.id === agent.id) === true &&
     agent.archivedAt === undefined
   );
-}
-
-/** What each place says under its name: that the agent is stopped first while it writes, and that only pushed work comes along from a device; none where neither holds. */
-function placeDetail(agent: MovedAgent): string | undefined {
-  const pushedOnly = agent.machine === AGENT_MACHINE.DEVICE;
-
-  if (!agentStillWriting(agent.status)) return pushedOnly ? MOVE_WORDS.PUSHED_ONLY : undefined;
-
-  return pushedOnly ? MOVE_WORDS.STOPS_FIRST_PUSHED_ONLY : MOVE_WORDS.STOPS_FIRST;
 }
 
 /** A message a move carries on as the continued agent's first: one its own machine did not take. */
@@ -187,7 +170,7 @@ export interface PlaceMove {
   readonly moveTo: (runsOn: AgentRunsOnRequest) => void;
   /** Whether the agent runs on a device, so a move takes only what it pushed. */
   readonly pushedOnly: boolean;
-  /** What the chip's menu says under each place but the agent's own (`placeDetail`); none where it says nothing. */
+  /** What the chip's menu says under each place but the agent's own (`moveDetail`); none where it says nothing. */
   readonly detail: string | undefined;
 }
 
@@ -213,7 +196,7 @@ export function useMovePlace(
     devices: agents.macs ?? NO_DEVICES,
     moveTo: (runsOn) => void move(runsOn),
     pushedOnly: agent.machine === AGENT_MACHINE.DEVICE,
-    detail: placeDetail(agent),
+    detail: moveDetail(agent),
   };
 }
 
@@ -227,12 +210,12 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
   const thisMac = useThisMac();
 
   if (!offered) return undefined;
-  const local = agent.machine === AGENT_MACHINE.DEVICE;
-  const said = placeDetail(agent);
+  const said = moveDetail(agent);
   const move = movedInPlace(agent, agents);
   const moveTo = (runsOn: AgentRunsOnRequest) => () => void move(runsOn);
+  const places = movePlaces(agent, devices);
 
-  const cloud: MenuAction[] = local
+  const cloud: MenuAction[] = places.cloud
     ? [
         {
           label: RUNS_ON_WORDS.CLOUD,
@@ -243,16 +226,9 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
       ]
     : [];
 
-  // Note that a local agent whose device the service did not name is offered the cloud alone, because
-  // any of the devices listed may be the one it runs on.
-  const here = local ? agent.mac?.deviceId : undefined;
-
-  const elsewhere =
-    local && here === undefined ? NO_DEVICES : devices.filter((each) => each.deviceId !== here);
-
   const items = [
     ...cloud,
-    ...elsewhere.map((device): MenuAction => {
+    ...places.devices.map((device): MenuAction => {
       const { icon, unready } = deviceMark(device, book);
 
       return {

@@ -25,7 +25,12 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { handInboxItems } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  pushedTranscripts,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
@@ -153,7 +158,7 @@ async function mount(
       tab: agentTab(AGENT.id),
       openAgents: [AGENT.id],
     },
-    agents: agentsControl({ agents: [AGENT], agentIds: [AGENT.id, OTHER_AGENT] }),
+    agents: taskAgentsOf(agentsControl({ agents: [AGENT], agentIds: [AGENT.id, OTHER_AGENT] })),
     onShowInbox: (choice) => inboxes.push(choice),
     onThreadsShown: (agentId) => covered.push(agentId),
   });

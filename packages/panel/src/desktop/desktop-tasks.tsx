@@ -68,7 +68,13 @@ import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-door
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { NAMED_ORDER, useNamedTask, useNamedTasks } from "../task-list-collections.js";
+import {
+  NAMED_ORDER,
+  useNamedTask,
+  useNamedTasksAtRest,
+  useTaskListCollections,
+  useTaskNames,
+} from "../task-list-collections.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -102,6 +108,7 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
+import { agentsNow, useTaskAgentName, useTaskPullRequestsOf } from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -121,11 +128,11 @@ import { AGENTS_SECTION } from "./agent-entries.js";
 import { AgentThreads } from "./agent-threads.js";
 import {
   AutomationRunSteps,
-  AutomationRunStrip,
   automationTrail,
   openRunAgent,
-  runAgentOf,
+  TaskRunStrip,
   useAutomationRunPlace,
+  useTaskRun,
 } from "./automation-agent-run.js";
 import { DesktopHome } from "./desktop-home.js";
 import {
@@ -449,6 +456,24 @@ function discardDraftItem(onSelect: () => void): MenuEntry {
  * and no name is guessed before the read says it; a task that could not be
  * drawn has no tab at all.
  */
+/**
+ * Whether the task's description is drawn: from the first draw that shows
+ * Overview on, and for as long as the same task stands. A task opened on an
+ * agent's tab draws none of its description behind it, its head included,
+ * so the commit that opens the task mounts only what its first frame shows;
+ * one shown once stays drawn while hidden again, so an edit not yet saved
+ * and its scroll outlive the switch. Note that another task starts over, so
+ * a task shown, left, and come back to while hidden draws nothing.
+ */
+function useDocumentDrawn(taskId: string | undefined, shown: boolean): boolean {
+  const [held, setHeld] = useState({ taskId, drawn: shown });
+  const drawn = shown || (held.taskId === taskId && held.drawn);
+
+  if (held.taskId !== taskId || held.drawn !== drawn) setHeld({ taskId, drawn });
+
+  return drawn;
+}
+
 function DescriptionDocument({
   tasks,
   looks,
@@ -460,6 +485,7 @@ function DescriptionDocument({
   room: ShellRoom;
   away: TaskHeadBack;
 }): React.JSX.Element {
+  const collections = useTaskListCollections();
   const { region } = tasks;
   const pins = usePins(tasks.typedNamesNow);
   const account = useWindowAccount();
@@ -530,12 +556,6 @@ function DescriptionDocument({
   const headingTask = region.kind === TASK_REGION.READY ? region.task.id : undefined;
   const columnHeld = useMemo(() => ({ current: column }), [column]);
 
-  const documentHeld = useMemo(
-    () => ({ current: headingTask === undefined ? null : documentBox }),
-    [documentBox, headingTask],
-  );
-
-  const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
   // The clock the plan's tab's card counts its update back from.
   const now = useMinute();
   const { open: onOpenAutomations } = useAutomationsDoor(tasks);
@@ -580,6 +600,20 @@ function DescriptionDocument({
 
   // The task renamed is the one the page stands on, so its rename opens while its description is still read.
   const taskId = opened?.id;
+  // The description stands in the column only once Overview has shown it (`useDocumentDrawn`).
+  const documentDrawn = useDocumentDrawn(taskId, isOverviewTab(tasks.mainTabs.tab));
+
+  // Note that only a phone watches the heading, because its row alone picks it up, and the words it reads off the drawn
+  // heading would draw the whole document again for nothing, after the draw that opened the task.
+  // The heading is watched again once the description is first drawn, which it was not while another tab stood over it.
+  const documentHeld = useMemo(
+    () => ({
+      current: !phone || headingTask === undefined || !documentDrawn ? null : documentBox,
+    }),
+    [documentBox, headingTask, phone, documentDrawn],
+  );
+
+  const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
   const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_TERMS));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
@@ -602,12 +636,13 @@ function DescriptionDocument({
   // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
   const readMentionAgents = useMentionAgentsReader(
     opened?.workspaceId,
-    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
+    useTaskNames(tasks.typedNames),
     tasks.agents.models,
   );
 
   const openMention = tasks.onShowMention;
   const revealed = tasks.sectionReveal;
+  // Note that the open task's agents' rows are read by the parts drawing them, never here, so a step of a turn draws none of the page but them.
   const { mainTabs, sidePanel, agents, agentThreads } = tasks;
   const backToOr = useBackToOr();
 
@@ -629,7 +664,8 @@ function DescriptionDocument({
     );
 
   // The agent a run of an automation started, on a run's task alone, whose path leads the task's bar and whose automation's runs its arrows step through (`automation-agent-run.tsx`).
-  const runAgent = runAgentOf([...(agents.agents ?? []), ...(agents.archived ?? [])]);
+  const run = useTaskRun(agents);
+  const runAgent = run.agent;
   const runPlace = useAutomationRunPlace(runAgent);
   const { tab } = mainTabs;
 
@@ -784,7 +820,7 @@ function DescriptionDocument({
   // An agent a mention names wears its tab's tile and hangs its tab's card, read as its tab reads them.
   // An agent the task lists not has no tab here, so a link to it, which names no task, wears what the window reads of it.
   const agentLook = (agentId: string) => {
-    const subject = agentSubject(agents, agentId, views.held, false);
+    const subject = agentSubject(agentsNow(agents), agentId, views.held, false);
 
     if (subject.agent === undefined) return undefined;
 
@@ -792,7 +828,7 @@ function DescriptionDocument({
   };
 
   // A pull request one of the task's agents opened hangs its Pull request tab's card wherever a link names it.
-  const agentPullRequests = agents.pullRequests;
+  const agentPullRequests = useTaskPullRequestsOf(agents);
 
   const changesPeople = useChangesPeopleOf(
     useMemo(
@@ -809,7 +845,8 @@ function DescriptionDocument({
   const pullRequestCard = (url: string) => {
     // A page under an agent's pull request, as its files, is still that pull request, as its press says.
     const address = pullRequestAddressOf(url);
-    const listed = address === undefined ? undefined : listedAgentOf(agents, address);
+    const held = agentsNow(agents);
+    const listed = address === undefined ? undefined : listedAgentOf(held, address);
 
     if (listed === undefined) return undefined;
     const { pullRequest } = listed;
@@ -817,7 +854,7 @@ function DescriptionDocument({
 
     const card = tabCard({
       kind: TAB_KIND.CHANGES,
-      subject: agentSubject(agents, agentId, views.held, false),
+      subject: agentSubject(held, agentId, views.held, false),
       models: agents.models,
       pullRequest,
       people: peopleOf(changesPeople.get(agentId), pullRequest),
@@ -915,6 +952,8 @@ function DescriptionDocument({
   });
 
   const tabAgent = tab === undefined ? undefined : agentOfTab(tab);
+  // The column's agent's name, read of its row alone, so only a rename draws the page again.
+  const tabAgentName = useTaskAgentName(agents, tabAgent);
 
   // The column's agent whose card shows its threads in its transcript's place, which main is told is not on screen.
   const threadsAgent =
@@ -951,10 +990,12 @@ function DescriptionDocument({
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
 
     // Note that with Done and follow-ups on the bar stands with nothing posted, since an agent done with nothing to ask still offers its Archive.
-    const others = (agents.agents ?? []).flatMap((each) => {
-      const count = each.id === tabAgent ? 0 : (waitingOf.get(each.id)?.length ?? 0);
+    // Note that the others are named as they stand when the posts move, which a step of a turn does not.
+    const others = (agents.agentIds ?? []).flatMap((agentId) => {
+      const count = agentId === tabAgent ? 0 : (waitingOf.get(agentId)?.length ?? 0);
+      const each = count === 0 ? undefined : agents.rowNow(agentId);
 
-      return count === 0 ? [] : [{ agentId: each.id, name: agentName(each), waiting: count }];
+      return each === undefined ? [] : [{ agentId, name: agentName(each), waiting: count }];
     });
 
     return posted.length === 0 && !turnEndOn
@@ -978,7 +1019,7 @@ function DescriptionDocument({
     turnEndOn,
     chooseAnswer,
     inboxSending,
-    agents.agents,
+    agents,
     openAgent,
   ]);
 
@@ -1065,7 +1106,14 @@ function DescriptionDocument({
   const { onSelect: selectTask, relationMenu } = tasks;
   const onNewRelatedTask = tasks.newTask.onOpenRelated;
   const { onSetTaskBlock, onSetTaskParent } = relationWrites;
-  const ofWorkspace = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, openedWorkspace);
+
+  // Note that the path and the add menu draw no agents, so the tasks are held still while only their agents move.
+  const ofWorkspace = useNamedTasksAtRest(
+    tasks.typedNames,
+    NAMED_ORDER.PINNED_FIRST,
+    openedWorkspace,
+  );
+
   // Note that with no task open there is no workspace whose tasks it may relate.
   const blockTasks = openedWorkspace === undefined ? NO_TASKS : ofWorkspace;
 
@@ -1441,7 +1489,7 @@ function DescriptionDocument({
     >
       {/* The way back to the agents stays pinned at the card's top left, over the details as they scroll. */}
       {detailsWide ? <div className="task-details-back">{detailsLead}</div> : null}
-      {read === undefined ? (
+      {!documentDrawn ? null : read === undefined ? (
         <DescriptionBodySkeleton task={task} standing={standing} head={descriptionHead} />
       ) : (
         <DescriptionBody
@@ -1497,7 +1545,7 @@ function DescriptionDocument({
 
   // What the column shows, by name: the agent's or the draft's screen, and where a tab of the panel goes back to.
   const columnLabel =
-    tab === undefined || isOverviewTab(tab) ? planLabel : mainTabLabel(tab, agents);
+    tab === undefined || isOverviewTab(tab) ? planLabel : mainTabLabel(tab, tabAgentName);
 
   const draftShown =
     pane === TASK_PANE.AGENT &&
@@ -1581,13 +1629,7 @@ function DescriptionDocument({
           reveal={tasks.commentReveal?.taskId === inboxTaskId ? tasks.commentReveal : undefined}
         >
           <MemberDirectory workspace={home} readerId={tasks.me}>
-            <AutomationDirectory
-              workspace={home}
-              wanted={[...(agents.agents ?? []), ...(agents.archived ?? [])].some(
-                (each) => each.automationId !== undefined,
-              )}
-              onOpen={openAutomation}
-            >
+            <AutomationDirectory workspace={home} wanted={run.any} onOpen={openAutomation}>
               <TaskMentions value={mentions}>
                 <OpenAddressesHere value={openHere}>
                   {/* The task's menu, its shortcuts, and the questions its items ask, keyed by the task so none outlives it; drawn ahead of the panel, which reads the items. */}
@@ -1631,7 +1673,7 @@ function DescriptionDocument({
                           {runPlace === undefined ? null : (
                             <AutomationRunSteps
                               place={runPlace}
-                              onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
+                              onOpenAgent={(agentId) => openRunAgent(tasks, collections, agentId)}
                             />
                           )}
                           <CopyChord copy={tasks.copy} workspaceId={task.workspaceId} />
@@ -1703,7 +1745,7 @@ function DescriptionDocument({
                         {sidePanel.fullScreen ? null : stranded.banner}
                         {/* A run's task says what fired the run over every tab of the column. */}
                         {runPlace === undefined || runAgent === undefined ? null : (
-                          <AutomationRunStrip place={runPlace} status={runAgent.status} />
+                          <TaskRunStrip agents={agents} agentId={runAgent.id} place={runPlace} />
                         )}
                         <TaskBody>
                           <FindScope
@@ -1722,7 +1764,7 @@ function DescriptionDocument({
                               ) : null
                             ) : (
                               <AgentPane
-                                label={mainTabLabel(tab, agents)}
+                                label={mainTabLabel(tab, tabAgentName)}
                                 tabbed
                                 tab={tab}
                                 agents={agents}
@@ -1881,12 +1923,48 @@ function startingPage(
 }
 
 /**
+ * What of the Tasks tab the task's page reads nothing of: the task the window
+ * is bound for, and the task its own place stands on. Both move at the press
+ * that opens another task, a round trip before that task opens, while the
+ * page still draws the task open, so a page drawn again for them would draw
+ * that task again for nothing. Note that nothing under the page may read
+ * either, because the page holds the tab it was last drawn with while only
+ * these move.
+ */
+const UNDRAWN_ON_PAGE = ["boundFor", "taskView"] as const satisfies readonly (keyof TasksControl)[];
+
+/** Whether two of the Tasks tab hand the task's page the same, every field but those it reads nothing of the same one. */
+function samePageTasks(was: TasksControl, now: TasksControl): boolean {
+  if (was === now) return true;
+  const undrawn: readonly (keyof TasksControl)[] = UNDRAWN_ON_PAGE;
+  // SAFETY: a tab's own keys are the fields of its shape, the one both sides are drawn from.
+  const keys = Object.keys(now) as (keyof TasksControl)[];
+
+  if (keys.length !== Object.keys(was).length) return false;
+
+  return keys.every((key) => undrawn.includes(key) || was[key] === now[key]);
+}
+
+/** Whether the work column is handed the same, the tab compared as its page reads it (`samePageTasks`). */
+function sameWorkColumn(was: WorkColumnProps, now: WorkColumnProps): boolean {
+  return (
+    was.looks === now.looks &&
+    was.room === now.room &&
+    was.away === now.away &&
+    was.accountName === now.accountName &&
+    was.staged === now.staged &&
+    samePageTasks(was.tasks, now.tasks)
+  );
+}
+
+/**
  * The Tasks tab's work column on a task's place: the open task's page, or
  * its page in the shape it lands in while the host opens it.
  *
  * A memo boundary: the shell drawn again over the same tasks, as a setting
  * that moves draws it, leaves the open plan, its transcripts, and its side
- * panel as they were.
+ * panel as they were, and so does a press opening another task, until that
+ * task opens (`UNDRAWN_ON_PAGE`).
  */
 export const DesktopTasks = memo(function DesktopTasks({
   tasks,
@@ -1920,7 +1998,7 @@ export const DesktopTasks = memo(function DesktopTasks({
       />
     </SkillFiles>
   );
-});
+}, sameWorkColumn);
 
 /**
  * The Tasks tab's work column on Home, the page of no task bound, whose own

@@ -14,6 +14,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { renamedTasks, repositoryPageUrl, type TaskNames } from "@repo/features/tasks-model";
+import { priorityOf, statusOf } from "@repo/features/tasks-page-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -41,7 +42,6 @@ import {
   Tooltip,
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
-import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { eq, useLiveQuery } from "@tanstack/react-db";
 import { Fragment, useEffect } from "react";
 import { tellAct } from "../act.js";

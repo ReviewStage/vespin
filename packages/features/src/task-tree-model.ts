@@ -1,14 +1,20 @@
 /**
- * task-tree-model.ts -- the phone's Tasks list as the panel's sidebar stands it: Pinned, Following, the member's own sections, then My tasks grouped by repository, each list's child tasks nested under their parents; the groups a wide window's sidebar lists as places of their own; and the workspace's tasks a search finds.
+ * task-tree-model.ts -- the phone's Tasks list as the panel's sidebar stands it: Pinned, Following, the member's own sections, then the reader's tasks under the view they chose, each list's child tasks nested under their parents; the groups a wide window's sidebar lists as places of their own; and the workspace's tasks a search finds.
  *
  * Every piece is the sidebar's own (`task-list-model.ts`,
- * `task-sections-model.ts`, `pin-order.ts`), read under the view the
- * sidebar starts from (`DEFAULT_TASK_LIST_VIEW`): the reader's own tasks,
- * to do and in progress, grouped by repository, the pinned repositories'
- * groups first. A pin or a section is the reader's own choice, which the
- * view's filters never thin, as the sidebar's never do.
+ * `task-sections-model.ts`, `pin-order.ts`) or the Tasks page's
+ * (`tasks-page-model.ts`). The tasks no pin or section holds stand under the
+ * view the reader chose on the Tasks tab (`TaskTreeView`): whose they are,
+ * as the sidebar's Assigned to says, which statuses, how they are grouped
+ * and ordered, which finished ones stand, and whether a sub-task stands
+ * beside its parent, as the Tasks page's Filter and View options say. It
+ * starts as the sidebar starts: the reader's own tasks, to do and in
+ * progress, grouped by repository, the pinned repositories' groups first. A
+ * pin or a section is the reader's own choice, which the view never thins,
+ * as the sidebar's never does.
  */
 
+import { Option, Schema } from "effect";
 import { inPinOrder } from "./pin-order.js";
 import { readsUnread } from "./read-mark.js";
 import { matchesTokens } from "./search-tokens.js";
@@ -18,7 +24,8 @@ import {
   taskAgentsStatus,
 } from "./task-agents-model.js";
 import {
-  DEFAULT_TASK_LIST_VIEW,
+  ASSIGNED_TO,
+  type AssignedTo,
   type DrawnTaskRow,
   drawnTaskRows,
   followingTasks,
@@ -26,10 +33,8 @@ import {
   orderTasks,
   repositoryHeadingsDrawn,
   repositoryLabel,
-  TASK_GROUPING,
   TASK_ORDER,
   taskListed,
-  taskSections,
   tasksAssignedTo,
   tasksById,
   taskTime,
@@ -37,7 +42,27 @@ import {
 } from "./task-list-model.js";
 import type { TaskSection } from "./task-section-wire.js";
 import { NO_TASK_SECTIONS, sectionedTasks, sectionWithoutSettled } from "./task-sections-model.js";
-import type { TaskSummary } from "./task-wire.js";
+import {
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "./task-standing-words.js";
+import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
+import {
+  COMPLETED_WINDOW,
+  type CompletedWindow,
+  standsCompleted,
+  statusOf,
+  TASKS_GROUP,
+  TASKS_GROUPING,
+  TASKS_ORDER,
+  type TasksFilter,
+  type TasksGroup,
+  type TasksGroupHead,
+  type TasksGrouping,
+  type TasksOrder,
+  tasksListGroups,
+} from "./tasks-page-model.js";
 import type { TaskListParts, TasksView } from "./tasks-view.js";
 import { taskKey } from "./workspace-key.js";
 
@@ -47,12 +72,16 @@ const PINNED_HEAD = "Pinned";
 /** What heads the tasks the reader follows that no other list holds, as the sidebar's group is called. */
 export const FOLLOWING_HEAD = "Following";
 
-/** What a group of the tree stands for: Pinned, Following, one of the member's sections, or a repository under My tasks. */
+/** What a group of the tree stands for: Pinned, Following, one of the member's sections, or one of the reader's tasks' groups under the view: a repository, a status, a priority, an assignee, or all of them in one. */
 export const TASK_TREE_GROUP = {
   PINNED: "pinned",
   FOLLOWING: "following",
   SECTION: "section",
   REPOSITORY: "repository",
+  STATUS: "status",
+  PRIORITY: "priority",
+  ASSIGNEE: "assignee",
+  ALL: "all",
 } as const;
 
 export type TaskTreeGroupKind = (typeof TASK_TREE_GROUP)[keyof typeof TASK_TREE_GROUP];
@@ -70,6 +99,8 @@ export interface TaskTreeGroup {
   readonly rows: readonly DrawnTaskRow[];
   /** A section's own icon, where its member gave it one. */
   readonly icon?: TaskSection["icon"];
+  /** What one of the reader's tasks' groups stands for under the view's grouping, which its heading's mark is drawn from; none for Pinned, Following, or a section. */
+  readonly head?: TasksGroupHead;
 }
 
 /** The phone's Tasks list: Pinned where anything is pinned, Following where the reader follows a task no other list holds, the member's sections, and My tasks' repository groups. */
@@ -80,6 +111,130 @@ export interface TaskTree {
   /** What heads the tasks no pin or section holds. */
   readonly tasksHead: string;
   readonly tasks: readonly TaskTreeGroup[];
+}
+
+/**
+ * How the reader's tasks under the Tasks tab stand, as the sidebar's View
+ * options and the Tasks page's Filter and View options say it: whose they
+ * are, which statuses, how they are grouped and ordered, which finished ones
+ * stand, and whether a sub-task stands beside its parent rather than only
+ * under it.
+ */
+export interface TaskTreeView {
+  readonly assignedTo: AssignedTo;
+  /** The statuses kept; none keeps the work to do and under way, as the sidebar does, with the finished the completed window keeps. */
+  readonly statuses: readonly TaskStatus[];
+  readonly grouping: TaskTreeGrouping;
+  readonly order: TasksOrder;
+  readonly completed: TaskTreeCompleted;
+  readonly subTasks: boolean;
+}
+
+/**
+ * The groupings the phone offers, the Tasks page's but by creator, which a
+ * phone's one column has no person card to head with.
+ */
+export const TASK_TREE_GROUPINGS = [
+  TASKS_GROUPING.STATUS,
+  TASKS_GROUPING.PRIORITY,
+  TASKS_GROUPING.REPOSITORY,
+  TASKS_GROUPING.ASSIGNEE,
+  TASKS_GROUPING.NONE,
+] as const satisfies readonly TasksGrouping[];
+
+type TaskTreeGrouping = (typeof TASK_TREE_GROUPINGS)[number];
+
+/**
+ * The completed windows the phone offers: the Tasks page's but All, since
+ * the list a phone holds keeps only the tasks finished in the past month,
+ * and pages in no older ones.
+ */
+export const TASK_TREE_COMPLETED = [
+  COMPLETED_WINDOW.NONE,
+  COMPLETED_WINDOW.PAST_WEEK,
+  COMPLETED_WINDOW.PAST_MONTH,
+] as const satisfies readonly CompletedWindow[];
+
+type TaskTreeCompleted = (typeof TASK_TREE_COMPLETED)[number];
+
+/** The view until the reader changes it, the sidebar's own: their tasks, to do and in progress, by repository, the latest active first, nothing finished, each sub-task under its parent. */
+export const DEFAULT_TASK_TREE_VIEW: TaskTreeView = {
+  assignedTo: { kind: ASSIGNED_TO.ME },
+  statuses: [],
+  grouping: TASKS_GROUPING.REPOSITORY,
+  order: TASKS_ORDER.UPDATED,
+  completed: COMPLETED_WINDOW.NONE,
+  subTasks: false,
+};
+
+/** A kept Assigned to, as the sidebar keeps its own. */
+const keptAssignedTo = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.ME) }),
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.FOLLOWING) }),
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.ANYONE) }),
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.MEMBER), userId: Schema.String }),
+]);
+
+/** A view as a device keeps it: each choice optional, so one kept before a choice existed reads the default for it. */
+const keptTreeView = Schema.Struct({
+  assignedTo: Schema.optionalKey(keptAssignedTo),
+  statuses: Schema.optionalKey(Schema.Array(Schema.Literals(Object.values(TASK_STATUS)))),
+  grouping: Schema.optionalKey(Schema.Literals(TASK_TREE_GROUPINGS)),
+  order: Schema.optionalKey(Schema.Literals(Object.values(TASKS_ORDER))),
+  completed: Schema.optionalKey(Schema.Literals(TASK_TREE_COMPLETED)),
+  subTasks: Schema.optionalKey(Schema.Boolean),
+});
+
+/** Each workspace's view as a device keeps it, by the workspace's id. */
+export type KeptTreeViews = Readonly<Record<string, typeof keptTreeView.Type>>;
+
+const readKept = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Record(Schema.String, keptTreeView)),
+);
+
+/**
+ * Each workspace's view from the words a device kept them as, none where
+ * it kept none or they read as nothing. Note that a record kept by a later build, naming a
+ * choice this one lacks, reads as none, so every workspace opens on the
+ * default rather than half a view.
+ */
+export function readTreeViews(words: string | undefined): KeptTreeViews {
+  if (words === undefined) return {};
+  const read = readKept(words);
+
+  return Option.isSome(read) ? read.value : {};
+}
+
+/** A workspace's view among those kept, the default for whatever it lacks. */
+export function treeViewIn(views: KeptTreeViews, workspaceId: string): TaskTreeView {
+  return { ...DEFAULT_TASK_TREE_VIEW, ...views[workspaceId] };
+}
+
+/** The words the views are kept as, with one workspace's changed. */
+export function keptTreeViews(
+  views: KeptTreeViews,
+  workspaceId: string,
+  view: TaskTreeView,
+): string {
+  return JSON.stringify({ ...views, [workspaceId]: view });
+}
+
+/** Whether two views stand the list alike, so Reset view offers itself only where it would change it. */
+export function sameTreeView(a: TaskTreeView, b: TaskTreeView): boolean {
+  const sameAssignee =
+    a.assignedTo.kind === b.assignedTo.kind &&
+    (a.assignedTo.kind !== ASSIGNED_TO.MEMBER ||
+      (b.assignedTo.kind === ASSIGNED_TO.MEMBER && a.assignedTo.userId === b.assignedTo.userId));
+
+  return (
+    sameAssignee &&
+    a.statuses.length === b.statuses.length &&
+    a.statuses.every((status) => b.statuses.includes(status)) &&
+    a.grouping === b.grouping &&
+    a.order === b.order &&
+    a.completed === b.completed &&
+    a.subTasks === b.subTasks
+  );
 }
 
 /** What the tree is read from: the host's task list, the workspace it is narrowed to, the reader, and what the group headings say of no repository. */
@@ -96,6 +251,12 @@ export interface TaskTreeInput {
   readonly noRepository: string;
   /** What heads the tasks no pin or section holds: "My tasks". */
   readonly tasksHead: string;
+  /** How the tasks no pin or section holds stand. */
+  readonly treeView: TaskTreeView;
+  /** A person's name, which an assignee's group is headed and ordered by. */
+  readonly personName: (userId: string) => string;
+  /** Epoch milliseconds now, which the completed window reaches back from. */
+  readonly now: number;
 }
 
 /** The workspace's tasks; every task while no workspace is known. */
@@ -112,19 +273,166 @@ const ALL_OPEN = () => true;
 /** No row is held standing under a fold, since none is folded. */
 const NONE_STANDING = () => false;
 
+/** The tasks the view keeps by status before the Tasks page's filter reads them: with no status named, the work to do and under way and the finished, as the sidebar holds them, Backlog left out; every one where a status is named, which the filter then keeps. */
+function inViewStatuses(tasks: readonly TaskSummary[], view: TaskTreeView): readonly TaskSummary[] {
+  if (view.statuses.length > 0) return tasks;
+
+  return tasks.filter((task) => taskListed(task) || isTaskSettled(statusOf(task)));
+}
+
+/** The latest a group's tasks saw activity, which the sidebar orders its repositories' groups by. */
+function latestIn(group: TasksGroup): number {
+  return Math.max(0, ...group.tasks.map((task) => taskTime(task, TASK_ORDER.UPDATED)));
+}
+
 /**
- * The tree the phone's Tasks tab draws, as the sidebar draws it under its
- * first view: Pinned in the order dragged, Following with the tasks to do and
- * in progress the reader follows that no other list holds (`followingTasks`),
- * each section with its open tasks in its own order, and the reader's other
- * tasks to do and in progress grouped by repository, each child task moved
- * under its parent wherever a list holds it (`homedTaskRows`), an open one
- * whatever its status or whoever is on it (`withSubTasks`), and nested
- * there, but one pinned or put in a section of its own, which stays where
- * it was put.
+ * The repositories' groups in the sidebar's order: the pinned repositories'
+ * first, in the order pinned, then the one holding the latest active task
+ * first, the tasks with none last whatever their age (`taskSections`).
+ */
+function inSidebarOrder(
+  groups: readonly TasksGroup[],
+  pinnedRepositories: readonly string[],
+): readonly TasksGroup[] {
+  const repositoryOf = (group: TasksGroup) =>
+    group.head.kind === TASKS_GROUP.REPOSITORY ? group.head.repository : null;
+
+  const pinnedAt = (group: TasksGroup) => {
+    const repository = repositoryOf(group);
+
+    return repository === null ? -1 : pinnedRepositories.indexOf(repository);
+  };
+
+  const pinned = groups.filter((group) => pinnedAt(group) >= 0);
+  const rest = groups.filter((group) => pinnedAt(group) < 0);
+
+  return [
+    ...pinned.toSorted((a, b) => pinnedAt(a) - pinnedAt(b)),
+    ...rest.toSorted(
+      (a, b) =>
+        Number(repositoryOf(a) === null) - Number(repositoryOf(b) === null) ||
+        latestIn(b) - latestIn(a),
+    ),
+  ];
+}
+
+/** The reader's tasks no pin or section holds as the view groups, orders, and keeps them, through the Tasks page's own List (`tasksListGroups`), the repositories' groups in the sidebar's order. */
+function viewGroups(unplaced: readonly TaskSummary[], input: TaskTreeInput): readonly TasksGroup[] {
+  const { treeView, readerId } = input;
+  const filter: TasksFilter = treeView.statuses.length === 0 ? {} : { status: treeView.statuses };
+
+  const groups = tasksListGroups(
+    inViewStatuses(tasksAssignedTo(unplaced, treeView.assignedTo, readerId), treeView),
+    {
+      filter,
+      display: {
+        grouping: treeView.grouping,
+        order: treeView.order,
+        emptyGroups: false,
+        completed: treeView.completed,
+        pinnedFirst: false,
+        subTasks: treeView.subTasks,
+        properties: [],
+      },
+      pinned: [],
+      sections: [],
+      readerId,
+      personName: input.personName,
+      members: [],
+      now: input.now,
+    },
+  ).filter((group) => group.tasks.length > 0);
+
+  if (treeView.grouping !== TASKS_GROUPING.REPOSITORY) return groups;
+
+  return inSidebarOrder(
+    groups,
+    (input.view.repositoryPins ?? []).map((pin) => pin.repository),
+  );
+}
+
+/** The kind of tree group one of the view's groups stands as. */
+function groupKind(head: TasksGroupHead): TaskTreeGroupKind {
+  switch (head.kind) {
+    case TASKS_GROUP.STATUS:
+      return TASK_TREE_GROUP.STATUS;
+    case TASKS_GROUP.PRIORITY:
+      return TASK_TREE_GROUP.PRIORITY;
+    case TASKS_GROUP.ASSIGNEE:
+      return TASK_TREE_GROUP.ASSIGNEE;
+    case TASKS_GROUP.REPOSITORY:
+      return TASK_TREE_GROUP.REPOSITORY;
+    default:
+      return TASK_TREE_GROUP.ALL;
+  }
+}
+
+/** The key a view's group is told apart by, such as its fold: its repository's full name, its status, its priority, or its assignee's id; none for the tasks with none, or all of them in one. */
+function groupKey(head: TasksGroupHead): string {
+  switch (head.kind) {
+    case TASKS_GROUP.STATUS:
+      return head.status;
+    case TASKS_GROUP.PRIORITY:
+      return head.priority;
+    case TASKS_GROUP.ASSIGNEE:
+      return head.assigneeId ?? NO_REPOSITORY_KEY;
+    case TASKS_GROUP.REPOSITORY:
+      return head.repository ?? NO_REPOSITORY_KEY;
+    default:
+      return NO_REPOSITORY_KEY;
+  }
+}
+
+/** What heads a view's group: its status, priority, or assignee in the panel's words, its repository as the sidebar names it where the list draws two or more, and none where the list stands as one, which My tasks then heads. */
+function groupTitle(
+  head: TasksGroupHead,
+  groups: readonly TasksGroup[],
+  input: TaskTreeInput,
+): string | undefined {
+  switch (head.kind) {
+    case TASKS_GROUP.STATUS:
+      return TASK_STATUS_WORDS[head.status];
+    case TASKS_GROUP.PRIORITY:
+      return TASK_PRIORITY_WORDS[head.priority];
+    case TASKS_GROUP.ASSIGNEE:
+      return head.assigneeId === null ? NO_ASSIGNEE_WORDS : input.personName(head.assigneeId);
+    case TASKS_GROUP.REPOSITORY: {
+      const repositories = groups.map((group) => ({
+        repository: group.head.kind === TASKS_GROUP.REPOSITORY ? group.head.repository : null,
+        tasks: group.tasks,
+      }));
+
+      if (!repositoryHeadingsDrawn(repositories)) return undefined;
+
+      return head.repository === null
+        ? input.noRepository
+        : repositoryLabel(head.repository, repositories);
+    }
+
+    default:
+      return undefined;
+  }
+}
+
+/** A list's rows standing flat, each sub-task on its own, as the view draws them while it shows sub-tasks beside their parents. */
+function flatRows(tasks: readonly TaskSummary[]): readonly DrawnTaskRow[] {
+  return tasks.map((task) => ({ task, depth: 0, open: undefined }));
+}
+
+/**
+ * The tree the phone's Tasks tab draws, as the sidebar draws it: Pinned in
+ * the order dragged, Following with the tasks to do and in progress the
+ * reader follows that no other list holds (`followingTasks`), each section
+ * with its open tasks in its own order, and the rest of the reader's tasks
+ * under the view (`viewGroups`). While the view folds sub-tasks under their
+ * parents, each child task moves under its parent wherever a list holds it
+ * (`homedTaskRows`), an open one whatever its status or whoever is on it,
+ * and a finished one the completed window keeps (`withSubTasks`), and nests
+ * there, but one pinned or put in a section of its own, which stays where it
+ * was put; while it shows them, each list stands its own tasks flat.
  */
 export function taskTree(input: TaskTreeInput): TaskTree {
-  const { view, workspaceId, readerId } = input;
+  const { view, workspaceId, readerId, treeView } = input;
   const listed = workspaceTasks(view.tasks, workspaceId);
   const every = tasksById(listed);
 
@@ -138,51 +446,41 @@ export function taskTree(input: TaskTreeInput): TaskTree {
 
   const sections = sectioned.sections.map(sectionWithoutSettled);
   const unplaced = free.filter((task) => !sectioned.taskIds.has(task.id));
+  const groups = viewGroups(unplaced, input);
 
-  const rest = tasksAssignedTo(unplaced, DEFAULT_TASK_LIST_VIEW.assignedTo, readerId).filter(
-    taskListed,
+  const followed = followingTasks(
+    unplaced,
+    groups.flatMap((group) => group.tasks),
+    readerId,
   );
 
-  const followed = followingTasks(unplaced, rest, readerId);
+  const lists = [
+    pinned,
+    ...sections.map((drawn) => drawn.tasks),
+    followed,
+    ...groups.map((group) => group.tasks),
+  ];
 
-  const grouped = taskSections(
-    orderTasks(rest),
-    TASK_GROUPING.REPOSITORY,
-    (view.repositoryPins ?? []).map((pin) => pin.repository),
-  );
+  // Note that a pool's finished task stands under its parent only where the completed window keeps it, as the Tasks page keeps it.
+  const homed = treeView.subTasks
+    ? lists
+    : withSubTasks(
+        homedTaskRows(lists, every, 1 + sections.length),
+        orderTasks(free).filter((task) => standsCompleted(task, treeView.completed, input.now)),
+        treeView.completed !== COMPLETED_WINDOW.NONE,
+      );
 
-  const groups = grouped.grouping === TASK_GROUPING.REPOSITORY ? grouped.groups : [];
+  const drawn = (at: number) =>
+    treeView.subTasks
+      ? flatRows(homed[at] ?? [])
+      : drawnTaskRows(homed[at] ?? [], ALL_OPEN, NONE_STANDING, every);
 
-  const homed = withSubTasks(
-    homedTaskRows(
-      [
-        pinned,
-        ...sections.map((drawn) => drawn.tasks),
-        followed,
-        ...groups.map((group) => group.tasks),
-      ],
-      every,
-      1 + sections.length,
-    ),
-    orderTasks(free),
-    DEFAULT_TASK_LIST_VIEW.finishedSubTasks,
-  );
+  const followingRows = drawn(1 + sections.length);
 
-  const followingRows = drawnTaskRows(
-    homed[1 + sections.length] ?? [],
-    ALL_OPEN,
-    NONE_STANDING,
-    every,
-  );
-
-  const drawn = (at: number) => drawnTaskRows(homed[at] ?? [], ALL_OPEN, NONE_STANDING, every);
-
-  // A repository group whose every task moved under a parent another list holds is left out, as the sidebar leaves it, and the headings read the groups left.
+  // A group whose every task moved under a parent another list holds is left out, as the sidebar leaves it, and the headings read the groups left.
   const homedGroups = groups
-    .map((group, at) => ({ ...group, tasks: homed[at + 2 + sections.length] ?? [] }))
+    .map((group, at) => ({ ...group, tasks: homed[at + 2 + sections.length] ?? [], at }))
     .filter((group) => group.tasks.length > 0);
-
-  const headings = repositoryHeadingsDrawn(homedGroups);
 
   return {
     pinned:
@@ -212,14 +510,11 @@ export function taskTree(input: TaskTreeInput): TaskTree {
     })),
     tasksHead: input.tasksHead,
     tasks: homedGroups.map((group) => ({
-      kind: TASK_TREE_GROUP.REPOSITORY,
-      key: group.repository ?? NO_REPOSITORY_KEY,
-      title: !headings
-        ? undefined
-        : group.repository === null
-          ? input.noRepository
-          : repositoryLabel(group.repository, homedGroups),
-      rows: drawnTaskRows(group.tasks, ALL_OPEN, NONE_STANDING, every),
+      kind: groupKind(group.head),
+      key: groupKey(group.head),
+      title: groupTitle(group.head, homedGroups, input),
+      head: group.head,
+      rows: drawn(group.at + 2 + sections.length),
     })),
   };
 }

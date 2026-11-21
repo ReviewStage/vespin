@@ -56,6 +56,7 @@ describe("latestStep", () => {
         provider: undefined,
         line: { verb: "Read", subject: "list-row.tsx", code: true },
         chip: undefined,
+        thread: undefined,
         runOn: undefined,
         standing: CALL_STANDING.DONE,
         open: false,

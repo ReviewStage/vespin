@@ -65,6 +65,14 @@ export const ASSIGNED_TO = {
   MEMBER: "member",
 } as const;
 
+/** What Assigned to is called, and its choices but a member's, who is called by their name: the sidebar's View options and the iPhone's alike. */
+export const ASSIGNED_TO_WORDS = {
+  HEAD: "Assigned to",
+  [ASSIGNED_TO.ME]: "Me",
+  [ASSIGNED_TO.FOLLOWING]: "Following",
+  [ASSIGNED_TO.ANYONE]: "Anyone",
+} as const;
+
 /** Whose tasks the list holds, a teammate by account id. */
 export type AssignedTo =
   | { readonly kind: typeof ASSIGNED_TO.ME }
@@ -86,6 +94,32 @@ export const TASKS_HEAD_WORDS = {
   [ASSIGNED_TO.FOLLOWING]: "Tasks I follow",
   [ASSIGNED_TO.ANYONE]: "Everyone's tasks",
 } as const;
+
+/** What the Tasks head says for one teammate's list, by their name. */
+export function memberTasksHead(name: string): string {
+  return `${name}'s tasks`;
+}
+
+/**
+ * What the Tasks head says, and its list is called: whose tasks the list
+ * holds, a teammate's by `nameOf`. Note that a workspace nobody shares
+ * lists every task, which are all the reader's, so it says "My tasks", as a
+ * teammate's list says it where the teammate is the reader.
+ */
+export function tasksHeadOf(
+  assignedTo: AssignedTo,
+  shared: boolean,
+  readerId: string | undefined,
+  nameOf: (userId: string) => string,
+): string {
+  if (!shared) return TASKS_HEAD_WORDS[ASSIGNED_TO.ME];
+
+  if (assignedTo.kind !== ASSIGNED_TO.MEMBER) return TASKS_HEAD_WORDS[assignedTo.kind];
+
+  if (assignedTo.userId === readerId) return TASKS_HEAD_WORDS[ASSIGNED_TO.ME];
+
+  return memberTasksHead(nameOf(assignedTo.userId));
+}
 
 /** The statuses the list shows: the work to do and under way, the backlog and the settled left out. */
 export const SHOWN_STATUSES: readonly TaskStatus[] = [TASK_STATUS.TODO, TASK_STATUS.IN_PROGRESS];

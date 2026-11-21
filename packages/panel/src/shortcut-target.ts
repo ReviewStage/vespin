@@ -21,7 +21,7 @@
  */
 
 import type { KeyedCommand } from "@repo/settings/shortcuts";
-import { useLayoutEffect, useSyncExternalStore } from "react";
+import { useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from "react";
 
 /** What a menu acts on, by kind. */
 export const SHORTCUT_SUBJECT = {
@@ -171,6 +171,52 @@ function subjectsOf(command: KeyedCommand): string {
 /** Draws the caller again whenever what `command`'s key acts on changes: a surface whose items all print that one key, as Copy link's ⇧⌘C. */
 export function useShortcutTargetsOf(command: KeyedCommand): void {
   useSyncExternalStore(subscribe, () => subjectsOf(command));
+}
+
+/** A subject a surface drew `command`'s key for, and whether the key acted on it as it was drawn. */
+interface Printed {
+  readonly subject: ShortcutSubject;
+  readonly held: boolean;
+}
+
+/**
+ * Notes each subject the caller draws `command`'s key for as it draws it, and
+ * draws the caller again once the key comes to act on one of them or stops
+ * acting on one, against what it drew, and only then: a surface printing
+ * that key on items of its own, as Copy link's ⇧⌘C on a row's links. Note
+ * that a target taken up or let go of on any other subject draws it nothing,
+ * as the open task's page naming its own link as it opens draws nothing of
+ * every row beside it, and that what was drawn is compared rather than what
+ * stood as the caller first heard the targets, because a target the same
+ * commit takes up stands before the caller listens.
+ */
+export function useKeyPrinted(command: KeyedCommand): (subject: ShortcutSubject) => void {
+  const printed = useRef(new Map<string, Printed>());
+  const [, redraw] = useReducer((draws: number) => draws + 1, 0);
+
+  useEffect(() => {
+    const stale = () => {
+      for (const { subject, held } of printed.current.values()) {
+        if (shortcutActsOn(command, subject) !== held) return true;
+      }
+
+      return false;
+    };
+
+    if (stale()) redraw();
+
+    return subscribe(() => {
+      if (stale()) redraw();
+    });
+  }, [command]);
+
+  // Note that each draw notes what it prints afresh, so a subject it no longer draws is let go.
+  const drawing = new Map<string, Printed>();
+  printed.current = drawing;
+
+  return (subject) => {
+    drawing.set(subject.id, { subject, held: shortcutActsOn(command, subject) });
+  };
 }
 
 /** Draws the caller again whenever any target changes: a menu standing open, whatever its items act on. */

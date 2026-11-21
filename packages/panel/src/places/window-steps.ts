@@ -39,12 +39,14 @@ import { liveStepTitle, type NamedStep } from "../history-titles.js";
 import type { InboxRoute } from "../inbox-route.js";
 import { inboxItemsQuery, workspaceMembersQuery } from "../live-reads.js";
 import type { RouteAccess } from "../route-gates.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import type { HistoryRows } from "./history-rows.js";
 import { placeParamsOf } from "./place-params.js";
 import {
   type PlaceThere,
   ROUTED_PLACE,
+  type RouteMatchSeen,
   routedPlaceOf,
   routedStepStands,
   stepPlaceOf,
@@ -270,6 +272,45 @@ function searchOf(address: string): URLSearchParams {
 /** The path of an address a step is held at, which the router matches routes by. */
 export function pathOf(address: string): string {
   return new URL(address, "https://panel.invalid").pathname;
+}
+
+/** How many addresses' matches a router's are kept for, past which they are matched afresh: more than the history keeps steps. */
+const MATCHES_KEPT = 256;
+
+/** The routes each address a step is held at matches, kept per router, as `matchesAt` reads them. */
+const addressMatches = new WeakMap<object, Map<string, readonly RouteMatchSeen[]>>();
+
+/**
+ * The routes the address a step is held at matches, by their ids and the
+ * params each was matched with, which is all a place's declaration reads.
+ * Note that they are kept per address, because Back's and Forward's lists
+ * name and reach every step known on every draw of the window, and matching
+ * each afresh walked the route tree once per step for every step between
+ * tasks; an address matches the same routes for the router's life.
+ */
+export function matchesAt(
+  router: Pick<ReturnType<typeof useRouter>, "matchRoutes">,
+  address: string,
+): readonly RouteMatchSeen[] {
+  let kept = addressMatches.get(router);
+
+  if (kept === undefined) {
+    kept = new Map();
+    addressMatches.set(router, kept);
+  }
+
+  const known = kept.get(address);
+
+  if (known !== undefined) return known;
+
+  const matches = router
+    .matchRoutes(pathOf(address))
+    .map(({ routeId, params }) => ({ routeId, params }));
+
+  if (kept.size >= MATCHES_KEPT) kept.clear();
+  kept.set(address, matches);
+
+  return matches;
 }
 
 /** The address a step is held at: its link's path, with the query and fragment it carries, since a browser holds a same-origin path. */
@@ -598,7 +639,7 @@ export function savedTaskOf(location: HistoryLocation): string | undefined {
 }
 
 /** The routes an address matches, as the window's router matches them. */
-type RouteMatches = ReturnType<ReturnType<typeof useRouter>["matchRoutes"]>;
+type RouteMatches = readonly RouteMatchSeen[];
 
 /** Which steps the window can still go to, and the task a version history's address names. */
 export interface StepReach {
@@ -619,7 +660,7 @@ export function useStepReach(input: {
   readonly access: RouteAccess;
   readonly tasks: Pick<
     TasksControl,
-    "boundFor" | "listFailed" | "mainTabs" | "workspace" | "workspaces" | "liveAgents"
+    "boundFor" | "listFailed" | "mainTabs" | "workspace" | "workspaces" | "agentsCarried"
   >;
   /** The task list's rows, by id. */
   readonly rows: HistoryRows;
@@ -631,6 +672,8 @@ export function useStepReach(input: {
   const { access, tasks, rows, columnSeen, automations } = input;
   const { boundFor } = tasks;
   const router = useRouter();
+  // Note that an agent is read as the list holds it at the call, never followed, so a step of its turn draws the window nothing; whether it stands on no task is all that is read, which no turn moves.
+  const { agents } = useTaskListCollections();
   // The tabs each task's column stood with as the window last stood on it, so a step on a tab since closed is passed over.
   // Note that a task reopened before its agents are read keeps the column it was last seen with.
   const knownColumns = useRef(new Map<string, ReadonlySet<string>>()).current;
@@ -675,14 +718,13 @@ export function useStepReach(input: {
     taskStands,
     columnStands,
     automationStands: (automationId: string) => !automations.deletedNow(automationId),
-    agentOnNoTask: (agentId: string) =>
-      tasks.liveAgents?.some((each) => each.id === agentId && each.taskId === null) === true,
+    agentOnNoTask: (agentId: string) => tasks.agentsCarried && agents.get(agentId)?.taskId === null,
     listed: (workspace: string) =>
       workspaceOfSlug(tasks.workspaces, workspace)?.id === listedWorkspace,
   });
 
   const reachable = (to: Place) => {
-    const matches = router.matchRoutes(pathOf(to.address));
+    const matches = matchesAt(router, to.address);
 
     return routedStepStands(matches, searchOf(to.address), access, thereOf(matches, to.task));
   };
@@ -727,8 +769,7 @@ export function useStepNames(input: {
     () =>
       personStanding ||
       entries().some(
-        (entry) =>
-          routedPlaceOf(router.matchRoutes(pathOf(entry.address)), access) === ROUTED_PLACE.PERSON,
+        (entry) => routedPlaceOf(matchesAt(router, entry.address), access) === ROUTED_PLACE.PERSON,
       ),
   );
 
@@ -755,7 +796,7 @@ export function useStepNames(input: {
 
   // A step is named again as its place's declaration says, by the ids its address names, a task's by what its step holds.
   const routedNamed = (to: Place): NamedStep | undefined => {
-    const matches = router.matchRoutes(pathOf(to.address));
+    const matches = matchesAt(router, to.address);
     const naming = { historyTask: historyTaskOf(matches), itemTask, taskStep: to.task };
 
     return stepPlaceOf(matches, access, to.task)?.named(

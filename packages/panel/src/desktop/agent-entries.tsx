@@ -1,5 +1,5 @@
 /**
- * agent-entries.tsx -- the task's agents as rows in their tabs' look, which History, the Overview's agents list, and ⌘K list them by.
+ * agent-entries.tsx -- the task's agents as rows in their tabs' look, which History and ⌘K list them by.
  */
 
 import type { AgentSummary } from "@repo/features/agent-wire";
@@ -19,7 +19,7 @@ export const AGENTS_SECTION = "Agents";
 
 /**
  * Each of the task's agents in the order started, or of those given (`listed`), as History lists a closed
- * or an archived one (`agent-history.tsx`), the Overview's agents list it, and ⌘K finds it, in its
+ * or an archived one (`agent-history.tsx`) and ⌘K finds it, in its
  * tab's look: its harness's mark wearing where it stands, and at its end
  * what every agent row ends in (`agentSummaryEnd`): a teammate's face where
  * the reader did not start it, then a failure, as its tab does. Picking an agent

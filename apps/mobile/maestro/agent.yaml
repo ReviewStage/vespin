@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny and Allow under it and the working line saying it waits on you, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, and Archive; then an agent whose transcript stands empty.
+# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny, Always allow and Allow under it and the working line saying it waits on you, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, Move to ›, and Archive; its threads line over the box, which opens the thread it names; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -34,9 +34,13 @@ env:
     timeout: 5000
 - takeScreenshot: agent-latest
 # Its last call, the test run, is held for the account's answer, as Ask mode
-# holds a shell command: its line says so with Deny and Allow under it, its
-# answer's only presses, and the working line says the agent waits on you.
+# holds a shell command: its line says so with Deny, Always allow and Allow
+# under it, its answer's only presses, Always allow naming the command's
+# first words it keeps for every agent, and the working line says the agent
+# waits on you.
 - assertVisible: "Waiting for approval"
+- assertVisible: "Always allow"
+- assertVisible: "Always allow won.t ask again for pnpm test \\* in any of your agents\\."
 - assertVisible: "Waiting on you · 1 approval"
 - takeScreenshot: agent-held
 # A call opens in place on its body: a command as a terminal, its prompt over
@@ -299,9 +303,34 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-pinned
+# Move to › lists where the agent may be moved, as the panel's does: the
+# fixture's cloud agent goes to either of Ada's machines, each saying it
+# stops the agent first, since it still works. Note that a compact window's
+# ⋯ still stands open from Unpin, where a regular window's must be opened;
+# a tap off the menu puts it away.
+- runFlow:
+    when:
+      notVisible: "Move to"
+    commands:
+      - tapOn: "More"
+- tapOn: "Move to"
+- assertVisible: "Ada's MacBook Pro"
+- assertVisible: "build-box"
+- assertVisible: "Stops the agent first"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-move-to
+- tapOn:
+    point: "50%, 20%"
+- waitForAnimationToEnd
+- assertNotVisible: "build-box"
 # Archive asks first, in the panel's words, since the agent still works and
 # archiving it stops it; putting the question away (a tap off the iPhone's
 # action sheet, the iPad alert's Cancel) leaves it.
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Archive
 - tapOn: "Archive"
 - assertVisible: "Archive agent?"
 - waitForAnimationToEnd:
@@ -325,6 +354,28 @@ env:
 - assertNotVisible: "Archive agent?"
 - assertNotVisible:
     id: "ask-note"
+# Its threads line stands over the box, as the panel's threads dock does:
+# the Inbox's glyph, and how many of the threads it posted wait on the
+# reader (the fixture's invitations agent posted several, some open). A
+# press opens the oldest waiting on the agent's own tab, over its page.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- extendedWaitUntil:
+    visible: "Inbox, \\d+ waiting"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-threads-line
+- tapOn: "Inbox, \\d+ waiting"
+- extendedWaitUntil:
+    notVisible: "Inbox, \\d+ waiting"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-threads-line-opened
 # An agent whose transcript is not read yet, or could not be: the fixture
 # holds none for this id, so the list stands empty and its empty state, which
 # is SwiftUI's, stands in the rows' place in a host of its own, rather than

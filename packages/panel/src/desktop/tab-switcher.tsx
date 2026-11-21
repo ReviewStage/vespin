@@ -32,26 +32,40 @@
  * and an automation's agent by its automation under it, as its page's bar
  * leads with it; a person's by their face; and any other place by the
  * glyph its door wears.
- * Its preview is a still of the whole work area, taken once the window
- * settles on the screen and again as ⌃Tab leaves it: main takes a downscaled
- * picture of that part of the window (`window.capture`). A still is a picture
+ * Its preview is a still of the whole work area, taken once the window has
+ * stood on the screen with nothing pressed or scrolled for a beat, and as ⌃Tab
+ * leaves a screen whose still is older than a few seconds, or that has none: main takes a downscaled picture of that
+ * part of the window (`window.capture`). Note that a still is taken once a
+ * screen, and only once the window is quiet, because each costs main about
+ * 10 ms of its own thread, a resize and a JPEG, that a press landing then
+ * waits behind, so a run of steps between tasks takes one, of the screen it
+ * ends on. A window with no switcher takes none. A still is a picture
  * of the window's words, so it is kept in this window's memory alone, a few
  * at a time, never written, traced, or counted, and the session recording
  * masks its address, so it draws empty there. Until a screen has one, its card shows its
  * glyph.
  */
 
-import type { AgentSummary } from "@repo/features/agent-wire";
+import type { AgentSummary, ListedAgent } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey } from "@repo/settings/shortcuts";
-import { createWait, DIALOG_SIZE, Dialog, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
+import {
+  createWait,
+  DIALOG_SIZE,
+  Dialog,
+  effectServices,
+  TabCard,
+  TabCards,
+  useRest,
+  VisuallyHidden,
+} from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Effect } from "effect";
+import { useQuery } from "@tanstack/react-query";
+import { Clock, Context, Duration, Effect } from "effect";
 import { HistoryIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
@@ -68,11 +82,12 @@ import {
   VERSION_HISTORY_WORDS,
 } from "../history-titles.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { TaskStep } from "../places/task-step.js";
 import type { RecentStep, RecentSteps } from "../places/window-history.js";
 import { type Place, type StepTitle, sameScreen } from "../places/window-steps.js";
-import { useNamedTask } from "../task-list-collections.js";
+import { useNamedTask, useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
@@ -95,8 +110,14 @@ import {
 /** How long ⌃ is held after ⌃Tab before the cards show, so a quick tap flips without drawing them. */
 const HOLD_SHOWS = "150 millis";
 
-/** How long the window stands on a screen before its still is taken, so a still is of the screen settled rather than arriving. */
-const STILL_SETTLES = "800 millis";
+/** How long the window stands on a screen with nothing pressed or scrolled before its still is taken: longer than a step through tasks at reading pace, so a run of them takes one still, of the screen it ends on. */
+const STILL_SETTLES = "1500 millis";
+
+/** How long a still stands for its screen as ⌃Tab leaves it: younger, it is kept, so flipping between two screens takes none; older, the screen is taken afresh, so no card is minutes old. */
+const STILL_STAYS = Duration.toMillis(Duration.seconds(10));
+
+/** What the window hears as it being used, each holding off the still a screen is owed: a press, a key, a scroll. */
+const BUSY_EVENTS = ["keydown", "pointerdown", "wheel"] as const;
 
 /** How many stills the window keeps, the most recent screens': as many as the cards, and a few the cards may reach once a tab closes. */
 const STILLS_KEPT = 8;
@@ -145,13 +166,17 @@ const PERSON_WORDS = "Profile";
 /** The hold before the cards show: the window's one, as it has one switcher, so each press held afresh calls off the one before. */
 const holdWait = createWait();
 
-/** The wait before a still is taken of the screen the window settled on, each settle calling off the one before. */
-const settleWait = createWait();
-
 /** A still kept of a screen. */
 interface HeldStill {
   readonly place: Place;
   readonly src: string;
+  /** When main answered it, on the renderer's clock. */
+  readonly at: number;
+}
+
+/** Reads the time on the renderer's clock as it stands at the call, for a still's stamp. */
+function clockNow(): number {
+  return Context.get(effectServices.state, Clock.Clock).currentTimeMillisUnsafe();
 }
 
 /** How a card wears its screen: its glyph and name, and under them the words a task's tabs are named by, its agent's glyph before them and its end mark after. */
@@ -222,10 +247,8 @@ function taskLook(
   };
 }
 
-/** An agent's card: the agent as its tab would wear it, read off every agent the window lists, its automation under it. */
-function agentLook(agentId: string, tasks: TasksControl): CardLook {
-  const agent = tasks.liveAgents?.find((each) => each.id === agentId);
-
+/** An agent's card: the agent as its tab would wear it, as the window lists it (`agent`), its automation under it. */
+function agentLook(agent: ListedAgent | undefined, tasks: TasksControl): CardLook {
   if (agent === undefined) {
     return {
       ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
@@ -242,13 +265,18 @@ function agentLook(agentId: string, tasks: TasksControl): CardLook {
 }
 
 /** How a card wears its screen, from what Back's list calls the step now and what the window holds of what it names, `task` the step's task as the window lists it. */
-function cardLook(step: RecentStep, tasks: TasksControl, task: TaskSummary | undefined): CardLook {
+function cardLook(
+  step: RecentStep,
+  tasks: TasksControl,
+  task: TaskSummary | undefined,
+  agent: ListedAgent | undefined,
+): CardLook {
   const { place, title, routed, params } = step;
 
   if (place.task !== undefined) return taskLook(place.task, title, task);
 
   if (routed === ROUTED_PLACE.AGENT && params.agentId !== undefined) {
-    return agentLook(params.agentId, tasks);
+    return agentLook(agent, tasks);
   }
 
   if (routed === ROUTED_PLACE.PERSON && params.userId !== undefined) {
@@ -292,7 +320,10 @@ function ScreenCard({
 }): React.JSX.Element {
   // The step's task as the window lists it, read by its id, so a delivery moving another task leaves the card as it is.
   const task = useNamedTask(step.place.task?.taskId, tasks.typedNames);
-  const look = cardLook(step, tasks, task);
+  // The step's agent, read by its id alone, so a step of any other agent's turn leaves the card as it is.
+  const agentId = step.routed === ROUTED_PLACE.AGENT ? step.params.agentId : undefined;
+  const agent = useTaskListRow(useTaskListCollections().agents, agentId);
+  const look = cardLook(step, tasks, task, tasks.agentsCarried ? agent : undefined);
 
   return (
     <TabCard
@@ -359,7 +390,7 @@ export function TabSwitcher({
 
   const answers = available && desktop;
   // Note that a still is the window's own action, sent on its mutation; nothing the service holds.
-  const { mutateAsync: sendCapture } = useMutation(actMutation(ACT_KIND.WINDOW_CAPTURE));
+  const { mutateAsync: sendCapture } = useMutationCalls(actMutation(ACT_KIND.WINDOW_CAPTURE));
   const [state, setState] = useState<SwitcherState<RecentStep>>(SWITCHER_LET_GO);
   // Counts the stills kept, so one landing while the cards show is drawn at once.
   const [, setStillsKept] = useState(0);
@@ -370,14 +401,10 @@ export function TabSwitcher({
   const settled = useRef<Place | undefined>(undefined);
   const doors = useRef(steps);
   doors.current = steps;
-  // The switcher's waits are called off as it leaves, since what they would do is draw it.
-  useEffect(
-    () => () => {
-      holdWait.stop();
-      settleWait.stop();
-    },
-    [],
-  );
+  // The screen whose still is owed, taken once the window has stood on it quiet for a beat (`stillRest`).
+  const owed = useRef<Place | undefined>(undefined);
+  // The switcher's hold is called off as it leaves, since what it would do is draw it.
+  useEffect(() => () => holdWait.stop(), []);
   useOverlayHold(state.held);
   const titleId = useId();
   const [face, setFace] = useState<SwitcherState<RecentStep>>(state);
@@ -394,7 +421,7 @@ export function TabSwitcher({
 
   const keep = (place: Place, src: string) => {
     stills.current = [
-      { place, src },
+      { place, src, at: clockNow() },
       ...stills.current.filter((held) => !sameScreen(held.place, place)),
     ].slice(0, STILLS_KEPT);
 
@@ -406,6 +433,9 @@ export function TabSwitcher({
     const area = areaOf(WORK_AREA);
 
     if (area === undefined) return;
+
+    // A screen taken is owed nothing more, so ⌃Tab's still of it is not taken again once the window is quiet.
+    if (owed.current !== undefined && sameScreen(owed.current, place)) owed.current = undefined;
     sendCapture(area).then(
       (src) => {
         if (src !== null) keep(place, src);
@@ -414,24 +444,43 @@ export function TabSwitcher({
     );
   };
 
-  // The screen the window settled on is taken as a still once it has stood a beat, checked on each render.
+  // Note that one rest stands for every screen, re-aimed as the window moves or is used, so a run of steps forks one fiber and takes one still.
+  const stillRest = useRest<Place>(STILL_SETTLES, (standing) => {
+    const stillOwed = owed.current !== undefined && sameScreen(owed.current, standing);
+    const standingOn = here();
+
+    if (stillOwed && standingOn !== undefined && sameScreen(standingOn, standing)) {
+      takeStill(standing);
+    }
+  });
+
+  // The screen the window arrives on is owed a still, checked on each render; a window with no switcher owes none.
   useEffect(() => {
-    const standing = here();
+    const standing = answers ? here() : undefined;
     const before = settled.current;
     settled.current = standing;
 
-    if (standing === undefined || (before !== undefined && sameScreen(before, standing))) return;
-    settleWait.start(
-      Effect.andThen(
-        Effect.sleep(STILL_SETTLES),
-        Effect.sync(() => {
-          const standingOn = here();
-
-          if (standingOn !== undefined && sameScreen(standingOn, standing)) takeStill(standing);
-        }),
-      ),
-    );
+    if (standing !== undefined && before !== undefined && sameScreen(before, standing)) return;
+    owed.current = standing;
+    stillRest.aim(standing);
   });
+
+  // While a still is owed, the window being used holds it off, so it is taken in a pause rather than under a press.
+  useEffect(() => {
+    if (!answers) return undefined;
+
+    const busy = () => {
+      if (owed.current !== undefined) stillRest.aim(owed.current);
+    };
+
+    for (const each of BUSY_EVENTS) {
+      window.addEventListener(each, busy, { capture: true, passive: true });
+    }
+
+    return () => {
+      for (const each of BUSY_EVENTS) window.removeEventListener(each, busy, { capture: true });
+    };
+  }, [answers, stillRest]);
 
   const pressedNow = (state: SwitcherState<RecentStep>, step: SwitchStep) => {
     const screens = doors.current.recent();
@@ -446,10 +495,16 @@ export function TabSwitcher({
     if (!next.held) return;
 
     if (!before.held) {
-      // The screen being left is taken afresh, before the cards can cover it.
+      // The screen being left is taken before the cards can cover it, unless its still is fresh (`STILL_STAYS`).
       const leaving = here();
+      const since = clockNow() - STILL_STAYS;
 
-      if (leaving !== undefined) takeStill(leaving);
+      const fresh = stills.current.some(
+        (held) => leaving !== undefined && sameScreen(held.place, leaving) && held.at > since,
+      );
+
+      if (leaving !== undefined && !fresh) takeStill(leaving);
+
       holdWait.start(
         Effect.andThen(
           Effect.sleep(HOLD_SHOWS),

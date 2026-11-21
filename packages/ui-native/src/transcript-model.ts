@@ -77,7 +77,13 @@ import {
   type ToolBlock,
   type ToolState,
 } from "@repo/features/tool-call-block";
-import { shownPageVersion, type ToolCallView, toolCallView } from "@repo/features/tool-call-model";
+import {
+  shownPageVersion,
+  TOOL_TARGET,
+  type ToolCallView,
+  toolCallView,
+  toolTarget,
+} from "@repo/features/tool-call-model";
 import { agentMessageOf, suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
@@ -240,6 +246,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly line: CallLine;
       /** What the call made or is about, named after the line's verb as the panel's chip names it. */
       readonly chip: string | undefined;
+      /** The id of the Inbox thread the call posted, withdrew, or read, which its chip opens, as the panel's thread chip does; none for a call about no one thread. */
+      readonly thread: string | undefined;
       /** Where it ran, beside its line, where it ran somewhere the transcript does not say. */
       readonly runOn: string | undefined;
       readonly standing: CallStanding;
@@ -314,6 +322,8 @@ export interface TranscriptReading {
   readonly origin?: TranscriptOrigin | undefined;
   /** The address of an agent whose suggestion a line was sent from, which the line's head opens; none where it can't be named, when the head names the agent alone. */
   readonly suggestionAddress?: ((agentId: string) => string | undefined) | undefined;
+  /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
+  readonly waitingCalls?: ReadonlySet<string> | undefined;
 }
 
 /** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
@@ -652,6 +662,15 @@ function linePlace(message: string, row: string): TranscriptPlace {
   return { message, row, member: undefined, piece: TRANSCRIPT_PIECE.LINE };
 }
 
+/** The Inbox thread a call names by the id its answer gave it, which its chip opens; none for any other call, a refused one, or one still running. */
+function calledThread(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+): string | undefined {
+  const target = toolTarget(part);
+
+  return target?.kind === TOOL_TARGET.INBOX ? target.item : undefined;
+}
+
 /**
  * How a call's line names what it did, as the panel's row does: a call that
  * made something by that thing's chip after its verb; a read or a write by
@@ -830,6 +849,7 @@ function callItems(
     callKind: view.kind,
     provider: view.provider,
     ...callNaming(view),
+    thread: calledThread(part),
     // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
     runOn: callPlace(view, CALL_MARK.LEADS),
     standing: standingOf(part.state, view.refused === true),
@@ -905,7 +925,13 @@ function rowItems(
     };
 
     if (row.kind === TURN_ROW.BLOCK) return partItems(row.block, base, reading);
-    const open = row.open !== foldTurned(reading.toggles, base.place);
+
+    // Note that a fold holding a call that waits on the reader stands open as the turn's latest work does, since a line landing after it, such as the reader's own steer, closes the run it stood in and would leave the call undrawn.
+    const waits = row.blocks.some(
+      (block) => block.kind === AGENT_PART.TOOL && reading.waitingCalls?.has(block.callId) === true,
+    );
+
+    const open = (row.open || waits) !== foldTurned(reading.toggles, base.place);
 
     const line: TranscriptItem = {
       ...base,
@@ -977,19 +1003,18 @@ function inRuns(items: readonly TranscriptItem[], now: number): readonly Transcr
  * The transcript with the member's messages on their way at its end, each
  * as their own line under the id its row lands under, so the row takes its
  * place, as the host draws them (`AppTranscript.sending`); a message the
- * service refused is the composer's to give back, and stands nowhere here.
+ * service refused stands there too, where it went, which the page marks Not
+ * delivered (`AgentTranscript`'s `undelivered`), as the panel keeps it.
  */
 export function withSending(
   messages: readonly AgentTranscriptMessage[],
   sending: readonly SendingMessage[],
 ): readonly AgentTranscriptMessage[] {
-  const going = sending.filter((message) => message.refused === undefined);
-
-  if (going.length === 0) return messages;
+  if (sending.length === 0) return messages;
 
   return [
     ...messages,
-    ...going.map(
+    ...sending.map(
       (message): AgentTranscriptMessage => ({
         id: message.id,
         role: MESSAGE_ROLE.USER,

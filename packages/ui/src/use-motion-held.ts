@@ -9,6 +9,23 @@ import { motionHeld } from "./motion-timing.js";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 /**
+ * Tells `heard` each time the reduced-motion setting changes, the moment to
+ * read the motion tokens again, since they change with it; answers the way
+ * to stop. Note that a document with no media queries, as a test's is, has
+ * no setting to follow.
+ */
+export function listenToMotionSetting(heard: () => void): () => void {
+  if (typeof window === "undefined" || !Predicate.isFunction(window.matchMedia)) {
+    return () => undefined;
+  }
+
+  const query = window.matchMedia(REDUCED_MOTION_QUERY);
+  query.addEventListener("change", heard);
+
+  return () => query.removeEventListener("change", heard);
+}
+
+/**
  * Whether motion is held still, for what a script plays that the stylesheet
  * cannot hold: holding every loop still leaves the poses, and switching
  * between poses is the motion someone asked not to see. Note that the tokens
@@ -25,12 +42,7 @@ export function useMotionHeld(): boolean {
     // that may be committed beside the caller, after the render's own read.
     update();
 
-    // Note that a document with no media queries, as a test's is, has no setting to follow.
-    if (!Predicate.isFunction(window.matchMedia)) return;
-    const query = window.matchMedia(REDUCED_MOTION_QUERY);
-    query.addEventListener("change", update);
-
-    return () => query.removeEventListener("change", update);
+    return listenToMotionSetting(update);
   }, []);
 
   return held;

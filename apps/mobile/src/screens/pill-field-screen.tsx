@@ -82,7 +82,7 @@ export function PillFieldScreen() {
   const attach = () => {
     const name = nextPictureName(files);
     setFiles(new Set([...files, name]));
-    field.current?.pick(filePill(name));
+    field.current?.place([filePill(name)]);
   };
 
   return (

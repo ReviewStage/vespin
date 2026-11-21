@@ -1,4 +1,4 @@
-# search.yaml -- the Search tab: what it says before anything is typed, the tasks, Inbox items, and agents a query finds, each in its own section, a task opened from them, and what it says where nothing matches.
+# search.yaml -- the Search tab: what it says before anything is typed, the tasks, Inbox items, and agents a query finds, each in its own section, a task opened from them, what it says where nothing matches, and the task opened standing under Recent once nothing is typed.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -65,3 +65,31 @@ appId: dev.vespin.ios
     above: "Fix ledger rounding"
 - assertVisible: "Created by .*"
 - takeScreenshot: search-opened
+# Back on Search with nothing typed, Recent lists the task just opened, as
+# Apple's search tabs list their recents. A compact window pushed the task on
+# Search's own stack, whose tab, tapped again, pops back to the field still
+# holding the words; a regular one opened it on Tasks and ended the search,
+# so its Search tab stands with the field empty.
+- runFlow:
+    when:
+      visible:
+        id: "search-tab"
+    commands:
+      - tapOn:
+          id: "search-tab"
+- runFlow:
+    when:
+      notVisible: "rounding"
+    commands:
+      - tapOn:
+          text: "Search"
+          rightOf: "Tasks"
+- runFlow:
+    when:
+      visible: "rounding"
+    commands:
+      - tapOn: "rounding"
+      - eraseText
+- assertVisible: "Recent"
+- assertVisible: "Ledger rounding"
+- takeScreenshot: search-recent
