@@ -1,11 +1,8 @@
-// held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny, Always allow and Allow under its line in the transcript, the line over the composer saying a message denies it, and a banner there for a call no row draws.
+// held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny, Always allow and Allow under its line in the transcript, and a banner over the composer for a call no row draws.
 
-import { HStack, Image, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
-import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import { HStack, Image, Text, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
-  accessibilityHint,
-  buttonStyle,
   font,
   foregroundStyle,
   frame,
@@ -14,7 +11,6 @@ import {
 import {
   ALWAYS_ALLOW_COMMAND_WORDS,
   APPROVAL_PRESS_WORDS,
-  DENIES_WAITING,
 } from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -170,45 +166,6 @@ export function HeldCallBody({ held }: { readonly held: HeldCall }) {
   );
 }
 
-/** What a press on the denial line is heard to do. */
-const SHOW_WAITING_HINT = "Shows the call waiting in the transcript";
-
-/**
- * Over the composer's field while a call waits and a message sent now would
- * deny it, as the panel's composer says it: "Sending a message denies the
- * waiting approval." in the muted ink. A press scrolls the transcript to the
- * call's row, whose presses answer it; where no row is drawn it is
- * words alone.
- */
-export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | undefined }) {
-  const colors = useColors();
-
-  const words = (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_LINE }),
-        foregroundStyle(colors.TEXT_MUTED),
-        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-        // Note that the shape stands on the words' full-width frame, not on the button, since a plain button takes a press only where its label is hit, and a wide window leaves most of the line past the words.
-        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-      ]}
-    >
-      {DENIES_WAITING}
-    </Text>
-  );
-
-  if (onShow === undefined) return words;
-
-  return (
-    <SwiftUIButton
-      onPress={onShow}
-      modifiers={[buttonStyle("plain"), accessibilityHint(SHOW_WAITING_HINT)]}
-    >
-      {words}
-    </SwiftUIButton>
-  );
-}
-
 type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "command" | "onAnswer"> & {
   /** How many calls wait, as the panel's working line says it: "Waiting on you · 1 approval". */
   readonly waiting: string;
@@ -217,7 +174,7 @@ type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "command" | "on
 };
 
 /**
- * What stands over the composer's field, inside its glass, while a call
+ * What the composer's Approval capsule opens, in a glass of its own, while a call
  * waits that no row of the transcript draws, such as a subagent's, so it is
  * still answered: a raised hand and how many wait in the attention ink,
  * what the oldest asks, and Deny, Always allow and Allow. A call whose row is drawn is
