@@ -36,6 +36,7 @@ import {
   MessageMenu,
   MessageWords,
   PictureOriginProvider,
+  PictureSetProvider,
   TurnActs,
   useCopyWords,
 } from "./held-menu.js";
@@ -1397,8 +1398,11 @@ export function AgentTranscript({
           data={items}
           keyExtractor={itemKey}
           // Note that each row is keyed by its item, so a cell FlashList recycles for another item mounts that item's row afresh rather than keeping the last one's state, such as a fold left open or a picture's measured size.
+          // Note that each row's pictures are one set its viewer swipes through, a message's or a showing's own, since rows scrolled away are drawn no longer.
           renderItem={({ item }) => (
-            <TranscriptRow key={itemKey(item)} item={item} drawing={rowDrawing} />
+            <PictureSetProvider key={itemKey(item)}>
+              <TranscriptRow item={item} drawing={rowDrawing} />
+            </PictureSetProvider>
           )}
           ListHeaderComponent={
             <>
