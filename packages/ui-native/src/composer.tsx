@@ -900,6 +900,7 @@ export function Composer(props: ComposerProps) {
       // Note that a field over a row of controls stands on the glass alone, as the desktop's box stands its field and its row on one ground, with no filled box of ours behind the words.
       field={!rowed}
       head={props.head}
+      heads={props.pills !== undefined}
       foot={rowed ? <ComposerRow props={props} parts={parts} /> : undefined}
       above={props.above}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
@@ -936,9 +937,9 @@ export function ComposerFoot(props: ComposerProps) {
     </HStack>
   );
 
-  // Note that a composer with a row under its field stands it there inside the same glass, as the bar does.
+  // Note that a composer with a row under its field stands it there inside the same glass, as the bar does, and that a field of pills keeps the column even with no head over it, so the `@` offer coming and going never draws the field anew and drops its keyboard.
   const foot =
-    props.head === undefined && !rowed ? (
+    props.head === undefined && !rowed && props.pills === undefined ? (
       <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={glass}>
         <RowPieces parts={parts} />
       </HStack>
