@@ -1,0 +1,238 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow answer
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Who can withdraw an invite\?", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Assert that "The member who sent it" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-decide... COMPLETED
+Tap on "Both, Recommended.*"... COMPLETED
+Assert that "Add a note" is visible... COMPLETED
+Take screenshot answer-decide-picked... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Chose Both" is visible... COMPLETED
+Assert that "The member who sent it" is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-decide-sent... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Run the memberships migration on preview\?", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Assert that "Decline" is visible... COMPLETED
+Tap on "Approve, Recommended.*"... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Not delivered.*" is visible... COMPLETED
+Assert that "Decline" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-refused... COMPLETED
+Tap on "Not delivered.*"... COMPLETED
+Assert that "Retry" is visible... COMPLETED
+Assert that "Edit" is visible... COMPLETED
+Assert that "Delete" is visible... COMPLETED
+Take screenshot answer-undelivered-menu... COMPLETED
+Tap on "Retry"... COMPLETED
+Assert that "Not delivered.*" is visible... COMPLETED
+Tap on "Not delivered.*"... COMPLETED
+Tap on "Edit"... COMPLETED
+Assert that "Not delivered.*" is not visible... COMPLETED
+Assert that "Send", enabled is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-undelivered-edited... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Not delivered.*" is visible... COMPLETED
+Tap on "Not delivered.*"... COMPLETED
+Tap on "Delete"... COMPLETED
+Assert that "Not delivered.*" is not visible... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Invite limits", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Assert that "None" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-fields... COMPLETED
+Tap on "None"... COMPLETED
+Tap on "Every member \(recommended\)"... COMPLETED
+Tap on "Email the sender when an invite is accepted.*"... COMPLETED
+Scrolling UP until id: answer-field-Invites a member may send a day is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on id: answer-field-Invites a member may send a day... COMPLETED
+Wait for animation to end... COMPLETED
+Input text .... COMPLETED
+Assert that "Send", enabled is visible... COMPLETED
+Tap on "Send"... COMPLETED
+Scrolling DOWN until "Write a number in Invites a member may send a day." is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Scrolling UP until id: answer-field-Invites a member may send a day is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on id: answer-field-Invites a member may send a day... COMPLETED
+Erase 1 characters... COMPLETED
+Input text 20... COMPLETED
+Assert that "Send", enabled is visible... COMPLETED
+Assert that "20", id: answer-field-Invites a member may send a day is visible... COMPLETED
+Take screenshot answer-fields-filled... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Submitted" is visible... COMPLETED
+Assert that "None" is not visible... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Verify the digest's sender domain", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Assert that "Mark done" is visible... COMPLETED
+Tap on ".*Add the three DNS records.*"... COMPLETED
+Assert that ".*your registrar\., ticked" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-do... COMPLETED
+Tap on "Mark done"... COMPLETED
+Assert that "Done 3/3" is visible... COMPLETED
+Assert that "Mark done" is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-do-sent... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "The digest's subject line", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Tap on id: composer-field... COMPLETED
+Wait for animation to end... COMPLETED
+Input text What shipped in Relay this week... COMPLETED
+Assert that "Send", enabled is visible... COMPLETED
+Take screenshot answer-words... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Answered" is visible... COMPLETED
+Assert that "What shipped in Relay this week" is visible... COMPLETED
+Swipe from (50%, 30%) to (50%, 60%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot answer-words-sent... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "acceptInvite can add a member twice", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Assert that "Reply" is visible... COMPLETED
+Tap on id: composer-field... COMPLETED
+Wait for animation to end... COMPLETED
+Input text Thanks, one transaction sounds right.... COMPLETED
+Assert that "Send", enabled is visible... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Thanks, one transaction sounds right." is visible... COMPLETED
+Swipe from (50%, 30%) to (50%, 60%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot reply-sent... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+      Run flow when "What the expired invite page says", Above id: search-tab is not visible and true is true... COMPLETED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/bar-act.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Tap on "More"... COMPLETED
+  Run flow when true is true... COMPLETED
+Run subflows/bar-act.yaml... COMPLETED
+Assert that "Resolve" is visible... COMPLETED
+Take screenshot resolve-menu... COMPLETED
+Tap on "Resolve"... COMPLETED
+Assert that "You resolved this without an answer.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot resolve-sent... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, UIPreferredContentSizeCategoryName=UICTContentSizeCategoryAccessibilityXL})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Tap on "Who can withdraw an invite?"... COMPLETED
+Scrolling DOWN until "Both, Recommended.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot answer-decide-ax3... COMPLETED
