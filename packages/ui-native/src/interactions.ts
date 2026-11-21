@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a view's VoiceOver Actions.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, a view's VoiceOver Actions, and a row's long press menu and swipes built from data.
 
 import {
   createModifier,
@@ -18,6 +18,8 @@ const MODIFIER = {
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
   HEARD_ACTS: "vespinHeardActs",
+  ROW_MENU: "vespinRowMenu",
+  ROW_SWIPES: "vespinRowSwipes",
 } as const;
 
 /** Which bar a subtitle stands under: a split view column's, SwiftUI's own, or the native stack's a compact screen is pushed under. */
@@ -78,6 +80,11 @@ const DroppedPicturesSchema = Schema.Struct({
 /** What a drop of a link sends: its address. */
 const DroppedLinkSchema = Schema.Struct({ url: Schema.String });
 
+/** What a press in a row's menu or on its swipe sends: the item's place, its group or edge's first, then its place in each menu within. */
+const PressedPlaceSchema = Schema.Struct({ path: Schema.Array(Schema.Number) });
+
+const decodePressedPlace = Schema.decodeUnknownOption(PressedPlaceSchema);
+
 /** What an Action VoiceOver ran sends: its place among the names the view was given. */
 const HeardActSchema = Schema.Struct({ index: Schema.Number });
 
@@ -133,5 +140,49 @@ export function heardActions(
       Option.map(({ index }) => acts[index]?.onPress()),
     ),
     { names: acts.map((act) => act.name) },
+  );
+}
+
+/**
+ * A row's long press menu, SwiftUI's own, which the native module builds from
+ * `menu`, the row's menu tree as JSON (`menuTree`, and its preview's,
+ * `previewTree`, where `previewed`), only as a long press opens it, so a row holds no view of
+ * an item or a preview nobody opened. A press hands on the place of the item
+ * pressed (`menuPressAt`). Note that it stands on the row's content inside
+ * its frame, so the menu lifts the row's words as the system's own does.
+ */
+export function rowMenu(
+  menu: string,
+  previewed: boolean,
+  onPress: (path: readonly number[]) => void,
+): ModifierConfig {
+  return createModifierWithEventListener(
+    MODIFIER.ROW_MENU,
+    flow(
+      decodePressedPlace,
+      Option.map(({ path }) => onPress(path)),
+    ),
+    { menu, previewed },
+  );
+}
+
+/**
+ * A row's swipes from either edge, SwiftUI's own swipe actions, which the
+ * native module builds from `swipes`, the trees of both edges as JSON
+ * (`swipeTree`): a press hands on the place of the item pressed, its edge's
+ * first, trailing then leading. Note that it stands on the row's frame, the
+ * list's row itself, since a list reads swipes off its row alone.
+ */
+export function rowSwipes(
+  swipes: string,
+  onPress: (path: readonly number[]) => void,
+): ModifierConfig {
+  return createModifierWithEventListener(
+    MODIFIER.ROW_SWIPES,
+    flow(
+      decodePressedPlace,
+      Option.map(({ path }) => onPress(path)),
+    ),
+    { swipes },
   );
 }

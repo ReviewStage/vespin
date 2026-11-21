@@ -75,6 +75,7 @@ import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
+import type { RowPreview } from "./row-preview-model.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -254,8 +255,8 @@ type AgentRowProps = {
   readonly trailingActions?: readonly RowSwipe[] | undefined;
   /** Its long press menu past its fold and its pull request, in the panel's agent menu's groups (`agentMenuGroups`): its links, Rename, Stop and Archive, and last and alone, Permanently delete. Its swipes stand behind the swipe alone. */
   readonly menu?: readonly LongPressGroup[] | undefined;
-  /** What its long press lifts over its menu (`AgentPreview`). */
-  readonly preview?: ReactElement | undefined;
+  /** What its long press lifts over its menu (`agentPreview`). */
+  readonly preview?: RowPreview | undefined;
   /** What its acts ask first, such as Archive, standing by the row; none where its acts never ask. */
   readonly question?: RowQuestion | undefined;
   /** How deep it stands nested under the agent that started it, which sets it in from the list's edge; at the top unless said. */

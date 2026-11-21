@@ -10,7 +10,6 @@ import {
   Menu,
   Section,
   Spacer,
-  SwipeActions,
   Text,
   Toggle,
   VStack,
@@ -51,7 +50,6 @@ import {
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
-import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -67,12 +65,13 @@ import {
   useContext,
   useState,
 } from "react";
+import { PixelRatio, useColorScheme } from "react-native";
 import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
-import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
+import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent, emojiContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { cellFocusRingOff, dragLink, heardActions } from "./interactions.js";
+import { cellFocusRingOff, dragLink, heardActions, rowMenu, rowSwipes } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -89,23 +88,46 @@ import {
 import { useMinute } from "./minute.js";
 import { heardActs } from "./row-heard-acts.js";
 import {
+  filledGroups,
+  isSubmenu,
+  type LongPressGroup,
+  type MenuChoice,
+  type MenuInks,
+  menuPressAt,
+  menuTree,
+  pressAt,
+  ROW_ACTION_TONE,
+  type RowAction,
+  type RowActionTone,
+  type RowMenuGroup,
+  type RowSubmenu,
+  type RowSwipe,
+  swipeTree,
+} from "./row-menu-model.js";
+import {
   RowChoosingContext,
   RowOpenContext,
   RowSearchedContext,
   RowSelectedContext,
 } from "./row-open.js";
+import { previewTree, type RowPreview } from "./row-preview-model.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
 import { sparedMarksDropped } from "./task-row-fit-model.js";
-import {
-  type BrandColors,
-  STATUS_TONE,
-  type StatusTone,
-  toneColor,
-  useColors,
-} from "./tokens/colors.js";
+import { type BrandColors, STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, ROW_INSET, SPACE } from "./tokens/space.js";
 import { SYSTEM_COLOR, type SystemColor, useSystemColors } from "./tokens/swipe-colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+
+export {
+  type LongPressGroup,
+  type MenuChoice,
+  ROW_ACTION_TONE,
+  type RowAction,
+  type RowActionTone,
+  type RowMenuGroup,
+  type RowSubmenu,
+  type RowSwipe,
+};
 
 /** How many lines a row's title and its line take: one each at the standard sizes, and more at an accessibility size, so they still read. */
 const ROW_LINES = {
@@ -152,26 +174,6 @@ const SUB_TASKS_SHOWN = "Sub-tasks shown";
 const SUB_TASKS_HIDDEN = "Sub-tasks hidden";
 
 /**
- * What a row's act means, which sets the color its swipe stands on: one
- * that marks a row read or unread, sets a reminder, finishes something
- * (Resolve, Mark done), pins, archives, or deletes, and the rest. In a long
- * press menu only a destructive act, a delete, reads apart, in the system's
- * red; the rest stand in the menu's ink. Copper is kept for what wants the
- * reader, so no act is drawn in it.
- */
-export const ROW_ACTION_TONE = {
-  NEUTRAL: "neutral",
-  DESTRUCTIVE: "destructive",
-  READ: "read",
-  REMIND: "remind",
-  DONE: "done",
-  PIN: "pin",
-  ARCHIVE: "archive",
-} as const;
-
-export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TONE];
-
-/**
  * The system color each act's swipe stands on, its glyph in white, as Mail
  * colors its swipes on iOS 26: Read and Unread blue, Remind Me and Archive
  * purple, Flag orange (a pin here), Trash red, and More gray, so red is kept
@@ -189,74 +191,9 @@ const SWIPE_FILL = {
   [ROW_ACTION_TONE.ARCHIVE]: SYSTEM_COLOR.PURPLE,
 } as const satisfies Record<RowActionTone, SystemColor>;
 
-export type RowAction = {
-  /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
-  readonly label: string;
-  /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
-  readonly symbol?: Glyph | undefined;
-  /** What a menu says under its words, such as when a reminder's time comes due. */
-  readonly detail?: string | undefined;
-  readonly tone: RowActionTone;
-  readonly onPress: () => void;
-  /** Whether it stands dimmed and takes no press, its `detail` saying why, as the panel's Unfollow stands for the assignee. */
-  readonly disabled?: boolean | undefined;
-  /** What VoiceOver's Actions call it where its words lean on the menu it stands in, such as Remind me's "Tomorrow" heard as "Remind me tomorrow"; its menu's name before its label where none is given (`heardActs`). */
-  readonly heard?: string | undefined;
-};
-
-/** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
-export type MenuChoice = {
-  readonly label: string;
-  /** What tells the choice apart where two may share a label, such as two tasks of one name; the label where none is given. */
-  readonly id?: string | undefined;
-  readonly symbol?: Glyph | undefined;
-  /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
-  readonly tone?: StatusTone | undefined;
-  /** A glyph drawn faint under its own in the same tone, as a priority's lit bars stand over every bar it can light (`MarkLayers`); none where its glyph stands alone. */
-  readonly under?: MarkLayer | undefined;
-  /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
-  readonly photo?: string | undefined;
-  /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
-  readonly mark?: IntegrationProvider | undefined;
-  /** An emoji drawn as its image in the glyph's place, as a section the member gave an emoji leads with it in the panel's Move to, so its words line up with its glyphs' choices. */
-  readonly emoji?: string | undefined;
-  /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
-  readonly detail?: string | undefined;
-  readonly on: boolean;
-  readonly onPress: () => void;
-  /** What VoiceOver's Actions call it, such as a status heard as "Set status: Backlog"; its menu's name before its label where none is given (`heardActs`). */
-  readonly heard?: string | undefined;
-};
-
-/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
-export type RowSubmenu = {
-  readonly label: string;
-  readonly symbol: Glyph;
-  readonly choices: readonly MenuChoice[];
-  /** Menus one level further down, after its choices, such as a task's repository inside More. */
-  readonly submenus?: readonly RowSubmenu[] | undefined;
-  readonly actions?: readonly RowAction[] | undefined;
-  /** What it means as a swipe, which sets the color it stands on, such as Remind me's purple; a plain act's gray where none is given. */
-  readonly tone?: RowActionTone | undefined;
-};
-
-/** What a swipe reveals: an act, or a menu of choices, such as a task's Status, which opens where the act would run. */
-export type RowSwipe = RowAction | RowSubmenu;
-
-/** A group of a row's long press menu, set apart from the groups around it by a divider, as Mail's and Reminders' row menus group their acts: its menus, then its acts. */
-export type RowMenuGroup = {
-  readonly submenus?: readonly RowSubmenu[] | undefined;
-  readonly actions?: readonly RowAction[] | undefined;
-};
-
 /** Whether a group holds anything to draw. */
 function menuGroupFilled(group: RowMenuGroup): boolean {
   return (group.submenus?.length ?? 0) + (group.actions?.length ?? 0) > 0;
-}
-
-/** Whether a swipe's piece is a menu of choices rather than one act. */
-function isSubmenu(swipe: RowSwipe): swipe is RowSubmenu {
-  return "choices" in swipe;
 }
 
 /** The acts a row carries: a swipe from either edge, the same acts in its long press menu, what that menu holds alone, and the preview it lifts. */
@@ -276,7 +213,7 @@ type RowActs = {
   /** The long press menu whole, in its own order, for a row whose menu follows the panel's right-click rather than leading with its swipes: each group set apart by a divider, after Open. Where given, the swipes stand behind the swipe alone, and `menuSubmenus`, `menuActions` and `menuGroups` are left out. */
   readonly menu?: readonly LongPressGroup[] | undefined;
   /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
-  readonly preview?: ReactElement | undefined;
+  readonly preview?: RowPreview | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
   readonly link?: string | undefined;
   /** What its own acts ask first, standing by the row (`RowAsking`), `QUIET_ROW_QUESTION` while it asks nothing; none for a row whose acts never ask. */
@@ -523,39 +460,6 @@ export function rowPlacement(
   ];
 }
 
-/** The tones of acts that ask before they run, which a full swipe never runs, so they wait for their button's tap. */
-const ASKS_FIRST: ReadonlySet<RowActionTone> = new Set([
-  ROW_ACTION_TONE.DESTRUCTIVE,
-  ROW_ACTION_TONE.ARCHIVE,
-]);
-
-/** Whether a full swipe from an edge runs its first act: never where that act asks first, such as Archive or a delete, nor where it is a menu. */
-function fullSwipes(swipes: readonly RowSwipe[]): boolean {
-  const first = swipes[0];
-
-  return first !== undefined && !isSubmenu(first) && !ASKS_FIRST.has(first.tone);
-}
-
-/**
- * A swipe's piece behind the row: an act's button, or a menu's, filled with
- * the system color its meaning takes (`SWIPE_FILL`). Note that a delete
- * fills red without the destructive role, because
- * SwiftUI takes a row out of its list the moment a destructive swipe is
- * pressed, before an act that asks first, such as Archive, hears its answer,
- * so a Cancel left the row gone under its section's count.
- */
-function swipeButton(
-  swipe: RowSwipe,
-  colors: BrandColors,
-  fills: Readonly<Record<SystemColor, string>>,
-) {
-  const fill = fills[SWIPE_FILL[swipe.tone ?? ROW_ACTION_TONE.NEUTRAL]];
-
-  if (isSubmenu(swipe)) return rowSubmenu(swipe, colors, fill);
-
-  return actionButton(swipe, colors, fill, false);
-}
-
 /** A swiped act as it stands again in the long press menu: in the muted ink a menu's glyph takes, and red through the system's destructive role, since a menu takes no row away. */
 function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
   return isSubmenu(swipe)
@@ -563,34 +467,29 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
-/** One group of a long press menu, in the menu's order: its acts and the menus within it. */
-export type LongPressGroup = readonly RowSwipe[];
-
 /**
  * The one long press menu the app opens on anything held, as the panel opens
  * its right-click menu on the same things: SwiftUI's own menu, its groups in
  * the panel's order, each set apart from the next by a divider, an act red
- * where it takes something away, and the preview it lifts where it has one,
- * as the system's own apps lift a glance at what a row opens. A row draws it
- * through `RowFrame`, a section's header through `ListSection`'s `menu`,
- * and SwiftUI or React Native views held through `HeldSwiftMenu` and
- * `HeldMenu`. The content alone where it offers nothing.
+ * where it takes something away. A section's header draws it through
+ * `ListSection`'s `menu`, and SwiftUI or React Native views held through
+ * `HeldSwiftMenu` and `HeldMenu`; a row's is built natively from the same
+ * groups instead (`RowFrame`, `rowMenu`). The content alone where it offers
+ * nothing.
  */
 export function LongPressMenu({
   groups,
   title,
-  preview,
   children,
 }: {
   readonly groups: readonly LongPressGroup[];
   /** What heads the menu, such as when a message was sent, as Messages heads a held message's menu by its time; none where it says nothing over its acts. */
   readonly title?: string | undefined;
-  readonly preview?: ReactElement | undefined;
   readonly children: ReactElement;
 }) {
-  const filled = groups.filter((group) => group.length > 0);
+  const filled = filledGroups(groups);
 
-  if (filled.length === 0 && preview === undefined) return children;
+  if (filled.length === 0) return children;
 
   const items = <LongPressMenuItems groups={filled} />;
 
@@ -600,7 +499,6 @@ export function LongPressMenu({
         {title === undefined ? items : <Section title={title}>{items}</Section>}
       </ContextMenu.Items>
       <ContextMenu.Trigger>{children}</ContextMenu.Trigger>
-      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
     </ContextMenu>
   );
 }
@@ -663,6 +561,7 @@ export function RowFrame({
   vertical,
   indent,
   leading,
+  now,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
@@ -672,6 +571,8 @@ export function RowFrame({
   readonly indent?: number | undefined;
   /** The row's leading inset: the unread dot's margin where none is given, or the list's edge for a row that draws no dot (`ROW_INSET.PLAIN`). */
   readonly leading?: number | undefined;
+  /** What its preview's times count from: its list's minute, where the row reads one; the moment it draws otherwise. */
+  readonly now?: number | undefined;
 }) {
   const colors = useColors();
   const fills = useSystemColors();
@@ -681,6 +582,8 @@ export function RowFrame({
   const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
   const voiceOver = useVoiceOver();
+  const scale = useScaledSize(1);
+  const dark = useColorScheme() === "dark";
   const swiped = [...trailingActions, ...leadingActions];
   const groups = menuGroups.filter(menuGroupFilled);
 
@@ -742,10 +645,32 @@ export function RowFrame({
     return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
+  const inks: MenuInks = { act: colors.TEXT_MUTED, tone: (tone) => toneColor(colors, tone) };
+
+  // Note that the menu and its preview reach the native module as one string, read only as a long press opens them, so the row holds no view of either; a press comes back as its place, which finds its handler here.
+  const tree = JSON.stringify({
+    groups: menuTree(menuGroupsDrawn, inks),
+    preview:
+      preview === undefined
+        ? undefined
+        : previewTree(preview, {
+            colors,
+            tone: inks.tone,
+            scale,
+            dark,
+            pixelRatio: PixelRatio.get(),
+            now: now ?? Date.now(),
+          }),
+  });
+
   const menu = asking(
-    <LongPressMenu groups={menuGroupsDrawn} preview={preview}>
+    <HStack
+      modifiers={[
+        rowMenu(tree, preview !== undefined, (path) => menuPressAt(menuGroupsDrawn, path)?.()),
+      ]}
+    >
       {row}
-    </LongPressMenu>,
+    </HStack>,
     question,
   );
 
@@ -754,20 +679,16 @@ export function RowFrame({
     return <HStack modifiers={frameModifiers}>{menu}</HStack>;
   }
 
+  const fill = (tone: RowActionTone) => fills[SWIPE_FILL[tone]];
+  const edges = [trailingActions, leadingActions] as const;
+
+  // Note that the swipes stand innermost of the frame's modifiers, as `@expo/ui`'s own swipe actions stood on the row's content inside its frame; their tree lists the trailing edge first, then the leading, as a press's place counts them.
+  const swipes = JSON.stringify(edges.map((edge) => swipeTree(edge, fill, inks)));
+
   return (
-    <SwipeActions modifiers={frameModifiers}>
+    <HStack modifiers={[rowSwipes(swipes, (path) => pressAt(edges, path)?.()), ...frameModifiers]}>
       {menu}
-      {trailingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
-          {trailingActions.map((swipe) => swipeButton(swipe, colors, fills))}
-        </SwipeActions.Actions>
-      )}
-      {leadingActions.length === 0 ? null : (
-        <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
-          {leadingActions.map((swipe) => swipeButton(swipe, colors, fills))}
-        </SwipeActions.Actions>
-      )}
-    </SwipeActions>
+    </HStack>
   );
 }
 
@@ -1144,6 +1065,7 @@ export function ListRow(props: ListRowProps) {
       row={row}
       heard={props.heard ?? threadHeard(props, now)}
       vertical={ROW_INSET.THREAD_VERTICAL}
+      now={now}
     />
   );
 }
@@ -1636,6 +1558,7 @@ export function TaskRow(props: TaskRowProps) {
       leading={ROW_INSET.PLAIN}
       menuActions={[...foldActions(fold, SUB_TASK_FOLD), ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props, minute)}
+      now={minute}
     />
   );
 }
