@@ -1030,7 +1030,15 @@ function ThreadDetail({
             pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
-            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+            foot: (
+              <ThreadComposer
+                item={item}
+                answer={answer}
+                agentName={agentName}
+                place={{ workspaceId: holder.task.workspaceId, taskId: holder.task.id }}
+                inColumn
+              />
+            ),
           })}
     />
   );
@@ -1085,7 +1093,16 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
+      <GlassDock
+        bar={
+          <ThreadComposer
+            item={item}
+            answer={answer}
+            agentName={agentName}
+            place={{ workspaceId: holder.task.workspaceId, taskId: holder.task.id }}
+          />
+        }
+      >
         <Screen>{page}</Screen>
       </GlassDock>
       {remind.sheet}
