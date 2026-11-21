@@ -98,12 +98,7 @@ import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
 import { compactNativeTurnHanded } from "../coder-host/turn-message.js";
 import { touchAgentSandbox } from "../sandbox-use.js";
-import {
-  admitRunnerBearer,
-  presentedBearer,
-  presentedLaunch,
-  runnerTokenDigest,
-} from "../workspace-mcp/bearer.js";
+import { admitRunnerRequest, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
 import { cursorMoments } from "./cursor-moments.js";
@@ -1050,16 +1045,8 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   }
 
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
-  const bearer = presentedBearer(request);
-
-  if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-
-  const admitted = yield* hostedStoreOrUnavailable(
-    admitRunnerBearer(bearer, presentedLaunch(request)),
-  );
-
-  if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-  const { target } = admitted.value;
+  const { bearer, runner } = yield* admitRunnerRequest(request);
+  const { target } = runner;
   // Every line the batch writes, and every issue it raises, names the account the agent runs for.
   yield* Effect.annotateLogsScoped({ userId: target.userId });
 
@@ -1135,7 +1122,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       target,
       runnerTokenDigest(bearer),
       (held) => applyBatch(applying, storable(batch.value), held),
-      admitted.value.launch,
+      runner.launch,
     ).pipe(Effect.provide(collecting)),
   );
 
@@ -1162,7 +1149,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   if (Option.isNone(applied)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   // Note that an agent on no task has none to name, take up, or settle.
   const { taskId } = agent.value;
-  const { runtimeSessionId } = admitted.value;
+  const { runtimeSessionId } = runner;
 
   for (const failed of applied.value.failed) {
     yield* sayTurnFailed(failed, harness, applying.payer, {
@@ -1232,17 +1219,17 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   }
 
   if (alive !== undefined && applied.value.keepsAlive) {
-    yield* alive({ target, sessionId: admitted.value.runtimeSessionId });
+    yield* alive({ target, sessionId: runner.runtimeSessionId });
   }
 
   if (ended !== undefined) {
     for (const { sequence, reason } of applied.value.ends) {
       yield* ended({
         target,
-        sessionId: admitted.value.runtimeSessionId,
+        sessionId: runner.runtimeSessionId,
         sequence,
         reason,
-        launch: admitted.value.launch,
+        launch: runner.launch,
       });
     }
   }
@@ -1250,7 +1237,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   if (idled !== undefined && applied.value.idle !== undefined) {
     yield* idled({
       target,
-      sessionId: admitted.value.runtimeSessionId,
+      sessionId: runner.runtimeSessionId,
       sequence: applied.value.idle,
     });
   }

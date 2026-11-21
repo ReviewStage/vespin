@@ -70,6 +70,11 @@ function storedIds(value: UnparsedWireValue): readonly string[] {
   return Option.getOrElse(decodeIntros(value), () => []);
 }
 
+/** The ids two stored lists hold, each once, in order, kept to the list's bound. */
+function idsUnion(one: UnparsedWireValue, other: UnparsedWireValue): readonly string[] {
+  return [...new Set([...storedIds(one), ...storedIds(other)])].sort().slice(0, INTROS_SEEN_MAX);
+}
+
 /** Whether `id` names an intro this build draws. */
 function isIntro(id: string): id is Intro {
   return INTRO_LIST.some((intro) => intro === id);
@@ -94,15 +99,14 @@ export function introsSeenUnion(
   one: UnparsedWireValue,
   other: UnparsedWireValue,
 ): string | undefined {
-  const ids = [...new Set([...storedIds(one), ...storedIds(other)])].sort();
+  const ids = idsUnion(one, other);
 
-  return ids.length === 0 ? undefined : encodeIntros(ids.slice(0, INTROS_SEEN_MAX));
+  return ids.length === 0 ? undefined : encodeIntros(ids);
 }
 
 /** A stored list with `intro` added, as a device writes it once Got it is pressed. */
 export function introsSeenWith(stored: UnparsedWireValue, intro: Intro): string {
-  // SAFETY: a list of one id is never empty, so the union always names one.
-  return introsSeenUnion(stored, encodeIntros([intro])) as string;
+  return encodeIntros(idsUnion(stored, encodeIntros([intro])));
 }
 
 /**

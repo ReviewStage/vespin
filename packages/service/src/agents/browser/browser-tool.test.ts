@@ -12,7 +12,6 @@ import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openAgentConversation, openWorkspace } from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { BROWSER_AGENT_ACTION, BROWSER_STEP_STATUS } from "@repo/features/browser-agent-actions";
-import type { PageTarget } from "@repo/features/browser-cdp";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { Clock, Effect, Fiber, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
@@ -29,6 +28,7 @@ import {
   noSandboxBrowserLayer,
 } from "../../testing/agent-browser-fake.js";
 import { AgentBrowser, agentBrowserOver } from "./agent-browser.js";
+import type { PageTarget } from "./browser-cdp.js";
 import {
   BROWSER_TOOL_REFUSAL,
   BROWSER_TOOL_STATUS,

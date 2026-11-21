@@ -27,10 +27,10 @@ index b542a50431f0a501a81c96d06d8705e745364a81..25de3ea1f08148cf00abb15c275fc229
       * Description of why the content is not available.
       */
 diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
-index f1aeaae3b55fd5cb2d30b952c096b086391575a6..15b708c45f7f84f70404d6ebbfec0e01bff19650 100644
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..bd0f057265c6a7d6fc53f0b9a572eadf00ab9c70 100644
 --- a/build/swift-ui/Image/index.d.ts
 +++ b/build/swift-ui/Image/index.d.ts
-@@ -28,6 +28,24 @@ export interface ImageProps extends CommonViewModifierProps {
+@@ -28,6 +28,31 @@ export interface ImageProps extends CommonViewModifierProps {
       * Can be a color name like '#ff00ff', 'red', 'blue', etc.
       */
      color?: ColorValue;
@@ -52,6 +52,13 @@ index f1aeaae3b55fd5cb2d30b952c096b086391575a6..15b708c45f7f84f70404d6ebbfec0e01
 +     * rendering kept original. Any other address draws nothing.
 +     */
 +    photoSize?: number;
++    /**
++     * An emoji drawn as the image, at `emojiSize` points square, its
++     * rendering kept original, so a system menu keeps its colors in the place
++     * it draws a glyph.
++     */
++    emoji?: string;
++    emojiSize?: number;
      /**
       * The variable value that alters the symbol's appearance.
       * A number between 0.0 and 1.0.
@@ -182,10 +189,10 @@ index 56dc559f87456e0b6b86f1b91529d9395d4c6a61..495964269db54444a1344d045cb893a4
    }
  }
 diff --git a/ios/ImageView.swift b/ios/ImageView.swift
-index 170de73445439a3ba4e5495643ee5f7c3eb332ab..e5d91c606a58a7e4936e0bc962c3c5eb1f82769e 100644
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..35b5a142bf18361b51003a306bf245ceb4fe1485 100644
 --- a/ios/ImageView.swift
 +++ b/ios/ImageView.swift
-@@ -8,6 +8,13 @@ public final class ImageViewProps: UIBaseViewProps {
+@@ -8,6 +8,16 @@ public final class ImageViewProps: UIBaseViewProps {
    @Field var systemName: String?
    @Field var assetName: String?
    @Field var variableValue: Double?
@@ -196,10 +203,13 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..e5d91c606a58a7e4936e0bc962c3c5eb
 +  @Field var underOpacity: Double?
 +  // The side, in points, a photo stands at where a system menu draws it: drawn into its circle at that size, read only from a file on this device.
 +  @Field var photoSize: Double?
++  // An emoji drawn as the image, at `emojiSize` points square, as a task section's emoji leads its name in a system menu where its glyphs stand.
++  @Field var emoji: String?
++  @Field var emojiSize: Double?
    @Field var useTapGesture: Bool?
    var onTap = EventDispatcher()
  }
-@@ -19,7 +26,52 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -19,7 +29,67 @@ public struct ImageView: ExpoSwiftUI.View {
      self.props = props
    }
  
@@ -245,6 +255,21 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..e5d91c606a58a7e4936e0bc962c3c5eb
 +    return Image(uiImage: round.withRenderingMode(.alwaysOriginal))
 +  }
 +
++  // An emoji already drawn into a square at its size, its rendering kept original, so a system menu, which holds an image alone in an item's icon place and templates it, keeps its colors and lines its words up with its glyphs' items.
++  private var emojiImage: Image? {
++    guard let side = props.emojiSize, side > 0, let emoji = props.emoji, !emoji.isEmpty else {
++      return nil
++    }
++    let size = CGSize(width: side, height: side)
++    // Note that the emoji is set a little under the square's side, since its line stands taller than its face.
++    let words = NSAttributedString(string: emoji, attributes: [.font: UIFont.systemFont(ofSize: side * 0.8)])
++    let face = words.size()
++    let drawn = UIGraphicsImageRenderer(size: size).image { _ in
++      words.draw(at: CGPoint(x: (side - face.width) / 2, y: (side - face.height) / 2))
++    }
++    return Image(uiImage: drawn.withRenderingMode(.alwaysOriginal))
++  }
++
    private var symbolImage: Image? {
 +    if let originalImage {
 +      return originalImage
@@ -252,10 +277,16 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..e5d91c606a58a7e4936e0bc962c3c5eb
      if let systemName = props.systemName {
        if #available(iOS 16.0, tvOS 16.0, *) {
          return Image(systemName: systemName, variableValue: props.variableValue)
-@@ -41,6 +93,12 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -41,6 +111,18 @@ public struct ImageView: ExpoSwiftUI.View {
        symbolImage
          .applyImageModifiers(props.modifiers, appContext: props.appContext)
          .applyOnTapGesture(useTapGesture: props.useTapGesture, eventDispatcher: props.onTap)
++    } else if props.emojiSize != nil {
++      if let emojiImage {
++        emojiImage
++          .applyImageModifiers(props.modifiers, appContext: props.appContext)
++          .applyOnTapGesture(useTapGesture: props.useTapGesture, eventDispatcher: props.onTap)
++      }
 +    } else if props.photoSize != nil {
 +      if let photoImage {
 +        photoImage

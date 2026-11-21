@@ -22,9 +22,10 @@ import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { invitation, member, user } from "../schemas/auth.js";
 
-/** The plugin's words for an invitation's status that the service writes or reads: not yet accepted, rejected, or canceled; and withdrawn by its workspace. */
+/** The plugin's words for an invitation's status that the service writes or reads: not yet accepted, rejected, or canceled; taken up by its invitee; and withdrawn by its workspace. */
 export const INVITATION_STATUS = {
   PENDING: "pending",
+  ACCEPTED: "accepted",
   CANCELED: "canceled",
 } as const;
 

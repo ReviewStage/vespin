@@ -47,12 +47,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
-import {
-  admitRunnerBearer,
-  presentedBearer,
-  presentedLaunch,
-  runnerTokenDigest,
-} from "../workspace-mcp/bearer.js";
+import { admitRunnerRequest, runnerTokenDigest } from "../workspace-mcp/bearer.js";
 
 /** The path a runner reads its lines from. */
 export const RUNNER_LINES_PATH = "/api/agents/runner-lines";
@@ -107,19 +102,11 @@ const runnerLinesEndpoint = /* @__PURE__ */ Effect.fn("web/runnerLinesEndpoint")
     }
 
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
-    const bearer = presentedBearer(request);
-
-    if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+    const { bearer, runner } = yield* admitRunnerRequest(request);
+    const { target } = runner;
     const query = readQuery(Object.fromEntries(new URL(request.url).searchParams));
 
     if (Option.isNone(query)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-
-    const admitted = yield* hostedStoreOrUnavailable(
-      admitRunnerBearer(bearer, presentedLaunch(request)),
-    );
-
-    if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-    const { target } = admitted.value;
 
     const agent = yield* hostedStoreOrUnavailable(
       readAgentOfConversation(target.userId, target.conversationId),

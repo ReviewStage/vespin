@@ -10,11 +10,11 @@ import {
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openAgentConversation, openWorkspace } from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
-import type { CdpSession } from "@repo/features/browser-cdp";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { agentBrowserTestLayer, fakeCdpPeer } from "../../testing/agent-browser-fake.js";
 import { AgentBrowser } from "./agent-browser.js";
+import type { CdpSession } from "./browser-cdp.js";
 import { connectRestoring, restoreBrowserTabs } from "./restore-tabs.js";
 
 /**

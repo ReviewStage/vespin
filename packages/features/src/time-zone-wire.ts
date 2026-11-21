@@ -17,8 +17,6 @@ export const timeZoneWriteSchema = EffectSchema.Struct({
   timeZone: timeZoneSchema,
 });
 
-export type TimeZoneWrite = typeof timeZoneWriteSchema.Type;
-
 /** What a write answers once the zone is kept: nothing a client needs to read. */
 export const timeZoneDoneAnswerSchema = EffectSchema.Struct({
   done: EffectSchema.Literal(true),

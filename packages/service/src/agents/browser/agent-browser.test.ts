@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { CDP_FAILURE, type CdpFailure } from "@repo/features/browser-cdp";
 import { ImageNotReady, SANDBOX_STATUS, SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { Duration, Effect, Exit, Fiber, Option, Stream } from "effect";
 import { TestClock } from "effect/testing";
@@ -25,6 +24,7 @@ import {
   type BrowserUnreachable,
   browserSessionOf,
 } from "./agent-browser.js";
+import { CDP_FAILURE, type CdpFailure } from "./browser-cdp.js";
 import { BROWSER_START_EXIT } from "./sandbox-browser.js";
 
 /**

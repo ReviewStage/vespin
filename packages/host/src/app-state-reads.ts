@@ -226,7 +226,6 @@ export function sameAccount(
     : one.email === other.email;
 }
 
-export const selectAccess = (state: AppStateSnapshot) => state.access;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
 
 /** What main holds of the account's tasks but the list itself, which a window reads from its task list's collections. */

@@ -19,7 +19,7 @@ import {
   githubReaching,
   type InstallationFixture,
 } from "../testing/github-app-fake.js";
-import type { SandboxRunner } from "./machine/sandbox-machine.js";
+import type { SandboxRunner } from "./machine/sandbox-checkout.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import {
   fillWorkspaceDrive,

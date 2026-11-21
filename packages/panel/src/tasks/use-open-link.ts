@@ -409,6 +409,7 @@ function openAddress(
 
 /** The window's router, which a press is matched on; none outside it, as in a test of one surface. */
 export function useLinkRouter(): LinkRouter | undefined {
+  // Note that the router read answers null outside a router whatever its type says, so the null is made none here.
   const router: LinkRouter | undefined = useRouter({ warn: false });
 
   return router ?? undefined;

@@ -16,7 +16,7 @@
  */
 
 import { appStateQuery, selectAppSettingsView } from "@repo/panel/use-app-state";
-import type { Theme } from "@repo/ui";
+import type { Theme } from "@repo/settings";
 import { wearTheme } from "@repo/ui/appearance";
 import { useQuery } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";

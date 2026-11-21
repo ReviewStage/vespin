@@ -3,11 +3,9 @@
 import {
   HStack,
   Image,
-  Menu,
   RNHostView,
   ScrollView,
   Spacer,
-  Button as SwiftUIButton,
   Text,
   Toolbar,
   ToolbarItem,
@@ -21,7 +19,6 @@ import {
   accessibilityLabel,
   animation,
   defaultScrollAnchorForRole,
-  disabled,
   font,
   foregroundStyle,
   frame,
@@ -42,18 +39,17 @@ import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
 import { CopyWordsSwiftMenu, PictureOriginProvider, PictureSetProvider } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
-import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
+import { AgentTile, Avatar, type Face } from "./marks.js";
 import type { MediaSize } from "./media-frame.js";
 import { PictureSet, type SetPicture } from "./picture-set.js";
 import {
-  BAR_ITEM_MENU,
   type BarFootItem,
   type BarMenu,
   BarMenuItem,
   barActItems,
+  PathTitle,
 } from "./split-view.js";
 import { newestRuns, threadRuns } from "./thread-group-model.js";
 import { useColors } from "./tokens/colors.js";
@@ -61,9 +57,6 @@ import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
-
-/** What parts a thread's path, as the panel's crumbs part a task from its agent. */
-export const PATH_PART = " › ";
 
 /** Between a writer's face and their name. */
 const WRITER_GAP = SPACE.TIGHT * 2;
@@ -243,66 +236,6 @@ function ThreadHead({
         </Text>
       )}
     </VStack>
-  );
-}
-
-/**
- * A split view's detail column's bar: a page's path, small and muted after
- * its task's ring, in the bar's middle, as a compact window's stack draws it
- * in its own bar. Given what it opens, the path is a menu of them under a
- * small chevron, as iOS's own title menus stand, so a thread leads to its
- * task and its agent as the panel's crumbs do.
- */
-export function PathTitle({
-  path,
-  status,
-  actions = [],
-  wrap = false,
-}: Pick<ThreadPageProps, "path" | "status"> & {
-  readonly actions?: BarMenu["actions"] | undefined;
-  /** Whether the words wrap rather than cut to one line, as where the path heads the page rather than standing in a bar. */
-  readonly wrap?: boolean | undefined;
-}) {
-  const colors = useColors();
-  const words = path.join(PATH_PART);
-
-  const title = (
-    <HStack spacing={SPACE.TIGHT + 2}>
-      {status === undefined ? null : <TaskStatusMark status={status} />}
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-          foregroundStyle(colors.TEXT_MUTED),
-          ...(wrap ? [] : [lineLimit(1)]),
-        ]}
-      >
-        {words}
-      </Text>
-      {actions.length === 0 ? null : (
-        <Image
-          {...glyphImage(GLYPH.UNFOLDED)}
-          size={MARK_SIZE.GLYPH - 4}
-          color={colors.TEXT_MUTED}
-          modifiers={[accessibilityHidden(true)]}
-        />
-      )}
-    </HStack>
-  );
-
-  if (actions.length === 0) return title;
-
-  return (
-    // Note that the menu takes a bar item's plain look, so the bar's glass is the one layer around the path, as the ⋯ stands.
-    <Menu label={title} modifiers={[...BAR_ITEM_MENU, accessibilityLabel(words)]}>
-      {actions.map((action) => (
-        <SwiftUIButton
-          key={action.label}
-          {...actContent(action.label, action.symbol)}
-          onPress={action.onPress}
-          modifiers={[disabled(action.disabled === true)]}
-        />
-      ))}
-    </Menu>
   );
 }
 

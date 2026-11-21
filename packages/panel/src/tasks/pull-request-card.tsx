@@ -5,8 +5,8 @@ import {
   type CheckSummary,
   type GitHubPerson,
   PULL_REQUEST_STATE,
+  type PullRequestReviewer,
   type PullRequestState,
-  type ReviewState,
 } from "@repo/features/agent-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import {
@@ -103,12 +103,6 @@ export interface CardedPullRequest {
   readonly url?: string | undefined;
   /** How its checks went; none where the place knows nothing of them. */
   readonly checks?: CheckSummary | undefined;
-}
-
-/** A reviewer of the pull request, and where they stand on it. */
-export interface PullRequestReviewer {
-  readonly by: GitHubPerson;
-  readonly state: ReviewState;
 }
 
 /** The agent whose pull request it is, as the place names it, and how its tab opens. */

@@ -2,6 +2,7 @@ import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
+import { THEME } from "@repo/settings";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
@@ -28,7 +29,7 @@ import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
 import { ProductMark } from "../../marks/product-mark.js";
 import { MARK_PROVIDER, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
-import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
+import { PROFILE, surfaceAttributes } from "../../tokens/surface.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Badge } from "../badge/badge.js";
 import { BarAction, BarItem, BarItems } from "../bar-item/bar-item.js";

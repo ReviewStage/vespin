@@ -15,9 +15,8 @@ import { Schema as EffectSchema } from "effect";
  * same way, a part the service does not take refused there.
  */
 
-/** The preferences snapshot (GET, and every PUT's answer). */
-export const accountPreferencesAnswerSchema = EffectSchema.Struct({
-  preferences: EffectSchema.Record(EffectSchema.String, EffectSchema.Unknown),
+/** The parts a snapshot and a write carry alike, each read the rest of the way by its owner. */
+const OWN_PART_FIELDS = {
   linkOpen: EffectSchema.optionalKey(EffectSchema.Unknown),
   pullRequestOpen: EffectSchema.optionalKey(EffectSchema.Unknown),
   agentEnter: EffectSchema.optionalKey(EffectSchema.Unknown),
@@ -37,6 +36,12 @@ export const accountPreferencesAnswerSchema = EffectSchema.Struct({
   inbox: EffectSchema.optionalKey(EffectSchema.Unknown),
   agent: EffectSchema.optionalKey(EffectSchema.Unknown),
   chaptersModel: EffectSchema.optionalKey(EffectSchema.Unknown),
+};
+
+/** The preferences snapshot (GET, and every PUT's answer). */
+export const accountPreferencesAnswerSchema = EffectSchema.Struct({
+  preferences: EffectSchema.Record(EffectSchema.String, EffectSchema.Unknown),
+  ...OWN_PART_FIELDS,
   experiments: EffectSchema.optionalKey(
     EffectSchema.Record(EffectSchema.String, EffectSchema.Unknown),
   ),
@@ -51,25 +56,7 @@ export type AccountPreferencesAnswerWire = typeof accountPreferencesAnswerSchema
 /** A write (PUT): any of the snapshot's seventeen parts, each read by its owner on the service. */
 export const accountPreferencesWriteSchema = EffectSchema.Struct({
   preferences: EffectSchema.optionalKey(EffectSchema.Unknown),
-  linkOpen: EffectSchema.optionalKey(EffectSchema.Unknown),
-  pullRequestOpen: EffectSchema.optionalKey(EffectSchema.Unknown),
-  agentEnter: EffectSchema.optionalKey(EffectSchema.Unknown),
-  commitAuthor: EffectSchema.optionalKey(EffectSchema.Unknown),
-  agentPermissionMode: EffectSchema.optionalKey(EffectSchema.Unknown),
-  setupFinished: EffectSchema.optionalKey(EffectSchema.Unknown),
-  setupPlace: EffectSchema.optionalKey(EffectSchema.Unknown),
-  soundWhen: EffectSchema.optionalKey(EffectSchema.Unknown),
-  completionSound: EffectSchema.optionalKey(EffectSchema.Unknown),
-  askSound: EffectSchema.optionalKey(EffectSchema.Unknown),
-  voice: EffectSchema.optionalKey(EffectSchema.Unknown),
-  turnNotifications: EffectSchema.optionalKey(EffectSchema.Unknown),
-  onboardingSurvey: EffectSchema.optionalKey(EffectSchema.Unknown),
-  introsSeen: EffectSchema.optionalKey(EffectSchema.Unknown),
-  githubWakesOff: EffectSchema.optionalKey(EffectSchema.Unknown),
-  newAgentServersOff: EffectSchema.optionalKey(EffectSchema.Unknown),
-  inbox: EffectSchema.optionalKey(EffectSchema.Unknown),
-  agent: EffectSchema.optionalKey(EffectSchema.Unknown),
-  chaptersModel: EffectSchema.optionalKey(EffectSchema.Unknown),
+  ...OWN_PART_FIELDS,
   experiments: EffectSchema.optionalKey(EffectSchema.Unknown),
 });
 

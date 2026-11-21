@@ -70,7 +70,7 @@ import {
 import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
-import { actContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { actContent, emojiContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink, heardActions } from "./interactions.js";
 import {
@@ -218,6 +218,8 @@ export type MenuChoice = {
   readonly photo?: string | undefined;
   /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
   readonly mark?: IntegrationProvider | undefined;
+  /** An emoji drawn as its image in the glyph's place, as a section the member gave an emoji leads with it in the panel's Move to, so its words line up with its glyphs' choices. */
+  readonly emoji?: string | undefined;
   /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
   readonly detail?: string | undefined;
   readonly on: boolean;
@@ -375,6 +377,8 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
 /** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
   if (choice.mark !== undefined) return markContent(choice.label, choice.mark);
+
+  if (choice.emoji !== undefined) return emojiContent(choice.label, choice.emoji);
 
   // Note that a choice saying more under its words, such as a member's email, stands as a menu's title and subtitle.
   if (choice.detail !== undefined)
@@ -584,18 +588,11 @@ export function LongPressMenu({
   readonly preview?: ReactElement | undefined;
   readonly children: ReactElement;
 }) {
-  const colors = useColors();
   const filled = groups.filter((group) => group.length > 0);
 
   if (filled.length === 0 && preview === undefined) return children;
 
-  const items = filled.map((group, at) => (
-    // Note that a group is keyed by its first item's words, which a menu holds once.
-    <Fragment key={group[0]?.label ?? at}>
-      {at === 0 ? null : <Divider />}
-      {group.map((item) => swipeMenuButton(item, colors))}
-    </Fragment>
-  ));
+  const items = <LongPressMenuItems groups={filled} />;
 
   return (
     <ContextMenu>
@@ -606,6 +603,25 @@ export function LongPressMenu({
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
     </ContextMenu>
   );
+}
+
+/**
+ * A long press menu's groups as the system's menu items, in the panel's
+ * order, each group after a divider: what `LongPressMenu` opens, and what a
+ * section's header opens as its own menu (`ListSection`).
+ */
+export function LongPressMenuItems({ groups }: { readonly groups: readonly LongPressGroup[] }) {
+  const colors = useColors();
+
+  return groups
+    .filter((group) => group.length > 0)
+    .map((group, at) => (
+      // Note that a group is keyed by its first item's words, which a menu holds once.
+      <Fragment key={group[0]?.label ?? at}>
+        {at === 0 ? null : <Divider />}
+        {group.map((item) => swipeMenuButton(item, colors))}
+      </Fragment>
+    ));
 }
 
 /** A row's content with the question its acts ask standing by it, where its acts ask any. */

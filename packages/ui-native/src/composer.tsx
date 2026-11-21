@@ -32,6 +32,7 @@ import {
   frame,
   layoutPriority,
   lineLimit,
+  onGeometryChange,
   opacity,
   padding,
   tint,
@@ -802,7 +803,13 @@ function CapsuleFade({ toward }: { readonly toward: "leading" | "trailing" }) {
  * scroll view's own, which leaves the capsules' presses alone, and that it
  * is redrawn only as an end's state turns, never on each frame of a scroll.
  */
-function CapsuleScroll({ children }: { readonly children: ReactNode }) {
+function CapsuleScroll({
+  children,
+  onWhole,
+}: {
+  readonly children: ReactNode;
+  readonly onWhole: (width: number) => void;
+}) {
   const [overflow, setOverflow] = useState<CapsuleOverflow>({ before: false, after: false });
 
   // Note that an end's state is set only when it turns, so a scroll's frames that change neither redraw nothing.
@@ -819,7 +826,14 @@ function CapsuleScroll({ children }: { readonly children: ReactNode }) {
         showsIndicators={false}
         modifiers={geometry === null ? [] : [geometry]}
       >
-        <HStack spacing={TOOL_SPACING} modifiers={[padding({ trailing: SPACE.ROW })]}>
+        {/* Note that the capsules inside a sideways scroll stand at their whole width, so it is measured here before the padding the fade keeps clear. */}
+        <HStack
+          spacing={TOOL_SPACING}
+          modifiers={[
+            onGeometryChange(({ width }) => onWhole(width)),
+            padding({ trailing: SPACE.ROW }),
+          ]}
+        >
           {children}
         </HStack>
       </ScrollView>
@@ -834,14 +848,33 @@ function CapsuleScroll({ children }: { readonly children: ReactNode }) {
   );
 }
 
+/** The widths the row under the field is laid out by, in points: its own, the + at its start, what stands at its end, and the capsules' whole. */
+type RowWidths = {
+  readonly row: number;
+  readonly add: number;
+  readonly end: number;
+  readonly capsules: number;
+};
+
+/** Whether the capsules stand on a line of their own: where they would not stand whole between the + and what stands at the row's end; a row not yet measured keeps one line. */
+function capsulesOwnLine(widths: RowWidths): boolean {
+  const room = widths.row - widths.add - widths.end - TOOL_SPACING * 2;
+
+  return widths.row > 0 && widths.capsules > room;
+}
+
 /**
  * The row under the field, as the desktop composer's foot stands it: the +
  * at its start and the capsules saying where the message runs after it,
- * scrolling sideways where they outrun the bar and fading where they run on
- * (`CapsuleScroll`), then at its end what is
- * picked for it, such as the model, whole, the capsules giving way first, a
- * call's presses, and Send or Stop, inside the composer's own glass, so the
- * keyboard that lifts the composer never covers them.
+ * then at its end what is picked for it, such as the model, whole, a call's
+ * presses, and Send or Stop, inside the composer's own glass, so the
+ * keyboard that lifts the composer never covers them. Where the capsules
+ * would not stand whole between them, as on a phone or the folded Duo,
+ * where the model and the presses left them a few letters, the + and the
+ * capsules take a line of their own over the rest, as a page's chips stand
+ * one to a line where a row has no room for them, and there scroll
+ * sideways where they still outrun it, fading where they run on
+ * (`CapsuleScroll`).
  */
 function ComposerRow({
   props,
@@ -851,20 +884,37 @@ function ComposerRow({
   readonly parts: ComposerParts;
 }) {
   const { addMenu, onAdd, tools, trailing, testIds, dictation } = props;
+  const [widths, setWidths] = useState<RowWidths>({ row: 0, add: 0, end: 0, capsules: 0 });
+
+  // Note that each width is set only as it changes, and none of them moves with the layout chosen, so choosing one line or two never turns the choice again.
+  const measured = (key: keyof RowWidths) => (width: number) =>
+    setWidths((was) => (was[key] === width ? was : { ...was, [key]: width }));
+
+  // Note that the end keeps the widest it has stood, so the capsules don't jump back up beside it as Talk gives way to Send under the first word typed.
+  const measuredEnd = (width: number) =>
+    setWidths((was) => (width <= was.end ? was : { ...was, end: width }));
 
   // Note that a dictation under way stands its strip in the row's place, as the desktop's strip stands in its box's foot.
   if (dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE) {
     return <DictationStrip dictation={dictation} />;
   }
 
-  return (
-    <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
-      <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} />
-      <CapsuleScroll>{tools}</CapsuleScroll>
-      {/* Note that what is picked for the message, such as the model, is offered the row first and takes its whole words, so the capsules before it scroll rather than cut its name short, as Apple's own rows never cut a control's word where they have room. */}
-      {trailing === undefined || trailing === null ? null : (
-        <HStack modifiers={[layoutPriority(1)]}>{trailing}</HStack>
-      )}
+  const start = (
+    <HStack spacing={TOOL_SPACING}>
+      <HStack modifiers={[onGeometryChange(({ width }) => measured("add")(width))]}>
+        <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} />
+      </HStack>
+      <CapsuleScroll onWhole={measured("capsules")}>{tools}</CapsuleScroll>
+    </HStack>
+  );
+
+  // Note that what is picked for the message, such as the model, is offered the row first and takes its whole words, so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room.
+  const end = (
+    <HStack
+      spacing={TOOL_SPACING}
+      modifiers={[layoutPriority(1), onGeometryChange(({ width }) => measuredEnd(width))]}
+    >
+      {trailing}
       {dictation === undefined ? null : (
         <DictationPress
           glyph={GLYPH.DICTATE}
@@ -875,6 +925,32 @@ function ComposerRow({
       {parts.call}
       {parts.send}
     </HStack>
+  );
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={TOOL_SPACING}
+      modifiers={[
+        onGeometryChange(({ width }) => measured("row")(width)),
+        padding({ leading: SPACE.TIGHT }),
+      ]}
+    >
+      {capsulesOwnLine(widths) ? (
+        <>
+          {start}
+          <HStack spacing={TOOL_SPACING}>
+            <Spacer />
+            {end}
+          </HStack>
+        </>
+      ) : (
+        <HStack spacing={TOOL_SPACING}>
+          {start}
+          {end}
+        </HStack>
+      )}
+    </VStack>
   );
 }
 
