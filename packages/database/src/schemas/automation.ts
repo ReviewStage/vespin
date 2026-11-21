@@ -188,6 +188,11 @@ export const automationRun = pgTable(
   (table) => [
     // One run per firing: a second claim of the same firing finds this row.
     uniqueIndex("automation_run_dedupe").on(table.automationId, table.dedupeKey),
+    // An account's delete cascades to its automation runs.
+    index("automation_run_user_id").on(table.userId),
+    // An agent's delete clears its run and claim references.
+    index("automation_run_agent_id").on(table.agentId),
+    index("automation_run_claimed_agent_id").on(table.claimedAgentId),
     // The history reads one automation's runs newest first, and the guards count its recent ones.
     index("automation_run_automation_fired").on(table.automationId, table.firedAt),
     // The sweep starts the queued runs oldest first and fails the ones queued too long.

@@ -182,6 +182,10 @@ export const attachment = pgTable(
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
+    // A workspace's delete cascades to its attachments.
+    index("attachment_organization_id").on(table.organizationId),
+    // An account's delete clears its attachment attribution.
+    index("attachment_user_id").on(table.userId),
     // An item's files are read and deleted by the item, and a message's by the message.
     index("attachment_inbox_item")
       .on(table.inboxItemId)

@@ -1,4 +1,4 @@
-import { pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 import { conversations } from "./storage.js";
@@ -31,5 +31,9 @@ export const nativeCallKey = pgTable(
     /** When the key was minted, which bounds the window a call of the same input reads it within. */
     mintedAt: timestamptz("minted_at").notNull(),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.conversationId, table.digest] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.conversationId, table.digest] }),
+    // A conversation's delete cascades to its native call keys.
+    index("native_call_key_conversation_id").on(table.conversationId),
+  ],
 );

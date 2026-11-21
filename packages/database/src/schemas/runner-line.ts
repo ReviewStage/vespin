@@ -69,6 +69,8 @@ export const runnerLine = pgTable(
     handed: jsonb("handed").$type<WireValue>(),
   },
   (table) => [
+    // An account's delete cascades to its runner lines.
+    index("runner_line_user_id").on(table.userId),
     // A runner reads its agent's lines in order.
     index("runner_line_agent_seq").on(table.agentId, table.seq),
     // A send repeated under its key queues its line once.

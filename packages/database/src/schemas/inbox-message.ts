@@ -79,6 +79,9 @@ export const inboxMessage = pgTable(
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
+    // An account's delete clears its author and addressee references.
+    index("inbox_message_user_id").on(table.userId),
+    index("inbox_message_addressee_id").on(table.addresseeId),
     // An item's thread is read in the order it was written.
     index("inbox_message_item_created").on(table.itemId, table.createdAt),
     // A message sent again under its key is the message already written.
