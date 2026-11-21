@@ -29,6 +29,7 @@ import {
 } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ACTOR_KIND } from "@repo/ui/actor-model";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -292,6 +293,8 @@ async function drawnFor(
   before?: string,
 ): Promise<readonly Element[]> {
   const container = await drawTab(reader, opened, agent, messages, automations, hosted, before);
+  // The pointer comes onto the messages, as a reader's does to reach their actions.
+  pointAtTurns(container);
   const drawn = [...container.querySelectorAll(".is-user, .is-received")];
   assert.equal(drawn.length, messages.length);
 
