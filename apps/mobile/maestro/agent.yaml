@@ -121,7 +121,24 @@ env:
       BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd:
     timeout: 5000
-- tapOn: ".*tool calls.*"
+# Note that the fold is tapped once, with Maestro's retry off, because its
+# rows land a moment after the tap in a landscape window, where the retry,
+# seeing no change yet, tapped a second time and folded it shut again; a
+# fold still closed once its rows had time to land is tapped once more.
+- tapOn:
+    text: ".*tool calls.*"
+    retryTapIfNoChange: false
+- extendedWaitUntil:
+    visible: "Read.*"
+    timeout: 3000
+    optional: true
+- runFlow:
+    when:
+      notVisible: "Read.*"
+    commands:
+      - tapOn:
+          text: ".*tool calls.*"
+          retryTapIfNoChange: false
 - assertVisible: "Read.*"
 - waitForAnimationToEnd:
     timeout: 5000
