@@ -92,7 +92,7 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { queryOptions, skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Duration } from "effect";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from "../actor-ref.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
@@ -110,7 +110,8 @@ import { QUERY_ROOT } from "../query-keys.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
 import { useShortcutTargetsOf } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useSteadyDoor, useSteadyList } from "../steady-door.js";
+import { useTaskListCollections, useTaskListRow, useTasksAbout } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
@@ -120,8 +121,12 @@ import { DeviceStandingGlyph, STANDING_WORDS } from "../tasks/runs-on.js";
 import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useWaitingItems } from "../tasks/use-waiting-items.js";
-import { useListedAgentPullRequests, useListedAgents } from "../tasks/use-workspace-agents.js";
+import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
+import {
+  agentTaskIds,
+  useAgentsStartedBy,
+  useListedAgentPullRequests,
+} from "../tasks/use-workspace-agents.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
@@ -278,7 +283,9 @@ function AgentRow({
   /** Where it stands in its section's run of rows (`VirtualTaskRows`). */
   place: VirtualRowPlace;
 }): React.JSX.Element {
-  const { task, agent, at } = each;
+  const { task, agent: handed, at } = each;
+  // Note that the row reads its own agent, since the page's are held still while a step of its turn moves nothing the page lays out (`useAgentsStartedBy`).
+  const agent = useTaskListRow(useTaskListCollections().agents, handed.id) ?? handed;
   const { models } = agents;
   const subject = listedRowSubject(agent, at, { models, me: tasks.me, pullRequests });
 
@@ -305,6 +312,31 @@ function AgentRow({
   );
 }
 
+/**
+ * Their agents as a section lists them, each the one handed last while its
+ * agent, its time, and its task stand, and the list the one handed last
+ * while it holds the same, so a change to their tasks alone, as a turn
+ * ending re-sorts them, leaves the agents' sections as they were (`memo`).
+ */
+function useHeldAgents(list: readonly PersonAgent[]): readonly PersonAgent[] {
+  const held = useRef<ReadonlyMap<string, PersonAgent>>(new Map());
+
+  const kept = list.map((each) => {
+    const was = held.current.get(each.agent.id);
+
+    return was !== undefined &&
+      was.agent === each.agent &&
+      was.at === each.at &&
+      was.task.id === each.task.id
+      ? was
+      : each;
+  });
+
+  held.current = new Map(kept.map((each) => [each.agent.id, each]));
+
+  return useSteadyList(kept);
+}
+
 /** An agent's key, by which its row leaves its list and glides into another (`ListMotion`). */
 function agentKey({ agent }: PersonAgent): string {
   return agent.id;
@@ -324,7 +356,7 @@ const AGENT_ROWS_FIT = {};
  * before a teammate's is archived, because the agents control reads only
  * the open task's.
  */
-function PersonAgentsSection({
+const PersonAgentsSection = memo(function PersonAgentsSection({
   title,
   agents,
   count = agents.length,
@@ -401,7 +433,7 @@ function PersonAgentsSection({
       {selection.dialog}
     </PersonSectionFrame>
   );
-}
+});
 
 /** What the page's ⋯ is called, on its button and its menu alike. */
 const PERSON = PERSON_PAGE_WORDS.PERSON;
@@ -855,6 +887,35 @@ function PersonLine({ person }: { person: Actor }): React.ReactNode {
   );
 }
 
+/** What waits on them in the Inbox, its rows the Inbox's own; drawn again only as its items or its words move (`memo`). */
+const PersonWaiting = memo(function PersonWaiting({
+  title,
+  listed,
+  tasks,
+  you,
+}: {
+  title: string;
+  listed: WaitingItems["items"];
+  tasks: TasksControl;
+  /** Whether it is the reader's own page, whose items wait on them. */
+  you: boolean;
+}): React.JSX.Element | null {
+  if (listed.length === 0) return null;
+
+  return (
+    <PersonSectionFrame
+      label={title}
+      title={title}
+      count={listed.length}
+      noun={TERM.INBOX_ITEM}
+      tone={you ? STATUS_TONE.ATTENTION : undefined}
+      fold={PERSON_SECTION_FOLD}
+    >
+      <InboxItemRows label={title} listed={listed} tasks={tasks} needsYouShown={you} moves />
+    </PersonSectionFrame>
+  );
+});
+
 /**
  * One section of a person's tasks, the first `PERSON_TASKS_SHOWN` of them,
  * newest first, wearing no face, since the page's head says whose they
@@ -862,7 +923,7 @@ function PersonLine({ person }: { person: Actor }): React.ReactNode {
  * person, the foot that says how many more there are and lists every one
  * in the sidebar (`onShowAll`), folding away with the rows.
  */
-function PersonTasks({
+const PersonTasks = memo(function PersonTasks({
   title,
   listed,
   count,
@@ -899,7 +960,7 @@ function PersonTasks({
       </Stack>
     </PersonSectionFrame>
   );
-}
+});
 
 /** A task's key, by which its row leaves its list and glides into another (`ListMotion`). */
 function taskKey({ id }: TaskSummary): string {
@@ -1001,16 +1062,22 @@ function PersonColumn({
   const { workspace: standing, landing } = usePersonRoute();
   // What a phone's bar picks up from the page's header once it scrolls away.
   const [pickUp, setPickUp] = useState<ToolbarPickUp>({ name: "", shown: false });
-  // The listed workspace's tasks, or every task while none is listed, as the sidebar lists them.
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  // Note that only their agents are read, and those only for what lays the page out, so a step of anyone's turn draws no page (`useAgentsStartedBy`).
+  const liveAgents = useAgentsStartedBy(tasks.agentsCarried, { userId });
+  const theirTaskIds = useMemo(() => agentTaskIds(liveAgents), [liveAgents]);
+
+  // The listed workspace's tasks, or every task while none is listed, that are theirs or their agents', as the sidebar lists them.
+  const listed = useTasksAbout(tasks.typedNames, tasks.workspace?.id, {
+    userId,
+    taskIds: theirTaskIds,
+  });
+
   // Named as the list names them, else as the members read does, else by the name the page was opened with, else as the former members read does; nobody's name where none does.
   const { members, readerId, former, refused, retry } = useMemberDirectory();
   const member = members?.find((each) => each.userId === userId);
   const known = opened === undefined ? undefined : { userId, name: opened };
   // Note that someone who left having only revised or answered is named by the former members read alone, since a link to them opens with no name.
   const left = former?.find((each) => each.userId === userId);
-  // Note that every agent is read only while the page stands, since it lists the person's agents among them.
-  const liveAgents = useListedAgents(tasks.agentsCarried);
   const listedPullRequests = useListedAgentPullRequests(tasks.agentsCarried);
   const ref = personRef(userId, listed, liveAgents) ?? member ?? known ?? left;
   const person = personActor(ref, members, readerId, former);
@@ -1019,13 +1086,19 @@ function PersonColumn({
   const memberCount = tasks.workspace?.memberCount;
   const shared = memberCount === undefined ? (members?.length ?? 0) > 1 : memberCount > 1;
 
-  const showTasks = () =>
+  const showTasks = useSteadyDoor(() =>
     taskView.onAssignedTo(
       userId === tasks.me ? { kind: ASSIGNED_TO.ME } : { kind: ASSIGNED_TO.MEMBER, userId },
-    );
+    ),
+  );
 
   // Note that the page keeps one identity while the list stands, because each of its lists follows its rows (`useLeaving`).
   const page = useMemo(() => personPage(userId, listed, liveAgents), [userId, listed, liveAgents]);
+  // Note that each section is handed its list as it was while its items stand, so a turn ending, which re-sorts their tasks, draws only the rows it moves.
+  const working = useHeldAgents(page.working);
+  const theirAgents = useHeldAgents(page.agents);
+  const assigned = useSteadyList(page.assigned);
+  const created = useSteadyList(page.created);
   // Each section counts what the list holds and what the service counted past it.
   const held = personHeld(page);
   const workspaceId = tasks.workspace?.id;
@@ -1054,10 +1127,12 @@ function PersonColumn({
 
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
   // On the reader's own page it must also wait on them now as the sidebar's Inbox row counts it (`waitsOnReaderNow`), so one with a reminder still ahead is left out until it comes due.
-  const waiting = read.items.filter(
-    ({ item }) =>
-      (inboxWaitsOn(item)?.userId ?? agentStarter(liveAgents, item.agentId)) === userId &&
-      (!you || waitsOnReaderNow(item, tasks.me, now)),
+  const waiting = useSteadyList(
+    read.items.filter(
+      ({ item }) =>
+        (inboxWaitsOn(item)?.userId ?? agentStarter(liveAgents, item.agentId)) === userId &&
+        (!you || waitsOnReaderNow(item, tasks.me, now)),
+    ),
   );
 
   // Nobody the workspace's members or those who left name, as a link to someone outside it opens, is not found here; until both are read, nobody is.
@@ -1152,10 +1227,10 @@ function PersonColumn({
               fold={PERSON_SECTION_FOLD}
             />
           ) : null}
-          {page.working.length === 0 ? null : (
+          {working.length === 0 ? null : (
             <PersonAgentsSection
               title={PERSON_PAGE_WORDS.WORKING}
-              agents={page.working}
+              agents={working}
               tasks={tasks}
               pullRequests={pullRequests}
             />
@@ -1175,27 +1250,10 @@ function PersonColumn({
               <InboxListSkeleton />
             </SectionSkeleton>
           ) : null}
-          {waiting.length === 0 ? null : (
-            <PersonSectionFrame
-              label={waitingTitle}
-              title={waitingTitle}
-              count={waiting.length}
-              noun={TERM.INBOX_ITEM}
-              tone={you ? STATUS_TONE.ATTENTION : undefined}
-              fold={PERSON_SECTION_FOLD}
-            >
-              <InboxItemRows
-                label={waitingTitle}
-                listed={waiting}
-                tasks={tasks}
-                needsYouShown={you}
-                moves
-              />
-            </PersonSectionFrame>
-          )}
+          <PersonWaiting title={waitingTitle} listed={waiting} tasks={tasks} you={you} />
           <PersonTasks
             title={personWords(PERSON_SECTION_WORDS.ASSIGNED, you)}
-            listed={page.assigned}
+            listed={assigned}
             count={counts.assigned}
             tasks={tasks}
             unread={unread}
@@ -1203,15 +1261,15 @@ function PersonColumn({
           />
           <PersonTasks
             title={personWords(PERSON_SECTION_WORDS.CREATED, you)}
-            listed={page.created}
+            listed={created}
             count={counts.created}
             tasks={tasks}
             unread={unread}
           />
-          {page.agents.length === 0 ? null : (
+          {theirAgents.length === 0 ? null : (
             <PersonAgentsSection
               title={PERSON_PAGE_WORDS.AGENTS}
-              agents={page.agents}
+              agents={theirAgents}
               count={counts.agents}
               tasks={tasks}
               pullRequests={pullRequests}

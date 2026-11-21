@@ -15,7 +15,16 @@ import {
   type TaskNames,
 } from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
-import { type Collection, caseWhen, coalesce, eq, gt, useLiveQuery } from "@tanstack/react-db";
+import {
+  type Collection,
+  caseWhen,
+  coalesce,
+  eq,
+  gt,
+  inArray,
+  or,
+  useLiveQuery,
+} from "@tanstack/react-db";
 import {
   createContext,
   type ReactNode,
@@ -212,6 +221,85 @@ export function useNamedTasks(
 
     return [...pinned, ...rest];
   }, [every, typedNames, order]);
+}
+
+/**
+ * Whom a page reads tasks about: a member, whose tasks are those assigned to
+ * or created by them, the creator read as `creatorIdOf` reads it, the owner
+ * where the service names none, or a coding agent, a Manager say, whose tasks are
+ * those it made; either way also the tasks `taskIds` names, those the
+ * agents it lists work on.
+ */
+export type TasksAbout =
+  | { readonly userId: string; readonly taskIds: readonly string[] }
+  | { readonly agentId: string; readonly taskIds: readonly string[] };
+
+/**
+ * The tasks of the workspace `workspaceId` names, every workspace's where
+ * none is named, that `about` names, in the sidebar's order as
+ * `useNamedTasks` answers them, each name drawn as it is being typed. The
+ * query holds those tasks alone, and of their agents' counts only the
+ * activity a task is ordered by (`taskTime`), so a change to any other task,
+ * or a turn of their agents that moves no order, draws no reader; for a page
+ * about someone, as a person's page and a Manager's overview are. The rows
+ * are the collection's own as the query last moved, so their `agents` may be
+ * a turn behind: a row that draws them reads its own task (`useNamedTask`).
+ */
+export function useTasksAbout(
+  typedNames: TaskNames,
+  workspaceId: string | undefined,
+  about: TasksAbout,
+): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+  const userId = "userId" in about ? about.userId : undefined;
+  const agentId = "agentId" in about ? about.agentId : undefined;
+  const { taskIds } = about;
+
+  const { data } = useLiveQuery((q) => {
+    const all = q
+      .from({ task: collections.tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+    const held =
+      workspaceId === undefined ? all : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+
+    const about =
+      userId === undefined
+        ? held.where(({ task }) =>
+            or(inArray(task.id, [...taskIds]), eq(task.origin?.agentId, agentId)),
+          )
+        : held.where(({ task }) =>
+            or(
+              inArray(task.id, [...taskIds]),
+              eq(task.assignee?.userId, userId),
+              eq(coalesce(task.createdBy?.userId, task.ownerId), userId),
+            ),
+          );
+
+    // Note that the agents' counts are left out but for the activity a task is ordered by (`taskTime`), so a turn that moves no order moves no row.
+    return about.select(({ task }) => {
+      const agentsAt = coalesce(task.agents?.activityAt, 0);
+
+      return {
+        ...task,
+        agents: undefined,
+        activeAt: caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt),
+      };
+    });
+  });
+
+  return useMemo(() => {
+    const rows = data.flatMap((row): TaskSummary[] => {
+      const task = collections.tasks.get(row.id);
+
+      return task === undefined ? [] : [task];
+    });
+
+    const { pinned, rest } = sidebarTasks(renamedTasks(rows, typedNames));
+
+    return [...pinned, ...rest];
+  }, [data, collections.tasks, typedNames]);
 }
 
 /**

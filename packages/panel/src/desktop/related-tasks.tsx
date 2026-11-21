@@ -14,7 +14,7 @@ import {
 import { type ReactNode, useMemo, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useFindOpen } from "../find-in-tab.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { NAMED_ORDER, useNamedTasksAtRest } from "../task-list-collections.js";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -23,7 +23,7 @@ import { useFittedColumns } from "./fitted-columns.js";
 import { nestsOf } from "./nested-rows.js";
 import { QUICK_ADD_ORDER, type QuickAdd, QuickAddLines, rowQuickAddLine } from "./quick-add.js";
 import { openedTaskOf, taskRowTab } from "./task-actions.js";
-import { openPullRequests, TaskListRow } from "./task-list-row.js";
+import { OwnTask, openPullRequests, TaskListRow } from "./task-list-row.js";
 import { useStandingDoor } from "./task-row-parts.js";
 import { useTasksSelection } from "./tasks-selection.js";
 
@@ -144,8 +144,8 @@ export function RelatedTasks({
   const rowTab = taskRowTab(tasks);
   const opened = openedTaskOf(tasks);
 
-  // Note that the rows are the open task's relations, all of its own workspace, whose tasks alone hold their sub-tasks.
-  const ofWorkspace = useNamedTasks(
+  // Note that the rows are the open task's relations, all of its own workspace, whose tasks alone hold their sub-tasks; the counts read no agents, so a turn of one draws only its row (`OwnTask`).
+  const ofWorkspace = useNamedTasksAtRest(
     tasks.typedNames,
     NAMED_ORDER.PINNED_FIRST,
     rows[0]?.task.workspaceId,
@@ -213,29 +213,33 @@ export function RelatedTasks({
           const row = rows[index];
 
           if (row === undefined) return null;
-          const { task, relation, depth, fold, menu, unlisted } = row;
+          const { task: handed, relation, depth, fold, menu, unlisted } = row;
 
+          // Note that each row reads its own task, since the rows its owner hands are held still while only a task's agents move.
           return (
-            <TaskListRow
-              key={task.id}
-              place={place}
-              tasks={rowTab}
-              task={task}
-              opened={opened}
-              workspaceName={workspaceName}
-              cells={cells}
-              subTasks={subTasks.get(task.id)}
-              content={{ [TASK_ROW_CELL.RELATION]: relation }}
-              chosen={selection.chosenOf(task.id)}
-              onOpen={() => onOpenTask(task.id)}
-              onStanding={(standing) => setStanding(task, standing)}
-              depth={depth}
-              nest={nests[index]}
-              fold={fold}
-              menuGroups={menu}
-              unlisted={unlisted}
-              more={more}
-            />
+            <OwnTask key={handed.id} handed={handed} typedNames={tasks.typedNames}>
+              {(task) => (
+                <TaskListRow
+                  place={place}
+                  tasks={rowTab}
+                  task={task}
+                  opened={opened}
+                  workspaceName={workspaceName}
+                  cells={cells}
+                  subTasks={subTasks.get(task.id)}
+                  content={{ [TASK_ROW_CELL.RELATION]: relation }}
+                  chosen={selection.chosenOf(task.id)}
+                  onOpen={() => onOpenTask(task.id)}
+                  onStanding={(standing) => setStanding(task, standing)}
+                  depth={depth}
+                  nest={nests[index]}
+                  fold={fold}
+                  menuGroups={menu}
+                  unlisted={unlisted}
+                  more={more}
+                />
+              )}
+            </OwnTask>
           );
         }}
       </VirtualTaskRows>

@@ -305,6 +305,8 @@ export const LIVE_READ = {
   HOSTS: "hosts",
   /** The account's machines with their own settings for agents' commands and apps, by the account: the service's `machinesRead`, declared as `MACHINES_READ`, held while Settings › Machines draws them and a while after. */
   MACHINES: "machines",
+  /** The machines one workspace owns, by the workspace: the service's `workspaceMachinesRead`, declared as `WORKSPACE_MACHINES_READ`, held while Settings › Machines draws them and a while after. */
+  WORKSPACE_MACHINES: "workspaceMachines",
   /** The asks the account's machines hold for its answer, by the account: the service's `machineAsksRead`, declared as `MACHINE_ASKS_READ`, held while a window could draw one and by each machine of the account, which takes its answers from it. */
   MACHINE_ASKS: "machineAsks",
   /** One workspace's pending invitations, by the workspace: the service's `workspaceInvitations` query, held for an owner's or an admin's windows that draw them and a few they drew lately. */

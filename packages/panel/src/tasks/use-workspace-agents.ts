@@ -1,7 +1,20 @@
-import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  AGENT_STATUS,
+  type AgentSummary,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import type { TaskListCollections } from "@repo/host/task-list-following";
-import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import {
+  and,
+  caseWhen,
+  coalesce,
+  eq,
+  inArray,
+  isUndefined,
+  useLiveQuery,
+} from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
@@ -35,6 +48,15 @@ export type WorkspaceAgents =
   | undefined;
 
 const AGENTS_FAILED = { failed: true } as const;
+
+/** The statuses under which an agent's row says when its run began rather than when it settled (`agentMovedAt`). */
+const RUN_STATUSES: readonly ListedAgent["status"][] = [
+  AGENT_STATUS.STARTING,
+  AGENT_STATUS.RUNNING,
+];
+
+/** No task: what agents on none work on. */
+const NO_TASK_IDS: readonly string[] = [];
 
 /** Newest started first, and by id among those started at one instant, as the service lists them. */
 function newestFirst(a: ListedAgent, b: ListedAgent): number {
@@ -148,28 +170,77 @@ export function listedAgentsNow(
   return carried ? collections.agents.toArray : undefined;
 }
 
+/** Whose agents a page lists: those a member started, or those a coding agent, a Manager say, started. */
+export type AgentsStartedBy = { readonly userId: string } | { readonly agentId: string };
+
 /**
- * Every agent the task list carries, the archived among them, the first
- * started first, and by id among those started at one instant; none while
- * `carried` says the list carries no agents, as before it is followed live,
- * which the collections cannot tell from a list of none.
+ * The agents the task list carries that `by` started, the archived among
+ * them, the first started first, and by id among those started at one
+ * instant, each as the collection holds it; none
+ * while `carried` says the list carries no agents. The live query picks
+ * what a page of them lays out and splits by: the task, the status, the
+ * archive, who started it, and when it last moved (`agentLastMovedAt`),
+ * so a change that moves none of them, as each step of a turn does, draws
+ * no reader. The agents handed are the collection's own as the query last
+ * moved, so a row drawing more of one reads its own agent (`useListedAgent`).
  */
-export function useListedAgents(carried: boolean): readonly ListedAgent[] | undefined {
+export function useAgentsStartedBy(
+  carried: boolean,
+  by: AgentsStartedBy,
+): readonly ListedAgent[] | undefined {
   const { agents } = useTaskListCollections();
+  const userId = "userId" in by ? by.userId : undefined;
+  const agentId = "agentId" in by ? by.agentId : undefined;
 
-  const { data } = useLiveQuery((q) =>
-    carried
-      ? q
-          .from({ agent: agents })
-          .orderBy(({ agent }) => agent.createdAt)
-          .orderBy(({ agent }) => agent.id, { stringSort: "lexical" })
-      : undefined,
+  const { data } = useLiveQuery((q) => {
+    if (!carried) return undefined;
+    const all = q.from({ agent: agents });
+
+    const theirs =
+      userId === undefined
+        ? all.where(({ agent }) => eq(agent.startedByAgentId, agentId))
+        : all.where(({ agent }) => eq(agent.startedBy?.userId, userId));
+
+    return theirs
+      .orderBy(({ agent }) => agent.createdAt)
+      .orderBy(({ agent }) => agent.id, { stringSort: "lexical" })
+      .select(({ agent }) => ({
+        id: agent.id,
+        taskId: agent.taskId,
+        status: agent.status,
+        archivedAt: agent.archivedAt,
+        startedBy: agent.startedBy?.userId,
+        startedByAgentId: agent.startedByAgentId,
+        movedAt: coalesce(
+          caseWhen(inArray(agent.status, [...RUN_STATUSES]), agent.runStartedAt, agent.settledAt),
+          agent.runStartedAt,
+          agent.createdAt,
+        ),
+      }));
+  });
+
+  return useMemo(
+    () =>
+      data?.flatMap((row): ListedAgent[] => {
+        const agent = agents.get(row.id);
+
+        return agent === undefined ? [] : [agent];
+      }),
+    [data, agents],
   );
-
-  return data;
 }
 
-/** The pull request of every agent the task list carries one of, the archived among them; none while `carried` says the list carries no agents (`useListedAgents`). */
+/** The tasks `agents` work on, each once, in the order first worked on; none while there are no agents. */
+export function agentTaskIds(agents: readonly ListedAgent[] | undefined): readonly string[] {
+  if (agents === undefined || agents.length === 0) return NO_TASK_IDS;
+  const ids = new Set<string>();
+
+  for (const { taskId } of agents) if (taskId !== null) ids.add(taskId);
+
+  return [...ids];
+}
+
+/** The pull request of every agent the task list carries one of, the archived among them; none while `carried` says the list carries no agents, as before it is followed live. */
 export function useListedAgentPullRequests(
   carried: boolean,
 ): readonly ListedPullRequest[] | undefined {

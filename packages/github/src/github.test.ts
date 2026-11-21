@@ -5,6 +5,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { assert, describe, it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
+import Bottleneck from "bottleneck";
 import { Context, Duration, Effect, Fiber, Layer, Predicate, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -136,6 +137,7 @@ function harness(answer: Answer) {
     appId: 1,
     privateKey: Redacted.make(privateKey),
     userAgent: "github-module-test",
+    throttleGroups: { write: new Bottleneck.Group({ maxConcurrent: 1 }) },
   }).pipe(Layer.provide(Layer.mergeAll(http, memoryHoldStore())));
 
   /** The requests sent for the repository, as each installation or member asked them. */

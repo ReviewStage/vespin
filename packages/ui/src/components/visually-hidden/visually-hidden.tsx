@@ -22,6 +22,9 @@
 
 import type { HTMLAttributes, ReactNode } from "react";
 
+/** The class words hidden outright wear, for words written into the page by hand (`visually-hidden.css`). */
+export const VISUALLY_HIDDEN_CLASS = "ui-visually-hidden";
+
 /** The elements hidden words may stand in. */
 export const VISUALLY_HIDDEN_ELEMENT = {
   SPAN: "span",
@@ -64,7 +67,9 @@ export function VisuallyHidden({
     <Element
       {...attributes}
       className={
-        under === undefined ? "ui-visually-hidden" : `ui-visually-hidden ${UNDER_CLASS[under]}`
+        under === undefined
+          ? VISUALLY_HIDDEN_CLASS
+          : `${VISUALLY_HIDDEN_CLASS} ${UNDER_CLASS[under]}`
       }
       data-under={under}
     >

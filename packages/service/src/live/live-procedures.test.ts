@@ -66,7 +66,7 @@ import { TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
-import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM, MACHINE_OWNER } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { HOSTS_READ, hostsOfLiveRows } from "@repo/features/host-live";
 import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
@@ -1978,7 +1978,7 @@ it.layer(getTestDB())("the account's hosts' live read", (it) => {
           version: "0.5.0",
           ip: null,
         });
-        yield* approveHostPairing(owner, userCode, randomUUID());
+        yield* approveHostPairing(owner, userCode, randomUUID(), { kind: MACHINE_OWNER.USER });
 
         const polled = yield* ask({ bearer: owner, path: "/api/live/hosts" });
         assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);

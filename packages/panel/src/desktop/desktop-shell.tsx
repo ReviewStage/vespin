@@ -1294,12 +1294,12 @@ export function InboxPlace(): null {
  * Changes', or a message's, which a step on a task's tab is written at.
  */
 export function AgentPlace(): React.JSX.Element {
-  const { tasks, room, away } = useShellPlaces();
+  const { tasks, room, away, sidebar } = useShellPlaces();
   const ownPage = useMatch({ from: "/places/$workspace/agent/$agentId/", shouldThrow: false });
 
   if (ownPage === undefined) return <StatePlace />;
 
-  return <AgentRoutePage tasks={tasks} away={phoneAway(room, away)} />;
+  return <AgentRoutePage tasks={tasks} away={phoneAway(room, away)} staged={sidebar.staged} />;
 }
 
 /**

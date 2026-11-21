@@ -7,7 +7,8 @@
  * page under the window's toolbar (`PAGE_FRAME.TOOLBAR`), named for a
  * reader by its label, its content across the whole room it has. It is
  * dense, every row one line, so a Manager's whole state stands on one
- * screen beside the open sidebar.
+ * screen beside the open sidebar, each of its sections on a card of its
+ * own.
  *
  * It opens on one line of counts: what waits on the reader, its agents at
  * work, its pull requests open, and its tasks done this week, each read
@@ -15,16 +16,26 @@
  * Under it stands Waiting on you, the Manager's own threads that wait on
  * the reader, each the row the line over its box lists (`NeedsYouRow`): an
  * ask of two short options answered from its buttons, any other opening its
- * thread in the window's Inbox; nothing while none waits. A list longer than
- * its cap shows its first rows and the rest on a press (`ShowMoreRow`).
+ * thread in the window's Inbox; nothing while none waits. Under it stand two
+ * columns. The first lists its agents, each the row a task's agents stand
+ * in (`AgentListRow`), and the pull requests they opened, each in a task
+ * row's anatomy as the Merge queue page draws one, opening in its Pull
+ * request tab. The second lists its open tasks and those done this week,
+ * each the Tasks page's own row (`RecentTasks`). A section with nothing to
+ * list stands nowhere, and a list longer than its cap shows its first rows
+ * and the rest on a press (`ShowMoreRow`).
  */
 
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import { type ManagerPullRequest, managerOverview } from "@repo/features/manager-overview-model";
 import type { PersonAgent } from "@repo/features/person-page-model";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { TERM } from "@repo/features/words";
 import {
+  CARD_LOOK,
+  CARD_PADDING,
+  Card,
   CountLine,
   CountParts,
   DetailPage,
@@ -53,18 +64,24 @@ import {
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { type ComponentProps, useMemo, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { MemberDirectory } from "../member-directory.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useTaskListCollections, useTaskListRow, useTasksAbout } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
 import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
+import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useListedAgentPullRequests, useListedAgents } from "../tasks/use-workspace-agents.js";
+import {
+  agentTaskIds,
+  useAgentsStartedBy,
+  useListedAgentPullRequests,
+} from "../tasks/use-workspace-agents.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { PersonSectionFrame } from "./person-frame.js";
+import { RecentTasks } from "./recent-tasks.js";
 
 /** What the panel is called, said to a reader as its region's name. */
 const OVERVIEW = "Overview";
@@ -79,6 +96,8 @@ const OVERVIEW_WORDS = {
   DONE_THIS_WEEK: "done this week",
   AGENTS: "Agents",
   PULL_REQUESTS: "Pull requests",
+  OPEN_TASKS: "Open tasks",
+  DONE: "Done this week",
 } as const;
 
 /** The most threads Waiting on you lists before its foot shows the rest. */
@@ -90,12 +109,31 @@ const AGENT_ROWS = 6;
 /** The most pull requests Pull requests lists before its foot shows the rest. */
 const PULL_REQUEST_ROWS = 5;
 
+/** The most tasks Open tasks lists before its foot shows the rest. */
+const OPEN_TASK_ROWS = 6;
+
+/** The most tasks Done this week lists before its foot shows the rest. */
+const DONE_ROWS = 4;
+
 /** The cells a pull request's row draws: its number where a task's key stands, its mark where a task's status does, then how many lines it changes. */
 const PULL_REQUEST_ROW_CELLS = [
   TASK_ROW_CELL.KEY,
   TASK_ROW_CELL.STATUS,
   TASK_ROW_CELL.SUB_TASKS,
 ] as const satisfies readonly TaskRowCell[];
+
+/**
+ * A section of the overview on a card of its own, as a dashboard's parts
+ * stand: its name and count over its rows (`PersonSectionFrame`), on the
+ * page's surface.
+ */
+function OverviewSection(props: ComponentProps<typeof PersonSectionFrame>): React.JSX.Element {
+  return (
+    <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.SNUG}>
+      <PersonSectionFrame {...props} />
+    </Card>
+  );
+}
 
 /** A list's rows standing under its cap, and the foot that lifts it. */
 interface Capped<Row> {
@@ -126,7 +164,7 @@ function WaitingOnYou({ threads }: { threads: AgentThreads }): React.JSX.Element
   if (threads.waiting.length === 0) return null;
 
   return (
-    <PersonSectionFrame
+    <OverviewSection
       label={OVERVIEW_WORDS.WAITING}
       title={OVERVIEW_WORDS.WAITING}
       count={threads.waiting.length}
@@ -141,7 +179,7 @@ function WaitingOnYou({ threads }: { threads: AgentThreads }): React.JSX.Element
           {foot}
         </List>
       </ReplayMask>
-    </PersonSectionFrame>
+    </OverviewSection>
   );
 }
 
@@ -150,6 +188,47 @@ function openPullRequest(tasks: TasksControl, taskId: string, url: string | unde
   const address = url === undefined ? undefined : pullRequestAddressOf(url);
 
   if (address !== undefined) tasks.onShowPanelTab(taskId, changesTab(address));
+}
+
+/**
+ * One agent the Manager started, as its row: the row a task's own agents
+ * stand in (`agent-list-row.tsx`), reading its own agent, since the
+ * overview's are held still while a step of its turn moves nothing the
+ * overview lays out (`useAgentsStartedBy`).
+ */
+function ManagerAgentRow({
+  each,
+  tasks,
+  agents,
+  pullRequests,
+  more,
+}: {
+  each: PersonAgent;
+  tasks: TasksControl;
+  agents: AgentsControl;
+  pullRequests: ReadonlyMap<string, AgentPullRequest>;
+  more: boolean;
+}): React.JSX.Element {
+  const { task, agent: handed, at } = each;
+  const agent = useTaskListRow(useTaskListCollections().agents, handed.id) ?? handed;
+  const { models } = agents;
+  const subject = listedRowSubject(agent, at, { models, me: tasks.me, pullRequests });
+
+  return (
+    <AgentListRow
+      agent={agent}
+      agents={agents}
+      shown={tasks.shown}
+      subject={subject}
+      at={at}
+      card={<AgentCard subject={subject} models={models} />}
+      pullRequest={pullRequests.get(agent.id)}
+      chosen={undefined}
+      more={more}
+      onPress={() => tasks.onShowAgent(task.id, agent.id)}
+      onOpenPullRequest={() => openPullRequest(tasks, task.id, pullRequests.get(agent.id)?.url)}
+    />
+  );
 }
 
 /**
@@ -181,10 +260,8 @@ function ManagerAgents({
 
   if (agents.length === 0) return null;
 
-  const { models } = control;
-
   return (
-    <PersonSectionFrame
+    <OverviewSection
       label={OVERVIEW_WORDS.AGENTS}
       title={OVERVIEW_WORDS.AGENTS}
       count={agents.length}
@@ -192,36 +269,20 @@ function ManagerAgents({
     >
       <ReplayMask>
         <TaskRows label={OVERVIEW_WORDS.AGENTS} cells={AGENT_ROW_CELLS} more={more} moves>
-          {shown.map(({ task, agent, at }) => {
-            const subject = listedRowSubject(agent, at, {
-              models,
-              me: tasks.me,
-              pullRequests,
-            });
-
-            return (
-              <AgentListRow
-                key={agent.id}
-                agent={agent}
-                agents={control}
-                shown={tasks.shown}
-                subject={subject}
-                at={at}
-                card={<AgentCard subject={subject} models={models} />}
-                pullRequest={pullRequests.get(agent.id)}
-                chosen={undefined}
-                more={more}
-                onPress={() => tasks.onShowAgent(task.id, agent.id)}
-                onOpenPullRequest={() =>
-                  openPullRequest(tasks, task.id, pullRequests.get(agent.id)?.url)
-                }
-              />
-            );
-          })}
+          {shown.map((each) => (
+            <ManagerAgentRow
+              key={each.agent.id}
+              each={each}
+              tasks={tasks}
+              agents={control}
+              pullRequests={pullRequests}
+              more={more}
+            />
+          ))}
         </TaskRows>
         {foot}
       </ReplayMask>
-    </PersonSectionFrame>
+    </OverviewSection>
   );
 }
 
@@ -259,7 +320,7 @@ function ManagerPullRequests({
   if (pullRequests.length === 0) return null;
 
   return (
-    <PersonSectionFrame
+    <OverviewSection
       label={OVERVIEW_WORDS.PULL_REQUESTS}
       title={OVERVIEW_WORDS.PULL_REQUESTS}
       count={pullRequests.length}
@@ -298,7 +359,46 @@ function ManagerPullRequests({
         </TaskRows>
         {foot}
       </ReplayMask>
-    </PersonSectionFrame>
+    </OverviewSection>
+  );
+}
+
+/**
+ * A section of the Manager's tasks, each the Tasks page's own row as Home's
+ * Recent and a person's page list them (`RecentTasks`), a press opening its
+ * task; nothing while it lists none.
+ */
+function ManagerTasks({
+  tasks,
+  title,
+  listed,
+  cap,
+  unread,
+}: {
+  tasks: TasksControl;
+  title: string;
+  listed: readonly TaskSummary[];
+  /** The most rows it lists before its foot shows the rest. */
+  cap: number;
+  unread: (task: TaskSummary) => boolean;
+}): React.JSX.Element | null {
+  const { shown, foot } = useCapped(listed, cap);
+
+  if (listed.length === 0) return null;
+
+  return (
+    <OverviewSection label={title} title={title} count={listed.length} noun={TERM.TASK}>
+      <ReplayMask>
+        <RecentTasks
+          tasks={tasks}
+          label={title}
+          listed={shown}
+          unread={unread}
+          onOpen={tasks.onSelect}
+        />
+        {foot}
+      </ReplayMask>
+    </OverviewSection>
   );
 }
 
@@ -307,16 +407,28 @@ export function ManagerOverview({
   tasks,
   manager,
   threads,
+  staged,
 }: {
   tasks: TasksControl;
   manager: ListedAgent;
   /** The threads the Manager posted, as the line over its box reads them; none while it posted none. */
   threads: AgentThreads | undefined;
+  /** Whether a fixture stages the window, whose tasks' looks are its own rather than kept (`useUnreadTasks`). */
+  staged: boolean;
 }): React.JSX.Element {
   const now = useMinute();
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
-  // Note that every agent is read only while the overview stands, since it counts the Manager's agents among them.
-  const liveAgents = useListedAgents(tasks.agentsCarried);
+  // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
+  const unread = useUnreadTasks({ staged });
+  // Note that only the agents the Manager started are read, and those only for what lays the overview out, so a step of another's turn draws no overview (`useAgentsStartedBy`).
+  const liveAgents = useAgentsStartedBy(tasks.agentsCarried, { agentId: manager.id });
+  const workedOn = useMemo(() => agentTaskIds(liveAgents), [liveAgents]);
+
+  // The tasks its agents work on and those it made, of the listed workspace, as the sidebar lists them.
+  const listed = useTasksAbout(tasks.typedNames, tasks.workspace?.id, {
+    agentId: manager.id,
+    taskIds: workedOn,
+  });
+
   const listedPullRequests = useListedAgentPullRequests(tasks.agentsCarried);
 
   const overview = useMemo(
@@ -343,7 +455,7 @@ export function ManagerOverview({
       <DetailPage frame={PAGE_FRAME.TOOLBAR} label={OVERVIEW} width={PAGE_WIDTH.FULL}>
         {/* Note that the counts and the sections' heads show in a screen recording, while each section masks its rows. */}
         <ReplayUnmask>
-          <Stack gap={GAP.SECTION}>
+          <Stack gap={GAP.BLOCK}>
             <CountLine
               label={OVERVIEW_WORDS.COUNTS}
               counts={[
@@ -362,6 +474,22 @@ export function ManagerOverview({
               <div className="manager-overview-column">
                 <ManagerAgents tasks={tasks} agents={overview.agents} pullRequests={byAgent} />
                 <ManagerPullRequests tasks={tasks} pullRequests={overview.pullRequests} />
+              </div>
+              <div className="manager-overview-column">
+                <ManagerTasks
+                  tasks={tasks}
+                  title={OVERVIEW_WORDS.OPEN_TASKS}
+                  listed={overview.openTasks}
+                  cap={OPEN_TASK_ROWS}
+                  unread={unread}
+                />
+                <ManagerTasks
+                  tasks={tasks}
+                  title={OVERVIEW_WORDS.DONE}
+                  listed={overview.doneThisWeek}
+                  cap={DONE_ROWS}
+                  unread={unread}
+                />
               </div>
             </div>
           </Stack>

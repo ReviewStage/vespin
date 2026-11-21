@@ -16,6 +16,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -119,6 +120,9 @@ export function useTaskListCollections(): TaskListCollections {
   return collections;
 }
 
+/** No rows: what a read naming no key, or none the collection holds, answers before any is read. */
+const NO_ROWS: readonly never[] = [];
+
 /** Nothing to listen for: what a read with no key subscribes with. */
 const LISTEN_TO_NOTHING = (): (() => void) => () => {};
 
@@ -149,6 +153,50 @@ export function useTaskListRow<Row extends object>(
   );
 }
 
+/**
+ * The rows `keys` name in one of the task list's collections (`.get(key)`),
+ * in the keys' order, a key it holds no row for left out, drawn again only
+ * when one of those rows moves, and the same array until one does or the
+ * keys change. Note that it reads no other row, so a list that needs a few
+ * of the account's thousands of tasks, such as the Inbox's holders, is
+ * neither read whole nor drawn again as any other task moves.
+ */
+export function useTaskListRowsOf<Row extends object>(
+  collection: Collection<Row, string>,
+  keys: readonly string[],
+): readonly Row[] {
+  const held = useRef<readonly Row[]>(NO_ROWS);
+
+  const subscribe = useCallback(
+    (heard: () => void) => {
+      const named = new Set(keys);
+
+      const subscription = collection.subscribeChanges((changes) => {
+        if (changes.some((change) => named.has(change.key))) heard();
+      });
+
+      return () => subscription.unsubscribe();
+    },
+    [collection, keys],
+  );
+
+  // Note that the rows read are the very array read last while each is the very row it held, as `useSyncExternalStore` asks of a snapshot.
+  return useSyncExternalStore(subscribe, () => {
+    const rows = keys.flatMap((key) => {
+      const row = collection.get(key);
+
+      return row === undefined ? [] : [row];
+    });
+
+    const last = held.current;
+
+    if (rows.length === last.length && rows.every((row, at) => row === last[at])) return last;
+    held.current = rows;
+
+    return rows;
+  });
+}
+
 /** Every row of one of the task list's pull-request collections, in no order, as one live query, drawn again only when one of them moves. */
 export function useTaskListRows<Row extends object>(
   collection: Collection<Row, string>,
@@ -156,28 +204,43 @@ export function useTaskListRows<Row extends object>(
   return useLiveQuery((q) => q.from({ row: collection })).data;
 }
 
-/** The task list's tasks newest started first, as the document lists them, as one live query, drawn again only when one of them moves. */
-export function useListedTasks(): readonly TaskSummary[] {
+/** No task or agent: what a list read while it is not asked for answers. */
+const NOT_READ: readonly never[] = [];
+
+/**
+ * The task list's tasks newest started first, as the document lists them, as one live query, drawn again only when one of them moves; none while `reading` is false, when nothing is read and no change is heard.
+ */
+export function useListedTasks(reading = true): readonly TaskSummary[] {
   const { tasks } = useTaskListCollections();
 
-  return useLiveQuery((q) =>
-    q
-      .from({ task: tasks })
-      .orderBy(({ task }) => task.createdAt, "desc")
-      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
-  ).data;
+  return (
+    useLiveQuery((q) =>
+      reading
+        ? q
+            .from({ task: tasks })
+            .orderBy(({ task }) => task.createdAt, "desc")
+            .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+        : undefined,
+    ).data ?? NOT_READ
+  );
 }
 
-/** The task list's agents, the archived among them, first started first, as the document lists them, as one live query, drawn again only when one of them moves. */
-export function useListedAgents(): readonly ListedAgent[] {
+/**
+ * The task list's agents, the archived among them, first started first, as the document lists them, as one live query, drawn again only when one of them moves; none while `reading` is false, when nothing is read and no change is heard.
+ */
+export function useListedAgents(reading = true): readonly ListedAgent[] {
   const { agents } = useTaskListCollections();
 
-  return useLiveQuery((q) =>
-    q
-      .from({ agent: agents })
-      .orderBy(({ agent }) => agent.createdAt)
-      .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
-  ).data;
+  return (
+    useLiveQuery((q) =>
+      reading
+        ? q
+            .from({ agent: agents })
+            .orderBy(({ agent }) => agent.createdAt)
+            .orderBy(({ agent }) => agent.id, { stringSort: "lexical" })
+        : undefined,
+    ).data ?? NOT_READ
+  );
 }
 
 /**

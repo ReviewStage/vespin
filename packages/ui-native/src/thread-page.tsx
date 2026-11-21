@@ -34,7 +34,7 @@ import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
-import type { ReactNode } from "react";
+import { type ReactNode, useDeferredValue, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useReduceMotion } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
@@ -43,7 +43,7 @@ import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { CopyWordsSwiftMenu, PictureOriginProvider } from "./held-menu.js";
+import { CopyWordsSwiftMenu, PictureOriginProvider, PictureSetProvider } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import type { MediaSize } from "./media-frame.js";
@@ -55,7 +55,7 @@ import {
   BarMenuItem,
   barActItems,
 } from "./split-view.js";
-import { threadRuns } from "./thread-group-model.js";
+import { newestRuns, threadRuns } from "./thread-group-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -67,6 +67,9 @@ export const PATH_PART = " › ";
 
 /** Between a writer's face and their name. */
 const WRITER_GAP = SPACE.TIGHT * 2;
+
+/** How many of a thread's newest messages its first frame draws at least, the runs before them a render later: more than most threads hold, so most open whole. */
+const FIRST_DRAWN = 10;
 
 /** Between one message and the next of the same run, closer than between runs, as Messages draws a speaker's bubbles. */
 const RUN_GAP = SPACE.TIGHT * 2;
@@ -666,79 +669,87 @@ export function ThreadPage(props: ThreadPageProps) {
   const footRoom = useDockRoom();
   const reduceMotion = useReduceMotion();
 
+  const runs = useMemo(() => threadRuns(messages), [messages]);
+
+  // Note that a long thread's first frame draws its newest runs alone, and React draws the runs before them in the render after it, above them, while the page holds to its foot, so opening a thread of many messages costs what one of a few does.
+  const shown = useDeferredValue(runs, newestRuns(runs, FIRST_DRAWN));
+
   // Note that the path heading the page wraps, so its words stand uncut, while the bar's keeps to one line.
   const pathTitle = (
     <PathTitle path={path} status={status} actions={pathActions} wrap={pathInHead} />
   );
 
   // Note that a thread opens at its newest message and keeps to its foot as it grows or the keyboard rises, as Messages does and the panel's board does, while one too short to scroll stands under its heading.
+  // Note that the thread's pictures are one set its viewer swipes through, every message's together.
   return (
-    <Toolbar>
-      <VStack spacing={0}>
-        <ScrollView
-          modifiers={[
-            scrollDismissesKeyboard("interactively"),
-            defaultScrollAnchorForRole("bottom", "initialOffset"),
-            defaultScrollAnchorForRole("bottom", "sizeChanges"),
-            defaultScrollAnchorForRole("top", "alignment"),
-          ]}
-        >
-          <VStack
-            alignment="leading"
-            spacing={SPACE.EDGE}
+    <PictureSetProvider>
+      <Toolbar>
+        <VStack spacing={0}>
+          <ScrollView
             modifiers={[
-              // Note that a wide window centers the thread's column at the reading width, as Mail centers a message, rather than running its lines across the screen.
-              frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
-              frame({ maxWidth: Number.POSITIVE_INFINITY }),
-              padding({ bottom: SPACE.PAGE + footRoom }),
-              // Note that a message landing, a reply's included, comes in on the system's default spring, as Messages' bubbles do, and the ask's card it answered steps away on the same one, since it goes as the reply lands; with Reduce Motion on they stand at once.
-              ...(reduceMotion ? [] : [animation(Animation.default, messages.length)]),
+              scrollDismissesKeyboard("interactively"),
+              defaultScrollAnchorForRole("bottom", "initialOffset"),
+              defaultScrollAnchorForRole("bottom", "sizeChanges"),
+              defaultScrollAnchorForRole("top", "alignment"),
             ]}
           >
-            <ThreadHead
-              title={title}
-              quoted={quoted}
-              standing={standing}
-              path={pathInHead ? pathTitle : undefined}
-            />
-            {(opening ?? []).map((event) => (
-              <EventLine key={event.key} event={event} now={drawing.now} />
-            ))}
-            {/* Note that a run's messages stand under its first one's head, and a line of what happened after a message ends its run, so it stands between runs. */}
-            {threadRuns(messages).map((run) => (
-              <VStack key={run[0]?.id} alignment="leading" spacing={RUN_GAP}>
-                {run.map((message, index) => (
-                  <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
-                    <MessageView message={message} head={index === 0} {...drawing} />
-                    {(message.after ?? []).map((event) => (
-                      <EventLine key={event.key} event={event} now={drawing.now} />
-                    ))}
-                  </VStack>
-                ))}
-              </VStack>
-            ))}
-            {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
-            {ask === undefined ? null : (
-              <VStack
-                alignment="leading"
-                modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
-              >
-                {ask}
-              </VStack>
-            )}
-          </VStack>
-        </ScrollView>
-        {foot}
-      </VStack>
-      <BarContent>
-        {pathInHead ? null : <ToolbarItem placement="principal">{pathTitle}</ToolbarItem>}
-        {barActItems(acts)}
-        {menu === undefined ? null : (
-          <ToolbarItem placement="topBarTrailing">
-            <BarMenuItem menu={menu} />
-          </ToolbarItem>
-        )}
-      </BarContent>
-    </Toolbar>
+            <VStack
+              alignment="leading"
+              spacing={SPACE.EDGE}
+              modifiers={[
+                // Note that a wide window centers the thread's column at the reading width, as Mail centers a message, rather than running its lines across the screen.
+                frame({ maxWidth: READING_WIDTH, alignment: "leading" }),
+                frame({ maxWidth: Number.POSITIVE_INFINITY }),
+                padding({ bottom: SPACE.PAGE + footRoom }),
+                // Note that a message landing, a reply's included, comes in on the system's default spring, as Messages' bubbles do, and the ask's card it answered steps away on the same one, since it goes as the reply lands; with Reduce Motion on they stand at once.
+                ...(reduceMotion ? [] : [animation(Animation.default, messages.length)]),
+              ]}
+            >
+              <ThreadHead
+                title={title}
+                quoted={quoted}
+                standing={standing}
+                path={pathInHead ? pathTitle : undefined}
+              />
+              {(opening ?? []).map((event) => (
+                <EventLine key={event.key} event={event} now={drawing.now} />
+              ))}
+              {/* Note that a run's messages stand under its first one's head, and a line of what happened after a message ends its run, so it stands between runs. */}
+              {shown.map((run) => (
+                <VStack key={run[0]?.id} alignment="leading" spacing={RUN_GAP}>
+                  {run.map((message, index) => (
+                    <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
+                      <MessageView message={message} head={index === 0} {...drawing} />
+                      {(message.after ?? []).map((event) => (
+                        <EventLine key={event.key} event={event} now={drawing.now} />
+                      ))}
+                    </VStack>
+                  ))}
+                </VStack>
+              ))}
+              {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
+              {ask === undefined ? null : (
+                <VStack
+                  alignment="leading"
+                  modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+                >
+                  {ask}
+                </VStack>
+              )}
+            </VStack>
+          </ScrollView>
+          {foot}
+        </VStack>
+        <BarContent>
+          {pathInHead ? null : <ToolbarItem placement="principal">{pathTitle}</ToolbarItem>}
+          {barActItems(acts)}
+          {menu === undefined ? null : (
+            <ToolbarItem placement="topBarTrailing">
+              <BarMenuItem menu={menu} />
+            </ToolbarItem>
+          )}
+        </BarContent>
+      </Toolbar>
+    </PictureSetProvider>
   );
 }

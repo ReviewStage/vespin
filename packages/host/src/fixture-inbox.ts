@@ -1301,13 +1301,14 @@ const MEMORIES: readonly MemorySummary[] = [
 /** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
 const PENDING_PAIRING_CODE = "BCDFGHJK";
 
-/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
+/** The machine waiting on that code, as it named itself, when its code lapses, ten minutes after the fixture landed, and the workspace the account owns that it may connect it to. */
 const PENDING_PAIRING: HostPairingAnswer = {
   name: "Ada's Mac mini",
   platform: DEVICE_PLATFORM.DARWIN,
   arch: DEVICE_ARCH.ARM64,
   ip: "203.0.113.7",
   expiresAt: LANDED + 10 * 60_000,
+  workspaces: [{ id: FIXTURE_WORKSPACE.id, name: FIXTURE_WORKSPACE.name }],
 };
 
 /** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */

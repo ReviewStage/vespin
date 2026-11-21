@@ -17,8 +17,8 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
-  isTaskSettled,
   TASK_CREATE_RELATION_KIND,
+  TASK_SETTLED,
   TASK_STATUS,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
@@ -51,6 +51,7 @@ import {
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
+import { and, eq, inArray, isUndefined, not, or, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useNavigation, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
@@ -59,7 +60,7 @@ import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-sugges
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useListedTasks } from "../host/host-provider.js";
+import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
 import {
   CLOUD,
@@ -747,8 +748,8 @@ export function NewAgentScreen({
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
-  const listed = useListedTasks();
-  const startsOn = listed.find((task) => task.id === (suggestedTask ?? taskId));
+  // Note that the task it starts on is read by its id alone, so the page isn't drawn again as any other of the account's tasks moves while words are typed.
+  const startsOn = useTaskListRow(useTaskListCollections().tasks, suggestedTask ?? taskId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
@@ -956,6 +957,9 @@ interface RelationPick {
 /** What a menu of tasks to relate to reads of the pick: the tasks it may name, the one named, and how to name one. */
 type RelationChoices = Pick<RelationPick, "tasks" | "relation" | "pick">;
 
+/** No task to relate: what the menu offers before the workspace is known. */
+const NO_RELATION_TASKS: readonly TaskSummary[] = [];
+
 /**
  * The relation New task starts its task in: none until one is picked from
  * the +, its kind and its task together, or Sub-task of `parent` where a
@@ -963,29 +967,42 @@ type RelationChoices = Pick<RelationPick, "tasks" | "relation" | "pick">;
  * yet settled, and the parent whatever its status.
  */
 function useRelationPick(
-  listed: readonly TaskSummary[],
   workspaceId: string | undefined,
   parent: string | undefined,
 ): RelationPick {
+  const collections = useTaskListCollections();
+
   const [relation, setRelation] = useState<TaskCreateRelation | undefined>(
     parent === undefined
       ? undefined
       : { kind: TASK_CREATE_RELATION_KIND.SUB_TASK_OF, taskId: parent },
   );
 
-  const tasks = useMemo(
-    () =>
-      listed.filter(
-        (task) =>
-          task.workspaceId === workspaceId &&
-          (task.id === parent || task.status === undefined || !isTaskSettled(task.status)),
-      ),
-    [listed, workspaceId, parent],
-  );
+  // Note that only the workspace's tasks not yet settled, and the parent, are read, in the list's order, which is all the menu offers, so opening New task sorts none of the account's other tasks, and a change to one of them draws the page nothing again.
+  const tasks =
+    useLiveQuery((q) =>
+      workspaceId === undefined
+        ? undefined
+        : q
+            .from({ task: collections.tasks })
+            .where(({ task }) => {
+              const open = or(
+                isUndefined(task.status),
+                not(inArray(task.status, [...TASK_SETTLED])),
+              );
+
+              return and(
+                eq(task.workspaceId, workspaceId),
+                parent === undefined ? open : or(eq(task.id, parent), open),
+              );
+            })
+            .orderBy(({ task }) => task.createdAt, "desc")
+            .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
+    ).data ?? NO_RELATION_TASKS;
 
   return {
     relation,
-    task: listed.find((task) => task.id === relation?.taskId),
+    task: tasks.find((task) => task.id === relation?.taskId),
     tasks,
     pick: setRelation,
     clear: () => setRelation(undefined),
@@ -1123,17 +1140,16 @@ export function NewTaskScreen({
   const dictated = useDictation(prompt, setPrompt);
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const listed = useListedTasks();
   const chosen = useChosenWorkspace(workspaces).chosen;
   const own = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
-  // Note that a sub-task starts in its parent's workspace by the id its row holds, read before the workspace list may be, and holds its start until that row is read.
-  const parentIn = listed.find((task) => task.id === parent)?.workspaceId;
+  // Note that a sub-task starts in its parent's workspace by the id its row holds, read before the workspace list may be, and holds its start until that row is read; the row is read by its id alone.
+  const parentIn = useTaskListRow(useTaskListCollections().tasks, parent)?.workspaceId;
   const workspaceId = parent === undefined ? own?.id : parentIn;
   const placed = workspaceId !== undefined || parent === undefined;
   // Note that a sub-task's repositories are its parent's workspace's alone, never the chosen one's, so none is offered until that workspace is read.
   const workspace = parent === undefined ? own : workspaces.find((each) => each.id === workspaceId);
   const repository = useRepositoryPick(workspace, draft?.repository);
-  const relation = useRelationPick(listed, workspaceId, parent);
+  const relation = useRelationPick(workspaceId, parent);
   const pick = useModelPick();
   const [modelsShown, setModelsShown] = useState(false);
   const startTask = useStartedIn(useStartTask(workspaceId), workspaceId, section);

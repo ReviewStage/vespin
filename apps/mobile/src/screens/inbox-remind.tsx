@@ -92,6 +92,8 @@ export function useRemind(): UseRemindResult {
     (items: readonly InboxItem[], after?: () => void): RemindMenu => {
       const times: RowAction[] = REMIND_TIMES.map((time, at) => ({
         label: time.label,
+        // Note that VoiceOver's Actions hear a time with its verb, "Remind me tomorrow", as Mail's do, since they list it apart from its menu.
+        heard: `${REMIND_WORDS.REMIND_ME} ${time.label.toLowerCase()}`,
         symbol: REMIND_TIME_GLYPH.get(time.label),
         detail: details[at],
         tone: ROW_ACTION_TONE.NEUTRAL,
@@ -100,6 +102,7 @@ export function useRemind(): UseRemindResult {
 
       const pick: RowAction = {
         label: REMIND_WORDS.PICK,
+        heard: REMIND_WORDS.PICK,
         symbol: GLYPH.TIME,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => setHeld({ items, at: Date.now(), after }),
@@ -109,6 +112,7 @@ export function useRemind(): UseRemindResult {
         ? [
             {
               label: items.length === 1 ? REMIND_WORDS.CLEAR : REMIND_WORDS.CLEAR_ALL,
+              heard: items.length === 1 ? REMIND_WORDS.CLEAR : REMIND_WORDS.CLEAR_ALL,
               symbol: GLYPH.INBOX,
               tone: ROW_ACTION_TONE.NEUTRAL,
               onPress: () => send(items, null, after),

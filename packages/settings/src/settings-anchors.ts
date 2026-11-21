@@ -53,6 +53,8 @@ export const SETTINGS_SEARCH_ROW = {
   ADD_HOSTS: "add-hosts",
   /** Machines' list of the account's machines. */
   HOSTS: "hosts-list",
+  /** Machines' list of the machines the workspace Settings shows owns. */
+  WORKSPACE_MACHINES: "workspace-machines",
   /** Skills' group of the reader's own, under the workspace's in a workspace of several members. */
   SKILLS_PERSONAL: "skills-personal",
   /** The Workspace page's identity row, where an owner or an admin renames the workspace. */

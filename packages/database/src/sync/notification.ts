@@ -86,6 +86,12 @@ export const TOPIC = {
   TASK_PARENT: "task-parent",
   AGENT: "agent",
   CONVERSATION: "conversation",
+  /**
+   * A host's device, by device id: the lines and requests queued for it,
+   * which its held reads are woken on, a member's own Mac or box and a
+   * workspace's machine alike, whose lines are every member's.
+   */
+  DEVICE: "device",
 } as const;
 
 export type TopicKind = (typeof TOPIC)[keyof typeof TOPIC];

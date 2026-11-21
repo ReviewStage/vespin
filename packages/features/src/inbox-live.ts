@@ -69,7 +69,11 @@ function latestOrder<Key extends string>(key: Key) {
  * `taskless`, `automations`, and `agents` hold nothing; they stay declared
  * for a released desktop (v0.22.0), which reads them, and keeps every part
  * but `agents`, whose decode strips it, so it sends the digest over those
- * (`olderParts`). This build reads none of the three. The service answers `unavailable` where its
+ * (`olderParts`). This build reads none of the three. The items of an agent
+ * on a machine its workspace owns are carried only to a build that reads
+ * one (`HOSTED_API_VERSION` 7 on), which the service binds as
+ * `workspaceMachines` from the headers the build names itself in, as a
+ * plan's inbox and the account's items carry them. The service answers `unavailable` where its
  * deployment's Realtime is misconfigured, which the desktop answers by
  * asking again.
  */
@@ -79,6 +83,7 @@ export const ACCOUNT_INBOX_READ = liveRead({
   params: {
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
     [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: LIVE_PARAM.OPTIONAL_TEXT,
+    workspaceMachines: LIVE_PARAM.SERVED,
   },
   query: {
     [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: EffectSchema.optionalKey(
@@ -327,7 +332,11 @@ export const TASK_INBOX_READ = liveRead({
   name: "taskInbox",
   path: HOSTED_SERVICE_PATH.LIVE_TASK_INBOX,
   // Note that the account is named first, so a session of another is refused as signed out before the id is read.
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, id: LIVE_PARAM.ID },
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    id: LIVE_PARAM.ID,
+    workspaceMachines: LIVE_PARAM.SERVED,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: SCOPE_INBOX_PARTS,
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND),
@@ -552,6 +561,7 @@ export const INBOX_ITEMS_READ = liveRead({
     [ACCOUNT_INBOX_ITEMS.SINCE]: LIVE_PARAM.OPTIONAL_TEXT,
     settledSince: LIVE_PARAM.SERVED,
     taskless: LIVE_PARAM.SERVED,
+    workspaceMachines: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.DELTA,
   parts: {
