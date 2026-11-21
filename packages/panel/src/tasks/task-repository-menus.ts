@@ -19,15 +19,24 @@ import { useTaskListCollections } from "../task-list-collections.js";
 import { appStateQuery, selectListedTasks } from "../use-app-state.js";
 import type { RepositoryChooser } from "./repository-chip.js";
 
-/** The tasks about a repository, newest started first: one live query, so a task about none moving leaves the same array. */
-function useRepositoryTasks(): readonly TaskSummary[] {
+/** A task about a repository as the chip's list reads it: its workspace and its repository. */
+type RepositoryTask = Pick<TaskSummary, "workspaceId" | "repository">;
+
+/**
+ * The tasks about a repository, newest started first, each as its workspace
+ * and repository alone: one live query, so a task about none moving, or a
+ * task moving in any other field, as each turn of its agents does, leaves
+ * the same array.
+ */
+function useRepositoryTasks(): readonly RepositoryTask[] {
   const { tasks } = useTaskListCollections();
 
   return useLiveQuery((q) =>
     q
       .from({ task: tasks })
       .where(({ task }) => not(isNull(task.repository)))
-      .orderBy(({ task }) => task.createdAt, "desc"),
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .select(({ task }) => ({ workspaceId: task.workspaceId, repository: task.repository })),
   ).data;
 }
 

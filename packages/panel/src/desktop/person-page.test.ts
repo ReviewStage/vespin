@@ -434,7 +434,7 @@ function mountWith(
 
   const control = (more: TasksControlOverrides) =>
     tasksControl({
-      liveAgents: followedOf(more.tasks ?? overrides.tasks ?? TASKS),
+      listedAgents: followedOf(more.tasks ?? overrides.tasks ?? TASKS),
       me: DEAN.userId,
       workspace: { ...ACME, memberCount },
       tasks: TASKS,

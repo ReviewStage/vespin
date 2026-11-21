@@ -144,7 +144,7 @@ async function mountSidebar(
   const tasks = tasksControl({
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    liveAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
+    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
     agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
     agents: agentsControl({
       rename: {

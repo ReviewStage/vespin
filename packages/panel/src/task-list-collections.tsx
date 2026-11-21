@@ -262,6 +262,29 @@ function sameStepped(one: readonly TaskSummary[], other: readonly TaskSummary[])
   return one.length === other.length && one.every((task, at) => other[at] === task);
 }
 
+/** A task as a reader naming tasks reads it: its id and its name. */
+export interface TaskName {
+  readonly id: string;
+  readonly name: string;
+}
+
+/**
+ * Every task the list holds as its id and its name, each name drawn as it
+ * is being typed where it is (`typedNames`), in no order. The live query
+ * selects only the two, so the list is the same array across a delivery
+ * moving any other field of a task, as each turn of its agents does; for a
+ * reader that names tasks, as an `@`'s agents name the tasks they work on.
+ */
+export function useTaskNames(typedNames: TaskNames): readonly TaskName[] {
+  const collections = useTaskListCollections();
+
+  const listed = useLiveQuery((q) =>
+    q.from({ task: collections.tasks }).select(({ task }) => ({ id: task.id, name: task.name })),
+  ).data;
+
+  return useMemo(() => renamedTasks(listed, typedNames), [listed, typedNames]);
+}
+
 /**
  * The tasks an address's step may name, as the list holds them: the one
  * whose id it is, and, for a step reading as a number, each numbered so in

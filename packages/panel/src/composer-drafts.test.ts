@@ -803,7 +803,7 @@ async function sidebarOn(open: typeof INVITES, pinned: boolean) {
     tasks: [INVITES.plan, BILLING.plan],
     activeTaskId: open.plan.id,
     chosenPin: pinned ? pin : undefined,
-    liveAgents: [listedAgent(open.agent)],
+    listedAgents: [listedAgent(open.agent)],
     mainTabs: {
       ...tasksControl().mainTabs,
       tabs: [pin.tab],
