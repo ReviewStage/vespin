@@ -40,6 +40,7 @@ import {
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_KIND,
+  AGENT_MACHINE,
   AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentQueueChange,
@@ -242,8 +243,8 @@ const ACCOUNT: AccountSnapshot = {
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
-/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by. Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
-const STAGED_EXPERIMENTS = { [EXPERIMENT.SKILLS]: true } as const;
+/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by, and Move agents', which an agent's Move to › stands behind. Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
+const STAGED_EXPERIMENTS = { [EXPERIMENT.SKILLS]: true, [EXPERIMENT.MOVE_AGENTS]: true } as const;
 
 /** Main's settings with the staged experiments on, one object for each of main's, so a staging that moves nothing of them hands nothing new. */
 const STAGED_SETTINGS = new WeakMap<
@@ -2295,8 +2296,15 @@ export function queuedAppState(state: AppStateSnapshot, queues: KeptQueues): App
   return { ...state, [LIVE_READ.TRANSCRIPT]: laid };
 }
 
-/** The models the account may start an agent on, as the service's catalog lists them, and no device of its own. */
+/** The models the account may start an agent on, as the service's catalog lists them, and the account's machines an agent may run or be moved to, as Settings › Machines lists them. */
 const MODELS: ModelsAnswer = {
+  macs: HOSTS.map((host) => ({
+    deviceId: host.id,
+    name: host.name,
+    providers: [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.OPENAI],
+    ...(host.platform === undefined ? undefined : { platform: host.platform }),
+    ...(host.model === undefined ? undefined : { model: host.model }),
+  })),
   models: [
     {
       id: MODEL,
@@ -3352,6 +3360,24 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
+  },
+  // Note that a move is taken as the service takes one, answered with the agent where it now runs, on the device named or in the cloud.
+  [ACT_KIND.AGENTS_MOVE]: ({ agentId, runsOn }) => {
+    const held = stagedAgent(agentId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const { machine: _machine, mac: _mac, ...cloud } = held;
+
+    if (runsOn.machine === AGENT_MACHINE.VERCEL) return { agent: cloud };
+    const host = HOSTS.find((each) => each.id === runsOn.deviceId);
+
+    return {
+      agent: {
+        ...cloud,
+        machine: AGENT_MACHINE.DEVICE,
+        mac: { name: host?.name ?? "", deviceId: runsOn.deviceId },
+      },
+    };
   },
   // Note that a change of model, of permission mode, of servers, of name, or of pin is taken as the service takes one, answered with the agent as it then stands; the iOS run lays it over the list itself (`chosenTasksView`).
   [ACT_KIND.AGENTS_CHOOSE]: ({ agentId, model, effort }) => {
