@@ -1,0 +1,11 @@
+pinned to d1b676d84e
+== bundle PJjpic10273b base d1b676d84e
+  built d1b676d84e base app Vp10273.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fpic10273: fails 0 shots 3 
+iphone-light-compose: fails 0 shots 11 
+iphone-light-agent: fails 0 shots 23 
+iphone-dark-fpic10273: fails 0 shots 3 
