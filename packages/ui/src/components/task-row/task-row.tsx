@@ -1,3 +1,4 @@
+import { LIST_COLUMN, TASK_PROPERTY } from "@repo/features/tasks-page-model";
 import {
   type ComponentPropsWithRef,
   type CSSProperties,
@@ -11,7 +12,6 @@ import {
 import { cssCustomProperties } from "../../css.js";
 import { FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { ReplayMask } from "../../session-replay-marks.js";
-import { LIST_COLUMN, TASK_PROPERTY } from "../../tasks-page-model.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress, SELECT_BOX_PLACE } from "../card-press/card-press.js";

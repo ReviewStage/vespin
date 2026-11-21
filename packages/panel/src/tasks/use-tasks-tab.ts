@@ -60,7 +60,6 @@ import {
   mutationOptions,
   type QueryClient,
   QueryObserver,
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -78,6 +77,7 @@ import { useChosenWorkspace } from "../desktop/chosen-workspace.js";
 import { type InboxAt, listedInboxChoice, useInboxRoute } from "../inbox-route.js";
 import { heldTaskQuery, historyQuery, historyRetryMutation, pagesQuery } from "../live-reads.js";
 import { useMergeQueueRoute } from "../merge-queue-route.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import {
   beginPanelSpan,
   PANEL_SPAN,
@@ -759,12 +759,12 @@ export function useTasksTab(input: {
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation, and
   // none invalidates a query, since what each changes comes back through app state.
   const queryClient = useQueryClient();
-  const { mutateAsync: sendSelect } = useMutation(actMutation(ACT_KIND.TASKS_SELECT));
-  const { mutateAsync: sendClose } = useMutation(actMutation(ACT_KIND.TASKS_CLOSE));
-  const { mutateAsync: sendRestore } = useMutation(actMutation(ACT_KIND.TASKS_RESTORE));
+  const { mutateAsync: sendSelect } = useMutationCalls(actMutation(ACT_KIND.TASKS_SELECT));
+  const { mutateAsync: sendClose } = useMutationCalls(actMutation(ACT_KIND.TASKS_CLOSE));
+  const { mutateAsync: sendRestore } = useMutationCalls(actMutation(ACT_KIND.TASKS_RESTORE));
   // Note that which agent is shown is told, quiet whatever comes back, since no person pressed for it.
-  const { mutate: tellShown } = useMutation(actMutation(ACT_KIND.AGENTS_SHOWN));
-  const { mutate: refreshTasks } = useMutation(pressMutation(ACT_KIND.TASKS_REFRESH));
+  const { mutate: tellShown } = useMutationCalls(actMutation(ACT_KIND.AGENTS_SHOWN));
+  const { mutate: refreshTasks } = useMutationCalls(pressMutation(ACT_KIND.TASKS_REFRESH));
   const copyWithToast = useCopyToast();
   const toast = useToast();
   const [chosen, setChosen] = useState<PinChoice | undefined>(undefined);
@@ -918,6 +918,8 @@ export function useTasksTab(input: {
   // A fixture run draws its synthetic tasks in place of the account's,
   // signed out as every fixture run is.
   const fixture = tasksFixture?.fixtureTasksView(input.run);
+  // Whether the window's task is the fixture's own for good, so a press opens nothing: every fixture run's but one that opens the task a select names (`open-tasks-fixture.ts`).
+  const boundForGood = fixture !== undefined && tasksFixture?.fixtureOpensTasks(input.run) !== true;
   const viewed = fixture ?? input.tasks;
   const accountSignedIn = input.signedIn;
   // A name, pin, status, priority, or assignee given here, a task's or an
@@ -1460,7 +1462,7 @@ export function useTasksTab(input: {
   // The description of the task a press asked for is held from the press, rather than once the host binds it a round
   // trip later, so its read runs beside the select. Note that a fixture's tasks are read nowhere, so nothing is read
   // ahead of them.
-  useQuery(heldTaskQuery(fixture === undefined ? boundFor : undefined));
+  useQuery(heldTaskQuery(boundForGood ? undefined : boundFor));
 
   // The description of the task the pointer comes to rest on is held ahead of the press, by an observer of its own
   // rather than state, because a pointer crossing the sidebar must not draw the tab again at every row. Note that it is
@@ -1480,9 +1482,9 @@ export function useTasksTab(input: {
 
   const pointTask = useCallback(
     (taskId: string | undefined) => {
-      if (fixture === undefined) pointRest.aim(taskId);
+      if (!boundForGood) pointRest.aim(taskId);
     },
-    [fixture, pointRest],
+    [boundForGood, pointRest],
   );
 
   useEffect(() => () => pointedHold.current?.release(), []);
@@ -1711,7 +1713,7 @@ export function useTasksTab(input: {
     takesStepless = false,
   ): boolean => {
     if (!opensTaskPlace && !over) return false;
-    const toward = fixture === undefined ? taskId : openTaskId;
+    const toward = boundForGood ? openTaskId : taskId;
 
     if (toward === undefined) {
       const moved = !input.homeView.open;
@@ -1776,11 +1778,11 @@ export function useTasksTab(input: {
         !stays &&
         (arrivedMove.current ??
           (routedTask.current.opens &&
-            (fixture === undefined ? taskId : openTaskId) !== routedTask.current.taskId));
+            (boundForGood ? openTaskId : taskId) !== routedTask.current.taskId));
 
       const standBack = pressedOverNow.current(false, moved);
       // Note that the task is asked for before the window moves, so its arrival finds it asked for already.
-      const takeBack = fixture === undefined ? ask(taskId) : NO_TAKE_BACK;
+      const takeBack = boundForGood ? NO_TAKE_BACK : ask(taskId);
 
       if (!stays) standTask.current(taskId);
       // Another task asked for is timed to its document drawn ready; the one
@@ -1796,7 +1798,7 @@ export function useTasksTab(input: {
         // A refusal with no way of its own stands again what stood where another task's open was pressed; the task already
         // open, and a fixture run's, which binds nothing asked of it, stand as they are.
         if (onRefused !== undefined) onRefused();
-        else if (fixture === undefined && taskId !== openTaskId) standBack();
+        else if (!boundForGood && taskId !== openTaskId) standBack();
       };
 
       sendSelect({ taskId }).then((opened) => {
@@ -1809,7 +1811,7 @@ export function useTasksTab(input: {
         onOpened();
       }, withdraw);
     },
-    [sendSelect, fixture, openTaskId, ask],
+    [sendSelect, boundForGood, openTaskId, ask],
   );
 
   // Binding no task is asked rather than told, so a refused one takes its ask back too. It is what arriving on Home asks of
@@ -1817,10 +1819,10 @@ export function useTasksTab(input: {
   const unbindTask = useCallback(() => {
     opening.current = undefined;
 
-    if (fixture !== undefined) return;
+    if (boundForGood) return;
     const takeBack = ask(undefined);
     sendClose().catch(takeBack);
-  }, [fixture, ask, sendClose]);
+  }, [boundForGood, ask, sendClose]);
 
   // Home is the page of no task bound, so leaving the open task, or going Home from anywhere, is a navigation to Home, whose
   // arrival asks the host to bind none; on Home already, it only lets go of a task still bound there. Note that it reads
@@ -1834,19 +1836,19 @@ export function useTasksTab(input: {
   const leaveMove = useCallback((): boolean => {
     const now = homeNow.current;
 
-    if (fixture !== undefined && now.boundFor !== undefined) return standTask.current(now.boundFor);
+    if (boundForGood && now.boundFor !== undefined) return standTask.current(now.boundFor);
 
     if (now.home.open) return false;
     now.home.onOpen();
 
     return true;
-  }, [fixture]);
+  }, [boundForGood]);
 
   const leaveTask = useCallback(() => {
     const bound = homeNow.current.boundFor;
 
-    if (!leaveMove() && fixture === undefined && bound !== undefined) unbindTask();
-  }, [fixture, leaveMove, unbindTask]);
+    if (!leaveMove() && !boundForGood && bound !== undefined) unbindTask();
+  }, [boundForGood, leaveMove, unbindTask]);
 
   // The open task leaves the window for Home once it is marked done or canceled, or leaves the list read, as a delete
   // takes it, since the sidebar draws it no longer. Note that only the move does, and only while the task's own place
@@ -2082,7 +2084,7 @@ export function useTasksTab(input: {
 
   // Note that the move's options stand across draws, calling the newest move, so a draw that moved nothing hands the same ones.
   const moveTaskOptions = useMemo(() => taskMoveMutation(runTaskMove), [runTaskMove]);
-  const { mutateAsync: sendTaskMove } = useMutation(moveTaskOptions);
+  const { mutateAsync: sendTaskMove } = useMutationCalls(moveTaskOptions);
 
   const moveTask = (
     taskId: string,
@@ -2107,7 +2109,7 @@ export function useTasksTab(input: {
     enabled: shown && historyOpen && historyTaskId !== undefined,
   });
 
-  const { mutate: retryHistory } = useMutation(historyRetryMutation());
+  const { mutate: retryHistory } = useMutationCalls(historyRetryMutation());
 
   const onRetryHistory = useCallback(() => {
     if (historyTaskId !== undefined) retryHistory({ taskId: historyTaskId });

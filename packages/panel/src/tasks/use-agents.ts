@@ -71,6 +71,7 @@ import {
 } from "../composer-drafts.js";
 import type { ShownFailure } from "../failure-report.js";
 import { modelsRetryMutation } from "../live-reads.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import type { RenameTerms } from "../rename-write.js";
 import { rendererFork } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
@@ -909,34 +910,44 @@ export function useAgents(input: {
     sendMutation(ACT_KIND.AGENTS_START, () => SENTRY_SEND_SPAN.AGENT_START),
   );
 
-  const { mutateAsync: sendStop } = useMutation(actMutation(ACT_KIND.AGENTS_STOP));
+  const { mutateAsync: sendStop } = useMutationCalls(actMutation(ACT_KIND.AGENTS_STOP));
   const sendSuggestion = useSuggestionSender();
-  const { mutateAsync: sendRewind } = useMutation(actMutation(ACT_KIND.AGENTS_REWIND));
-  const { mutate: sendUnsend } = useMutation(actMutation(ACT_KIND.AGENTS_UNSEND));
-  const { mutateAsync: sendClear } = useMutation(actMutation(ACT_KIND.AGENTS_CLEAR));
-  const { mutateAsync: sendMove } = useMutation(actMutation(ACT_KIND.AGENTS_MOVE));
+  const { mutateAsync: sendRewind } = useMutationCalls(actMutation(ACT_KIND.AGENTS_REWIND));
+  const { mutate: sendUnsend } = useMutationCalls(actMutation(ACT_KIND.AGENTS_UNSEND));
+  const { mutateAsync: sendClear } = useMutationCalls(actMutation(ACT_KIND.AGENTS_CLEAR));
+  const { mutateAsync: sendMove } = useMutationCalls(actMutation(ACT_KIND.AGENTS_MOVE));
 
-  const { mutateAsync: sendMessage } = useMutation(
+  const { mutateAsync: sendMessage } = useMutationCalls(
     sendMutation(ACT_KIND.AGENTS_MESSAGE, () => SENTRY_SEND_SPAN.AGENT_SEND),
   );
 
-  const { mutateAsync: sendChoice } = useMutation(actMutation(ACT_KIND.AGENTS_CHOOSE));
-  const { mutateAsync: sendServers } = useMutation(actMutation(ACT_KIND.AGENTS_SERVERS));
+  const { mutateAsync: sendChoice } = useMutationCalls(actMutation(ACT_KIND.AGENTS_CHOOSE));
+  const { mutateAsync: sendServers } = useMutationCalls(actMutation(ACT_KIND.AGENTS_SERVERS));
 
-  const { mutateAsync: sendPermissionMode } = useMutation(
+  const { mutateAsync: sendPermissionMode } = useMutationCalls(
     actMutation(ACT_KIND.AGENTS_PERMISSION_MODE),
   );
 
-  const { mutateAsync: sendFace } = useMutation(actMutation(ACT_KIND.AGENTS_FACE));
+  const { mutateAsync: sendFace } = useMutationCalls(actMutation(ACT_KIND.AGENTS_FACE));
 
-  const { mutateAsync: sendApprovalAnswer } = useMutation(
+  const { mutateAsync: sendApprovalAnswer } = useMutationCalls(
     actMutation(ACT_KIND.AGENTS_ANSWER_APPROVAL),
   );
 
-  const { mutateAsync: sendArchive } = useMutation(actMutation(ROW_WRITE.AGENT_ARCHIVE.kind));
-  const { mutateAsync: sendInboxAnswer } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
-  const { mutateAsync: sendInboxMessage } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_MESSAGE));
-  const { mutateAsync: sendInboxStart } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_START));
+  const { mutateAsync: sendArchive } = useMutationCalls(actMutation(ROW_WRITE.AGENT_ARCHIVE.kind));
+
+  const { mutateAsync: sendInboxAnswer } = useMutationCalls(
+    actMutation(ACT_KIND.AGENTS_INBOX_ANSWER),
+  );
+
+  const { mutateAsync: sendInboxMessage } = useMutationCalls(
+    actMutation(ACT_KIND.AGENTS_INBOX_MESSAGE),
+  );
+
+  const { mutateAsync: sendInboxStart } = useMutationCalls(
+    actMutation(ACT_KIND.AGENTS_INBOX_START),
+  );
+
   // Note that an archive is out while any of the window's is, ⌘Z's sends among them, as the host draws each at once.
   const archiving = useIsMutating({ mutationKey: [ROW_WRITE.AGENT_ARCHIVE.kind] }) > 0;
   const mintKey = input.mintKey ?? (() => crypto.randomUUID());
@@ -1076,7 +1087,7 @@ export function useAgents(input: {
    * The ask and its bound run as one fiber, stopped by the next ask or as
    * the hook leaves, so neither sets state on a tab no longer standing.
    */
-  const { mutateAsync: retryModels } = useMutation(modelsRetryMutation());
+  const { mutateAsync: retryModels } = useMutationCalls(modelsRetryMutation());
   const stopModelsRead = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => () => stopModelsRead.current?.(), []);
@@ -1988,7 +1999,7 @@ export function useAgents(input: {
   const archiveAgent = useMemo(() => agentArchiveMutation(runArchiveOne), [runArchiveOne]);
   const archiveAgents = useMemo(() => agentsArchiveMutation(runArchiveMany), [runArchiveMany]);
 
-  const { mutateAsync: archive } = useMutation(archiveAgent);
+  const { mutateAsync: archive } = useMutationCalls(archiveAgent);
 
   const onArchive = (
     agentId: string,
@@ -1996,7 +2007,7 @@ export function useAgents(input: {
     how: ArchivePress = {},
   ): Promise<ActedResult> => archive({ agentId, archived, ...how });
 
-  const { mutateAsync: archiveMany } = useMutation(archiveAgents);
+  const { mutateAsync: archiveMany } = useMutationCalls(archiveAgents);
   const archiveManyNow = useRef(archiveMany);
   archiveManyNow.current = archiveMany;
 

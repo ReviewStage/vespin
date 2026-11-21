@@ -1,6 +1,11 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentStatus,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
@@ -85,6 +90,7 @@ import {
   repositoryPageUrl,
   type StopAgentsWords,
 } from "@repo/features/tasks-model";
+import { TASKS_GROUP } from "@repo/features/tasks-page-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
@@ -98,6 +104,7 @@ import {
   VERB,
 } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
+import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
@@ -177,6 +184,7 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
+import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -238,6 +246,7 @@ import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
+import { tasksViewMenu } from "./tasks-view-menu.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
@@ -892,8 +901,8 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * What a task dropped on a group's header does there, keeping it in one
  * place as the panel's drag does: onto Pinned it leaves the section the
  * member keeps it in, a pinned task's stored entry among them, and is
- * pinned at the same moment, both drawn at once; onto a section it is put in it, and onto a
- * repository group it leaves its section, each unpinning it once the move
+ * pinned at the same moment, both drawn at once; onto a section it is put in it, and onto one
+ * of the reader's tasks' groups, such as a repository's, it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
  * first, while a refused newer one leaves the older to finish. Nothing is
@@ -1245,6 +1254,15 @@ type TasksTreeProps = {
 function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree } = listing;
   const read = useTasksReadStatus();
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const managers = useWorkspaceManagers(listing.workspace?.id);
+
+  // Note that a Manager's row opens its page over the list in either window, as an agent's row on a task's page does, since the split view's detail stands a task alone.
+  const open = (id: string) => {
+    if (managers.some((agent) => agent.id === id)) router.push(onOwnTab(iosAgentRoute(id)));
+    else onSelect(id);
+  };
 
   const found = listing.found;
 
@@ -1271,12 +1289,13 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   }
 
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) {
+  if (treeEmpty(tree) && managers.length === 0) {
     return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
   }
 
   return (
-    <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
+    <RowList look={look} selected={selected} onSelect={open} onRefresh={onRefresh}>
+      <ManagersSection managers={managers} hold={hold} />
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
@@ -1296,12 +1315,59 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   );
 }
 
+/** The Managers section's name, on its header. */
+const MANAGERS_HEAD = "Managers";
+
+/** The Managers section's key among the tree's groups, by which its fold is held. */
+const MANAGERS_KEY = "managers";
+
+/**
+ * The workspace's Managers as the Tasks list's first section, above Pinned,
+ * as the desktop's sidebar stands them (`sidebar-managers.tsx`): each an
+ * agent's row, newest started first, its unread dot standing while its chat
+ * said something the reader has not read, and its press opening its chat
+ * (`TasksTree`), its long press and swipes an agent's own. It folds under
+ * its header and count as the other groups do, and stands nowhere while the
+ * workspace has none or has the Managers experiment off.
+ */
+function ManagersSection({
+  managers,
+  hold,
+}: {
+  readonly managers: readonly ListedAgent[];
+  readonly hold: TreeHold;
+}) {
+  const asking = useAgentRowAsk();
+
+  if (managers.length === 0) return null;
+
+  return (
+    <ListSection
+      title={MANAGERS_HEAD}
+      count={managers.length}
+      foldable
+      folded={hold.folded.has(MANAGERS_KEY)}
+      onFold={(shut) => hold.setFolded(MANAGERS_KEY, shut)}
+    >
+      {managers.map((agent) => (
+        <TaskAgentRow
+          key={agent.id}
+          line={{ agent, waiting: 0, pullRequest: undefined }}
+          asking={asking}
+        />
+      ))}
+    </ListSection>
+  );
+}
+
 /**
  * What a Tasks list group's header leads with, as the panel's sidebar
  * heads each: Pinned with the pin, Following with the eye, a section with
  * its own icon, a repository with the repository's mark, which stands in
  * until its owner's picture draws (`headPicture`), and the tasks with none
- * with no-repository's.
+ * with no-repository's; under another grouping, as the Tasks page heads its
+ * groups, a status or a priority with its mark, and an assignee with a
+ * person, or no one's mark.
  */
 function groupHeadGlyph(group: TaskTreeGroup): Glyph {
   switch (group.kind) {
@@ -1313,6 +1379,18 @@ function groupHeadGlyph(group: TaskTreeGroup): Glyph {
       return sectionGlyph(group.icon);
     case TASK_TREE_GROUP.REPOSITORY:
       return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+    case TASK_TREE_GROUP.STATUS:
+      return group.head?.kind === TASKS_GROUP.STATUS
+        ? STATUS_MARK_SYMBOL[group.head.status]
+        : GLYPH.STATUS;
+    case TASK_TREE_GROUP.PRIORITY:
+      return group.head?.kind === TASKS_GROUP.PRIORITY
+        ? PRIORITY_MARK_SYMBOL[group.head.priority]
+        : GLYPH.PRIORITY_BARS;
+    case TASK_TREE_GROUP.ASSIGNEE:
+      return group.key === NO_REPOSITORY_KEY ? GLYPH.UNASSIGNED : GLYPH.PERSON;
+    case TASK_TREE_GROUP.ALL:
+      return GLYPH.TASK;
   }
 }
 
@@ -2144,6 +2222,7 @@ export function TaskAgentRow({
       depth={nest?.depth}
       fold={nest?.fold}
       started={nest?.started}
+      unread={managerChatUnread(agent)}
       task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
@@ -2747,8 +2826,25 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
   const doors = useTaskRowDoors(read.workspace?.id);
   const { listing, status, deletion } = useListingAsks(read, doors);
   const { refreshTasks } = useInboxActs();
+  const viewMenu = useViewMenu(read);
 
-  return { search, setSearch, listing, status, deletion, refreshTasks };
+  return { search, setSearch, listing, status, deletion, refreshTasks, viewMenu };
+}
+
+/** The list's View options, its members' photos read as files for the menu, built anew only as the view or the members change. */
+function useViewMenu(read: ReadListing): BarMenu {
+  const { treeView, setTreeView, shared, members } = read;
+  const pictureOf = useMemberPictures();
+
+  const photoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
+  return useMemo(
+    () => tasksViewMenu({ view: treeView, setView: setTreeView, shared, members, photoOf }),
+    [treeView, setTreeView, shared, members, photoOf],
+  );
 }
 
 /** The list screens' state, held by the tab's root screen above its two layouts. */
@@ -2768,7 +2864,7 @@ function TasksStackList({
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
-  const { search, setSearch, listing, refreshTasks } = screen;
+  const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
 
@@ -2785,16 +2881,19 @@ function TasksStackList({
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
-      {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
-      {PLUS_TAB ? null : (
-        <Stack.Toolbar placement="right">
+      {/* Note that View options stands at the bar's edge, as Mail's filter stands by its list, and a narrow iPad window's tab bar has no round +, so its list's bar offers New task beside it, as its wider windows' bars do. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Menu icon={glyphSymbol(viewMenu.symbol)} accessibilityLabel={viewMenu.label}>
+          {stackMenuItems(viewMenu)}
+        </Stack.Toolbar.Menu>
+        {PLUS_TAB ? null : (
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
             onPress={compose.onPress}
           />
-        </Stack.Toolbar>
-      )}
+        )}
+      </Stack.Toolbar>
       <Screen>
         <TasksTree
           listing={listing}
@@ -2907,7 +3006,7 @@ function TasksSplitScreen({
   readonly screen: TasksScreenState;
   readonly hold: TreeHold;
 }) {
-  const { search, setSearch, listing, refreshTasks } = screen;
+  const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
 
   const { detail, detailBar } = useTaskDetail(selected, listing);
 
@@ -2926,6 +3025,7 @@ function TasksSplitScreen({
     ),
     bar: {
       title: TASKS_TITLE,
+      menu: viewMenu,
       search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
     },
   };

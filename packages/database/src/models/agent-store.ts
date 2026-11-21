@@ -1797,6 +1797,25 @@ const findAgentsOfDeletedWorkspace = SqlSchema.findAll({
     ),
 });
 
+const findAgentsOfLeaver = SqlSchema.findAll({
+  Request: Schema.Struct({ organizationId: Schema.String, userId: Schema.String }),
+  Result: AgentRowSchema,
+  execute: ({ organizationId, userId }) =>
+    Database.use((db) =>
+      db
+        .select(AGENT_COLUMNS)
+        .from(agentTable)
+        .where(
+          and(
+            eq(agentTable.organizationId, organizationId),
+            eq(agentTable.userId, userId),
+            isNull(agentTable.archivedAt),
+          ),
+        )
+        .orderBy(asc(agentTable.createdAt), asc(agentTable.id)),
+    ),
+});
+
 const findAgentLinesOfWorkspace = SqlSchema.findAll({
   Request: AgentsOfWorkspaceSchema,
   Result: AgentLineRowSchema,
@@ -2640,6 +2659,19 @@ export function listAgentsOfDeletedWorkspace(
   page: { readonly offset: number; readonly limit: number },
 ): AgentStoreEffect<readonly Agent[]> {
   return findAgentsOfDeletedWorkspace({ organizationId, ...page });
+}
+
+/**
+ * Every agent the account started in the workspace and not archived,
+ * oldest started first, read by the workspace and the account alone: the
+ * caller holds the account to one leaving the workspace, whose agents are
+ * stopped before they go.
+ */
+export function listAgentsOfLeaver(
+  organizationId: string,
+  userId: string,
+): AgentStoreEffect<readonly Agent[]> {
+  return findAgentsOfLeaver({ organizationId, userId });
 }
 
 /** The workspace's agents as `listWorkspaceAgents` lists them, each as its line reads. */

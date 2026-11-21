@@ -34,7 +34,6 @@
     "./microphone-access": "./src/microphone-access.js",
     "./sort-direction": "./src/sort-direction.js",
     "./tab-strip-model": "./src/tab-strip-model.js",
-    "./tasks-page-model": "./src/tasks-page-model.js",
     "./section-icon-model": "./src/section-icon-model.js",
     "./github-html": "./src/github-html.js",
     "./held-link": "./src/held-link.js",

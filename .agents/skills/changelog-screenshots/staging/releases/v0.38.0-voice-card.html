@@ -1,0 +1,128 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0}#c{display:block}
+</style></head><body><canvas id="c" width="2400" height="1592"></canvas><script>
+// v0.38.0-voice-card.html -- 0.38.0's Talk to your agents card: a voice drawn as a waveform of the landing's square dots, on the 0.26.0 and 0.28.0 cards' graphite. The picture that landed is v=wave-single.
+//
+// Query: v=turns|mirror|tracks|bars|meter-thin|meter-up|meter-talk|line|wave-single|ribbon|scope|rings (the waveform's shape), plus the cards' own g (ground), d (field dots), i (ink), a (accent), e (the field's edge, as the cards').
+const q=new URLSearchParams(location.search);
+const ground=q.get('g')||'#0f0d0b',dots=q.get('d')||'#6e6862',ink=q.get('i')||'#efeae4',accent=q.get('a')||'#cf7b26';
+const variant=q.get('v')||'bars',edge=q.get('e')||'soft2';
+const W=2400,H=1592,S=3,cell=7*S,dot=cell*0.42;
+const BAYER=[0,32,8,40,2,34,10,42,48,16,56,24,50,18,58,26,12,44,4,36,14,46,6,38,60,28,52,20,62,30,54,22,3,35,11,43,1,33,9,41,51,19,59,27,49,17,57,25,15,47,7,39,13,45,5,37,63,31,55,23,61,29,53,21].map(r=>(r+.5)/64);
+const bayer=(i,j)=>BAYER[(j%8)*8+(i%8)];
+const sm=(a,b,v)=>{const t=Math.min(1,Math.max(0,(v-a)/(b-a)));return t*t*(3-2*t);};
+// The landing's flow field, faded in from two corners, as the cards draw it.
+const flow=(x,y,t)=>0.17+0.16*Math.sin(x*0.011+t*0.3+Math.sin(y*0.012-t*0.2)*2.2)*Math.cos(y*0.008+t*0.22);
+function edgeAt(px,py){
+ if(edge==='soft2'){const a=Math.hypot(px/W,py/H*0.8),b=Math.hypot((W-px)/W,(H-py)/H*0.8);return Math.max(sm(0.62,0.0,a),sm(0.62,0.0,b))**1.6;}
+ return 0;}
+// A spoken phrase's loudness along the line: a few syllables' bumps under one breath, quiet at both ends.
+function loudness(u){
+ const breath=Math.sin(Math.PI*Math.min(1,Math.max(0,(u-0.06)/0.88)))**0.8;
+ const syl=0.55+0.45*Math.abs(Math.sin(u*31+1.3))*(0.6+0.4*Math.sin(u*7.3+0.4));
+ const flick=0.85+0.15*Math.sin(u*97);
+ return breath*syl*flick;}
+const c=document.getElementById('c'),x=c.getContext('2d');
+x.fillStyle=ground;x.fillRect(0,0,W,H);
+const sq=(cx,cy,s,col)=>{x.fillStyle=col;x.fillRect(cx-s/2,cy-s/2,s,s);};
+const cy=H/2,span={from:520,to:W-520};
+// The voice is drawn on a finer grid than the field, as the 0.28.0 card's dotted lettering is, so its curves read smooth.
+const fc=12,fd=fc*0.62;
+const fine=new Map();
+const fkey=(i,j)=>i*10000+j;
+const put=(px,py,col)=>{const i=Math.round(px/fc),j=Math.round(py/fc);fine.set(fkey(i,j),col);};
+if(variant==='bars'){
+ // An audio meter: a bar every few dots, as tall as the voice is loud, its loudest bars in the accent.
+ const step=fc*3;
+ for(let px=span.from;px<=span.to;px+=step){const u=(px-span.from)/(span.to-span.from);const l=loudness(u);
+  const half=Math.max(1,Math.round(l*380/fc));const col=l>0.62?accent:ink;
+  for(let k=-half;k<=half;k++){put(px,cy+k*fc,col);put(px+fc,cy+k*fc,col);}}
+}
+if(variant==='line'){
+ // Two voices' waveforms, the caller's in ink and the agent's in the accent, each a carrier under the phrase's loudness.
+ const wave=(u,ph,a)=>Math.sin(u*Math.PI*2*9+ph)*loudness(u)*a;
+ for(let px=span.from;px<=span.to;px+=2){const u=(px-span.from)/(span.to-span.from);
+  put(px,cy+wave(u,0,330),ink);
+  const v=Math.min(1,Math.max(0,(u-0.1)/0.8));put(px,cy+wave(u,2.2,190)*Math.sin(Math.PI*v),accent);}
+}
+if(variant==='meter-thin'){
+ // A finer meter: a one-dot bar every other dot, its middle third in the accent.
+ const step=fc*2;
+ for(let px=span.from;px<=span.to;px+=step){const u=(px-span.from)/(span.to-span.from);const l=loudness(u);
+  const half=Math.max(1,Math.round(l*400/fc));const col=Math.abs(u-0.5)<0.17?accent:ink;
+  for(let k=-half;k<=half;k++)put(px,cy+k*fc,col);}
+}
+if(variant==='meter-up'){
+ // An equalizer: bars rising from one baseline, their tops in the accent.
+ const step=fc*3,base=cy+300;
+ for(let px=span.from;px<=span.to;px+=step){const u=(px-span.from)/(span.to-span.from);const l=loudness(u);
+  const n=Math.max(1,Math.round(l*620/fc));
+  for(let k=0;k<n;k++){const col=k>=n-3&&n>6?accent:ink;put(px,base-k*fc,col);put(px+fc,base-k*fc,col);}}
+}
+if(variant==='meter-talk'){
+ // A conversation: the caller's phrase in ink, a breath, then the agent's answer in the accent.
+ const step=fc*3,gap=0.08;
+ for(let px=span.from;px<=span.to;px+=step){const u=(px-span.from)/(span.to-span.from);
+  const first=u<0.5-gap/2,second=u>0.5+gap/2;if(!first&&!second){put(px,cy,dots);put(px+fc,cy,dots);continue;}
+  const v=first?u/(0.5-gap/2):(u-0.5-gap/2)/(0.5-gap/2);const l=loudness(v*0.9+0.05)*(first?1:0.85);
+  const half=Math.max(1,Math.round(l*380/fc));const col=first?ink:accent;
+  for(let k=-half;k<=half;k++){put(px,cy+k*fc,col);put(px+fc,cy+k*fc,col);}}
+}
+if(variant==='wave-single'){
+ // One voice's waveform in the accent, drawn two dots thick.
+ for(let px=span.from;px<=span.to;px+=2){const u=(px-span.from)/(span.to-span.from);
+  const y=Math.sin(u*Math.PI*2*11)*loudness(u)*340;put(px,cy+y,accent);put(px,cy+y+fc,accent);}
+}
+if(variant==='ribbon'){
+ // A ribbon of waves: five phases of one voice, the outer ones fading, the middle one in the accent.
+ for(let n=-2;n<=2;n++){const a=1-Math.abs(n)*0.28;const col=n===0?accent:ink;
+  for(let px=span.from;px<=span.to;px+=3){const u=(px-span.from)/(span.to-span.from);
+   if(n!==0&&bayer(Math.round(px/fc),Math.abs(n)*3)>a)continue;
+   put(px,cy+Math.sin(u*Math.PI*2*5+n*0.55)*loudness(u)*360*a,col);}}
+}
+if(variant==='scope'){
+ // A recording's waveform: each column spans the samples' low to high, as an audio editor draws it, the part being said in the accent.
+ for(let px=span.from;px<=span.to;px+=fc){const u=(px-span.from)/(span.to-span.from);const l=loudness(u);
+  const half=Math.round(l*(0.55+0.45*Math.abs(Math.sin(u*211)))*400/fc);const col=u>0.38&&u<0.62?accent:ink;
+  for(let k=-half;k<=half;k++)put(px,cy+k*fc,col);}
+}
+// A phrase's bars between u0 and u1 of the line, its loudness scaled by gain, drawn by draw(px, l).
+function phrase(u0,u1,gain,step,draw){
+ for(let px=span.from+u0*(span.to-span.from);px<=span.from+u1*(span.to-span.from);px+=step){
+  const v=(px-span.from)/(span.to-span.from);const w=(v-u0)/(u1-u0);draw(px,loudness(w*0.9+0.05)*gain);}}
+if(variant==='turns'){
+ // A back-and-forth: the caller and the agent each speak twice, in turn, a breath between.
+ const step=fc*3;
+ const bar=(col)=>(px,l)=>{const half=Math.max(1,Math.round(l*360/fc));for(let k=-half;k<=half;k++){put(px,cy+k*fc,col);put(px+fc,cy+k*fc,col);}};
+ [[0,0.27,1,ink],[0.31,0.52,0.8,accent],[0.56,0.74,0.9,ink],[0.78,1,0.75,accent]].forEach(([a,b,g,col])=>phrase(a,b,g,step,bar(col)));
+ [0.29,0.54,0.76].forEach((u)=>{const px=span.from+u*(span.to-span.from);put(px,cy,dots);});
+}
+if(variant==='mirror'){
+ // Two sides of one call on one line: the caller's voice rises above it in ink, the agent's falls below it in copper.
+ const step=fc*3;
+ for(let px=span.from;px<=span.to;px+=step){put(px,cy,dots);put(px+fc,cy,dots);}
+ const up=(px,l)=>{const n=Math.round(l*380/fc);for(let k=1;k<=n;k++){put(px,cy-k*fc,ink);put(px+fc,cy-k*fc,ink);}};
+ const down=(px,l)=>{const n=Math.round(l*380/fc);for(let k=1;k<=n;k++){put(px,cy+k*fc,accent);put(px+fc,cy+k*fc,accent);}};
+ phrase(0,0.5,1,step,up);phrase(0.42,1,0.85,step,down);
+}
+if(variant==='tracks'){
+ // A call's two tracks, one above the other: the caller speaks on the upper one, then the agent answers on the lower.
+ const step=fc*3,top=cy-210,bottom=cy+210;
+ const bar=(y0,col)=>(px,l)=>{const half=Math.max(1,Math.round(l*170/fc));for(let k=-half;k<=half;k++){put(px,y0+k*fc,col);put(px+fc,y0+k*fc,col);}};
+ const rest=(y0,a,b)=>{for(let px=span.from+a*(span.to-span.from);px<=span.from+b*(span.to-span.from);px+=step){put(px,y0,dots);put(px+fc,y0,dots);}};
+ phrase(0,0.55,1,step,bar(top,ink));rest(top,0.57,1);
+ rest(bottom,0,0.43);phrase(0.45,1,0.9,step,bar(bottom,accent));
+}
+if(variant==='rings'){
+ // A voice spreading out: dotted rings round a center, the inner one in the accent, each fainter and sparser outward.
+ const cx=W/2;
+ for(let n=1;n<=7;n++){const r=n*95;const steps=Math.round(2*Math.PI*r/fc);const keep=1-(n-1)/8;
+  for(let s2=0;s2<steps;s2++){const a=s2/steps*Math.PI*2;if(n>1&&bayer(s2,n)>keep)continue;put(cx+Math.cos(a)*r,cy+Math.sin(a)*r,n===1?accent:ink);}}
+}
+const clear=variant==='rings'?(px,py)=>Math.hypot(px-W/2,py-cy)<760:(px,py)=>px>span.from-140&&px<span.to+140&&Math.abs(py-cy)<460;
+const cols=Math.floor(W/cell),rows=Math.floor(H/cell);
+for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const px=cell/2+i*cell,py=cell/2+j*cell;
+ if(!clear(px,py)&&flow(px/S,py/S,8)*2.0*edgeAt(px,py)>bayer(i,j))sq(px,py,dot,dots);}
+for(const [k,col] of fine){const i=Math.floor(k/10000),j=k%10000;sq(i*fc,j*fc,fd,col);}
+document.title='done';
+</script></body></html>

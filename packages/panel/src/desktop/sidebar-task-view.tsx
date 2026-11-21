@@ -1,6 +1,8 @@
 import {
   ASSIGNED_TO,
+  ASSIGNED_TO_WORDS,
   type AssignedTo,
+  memberTasksHead,
   TASK_GROUPING,
   TASKS_HEAD_WORDS,
   type TaskGrouping,
@@ -64,9 +66,6 @@ const GROUPING_WORDS = {
 /** The switch that stands each parent's completed sub-tasks under it, or leaves them out, in the words the Tasks page's Show completed uses for the same Done and Canceled tasks. */
 const SHOW_COMPLETED_SUB_TASKS = "Show completed sub-tasks";
 
-/** What Assigned to's choice of the tasks the reader follows is called. */
-const FOLLOWING_CHOICE = "Following";
-
 /** Who the list is filtered to, as the window draws them: a member as read, else as a listed task names them, else someone. */
 function filteredActor(
   userId: string,
@@ -122,7 +121,7 @@ function assignedToChoices(
   });
 
   const followed: MenuAction = {
-    label: FOLLOWING_CHOICE,
+    label: ASSIGNED_TO_WORDS[ASSIGNED_TO.FOLLOWING],
     icon: <BellIcon />,
     checked: followingChosen,
     onSelect: () => onChoose({ kind: ASSIGNED_TO.FOLLOWING }),
@@ -240,7 +239,7 @@ export function tasksHeadWords(
 
   if (actor.kind === ACTOR_KIND.PERSON && actor.you) return TASKS_HEAD_WORDS[ASSIGNED_TO.ME];
 
-  return `${actorName(actor)}'s tasks`;
+  return memberTasksHead(actorName(actor));
 }
 
 /** What the list says where its filters leave nothing, as the Tasks page says it; a section says it where they leave none of its rows. */

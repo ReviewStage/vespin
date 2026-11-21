@@ -30,6 +30,7 @@ type TasksFixture = {
   | "fixtureActAnswer"
   | "fixtureAppState"
   | "fixturePlace"
+  | "fixtureOpensTasks"
 >;
 
 let landed: TasksFixture | undefined;
@@ -50,6 +51,7 @@ function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
     fixtureSidePanel: tasks.fixtureSidePanel,
     fixtureColumnTab: tasks.fixtureColumnTab,
     fixturePlace: tasks.fixturePlace,
+    fixtureOpensTasks: tasks.fixtureOpensTasks,
     fixtureTasksView,
     fixtureActAnswer: (run, kind, payload) =>
       inbox.inboxActAnswer(run.profile, kind, payload) ??

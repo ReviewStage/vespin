@@ -27,7 +27,7 @@ import {
 import { BILLING_REFUSAL, type BillingRefusal } from "@repo/features/billing-refusal-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
 import { choiceOn, effortFor } from "@repo/features/model-effort";
-import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
+import { type CatalogModel, MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -54,6 +54,7 @@ import {
   lastTurnEnding,
   messageFailureNote,
   modelLabel,
+  modelsRunOn,
   noteWhileOffline,
   offeredModels,
   offersStop,
@@ -68,6 +69,7 @@ import {
   type TabSends,
   tabTurnOf,
   transcriptRowKey,
+  unrunnableChoice,
   unsearchedModels,
   workingLineWords,
 } from "./agent-model.js";
@@ -911,6 +913,40 @@ test("a Start refused for a missing credential says in one sentence which harnes
         provider: MODEL_PROVIDER.OPENAI,
       },
     ],
+  );
+});
+
+test("a choice nothing of the account's pays for is held in the cloud and on a device that runs no harness of its provider, and runs on a device that runs it", () => {
+  const unpaid: readonly CatalogModel[] = [
+    {
+      id: "anthropic/claude-opus-5.5",
+      name: "Claude Opus 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["high"],
+      credentialMissing: true,
+    },
+    {
+      id: "openai/gpt-5.5",
+      name: "GPT-5.5",
+      provider: MODEL_PROVIDER.OPENAI,
+      efforts: ["high"],
+      credentialMissing: true,
+    },
+  ];
+
+  // A device that registered no Codex runs Claude Code alone.
+  const claudeOnly = { providers: [MODEL_PROVIDER.ANTHROPIC] };
+
+  const heldFor = (device: typeof claudeOnly | undefined, model: string) =>
+    unrunnableChoice(modelsRunOn(unpaid, device) ?? [], { model, effort: "high" })?.provider;
+
+  assert.deepEqual(
+    [
+      heldFor(undefined, "anthropic/claude-opus-5.5"),
+      heldFor(claudeOnly, "anthropic/claude-opus-5.5"),
+      heldFor(claudeOnly, "openai/gpt-5.5"),
+    ],
+    [MODEL_PROVIDER.ANTHROPIC, undefined, MODEL_PROVIDER.OPENAI],
   );
 });
 

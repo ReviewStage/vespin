@@ -1,5 +1,6 @@
 import type { Failure } from "@repo/features/failure-remedy";
 import { TASK_BOUNDS, type TaskStanding, type TaskSummary } from "@repo/features/task-wire";
+import { TASK_PROPERTY } from "@repo/features/tasks-page-model";
 import {
   ANNOUNCE,
   CHIP_LOOK,
@@ -12,7 +13,6 @@ import {
   usePressAway,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { TASK_PROPERTY } from "@repo/ui/tasks-page-model";
 import { Fragment, type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
 import { useMemberDirectory } from "../member-directory.js";
 import { type QuickAddInto, useQuickAddStart } from "../tasks/use-new-task.js";

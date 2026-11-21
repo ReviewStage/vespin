@@ -44,6 +44,10 @@
  * its conversation is summarized, which drops them from what the model
  * reads.
  *
+ * Skills. The SDK takes no folder of skills, so the member's installed
+ * skills are linked into the checkout's `.agents/skills`, kept out of git,
+ * before the agent is made (`cursor-skills.ts`).
+ *
  * Secrets. The key is handed the SDK as its `apiKey` and taken out of the
  * runner's own environment before the agent is made, with the runner's
  * bearer and every other credential, because the SDK runs the agent's shell
@@ -83,6 +87,7 @@ import {
 } from "effect";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { type CursorAgentHandle, type CursorRun, CursorSdk } from "./cursor-sdk.js";
+import { linkInstalledSkills } from "./cursor-skills.js";
 import { type CursorStore, cursorStore, restoredEntries } from "./cursor-store.js";
 import { type CursorTools, openCursorTools } from "./cursor-tools.js";
 import { type LaunchContext, type LaunchOutcome, runsOnHost, toolEnvOf } from "./launch.js";
@@ -870,6 +875,16 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
 
   // A rewind or a fork at a message resumes the agent from the checkpoint marked before that line.
   if (config.rewindBefore !== undefined) store.success.cutBefore(session, config.rewindBefore);
+
+  // Note that skills that could not be linked are logged, and the agent opens without them rather than not at all.
+  yield* Effect.try({
+    try: () => linkInstalledSkills(config.cwd, config.installedSkills),
+    catch: detailOf,
+  }).pipe(
+    Effect.catch((detail) =>
+      Effect.logWarning(`agent-runner: the installed skills were not linked: ${detail}`),
+    ),
+  );
 
   const tools = yield* openCursorTools(mcpServersOf(config), context.bearer);
 

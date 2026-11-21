@@ -17,20 +17,28 @@
  * (`organization-store.ts`), since the plugin's member writes take only a
  * session and these rules already make the whole decision. A member
  * removed, or one who leaves, stays assigned to the workspace's tasks they
- * were on, read as a former member (`workspace-members.ts`), and their
+ * were on, read as a former member (`workspace-members.ts`); their running
+ * agents there are stopped first and their Managers archived, and their
  * automations there are turned off.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { listAgentsOfLeaver } from "@repo/database/models/agent-store";
 import {
   handOverWorkspace,
   removeWorkspaceMember,
   setWorkspaceMemberRole,
 } from "@repo/database/models/organization-store";
 import { workspaceOf } from "@repo/database/models/workspace-store";
+import { storeWriter } from "@repo/database/models/writer";
+import { AGENT_ARCHIVER, AGENT_KIND } from "@repo/features/agent-wire";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { Effect, Option } from "effect";
+import { archivedAgent } from "../agents/agent-change.js";
+import { everyTurnStoppedByStarter } from "../agents/coder-host/stop.js";
+import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
+import { deploymentSandboxDeletes } from "../agents/session-sandboxes.js";
 import { leaverAutomationsPaused } from "../automations/automation-cadence.js";
 import {
   recordServerEvent,
@@ -51,6 +59,12 @@ const HEIR_ROLES: ReadonlySet<WorkspaceRole> = new Set([
   WORKSPACE_ROLE.ADMIN,
   WORKSPACE_ROLE.OWNER,
 ]);
+
+/** Whoever a leaver's Stops are written as: the workspace's agents, as a workspace delete's are. */
+const STOPPER = storeWriter({ tools: CODER_TOOL_SET });
+
+/** Why a leaver's Manager was archived, as its banner says it. */
+const LEAVER_MANAGER_ARCHIVE_REASON = "Its starter left the workspace.";
 
 /** The roles each role removes: the owner an admin or a member, an admin a member alone. */
 const REMOVABLE_BY: ReadonlyMap<WorkspaceRole, ReadonlySet<WorkspaceRole>> = new Map([
@@ -84,6 +98,38 @@ const membersNow = (
   HostedRefusal,
   DatabaseServices
 > => Effect.map(hostedStoreOrUnavailable(listMembers(workspaceId)), (members) => ({ members }));
+
+/**
+ * The agents a member started in the workspace stopped before they go:
+ * every turn under way stopped under the member's own account, as a
+ * workspace delete stops each (`everyTurnStoppedByStarter`), which cancels
+ * their wakeups too, and their Managers archived, since a Manager stands
+ * in every member's sidebar and nobody else can talk to it. Note that this
+ * runs while they are still a member, because a Stop is reached through
+ * the starter's account and a removal cuts that off, and that their task
+ * agents are left unarchived, so a teammate can read one and continue it.
+ */
+const leaverAgentsStopped = Effect.fn("web/leaverAgentsStopped")(function* (
+  workspaceId: string,
+  leaverId: string,
+) {
+  const agents = yield* hostedStoreOrUnavailable(listAgentsOfLeaver(workspaceId, leaverId));
+  yield* everyTurnStoppedByStarter(STOPPER, agents);
+  yield* Effect.forEach(
+    agents.filter((agent) => agent.kind === AGENT_KIND.MANAGER),
+    (manager) =>
+      archivedAgent(deploymentSandboxDeletes, STOPPER, leaverId, manager, true, {
+        by: AGENT_ARCHIVER.APP,
+        userId: leaverId,
+        reason: LEAVER_MANAGER_ARCHIVE_REASON,
+      }).pipe(
+        Effect.catch((refusal) =>
+          Effect.logWarning(`a removed member's Manager was not archived: ${refusal.error}`),
+        ),
+      ),
+    { discard: true },
+  );
+});
 
 /**
  * What a member leaves behind settled once they are out of the workspace:
@@ -126,6 +172,7 @@ export const workspaceMemberRemove = Effect.fn("web/workspaceMemberRemove")(func
   const role = yield* otherMemberRole(userId, workspace.id, removed);
 
   if (!removable.has(role)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  yield* leaverAgentsStopped(workspace.id, removed);
   yield* hostedStoreOrUnavailable(removeWorkspaceMember(workspace.id, removed));
   yield* leaverSettled(workspace.id, removed);
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.REMOVE);
@@ -186,6 +233,7 @@ export const workspaceLeave = Effect.fn("web/workspaceLeave")(function* (
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }
 
+  yield* leaverAgentsStopped(workspace.id, userId);
   yield* hostedStoreOrUnavailable(removeWorkspaceMember(workspace.id, userId));
   yield* leaverSettled(workspace.id, userId);
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.LEAVE);

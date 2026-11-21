@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; and the rounding agent's, ten finished turns with wide words.
+ * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; and the release Manager's short chat.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -383,6 +383,59 @@ export function fixtureAgentTranscript(
     messages: transcriptMessages(startedAt, reader),
     cursor: "3:0",
     word: { status: AGENT_STATUS.RUNNING, runStartedAt: startedAt, title, caughtUp: true },
+    pages: 1,
+  };
+}
+
+/**
+ * The release Manager's transcript, its instants counted from `startedAt`:
+ * the account's ask, then a turn that worked through other calls and its
+ * own words and sent the account two messages (`send_to_user`), which its
+ * page draws as its chat, leaving the rest out
+ * (`@repo/features/manager-chat`).
+ */
+export function fixtureManagerTranscript(
+  startedAt: number,
+  reader: { readonly userId: string; readonly name: string },
+  title: string,
+): AppTranscript {
+  const messages: readonly AgentTranscriptMessage[] = [
+    asked(
+      "fixture-manager-ask",
+      startedAt,
+      "Get the invitations work ready to ship this week, and tell me what's left.",
+      reader,
+    ),
+    {
+      id: "fixture-manager-turn",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        { type: "text", text: "Reading the invitations task before I answer." },
+        toolPart(
+          AGENT_TOOL.SEND_TO_USER,
+          "fixture-manager-said-plan",
+          { text: "On it. The invitations agent has its pull request open and its tests pass." },
+          { status: "accepted" },
+        ),
+        toolPart(
+          AGENT_TOOL.SEND_TO_USER,
+          "fixture-manager-said-left",
+          {
+            text: "Left before it ships: a Resend button on pending invites, and the audit log line. I'll tell you once both land.",
+          },
+          { status: "accepted" },
+        ),
+      ],
+      startedAt: startedAt + MINUTE,
+      finishedAt: startedAt + 4 * MINUTE,
+    },
+  ];
+
+  return {
+    messages,
+    cursor: "1:0",
+    word: { status: AGENT_STATUS.COMPLETED, runStartedAt: startedAt, title, caughtUp: true },
     pages: 1,
   };
 }

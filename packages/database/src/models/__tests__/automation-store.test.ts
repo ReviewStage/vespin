@@ -543,7 +543,7 @@ it.layer(getTestDB())("the automation store", (it) => {
 
 it.layer(getTestDB())("the automation store's failed runs", (it) => {
   it.effect(
-    "the newest run of each of the account's own automations that failed to start since the instant asked is read, the latest first, a skipped one passed over, and none of another account's",
+    "the newest run of each of the account's own automations that failed to start since the instant asked is read, the latest first, a skipped one passed over, and none of another account's but one whose creator left a workspace the account owns",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
@@ -618,6 +618,22 @@ it.layer(getTestDB())("the automation store's failed runs", (it) => {
         assert.deepEqual(yield* read(other, 0), [
           [theirRun, "Their sweep", AUTOMATION_RUN_REASON.CREATOR_LEFT],
         ]);
+
+        // A member's automation that failed because they left is told to the workspace's owner, and to no other member.
+        const creator = yield* openAccount;
+        const teammate = yield* openAccount;
+        yield* joinWorkspace(workspaceId, creator);
+        yield* joinWorkspace(workspaceId, teammate);
+        const leftBehind = yield* made(creator, workspaceId, "Left behind");
+        const leftRun = yield* ran(leftBehind, failed(AUTOMATION_RUN_REASON.CREATOR_LEFT));
+        yield* leaveWorkspace(workspaceId, creator);
+
+        assert.deepEqual(yield* read(owner, 0), [
+          [leftRun, "Left behind", AUTOMATION_RUN_REASON.CREATOR_LEFT],
+          [digested, "Morning digest", AUTOMATION_RUN_REASON.UNAVAILABLE],
+          [newest, "Nightly flaky-test sweep", AUTOMATION_RUN_REASON.MODEL],
+        ]);
+        assert.deepEqual(yield* read(teammate, 0), []);
       }),
   );
 

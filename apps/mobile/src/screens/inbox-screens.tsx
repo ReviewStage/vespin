@@ -30,6 +30,11 @@ import {
   READING_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
+import {
+  filesLost,
+  UNDELIVERED_FILES_LOST,
+  type UndeliveredReply,
+} from "@repo/features/inbox-undelivered";
 import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
@@ -82,6 +87,7 @@ import {
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
+  type UndeliveredLine,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -103,7 +109,12 @@ import {
   useStandFrontSteps,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
-import { pendingThreadFile, useThreadAnswer } from "../inbox/use-thread-answer.js";
+import {
+  pendingThreadFile,
+  type ThreadAnswer,
+  useThreadAnswer,
+  useUndeliveredShown,
+} from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { NotificationAsk } from "../notification-ask.js";
@@ -707,9 +718,12 @@ function ThreadDetail({
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
+  // Note that the reader's replies that did not go stand at the thread's foot as their own messages, marked Not delivered, as the panel keeps them.
+  const undelivered = useUndeliveredShown(item);
+
   const messages = useMemo(
-    () => inboxThreadMessages(item, agentName, readerId),
-    [item, agentName, readerId],
+    () => inboxThreadMessages(undelivered.item, agentName, readerId),
+    [undelivered.item, agentName, readerId],
   );
 
   const hostActs = useHostActs();
@@ -870,9 +884,12 @@ function ThreadDetail({
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
+  const undeliveredLines = new Map(undelivered.lines.map((line) => [line.key, line]));
+
   const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
     ...message,
     after: events.get(index),
+    undelivered: undeliveredOf(undeliveredLines.get(message.id), answer),
     writer: {
       ...message.writer,
       id: message.writer.agent ? undefined : message.writer.userId,
@@ -1074,6 +1091,24 @@ function ThreadDetail({
       {remind.sheet}
     </>
   );
+}
+
+/** What a reply that did not go says under its words and offers, Retry where it can go as it stands; none for a message that went. */
+function undeliveredOf(
+  line: UndeliveredReply | undefined,
+  answer: Pick<ThreadAnswer, "retryUndelivered" | "editUndelivered" | "deleteUndelivered">,
+): UndeliveredLine | undefined {
+  if (line === undefined) return undefined;
+  const { key } = line;
+  const lost = filesLost(line);
+
+  return {
+    why: lost ? UNDELIVERED_FILES_LOST : line.why,
+    newThread: line.startsThread === true,
+    onRetry: lost ? undefined : () => answer.retryUndelivered(key),
+    onEdit: () => answer.editUndelivered(key),
+    onDelete: () => answer.deleteUndelivered(key),
+  };
 }
 
 /** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Try again, or that no such thread is the account's to read. */

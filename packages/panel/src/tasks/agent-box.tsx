@@ -1,11 +1,11 @@
 import { AGENT_STATUS, type AgentStatus, type AgentSummary } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import type { Actor } from "@repo/ui/actor-model";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { usePerson } from "../member-directory.js";
 import { type AgentModeControl, useAgentPermissionMode } from "./agent-approvals.js";
 import { ForwardChip } from "./agent-forward.js";
-import { offersStop, teammateStarter, turnUnderWay } from "./agent-model.js";
+import { modelsRunOn, offersStop, teammateStarter, turnUnderWay } from "./agent-model.js";
 import { AgentPlace } from "./agent-place.js";
 import type { AgentServersControl } from "./agent-servers.js";
 import { useMovePlace } from "./move-agent.js";
@@ -82,6 +82,18 @@ export function useAgentBox(input: {
   });
 
   const placeMove = useMovePlace(agent, agents);
+  // Note that an agent on the reader's own device runs on that device's sign-in, so a model of a harness it runs is offered whatever pays for it.
+  const deviceId = agent?.mac?.deviceId;
+
+  const models = useMemo(
+    () =>
+      modelsRunOn(
+        agents.models,
+        agents.macs?.find((device) => device.deviceId === deviceId),
+      ),
+    [agents.models, agents.macs, deviceId],
+  );
+
   // Note that a teammate's agent is named as theirs, so its chip names their plan and none of the reader's.
   const starter = usePerson(agent?.startedBy);
   const teammate = teammateStarter(agent?.startedBy, agents.me) !== undefined;
@@ -93,7 +105,7 @@ export function useAgentBox(input: {
     stoppable: agent !== undefined && offersStop(agent),
     steers: agent !== undefined && turnUnderWay(agent),
     model,
-    models: agents.models,
+    models,
     modelsFailed: agents.modelsFailed,
     readModels: agents.readModels,
     owner,

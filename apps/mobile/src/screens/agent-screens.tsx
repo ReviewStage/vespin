@@ -6,13 +6,17 @@ import {
   type PortAct,
   type PortRow,
 } from "@repo/features/agent-ports-model";
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
+  AGENT_KIND,
   AGENT_MACHINE,
   type AgentOverviewPullRequest,
+  type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
+import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
 import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import {
@@ -21,6 +25,7 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
+import { managerChatLines } from "@repo/features/manager-chat";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -97,6 +102,7 @@ import {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  type UndeliveredLine,
   useAnnounced,
   useColors,
   useWindowSizeClass,
@@ -131,6 +137,8 @@ import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-appr
 import {
   type AgentComposer,
   type SuggestedSend,
+  type UndeliveredActs,
+  undeliveredWhole,
   useAgentComposer,
 } from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
@@ -140,6 +148,7 @@ import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
 import { type AgentCommandsPlace, useAgentCommandsPlace } from "../agents/use-agent-tools.js";
+import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -186,6 +195,7 @@ const MENU_WORDS = {
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
   DELETE: "Permanently delete",
+  OVERVIEW: "Overview",
 } as const;
 
 /** What Copy transcript offers, in the panel's words: the transcript concise or whole, copied, and the same words handed to the share sheet. */
@@ -217,6 +227,14 @@ const MODEL_CHIP_ID = "agent-model-chip";
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
+
+/** A transcript's messages as its page draws them: a Manager's as its chat (`managerChatLines`), any other agent's whole. */
+function chatOrTranscript(
+  messages: readonly AgentTranscriptMessage[],
+  chat: boolean,
+): readonly AgentTranscriptMessage[] {
+  return chat ? managerChatLines(messages) : messages;
+}
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
@@ -445,6 +463,7 @@ function AgentComposerArea({
   messageSent,
   suggested,
   editMessage,
+  undeliveredActs,
   approvals,
   onShowWaiting,
   servers,
@@ -461,6 +480,7 @@ function AgentComposerArea({
   readonly messageSent: Parameters<typeof useAgentComposer>[4];
   readonly suggested: Parameters<typeof useAgentComposer>[5];
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
+  readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
   readonly servers: AgentServers;
@@ -478,7 +498,8 @@ function AgentComposerArea({
   const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
-  }, [editMessage, composer.editMessage]);
+    undeliveredActs.current = composer.undelivered;
+  }, [editMessage, composer.editMessage, undeliveredActs, composer.undelivered]);
 
   return (
     <>
@@ -845,10 +866,14 @@ function AgentConversation({
     ],
   );
 
+  // Note that a Manager's page is its chat, never its transcript, as the panel draws it (`managerChatLines`): people's lines and its `send_to_user` words alone.
+  const chat = shown?.kind === AGENT_KIND.MANAGER;
+  useManagerChatLooks(shown);
+
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
-      transcriptItems(withSending(messages ?? [], sending ?? []), {
+      transcriptItems(chatOrTranscript(withSending(messages ?? [], sending ?? []), chat), {
         writing: status !== undefined && agentStillWriting(status),
         readerId,
         toggles,
@@ -868,6 +893,7 @@ function AgentConversation({
       whole.read,
       origin,
       suggestionAddress,
+      chat,
     ],
   );
 
@@ -898,6 +924,27 @@ function AgentConversation({
 
   // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
   const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
+  // Note that a refused line's Retry, Edit, and Delete reach the composer the same way.
+  const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
+
+  // A line of the member's the service refused, marked Not delivered where it went, with why and what mends it, as the panel keeps it.
+  const undelivered = useCallback(
+    (lineId: string): UndeliveredLine | undefined => {
+      const line = sending?.find((each) => each.id === lineId);
+
+      if (line?.refused === undefined) return undefined;
+      const whole = undeliveredWhole(line);
+
+      return {
+        why: whole ? messageFailureWords(line.refused.failure) : UNDELIVERED_FILES_LOST,
+        newThread: false,
+        onRetry: whole ? () => undeliveredActs.current?.retry(lineId) : undefined,
+        onEdit: () => undeliveredActs.current?.edit(lineId),
+        onDelete: () => undeliveredActs.current?.drop(lineId),
+      };
+    },
+    [sending],
+  );
 
   const composer = useMemo(
     () => ({
@@ -1010,6 +1057,13 @@ function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
+  // Note that a Manager's overview stands beside its chat on the desktop; here it is pushed from the bar, where the workspace lists its Managers.
+  const overviewShown = useManagersListed(shown?.workspaceId) && chat;
+
+  const openOverview = overviewShown
+    ? () => router.push({ pathname: onOwnTab("/tasks/agent/[id]/overview"), params: { id } })
+    : undefined;
+
   // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || agent !== undefined;
@@ -1065,6 +1119,7 @@ function AgentConversation({
       messageSent={approvals.messageSent}
       suggested={suggested}
       editMessage={editMessage}
+      undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
       servers={servers}
@@ -1107,6 +1162,7 @@ function AgentConversation({
       onOpenAddress={openInSafari}
       messageLink={messageLink}
       messageMore={messageActs.more}
+      undelivered={undelivered}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
         const key = keyOf(item.url);
@@ -1178,6 +1234,13 @@ function AgentConversation({
               <Stack.Toolbar.Menu inline>
                 <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.TASK)} onPress={openTask}>
                   {PATH_OPENS.TASK}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
+            {openOverview === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LIST)} onPress={openOverview}>
+                  {MENU_WORDS.OVERVIEW}
                 </Stack.Toolbar.MenuAction>
               </Stack.Toolbar.Menu>
             )}
@@ -1285,6 +1348,14 @@ function AgentConversation({
           </Stack.Toolbar.Menu>
         ) : null}
         {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
+        {/* Note that a Manager's Overview stands as a glyph in every window, nearest the ⋯, since on the desktop it is never hidden beside the chat. */}
+        {openOverview === undefined ? null : (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.LIST)}
+            accessibilityLabel={MENU_WORDS.OVERVIEW}
+            onPress={openOverview}
+          />
+        )}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(GLYPH.ARCHIVE)}

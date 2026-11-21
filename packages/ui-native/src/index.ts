@@ -424,6 +424,8 @@ export {
   withWaitingLine,
 } from "./transcript-model.js";
 
+export { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
+
 export {
   ASYNC_ACTION_STAGE,
   type AsyncAction,

@@ -35,6 +35,7 @@ import { composerEditor, editorBundleLanded, installEditorLayout } from "../test
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { overEveryTask } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
+import { layScrollerOut } from "../testing/scroller.js";
 import { type TasksControlOverrides, tasksControl, waitingOf } from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { DesktopHome } from "./desktop-home.js";
@@ -121,6 +122,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
+  vi.restoreAllMocks();
   handState({});
   window.localStorage.clear();
   document.body.innerHTML = "";
@@ -342,6 +344,55 @@ test("↓ and ↑ walk from the Inbox's rows into Recent's as one list", async (
     );
   });
   assert.ok(document.activeElement === first, "↑ goes back to the Inbox's item");
+});
+
+test("↓ past the last Inbox row drawn goes on to the next item, and ↑ from Recent's first task reaches the Inbox's last", async () => {
+  // Note that the window is made two rows tall, so the Inbox draws its first rows alone, as a long Inbox does, and jsdom draws few.
+  const view = 2 * 72;
+  vi.spyOn(window, "innerHeight", "get").mockReturnValue(view);
+
+  const items = Array.from({ length: 12 }, (_, n) =>
+    item(n + 1, `Question ${String.fromCharCode(65 + n)}`, (n + 1) * MINUTE),
+  );
+
+  const { page } = mount({}, items);
+  const inboxRows = () => [...page.querySelectorAll('ul[aria-label="Inbox"] > li')];
+  await vi.waitFor(() => assert.ok(inboxRows().length > 0, "the Inbox's rows stand"));
+  const scroller = page.querySelector<HTMLElement>(".ui-detail-page-main");
+  assert.ok(scroller, "the page scrolls");
+  // Note that jsdom lays nothing out, so the page is given a view and a length for a row brought in to scroll to.
+  layScrollerOut(scroller, view, 12 * 74 + 3 * 52);
+  const drawn = inboxRows().length;
+  assert.ok(drawn < items.length, "the Inbox leaves its last rows undrawn");
+  const lastDrawn = row(page, `Question ${String.fromCharCode(64 + drawn)}`);
+  act(() => lastDrawn.focus());
+
+  act(() => {
+    lastDrawn.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }),
+    );
+  });
+  await vi.waitFor(() =>
+    assert.ok(
+      document.activeElement === row(page, `Question ${String.fromCharCode(65 + drawn)}`),
+      "↓ lands on the item after the last drawn",
+    ),
+  );
+
+  const cache = row(page, CACHE.name);
+  act(() => cache.focus());
+
+  act(() => {
+    cache.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }),
+    );
+  });
+  await vi.waitFor(() =>
+    assert.ok(
+      document.activeElement === row(page, "Question L"),
+      "↑ from Recent's first task lands on the Inbox's last item",
+    ),
+  );
 });
 
 test("a right-click on an Inbox row opens the Inbox row's own menu, and opens no item", async () => {

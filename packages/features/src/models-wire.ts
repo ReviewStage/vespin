@@ -155,9 +155,10 @@ const catalogModelSchema = EffectSchema.Struct({
   fastNotEnabled: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
    * Whether no subscription or API key of the account's pays for this
-   * model's provider, so a Start on it is refused until one is connected in
-   * Settings › Agents; the menus draw it disabled. Absent otherwise, and
-   * from a service older than it.
+   * model's provider, so a Start on it in the cloud is refused until one is
+   * connected in Settings › Agents, the menus drawing it so; a Start on a
+   * Mac that runs its harness runs on the Mac's own sign-in and needs none.
+   * Absent otherwise, and from a service older than it.
    */
   credentialMissing: EffectSchema.optionalKey(EffectSchema.Boolean),
 });

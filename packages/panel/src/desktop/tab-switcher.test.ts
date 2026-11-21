@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { it } from "@effect/vitest";
 import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { fileTab } from "@repo/ui/tab-strip-model";
+import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { holdExits } from "@repo/ui/testing/held-exits";
+import { Clock, Context, Duration, Effect } from "effect";
+import { TestClock } from "effect/testing";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
@@ -122,7 +126,14 @@ function windowSteps(screens: readonly Omit<RecentStep, "standing">[]) {
   return { steps, visits };
 }
 
-/** The switcher over `steps`, drawn under a window's router. */
+/** Lets what fell due land: the window's state, a capture sent, and main's answer to it. */
+async function flushed(): Promise<void> {
+  await act(async () => {
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+}
+
+/** The switcher over `steps`, drawn under a window's router; answers how to draw it again, as the window does once it moves. */
 async function mounted(
   steps: RecentSteps,
   tasks: TasksControl = tasksControl({
@@ -137,17 +148,20 @@ async function mounted(
   roots.push(root);
   const { provide } = windowRouter();
 
-  // Note that the window's state lands on a later render, as main delivers it, so the switcher is drawn twice, as a window settles.
-  for (let drawn = 0; drawn < 2; drawn += 1) {
+  const redraw = async () => {
     act(() =>
       root.render(
         withQueryClient(provide(createElement(TabSwitcher, { available: true, steps, tasks }))),
       ),
     );
-    await act(async () => {
-      for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
-    });
-  }
+    await flushed();
+  };
+
+  // Note that the window's state lands on a later render, as main delivers it, so the switcher is drawn twice, as a window settles.
+  await redraw();
+  await redraw();
+
+  return redraw;
 }
 
 function key(type: "keydown" | "keyup", init: KeyboardEventInit): KeyboardEvent {
@@ -381,6 +395,104 @@ test("the screen left is taken as a still of the work area for its card, drawn a
   assert.equal(preview?.querySelector("img")?.getAttribute("src"), STILL);
   assert.equal(cards()[1]?.querySelector("img"), null, "a screen with no still wears its glyph");
 });
+
+it.effect(
+  "a run of steps between screens, and the window used after it, take no still until the window stands quiet, then one",
+  () =>
+    Effect.gen(function* () {
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      handCapabilities(DESKTOP_CAPABILITIES);
+      const taken: unknown[] = [];
+      fakeActPort({
+        [ACT_KIND.WINDOW_CAPTURE]: (part) => {
+          taken.push(part);
+
+          return Promise.resolve(STILL);
+        },
+      });
+      const work = document.createElement("main");
+      work.className = "desktop-main";
+      work.getBoundingClientRect = () => new DOMRect(240, 0, 1040, 800);
+      document.body.append(work);
+
+      const screens = [
+        INBOX,
+        taskScreen(undefined, README),
+        taskScreen(undefined, NOTES),
+        placeScreen(ROUTED_PLACE.SETTINGS, "/settings/general", { label: "Settings" }),
+      ];
+
+      let standing = 0;
+
+      const steps: RecentSteps = {
+        recent: () => screens.map((screen, at) => ({ ...screen, standing: at === standing })),
+        standingStep: () => screens[standing]?.place,
+        onVisitStep: () => undefined,
+      };
+
+      const redraw = yield* Effect.promise(() => mounted(steps));
+      const pressed = () => key("keydown", { key: "ArrowDown", ctrlKey: true, altKey: true });
+
+      // Each step is a press and the screen it lands on, a second apart: slower than a quick sweep, quicker than the still's rest.
+      for (let at = 1; at < screens.length; at += 1) {
+        pressed();
+        standing = at;
+        yield* Effect.promise(redraw);
+        yield* TestClock.adjust(Duration.seconds(1));
+      }
+
+      // A press on the screen the run ended on, a field's or a list's, holds its still off afresh.
+      pressed();
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Effect.promise(flushed);
+      assert.deepEqual(taken, [], "no still is taken while the window is moved through or used");
+
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Effect.promise(flushed);
+      assert.deepEqual(taken, [{ x: 240, y: 0, width: 1040, height: 800 }]);
+    }),
+);
+
+it.effect(
+  "⌃Tab leaving a screen keeps a still younger than ten seconds and takes one older afresh",
+  () =>
+    Effect.gen(function* () {
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      handCapabilities(DESKTOP_CAPABILITIES);
+      let taken = 0;
+      fakeActPort({
+        [ACT_KIND.WINDOW_CAPTURE]: () => {
+          taken += 1;
+
+          return Promise.resolve(STILL);
+        },
+      });
+      const work = document.createElement("main");
+      work.className = "desktop-main";
+      work.getBoundingClientRect = () => new DOMRect(240, 0, 1040, 800);
+      document.body.append(work);
+      yield* Effect.promise(() =>
+        mounted(windowSteps([taskScreen(undefined, README), INBOX]).steps),
+      );
+
+      const heldAndCalledOff = () => {
+        tab();
+        key("keydown", { key: "Escape", ctrlKey: true });
+      };
+
+      // The window stands quiet on the screen, so it takes its still, then ⌃Tab is held and called off at once.
+      yield* TestClock.adjust(Duration.seconds(2));
+      yield* Effect.promise(flushed);
+      heldAndCalledOff();
+      yield* Effect.promise(flushed);
+      assert.equal(taken, 1, "a still two seconds old is kept");
+
+      yield* TestClock.adjust(Duration.seconds(10));
+      heldAndCalledOff();
+      yield* Effect.promise(flushed);
+      assert.equal(taken, 2, "a still past ten seconds is taken afresh");
+    }),
+);
 
 test("a window that is no desktop app leaves ⌃Tab to the browser", async () => {
   handCapabilities(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP));

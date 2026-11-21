@@ -47,7 +47,7 @@ import { appStateQuery, selectExperiment, selectNewAgentServersOff } from "../us
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, type ComposerWords } from "./agent-composer.js";
-import { unrunnableChoice } from "./agent-model.js";
+import { modelsRunOn, unrunnableChoice } from "./agent-model.js";
 import { repositorySkillsQueryOptions } from "./agent-reads.js";
 import type { AgentServersControl } from "./agent-servers.js";
 import { ConnectAgentBanner, NOTICE_LOOK, type NoticeLook } from "./connect-agent-banner.js";
@@ -85,10 +85,9 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * image pasted or files dropped taken too, MCP servers, which opens the
  * servers popover beside the menu (`agent-servers.tsx`), and, on a task's
  * card, Task relation, which opens the task search beside it
- * (`new-task-relation.tsx`), dictation, the model chip, which `/model` opens as in an agent's box, and the round Start agent button, with File for
- * later before it, drawing the backlog's mark alone where the card is too
- * narrow for its words, as on a phone, where the model chip's words are cut
- * short too, so Start stays at the row's end in the card.
+ * (`new-task-relation.tsx`), dictation, the model chip, which `/model` opens as in an agent's box, and the round Start agent button,
+ * which stays at the row's end in the card: where the card is too narrow,
+ * as on a phone, the model chip's words are cut short instead.
  * New task's repository chip stands in a head row over the card, the same in the
  * dialog and on Home: the repository the task is about
  * (`repository-chip.tsx`), its title, "New task", named to a reader alone,
@@ -532,6 +531,9 @@ export function NewTaskComposer({
     runsOnStands && keptDevice,
   );
 
+  // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
+  const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
+
   // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
   const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
   const { repository: picked, judged, drop } = repositoryDefault;
@@ -546,9 +548,7 @@ export function NewTaskComposer({
   // An agent needs something to work on, words or files, and works in no repository where none is chosen.
   // Note that an agent nothing of the account's pays for is held here, with the press that connects one, rather than refused once pressed; a bare task needs none.
   const unpaid =
-    newTask.models === undefined || choice === undefined
-      ? undefined
-      : unrunnableChoice(newTask.models, choice);
+    models === undefined || choice === undefined ? undefined : unrunnableChoice(models, choice);
 
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
@@ -786,8 +786,8 @@ export function NewTaskComposer({
     : [relationMenuPanel(relationSearchId, relationControl, relationKind, setRelationKind)];
 
   const agentNotice =
-    unpaid === undefined || newTask.models === undefined ? null : (
-      <ConnectAgentBanner models={newTask.models} unpaid={unpaid} look={notices} />
+    unpaid === undefined || models === undefined ? null : (
+      <ConnectAgentBanner models={models} unpaid={unpaid} look={notices} />
     );
 
   const carded = notices === NOTICE_LOOK.CARD;
@@ -838,7 +838,7 @@ export function NewTaskComposer({
           !devicesUnread && (startsBare || unpaid === undefined) && (!forAutomation || requested)
         }
         model={choice === undefined ? undefined : { choice, note: undefined, choose }}
-        models={newTask.models}
+        models={models}
         modelsFailed={newTask.modelsFailed}
         readModels={newTask.readModels}
         usage={undefined}

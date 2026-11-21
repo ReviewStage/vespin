@@ -20,6 +20,7 @@ import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { joinWorkspace, openAgentOnOwnTask } from "@repo/database/testing";
 import { GITHUB_INSTALL_STATUS, HOSTED_SERVICE_PATH } from "@repo/features";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -1644,6 +1645,40 @@ it.effect(
         );
       }).pipe(Effect.provide(database));
     }),
+);
+
+it.effect("a member removed has their Managers archived and their task agents left standing", () =>
+  Effect.gen(function* () {
+    const plugin = yield* openWorkspacePlugin;
+    yield* Effect.gen(function* () {
+      const ada = yield* openGithubAccount("Ada Lovelace");
+      const grace = yield* openGithubAccount("Grace Hopper");
+      const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
+      const taskAgentId = yield* openAgentOnOwnTask(grace, acme);
+      const managerId = yield* openAgentOnOwnTask(grace, acme);
+      // A Manager is an agent of its own kind on no task.
+      yield* Database.use((db) =>
+        db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER, taskId: null })
+          .where(eq(agentTable.id, managerId)),
+      );
+
+      yield* removing(plugin, ada, acme, grace);
+
+      const archived = yield* Database.use((db) =>
+        db
+          .select({ id: agentTable.id, archivedAt: agentTable.archivedAt })
+          .from(agentTable)
+          .where(eq(agentTable.userId, grace)),
+      );
+
+      assert.deepEqual(
+        Object.fromEntries(archived.map((agent) => [agent.id, agent.archivedAt !== null])),
+        { [taskAgentId]: false, [managerId]: true },
+      );
+    }).pipe(Effect.provide(plugin.database));
+  }),
 );
 
 it.effect("an owner cannot leave, and a member leaves", () =>

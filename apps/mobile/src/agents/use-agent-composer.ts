@@ -10,15 +10,19 @@
  * refused it. A message on its way stands in the transcript as the member's
  * own line, as the host draws it from the moment it is sent
  * (`AppTranscript.sending`), and one queued in the queue over the field, so
- * the phone draws the one record every window draws. One refused hands its
- * words and pictures back to the field, the refusal said over it in the
- * panel's words, its line let go (`AGENTS_UNSEND`), and the phone buzzes as
- * a refusal does. A paste long enough to bury the message is attached as a
- * text file beside the pictures (`useAttachedPictures`' `pasteText`). The
- * field draws each mention and each file attached as its pill, a file's
- * marker placed where the caret stands as it is attached, as the panel's box
- * lays in its chip, and a file whose pill is taken out of the words taken
- * off.
+ * the phone draws the one record every window draws. One refused stays in
+ * the transcript where it went, marked Not delivered, as the panel keeps it
+ * rather than handing its words back to the field: Retry sends it again
+ * under its key, Edit lays its words and pictures back in the field, ahead
+ * of anything typed since, and Delete lets it go (`AGENTS_UNSEND`); the
+ * refusal is said over the field in the panel's words, and the phone buzzes
+ * as a refusal does. A queued message or a suggestion's send refused still
+ * hands its words back, since the host keeps no line of it. A paste long
+ * enough to bury the message is attached as a text file beside the
+ * pictures (`useAttachedPictures`' `pasteText`). The field draws each
+ * mention and each file attached as its pill, a file's marker placed where
+ * the caret stands as it is attached, as the panel's box lays in its chip,
+ * and a file whose pill is taken out of the words taken off.
  * Stop is offered while the agent may still write (`agentStillWriting`),
  * starting or awaiting its turn included, as the panel offers it. A `/`
  * offers the skills of the agent's task's repository (`use-skill-offer.ts`).
@@ -42,7 +46,11 @@ import {
   STOP_NOTHING_YET,
 } from "@repo/features/agent-refusal-words";
 import { editSendAsk } from "@repo/features/agent-rewind-model";
-import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
+import {
+  AGENT_CALL_FAILURE,
+  type AgentCallFailure,
+  type SendingMessage,
+} from "@repo/features/agent-view";
 import {
   type AgentAttachment,
   type AgentQueueChange,
@@ -109,6 +117,34 @@ interface Sent {
   readonly pictures: readonly HeldPicture[];
 }
 
+/**
+ * The words as typed and the pictures of each message this phone sent to an
+ * agent, by the id its line is drawn under, until it went or was let go, so
+ * a line the service refused is sent again or taken back with them. Note that
+ * they are held beside the screens, so a refusal that lands once the page
+ * was left still finds them, and in memory alone, since pictures may run to
+ * megabytes: a relaunch, or a line sent from another device, keeps its line
+ * and words but none of its pictures' bytes (`undeliveredWhole`).
+ */
+const heldSends = new Map<string, Sent>();
+
+/** Whether this phone holds every file a refused line went with, so its Retry sends it as it went. */
+export function undeliveredWhole(line: SendingMessage): boolean {
+  const files = (line.files ?? []).length;
+
+  return files === 0 || heldSends.get(line.id)?.pictures.length === files;
+}
+
+/** What a line of the member's that the service refused offers, by the id it is drawn under. */
+export interface UndeliveredActs {
+  /** Sends it again under its key, as it went. */
+  readonly retry: (lineId: string) => void;
+  /** Lays its words and pictures back in the field, ahead of anything typed since, its line let go. */
+  readonly edit: (lineId: string) => void;
+  /** Lets it go, sending nothing. */
+  readonly drop: (lineId: string) => void;
+}
+
 /** What a queue change the host took back says, with where the message went where the service said it left the queue. */
 function queueRefusalWords(change: AgentQueueChange["change"], failure: AgentCallFailure): string {
   const words = QUEUE_REFUSED_WORDS[change] ?? messageFailureWords(failure);
@@ -170,6 +206,8 @@ export interface AgentComposer {
   readonly sendingEdit: QueuedDeleteAsk;
   /** Counts each time the field is asked to take the keyboard, as Edit asks it. */
   readonly focusAsk: number;
+  /** Retry, Edit, and Delete on a line of the member's the service refused. */
+  readonly undelivered: UndeliveredActs;
 }
 
 /** One of the member's sent lines opened to write again in its place: its id, its words, and what its send drops. */
@@ -363,7 +401,7 @@ export function useAgentComposer(
   }, [writing]);
 
   // A send refused: its words and pictures back in the field, ahead of anything typed since, and the refusal said; while the field holds a queued message's words, they go to the draft kept aside, which the edit's end gives back.
-  const handBack = (sent: Sent, refusal: string) => {
+  const handBack = (sent: Sent, refusal: string | undefined) => {
     setNote(refusal);
 
     if (editingNow.current !== undefined) {
@@ -381,28 +419,6 @@ export function useAgentComposer(
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
     pictures.putBack(sent.pictures);
   };
-
-  // The lines this screen sent, whose refusal its own send hands back.
-  const ownSends = useRef(new Set<string>());
-
-  // A message refused while no screen of the agent stood, or sent from one since left, waits in the host's record,
-  // which the phone draws no line of: its words come back to the field as this screen opens, the refusal said, and
-  // the line is let go. Note that one carrying files is left in the record, where the desktop and the web draw it
-  // with Retry, Edit, and Delete, because the phone holds none of their bytes and would let them go.
-  const sending = transcript?.sending;
-  useEffect(() => {
-    for (const message of sending ?? []) {
-      if (message.refused === undefined || ownSends.current.has(message.id)) continue;
-
-      if ((message.files ?? []).length > 0) continue;
-      ownSends.current.add(message.id);
-      handBack(
-        { id: message.clientKey, words: message.text, pictures: [] },
-        messageFailureWords(message.refused.failure),
-      );
-      void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId: message.id }).catch(() => undefined);
-    }
-  }, [sending, acts, agentId]);
 
   const send = () => {
     // Note that a send while the field holds a queued message's words saves them back in its place, as Save does.
@@ -434,7 +450,6 @@ export function useAgentComposer(
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
     const sent: Sent = { id: randomUUID(), words: typed, pictures: pictures.take() };
-    ownSends.current.add(sentLineId(sent.id));
     setWords("");
     setNote(undefined);
 
@@ -484,18 +499,14 @@ export function useAgentComposer(
         () => false,
       ),
     );
+    heldSends.set(sentLineId(sent.id), sent);
     write(() => message, {
       ...saying,
-      // A refused message's words come back to the field, so its line in the host's record is let
-      // go; a screen left meanwhile has no field to take them, so the line stands until a screen
-      // of the agent opens again and takes them back.
+      // A refused message stays in the transcript marked Not delivered, the host keeping its line, so only the refusal is said over the field.
       inPlace: (words: string) => {
-        if (!mounted.current) return;
-        handBack(sent, words);
-        void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId: sentLineId(sent.id) }).catch(
-          () => undefined,
-        );
+        if (mounted.current) setNote(words);
       },
+      done: () => heldSends.delete(sentLineId(sent.id)),
       refused: (answer) => ("failure" in answer ? messageFailureWords(answer.failure) : undefined),
       unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
     });
@@ -526,7 +537,7 @@ export function useAgentComposer(
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
     const sent: Sent = { id: randomUUID(), words: typed, pictures: pictures.take() };
-    ownSends.current.add(sentLineId(sent.id));
+    heldSends.set(sentLineId(sent.id), sent);
     setNote(undefined);
     giveBackRewritten(stash);
     write(
@@ -542,18 +553,78 @@ export function useAgentComposer(
         }),
       {
         went: BUZZ.SUCCESS,
+        // Note that a line written again and refused stays marked Not delivered, as any send does, its Retry taking the agent back first.
         inPlace: (refusal: string) => {
-          if (!mounted.current) return;
-          handBack(sent, refusal);
-          void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId: sentLineId(sent.id) }).catch(
-            () => undefined,
-          );
+          if (mounted.current) setNote(refusal);
         },
+        done: () => heldSends.delete(sentLineId(sent.id)),
         refused: (answer) =>
           "failure" in answer ? messageFailureWords(answer.failure) : undefined,
         unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
       },
     );
+  };
+
+  /** The line of the member's under `lineId` the service refused; none for any other. */
+  const refusedLine = (lineId: string): SendingMessage | undefined =>
+    transcript?.sending?.find((line) => line.id === lineId && line.refused !== undefined);
+
+  // Note that a refused line goes again under its key, so one whose answer was lost reaches the agent once, taking the agent back first where it was a line written again; the host draws it on its way in the refusal's place, and a refusal again marks it again.
+  const retryLine = (lineId: string) => {
+    const line = refusedLine(lineId);
+
+    if (line === undefined || !undeliveredWhole(line)) return;
+    const files = heldSends.get(lineId)?.pictures.map(({ file }) => file) ?? [];
+    setNote(undefined);
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_MESSAGE]({
+          agentId,
+          text: line.text,
+          clientKey: line.clientKey,
+          ...(files.length === 0 ? undefined : { attachments: files }),
+          steers: line.rewinds === undefined && writing,
+          ...(line.rewinds === undefined
+            ? undefined
+            : {
+                rewinds: {
+                  messageId: line.rewinds,
+                  ...(line.restoresFiles === true ? { restoreFiles: true } : undefined),
+                },
+              }),
+          ...(taskId === undefined ? undefined : { taskId }),
+        }),
+      {
+        went: BUZZ.SUCCESS,
+        inPlace: (refusal: string) => {
+          if (mounted.current) setNote(refusal);
+        },
+        done: () => heldSends.delete(lineId),
+        refused: (answer) =>
+          "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+      },
+    );
+  };
+
+  // Note that the words go back as typed, their files' markers among them, and the pictures this phone still holds with them, so each stands as the pill it was.
+  const editLine = (lineId: string) => {
+    const line = refusedLine(lineId);
+
+    if (line === undefined) return;
+    const held = heldSends.get(lineId);
+    heldSends.delete(lineId);
+    void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId }).catch(() => undefined);
+    handBack(
+      { id: line.clientKey, words: held?.words ?? line.text, pictures: held?.pictures ?? [] },
+      undefined,
+    );
+  };
+
+  const dropLine = (lineId: string) => {
+    if (refusedLine(lineId) === undefined) return;
+    heldSends.delete(lineId);
+    void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId }).catch(() => undefined);
   };
 
   /** What the field holds of its own, kept aside while it holds another message's words: what an edit standing kept aside, or else what it holds now, its pictures taken off. */
@@ -796,5 +867,6 @@ export function useAgentComposer(
       onDismiss: () => setAskingEdit(false),
     },
     focusAsk,
+    undelivered: { retry: retryLine, edit: editLine, drop: dropLine },
   };
 }

@@ -133,7 +133,7 @@ import {
   sum,
   useLiveQuery,
 } from "@tanstack/react-db";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useConnected } from "../connection.js";
@@ -325,6 +325,26 @@ export function HistoryButtons({
     </div>
   );
 }
+
+/**
+ * The window's history as the sidebar's Back and Forward read it, handed
+ * past the column rather than through it. Note that the window makes its
+ * history afresh on each of its draws, three to a step between tasks, so a
+ * column handed it drew every header, place, and dialog again for what only
+ * its two buttons show.
+ */
+const SidebarHistoryContext = createContext<NavigationHistory | undefined>(undefined);
+
+/** Back and Forward over the history the sidebar is handed (`SidebarHistoryContext`), drawn again only as it moves. */
+const SidebarHistoryButtons = memo(function SidebarHistoryButtons({
+  room,
+}: {
+  room: ShellRoom;
+}): React.JSX.Element | null {
+  const history = use(SidebarHistoryContext);
+
+  return history === undefined ? null : <HistoryButtons history={history} room={room} />;
+});
 
 /** The steps a list names a step by where nothing named it as the window stood on it. */
 const UNNAMED_STEP = "Earlier page";
@@ -1860,6 +1880,20 @@ function useFloatingSidebar(sidebar: SidebarCollapse): FloatingSidebar {
   return { ...pane, inSight: sidebarInSight(sidebar) };
 }
 
+/** Search, a second door to the command palette, heading the list. */
+function SidebarSearchRow({ onOpen }: { onOpen: () => void }): React.JSX.Element {
+  return (
+    <NavItem
+      icon={<SearchIcon />}
+      aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.COMMAND_PALETTE)}
+      shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.COMMAND_PALETTE].chord} />}
+      onClick={onOpen}
+    >
+      Search
+    </NavItem>
+  );
+}
+
 /**
  * Home's row, between Search and the Inbox and drawn as they are: the
  * house, its name, and its chord at its end while the row is hovered or
@@ -2006,10 +2040,25 @@ function SidebarMergeQueueRow({
   );
 }
 
+// Note that the places' rows and the foot are drawn again only as what they show moves,
+// handed steady doors (`placeDoors`), because the column is drawn again on
+// every step between tasks, which moves none of them.
+const HeldSearchRow = memo(SidebarSearchRow);
+const HeldHomeRow = memo(SidebarHomeRow);
+const HeldInboxRow = memo(SidebarInboxRow);
+const HeldTasksRow = memo(SidebarTasksRow);
+const HeldAutomationsRow = memo(SidebarAutomationsRow);
+const HeldMergeQueueRow = memo(SidebarMergeQueueRow);
+const HeldSidebarFoot = memo(SidebarFoot);
+
 /** What the sidebar is drawn from. */
-interface DesktopSidebarProps {
-  sidebar: SidebarCollapse;
+interface DesktopSidebarProps extends SidebarColumnProps {
   history: NavigationHistory;
+}
+
+/** What the sidebar's column is drawn from: all but the history, which only its Back and Forward read. */
+interface SidebarColumnProps {
+  sidebar: SidebarCollapse;
   tasks: TasksControl;
   tab: PanelTab;
   onTabChange: (tab: PanelTab) => void;
@@ -2087,7 +2136,6 @@ function useFirstUsableSpan(tasks: TasksControl): void {
  */
 function SidebarColumn({
   sidebar,
-  history,
   tasks: control,
   tab,
   onTabChange,
@@ -2096,7 +2144,7 @@ function SidebarColumn({
   onSignOut,
   onPressWithin,
   room = SHELL_ROOM.WIDE,
-}: DesktopSidebarProps): React.JSX.Element {
+}: SidebarColumnProps): React.JSX.Element {
   // Note that the column's tasks stand while neither the window's nor the pins change, because every row is handed them, and a new one draws every row again.
   const pins = useSteadyDoors(usePins(control.typedNamesNow));
   const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
@@ -2684,59 +2732,68 @@ function SidebarColumn({
   const inTab = (place: LinkDestination) =>
     listedStep === undefined ? undefined : openInTabOf(linkOf(place, listedStep));
 
+  // The places' doors and the foot's, steady across the column's draws, so their rows hold while what they show does.
+  const placeDoors = useSteadyDoors({
+    onSearch: chosen(() => runAppCommand(APP_COMMAND.COMMAND_PALETTE)),
+    onHome: chosen(goHome),
+    onHomeInTab: inTab({ kind: LINK_DESTINATION.HOME }),
+    onInbox: chosen(openInbox),
+    onInboxInTab: inTab({ kind: LINK_DESTINATION.INBOX }),
+    onBoard: chosen(openBoard),
+    onBoardInTab: inTab({ kind: LINK_DESTINATION.BOARD }),
+    onBoardPreload: board.preload,
+    onAutomations: chosen(openAutomations),
+    onAutomationsInTab: inTab({ kind: LINK_DESTINATION.AUTOMATIONS }),
+    onMergeQueue: chosen(openMergeQueue),
+    onSettings: chosen(() => onTabChange(PANEL_TAB.SETTINGS)),
+    onSignOut,
+  });
+
   const places = (
     <>
       <SidebarPlaces>
         {phone ? null : (
           <>
-            {/* Search is a second door to the command palette, heading the list. */}
-            <NavItem
-              icon={<SearchIcon />}
-              aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.COMMAND_PALETTE)}
-              shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.COMMAND_PALETTE].chord} />}
-              onClick={chosen(() => runAppCommand(APP_COMMAND.COMMAND_PALETTE))}
-            >
-              Search
-            </NavItem>
-            <SidebarHomeRow
+            <HeldSearchRow onOpen={placeDoors.onSearch} />
+            <HeldHomeRow
               current={atHome}
               disabled={!tasks.signedIn}
-              onOpen={chosen(goHome)}
-              onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
+              onOpen={placeDoors.onHome}
+              onOpenInTab={placeDoors.onHomeInTab}
             />
             {inboxOn ? (
-              <SidebarInboxRow
+              <HeldInboxRow
                 count={inboxCount}
                 current={inInbox}
                 disabled={!tasks.signedIn}
-                onOpen={chosen(openInbox)}
-                onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
+                onOpen={placeDoors.onInbox}
+                onOpenInTab={placeDoors.onInboxInTab}
               />
             ) : null}
           </>
         )}
         {phone ? null : (
-          <SidebarTasksRow
+          <HeldTasksRow
             current={inBoard}
             disabled={!tasks.signedIn}
-            onOpen={chosen(openBoard)}
-            onOpenInTab={inTab({ kind: LINK_DESTINATION.BOARD })}
-            onPreload={board.preload}
+            onOpen={placeDoors.onBoard}
+            onOpenInTab={placeDoors.onBoardInTab}
+            onPreload={placeDoors.onBoardPreload}
           />
         )}
-        <SidebarAutomationsRow
+        <HeldAutomationsRow
           current={inAutomations}
           failed={automationFailed}
           running={automationsRunning}
           disabled={!tasks.signedIn}
-          onOpen={chosen(openAutomations)}
-          onOpenInTab={inTab({ kind: LINK_DESTINATION.AUTOMATIONS })}
+          onOpen={placeDoors.onAutomations}
+          onOpenInTab={placeDoors.onAutomationsInTab}
         />
         {mergeQueueOn ? (
-          <SidebarMergeQueueRow
+          <HeldMergeQueueRow
             current={inMergeQueue}
             disabled={!tasks.signedIn}
-            onOpen={chosen(openMergeQueue)}
+            onOpen={placeDoors.onMergeQueue}
           />
         ) : null}
       </SidebarPlaces>
@@ -2759,7 +2816,7 @@ function SidebarColumn({
       onKeyDown={overlay.onKeyDown}
     >
       <div className="desktop-drag-strip" />
-      <HistoryButtons history={history} room={room} />
+      <SidebarHistoryButtons room={room} />
       {/* The workspace heads the sidebar once one is read, as everything under it is that
           workspace's; the app's own head stands until then. A phone heads it as it heads
           every place, the reader's face opening their workspaces and account (`phone-account.tsx`). */}
@@ -3043,14 +3100,14 @@ function SidebarColumn({
         </Fill>
 
         {phone ? null : (
-          <SidebarFoot
+          <HeldSidebarFoot
             account={account}
             updates={updates}
             shown={overlay.inSight}
             settingsOpen={tab === PANEL_TAB.SETTINGS}
             callDocked={!sidebar.collapsed}
-            onSettings={chosen(() => onTabChange(PANEL_TAB.SETTINGS))}
-            onSignOut={onSignOut}
+            onSettings={placeDoors.onSettings}
+            onSignOut={placeDoors.onSignOut}
           />
         )}
       </ReplayUnmask>
@@ -3062,6 +3119,9 @@ function SidebarColumn({
   );
 }
 
+/** The column, drawn again only as what it is handed moves (`DesktopSidebar`). */
+const HeldSidebarColumn = memo(SidebarColumn);
+
 /**
  * The sidebar, read against the listed workspace's members: a teammate's
  * face on a row, a creator's group's header, and the order of those groups
@@ -3070,17 +3130,24 @@ function SidebarColumn({
  *
  * A memo boundary: the shell drawn again over the same tasks, history, and
  * fold, as a setting that moves draws it, leaves the sidebar and every row
- * of it as they were.
+ * of it as they were. The column is a second one, so a move of the history
+ * alone draws Back and Forward again and nothing else.
  */
-export const DesktopSidebar = memo(function DesktopSidebar(
-  props: DesktopSidebarProps,
-): React.JSX.Element {
-  const { workspace } = props.tasks;
+export const DesktopSidebar = memo(function DesktopSidebar({
+  history,
+  ...column
+}: DesktopSidebarProps): React.JSX.Element {
+  const { workspace } = column.tasks;
+  // Note that the window makes its history afresh on each of its draws, so Back and Forward are handed only what they read, held while it reads the same.
+  const { canGoBack, canGoForward, onBack, onForward, steps, onGoTo } = history;
+  const buttons = useSteadyDoors({ canGoBack, canGoForward, onBack, onForward, steps, onGoTo });
 
   return (
     <LinkWorkspaceProvider value={workspace?.slug ?? workspace?.id}>
-      <MemberDirectory workspace={workspace} readerId={props.tasks.me}>
-        <SidebarColumn {...props} />
+      <MemberDirectory workspace={workspace} readerId={column.tasks.me}>
+        <SidebarHistoryContext value={buttons}>
+          <HeldSidebarColumn {...column} />
+        </SidebarHistoryContext>
       </MemberDirectory>
     </LinkWorkspaceProvider>
   );

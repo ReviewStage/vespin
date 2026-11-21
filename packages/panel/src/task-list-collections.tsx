@@ -15,7 +15,7 @@ import {
   type TaskNames,
 } from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
-import { type Collection, eq, inArray, or, useLiveQuery } from "@tanstack/react-db";
+import { type Collection, eq, or, useLiveQuery } from "@tanstack/react-db";
 import {
   createContext,
   type ReactNode,
@@ -23,8 +23,8 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
-  useState,
   useSyncExternalStore,
 } from "react";
 
@@ -99,12 +99,6 @@ const NUMBER_STEP = /^\d+$/u;
 
 /** No step asked: what a read of the tasks a step names answers. */
 const NO_STEPPED: readonly TaskSummary[] = [];
-
-/** The live queries' keys: the rows of each collection a reader by id has asked for. */
-const ROWS_KEY = {
-  TASKS: "task-list-rows-tasks",
-  AGENTS: "task-list-rows-agents",
-} as const;
 
 /** Nothing to listen for: what a read with no key subscribes with. */
 const LISTEN_TO_NOTHING = (): (() => void) => () => {};
@@ -223,75 +217,89 @@ export interface TaskListRows {
   readonly agent: (agentId: string) => ListedAgent | undefined;
 }
 
-/** The ids asked for that the live query does not yet follow, all of them sorted, or none where it follows each. */
-function widened(
-  asked: ReadonlySet<string>,
-  followed: readonly string[],
-): readonly string[] | undefined {
-  if (asked.size === followed.length) return undefined;
+/** The rows a reader by id asked for, by id, each as it read it last, and the stops of the listens following them. */
+interface AskedRows<Row> {
+  readonly read: Map<string, Row | undefined>;
+  readonly stops: Map<string, () => void>;
+}
 
-  return [...asked].sort();
+/** Counts one more move of a row a reader asked for. */
+const countMove = (moves: number): number => moves + 1;
+
+/**
+ * Follows each row of `collection` asked for and not yet followed, telling
+ * `moved` of a row that moved between its read and now, since its listen
+ * hears only what moves after it.
+ */
+function followAsked<Row extends object>(
+  collection: Collection<Row, string>,
+  asked: AskedRows<Row>,
+  moved: RowHeard,
+): void {
+  for (const [key, read] of asked.read) {
+    if (asked.stops.has(key)) continue;
+    asked.stops.set(key, listenToRow(collection, key, moved));
+
+    if (collection.get(key) !== read) moved();
+  }
+}
+
+/** Stops following every row asked for, so the next commit follows them afresh. */
+function stopFollowing(asked: AskedRows<object>): void {
+  for (const stop of asked.stops.values()) stop();
+  asked.stops.clear();
 }
 
 /**
  * The task list's rows read by id (`.get`), for a reader that looks up a
  * handful of rows in a plain function or a callback, each task's name drawn
  * as it is being typed where it is (`typedNames`). Each id asked is followed
- * from the next commit on by a live query over the ids asked (`inArray`), so
- * the reader is drawn again when one of those rows moves and holds across a
- * delivery moving any other; a lookup always reads the collection as it
- * stands, so an id asked for the first time reads its row at once.
+ * from the next commit on, through the collection's one listen by key
+ * (`listenToRow`), so the reader is drawn again when one of those rows moves
+ * and holds across a delivery moving any other; a lookup always reads the
+ * collection as it stands, so an id asked for the first time reads its row at
+ * once, and asking it draws nothing again.
  */
 export function useTaskListRows(typedNames: TaskNames = NO_NAMES_TYPED): TaskListRows {
   const collections = useTaskListCollections();
-  // The ids asked for, which the live queries follow once committed. Note that they only grow, as the rows a reader looks up are few.
-  const asked = useRef({ tasks: new Set<string>(), agents: new Set<string>() }).current;
 
-  const [followed, setFollowed] = useState<{
-    readonly tasks: readonly string[];
-    readonly agents: readonly string[];
-  }>({ tasks: [], agents: [] });
+  // The ids asked for, followed once committed. Note that they only grow, as the rows a reader looks up are few.
+  const asked = useRef<{ tasks: AskedRows<TaskSummary>; agents: AskedRows<ListedAgent> }>({
+    tasks: { read: new Map(), stops: new Map() },
+    agents: { read: new Map(), stops: new Map() },
+  }).current;
 
-  const followedTasks = useLiveQuery({
-    queryKey: [ROWS_KEY.TASKS, followed.tasks],
-    query: (q) =>
-      q
-        .from({ task: collections.tasks })
-        .where(({ task }) => inArray(task.id, [...followed.tasks])),
-  }).data;
-
-  const followedAgents = useLiveQuery({
-    queryKey: [ROWS_KEY.AGENTS, followed.agents],
-    query: (q) =>
-      q
-        .from({ agent: collections.agents })
-        .where(({ agent }) => inArray(agent.id, [...followed.agents])),
-  }).data;
-
+  const [moves, moved] = useReducer(countMove, 0);
   useEffect(() => {
-    const tasks = widened(asked.tasks, followed.tasks);
-    const agents = widened(asked.agents, followed.agents);
-
-    if (tasks === undefined && agents === undefined) return;
-    setFollowed({ tasks: tasks ?? followed.tasks, agents: agents ?? followed.agents });
+    followAsked(collections.tasks, asked.tasks, moved);
+    followAsked(collections.agents, asked.agents, moved);
   });
+  useEffect(
+    () => () => {
+      stopFollowing(asked.tasks);
+      stopFollowing(asked.agents);
+    },
+    [collections, asked],
+  );
 
   // Note that the lookups are made again only once a row followed or a typed name moves, so what reads them holds across every other delivery.
   return useMemo(
     () => ({
       task: (taskId: string) => {
-        asked.tasks.add(taskId);
         const row = collections.tasks.get(taskId);
+        asked.tasks.read.set(taskId, row);
 
         return row === undefined ? undefined : renamedTask(row, typedNames);
       },
       agent: (agentId: string) => {
-        asked.agents.add(agentId);
+        const row = collections.agents.get(agentId);
+        asked.agents.read.set(agentId, row);
 
-        return collections.agents.get(agentId);
+        return row;
       },
     }),
-    [collections, asked, typedNames, followedTasks, followedAgents],
+    // Note that `moves` is read only to make the lookups again.
+    [collections, asked, typedNames, moves],
   );
 }
 

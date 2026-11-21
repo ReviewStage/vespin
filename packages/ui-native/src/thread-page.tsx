@@ -59,6 +59,7 @@ import { threadRuns } from "./thread-group-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
 /** What parts a thread's path, as the panel's crumbs part a task from its agent. */
@@ -146,6 +147,8 @@ export type ThreadMessage = {
   readonly after?: readonly ThreadEvent[] | undefined;
   /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
+  /** That the reader sent it and it did not go, which it says under its words with what mends it; none for a message that went. */
+  readonly undelivered?: UndeliveredLine | undefined;
 };
 
 /** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
@@ -616,6 +619,12 @@ function MessageView({
             )}
           </View>
         </RNHostView>
+        {message.undelivered === undefined ? null : (
+          <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+            <UndeliveredMark line={message.undelivered} />
+            <Spacer />
+          </HStack>
+        )}
       </VStack>
     </CopyWordsSwiftMenu>
   );

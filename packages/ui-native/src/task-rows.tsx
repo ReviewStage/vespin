@@ -264,7 +264,12 @@ type AgentRowProps = {
   readonly fold?: RowFold | undefined;
   /** Where the agents it started stand, at every depth; none where it started none. */
   readonly started?: StartedAgentsStanding | undefined;
+  /** Whether it said something the reader has not read, as a Manager's chat does, which its unread dot says as a task's row says its own; read unless said. */
+  readonly unread?: boolean | undefined;
 };
+
+/** What an unread agent's row is heard as first, as a task's row is. */
+const AGENT_UNREAD = "Unread";
 
 /** Whether an agent's row says the agents it started stand open under it, as a task's row says its sub-tasks. */
 const STARTED_SHOWN = "Agents it started shown";
@@ -277,11 +282,12 @@ function startedFold(name: string): FoldWords {
 
 /** What an agent row is heard as: its name, then where it stands, where it runs, its task, the agents it started, its pull request, what of it needs you, and whether the agents it started stand open. */
 function agentHeard(props: AgentRowProps) {
-  const { name, state, runsOn, task, started, pullRequest, waiting, fold } = props;
+  const { name, state, runsOn, task, started, pullRequest, waiting, fold, unread } = props;
 
   return {
     label: name,
     value: [
+      unread === true && AGENT_UNREAD,
       state === AGENT_ROW_STATE.WORKING && GLYPH_STATE_WORDS[GLYPH_STATE.WORKING],
       state === AGENT_ROW_STATE.FAILED && GLYPH_STATE_WORDS[GLYPH_STATE.FAILED],
       runsOn,
@@ -370,7 +376,8 @@ function AgentStateWords({
  * wait on the reader, in the accent, since they want you. An agent that
  * started others leads with the fold a parent task's row leads with, whose
  * press opens them; its caller draws them as rows of their own under it, a
- * level deeper, as a task's sub-tasks stand.
+ * level deeper, as a task's sub-tasks stand. One that said something the
+ * reader has not read, as a Manager's chat does, leads with the unread dot.
  */
 export function AgentRow(props: AgentRowProps) {
   const { id, name, harness, state, runsOn, waiting, pullRequest, task, fold, started } = props;
@@ -398,7 +405,7 @@ export function AgentRow(props: AgentRowProps) {
       ]}
     >
       <RowHead
-        unread={false}
+        unread={props.unread === true}
         faded={false}
         fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={folding} />}
         lead={<AgentTile harness={harness} size={tile} />}

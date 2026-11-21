@@ -62,6 +62,7 @@ import {
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
+import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
 /** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
@@ -151,6 +152,7 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  undelivered: { alignSelf: "flex-end", paddingTop: SPACE.TIGHT },
   // Note that a line anyone but the reader sent stands at the column's leading edge, its pictures, files and bubble with it, as the panel stands a received line at its left.
   received: { alignItems: "flex-start" },
   // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
@@ -605,6 +607,19 @@ function FoldRow({
   );
 }
 
+/** The mark a line of the reader's that did not go stands under its bubble at the column's trailing edge, as Messages marks one; nothing for a line that went. */
+function UndeliveredUnder({ line }: { readonly line: UndeliveredLine | undefined }) {
+  if (line === undefined) return null;
+
+  return (
+    <View style={styles.undelivered}>
+      <InlineHost matchContents>
+        <UndeliveredMark line={line} />
+      </InlineHost>
+    </View>
+  );
+}
+
 /** What drawing the list's rows needs beyond the rows. */
 interface RowDrawing {
   readonly repository: string | null | undefined;
@@ -646,6 +661,8 @@ interface RowDrawing {
     | undefined;
   /** Hands the transcript a call's row as it stands and as it goes, so a reader sent to the call lands on it. */
   readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
+  /** That a line of the reader's did not go, by the id it is drawn under, with what mends it; none for a line that went. */
+  readonly undelivered?: ((lineId: string) => UndeliveredLine | undefined) | undefined;
 }
 
 /** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
@@ -812,6 +829,7 @@ function TranscriptRow({
             </MessageMenu>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
+          <UndeliveredUnder line={drawing.undelivered?.(item.place.row)} />
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:

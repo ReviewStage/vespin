@@ -42,7 +42,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useListedAgents } from "../host/host-provider.js";
 import { useKeeping } from "../keeping.js";
@@ -392,6 +392,12 @@ function Version({
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
 
+  // Note that the version is compared with the one before it once per read rather than on every draw, since a long description's comparison holds the screen for a moment each time.
+  const diff = useMemo(
+    () => (read === undefined ? undefined : versionDiff(read.previous, read.description)),
+    [read],
+  );
+
   // Note that the version and the one before it are each read for their pictures on their own, since a section struck from the one before draws through that version's own reference definitions, which share names with the version's.
   const shownPictures = useDescriptionPictures(read?.description.body);
   const struckPictures = useDescriptionPictures(read?.previous?.body);
@@ -420,7 +426,7 @@ function Version({
 
   const body = version.isPending ? (
     <EmptyState title={readingWords("this version")} symbol={HISTORY_SYMBOL} loading />
-  ) : read === undefined ? (
+  ) : read === undefined || diff === undefined ? (
     <EmptyState
       title={VERSION_HISTORY_WORDS.VERSION_UNREAD}
       symbol={GLYPH.FAILED}
@@ -428,7 +434,7 @@ function Version({
     />
   ) : (
     <VersionWords
-      diff={versionDiff(read.previous, read.description)}
+      diff={diff}
       first={read.previous === null}
       onOpenLink={openLink}
       pictureSource={pictureSource}

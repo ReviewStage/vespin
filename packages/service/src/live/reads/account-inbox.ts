@@ -8,7 +8,7 @@
  */
 
 import { queryBuilder } from "@repo/database/core/query";
-import { memberOfAutomationWorkspace } from "@repo/database/models/automation-store";
+import { failedRunToldTo } from "@repo/database/models/automation-store";
 import { automation, automationRun } from "@repo/database/schemas/automation";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
@@ -29,8 +29,10 @@ import { accountInboxLiveStatements } from "../../inbox/inbox-store.js";
 import { bindLiveRead, liveRowsStatement, ownOrder } from "../live-read-binding.js";
 
 /**
- * The account's own automations' runs that failed to start, each
- * automation's newest alone, in workspaces it is still a member of, every
+ * The account's own automations' runs that failed to start, and those of
+ * automations whose creator left a workspace it owns or administers
+ * (`failedRunToldTo`), each automation's newest alone, in workspaces it is
+ * still a member of, every
  * one of them: a live statement reads no clock, so the reader keeps them to
  * its own last week. Note that the newest of each is taken by an order of
  * its own.
@@ -57,11 +59,7 @@ function failedRunsStatement(userId: string) {
           .from(automationRun)
           .innerJoin(automation, eq(automation.id, automationRun.automationId))
           .where(
-            and(
-              eq(automation.userId, userId),
-              memberOfAutomationWorkspace(userId),
-              eq(automationRun.status, AUTOMATION_RUN_STATUS.FAILED),
-            ),
+            and(failedRunToldTo(userId), eq(automationRun.status, AUTOMATION_RUN_STATUS.FAILED)),
           )
           .orderBy(
             asc(automationRun.automationId),
