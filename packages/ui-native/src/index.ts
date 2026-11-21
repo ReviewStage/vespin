@@ -101,6 +101,7 @@ export {
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeBars,
   FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,

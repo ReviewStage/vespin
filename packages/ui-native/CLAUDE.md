@@ -52,7 +52,8 @@ builds a control of its own.
   opens Settings, never worded "Allow", and Not Now), `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass in one fixed place, dropping in
   under the top bar inside the safe area as the system's banners drop in,
-  swiped up to let go, with the refusal's words and Try again, said aloud by
+  below an iPad's floating tab bar and a tab's column bars, which the tab
+  in front tells it of (`FailureNoticeBars`), swiped up to let go, with the refusal's words and Try again, said aloud by
   VoiceOver, faded rather than slid where the reader reduces motion, standing
   over the app's root view or the sheet on top (`FailureNoticeLayer`; not a
   `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
