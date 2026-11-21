@@ -1,0 +1,50 @@
+appId: dev.vespin.ios
+---
+- tapOn:
+    point: "60,668"
+- waitForAnimationToEnd
+- takeScreenshot: 1-word
+- assertNotVisible:
+    text: "Launch checklist"
+    optional: true
+- tapOn:
+    point: "24,668"
+- waitForAnimationToEnd
+- takeScreenshot: 2-glyph
+- assertVisible:
+    text: "Launch checklist"
+    optional: true
+- tapOn:
+    point: "93,668"
+- waitForAnimationToEnd
+- takeScreenshot: 3-count
+- assertNotVisible:
+    text: "Launch checklist"
+    optional: true
+- tapOn:
+    point: "253,668"
+- waitForAnimationToEnd
+- takeScreenshot: 4-chevron
+- assertVisible:
+    text: "Launch checklist"
+    optional: true
+- tapOn:
+    point: "173,668"
+- waitForAnimationToEnd
+- takeScreenshot: 5-blank
+- assertNotVisible:
+    text: "Launch checklist"
+    optional: true
+- longPressOn:
+    point: "60,668"
+- waitForAnimationToEnd
+- takeScreenshot: 6-longpress
+- assertVisible:
+    text: "Rename"
+    optional: true
+- assertVisible:
+    text: "Delete section"
+    optional: true
+- assertVisible:
+    text: "New task"
+    optional: true

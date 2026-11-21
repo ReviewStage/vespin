@@ -1,0 +1,5 @@
+word 60,668
+glyph 24,668
+count 93,668
+chevron 253,668
+blank 173,668

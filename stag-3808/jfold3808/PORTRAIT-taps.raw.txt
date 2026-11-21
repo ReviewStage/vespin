@@ -1,0 +1,31 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow taps
+Tap on point (60,668)... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 1-word... COMPLETED
+Assert that (Optional) "Launch checklist" is not visible... COMPLETED
+Tap on point (24,668)... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 2-glyph... COMPLETED
+Assert that (Optional) "Launch checklist" is visible... COMPLETED
+Tap on point (93,668)... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 3-count... COMPLETED
+Assert that (Optional) "Launch checklist" is not visible... COMPLETED
+Tap on point (253,668)... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 4-chevron... COMPLETED
+Assert that (Optional) "Launch checklist" is visible... COMPLETED
+Tap on point (173,668)... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 5-blank... COMPLETED
+Assert that (Optional) "Launch checklist" is not visible... COMPLETED
+Long press on point (60,668)... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot 6-longpress... COMPLETED
+Assert that (Optional) "Rename" is visible... COMPLETED
+Assert that (Optional) "Delete section" is visible... COMPLETED
+Assert that (Optional) "New task" is visible... COMPLETED
