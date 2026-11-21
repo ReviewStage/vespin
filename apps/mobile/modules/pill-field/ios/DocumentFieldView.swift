@@ -719,24 +719,32 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let ends = NSMaxRange(paragraph) > paragraph.location
         && string.character(at: NSMaxRange(paragraph) - 1) == 0x0A
       let content = NSRange(location: paragraph.location, length: paragraph.length - (ends ? 1 : 0))
-      lines.append(heldLine(content, at: paragraph.location))
+      lines.append(heldLine(content, in: paragraph, after: lines.last?.facts))
       location = NSMaxRange(paragraph)
     }
 
-    // Note that a Return typed at the words' end leaves an empty last line, which takes its block from the line break that opened it.
+    // Note that a Return typed at the words' end leaves an empty last line, which carries on the block of the line before it.
     if string.character(at: string.length - 1) == 0x0A {
-      lines.append(heldLine(NSRange(location: string.length, length: 0), at: string.length - 1))
+      let end = NSRange(location: string.length, length: 0)
+      lines.append(heldLine(end, in: end, after: lines.last?.facts))
     }
 
     return lines
   }
 
-  /// The line in a range: its block's facts, read at `factsAt`, and its runs.
-  private func heldLine(_ content: NSRange, at factsAt: Int) -> DocumentLine {
+  /// The line in a range: its block's facts, and its runs. The facts are the first its paragraph holds, its line break included; a paragraph holding none, such as one a Return in a list opened, whose words UIKit types with none of the field's attributes, carries on the line before it, as a Return carries a list on, which the model makes a paragraph of its own after a one-line block.
+  private func heldLine(_ content: NSRange, in paragraph: NSRange, after before: LineFacts?) -> DocumentLine {
     let storage = textView.textStorage
     let string = storage.string as NSString
-    let held = factsAt < storage.length ? storage.attribute(lineKey, at: factsAt, effectiveRange: nil) as? LineFacts : nil
-    var facts = held ?? LineFacts(block: -1, kind: DocumentKind.paragraph.rawValue)
+    var held: LineFacts?
+    storage.enumerateAttribute(lineKey, in: paragraph) { value, _, stop in
+      guard let value = value as? LineFacts else { return }
+      held = value
+      stop.pointee = true
+    }
+    // Note that a task carried on starts unchecked, since its box is drawn only once JavaScript hands the line back.
+    let carried = before.map { $0.drawnKind == .taskList ? $0.with(checked: false) : $0 }
+    var facts = held ?? carried ?? LineFacts(block: -1, kind: DocumentKind.paragraph.rawValue)
     var runs: [DocumentRun] = []
 
     storage.enumerateAttributes(in: content) { attributes, range, _ in
