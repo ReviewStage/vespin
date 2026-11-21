@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { pinAgentCommitted } from "@repo/database/models/agent-store";
+import { ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { createTask, updateTaskCommitted } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -23,6 +24,7 @@ import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { TASKLESS_LIVE } from "../agents/taskless-reads.js";
+import { WORKSPACE_MACHINE_LIVE } from "../agents/workspace-machine-reads.js";
 import { TURN_ORIGIN } from "../core.js";
 import { tasksRead } from "../live/reads/tasks.js";
 
@@ -70,6 +72,7 @@ const wakesTheTaskList = <A, E, R>(
       userId,
       liveSince: "0",
       taskless: TASKLESS_LIVE.LEFT_OUT,
+      workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
     });
 
     const fired = yield* expectTopicsFire(write, topics);
@@ -182,17 +185,17 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
           ],
           userId,
         );
-        yield* expectTopicsFire(beatDevice(teammate, deviceId), []);
+        yield* expectTopicsFire(beatDevice(ownDeviceHost(teammate, deviceId)), []);
         yield* expectTopicsFire(
           registerDevice(teammate, { id: deviceId, name: "Studio Display", ...DEVICE_LAYOUT }),
           [],
         );
         const updating = { update: HOST_UPDATE.UPDATING };
-        yield* expectTopicsFire(beatDevice(teammate, deviceId, updating), [
+        yield* expectTopicsFire(beatDevice(ownDeviceHost(teammate, deviceId), updating), [
           [TOPIC.ACCOUNT, teammate],
           [TOPIC.WORKSPACE, teamId],
         ]);
-        yield* expectTopicsFire(beatDevice(teammate, deviceId, updating), []);
+        yield* expectTopicsFire(beatDevice(ownDeviceHost(teammate, deviceId), updating), []);
       }),
   );
 
@@ -211,7 +214,12 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
         assert.ok(
           wokenBy(
             [team],
-            yield* tasksRead.topics({ userId, liveSince: "0", taskless: TASKLESS_LIVE.LEFT_OUT }),
+            yield* tasksRead.topics({
+              userId,
+              liveSince: "0",
+              taskless: TASKLESS_LIVE.LEFT_OUT,
+              workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
+            }),
           ),
           "the joined team wakes it",
         );
@@ -219,7 +227,12 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
         assert.ok(
           !wokenBy(
             [team],
-            yield* tasksRead.topics({ userId, liveSince: "0", taskless: TASKLESS_LIVE.LEFT_OUT }),
+            yield* tasksRead.topics({
+              userId,
+              liveSince: "0",
+              taskless: TASKLESS_LIVE.LEFT_OUT,
+              workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
+            }),
           ),
           "the team left wakes none",
         );

@@ -146,6 +146,9 @@ const IOS = {
     "iOS's composers offer skills after a `/` and no `@` list yet, so no machine is offered to mention",
   ),
   MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
+  WORKSPACE_MACHINES: notYet(
+    "iOS's Machines page lists the member's own hosts; the machines a workspace owns are the desktop's and the web's for now",
+  ),
   BILLING: byDesign("iOS v1 leaves billing to the desktop and the web"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
@@ -571,4 +574,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_BILLING_PORTAL]: panel(IOS.BILLING),
   [PORT_ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: panel(IOS.MERGE_QUEUE),
   [PORT_ACT_KIND.WORKSPACE_MACHINES_READ]: panel(IOS.MENTION_MACHINES),
+  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW]: panel(IOS.WORKSPACE_MACHINES),
+  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINES_RETRY]: panel(IOS.WORKSPACE_MACHINES),
+  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINE_RENAME]: panel(IOS.WORKSPACE_MACHINES),
+  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINE_REMOVE]: panel(IOS.WORKSPACE_MACHINES),
 } as const satisfies Record<PortActKind, ClientParityRow>;

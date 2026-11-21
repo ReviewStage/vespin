@@ -9,6 +9,7 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { isSlashCommand } from "@repo/features/slash-command";
 import { EXPERIMENT } from "@repo/settings";
+import { afterPaint } from "@repo/ui/after-paint";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -21,7 +22,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { afterPaint } from "../after-paint.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { CommandRef, sentCommands } from "./command-ref.js";
 import { WordFilesContext } from "./file-chips.js";

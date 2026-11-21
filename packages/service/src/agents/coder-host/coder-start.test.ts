@@ -10,13 +10,25 @@ import { createTask, readTask } from "@repo/database/models/task-store";
 import { recordWorkspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { device } from "@repo/database/schemas/device";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import {
+  connectWorkspaceMachine,
+  getTestDB,
+  joinWorkspace,
+  openWorkspace,
+} from "@repo/database/testing";
 import { BOOT_FAILURE, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
-import { AGENT_KIND, AGENT_MACHINE, QUEUE_CHANGE } from "@repo/features/agent-wire";
+import {
+  AGENT_KIND,
+  AGENT_MACHINE,
+  LOCAL_AGENT_REFUSAL,
+  QUEUE_CHANGE,
+} from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
+import { DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { ManagerCreateRequest } from "@repo/features/manager-wire";
@@ -30,7 +42,7 @@ import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Predicate, Resul
 import { TestClock } from "effect/testing";
 import { MESSAGE_ROLE, RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
 import { keptAfterResponse } from "../../http/after-response.js";
-import { HOSTED_REFUSAL } from "../../http/http-effect.js";
+import { HOSTED_REFUSAL, localAgentRefused } from "../../http/http-effect.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import {
@@ -79,7 +91,9 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * prompt, and a retry under its key is that agent and opens nothing again;
  * a member who did not make the task starts one as well, an account outside it starts nothing, and a
  * repository the workspace's installation does not reach is refused before
- * the harness is asked, and a Start whose session never opened leaves no agent. A Start
+ * the harness is asked, and a Start whose session never opened leaves no agent. A member's
+ * Start runs on a machine their workspace owns, whoever connected it, once its host runs agents
+ * in VMs, and on no other workspace's. A Start
  * whose repository its workspace's drive does not hold yet waits for the
  * drive's build, its machine not opened. An agent started on a task moves it into progress from the
  * backlog or to do, and on a task stored in pilot mode it is a coder. The
@@ -92,7 +106,7 @@ const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 16 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 28 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -299,6 +313,50 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
   );
 
   it.effect(
+    "a member starts an agent on a machine a teammate connected to their workspace once it runs agents in VMs, and a member of another workspace is refused it as away",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const teammate = yield* openGithubUser();
+        yield* connectAgentApiKeys(teammate);
+        yield* joinWorkspace(workspaceId, teammate);
+        const outside = yield* openConnectedWorkspace;
+        const box = yield* connectWorkspaceMachine(workspaceId, owner);
+        const onBox = { machine: AGENT_MACHINE.WORKSPACE, deviceId: box } as const;
+        const { agentSessions } = fakeAgentSessions();
+
+        const startOnBox = (userId: string, workspace: string) =>
+          Effect.flatMap(promptAsk(userId, workspace), (ask) =>
+            startAgent(agentSessions, userId, { ...ask, runsOn: onBox }),
+          ).pipe(Effect.provide(services), Effect.result);
+
+        const beforeVms = yield* startOnBox(teammate, workspaceId);
+        yield* db
+          .update(device)
+          .set({ capabilities: [DEVICE_CAPABILITY.VM_AGENTS] })
+          .where(eq(device.id, box));
+        const started = yield* startOnBox(teammate, workspaceId);
+        const fromOutside = yield* startOnBox(outside.owner, outside.workspaceId);
+
+        assert.deepEqual(
+          Result.isFailure(beforeVms) && beforeVms.failure,
+          localAgentRefused(LOCAL_AGENT_REFUSAL.PREPARING),
+        );
+        assert.ok(Result.isSuccess(started));
+        const agent = Option.getOrThrow(yield* readAgent(teammate, started.success.agent.id));
+        assert.deepEqual(
+          [agent.userId, agent.machine, agent.deviceId],
+          [teammate, AGENT_MACHINE.WORKSPACE, box],
+        );
+        assert.deepEqual(
+          Result.isFailure(fromOutside) && fromOutside.failure,
+          localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY),
+        );
+      }),
+  );
+
+  it.effect(
     "a Start on no task naming a repository beside its own that only the member's own token reaches, which its checkout could not mint, is refused and starts nothing",
     () =>
       Effect.gen(function* () {
@@ -422,6 +480,58 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         assert.deepEqual(
           queue.messages.map((message) => message.text),
           ["And open a pull request"],
+        );
+      }),
+  );
+
+  it.effect(
+    "a Manager is made on a machine its workspace owns through the Manager door, and a member of another workspace naming that machine is refused it as away",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const ours = yield* openConnectedWorkspace;
+        const theirs = yield* openConnectedWorkspace;
+        const box = yield* connectWorkspaceMachine(ours.workspaceId, ours.owner);
+        yield* db
+          .update(device)
+          .set({ capabilities: [DEVICE_CAPABILITY.VM_AGENTS] })
+          .where(eq(device.id, box));
+        const { agentSessions } = fakeAgentSessions();
+
+        const made = (userId: string, workspaceId: string) =>
+          Effect.gen(function* () {
+            yield* setWorkspaceExperiment({
+              organizationId: workspaceId,
+              experiment: EXPERIMENT.MANAGERS,
+              on: true,
+              by: userId,
+            });
+
+            return yield* Effect.result(
+              startManager(agentSessions, userId, {
+                idempotencyKey: randomUUID(),
+                workspaceId,
+                name: "Billing",
+                repositories: [RELAY_REPOSITORY],
+                runsOn: { machine: AGENT_MACHINE.WORKSPACE, deviceId: box },
+                model: AGENT_DEFAULT_CHOICE.model,
+                effort: "high",
+              }).pipe(Effect.provide(services)),
+            );
+          });
+
+        const fromOutside = yield* made(theirs.owner, theirs.workspaceId);
+        const started = yield* made(ours.owner, ours.workspaceId);
+
+        assert.deepEqual(
+          Result.isFailure(fromOutside) && fromOutside.failure,
+          localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY),
+        );
+        assert.ok(Result.isSuccess(started));
+        const agent = Option.getOrThrow(yield* readAgent(ours.owner, started.success.agent.id));
+        assert.deepEqual(
+          [agent.kind, agent.machine, agent.deviceId],
+          [AGENT_KIND.MANAGER, AGENT_MACHINE.WORKSPACE, box],
         );
       }),
   );

@@ -45,7 +45,7 @@ function pageShown(visible: boolean): void {
 }
 
 function Warm() {
-  useWarmAgent(AGENT);
+  useWarmAgent(AGENT.id);
 
   return null;
 }

@@ -12,6 +12,7 @@ import {
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import type {
@@ -34,6 +35,7 @@ import {
   agentRenameMutation,
   agentsArchiveMutation,
   MODELS_READ,
+  type TaskAgentsControl,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
 import type { NewTask } from "../tasks/use-new-task.js";
@@ -283,6 +285,31 @@ export const NO_REPOSITORIES = {
   manages: true,
 } as const satisfies RepositoryChooser;
 
+/**
+ * The window's control of the open task (`TaskAgentsControl`) over a
+ * control listing its agents, which stand as the agents New task holds
+ * until the list carries them, so a test needs no collection to draw them.
+ * Their pull requests and runs are read from the collections by `taskId`,
+ * where a test stands them.
+ */
+export function taskAgentsOf(
+  control: AgentsControl = agentsControl(),
+  taskId?: string,
+): TaskAgentsControl {
+  const { agents, archived, pullRequests, ...acts } = control;
+  const held = agents === undefined ? undefined : [...agents, ...(archived ?? [])];
+
+  return {
+    ...acts,
+    // Note that a task named is followed, its agents standing beside whatever the collections list of it.
+    rows: { taskId, followed: taskId !== undefined, held },
+    rowNow: (agentId) => held?.find((agent) => agent.id === agentId),
+    pullRequestNow: (agentId) => pullRequests.get(agentId),
+    archivedIds: archived?.map((agent) => agent.id),
+    workingIds: agents?.flatMap((agent) => (agentStillWriting(agent.status) ? [agent.id] : [])),
+  };
+}
+
 /** A task with no agents and no repository, every press ignored. */
 export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsControl {
   const onArchive: AgentsControl["onArchive"] =
@@ -410,6 +437,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
     move(true);
     landed();
   },
+  free: () => true,
   stays: ignore,
   stayed: () => false,
   along: ignore,
@@ -622,7 +650,7 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
     },
     unreadTabs: [],
     pages: undefined,
-    agents: agentsControl(),
+    agents: taskAgentsOf(),
     history: versionHistoryControl(),
     onSelect: ignore,
     onResume: ignore,

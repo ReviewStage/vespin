@@ -53,7 +53,7 @@ export const TOOLTIP_CHORD = "ui-tooltip-chord [--ui-shortcut-ink:var(--ui-color
 
 /** What every hint is handed: the control it stands for, and how it shows and goes. */
 interface TooltipBase {
-  /** The hint's own id, apart from its words' (`hint.tsx`'s `HintWords`), which describe its control. */
+  /** The hint's own id, apart from its words' (`hint.tsx`'s `useHintWords`), which describe its control. */
   id: string;
   /** The control it hangs from. */
   anchor: HTMLElement;

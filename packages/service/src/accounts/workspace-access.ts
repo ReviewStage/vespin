@@ -8,7 +8,7 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { OrganizationRefused } from "@repo/database/models/workspace-seams";
-import { type Workspace, workspaceOf } from "@repo/database/models/workspace-store";
+import { listWorkspaces, type Workspace, workspaceOf } from "@repo/database/models/workspace-store";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { type Cause, Effect, Option } from "effect";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -95,4 +95,19 @@ export const managedWorkspace = Effect.fn("web/managedWorkspace")(function* (
   if (!MANAGING_ROLES.has(workspace.role)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
 
   return workspace;
+});
+
+/** The workspaces the account is an owner or an admin of, each by its id and name, as a choice among them names them. */
+export const managedWorkspacesOf = Effect.fn("web/managedWorkspacesOf")(function* (
+  userId: string,
+): Effect.fn.Return<
+  readonly { readonly id: string; readonly name: string }[],
+  HostedRefusal,
+  DatabaseServices
+> {
+  const workspaces = yield* hostedStoreOrUnavailable(listWorkspaces(userId));
+
+  return workspaces
+    .filter((workspace) => MANAGING_ROLES.has(workspace.role))
+    .map(({ id, name }) => ({ id, name }));
 });

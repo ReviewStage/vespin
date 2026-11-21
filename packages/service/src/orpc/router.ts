@@ -53,6 +53,10 @@ import {
 } from "../agents/machine-commands-procedures.js";
 import { type MessagesProcedureSeams, messagesProcedures } from "../agents/messages-procedures.js";
 import {
+  type WorkspaceMachinesProcedureSeams,
+  workspaceMachinesProcedures,
+} from "../agents/workspace-machines-procedures.js";
+import {
   type AutomationsProcedureSeams,
   automationsProcedures,
 } from "../automations/automations-procedures.js";
@@ -162,6 +166,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   GitHubProcedureSeams &
   GitHubTokenProcedureSeams &
   HostsProcedureSeams &
+  WorkspaceMachinesProcedureSeams &
   InboxProcedureSeams &
   InstalledSkillsProcedureSeams &
   IntegrationsProcedureSeams &
@@ -238,6 +243,7 @@ export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
     workspaceSandboxSize: workspaceSandboxSizeProcedures(seams),
+    workspaceMachines: workspaceMachinesProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),
     workspaceInvitations: workspaceInvitationsProcedures(seams),
     workspaceMergeQueue: mergeQueueProcedures(seams),

@@ -335,6 +335,7 @@ export function AgentComposer({
   keywords = [],
   skills,
   replyDoor,
+  focusDoor,
   sendsEmpty = false,
   closedRemedy,
   wording,
@@ -401,6 +402,8 @@ export function AgentComposer({
   skills?: SkillSource | undefined;
   /** Where the box hands the transcript's Reply the door that lays a quote in at its caret; none where nothing replies. */
   replyDoor?: RefObject<((words: string) => void) | undefined> | undefined;
+  /** Where the box hands the door that puts the caret in it, as a reply to a Manager's message asks; none where nothing asks. */
+  focusDoor?: RefObject<(() => void) | undefined> | undefined;
   /** Whether an empty box sends too, as a fork's draft does, which needs no words of its own. */
   sendsEmpty?: boolean;
   /** What mends a box closed for good, drawn after its note: Continue in new agent (`continue-agent.tsx`); none where nothing does. */
@@ -666,6 +669,16 @@ export function AgentComposer({
       replyDoor.current = undefined;
     };
   }, [replyDoor, editor]);
+
+  // A reply to one of a Manager's messages puts the caret here, for the words that answer it.
+  useEffect(() => {
+    if (focusDoor === undefined) return undefined;
+    focusDoor.current = () => editor.current?.focus();
+
+    return () => {
+      focusDoor.current = undefined;
+    };
+  }, [focusDoor, editor]);
 
   // A file's lines picked in a File tab on the page (⌥⌘K) are laid in here, where the caret stands.
   useMentionBox(

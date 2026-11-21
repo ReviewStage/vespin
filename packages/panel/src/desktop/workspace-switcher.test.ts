@@ -25,7 +25,9 @@ import { WorkspaceSwitcher } from "./workspace-switcher.js";
  */
 
 /** The switcher under the window's workspace keys, which the window answers wherever the switcher stands. */
-function KeyedSwitcher(props: React.ComponentProps<typeof WorkspaceSwitcher>): React.JSX.Element {
+function KeyedSwitcher(
+  props: React.ComponentProps<typeof WorkspaceSwitcher> & { tasks: TasksControl },
+): React.JSX.Element {
   useWorkspaceKeys(props.tasks, true);
 
   return createElement(WorkspaceSwitcher, props);

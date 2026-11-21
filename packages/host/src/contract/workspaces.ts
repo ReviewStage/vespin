@@ -34,6 +34,14 @@ import {
 } from "@repo/features/workspace-environment-wire";
 import { workspaceInvitationSchema } from "@repo/features/workspace-invitation-wire";
 import {
+  WORKSPACE_MACHINE_UNANSWERED,
+  workspaceMachineDoneViewSchema,
+} from "@repo/features/workspace-machine-view";
+import {
+  workspaceMachineRenameRequestSchema,
+  workspaceMachineRequestSchema,
+} from "@repo/features/workspace-machine-wire";
+import {
   workspaceInstallScriptPutRequestSchema,
   workspaceRepositorySetupPutRequestSchema,
   workspaceRunActionsPutRequestSchema,
@@ -353,6 +361,22 @@ export const WORKSPACE_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.READ,
   }),
+  WORKSPACE_OWNED_MACHINE_RENAME: hostAct({
+    input: workspaceMachineRenameRequestSchema,
+    output: workspaceMachineDoneViewSchema,
+    refusal: "Could not rename that machine on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: WORKSPACE_MACHINE_UNANSWERED,
+  }),
+  WORKSPACE_OWNED_MACHINE_REMOVE: hostAct({
+    input: workspaceMachineRequestSchema,
+    output: workspaceMachineDoneViewSchema,
+    refusal: "Could not remove that machine on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: WORKSPACE_MACHINE_UNANSWERED,
+  }),
 });
 
 /** A workspace's people, invitations, own integrations, Slack channels, and token repositories, each followed for the panel while it draws them. */
@@ -399,6 +423,17 @@ export const WORKSPACE_FOLLOWS = liveFollows({
     retry: {
       name: "WORKSPACE_INVITATIONS_RETRY",
       refusal: "Could not read that workspace's invitations again on this system.",
+    },
+  }),
+  WORKSPACE_OWNED_MACHINES_FOLLOW: liveFollow({
+    slice: LIVE_READ.WORKSPACE_MACHINES,
+    hold: HOLD.WINDOW,
+    key: workspacePeopleFollowSchema,
+    refusal: "Could not follow that workspace's machines on this system.",
+    panelOnly: true,
+    retry: {
+      name: "WORKSPACE_OWNED_MACHINES_RETRY",
+      refusal: "Could not read that workspace's machines again on this system.",
     },
   }),
   WORKSPACE_TOKEN_REPOSITORIES_FOLLOW: liveFollow({

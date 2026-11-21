@@ -11,6 +11,7 @@ import { writeListedTasks } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { handInbox, newTaskControl, tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
 
 /**
  * sidebar-folds.test.ts -- every group that folds folds under one
@@ -144,16 +145,22 @@ test("a folded repository leaves only the task that is open standing, one that n
     ],
   });
 
-  const sidebar = mountSidebar(
-    tasksControl({
-      tasks: [
-        task("p-1", "Invite expiry", "acme/relay"),
-        task("p-2", "Retry audit", "acme/relay"),
-        task("p-3", "Webhook retries", "acme/relay"),
-        task("p-4", "Billing export", "acme/console"),
-      ],
-      activeTaskId: "p-1",
-    }),
+  const listed = [
+    task("p-1", "Invite expiry", "acme/relay"),
+    task("p-2", "Retry audit", "acme/relay"),
+    task("p-3", "Webhook retries", "acme/relay"),
+    task("p-4", "Billing export", "acme/console"),
+  ];
+
+  const router = windowRouter();
+
+  const openOn = (activeTaskId: string) =>
+    withQueryClient(
+      drawnSidebar(sidebarProps(tasksControl({ tasks: listed, activeTaskId })), router),
+    );
+
+  const sidebar = mount(
+    drawnSidebar(sidebarProps(tasksControl({ tasks: listed, activeTaskId: "p-1" })), router),
   );
 
   const names = () =>
@@ -165,6 +172,10 @@ test("a folded repository leaves only the task that is open standing, one that n
 
   act(() => fold(sidebar, "relay").click());
   assert.deepEqual(names(), ["Billing export", "Invite expiry"]);
+
+  // Another task opened under the fold stands in the open one's place.
+  act(() => roots.at(-1)?.render(openOn("p-2")));
+  assert.deepEqual(names(), ["Billing export", "Retry audit"]);
 
   act(() => fold(sidebar, "relay").click());
   assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);

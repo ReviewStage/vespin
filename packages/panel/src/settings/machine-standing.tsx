@@ -1,5 +1,9 @@
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
-import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_PLATFORM,
+  type DeviceArch,
+  type DevicePlatform,
+} from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { type HostStanding, MACHINE_STANDING_WORDS } from "@repo/features/machines-settings-words";
 import {
@@ -80,15 +84,21 @@ export function MachineMark({
   );
 }
 
-/** A machine's line under its name: a standing that asks something of the member first, then what it is, then what it lets agents do. */
+/** A machine's line under its name: a standing that asks something of the member first, then what it is, its architecture where it is said, then what it lets agents do, and any fact of its own after. */
 export function MachineStandingLine({
   standing,
   platform,
+  arch,
   facts,
+  more,
 }: {
   standing: HostStanding | undefined;
   platform: DevicePlatform | undefined;
+  /** Its architecture, said where the reader picks a machine by it, as a workspace's machine is. */
+  arch?: DeviceArch | undefined;
   facts?: MachineAgentFacts | undefined;
+  /** A fact of the machine's own after the rest, such as the networks a workspace's machine's agents may reach. */
+  more?: string | undefined;
 }): React.JSX.Element {
   const said = standing === DEVICE_STANDING.SETTING_UP || standing === DEVICE_STANDING.FAILED;
 
@@ -100,12 +110,14 @@ export function MachineStandingLine({
         </SettingsRowStateLine>
       ) : null}
       <span>{DEVICE_PLATFORM_NAME[platformOf(platform)]}</span>
+      {arch === undefined ? null : <span>{arch}</span>}
       {facts === undefined ? null : (
         <GlyphFact glyph={<TerminalIcon />}>{facts.commands}</GlyphFact>
       )}
       {facts?.apps === undefined ? null : (
         <GlyphFact glyph={<ComputerUseIcon />}>{facts.apps}</GlyphFact>
       )}
+      {more === undefined ? null : <span>{more}</span>}
     </SettingsFacts>
   );
 }

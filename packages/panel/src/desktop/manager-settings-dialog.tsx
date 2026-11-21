@@ -17,7 +17,7 @@
  */
 
 import { chooseFailureNote } from "@repo/features/agent-refusal-words";
-import type { AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentSummary, agentMachineOf } from "@repo/features/agent-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -30,6 +30,7 @@ import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { RepositoryChooser } from "../tasks/repository-chip.js";
+import type { OfferedPlace } from "../tasks/runs-on.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { MANAGER_CARD, ManagerCard } from "./new-manager-dialog.js";
@@ -50,7 +51,7 @@ const NO_REPOSITORIES: readonly string[] = [];
 /** What a Manager's Settings reads of it. */
 export type ManagerSettingsSubject = Pick<
   AgentSummary,
-  "id" | "title" | "model" | "effort" | "contextWindow" | "runtime" | "mac" | "face"
+  "id" | "title" | "model" | "effort" | "contextWindow" | "runtime" | "machine" | "mac" | "face"
 > & {
   /** The workspace it is in, whose repositories its card's chip names; none where the surface does not know it. */
   readonly workspaceId?: string | undefined;
@@ -87,22 +88,35 @@ function sameFace(one: ManagerFace | undefined, other: ManagerFace | undefined):
   return one?.character === other?.character && one?.color === other?.color;
 }
 
-/** The device a Manager on a Mac runs on, from the member's devices where they list it, else as the Manager names it; none for one in the cloud. */
-function deviceOf(
+/** Where a Manager runs: the device it runs on, from the member's devices where they list it, else as the Manager names it, or the workspace's machine as it names it; none for one in the cloud. */
+function placeOf(
   agent: ManagerSettingsSubject,
   devices: readonly MacOffer[],
-): MacOffer | undefined {
+): OfferedPlace | undefined {
   const { mac } = agent;
 
   if (mac?.deviceId === undefined) return undefined;
 
-  return (
-    devices.find((each) => each.deviceId === mac.deviceId) ?? {
-      deviceId: mac.deviceId,
-      name: mac.name,
-      providers: [],
-    }
-  );
+  switch (agentMachineOf(agent)) {
+    case AGENT_MACHINE.VERCEL:
+      return undefined;
+    case AGENT_MACHINE.DEVICE:
+      return {
+        machine: AGENT_MACHINE.DEVICE,
+        device: devices.find((each) => each.deviceId === mac.deviceId) ?? {
+          deviceId: mac.deviceId,
+          name: mac.name,
+          providers: [],
+        },
+      };
+    case AGENT_MACHINE.WORKSPACE:
+      return {
+        machine: AGENT_MACHINE.WORKSPACE,
+        deviceId: mac.deviceId,
+        name: mac.name,
+        owned: undefined,
+      };
+  }
 }
 
 /** The Settings card for `agent`, a Manager, saved through `agents`; the card stands only while `shown`. */
@@ -208,7 +222,7 @@ export function useManagerSettingsDialog(
         chooser,
         onToggle: () => undefined,
       }}
-      machine={{ devices, device: deviceOf(agent, devices), onChoose: () => undefined }}
+      machine={{ devices, place: placeOf(agent, devices), onChoose: () => undefined }}
       model={{
         choice,
         choose: (next) => {

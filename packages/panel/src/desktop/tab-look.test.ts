@@ -37,7 +37,12 @@ import { restOn } from "../testing/hint-rest.js";
 import { overEveryTask } from "../testing/history-rows.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, listedTasksOf, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  listedTasksOf,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { taskCardOf } from "./task-card.js";
@@ -178,6 +183,18 @@ interface Shown {
   main?: MainTab;
 }
 
+/** The pull request the done agent opened. */
+const DONE_PULL_REQUEST = {
+  number: 42,
+  title: "Expire invitations",
+  url: "https://github.com/acme/relay/pull/42",
+  state: PULL_REQUEST_STATE.OPEN,
+  checks: CHECK_SUMMARY.PASSING,
+  additions: 210,
+  deletions: 14,
+  changedFiles: 6,
+};
+
 /** The task's window as `mount` describes it. */
 function taskDrawn(shown: Shown) {
   const base = tasksControl();
@@ -208,26 +225,15 @@ function taskDrawn(shown: Shown) {
       pages: [pageTab(FUNNEL.id)],
     },
     pages: [FUNNEL],
-    agents: agentsControl({
-      agents: [WORKING, DONE],
-      agentIds: [WORKING.id, DONE.id],
-      draft: { id: DRAFT, prompt: "", attachments: [], choice: undefined, disabledServers: [] },
-      pullRequests: new Map([
-        [
-          DONE.id,
-          {
-            number: 42,
-            title: "Expire invitations",
-            url: "https://github.com/acme/relay/pull/42",
-            state: PULL_REQUEST_STATE.OPEN,
-            checks: CHECK_SUMMARY.PASSING,
-            additions: 210,
-            deletions: 14,
-            changedFiles: 6,
-          },
-        ],
-      ]),
-    }),
+    agents: taskAgentsOf(
+      agentsControl({
+        agents: [WORKING, DONE],
+        agentIds: [WORKING.id, DONE.id],
+        draft: { id: DRAFT, prompt: "", attachments: [], choice: undefined, disabledServers: [] },
+        pullRequests: new Map([[DONE.id, DONE_PULL_REQUEST]]),
+      }),
+      TASK.id,
+    ),
   });
 
   // The window's tasks' cards, as the shell hands them to everything it holds.
@@ -249,6 +255,8 @@ function taskDrawn(shown: Shown) {
           tasks,
           createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
           TASK_PULL_REQUESTS,
+          // The done agent's pull request, as the task list holds it.
+          [{ agentId: DONE.id, taskId: TASK.id, pullRequest: DONE_PULL_REQUEST }],
         ),
       ),
     ),

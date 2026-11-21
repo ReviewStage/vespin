@@ -8,8 +8,8 @@ import { device } from "./device.js";
  * host-pairing.ts -- the pairings a box started to join a member's devices with a code, and how many codes each account guessed wrong.
  *
  * A box starts a pairing with no credential: the service keeps the box's
- * name, platform, architecture, and daemon version, the address the start
- * came from, the user code it shows, and the SHA-256 of the poll secret it
+ * name, platform, architecture, and daemon version, the machine it runs on
+ * where it named one, the address the start came from, the user code it shows, and the SHA-256 of the poll secret it
  * answered, never the secret. A signed-in member who opens the code's link
  * approves it, which makes their host row (`./device.ts`, kind host) with no
  * secret and names it here, or denies it; either is the pairing's one
@@ -48,6 +48,14 @@ export const hostPairing = pgTable(
     name: text("name").notNull(),
     platform: text("platform").$type<DevicePlatform>().notNull(),
     arch: text("arch").$type<DeviceArch>().notNull(),
+    /**
+     * Which machine the box runs on, as its start named it: the keyed SHA-256
+     * of the OS's own id for the machine that a device row keeps
+     * (`device.machine_id`), which the host row is made with, so an approve
+     * can tell a machine already standing as another owner's host. Null for a
+     * start from a daemon that names none.
+     */
+    machineId: text("machine_id"),
     /** The daemon version the start called with, which the host row is made with. */
     version: text("version").notNull(),
     /** The address the start came from, as the platform named it; null where it named none. */

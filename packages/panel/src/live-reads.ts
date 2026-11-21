@@ -280,6 +280,8 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
     askAct(ACT_KIND.WORKSPACE_MEMBERS_FOLLOW, { workspaceId: String(workspaceId) }),
   [LIVE_READ.WORKSPACE_INVITATIONS]: ([workspaceId = ""]) =>
     askAct(ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW, { workspaceId: String(workspaceId) }),
+  [LIVE_READ.WORKSPACE_MACHINES]: ([workspaceId = ""]) =>
+    askAct(ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW, { workspaceId: String(workspaceId) }),
   [LIVE_READ.AUTOMATIONS]: automationsFollow(AUTOMATION_FOLLOW.WORKSPACE),
   [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: automationsFollow(AUTOMATION_FOLLOW.WORKSPACE_RUNS),
   [LIVE_READ.AUTOMATION_RUNS]: automationsFollow(AUTOMATION_FOLLOW.RUNS),
@@ -362,6 +364,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.TOKEN_REPOSITORIES,
   LIVE_READ.WORKSPACE_MEMBERS,
   LIVE_READ.WORKSPACE_INVITATIONS,
+  LIVE_READ.WORKSPACE_MACHINES,
   LIVE_READ.WORKSPACE_PHOTOS,
   LIVE_READ.AUTOMATIONS,
   LIVE_READ.AUTOMATION_WORKSPACE_RUNS,
@@ -720,6 +723,10 @@ export const workspaceMembersQuery = (workspaceId: string | undefined) =>
 export const workspaceInvitationsQuery = (workspaceId: string | undefined) =>
   liveReadQuery(LIVE_READ.WORKSPACE_INVITATIONS, oneId(workspaceId));
 
+/** The machines a workspace owns, which every member's agents may run on, by the workspace. */
+export const workspaceOwnedMachinesQuery = (workspaceId: string | undefined) =>
+  liveReadQuery(LIVE_READ.WORKSPACE_MACHINES, oneId(workspaceId));
+
 /** A listed workspace's photo, by the workspace, which the host fetches as its version moves and holds for the session. */
 export const workspacePhotoQuery = (workspaceId: string | undefined) =>
   liveReadQuery(LIVE_READ.WORKSPACE_PHOTOS, oneId(workspaceId));
@@ -815,6 +822,10 @@ export const workspaceMembersRetryMutation = () => actMutation(ACT_KIND.WORKSPAC
 /** Try again on a workspace's invitations. */
 export const workspaceInvitationsRetryMutation = () =>
   actMutation(ACT_KIND.WORKSPACE_INVITATIONS_RETRY);
+
+/** Try again on the machines a workspace owns. */
+export const workspaceOwnedMachinesRetryMutation = () =>
+  actMutation(ACT_KIND.WORKSPACE_OWNED_MACHINES_RETRY);
 
 /** Try again on one automations list or history, by what it holds and its id (`AutomationFollow`). */
 export const automationsRetryMutation = () => actMutation(ACT_KIND.AUTOMATIONS_RETRY);

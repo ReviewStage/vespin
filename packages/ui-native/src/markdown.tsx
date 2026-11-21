@@ -8,7 +8,15 @@ import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ComponentRef,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   type AccessibilityActionEvent,
   ActionSheetIOS,
@@ -35,7 +43,13 @@ import { DraftCard } from "./draft-card.js";
 import { ENTITY_GLYPH } from "./entity-glyph.js";
 import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
-import { HeldMenu, useKeeping, useKeptActs, useQuickLook } from "./held-menu.js";
+import {
+  HeldMenu,
+  PictureSetProvider,
+  useKeeping,
+  useKeptActs,
+  usePictureView,
+} from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { KEPT_KIND, type Kept } from "./keep-model.js";
 import {
@@ -1066,9 +1080,10 @@ type PictureProps = {
 
 /**
  * A picture at its message's width, which a press opens full screen in the
- * system's Quick Look, as Messages and Mail open one, where a swipe down
- * closes it, a double tap or a pinch zooms it, and
- * its share button copies, saves or shares it. A long press offers the same
+ * app's viewer, grown out of the thumbnail and drawn at once from the bitmap
+ * the thumbnail shows, as Photos opens one, where a drag down closes it, a
+ * double tap or a pinch zooms it, and its share button copies, saves or
+ * shares it. A long press offers the same
  * acts in place. Note that a picture still on its way stands as its well at
  * the shape a picture most often is, the system's spinner in it as Photos
  * stands one, so the words under it do not jump twice and it never reads as
@@ -1092,7 +1107,8 @@ export function Picture({
     source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard };
 
   const acts = useKeptActs(kept);
-  const show = useQuickLook(kept);
+  const drawn = useRef<ComponentRef<typeof Image>>(null);
+  const show = usePictureView(source, heard, drawn);
 
   // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(size ?? natural, bounds) : undefined;
@@ -1139,13 +1155,14 @@ export function Picture({
           <HeldMenu acts={acts} width={boxWidth}>
             <Press
               onPress={show}
-              disabled={show === undefined}
+              disabled={source == null}
               accessibilityRole="imagebutton"
               accessibilityLabel={heard}
               accessibilityHint="Opens full screen"
               testID="markdown-picture"
             >
               <Image
+                ref={drawn}
                 source={{ uri: source }}
                 resizeMode={fill ? "cover" : "contain"}
                 onLoad={(event) => {
@@ -1467,22 +1484,25 @@ export function Markdown({
     suggestion,
   };
 
+  // Note that the words' pictures are one set a viewer swipes through, as a description's are, or join the set of the thread or message around them.
   return (
-    <View
-      onLayout={(event) => {
-        // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
-        const laid = event.nativeEvent.layout.width;
+    <PictureSetProvider>
+      <View
+        onLayout={(event) => {
+          // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
+          const laid = event.nativeEvent.layout.width;
 
-        if (laid > 0) setMeasured(laid);
-      }}
-    >
-      {diagrams ? (
-        <DiagramRenderer>
+          if (laid > 0) setMeasured(laid);
+        }}
+      >
+        {diagrams ? (
+          <DiagramRenderer>
+            <Blocks blocks={blocks} drawing={drawing} />
+          </DiagramRenderer>
+        ) : (
           <Blocks blocks={blocks} drawing={drawing} />
-        </DiagramRenderer>
-      ) : (
-        <Blocks blocks={blocks} drawing={drawing} />
-      )}
-    </View>
+        )}
+      </View>
+    </PictureSetProvider>
   );
 }

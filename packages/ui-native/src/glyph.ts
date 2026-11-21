@@ -20,6 +20,8 @@ import {
   TASK_PRIORITY_BARS_SYMBOL,
   TASK_PRIORITY_SYMBOL,
   TASK_STATUS_SYMBOL,
+  UNASSIGNED_SEAT_OPACITY,
+  UNASSIGNED_SYMBOL,
 } from "./tokens/task-status-symbols.js";
 
 declare const GLYPH_NAME: unique symbol;
@@ -52,6 +54,11 @@ const priorityMark = (
     | (typeof TASK_PRIORITY_SYMBOL)[keyof typeof TASK_PRIORITY_SYMBOL]
     | typeof TASK_PRIORITY_BARS_SYMBOL,
 ): Glyph => name as Glyph;
+
+/** No one's mark as the panel draws it, cut from the same table: its dashed ring, and the seat drawn faint under it. */
+// SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
+const unassignedMark = (name: (typeof UNASSIGNED_SYMBOL)[keyof typeof UNASSIGNED_SYMBOL]): Glyph =>
+  name as Glyph;
 
 /** The product's mark, the Keel, cut from `@repo/brand`'s one description of it into the asset catalog, seated as a line glyph. */
 // SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
@@ -283,7 +290,8 @@ export const GLYPH = {
   ROUND_BOX_TICKED: system("checkmark.circle.fill"),
   CHECK_RUNNING: system("circle.dotted"),
   FACE: system("person.crop.circle"),
-  UNASSIGNED: system("person.crop.circle.dashed"),
+  /** No one, as the panel's `UnassignedAvatar` draws it: its ring of eight dashes, over its seat drawn faint (`UNASSIGNED_UNDER`). */
+  UNASSIGNED: unassignedMark(UNASSIGNED_SYMBOL.RING),
   APP: system("app"),
   MCP_SERVER: system("server.rack"),
   MCP_TOOL: system("wrench.and.screwdriver"),
@@ -369,6 +377,7 @@ export function sectionEmoji(icon: TaskSectionIcon | undefined): string | undefi
 const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
   ...EVERY_LUCIDE_SYMBOL,
   ...Object.values(TASK_STATUS_SYMBOL),
+  ...Object.values(UNASSIGNED_SYMBOL),
   ...Object.values(TASK_PRIORITY_SYMBOL),
   TASK_PRIORITY_BARS_SYMBOL,
   PRODUCT_MARK_SYMBOL,
@@ -413,3 +422,9 @@ export type MarkLook = { readonly symbol: Glyph; readonly tone: StatusTone };
 
 /** A glyph drawn faint under another in the same ink, at `opacity`, as a priority's lit bars stand over every bar it can light. */
 export type MarkLayer = { readonly glyph: Glyph; readonly opacity: number };
+
+/** What no one's ring stands over: its seat, fainter, so the outline leads, as the panel's `UnassignedAvatar` draws it. */
+export const UNASSIGNED_UNDER: MarkLayer = {
+  glyph: unassignedMark(UNASSIGNED_SYMBOL.SEAT),
+  opacity: UNASSIGNED_SEAT_OPACITY,
+};

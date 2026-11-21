@@ -6,6 +6,7 @@ import {
   CONFIRM_LOSS,
   ConfirmDialog,
   type DialogQuestion,
+  HeldMessageAction,
   useConfirmDialog,
 } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
@@ -132,8 +133,9 @@ export function RevertMessageAction({ messageId }: { messageId: string }): React
 
   if (doors === undefined || lineId === undefined) return null;
 
+  // Note that its question waits with its button until the turn's actions are drawn (`HeldMessageAction`).
   return (
-    <>
+    <HeldMessageAction>
       <MessageAction
         label={REWIND_WORDS.REVERT}
         tooltip={REWIND_WORDS.REVERT}
@@ -155,7 +157,7 @@ export function RevertMessageAction({ messageId }: { messageId: string }): React
           </Checkbox>
         ) : undefined}
       </ConfirmDialog>
-    </>
+    </HeldMessageAction>
   );
 }
 

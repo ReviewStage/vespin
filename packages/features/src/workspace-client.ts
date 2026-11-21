@@ -50,6 +50,7 @@ import {
   workspaceInvitationCancelSchema,
   workspaceInviteRequestSchema,
 } from "./workspace-invitation-wire.js";
+import type { WorkspaceMachineDoneView } from "./workspace-machine-view.js";
 import {
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
@@ -82,7 +83,7 @@ import {
 } from "./workspace-wire.js";
 
 /**
- * workspace-client.ts -- the account's workspaces as the host asks the service for them: the list, a workspace created, renamed, given a slug or a photo, or handed over, a GitHub organization connected or disconnected, its members read, removed, given a role, or left, and its members' machines read.
+ * workspace-client.ts -- the account's workspaces as the host asks the service for them: the list, a workspace created, renamed, given a slug or a photo, or handed over, a GitHub organization connected or disconnected, its members read, removed, given a role, or left, its members' machines read, and the machines it owns renamed or removed.
  *
  * Every call is the account call, so the bearer is read fresh per attempt
  * and a 401 is renewed and retried once. A workspace's photo is read apart
@@ -568,6 +569,23 @@ export class HostedWorkspaceClient {
       ),
       (answer) => answer,
     );
+  }
+
+  /** One of the machines the workspace owns renamed by an owner or an admin: done with the transaction it was written in, or why not (`workspace-machine-view.ts`). */
+  renameOwnedMachine(
+    workspaceId: string,
+    id: string,
+    name: string,
+  ): Effect.Effect<WorkspaceMachineDoneView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.workspaceMachines.rename, { workspaceId, id, name });
+  }
+
+  /** One of the machines the workspace owns removed by an owner or an admin, its box refused at once: done with the transaction it was written in, or why not. */
+  removeOwnedMachine(
+    workspaceId: string,
+    id: string,
+  ): Effect.Effect<WorkspaceMachineDoneView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.workspaceMachines.remove, { workspaceId, id });
   }
 
   /** The workspace's cloud sandbox setup, its install script and each repository's setup script, as any member reads it. */

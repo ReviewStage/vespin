@@ -134,7 +134,7 @@ import { type TaskRelationDoor, taskRelationMenuPanel } from "../tasks/task-rela
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import { NO_ASSIGNEE, PRIORITY_ROWS, useAssigneeRows } from "../tasks/task-standing.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import type { TaskAgentsControl } from "../tasks/use-agents.js";
 import type { NewTask } from "../tasks/use-new-task.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
@@ -159,6 +159,7 @@ import {
 } from "./action-menu.js";
 import { useMoveTaskDialog } from "./move-task-dialog.js";
 import { useRowPlace, withRowMoves } from "./row-moves.js";
+import { type OpenMarks, type SidebarTasksControl, useSidebarOpen } from "./sidebar-open.js";
 import { moveToSectionEntry, useSectionDialogs } from "./sidebar-sections.js";
 import { chipSubmenu, keyedStatusSubmenu, STANDING_WORDS } from "./standing-submenus.js";
 import {
@@ -254,7 +255,7 @@ export interface TaskRowTab
 }
 
 /** What a task's row reads of `tasks`. */
-export function taskRowTab(tasks: TasksControl): TaskRowTab {
+export function taskRowTab(tasks: SidebarTasksControl): TaskRowTab {
   return {
     shown: tasks.shown,
     signedIn: tasks.signedIn,
@@ -287,7 +288,7 @@ export function useTaskRowTab(tasks: TasksControl): TaskRowTab {
  */
 export interface OpenedTask {
   readonly task: Task;
-  readonly agents: AgentsControl;
+  readonly agents: TaskAgentsControl;
 }
 
 /** The task `tasks` has open and its agents; none while no document is drawn. */
@@ -1203,19 +1204,26 @@ function SidebarTaskCard({
 export function SidebarTask({
   tasks,
   task: handed,
-  unread: unreadOf,
+  marks,
   ...rest
 }: SidebarTaskProps): React.JSX.Element {
   const tab = useSteadyDoors(sidebarRowTab(tasks));
-  const opened = openedAs(openedTaskOf(tasks), handed.id);
+  const taskId = handed.id;
+  // Note that the row reads its own marks of the task opening, so an open draws the rows it moves and not the sidebar (`sidebar-open.tsx`).
+  const current = useSidebarOpen((open) => marks.marked(open, taskId, undefined));
+  const isOpen = useSidebarOpen((open) => marks.current(open, taskId));
+  const opened = useSidebarOpen((open) => openedAs(open.opened, taskId));
   // Note that the row hears its own task, so a delivery moving it alone draws this row and not the sidebar (`useListedPart`); the task handed stands until the collection holds it.
-  const task = useNamedTask(handed.id, tasks.typedNames) ?? handed;
+  const task = useNamedTask(taskId, tasks.typedNames) ?? handed;
+  const unread = useSidebarOpen((open) => marks.unread(open, task));
 
   return (
     <SidebarTaskRow
       {...useSteadyDoors(rest)}
       task={task}
-      unread={unreadOf(task)}
+      current={current}
+      open={isOpen}
+      unread={unread}
       at={taskTime(task, TASK_ORDER.UPDATED)}
       tasks={tab}
       opened={opened}
@@ -1235,7 +1243,7 @@ interface SidebarRowTab
   readonly agents: Pick<TasksControl["agents"], "models">;
 }
 
-function sidebarRowTab(tasks: TasksControl): SidebarRowTab {
+function sidebarRowTab(tasks: SidebarTasksControl): SidebarRowTab {
   return {
     ...taskRowTab(tasks),
     onPointTask: tasks.onPointTask,
@@ -1248,14 +1256,10 @@ function sidebarRowTab(tasks: TasksControl): SidebarRowTab {
 
 /** What a sidebar task row is handed (`SidebarTask`). */
 interface SidebarTaskProps {
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
   task: TaskSummary;
-  /** Whether this is the task the work column is showing. */
-  current: boolean;
-  /** Whether the plan is open in the window, so its drafts are in reach and unmarked; a row the sidebar does not mark may be, as one opened from a pin, and is its own mark unless said. */
-  open?: boolean;
-  /** Whether a task was saved since the developer last looked at it on this Mac, which the row asks of its task as it stands. */
-  unread: (task: TaskSummary) => boolean;
+  /** How the row reads its marks of the task opening (`sidebar-open.tsx`): whether it is the row marked, the plan open, and unread. */
+  marks: OpenMarks;
   /** The time the row's last update is counted back from. */
   now: number;
   /** The repository the row names, its owner's picture and its name, muted before its time, where the list hands one. */
@@ -1287,7 +1291,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   opened,
   task,
   current,
-  open = current,
+  open,
   unread,
   now,
   at,
@@ -1299,8 +1303,12 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   fold,
   childCount,
   onOpen,
-}: Omit<SidebarTaskProps, "tasks" | "unread"> & {
+}: Omit<SidebarTaskProps, "tasks" | "marks"> & {
   tasks: SidebarRowTab;
+  /** Whether this is the row the sidebar marks for the task the work column is showing. */
+  current: boolean;
+  /** Whether the plan is open in the window, so its drafts are in reach and unmarked; a row the sidebar does not mark may be, as one opened from a pin. */
+  open: boolean;
   /** Whether the task was saved since the developer last looked at it on this Mac. */
   unread: boolean;
   /** The time the row shows: the later of its own update and its agents' last settled activity (`taskTime`). */
@@ -1312,7 +1320,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const pins = usePinWrites(tasks.typedNamesNow);
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
-  const reads = useReadMarks();
+  const markRead = useReadMark();
   const coarse = useCoarsePointer();
   const worn = rowFaceOf(task, useMemberDirectory(), faces);
   const chosen = useContext(ChosenTasksContext)(task.id);
@@ -1340,7 +1348,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const rowSubject = useFocusedRowKeys(
     item,
     shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id),
-    () => reads.mark(task, !unread),
+    () => markRead(task, !unread),
     () => pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN),
     statusDrawn ? () => setStatusAsks((asks) => asks + 1) : undefined,
   );

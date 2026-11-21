@@ -11,7 +11,6 @@ import {
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { useAccessibilitySize } from "./accessibility.js";
 import { FieldChip, type FieldMenu, FollowingChip, PriorityChip, StatusChip } from "./button.js";
-import { GLYPH } from "./glyph.js";
 import type { Face } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -82,7 +81,7 @@ export function PageHeader(props: PageHeaderProps) {
       {assignee === undefined ? null : (
         <HStack modifiers={[layoutPriority(-1)]}>
           {assignee.nobody ? (
-            <FieldChip label={assignee.name} symbol={GLYPH.UNASSIGNED} menu={menus?.assignee} />
+            <FieldChip label={assignee.name} nobody menu={menus?.assignee} />
           ) : (
             <FieldChip label={assignee.name} face={assignee} menu={menus?.assignee} />
           )}

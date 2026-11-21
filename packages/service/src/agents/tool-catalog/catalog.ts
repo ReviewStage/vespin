@@ -626,7 +626,7 @@ const CATALOG = [
   served(LIST_MACHINES_TOOL, (admitted, input, { standing }) =>
     Option.isNone(standing.agent)
       ? Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT))
-      : runAgentListMachines(standing.agent.value.userId, admitted.target, input),
+      : runAgentListMachines(standing.agent.value, admitted.target, input),
   ),
   // Tasks and sections.
   agentTool(LIST_TASKS_TOOL, runListTasks),

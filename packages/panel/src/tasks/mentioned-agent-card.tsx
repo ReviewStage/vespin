@@ -1,10 +1,9 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { LINK_DESTINATION, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
-import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useSyncExternalStore } from "react";
 import { tabCard } from "../desktop/tab-card.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { AGENTS_LISTED, appStateQuery, selectAgentsListed } from "../use-app-state.js";
@@ -171,16 +170,45 @@ interface OwnedPullRequest {
   readonly number: number | undefined;
 }
 
-/** The agent that opened the pull request a link names, among the tasks the window lists; none where none of them did. */
+/**
+ * The agent that opened the pull request a link names, among the tasks the
+ * window lists; none where none of them did. Note that it is looked up as the
+ * list moves and drawn again only when the agent or its task does, since any
+ * task's pull requests move as their checks and reviews do.
+ */
 function useOwnedPullRequest(url: string): OwnedPullRequest | undefined {
   const { taskPullRequests } = useTaskListCollections();
-  const { data: carried } = useLiveQuery((q) => q.from({ listed: taskPullRequests }));
-  const number = pullRequestAddressOf(url)?.number;
-  const listed = listedPullRequestOf(url, carried);
+  const held = useRef<OwnedPullRequest | undefined>(undefined);
 
-  return listed?.agentId === undefined
-    ? undefined
-    : { agentId: listed.agentId, taskId: listed.taskId, number };
+  const subscribe = useCallback(
+    (heard: () => void) => {
+      const subscription = taskPullRequests.subscribeChanges(heard);
+
+      return () => subscription.unsubscribe();
+    },
+    [taskPullRequests],
+  );
+
+  const read = (): OwnedPullRequest | undefined => {
+    const listed = listedPullRequestOf(url, taskPullRequests.values());
+    const was = held.current;
+
+    const owned =
+      listed?.agentId === undefined
+        ? undefined
+        : was?.agentId === listed.agentId && was.taskId === listed.taskId
+          ? was
+          : { agentId: listed.agentId, taskId: listed.taskId, number: undefined };
+
+    held.current = owned;
+
+    return owned;
+  };
+
+  const owned = useSyncExternalStore(subscribe, read, read);
+  const number = pullRequestAddressOf(url)?.number;
+
+  return useMemo(() => (owned === undefined ? undefined : { ...owned, number }), [owned, number]);
 }
 
 /**

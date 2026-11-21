@@ -29,7 +29,7 @@ import { LinkIcon, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { NAMED_ORDER, useNamedTasksAtRest } from "../task-list-collections.js";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import { RelationKindPill } from "../tasks/relation-kind-pill.js";
 import {
@@ -367,8 +367,12 @@ export function OverviewRelations({
   const doorsOf = (other: TaskSummary, kind: TaskRelationKind) =>
     relationDoors(writes, task, other, kind);
 
-  // Note that its sub-tasks and blocks are of its own workspace, whose tasks alone are read.
-  const ofWorkspace = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, task.workspaceId);
+  // Note that its sub-tasks and blocks are of its own workspace, whose tasks alone are read, held still while only a task's agents move, which each row reads itself (`RelatedTasks`).
+  const ofWorkspace = useNamedTasksAtRest(
+    tasks.typedNames,
+    NAMED_ORDER.PINNED_FIRST,
+    task.workspaceId,
+  );
 
   const subTasks = subTaskRows(ofWorkspace, task, opened, fold, (subTask) =>
     relationMenu(TASK_RELATION_KIND.SUB_TASK, doorsOf(subTask, TASK_RELATION_KIND.SUB_TASK)),

@@ -92,6 +92,7 @@ import {
   WORKSPACE_MEMBERS_READ,
   WORKSPACES_READ,
 } from "../workspace-live.js";
+import { WORKSPACE_MACHINES_READ } from "../workspace-machine-live.js";
 
 export const liveContract = {
   [ACCOUNT_INBOX_READ.name]: liveProcedure(ACCOUNT_INBOX_READ),
@@ -123,6 +124,7 @@ export const liveContract = {
   [WORKSPACE_INVITATIONS_READ.name]: liveProcedure(WORKSPACE_INVITATIONS_READ),
   [HOSTS_READ.name]: liveProcedure(HOSTS_READ),
   [MACHINES_READ.name]: liveProcedure(MACHINES_READ),
+  [WORKSPACE_MACHINES_READ.name]: liveProcedure(WORKSPACE_MACHINES_READ),
   [MACHINE_ASKS_READ.name]: liveProcedure(MACHINE_ASKS_READ),
   [WORKSPACE_MEMORIES_READ.name]: liveProcedure(WORKSPACE_MEMORIES_READ),
   [INSTALLED_SKILLS_READ.name]: liveProcedure(INSTALLED_SKILLS_READ),

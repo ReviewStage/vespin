@@ -13,11 +13,11 @@ import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STATUS_TONE } from "@repo/ui";
+import { afterPaint } from "@repo/ui/after-paint";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { firstNotKept, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
 import { useToast } from "../toast.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";

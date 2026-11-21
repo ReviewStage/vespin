@@ -8,18 +8,12 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
  */
 
 /**
- * The Inbox's row, last of the rows heading the list and drawn as they are:
- * the tray, its name, and at its end how many items the view the Inbox
- * shows lists, Questions what waits on the developer and Open what they are
- * not done with (`useInboxViewCount`), in even figures, read with that
- * view's words and drawn in its tone, as the phone's bar counts it
- * (`mobile-bar.tsx`), and nothing at none. Its chord takes the count's place
- * while the row is hovered or reached from the keyboard, as New task's and
- * Search's show theirs. A press opens the window's Inbox
- * (`desktop-inbox.tsx`), and a middle-click opens it in a tab of its own
- * where the window opens tabs; the row is the place shown while it stands.
- * Note that it opens no menu: Mark all as read stands on the Inbox's own
- * head, where its reader looks for it.
+ * The Inbox's row, after Home's. At its end it counts what the Inbox's chosen
+ * view lists, Questions what waits on the developer and Open what they are
+ * not done with (`useInboxViewCount`), in that view's tone, as the phone's
+ * bar counts it (`mobile-bar.tsx`). A press opens the window's Inbox
+ * (`desktop-inbox.tsx`). Note that it opens no menu: Mark all as read stands
+ * on the Inbox's own head, where its reader looks for it.
  */
 export function SidebarInboxRow({
   count,

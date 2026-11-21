@@ -42,7 +42,7 @@ import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useRelatableTasks } from "../task-list-collections.js";
 import { appStateQuery, selectExperiment, selectNewAgentServersOff } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
@@ -68,7 +68,15 @@ import { heldUpdateOver, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { useRepositoryDefault } from "./repository-default.js";
 import { keptSkills } from "./repository-skills.js";
-import { NewTaskRunsOnChip, newTaskRunsOn, useDevicesRead, useNewTaskRunsOn } from "./runs-on.js";
+import {
+  deviceOfPlace,
+  NewTaskRunsOnChip,
+  newTaskRunsOn,
+  placeIdOf,
+  useDevicesRead,
+  useNewTaskRunsOn,
+  useOwnedMachines,
+} from "./runs-on.js";
 import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
@@ -511,7 +519,7 @@ export function NewTaskComposer({
   // The last agent press's key and what it asked, until a start lands.
   const pressed = useRef<NewTaskPress | undefined>(refused?.card.press);
   // Task relation offers the tasks of the card's workspace, in the sidebar's order.
-  const relatable = useNamedTasks(newTask.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
+  const relatable = useRelatableTasks(newTask.typedNames, workspaceId);
 
   // Runs on stands on every card but an automation's agent's.
   const runsOnStands = !forAutomation;
@@ -523,7 +531,9 @@ export function NewTaskComposer({
     if (runsOnStands) readModels.current();
   }, [runsOnStands]);
   const devices = (runsOnStands ? newTask.devices : undefined) ?? NO_DEVICES;
-  const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
+  const owned = useOwnedMachines(runsOnStands ? workspaceId : undefined);
+  const [place, choosePlace, keptDevice] = useNewTaskRunsOn(devices, owned);
+  const device = deviceOfPlace(place);
 
   // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
   const { unread: devicesUnread, failed: devicesFailed } = useDevicesRead(
@@ -535,7 +545,7 @@ export function NewTaskComposer({
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 
   // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
-  const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
+  const runsOn = runsOnStands ? newTaskRunsOn(place) : undefined;
   const { repository: picked, judged, drop } = repositoryDefault;
 
   // A tree's two tasks work in one repository, the other task's, which the chip is held to.
@@ -645,7 +655,7 @@ export function NewTaskComposer({
     const ask: AgentAsk = {
       repository,
       workspaceId,
-      deviceId: device?.deviceId,
+      deviceId: placeIdOf(place),
       relations: relationsAsked(relations),
       agent: {
         prompt,
@@ -681,7 +691,7 @@ export function NewTaskComposer({
     const ask: AgentAsk = {
       repository,
       workspaceId,
-      deviceId: device?.deviceId,
+      deviceId: placeIdOf(place),
       relations: relationsAsked(relations),
       agent: {
         prompt: "",
@@ -859,10 +869,11 @@ export function NewTaskComposer({
             ? (narrow) => (
                 <NewTaskRunsOnChip
                   devices={devices}
-                  device={device}
+                  owned={owned}
+                  place={place}
                   disabled={starting}
                   narrow={narrow}
-                  onChoose={chooseDevice}
+                  onChoose={choosePlace}
                 />
               )
             : undefined
