@@ -784,6 +784,8 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     // Note that a field handed no looks, as every composer is, lays none, so its words are never walked again on each key.
     guard !(handed.isEmpty && spans.isEmpty) else { return }
     spans = handed
+    // Note that a look changes the words' faces and so their height, which the next layout measures again rather than keeping the height measured before.
+    measured = nil
 
     quiet = true
     storage.beginEditing()
