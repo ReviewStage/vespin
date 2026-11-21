@@ -222,7 +222,8 @@ import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import {
   NAMED_ORDER,
   type TaskListRows,
-  useNamedTasks,
+  useNamedTask,
+  useNamedTasksAtRest,
   useTaskListRows,
 } from "../task-list-collections.js";
 import { agentSummaryEnd } from "../tasks/agent-menu-row.js";
@@ -854,7 +855,21 @@ function PaletteTaskCard({
   tasks: TasksControl;
   task: TaskSummary;
 }): React.JSX.Element {
-  return homeTaskCardOf(tasks, task, useMinute());
+  // Note that the card reads its own task, since the rows are held still while only a task's agents move (`useNamedTasksAtRest`).
+  const own = useNamedTask(task.id, tasks.typedNames) ?? task;
+
+  return homeTaskCardOf(tasks, own, useMinute());
+}
+
+/** A task row's mark, the task's own as the list holds it now, so the agents' turns move this mark alone (`useNamedTasksAtRest`). */
+function PaletteTaskMark({
+  tasks,
+  task,
+}: {
+  tasks: TasksControl;
+  task: TaskSummary;
+}): React.JSX.Element {
+  return <TaskRowStatus task={useNamedTask(task.id, tasks.typedNames) ?? task} />;
 }
 
 /**
@@ -966,7 +981,7 @@ function taskRows(
         endMark: (
           <>
             {worn === undefined ? null : <AssigneeFaceMark face={worn} />}
-            <TaskRowStatus task={task} />
+            <PaletteTaskMark tasks={carded} task={task} />
           </>
         ),
         people: [...new Set([assignedTo, createdBy])].filter((name) => name !== null),
@@ -2233,7 +2248,12 @@ export function CommandPalette({
     open && tasks.signedIn && (filter === PALETTE_FILTER.ALL || filter === PALETTE_FILTER.TASKS);
 
   // Note that every task is read only while the rows are, because the palette stands drawn while shut and a task's change would draw it.
-  const everyTask = useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED, undefined, tasksShown);
+  const everyTask = useNamedTasksAtRest(
+    tasks.typedNames,
+    NAMED_ORDER.STARTED,
+    undefined,
+    tasksShown,
+  );
 
   // Note that who made each task is read only while the rows are, for the same reason.
   const originOf = useTaskOrigin(tasksShown);

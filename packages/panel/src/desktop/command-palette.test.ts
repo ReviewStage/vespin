@@ -1426,6 +1426,34 @@ test("a task's row ends as its sidebar row does, who is on it then an agent at w
   assert.deepEqual(rows(), ["Billing usage alerts · billing · ACME-12"]);
 });
 
+test("a task's row in ⌘K says its agents stopped once only its agents moved, while the palette stands open", () => {
+  const acme = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null };
+
+  const withAgentsAt = (working: number): TaskSummary => ({
+    id: "plan-12",
+    workspaceId: acme.id,
+    name: "Billing usage alerts",
+    number: 12,
+    createdAt: 1,
+    updatedAt: 1,
+    repository: "acme/billing",
+    agents: { total: 1, working, pullRequestTotal: 0 },
+  });
+
+  listed = standingTaskList({ tasks: [withAgentsAt(1)] });
+  openPalette(tasksControl({ workspace: acme, workspaces: [acme], tasks: [withAgentsAt(1)] }));
+  chooseFilter("Tasks");
+
+  const marks = () =>
+    [...document.querySelectorAll('[role="option"] .task-agents-mark')].map((mark) =>
+      mark.getAttribute("data-task-agents"),
+    );
+
+  assert.deepEqual(marks(), ["working"]);
+  act(() => listed?.stand({ tasks: [withAgentsAt(0)] }));
+  assert.deepEqual(marks(), []);
+});
+
 test("an agent pressed on a task's card in ⌘K over Settings leaves the palette for the tasks and opens the agent's tab, as a row does", () => {
   const shown: [string, string][] = [];
 
