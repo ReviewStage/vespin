@@ -38,3 +38,18 @@ appId: dev.vespin.ios
 - takeScreenshot: pill-field-picked
 - runFlow: subflows/lower-keyboard.yaml
 - takeScreenshot: pill-field-written
+# Under the page's own field, a document's field draws its words in the
+# looks the page draws them in as they are written: a heading larger, bold
+# words bold, code in the monospaced face, a list's marks, a quote muted.
+# Away from the caret its syntax's marks (`##`, `**`, the backticks, the
+# fences) are hidden, and the line the caret stands on shows its own.
+- scrollUntilVisible:
+    element:
+      id: "pill-field-styled"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: pill-field-styled
+- tapOn:
+    id: "pill-field-styled"
+- waitForAnimationToEnd
+- takeScreenshot: pill-field-styled-caret

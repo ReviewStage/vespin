@@ -239,6 +239,8 @@ export { PictureSet, type SetPicture } from "./picture-set.js";
 
 export { type CaretAtWord, PillField, type PillFieldHandle } from "./pill-field.js";
 
+export { MARKS_SHOWN, type MarksShown } from "./pill-field-native.js";
+
 export { ProblemLine } from "./problem-line.js";
 
 export {

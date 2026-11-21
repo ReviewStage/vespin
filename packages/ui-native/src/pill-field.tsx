@@ -2,10 +2,12 @@
 
 import { type AtWord, atWordAround } from "@repo/features/at-word";
 import { readerZone } from "@repo/features/date-mention";
+import { styledRuns } from "@repo/features/markdown-styles";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import {
+  type MarksShown,
   type NativePill,
   NativePillField,
   type NativePillFieldDoors,
@@ -58,6 +60,8 @@ interface PillFieldProps {
   readonly editable?: boolean | undefined;
   /** Whether the field takes the keyboard as it first stands, as a page that starts work opens on its words. */
   readonly autoFocus?: boolean | undefined;
+  /** Draws the words in the looks the page draws them in as they are written, as a document edited whole is, its syntax's marks shown as `marks` says; plain words, as a message's, where none is given. */
+  readonly styled?: { readonly marks: MarksShown } | undefined;
   /** The `@` word the caret stands in as it changes, which a mention offer reads; none once the caret stands in none. */
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
@@ -118,6 +122,7 @@ export function PillField({
   maxLines,
   editable,
   autoFocus,
+  styled,
   onAtWord,
   onFocusChange,
   testID,
@@ -133,17 +138,27 @@ export function PillField({
   const told = useRef({ markdown: value });
   const atWord = useRef<CaretAtWord | undefined>(undefined);
 
+  const marks = styled?.marks;
+
   const handed = useMemo((): NativeValue => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
 
-    const runs = pillRuns(value, files).map((run) =>
-      run.kind === PILL_RUN.WORDS
-        ? { text: run.text }
-        : { pill: { markdown: run.pill.markdown, ...pillLook(run.pill, reading) } },
-    );
+    const drawn = (pill: Pill) => ({
+      pill: { markdown: pill.markdown, ...pillLook(pill, reading) },
+    });
+
+    // Note that the looks are read only for a field that draws them, so a message's box never parses its words on each key.
+    const runs =
+      marks === undefined
+        ? pillRuns(value, files).map((run) =>
+            run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
+          )
+        : styledRuns(value, files).map((run) =>
+            run.kind === PILL_RUN.WORDS ? { text: run.text, styles: run.styles } : drawn(run.pill),
+          );
 
     return { runs, seen };
-  }, [value, files, repository, seen]);
+  }, [value, files, repository, seen, marks]);
 
   const look = {
     text: colors.TEXT,
@@ -195,6 +210,7 @@ export function PillField({
       placeholder={placeholder}
       maxLines={maxLines}
       editable={editable}
+      marks={marks}
       testID={testID}
       onWords={onWords}
       onHeight={({ nativeEvent }) => {
