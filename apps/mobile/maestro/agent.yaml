@@ -262,7 +262,24 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-model-picked
-- tapOn: "Done"
+# A compact window's sheet closes on its Done; a regular window stands Model
+# as a popover from the composer's chip, as the panel's menu stands, which
+# has no Done and closes on a tap off it, at the window's leading edge, which
+# the popover from the chip at the composer's end never reaches.
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - tapOn: "Done"
+- runFlow:
+    when:
+      visible: "Effort.*"
+    commands:
+      - runFlow:
+          file: subflows/dismiss.yaml
+          env:
+            POINT: "5%, 50%"
+- assertNotVisible: "Effort.*"
 # Rename asks for the name in the system's alert, holding the name as it
 # stands; the new one is drawn in the bar at once.
 - tapOn: "More"
