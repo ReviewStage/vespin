@@ -152,10 +152,7 @@ function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSea
       Effect.orElseSucceed(settings.store.snapshot(), () => ({ experiments: NO_EXPERIMENTS })),
       (snapshot) => experimentOn(snapshot.experiments, EXPERIMENT.COMPUTER_USE),
     ),
-    enabled: Effect.map(
-      stored,
-      (values) => values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default,
-    ),
+    enabled: Effect.map(stored, (values) => values.computerUse),
     allowedApps: Effect.map(stored, (values) => computerUseAppsOf(values.computerUseApps)),
     allowApp: (app) =>
       Effect.map(
@@ -208,7 +205,7 @@ function machineCommandsDevice(
     settings: Effect.map(stored, (values) => ({
       commandMode: values.macCommands ?? APP_SETTING_SCHEMA.macCommands.default,
       alwaysAllowedApps: computerUseAppsOf(values.computerUseApps),
-      computerUse: values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default,
+      computerUse: values.computerUse,
     })),
     applySettings: (kept) =>
       Effect.gen(function* () {
@@ -222,10 +219,7 @@ function machineCommandsDevice(
         }
 
         // Note that a service that holds no switch for apps yet names none, which leaves this Mac's for it to carry up.
-        if (
-          kept.computerUse !== undefined &&
-          (values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default) !== kept.computerUse
-        ) {
+        if (kept.computerUse !== undefined && values.computerUse !== kept.computerUse) {
           landed =
             (yield* written(
               settings.store.set(APP_SETTING_SCHEMA.computerUse.field, kept.computerUse),

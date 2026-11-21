@@ -316,7 +316,7 @@ export function taskListFollowing(): TaskListFollowing {
 
   const lay = (view: TaskListParts): void => {
     laid = true;
-    feeds.tasks.lay(view.tasks ?? []);
+    feeds.tasks.lay(view.tasks);
     feeds.taskAgents.lay(view.taskAgents ?? []);
     feeds.taskPullRequests.lay(view.taskPullRequests ?? []);
     feeds.agentPullRequests.lay(view.agentPullRequests ?? []);
