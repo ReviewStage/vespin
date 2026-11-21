@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { threadRuns } from "./thread-group-model.js";
+import { newestRuns, threadRuns } from "./thread-group-model.js";
 
 const MINUTE = 60 * 1000;
 
@@ -46,5 +46,25 @@ describe("threadRuns", () => {
     ],
   ])("%s", (_case, messages, runs) => {
     expect(threadRuns(messages).map((run) => run.map((each) => each.id))).toEqual(runs);
+  });
+});
+
+describe("newestRuns", () => {
+  it.each([
+    [
+      "a thread of fewer than the first frame draws is drawn whole",
+      [[1, 2], [3]],
+      4,
+      [[1, 2], [3]],
+    ],
+    [
+      "the newest runs are taken whole until they hold enough",
+      [[1, 2], [3, 4, 5], [6], [7, 8]],
+      3,
+      [[6], [7, 8]],
+    ],
+    ["a run is never split, so its head stays", [[1, 2, 3, 4], [5]], 2, [[1, 2, 3, 4], [5]]],
+  ])("%s", (_case, runs, least, newest) => {
+    expect(newestRuns(runs, least)).toEqual(newest);
   });
 });
