@@ -507,10 +507,9 @@ export function LongPressMenu({
 
 /**
  * A long press menu's groups as the system's menu items, in the panel's
- * order, each group after a divider: what `LongPressMenu` opens, and what a
- * section's header opens as its own menu (`ListSection`).
+ * order, each group after a divider: what `LongPressMenu` opens.
  */
-export function LongPressMenuItems({ groups }: { readonly groups: readonly LongPressGroup[] }) {
+function LongPressMenuItems({ groups }: { readonly groups: readonly LongPressGroup[] }) {
   const colors = useColors();
 
   return groups

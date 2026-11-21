@@ -1,4 +1,4 @@
-// RowMenu.swift -- a row's long press menu, its preview, and its swipes, built by SwiftUI from the plain tree a row hands over (`packages/ui-native/src/row-menu-model.ts`, `row-preview-model.ts`), so a list's rows hold no views of a menu nobody opened.
+// RowMenu.swift -- a row's long press menu, its preview, and its swipes, and a section header's menu, built by SwiftUI from the plain tree a row hands over (`packages/ui-native/src/row-menu-model.ts`, `row-preview-model.ts`), so a list's rows hold no views of a menu nobody opened.
 //
 // The tree arrives as JSON in one string. The menu's items and its preview
 // are read from it only inside SwiftUI's `contextMenu` closures, which run as
@@ -291,6 +291,47 @@ internal struct RowMenuModifier: ViewModifier, Record {
     } else {
       content.contextMenu {
         RowMenuItems(json: json, press: press)
+      }
+    }
+  }
+}
+
+/// A section header's menu, SwiftUI's own menu button around the header, its items built from the header's tree as the menu opens: a tap folds the section where `folds`, its primary action, and a long press opens the menu, as Reminders' and Files' headers do; a header that folds nothing opens the menu on a tap. A press sends the place of the item pressed, and the fold sends `fold` (`headerMenu` in `interactions.ts`).
+///
+/// Note that it is a menu button rather than a context menu, because
+/// SwiftUI's context menu on a list's section header never opened, its long
+/// press lost to the fold's button or dropped (#10405).
+internal struct HeaderMenuModifier: ViewModifier, Record {
+  static let name = "vespinHeaderMenu"
+
+  @Field var menu: String = ""
+  @Field var folds: Bool = false
+  var eventDispatcher: EventDispatcher?
+
+  init() {}
+
+  init(from params: Dict, appContext: AppContext, eventDispatcher: EventDispatcher) throws {
+    try self = .init(from: params, appContext: appContext)
+    self.eventDispatcher = eventDispatcher
+  }
+
+  func body(content: Content) -> some View {
+    let json = menu
+    let dispatcher = eventDispatcher
+    let press: PressPlace = { place in dispatcher?([Self.name: ["path": place]]) }
+    if folds {
+      Menu {
+        RowMenuItems(json: json, press: press)
+      } label: {
+        content
+      } primaryAction: {
+        dispatcher?([Self.name: ["fold": true]])
+      }
+    } else {
+      Menu {
+        RowMenuItems(json: json, press: press)
+      } label: {
+        content
       }
     }
   }
