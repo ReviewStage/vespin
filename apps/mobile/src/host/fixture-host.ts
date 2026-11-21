@@ -583,8 +583,8 @@ function editConflict({
  * agent's notice with Try again once its sheet has closed, and a follower
  * added, a memory deleted or a thread's reminder or reply unanswered, so a
  * flow sees the notice over Add a follower's sheet, Settings', and a
- * thread's composer, the keyboard up or down, and a refused reply's words
- * and pictures put back on its box, and a description's edit met by the
+ * thread's composer, the keyboard up or down, and a reply standing on its
+ * thread marked Not delivered, and a description's edit met by the
  * invitations agent's note written meanwhile over the same lines, so a flow
  * sees Edit description's conflict ask.
  */
@@ -606,7 +606,7 @@ const REFUSED_WRITES: ReadonlyMap<
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.AGENTS_INBOX_REMIND, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
-  // Note that a thread's reply is unanswered too, so a flow sees its words and pictures put back on the box with the refusal's note.
+  // Note that a thread's reply is unanswered too, so a flow sees it stand on its thread marked Not delivered.
   [ACT_KIND.AGENTS_INBOX_MESSAGE, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],

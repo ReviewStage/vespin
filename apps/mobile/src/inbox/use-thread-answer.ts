@@ -7,8 +7,15 @@
  * `AGENTS_INBOX_MESSAGE`, and a resolve as `AGENTS_INBOX_CLOSE`. Each send is
  * drawn over the thread the moment it is pressed (`inboxSendingDrawn`), so
  * the list and the thread read it settled at once, and stands until a read
- * carries it; a refused one is let go, its words and picks put back on the
- * box, the refusal said in its head, and the phone buzzes as a refusal does.
+ * carries it. A reply or a thread's start refused, or one no answer came
+ * back for, which may have reached the agent all the same, never goes back
+ * into the box: it stays at the thread's foot marked Not delivered
+ * (`undelivered.ts`, `@repo/features/inbox-undelivered`), as the panel keeps
+ * it, with Retry, which sends it again under the key it went under so the
+ * service takes it once, Edit, which takes its words, pictures, and picks
+ * back into the box, and Delete; a refusal also says why in the box's head,
+ * and the phone buzzes as a refusal does. A read holding a message under its
+ * key settles it, since that one went.
  * The box's next send may start a new thread with the thread's agent
  * instead (`AGENTS_INBOX_START`), as the panel's "Send as a new thread to"
  * does: its words the thread's first message, the new thread opened once
@@ -48,10 +55,20 @@ import {
 } from "@repo/features/inbox-list-model";
 import { INBOX_PUSH_PRESS, type InboxPushPress } from "@repo/features/inbox-push-wire";
 import {
+  filesLost,
+  UNHEARD_UNDELIVERED,
+  type UndeliveredReply,
+  undeliveredDraft,
+  undeliveredOn,
+  undeliveredTakenBack,
+  withUndelivered,
+} from "@repo/features/inbox-undelivered";
+import {
   INBOX_ASK,
   INBOX_FIELD,
   INBOX_REPLY,
   INBOX_STATUS,
+  type InboxAnswers,
   type InboxItem,
   type InboxMessage,
   openAskOf,
@@ -78,6 +95,7 @@ import {
 } from "@repo/features/inbox-writes";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
+import { actRefusalSentence } from "@repo/host/contract";
 import {
   BUZZ,
   buzz,
@@ -94,6 +112,14 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { replyLetGo, replyPressed } from "../reply-drawn.js";
 import { useWrite } from "../use-write.js";
+import {
+  dropUndelivered,
+  keepUndelivered,
+  settleUndelivered,
+  undeliveredLine,
+  undeliveredOnItem,
+  useUndelivered,
+} from "./undelivered.js";
 
 /** What the app holds of one thread: the draft on its box, the sends not yet carried by a read, by key, what its last refused send said, and a notification's action not yet sent. */
 interface ThreadHeld {
@@ -111,6 +137,10 @@ interface ThreadHeld {
   };
   /** The key of the Got it out, which takes Got it off the thread while it is out, as the host draws the thread settled once it goes, and sends nothing on a second press. */
   readonly nodding?: string | undefined;
+  /** The key of the thread's start out, which a start that did not go stands under and Retry sends again, so its line steps aside while it goes. */
+  readonly startOut?: string | undefined;
+  /** The reply Edit took back into the box, by what it sends, which a send of the same goes under again, so a reply that landed unheard is taken once. */
+  readonly edited?: { readonly key: string; readonly words: string } | undefined;
 }
 
 /** A thread the app holds nothing of. */
@@ -158,6 +188,24 @@ function samePictures(one: readonly AgentAttachment[], other: readonly AgentAtta
   );
 }
 
+/** What a reply sends: its words and pictures, the answer it carries, and the notice's revision it settles. */
+interface ReplySent {
+  readonly text: string;
+  readonly attachments: readonly AgentAttachment[];
+  readonly answers?: InboxAnswers | undefined;
+  readonly revision?: number | undefined;
+}
+
+/** The words a reply is known by, which the same reply sent again after Edit is known by too, so it goes under the same key. */
+function sentWords({ text, attachments, answers }: ReplySent): string {
+  return JSON.stringify([text, attachments.map(({ name, data }) => [name, data]), answers]);
+}
+
+/** Whether a refusal the act threw is the host's or the service's, said in a sentence, rather than a send no answer came back for. */
+function heardRefusal(cause: unknown): boolean {
+  return actRefusalSentence(cause) !== undefined;
+}
+
 /** The draft a notification's action sends on the thread: its option on the ask it answers, while that ask is still the open one, or its words; none otherwise. */
 function pressedDraft(
   thread: readonly InboxMessage[],
@@ -187,11 +235,20 @@ export function pendingThreadFile(
   attachmentId: string,
   thread: readonly InboxMessage[] | undefined,
 ): InboxHeldFile | undefined {
-  const held = threads.read().get(itemId);
+  const sending = threads.read().get(itemId)?.sending.values() ?? [];
 
-  return held === undefined
-    ? undefined
-    : inboxSendingFile(held.sending.values(), attachmentId, thread);
+  // Note that a reply that did not go draws its pictures from the bytes it still holds, as one on its way does.
+  const undelivered = undeliveredOnItem(itemId).map(
+    (line): InboxSending => ({
+      kind: INBOX_SENDING.REPLY,
+      key: line.key,
+      text: line.text,
+      files: inboxSendingFiles(line.key, line.attachments),
+      at: line.at,
+    }),
+  );
+
+  return inboxSendingFile([...sending, ...undelivered], attachmentId, thread);
 }
 
 /** The store with the thread's holding changed as `change` says. */
@@ -267,7 +324,12 @@ export function useSendsDrawn<Group extends { readonly items: readonly InboxItem
 ): readonly Group[] {
   const store = useHeldValue(threads);
   const reader = useReader();
-  useEffect(() => letGoCarriedCloses(groups.flatMap((group) => group.items)), [groups]);
+  useEffect(() => {
+    const items = groups.flatMap((group) => group.items);
+    letGoCarriedCloses(items);
+    // Note that a reply that did not go is taken as sent once a read holds a message under its key, since one no answer came back for may have landed.
+    settleUndelivered(items);
+  }, [groups]);
 
   return useMemo(() => {
     if (store.size === 0) return groups;
@@ -287,6 +349,32 @@ export function useSendsDrawn<Group extends { readonly items: readonly InboxItem
       };
     });
   }, [groups, store, reader]);
+}
+
+/** A thread as it is drawn with the reader's replies on it that did not go, and those replies. */
+export interface UndeliveredShown {
+  /** The item with each reply that did not go at its thread's foot, as the reader's own message under its key (`withUndelivered`). */
+  readonly item: InboxItem;
+  /** The replies on it that did not go, in the order they failed, but for those a read holds under their keys already and one Retry has on its way, which stands on the thread as sending meanwhile. */
+  readonly lines: readonly UndeliveredReply[];
+}
+
+/** The reader's replies on `item` that did not go, and the item as its thread draws them, at its foot marked Not delivered. */
+export function useUndeliveredShown(item: InboxItem): UndeliveredShown {
+  const reader = useReader();
+  const all = useUndelivered(reader?.userId);
+  const held = useHeldValue(threads, (store) => store.get(item.id));
+
+  return useMemo(() => {
+    const out = (key: string) =>
+      held?.sending.has(key) === true ||
+      held?.startOut === key ||
+      (item.thread ?? []).some(({ id, clientKey }) => id === key || clientKey === key);
+
+    const lines = undeliveredOn(all, item.id, out);
+
+    return { item: withUndelivered(item, lines, reader), lines };
+  }, [item, all, held, reader]);
 }
 
 /* ----- Undo ----- */
@@ -388,6 +476,12 @@ export interface ThreadAnswer {
   readonly setAsNew: (asNew: boolean) => void;
   /** Starts a new thread with the thread's agent, the box's words its first message, and opens it once the service took it. */
   readonly start: () => void;
+  /** Sends a reply that did not go again under the key it went under; none where a relaunch took its pictures, which Edit attaches again. */
+  readonly retryUndelivered: (key: string) => void;
+  /** Takes a reply that did not go back into the box, ahead of what was typed since, to send again. */
+  readonly editUndelivered: (key: string) => void;
+  /** Lets go of a reply that did not go. */
+  readonly deleteUndelivered: (key: string) => void;
 }
 
 /** The new threads out, by the item's id, so a second start waits for the first's answer rather than racing it for the box's words. */
@@ -426,9 +520,8 @@ export function useThreadAnswer(
     [itemId],
   );
 
-  // A send let go once refused: its words and picks back on the box, ahead of nothing typed since, and the refusal said.
+  // A send let go once refused, for the resolve whose draft stands on the box: the draft back, ahead of nothing typed since, and the refusal said.
   const refuse = (key: string, sent: InboxDraft, words: string) => {
-    replyLetGo(key);
     hold(itemId, (was) => {
       const sending = new Map(was.sending);
       sending.delete(key);
@@ -439,6 +532,79 @@ export function useThreadAnswer(
 
       return { ...was, draft: typed, sending, note: words };
     });
+  };
+
+  // Note that a reply that did not go stays at the thread's foot under its key, never back in the box, with why: the refusal's words, which the box says too, or that no answer came back, which only its mark says.
+  const undelivered = (line: Omit<UndeliveredReply, "why">, words: string, heard: boolean) => {
+    replyLetGo(line.key);
+    hold(itemId, (was) => {
+      const sending = new Map(was.sending);
+      sending.delete(line.key);
+
+      return { ...was, sending, note: heard ? words : was.note };
+    });
+
+    if (readerId !== undefined)
+      keepUndelivered(readerId, { ...line, why: heard ? words : UNHEARD_UNDELIVERED });
+  };
+
+  // A reply sent under `key`, drawn at the thread's foot at once, and kept Not delivered where it did not go.
+  const sendReply = (sent: ReplySent, key: string, at: number) => {
+    replyPressed(key, sent.attachments.length > 0);
+    hold(itemId, (was) => ({
+      ...was,
+      note: undefined,
+      sending: new Map(was.sending).set(key, {
+        kind: INBOX_SENDING.REPLY,
+        key,
+        text: sent.text,
+        answers: sent.answers,
+        files: inboxSendingFiles(key, sent.attachments),
+        at,
+      }),
+    }));
+
+    const line = {
+      key,
+      taskId: listed.holder.task.id,
+      itemId,
+      text: sent.text,
+      attachments: sent.attachments,
+      files: sent.attachments.length,
+      answers: sent.answers,
+      revision: sent.revision,
+      at,
+    };
+
+    let heard = true;
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
+          itemId,
+          text: sent.text,
+          ...(sent.attachments.length === 0 ? undefined : { attachments: [...sent.attachments] }),
+          ...(sent.answers === undefined ? undefined : { answers: sent.answers }),
+          ...(sent.revision === undefined ? undefined : { revision: sent.revision }),
+          clientKey: key,
+        }).then(
+          (answer) => {
+            heard = !("failure" in answer) || answer.failure !== AGENT_CALL_FAILURE.UNANSWERED;
+
+            return answer;
+          },
+          (cause: unknown) => {
+            heard = heardRefusal(cause);
+            throw cause;
+          },
+        ),
+      {
+        refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
+        unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+        inPlace: (words) => undelivered(line, words, heard),
+        went: BUZZ.SUCCESS,
+        done: () => dropUndelivered(key),
+      },
+    );
   };
 
   const send = (pressed?: InboxDraft) => {
@@ -452,9 +618,9 @@ export function useThreadAnswer(
       return;
     }
 
-    const sent = inboxThreadSend(thread, sending);
+    const message = inboxThreadSend(thread, sending);
 
-    if (sent === undefined) {
+    if (message === undefined) {
       const missing = inboxMissing(thread, sending);
       hold(itemId, (was) => ({
         ...was,
@@ -465,40 +631,13 @@ export function useThreadAnswer(
       return;
     }
 
-    const key = randomUUID();
-    replyPressed(key, sent.attachments.length > 0);
-    const revision = awaitsNod(item) ? item.revision : undefined;
-    hold(itemId, (was) => ({
-      ...was,
-      draft: EMPTY_INBOX_DRAFT,
-      note: undefined,
-      sending: new Map(was.sending).set(key, {
-        kind: INBOX_SENDING.REPLY,
-        key,
-        text: sent.text,
-        answers: sent.answers,
-        files: inboxSendingFiles(key, sent.attachments),
-        at: Date.now(),
-      }),
-    }));
-    // A send refused says why on the box, where its words go back, rather than in the notice.
-    write(
-      () =>
-        acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
-          itemId,
-          text: sent.text,
-          ...(sent.attachments.length === 0 ? undefined : { attachments: [...sent.attachments] }),
-          ...(sent.answers === undefined ? undefined : { answers: sent.answers }),
-          ...(revision === undefined ? undefined : { revision }),
-          clientKey: key,
-        }),
-      {
-        refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
-        unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        inPlace: (words) => refuse(key, sending, words),
-        went: BUZZ.SUCCESS,
-      },
-    );
+    const sent = { ...message, revision: awaitsNod(item) ? item.revision : undefined };
+    // Note that the reply Edit took back, sent again as it was, goes under the key it went under, so one that landed unheard is taken once.
+    const edited = threads.read().get(itemId)?.edited;
+    const key = edited?.words === sentWords(sent) ? edited.key : randomUUID();
+    // Note that the box lets go of what it sent at once and never takes it back.
+    hold(itemId, ({ edited: _sent, ...was }) => ({ ...was, draft: EMPTY_INBOX_DRAFT }));
+    sendReply(sent, key, Date.now());
   };
 
   const resolve = () => {
@@ -595,12 +734,77 @@ export function useThreadAnswer(
     [itemId],
   );
 
-  // Note that the same words and pictures sent again go under the key they went under, so a retry starts one thread, and a start whose pictures changed goes under a new key, which the service would refuse under the old one. The box lets go of its words at once, as a reply does, and a start refused puts them back ahead of nothing typed since. One start is out at a time, as one Got it is, so a refusal never puts back words a later start sent.
+  // A thread's start under `key`, its words and pictures the new thread's first message, kept Not delivered where it did not go and opened once the service took it. One start is out at a time, as one Got it is.
+  const startUnder = (text: string, attachments: readonly AgentAttachment[], key: string) => {
+    if (starting.has(itemId)) return;
+    starting.add(itemId);
+    const at = undeliveredLine(key)?.at ?? Date.now();
+    let startedId: string | undefined;
+    let heard = true;
+    hold(itemId, (was) => ({
+      ...was,
+      note: undefined,
+      started: { key, words: text, attachments },
+      startOut: key,
+    }));
+    void write(
+      () =>
+        acts[ACT_KIND.AGENTS_INBOX_START]({
+          agentId: item.agentId,
+          text,
+          ...(attachments.length === 0 ? undefined : { attachments: [...attachments] }),
+          clientKey: key,
+        }).then(
+          (answer) => {
+            if (!("failure" in answer)) startedId = answer.item.id;
+            else heard = answer.failure !== AGENT_CALL_FAILURE.UNANSWERED;
+
+            return answer;
+          },
+          (cause: unknown) => {
+            heard = heardRefusal(cause);
+            throw cause;
+          },
+        ),
+      {
+        refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
+        unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+        // Note that a start that did not go stays on the thread marked as a new thread, never back in the box, so a later Send never posts its words as a reply.
+        inPlace: (words) => {
+          hold(itemId, (was) => ({ ...was, note: heard ? words : was.note }));
+
+          if (readerId === undefined) return;
+          keepUndelivered(readerId, {
+            key,
+            taskId: listed.holder.task.id,
+            itemId,
+            text,
+            attachments,
+            files: attachments.length,
+            at,
+            why: heard ? words : UNHEARD_UNDELIVERED,
+            startsThread: true,
+          });
+        },
+        went: BUZZ.SUCCESS,
+        done: () => dropUndelivered(key),
+      },
+    ).then((went) => {
+      starting.delete(itemId);
+      hold(itemId, ({ startOut: _out, ...was }) => was);
+
+      if (!went || startedId === undefined || threads.read().get(itemId)?.started?.key !== key)
+        return;
+      hold(itemId, ({ started: _sent, ...was }) => ({ ...was, asNew: false }));
+      onStarted?.(startedId);
+    });
+  };
+
+  // Note that the same words and pictures sent again go under the key they went under, so a retry starts one thread, and a start whose pictures changed goes under a new key, which the service would refuse under the old one. The box lets go of its words at once, as a reply does.
   const start = () => {
     const text = draft.note.trim();
 
     if (text === "" || starting.has(itemId)) return;
-    starting.add(itemId);
     // The pictures the box holds go as the new thread's first message's, as the panel's start carries its files.
     const { attachments } = draft;
     const before = threads.read().get(itemId)?.started;
@@ -610,50 +814,41 @@ export function useThreadAnswer(
         ? before.key
         : randomUUID();
 
-    let startedId: string | undefined;
+    hold(itemId, (was) => ({ ...was, draft: { ...was.draft, note: "", attachments: [] } }));
+    startUnder(text, attachments, key);
+  };
+
+  // Note that a reply goes again after whatever is on its way, as it was, under the key it went under; one a relaunch took the pictures from never goes without them.
+  const retryUndelivered = (key: string) => {
+    const line = undeliveredLine(key);
+
+    if (line === undefined || filesLost(line)) return;
+
+    if (line.startsThread === true) {
+      startUnder(line.text, line.attachments, key);
+
+      return;
+    }
+
+    if (threads.read().get(itemId)?.sending.has(key) === true) return;
+    sendReply(line, key, line.at);
+  };
+
+  // Note that the words taken back and sent again as they were go under the key they went under, so one that landed unheard is taken once; a thread's start goes back as one, the box turned to start a thread.
+  const editUndelivered = (key: string) => {
+    const line = undeliveredLine(key);
+
+    if (line === undefined) return;
+    dropUndelivered(key);
+    const went = undeliveredDraft(thread, line);
     hold(itemId, (was) => ({
       ...was,
-      draft: { ...was.draft, note: "", attachments: [] },
+      draft: undeliveredTakenBack(was.draft, went),
       note: undefined,
-      started: { key, words: text, attachments },
+      ...(line.startsThread === true
+        ? { asNew: true, started: { key, words: line.text, attachments: line.attachments } }
+        : { edited: { key, words: sentWords(line) } }),
     }));
-    void write(
-      () =>
-        acts[ACT_KIND.AGENTS_INBOX_START]({
-          agentId: item.agentId,
-          text,
-          ...(attachments.length === 0 ? undefined : { attachments: [...attachments] }),
-          clientKey: key,
-        }).then((answer) => {
-          if (!("failure" in answer)) startedId = answer.item.id;
-
-          return answer;
-        }),
-      {
-        refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
-        unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        // Note that the words and pictures go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
-        inPlace: (words) =>
-          hold(itemId, (was) =>
-            was.draft.note.trim() === "" && was.draft.attachments.length === 0
-              ? {
-                  ...was,
-                  asNew: true,
-                  draft: { ...was.draft, note: draft.note, attachments },
-                  note: words,
-                }
-              : { ...was, note: words },
-          ),
-        went: BUZZ.SUCCESS,
-      },
-    ).then((went) => {
-      starting.delete(itemId);
-
-      if (!went || startedId === undefined || threads.read().get(itemId)?.started?.key !== key)
-        return;
-      hold(itemId, ({ started: _sent, ...was }) => ({ ...was, asNew: false }));
-      onStarted?.(startedId);
-    });
   };
 
   // A notification's action held for this thread, taken once and sent as though pressed here.
@@ -680,5 +875,8 @@ export function useThreadAnswer(
     asNew,
     setAsNew,
     start,
+    retryUndelivered,
+    editUndelivered,
+    deleteUndelivered: dropUndelivered,
   };
 }

@@ -6,6 +6,7 @@ import {
   Menu,
   RNHostView,
   ScrollView,
+  Section,
   Spacer,
   Button as SwiftUIButton,
   Text,
@@ -30,6 +31,7 @@ import {
   padding,
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
+import { UNDELIVERED_WORDS } from "@repo/features/inbox-undelivered";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -146,6 +148,21 @@ export type ThreadMessage = {
   readonly after?: readonly ThreadEvent[] | undefined;
   /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
+  /** That the reader sent it and it did not go, which it says under its words with what mends it; none for a message that went. */
+  readonly undelivered?: ThreadUndelivered | undefined;
+};
+
+/** A message of the reader's that did not go, as its mark says it and offers what mends it, as the panel's Not delivered does. */
+export type ThreadUndelivered = {
+  /** Why it did not go, which heads its mark's menu. */
+  readonly why: string;
+  /** Whether it was to start a new thread with the agent rather than reply here. */
+  readonly newThread: boolean;
+  /** Sends it again under the key it went under; none where it cannot go as it stands, such as one a relaunch took the pictures from. */
+  readonly onRetry?: (() => void) | undefined;
+  /** Takes it back into the box. */
+  readonly onEdit: () => void;
+  readonly onDelete: () => void;
 };
 
 /** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
@@ -353,6 +370,9 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
   }
 }
 
+/** The role of the act that takes a message away, which the system draws in red. */
+const DELETE_ROLE = "destructive";
+
 /** What a sent answer's mark is heard as: it went ahead with what was asked, or held back. */
 const STAMP_HEARD = { AHEAD: "Went ahead", HELD: "Held back" } as const;
 
@@ -494,6 +514,65 @@ function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["
   );
 }
 
+/**
+ * A message of the reader's that did not go, marked under its words where
+ * they start, as Messages marks one: the alert and "Not delivered" in the
+ * danger ink, after "New thread" for a thread's start, whose press opens
+ * the system's menu headed by why, with Retry, Edit, and Delete in red.
+ */
+function UndeliveredMark({ undelivered }: { readonly undelivered: ThreadUndelivered }) {
+  const colors = useColors();
+
+  const words = undelivered.newThread
+    ? `${UNDELIVERED_WORDS.NEW_THREAD} · ${UNDELIVERED_WORDS.NOT_DELIVERED}`
+    : UNDELIVERED_WORDS.NOT_DELIVERED;
+
+  const label = (
+    <HStack spacing={SPACE.TIGHT + 2}>
+      <Image
+        {...glyphImage(GLYPH.FAILED)}
+        size={MARK_SIZE.GLYPH - 2}
+        color={colors.DANGER}
+        modifiers={[accessibilityHidden(true)]}
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+          foregroundStyle(colors.DANGER_TEXT),
+        ]}
+      >
+        {words}
+      </Text>
+    </HStack>
+  );
+
+  // Note that the mark is heard as what it says and why, and its press opens the menu, as a VoiceOver reader expects of a button.
+  return (
+    <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+      <Menu label={label} modifiers={[accessibilityLabel(`${words}. ${undelivered.why}`)]}>
+        <Section title={undelivered.why}>
+          {undelivered.onRetry === undefined ? null : (
+            <SwiftUIButton
+              {...actContent(UNDELIVERED_WORDS.RETRY, GLYPH.RETRY)}
+              onPress={undelivered.onRetry}
+            />
+          )}
+          <SwiftUIButton
+            {...actContent(UNDELIVERED_WORDS.EDIT, GLYPH.EDIT_MESSAGE)}
+            onPress={undelivered.onEdit}
+          />
+        </Section>
+        <SwiftUIButton
+          {...actContent(UNDELIVERED_WORDS.DELETE, GLYPH.DELETE)}
+          role={DELETE_ROLE}
+          onPress={undelivered.onDelete}
+        />
+      </Menu>
+      <Spacer />
+    </HStack>
+  );
+}
+
 /** One message, flat on the page: the writer's face or tile, name in the row line's style, semibold, and time where it leads its run, and under them its words and files. */
 function MessageView({
   message,
@@ -616,6 +695,9 @@ function MessageView({
             )}
           </View>
         </RNHostView>
+        {message.undelivered === undefined ? null : (
+          <UndeliveredMark undelivered={message.undelivered} />
+        )}
       </VStack>
     </CopyWordsSwiftMenu>
   );
