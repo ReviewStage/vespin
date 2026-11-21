@@ -10,7 +10,7 @@ appId: dev.vespin.ios
 # Launched on the host's Inbox fixture with `-refuseWrites true`, opened on
 # its invitations agent's page as `compose.yaml` is, so the fixture leaves
 # each message to the agent unanswered and keeps it as the host keeps a
-# refused line (`src/host/fixture-host.ts`'s `keepRefusedSend`); nothing
+# refused line (`src/host/fixture-host.ts`'s `keepSend`); nothing
 # reaches a server. Note that the value is quoted, as `failure-notice.yaml`
 # says why.
 - launchApp:
