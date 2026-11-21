@@ -11,9 +11,24 @@
  * binds one, by moving the task the list holds open and staging the
  * window's document again (`fixture-moves.ts`), and a close leaves it.
  * Every name, path, and line here is invented.
+ *
+ * An address naming `scale=large` beside the profile (`?fixture=tasks-open&scale=large`)
+ * lists as many tasks and agents again as a real account's at its largest
+ * (`LARGE`): 3,200 light tasks, 5,400 agents, and a Manager that started some
+ * of them, the first few of the tasks sub-tasks of the task open. One row
+ * moves on a timer as an agent at work moves it, so what a step costs the
+ * window can be timed (`tools/bench/README.md`): `move` names the row, a
+ * background agent's (`agent`, the default), the open task's agent its tab
+ * shows (`shown-agent`) or another of its agents (`task-agent`), a
+ * background task's own as its agents' turns start and end (`task`), the
+ * open task's first sub-task's the same way (`sub-task`), or none
+ * (`none`), and `every` how many milliseconds apart, 0 for no timer. A bench
+ * steps it itself through `vespinFixtureStep()` on the page, so each step is
+ * timed alone.
  */
 
 import {
+  AGENT_KIND,
   AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentTranscriptMessage,
@@ -22,6 +37,7 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
 import type { ListedTasksView, TasksView } from "@repo/features/tasks-view";
+import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppStateSnapshot,
@@ -31,6 +47,7 @@ import {
 } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload, PortActResult } from "@repo/host/contract";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
+import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { fixtureMoved } from "./fixture-moves.js";
 
@@ -53,6 +70,50 @@ const HOUR = 60 * MINUTE;
 
 /** When the tasks were last moved, counted back from the moment the chunk landed, as the Inbox fixture counts. */
 const LANDED = Date.now();
+
+/** How big the large stage is, and how it moves (`LARGE_PARAMETER`). */
+const LARGE = {
+  /** The light tasks listed beside the profile's own. */
+  TASKS: 3200,
+  /** Of every 16 light tasks, how many hold two agents rather than one, so the 3,200 hold 5,400. */
+  TWO_AGENTS_OF_16: 11,
+  /** The light tasks at the head of the list that are sub-tasks of the task open. */
+  SUB_TASKS: 6,
+  /** Of every so many light tasks, the one whose first agent the Manager started. */
+  MANAGED_EVERY: 20,
+  /** Of every so many light tasks, the one whose first agent is at work. */
+  WORKING_EVERY: 8,
+  /** How many milliseconds apart the row named moves, where the address names none; 0 for no timer. */
+  EVERY: 400,
+} as const;
+
+/** The address's words for the large stage. */
+const LARGE_PARAMETER = {
+  SCALE: "scale",
+  MOVE: "move",
+  EVERY: "every",
+} as const;
+
+/** The scale that asks for the large stage. */
+const SCALE_LARGE = "large";
+
+/** The row the large stage moves on each step. */
+const LARGE_MOVE = {
+  /** A background task's first agent: its row moves, as each step of its turn moves it. */
+  AGENT: "agent",
+  /** The open task's first agent, at work, whose tab the task opens on. */
+  SHOWN_AGENT: "shown-agent",
+  /** The open task's second agent, whose tab stands beside the shown one. */
+  TASK_AGENT: "task-agent",
+  /** A background task's own row: its agents' turn starts, then ends, by turns. */
+  TASK: "task",
+  /** The open task's first sub-task's own row, moved as a background task's is, in view on its Overview. */
+  SUB_TASK: "sub-task",
+  /** Nothing moves. */
+  NONE: "none",
+} as const;
+
+type LargeMove = (typeof LARGE_MOVE)[keyof typeof LARGE_MOVE];
 
 /** The account signed in, as the Inbox fixture signs it in. */
 const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
@@ -317,6 +378,207 @@ const AGENTS: readonly ListedAgent[] = INDEXES.flatMap((index) =>
   Array.from({ length: OPEN_TASKS.AGENTS }, (_, at) => agentAt(index, at)),
 );
 
+/** What the address asks of the large stage: none where it names no `scale=large`, as in a desktop run. */
+function largeAsked(): { readonly move: LargeMove; readonly every: number } | undefined {
+  const search = typeof location === "undefined" ? "" : location.search;
+  const asked = new URLSearchParams(search);
+
+  if (asked.get(LARGE_PARAMETER.SCALE) !== SCALE_LARGE) return undefined;
+  const named = asked.get(LARGE_PARAMETER.MOVE);
+  const move = Object.values(LARGE_MOVE).find((each) => each === named) ?? LARGE_MOVE.AGENT;
+  const every = Number(asked.get(LARGE_PARAMETER.EVERY) ?? LARGE.EVERY);
+
+  return { move, every: Number.isFinite(every) && every >= 0 ? every : LARGE.EVERY };
+}
+
+/** The Manager of the large stage, which started some of its agents and works on no task. */
+const LARGE_MANAGER: ListedAgent = {
+  id: fixtureUuid(5, 0),
+  taskId: null,
+  model: MODEL,
+  effort: "high",
+  title: "Bench manager",
+  kind: AGENT_KIND.MANAGER,
+  createdAt: LANDED - 30 * 24 * HOUR,
+  status: AGENT_STATUS.COMPLETED,
+  turnId: null,
+  startedBy: ADA,
+  runtime: AGENT_RUNTIME.CLAUDE_CODE,
+  workspaceId: FIXTURE_IDS.WORKSPACE,
+  repository: REPOSITORY,
+  settledAt: LANDED - HOUR,
+};
+
+/** The light task at `index` of the large stage: a row the list carries, never opened. */
+function largeTaskAt(index: number): TaskSummary {
+  const agents = index % 16 < LARGE.TWO_AGENTS_OF_16 ? 2 : 1;
+  const at = LANDED - (OPEN_TASKS.TASKS + index + 2) * 6 * MINUTE;
+
+  return {
+    id: fixtureUuid(3, index),
+    workspaceId: FIXTURE_IDS.WORKSPACE,
+    name: `${subjectAt(index)}: step ${index + 1}`,
+    createdAt: at,
+    updatedAt: at + MINUTE,
+    repository: REPOSITORY,
+    priority: TASK_PRIORITY.MEDIUM,
+    status: index % 3 === 0 ? TASK_STATUS.DONE : TASK_STATUS.IN_PROGRESS,
+    number: 1000 + index,
+    ownerId: ADA.userId,
+    createdBy: ADA,
+    assignee: ADA,
+    blockedBy: [],
+    blocks: [],
+    ...(index < LARGE.SUB_TASKS ? { parentTaskId: taskIdAt(0) } : undefined),
+    agents: {
+      total: agents,
+      working: index % LARGE.WORKING_EVERY === 0 ? 1 : 0,
+      activityAt: at + MINUTE,
+      pullRequestTotal: 0,
+    },
+  };
+}
+
+/** The agent at `at` of the large stage's light task `task`. */
+function largeAgentOf(task: TaskSummary, index: number, at: number): ListedAgent {
+  const running = at === 0 && index % LARGE.WORKING_EVERY === 0;
+  const startedAt = task.createdAt + at * MINUTE;
+
+  return {
+    id: fixtureUuid(4, index * 2 + at),
+    taskId: task.id,
+    model: MODEL,
+    effort: "high",
+    title: `${task.name} (${at + 1})`,
+    createdAt: startedAt,
+    status: running ? AGENT_STATUS.RUNNING : AGENT_STATUS.COMPLETED,
+    turnId: null,
+    runStartedAt: startedAt,
+    startedBy: ADA,
+    ...(at === 0 && index % LARGE.MANAGED_EVERY === 0
+      ? { startedByAgentId: LARGE_MANAGER.id }
+      : undefined),
+    runtime: AGENT_RUNTIME.CLAUDE_CODE,
+    workspaceId: FIXTURE_IDS.WORKSPACE,
+    repository: REPOSITORY,
+    ...(running ? undefined : { settledAt: startedAt + HOUR }),
+  };
+}
+
+/** The workspaces staged with the large stage, Managers on in the fixture's own so its Manager's page draws its overview, one array for each list's. */
+const MANAGED_WORKSPACES = new WeakMap<readonly Workspace[], readonly Workspace[]>();
+
+/** `workspaces` with Managers turned on in the fixture's own, as its owner would turn it on. */
+function managedWorkspaces(workspaces: readonly Workspace[]): readonly Workspace[] {
+  const kept = MANAGED_WORKSPACES.get(workspaces);
+
+  if (kept !== undefined) return kept;
+
+  const managers = {
+    experiment: EXPERIMENT.MANAGERS,
+    on: true,
+    changedBy: { id: ADA.userId, name: ADA.name },
+    changedAt: LANDED - 30 * 24 * HOUR,
+  };
+
+  const laid = workspaces.map((workspace) =>
+    workspace.id === FIXTURE_IDS.WORKSPACE
+      ? {
+          ...workspace,
+          experiments: [
+            ...(workspace.experiments ?? []).filter(
+              (each) => each.experiment !== EXPERIMENT.MANAGERS,
+            ),
+            managers,
+          ],
+        }
+      : workspace,
+  );
+
+  MANAGED_WORKSPACES.set(workspaces, laid);
+
+  return laid;
+}
+
+/** The large stage as it stands: its rows and the profile's own agents, moved in place by each step, and how many steps it took. */
+interface LargeStage {
+  readonly tasks: TaskSummary[];
+  readonly agents: ListedAgent[];
+  readonly own: ListedAgent[];
+  steps: number;
+}
+
+/** The large stage, made the first time a list is staged under an address asking for it. */
+let large: LargeStage | undefined;
+
+/** The large stage's rows, made once, and the timer moving the row the address names. */
+function largeStage(): LargeStage | undefined {
+  if (large !== undefined) return large;
+  const asked = largeAsked();
+
+  if (asked === undefined) return undefined;
+  const tasks = Array.from({ length: LARGE.TASKS }, (_, index) => largeTaskAt(index));
+
+  const agents = [
+    LARGE_MANAGER,
+    ...tasks.flatMap((task, index) =>
+      Array.from({ length: task.agents?.total ?? 0 }, (_, at) => largeAgentOf(task, index, at)),
+    ),
+  ];
+
+  const stage: LargeStage = { tasks, agents, own: [...AGENTS], steps: 0 };
+  large = stage;
+
+  const step = () => largeStep(stage, asked.move);
+  // Note that a bench takes each step itself, so it times one at a time (`tools/bench`).
+  Object.assign(globalThis, { vespinFixtureStep: step });
+
+  if (asked.move !== LARGE_MOVE.NONE && asked.every > 0) setInterval(step, asked.every);
+
+  return stage;
+}
+
+/**
+ * Moves the row `move` names one step, as the service's delivery moves it:
+ * an agent's start of its run by a millisecond, as each step of a turn
+ * moves its row and nothing a list draws of it, or a background task's
+ * agents' turn starting, then ending, by turns, its activity moved as it
+ * ends; then stages the window's document again.
+ */
+function largeStep(stage: LargeStage, move: LargeMove): void {
+  if (move === LARGE_MOVE.NONE) return;
+  stage.steps += 1;
+
+  if (move === LARGE_MOVE.TASK || move === LARGE_MOVE.SUB_TASK) {
+    const at = move === LARGE_MOVE.TASK ? stage.tasks.length - 1 : 0;
+    const task = stage.tasks[at];
+
+    if (task?.agents === undefined) return;
+    const starts = stage.steps % 2 === 1;
+
+    stage.tasks[at] = {
+      ...task,
+      agents: {
+        ...task.agents,
+        working: starts ? 1 : 0,
+        ...(starts ? undefined : { activityAt: LANDED + stage.steps }),
+      },
+    };
+  } else {
+    // Note that the open task's agents are the profile's own, staged from a copy the stage keeps.
+    const own = move === LARGE_MOVE.SHOWN_AGENT || move === LARGE_MOVE.TASK_AGENT;
+    const rows = own ? stage.own : stage.agents;
+    const id = own ? agentIdAt(0, move === LARGE_MOVE.SHOWN_AGENT ? 0 : 1) : rows.at(-1)?.id;
+    const at = rows.findIndex((agent) => agent.id === id);
+    const agent = rows[at];
+
+    if (agent === undefined) return;
+    rows[at] = { ...agent, runStartedAt: (agent.runStartedAt ?? 0) + 1 };
+  }
+
+  fixtureMoved();
+}
+
 /** Each task's description as main holds it once read, by task. */
 const DOCUMENTS: AppStateSnapshot[typeof LIVE_READ.HELD_TASK] = Object.fromEntries(
   TASK_ROWS.map((row, index): [string, { readonly rows: { readonly task: Task } }] => {
@@ -345,7 +607,10 @@ const TRANSCRIPTS: AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT] = Object.fromEn
 let opened: string | undefined = taskIdAt(0);
 
 /** The lists staged, one object for each list handed in and task open, as a staged list must be. */
-const STAGED_LISTS = new WeakMap<ListedTasksView, Map<string | undefined, ListedTasksView>>();
+const STAGED_LISTS = new WeakMap<
+  ListedTasksView,
+  Map<string | undefined, { readonly steps: number; readonly view: ListedTasksView }>
+>();
 
 /** Whether the profile opens the task a select names, as a signed-in account's window does; every other profile binds its own. */
 export function opensTasks(profile: string): boolean {
@@ -362,19 +627,22 @@ export function openTasksView(profile: string, list: ListedTasksView): ListedTas
     STAGED_LISTS.set(list, byOpen);
   }
 
+  const stage = largeStage();
+  const steps = stage?.steps ?? 0;
   const kept = byOpen.get(opened);
 
-  if (kept !== undefined) return kept;
+  if (kept !== undefined && kept.steps === steps) return kept.view;
   const { activeTaskId: _open, ...rest } = list;
 
   const laid: ListedTasksView = {
     ...rest,
-    tasks: [...TASK_ROWS, ...list.tasks],
-    taskAgents: [...AGENTS, ...(list.taskAgents ?? [])],
+    ...(stage === undefined ? undefined : { workspaces: managedWorkspaces(list.workspaces) }),
+    tasks: [...TASK_ROWS, ...(stage?.tasks ?? []), ...list.tasks],
+    taskAgents: [...(stage?.own ?? AGENTS), ...(stage?.agents ?? []), ...(list.taskAgents ?? [])],
     ...(opened === undefined ? undefined : { activeTaskId: opened }),
   };
 
-  byOpen.set(opened, laid);
+  byOpen.set(opened, { steps, view: laid });
 
   return laid;
 }
