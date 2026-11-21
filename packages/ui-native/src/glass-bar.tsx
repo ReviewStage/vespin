@@ -261,6 +261,7 @@ export function GlassBar({
   above,
   modifiers = [],
   field = false,
+  heads = false,
 }: {
   readonly children: ReactNode;
   /** What stands under the row inside the same glass, such as the capsules saying where a start runs; nothing where none is given. */
@@ -273,6 +274,8 @@ export function GlassBar({
   readonly head?: ReactNode;
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
   readonly modifiers?: readonly ModifierConfig[];
+  /** Whether a head may come and go over a row that must never be drawn anew, such as a field of pills holding the keyboard: the bar then keeps the column a head stands in even while none does. */
+  readonly heads?: boolean;
 }) {
   const ground = useFieldGround(PRESS_SIZE / 2);
   const pill = field ? ground : [];
@@ -284,7 +287,8 @@ export function GlassBar({
     ...BAR_GLASS,
   ];
 
-  const alone = head === undefined && foot === undefined;
+  // Note that a bar whose head comes and goes keeps one shape, because a row moved into a column is drawn anew, and a field drawn anew lets go of the keyboard between one key and the next.
+  const alone = !heads && head === undefined && foot === undefined;
   const rowModifiers = alone ? [...modifiers, ...pill, ...glass] : [...pill];
 
   // Note that a row over a foot holds the field alone, so it stands in a column that hands it the bar's width as it is, rather than a row that sizes the field's text view again for each width it tries.

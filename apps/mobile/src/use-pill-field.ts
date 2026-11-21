@@ -29,7 +29,7 @@ export interface PillFieldHeld {
 export function usePillField(
   words: string,
   onWords: (words: string) => void,
-  pictures: AttachedPictures,
+  pictures: Pick<AttachedPictures, "attached" | "detach">,
 ): PillFieldHeld {
   const field = useRef<PillFieldHandle>(null);
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
