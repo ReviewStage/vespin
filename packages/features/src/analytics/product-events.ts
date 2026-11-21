@@ -54,6 +54,8 @@ export const PRODUCT_EVENT = {
   APP_READY: "app:ready",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
+  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand, each on a rung, its kind, and whether it was the first of its kind since launch. */
+  OPEN_DRAWN: "open:drawn",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -76,6 +78,7 @@ export const PRODUCT_SURFACE_EVENT = {
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
   APP_READY: PRODUCT_EVENT.APP_READY,
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
+  OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -125,6 +128,8 @@ export const PRODUCT_EVENT_PROPERTY = {
   APP_BUILD: "app_build",
   FIRST_ROWS: "first_rows",
   READY_AFTER: "ready_after",
+  START_MS: "start_ms",
+  OPEN_ORDER: "open_order",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -497,10 +502,11 @@ export function productLaunchSeconds(milliseconds: number): ProductLaunchSeconds
 }
 
 /**
- * The rungs a reply travels on, in milliseconds from its Send to its standing
- * in its thread, each the shortest wait that reaches it: fine through the
- * first second, where a send feels instant or slow, and coarse past it, for
- * the reason a wait travels on rungs.
+ * The rungs a wait to draw travels on, in milliseconds from a press to what
+ * it asked standing, a reply in its thread or a page pushed open, each the
+ * shortest wait that reaches it: fine through the first second, where a
+ * press feels instant or slow, and coarse past it, for the reason a wait
+ * travels on rungs.
  */
 const PRODUCT_DRAWN_MS = {
   UNDER_100: 0,
@@ -521,7 +527,7 @@ const PRODUCT_DRAWN_LADDER: readonly ProductDrawnMilliseconds[] = Object.values(
   PRODUCT_DRAWN_MS,
 ).sort((left, right) => right - left);
 
-/** The highest rung a send's wait in milliseconds reaches; anything under the first rung, or a wait that is no number, is the first. */
+/** The highest rung a wait in milliseconds reaches; anything under the first rung, or a wait that is no number, is the first. */
 export function productDrawnMilliseconds(milliseconds: number): ProductDrawnMilliseconds {
   if (!Number.isFinite(milliseconds)) return PRODUCT_DRAWN_MS.UNDER_100;
 
@@ -535,6 +541,14 @@ export const PRODUCT_REPLY_KIND = {
 } as const;
 
 export type ProductReplyKind = (typeof PRODUCT_REPLY_KIND)[keyof typeof PRODUCT_REPLY_KIND];
+
+/** Whether a page pushed open was the first of its kind since the app launched, which draws kinds it has not drawn before, or a later one. */
+export const PRODUCT_OPEN_ORDER = {
+  FIRST: "first",
+  LATER: "later",
+} as const;
+
+export type ProductOpenOrder = (typeof PRODUCT_OPEN_ORDER)[keyof typeof PRODUCT_OPEN_ORDER];
 
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
@@ -569,6 +583,8 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: ProductReadyAfter;
+  [PRODUCT_EVENT_PROPERTY.START_MS]: ProductDrawnMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: ProductOpenOrder;
 }
 
 /**
@@ -586,6 +602,7 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.DRAWN_MS
+  | typeof PRODUCT_EVENT_PROPERTY.START_MS
   | typeof PRODUCT_EVENT_PROPERTY.STANDING_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS
@@ -615,6 +632,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
+  [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: Object.values(PRODUCT_OPEN_ORDER),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -661,6 +679,12 @@ const PRODUCT_EVENT_PROPERTIES = {
   ],
   [PRODUCT_EVENT.APP_READY]: [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS],
   [PRODUCT_EVENT.REPLY_DRAWN]: [PRODUCT_EVENT_PROPERTY.DRAWN_MS, PRODUCT_EVENT_PROPERTY.REPLY_KIND],
+  [PRODUCT_EVENT.OPEN_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.SURFACE,
+    PRODUCT_EVENT_PROPERTY.START_MS,
+    PRODUCT_EVENT_PROPERTY.DRAWN_MS,
+    PRODUCT_EVENT_PROPERTY.OPEN_ORDER,
+  ],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 
 /**
@@ -683,6 +707,7 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
     PRODUCT_EVENT_PROPERTY.READY_AFTER,
   ],
+  [PRODUCT_EVENT.OPEN_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
 } as const satisfies { readonly [Name in ProductEventName]?: readonly ProductEventProperty[] };
 
 /** The properties `Name` may leave off; none for an event with no entry. */
@@ -871,6 +896,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: elapsedReader,
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: drawnReader,
+  [PRODUCT_EVENT_PROPERTY.START_MS]: drawnReader,
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS]: launchReader,
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS]: launchReader,

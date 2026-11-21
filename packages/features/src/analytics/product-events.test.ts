@@ -5,8 +5,10 @@ import {
   PRODUCT_EVENT_PROPERTY,
   PRODUCT_EXPERIMENT,
   PRODUCT_EXPERIMENT_SCOPE,
+  PRODUCT_OPEN_ORDER,
   PRODUCT_REPLY_KIND,
   PRODUCT_SETTING_VALUE,
+  PRODUCT_SURFACE,
   productDrawnMilliseconds,
   productEventBuildFromWire,
   productEventFromWire,
@@ -238,6 +240,47 @@ test("a reply's wait to stand in its thread travels on a rung, with what it carr
       properties: {
         [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 640,
         [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: PRODUCT_REPLY_KIND.WORDS,
+      },
+    }),
+    undefined,
+  );
+});
+
+test("a page's open travels its waits on rungs with its kind and order, never which page or the raw time", () => {
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.OPEN_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.SURFACE]: PRODUCT_SURFACE.THREAD,
+        [PRODUCT_EVENT_PROPERTY.START_MS]: 800,
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 1300,
+        [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.FIRST,
+        [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "76",
+        threadId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.OPEN_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.SURFACE]: PRODUCT_SURFACE.THREAD,
+        [PRODUCT_EVENT_PROPERTY.START_MS]: 800,
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 1300,
+        [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.FIRST,
+        [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "76",
+      },
+    },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.OPEN_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.SURFACE]: PRODUCT_SURFACE.TASK,
+        [PRODUCT_EVENT_PROPERTY.START_MS]: 212,
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 800,
+        [PRODUCT_EVENT_PROPERTY.OPEN_ORDER]: PRODUCT_OPEN_ORDER.LATER,
       },
     }),
     undefined,
