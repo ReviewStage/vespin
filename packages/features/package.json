@@ -69,6 +69,7 @@
     "./client-identity": "./src/client-identity.js",
     "./live-wire": "./src/live-wire.js",
     "./tasks-model": "./src/tasks-model.js",
+    "./tasks-page-model": "./src/tasks-page-model.js",
     "./transcript-copy": "./src/transcript-copy.js",
     "./transcript-lines": "./src/transcript-lines.js",
     "./voice-call-lines": "./src/voice-call-lines.js",

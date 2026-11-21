@@ -19,6 +19,18 @@ import {
 } from "@repo/features/task-wire";
 import { RENAME_FAILED_NOTE, repositoryPageUrl } from "@repo/features/tasks-model";
 import {
+  COMPLETED_WINDOW,
+  mayHoldSettled,
+  settledRowsDrawn,
+  TASK_PROPERTY,
+  TASKS_GROUP,
+  type TaskProperty,
+  type TasksGroup,
+  type TasksGroupHead,
+  taskIdOf,
+  tasksBoardColumns,
+} from "@repo/features/tasks-page-model";
+import {
   noneYetWords,
   REFRESH_FAILED_WORDS,
   readFailedWords,
@@ -97,18 +109,6 @@ import {
 import { actorName } from "@repo/ui/actor-model";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  COMPLETED_WINDOW,
-  mayHoldSettled,
-  settledRowsDrawn,
-  TASK_PROPERTY,
-  TASKS_GROUP,
-  type TaskProperty,
-  type TasksGroup,
-  type TasksGroupHead,
-  taskIdOf,
-  tasksBoardColumns,
-} from "@repo/ui/tasks-page-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import {
   useVirtualRuns,

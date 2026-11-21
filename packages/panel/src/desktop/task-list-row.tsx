@@ -16,6 +16,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { RENAME_FAILED_NOTE } from "@repo/features/tasks-model";
+import { statusOf } from "@repo/features/tasks-page-model";
 import { taskKey } from "@repo/features/workspace-key";
 import {
   ANNOUNCE,
@@ -39,7 +40,6 @@ import {
 } from "@repo/ui";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
-import { statusOf } from "@repo/ui/tasks-page-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation } from "@tanstack/react-query";
