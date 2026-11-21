@@ -44,3 +44,33 @@ export function useCloseSheet(kept?: Pick<KeptWords, "asking">): () => void {
     });
   }, [router]);
 }
+
+/**
+ * Closes the sheet as `useCloseSheet` does, once its fields let go of the
+ * keyboard, and then runs `after`, such as opening the page a sheet made,
+ * so the page is pushed on the tabs rather than inside the sheet closing.
+ * Nothing runs where the sheet has already gone.
+ */
+export function useCloseSheetThen(): (after: () => void) => void {
+  const router = useRouter();
+  const standing = useRef(true);
+
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
+
+  return useCallback(
+    (after) => {
+      void releaseFields().then(() => {
+        if (!standing.current) return;
+        router.back();
+        after();
+      });
+    },
+    [router],
+  );
+}

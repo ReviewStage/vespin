@@ -163,7 +163,7 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="chat-bubbles"
-        title="A chat's bubbles: what people sent at the right, the other side's at the left beside its face, one sender's run close, its corners tightened, one time under its last"
+        title="A chat's bubbles: the reader's at the right, the other side's at the left under its name and beside its face, one sender's run close, its corners tightened, one time under its last"
       >
         <div className="catalog-frame">
           <div className="flex flex-col gap-ui-4">
@@ -179,6 +179,9 @@ function Messages(): React.JSX.Element {
                 revealActionsOnTap
                 className="mr-auto flex flex-col items-start"
               >
+                {index === 0 ? (
+                  <MessageHead inset={MESSAGE_LINE_INSET.AVATAR} sender="Iris" />
+                ) : null}
                 <ChatBubble
                   side={CHAT_SIDE.RECEIVED}
                   run={chatRunOf(index === 0, index === RUN.length - 1)}

@@ -7,19 +7,25 @@
  * newest started first (`@repo/features/workspace-managers-model`), as the
  * desktop's sidebar lists them. It stands only where the workspace has the
  * Managers experiment on, as the sidebar's does, and moves as the live read
- * hears a Manager made, renamed, archived, or at work.
+ * hears a Manager made, renamed, archived, or at work. New Manager makes one
+ * (`useCreateManager`), as the desktop's card does.
  */
 
+import { managerCreateRefusalWords } from "@repo/features/agent-refusal-words";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_KIND, type ListedAgent } from "@repo/features/agent-wire";
+import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
 import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
 import { useQuery } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useListedAgents } from "../host/host-provider.js";
+import { runsOnOf, startRefusalWords } from "../tasks/use-start.js";
 
 /** No Manager, the same array every render. */
 const NO_MANAGERS: readonly ListedAgent[] = [];
@@ -89,4 +95,72 @@ export function useManagerChatLooks(
 
     acts[ACT_KIND.AGENTS_MARK_READ]({ agentId, readMark: READ_MARK.SEEN }).catch(lookRefused);
   }, [acts, agentId, saidAt]);
+}
+
+/** What New Manager makes: its name, its repositories, the first its checkout, where it runs (`CLOUD` or a device's id), and its model and effort. */
+export interface ManagerAsk {
+  readonly name: string;
+  readonly repositories: readonly [string, ...string[]];
+  readonly runsOn: string;
+  readonly choice: ModelChoice;
+}
+
+/** What a New Manager's Create came to: the Manager made, or why it was not. */
+export type ManagerMade = { readonly agentId: string } | { readonly refused: string };
+
+/** Whether two asks name the same Manager, so a Create sent again unchanged makes one. */
+function sameAsk(one: ManagerAsk, other: ManagerAsk): boolean {
+  return (
+    one.name === other.name &&
+    one.runsOn === other.runsOn &&
+    one.choice.model === other.choice.model &&
+    one.choice.effort === other.choice.effort &&
+    one.repositories.length === other.repositories.length &&
+    one.repositories.every((repository, at) => repository === other.repositories[at])
+  );
+}
+
+/**
+ * New Manager's Create in `workspaceId` (`AGENTS_CREATE_MANAGER`), as the
+ * desktop's card sends it, wearing the face the service picks: under one
+ * key while what it names stands, so a Create sent again after no answer
+ * makes one Manager, and a new key once anything it names changed. A
+ * refusal says why in the desktop's words for a Manager's Create, else a
+ * Start's.
+ */
+export function useCreateManager(
+  workspaceId: string | undefined,
+): (ask: ManagerAsk) => Promise<ManagerMade> {
+  const acts = useHostActs();
+  const sent = useRef<{ readonly ask: ManagerAsk; readonly key: string } | undefined>(undefined);
+
+  return async (ask) => {
+    if (workspaceId === undefined) {
+      return { refused: startRefusalWords({ failure: AGENT_CALL_FAILURE.UNANSWERED }) };
+    }
+
+    const was = sent.current;
+    const key = was !== undefined && sameAsk(was.ask, ask) ? was.key : randomUUID();
+    sent.current = { ask, key };
+
+    const answer = await acts[ACT_KIND.AGENTS_CREATE_MANAGER]({
+      idempotencyKey: key,
+      workspaceId,
+      name: ask.name,
+      repositories: [...ask.repositories],
+      runsOn: runsOnOf(ask.runsOn),
+      model: ask.choice.model,
+      effort: ask.choice.effort,
+    }).catch((cause: unknown) => {
+      console.error("The Manager's Create did not go.", cause);
+
+      return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+    });
+
+    if ("failure" in answer) {
+      return { refused: managerCreateRefusalWords(answer.failure) ?? startRefusalWords(answer) };
+    }
+
+    return { agentId: answer.agent.id };
+  };
 }

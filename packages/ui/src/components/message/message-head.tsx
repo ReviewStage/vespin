@@ -17,23 +17,31 @@
  * it. The reader's own message has no head.
  *
  * It is drawn in the Tailwind theme's utilities, in the caption's size and
- * the muted ink, at the bubble's inset.
+ * the muted ink, at the bubble's inset, past the sender's picture where one
+ * stands beside the bubble (`MESSAGE_LINE_INSET.AVATAR`), as a group chat
+ * names a speaker over their run.
  */
 
 import type { ReactNode } from "react";
+import { MESSAGE_LINE_INSET, type MessageLineInset, OPENING_INSET } from "./message-line.js";
 
 /** The line over a received message: `sender`, then `children`, what they did, where the message says. */
 export function MessageHead({
   sender,
+  inset = MESSAGE_LINE_INSET.BUBBLE,
   children,
 }: {
   /** Who sent it, as the caller's own mark and name. */
   sender: ReactNode;
+  /** Where its start stands: at the bubble's inset, past the sender's picture where one stands beside the bubble. */
+  inset?: MessageLineInset;
   /** What they did, such as a thread's `SubjectLine`; none where the message says nothing more. */
   children?: ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="ui-message-head flex min-w-0 max-w-full flex-wrap items-baseline gap-x-ui-4 gap-y-ui-2 px-ui-4 text-caption-inline text-muted-foreground">
+    <div
+      className={`ui-message-head flex min-w-0 max-w-full flex-wrap items-baseline gap-x-ui-4 gap-y-ui-2 ${OPENING_INSET[inset]} text-caption-inline text-muted-foreground`}
+    >
       <span className="ui-message-head-sender flex min-w-0 max-w-full items-center">{sender}</span>
       {children == null ? null : (
         <span className="flex min-w-0 max-w-full items-center">{children}</span>

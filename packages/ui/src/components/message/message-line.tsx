@@ -42,8 +42,8 @@ export const MESSAGE_LINE_INSET = {
 
 export type MessageLineInset = (typeof MESSAGE_LINE_INSET)[keyof typeof MESSAGE_LINE_INSET];
 
-/** The sender's inset, and the time's where it opens the line: at its end, and at its start too, past the sender's picture where one stands beside the bubble, unless the line opens flush with words on no ground. */
-const OPENING_INSET = {
+/** The sender's inset, and the time's where it opens the line, and the head's over a message (`MessageHead`): at its end, and at its start too, past the sender's picture where one stands beside the bubble, unless the line opens flush with words on no ground. */
+export const OPENING_INSET = {
   [MESSAGE_LINE_INSET.BUBBLE]: "px-ui-4",
   [MESSAGE_LINE_INSET.AVATAR]: "ps-chat-avatar-bubble pe-ui-4",
   [MESSAGE_LINE_INSET.FLUSH]: "pe-ui-4",

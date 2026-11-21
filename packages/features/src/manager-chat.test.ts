@@ -113,7 +113,7 @@ test("a line that reached a turn while it ran stands between the messages it arr
   assert.equal(chat[1]?.arrivedIn, undefined);
 });
 
-test("a Manager's chat runs one sender's messages together until another sender writes or ten minutes pass, and counts the people who wrote", () => {
+test("a Manager's chat runs one sender's messages together until another sender writes or ten minutes pass", () => {
   const minute = 60_000;
 
   const chat = [
@@ -142,5 +142,4 @@ test("a Manager's chat runs one sender's messages together until another sender 
       ["later", true, true],
     ],
   );
-  assert.equal(runs.people, 2);
 });

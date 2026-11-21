@@ -26,6 +26,7 @@
     "./automation-schedule": "./src/automation-schedule.js",
     "./automation-wire": "./src/automation-wire.js",
     "./automation-view": "./src/automation-view.js",
+    "./automation-words": "./src/automation-words.js",
     "./cli-words": "./src/cli-words.js",
     "./credential-redaction": "./src/credential-redaction.js",
     "./device-platform": "./src/device-platform.js",

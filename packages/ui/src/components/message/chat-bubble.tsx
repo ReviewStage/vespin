@@ -11,10 +11,11 @@
  * face, stands at the bubble's outer side, level with its foot, beside the
  * run's last bubble and a bubble alone, as a chat app stands it, and keeps
  * its room beside the run's others, so the run's bubbles line up, and the
- * line under the run starts past it (`MESSAGE_LINE_INSET.AVATAR`). The two sides wear different grounds, the sent one a
- * wash of the accent and the received one the raised fill, both under the
- * foreground's ink, so the words, links, chips, and code inside read as
- * they do anywhere in a transcript. Where the bubble stands in the column,
+ * line under the run starts past it (`MESSAGE_LINE_INSET.AVATAR`). It is
+ * the one bubble of every transcript: an agent's, where a line stands
+ * alone, and a Manager's chat, where it stands in runs. Both sides wear the
+ * raised fill under the foreground's ink, so the words, links, chips, and
+ * code inside read as they do anywhere in a transcript. Where the bubble stands in the column,
  * and the line over or under it, is its caller's.
  *
  * It is drawn in the Tailwind theme's utilities.
@@ -39,12 +40,6 @@ export const CHAT_RUN = {
 } as const;
 
 export type ChatRun = (typeof CHAT_RUN)[keyof typeof CHAT_RUN];
-
-/** The bubble's ground on each side. */
-const SIDE_GROUND: Record<ChatSide, string> = {
-  [CHAT_SIDE.SENT]: "bg-bubble-sent",
-  [CHAT_SIDE.RECEIVED]: "bg-fill-strong",
-};
 
 /** The corners tightened on each side where the run goes on past the bubble: below it, above it, or both. */
 const RUN_CORNERS: Record<ChatSide, Record<ChatRun, string>> = {
@@ -108,7 +103,7 @@ export function ChatBubble({
       )}
       {/* Note that it clips past the keyboard's ring rather than at its edge, so a fold, a chip, or a link it holds keeps its ring. */}
       <div
-        className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] ${SIDE_GROUND[side]} ${RUN_CORNERS[side][run]}`}
+        className={`ui-chat-bubble min-w-0 max-w-full overflow-clip rounded-ui-14 px-list-inset py-row-inset text-body leading-reading text-foreground [overflow-clip-margin:var(--ui-focus-ring-room)] bg-fill-strong ${RUN_CORNERS[side][run]}`}
       >
         {children}
       </div>

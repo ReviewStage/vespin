@@ -184,7 +184,7 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { useWorkspaceManagers } from "../agents/use-managers.js";
+import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -1257,6 +1257,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const managers = useWorkspaceManagers(listing.workspace?.id);
+  const managersListed = useManagersListed(listing.workspace?.id);
 
   // Note that a Manager's row opens its page over the list in either window, as an agent's row on a task's page does, since the split view's detail stands a task alone.
   const open = (id: string) => {
@@ -1295,7 +1296,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
 
   return (
     <RowList look={look} selected={selected} onSelect={open} onRefresh={onRefresh}>
-      <ManagersSection managers={managers} hold={hold} />
+      <ManagersSection listed={managersListed} managers={managers} hold={hold} />
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
@@ -1315,39 +1316,62 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   );
 }
 
-/** The Managers section's name, on its header. */
-const MANAGERS_HEAD = "Managers";
+/** The Managers section's words: its header, its +, and what it says while it holds none, as the desktop's sidebar says them. */
+const MANAGERS_WORDS = {
+  HEAD: "Managers",
+  NEW: "New Manager",
+  NONE: "No Managers yet.",
+} as const;
 
 /** The Managers section's key among the tree's groups, by which its fold is held. */
 const MANAGERS_KEY = "managers";
+
+/** Where New Manager opens, as a sheet over the tabs. */
+const NEW_MANAGER_ROUTE = "/new-manager";
 
 /**
  * The workspace's Managers as the Tasks list's first section, above Pinned,
  * as the desktop's sidebar stands them (`sidebar-managers.tsx`): each an
  * agent's row, newest started first, its unread dot standing while its chat
  * said something the reader has not read, and its press opening its chat
- * (`TasksTree`), its long press and swipes an agent's own. It folds under
+ * (`TasksTree`), its long press and swipes an agent's own. Its header's +
+ * opens New Manager, and it says so where it holds none yet. It folds under
  * its header and count as the other groups do, and stands nowhere while the
- * workspace has none or has the Managers experiment off.
+ * workspace has the Managers experiment off.
  */
 function ManagersSection({
+  listed,
   managers,
   hold,
 }: {
+  /** Whether the workspace has the Managers experiment on. */
+  readonly listed: boolean;
   readonly managers: readonly ListedAgent[];
   readonly hold: TreeHold;
 }) {
+  const router = useRouter();
   const asking = useAgentRowAsk();
 
-  if (managers.length === 0) return null;
+  if (!listed) return null;
 
   return (
     <ListSection
-      title={MANAGERS_HEAD}
+      title={MANAGERS_WORDS.HEAD}
       count={managers.length}
-      foldable
+      foldable={managers.length > 0}
       folded={hold.folded.has(MANAGERS_KEY)}
       onFold={(shut) => hold.setFolded(MANAGERS_KEY, shut)}
+      footer={managers.length === 0 ? MANAGERS_WORDS.NONE : undefined}
+      add={{
+        label: MANAGERS_WORDS.NEW,
+        acts: [
+          {
+            label: MANAGERS_WORDS.NEW,
+            symbol: GLYPH.ADD,
+            onPress: () => router.push(NEW_MANAGER_ROUTE),
+          },
+        ],
+      }}
     >
       {managers.map((agent) => (
         <TaskAgentRow

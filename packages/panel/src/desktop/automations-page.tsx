@@ -18,6 +18,14 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
+import {
+  AUTOMATION_RUN_REFUSAL_WORDS,
+  automationNarrowLine,
+  automationNextText,
+  automationOwnerFor,
+  automationOwnerName,
+  READING_AUTOMATIONS,
+} from "@repo/features/automation-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -99,7 +107,6 @@ import {
   AutomationPageSkeleton,
   AutomationSwitch,
   automationActionGroups,
-  RUN_REFUSAL_WORDS,
   runNowAction,
   type SentryOffer,
 } from "./automation-editor.js";
@@ -120,14 +127,7 @@ import {
   runsShownChoices,
   WorkspaceRuns,
 } from "./automation-runs-tab.js";
-import {
-  automationDeleteQuestion,
-  automationNarrowLine,
-  automationNextText,
-  automationOwnerFor,
-  automationOwnerName,
-  READING_AUTOMATIONS,
-} from "./automation-words.js";
+import { automationDeleteQuestion } from "./automation-words.js";
 import { PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { useWorkspaceRuns, type WorkspaceRunsRead } from "./use-automation-runs.js";
 import {
@@ -276,7 +276,7 @@ function useRunNow(automationId: string): UseRunNowResult {
       .then((answer) => {
         if ("failure" in answer) {
           toast({
-            words: RUN_REFUSAL_WORDS[answer.failure],
+            words: AUTOMATION_RUN_REFUSAL_WORDS[answer.failure],
             replayUnmasked: true,
             tone: STATUS_TONE.DANGER,
             failure: {

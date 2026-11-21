@@ -43,13 +43,16 @@ import type {
 } from "@repo/host/contract";
 import {
   type AgentChoices,
+  type AutomationSwitches,
   agentChangeOf,
+  automationSwitchOf,
   chosenTasksView,
   type InboxReadMarks,
   type InboxReminders,
   type InboxSentReplies,
   inboxActAnswer,
   inboxAppState,
+  inboxAutomationsAppState,
   inboxReadMarksAppState,
   inboxRemindersAppState,
   inboxSentFile,
@@ -184,6 +187,12 @@ const MEMORY_WORDS = new WeakMap<object, SavedMemoryWords>();
 
 /** No memory's words saved yet. */
 const NO_MEMORY_WORDS: SavedMemoryWords = new Map();
+
+/** The switches each run turned on the fixture's automations, by the store the run stages, each map replaced whole as one is turned. */
+const SWITCHES = new WeakMap<object, AutomationSwitches>();
+
+/** No automation's switch turned yet. */
+const NO_SWITCHES: AutomationSwitches = new Map();
 
 /** What each run changed of the fixture's agents, by the store the run stages, each map replaced whole as one is changed. */
 const CHOICES = new WeakMap<object, AgentChoices>();
@@ -399,10 +408,11 @@ export function stageFixture(
   );
 
   const sendsRefused = refusedSendsAppState(saved, REFUSED_SENDS.get(state) ?? NO_REFUSED_SENDS);
+  const switched = inboxAutomationsAppState(sendsRefused, SWITCHES.get(state) ?? NO_SWITCHES);
 
   const reminded = MACHINE_ASKED.has(state)
-    ? machineAskAppState(sendsRefused, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
-    : sendsRefused;
+    ? machineAskAppState(switched, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
+    : switched;
 
   const listed = stagedTasks(
     held,
@@ -540,6 +550,20 @@ function keepMemory(
 
   const id = replaces ?? NEW_MEMORY_ID;
   MEMORY_WORDS.set(state, new Map(MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS).set(id, text));
+  stageFixture(state);
+}
+
+/** Keeps an automation's switch the fixture turned, and lays it over the list at once, as the host draws a switch turned (`inboxAutomationsAppState`); nothing for any other act. */
+function keepAutomationSwitch(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  const turned = automationSwitchOf(kind, payload);
+
+  if (turned === undefined) return;
+  const switches = new Map(SWITCHES.get(state) ?? NO_SWITCHES);
+  SWITCHES.set(state, switches.set(turned.automationId, turned.enabled));
   stageFixture(state);
 }
 
@@ -722,7 +746,8 @@ function memberAt<Member>(
  * fixture's pull requests moves it on the document of `state`, as GitHub
  * would, so a screen draws it merged, out of the queue, closed, or a
  * draft, and a reminder set or cleared moves its item there, as the host draws one, so the Inbox
- * puts it away under Reminders, and a change of an agent's model, permission
+ * puts it away under Reminders, an automation's switch turned moves it on
+ * the list there, and a change of an agent's model, permission
  * mode, servers, name, or pin moves the agent there, as the host draws one,
  * and a change to its queue moves the queue there, a Stop pausing it, so a
  * flow may move a queued message and Resume.
@@ -793,6 +818,8 @@ export function fixtureActs(
         keepQueue(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepMemory(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepAutomationSwitch(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepMachineAnswer(state, kind as PortActKind, payload);
         // SAFETY: as above.

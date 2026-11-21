@@ -16,6 +16,7 @@ import {
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
+import type { AgentThreadsLine } from "@repo/features/inbox-list-model";
 import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
 import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
@@ -95,6 +96,7 @@ import {
   StackSubtitle,
   shownFiles,
   shownMediaIds,
+  ThreadsLine,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
@@ -160,6 +162,7 @@ import {
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useAgentThreadsLine } from "../inbox/use-agent-threads.js";
 import { useNewestNote } from "../newest-note.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
@@ -175,6 +178,12 @@ import { useDevicePlatform } from "../tasks/use-start.js";
 import { useDictation } from "../use-dictation.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
+
+/** The agent's threads line over its box, and what a press on it opens. */
+interface AgentThreadsDock {
+  readonly line: AgentThreadsLine;
+  readonly onOpen: (threadId: string) => void;
+}
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
@@ -196,6 +205,7 @@ const MENU_WORDS = {
   ARCHIVE: "Archive",
   DELETE: "Permanently delete",
   OVERVIEW: "Overview",
+  SETTINGS: "Settings…",
 } as const;
 
 /** What Copy transcript offers, in the panel's words: the transcript concise or whole, copied, and the same words handed to the share sheet. */
@@ -348,6 +358,7 @@ function AgentComposerBar({
   tools,
   trailing,
   dictation,
+  threads,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -366,6 +377,8 @@ function AgentComposerBar({
   readonly trailing: ReactNode;
   /** Dictate before Send, and its strip while a dictation stands. */
   readonly dictation: ComposerDictation;
+  /** The agent's threads line and its press, while it has posted threads. */
+  readonly threads: AgentThreadsDock | undefined;
 }) {
   const { banner, waiting } = approvals;
   // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
@@ -374,6 +387,7 @@ function AgentComposerBar({
   const denies = waiting !== undefined && !composer.sendQueues;
 
   const head =
+    threads === undefined &&
     !denies &&
     banner === undefined &&
     composer.cancelMessageEdit === undefined &&
@@ -382,6 +396,13 @@ function AgentComposerBar({
     otherCall === undefined &&
     note === undefined ? undefined : (
       <>
+        {threads === undefined ? null : (
+          <ThreadsLine
+            words={threads.line.words}
+            waiting={threads.line.waiting}
+            onOpen={() => threads.onOpen(threads.line.opens.id)}
+          />
+        )}
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
         )}
@@ -472,6 +493,7 @@ function AgentComposerArea({
   otherCall,
   tools,
   trailing,
+  onOpenThread,
 }: {
   readonly id: string;
   readonly agent: Parameters<typeof useAgentComposer>[1];
@@ -491,7 +513,10 @@ function AgentComposerArea({
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
   readonly trailing: ReactNode;
+  /** Opens one of the agent's Inbox threads by its id. */
+  readonly onOpenThread: (threadId: string) => void;
 }) {
+  const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
   const dictated = useDictation(composer.words, composer.onWords);
   // Note that one pick holds the newest refusal, a send's, a dictation's or the page's, so an older one never hides why the last act did not go.
@@ -514,6 +539,9 @@ function AgentComposerArea({
         tools={tools}
         trailing={trailing}
         dictation={dictated.dictation}
+        threads={
+          threadsLine === undefined ? undefined : { line: threadsLine, onOpen: onOpenThread }
+        }
       />
       <ConfirmAsk destructive {...composer.removing} />
       <ConfirmAsk destructive {...composer.sendingEdit} />
@@ -1060,6 +1088,8 @@ function AgentConversation({
   // Note that a Manager's overview stands beside its chat on the desktop; here it is pushed from the bar, where the workspace lists its Managers.
   const overviewShown = useManagersListed(shown?.workspaceId) && chat;
 
+  const openSettings = () => router.push({ pathname: "/manager-settings", params: { agent: id } });
+
   const openOverview = overviewShown
     ? () => router.push({ pathname: onOwnTab("/tasks/agent/[id]/overview"), params: { id } })
     : undefined;
@@ -1097,6 +1127,10 @@ function AgentConversation({
     });
   };
 
+  // Note that a thread opens on the agent's own tab, pushed over its page, as the Inbox opens one found elsewhere.
+  const openThread = (threadId: string) =>
+    router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: threadId })));
+
   // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
   const openPullRequest = (url: string) => {
     const key = keyOf(url);
@@ -1122,6 +1156,7 @@ function AgentConversation({
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
+      onOpenThread={openThread}
       servers={servers}
       note={note}
       call={talk.call}
@@ -1162,6 +1197,7 @@ function AgentConversation({
       onOpenAddress={openInSafari}
       messageLink={messageLink}
       messageMore={messageActs.more}
+      onOpenThread={openThread}
       undelivered={undelivered}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
@@ -1280,9 +1316,19 @@ function AgentConversation({
             ) : null}
             {agent === undefined ? null : (
               <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
-                  {MENU_WORDS.RENAME}
-                </Stack.Toolbar.MenuAction>
+                {/* Note that a Manager is named from its Settings, its one place to configure it, as the desktop's menu offers Settings… in Rename's place. */}
+                {chat ? (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.OPTIONS)}
+                    onPress={openSettings}
+                  >
+                    {MENU_WORDS.SETTINGS}
+                  </Stack.Toolbar.MenuAction>
+                ) : (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
+                    {MENU_WORDS.RENAME}
+                  </Stack.Toolbar.MenuAction>
+                )}
                 {barActs ? null : (
                   <Stack.Toolbar.MenuAction
                     icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}

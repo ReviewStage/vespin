@@ -1,5 +1,6 @@
 // _layout.tsx -- Settings' own stack inside its sheet: the main list, and the pages it pushes, under the system's inline headers in the brand's tint on the sidebar's ground.
 
+import { AUTOMATION_PHONE_WORDS } from "@repo/features/automation-words";
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { HOST_CONNECT_WORDS } from "@repo/features/host-connect-words";
 import { PUSH_NOTIFICATIONS_TITLE } from "@repo/features/push-device-model";
@@ -76,6 +77,8 @@ export default function SettingsLayout() {
           name="cloud-environment"
           options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.ENVIRONMENT] }}
         />
+        <Stack.Screen name="automations" options={{ title: AUTOMATION_PHONE_WORDS.TITLE }} />
+        <Stack.Screen name="automation" />
         <Stack.Screen
           name="memory"
           options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }}

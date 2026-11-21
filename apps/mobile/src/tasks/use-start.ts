@@ -261,7 +261,7 @@ export function runsOnOptions(devices: readonly MacOffer[]): readonly PickOption
 }
 
 /** Where a start runs its agent, as it names it: the cloud, or a device by its id. */
-function runsOnOf(place: string) {
+export function runsOnOf(place: string) {
   return place === CLOUD
     ? { machine: AGENT_MACHINE.VERCEL }
     : { machine: AGENT_MACHINE.DEVICE, deviceId: place };
