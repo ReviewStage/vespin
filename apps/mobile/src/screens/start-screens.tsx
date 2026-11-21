@@ -775,12 +775,17 @@ export function NewAgentScreen({
   const starting = sheet.starting || closing.starting;
   const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
 
-  const mentions = useMentionOffer(prompt, setPrompt, {
-    workspaceId: startsOn?.workspaceId,
-    taskId: startsOn?.id,
-  });
+  // The field, which draws each mention and each picture attached as its pill.
+  const pillField = usePillField(prompt, setPrompt, pictures);
 
-  // The prompt as it is sent, each picked mention written as its link.
+  const mentions = useMentionOffer(
+    prompt,
+    setPrompt,
+    { workspaceId: startsOn?.workspaceId, taskId: startsOn?.id },
+    pillField.mentions,
+  );
+
+  // The prompt as it is sent, each mention already its link in the field of pills.
   const sendablePrompt = () => mentions.sendable(prompt.trim());
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
@@ -896,6 +901,7 @@ export function NewAgentScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
+        pills={pillField.pills}
         trailing={<StartModelChip pick={pick} shown={modelsShown} onShown={setModelsShown} />}
         chips={
           <>
