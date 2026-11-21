@@ -31,10 +31,9 @@ import {
   sectionAnchors,
   type TaskMention,
 } from "@repo/features/mention-link";
-import type { PageLine } from "@repo/features/page-wire";
+import { type PageLine, READ_PAGE_VERSION } from "@repo/features/page-wire";
 import type { Task } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import { READ_PAGE_VERSION } from "./agent-tools.js";
 
 /**
  * mentioned-context.ts -- what a coding agent's message mentions that the agent cannot read for itself, as it stood when the message was sent.

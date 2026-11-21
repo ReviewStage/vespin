@@ -17,6 +17,11 @@ import { countedNumber, wireUuidSchema } from "./service-wire.js";
 /** The tool every agent writes a page with, by the name its calls carry. */
 export const SHOW_PAGE_TOOL_NAME = "show_page";
 
+/** The version a page read names in words rather than by its number. */
+export const READ_PAGE_VERSION = {
+  NEWEST: "newest",
+} as const;
+
 export const PAGE_BOUNDS = {
   /** The most characters a page's title may spell. */
   MAX_TITLE_CHARS: 80,
