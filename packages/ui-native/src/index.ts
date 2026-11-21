@@ -90,6 +90,7 @@ export {
   type AttachedPicture,
   AttachedPictures,
   EditingLine,
+  type MentionCrumb,
   type MentionSuggestion,
   type MentionSuggestionGroup,
   MentionSuggestions,

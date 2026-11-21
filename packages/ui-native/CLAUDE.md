@@ -88,8 +88,11 @@ builds a control of its own.
   scrolling to the call's row, whose presses alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with
   Deny, Always allow and Allow), the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
-  offers (the panel's groups and words, a pick written `@Name` and sent as
-  its link, since the field draws no chip), its `QueuedLines` (Steer and
+  offers (the panel's groups and words, each row led by the mark its pill
+  wears, a bare `@` listing Suggested then Browse, a row per kind with
+  iOS's chevron, and a list narrowed to one kind, `@people:`, standing
+  under its crumb, whose ‹ widens it; the threads and denial lines step
+  aside while it stands), its `QueuedLines` (Steer and
   Delete), two or more folded under one "2 queued" line a press opens, its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
   taking the keyboard through `focusAsk`), an `AskNote`, and an agent's

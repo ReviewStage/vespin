@@ -490,6 +490,7 @@ function AgentComposerBar({
           <MentionSuggestions
             groups={composer.mentions.groups}
             empty={composer.mentions.empty}
+            crumb={composer.mentions.crumb}
             onPick={composer.mentions.pick}
           />
         )}
