@@ -172,6 +172,7 @@
     "./composer-markdown": "./src/composer-markdown.js",
     "./plain-words": "./src/plain-words.js",
     "./search-found-model": "./src/search-found-model.js",
+    "./search-recent-model": "./src/search-recent-model.js",
     "./search-score": "./src/search-score.js",
     "./search-tokens": "./src/search-tokens.js",
     "./device-agent-wire": "./src/device-agent-wire.js",

@@ -34,6 +34,7 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useRecentOpenedSignOut } from "../search/recent-opened.js";
 import { useSetupGate } from "../setup/use-setup-gate.js";
 import { useShareSheet } from "../share-sheet.js";
 import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
@@ -192,6 +193,7 @@ function GuardedScreens() {
   useLiveActivity(signedIn);
   useInboxWidget(signedIn);
   useSystemActivity(signedIn);
+  useRecentOpenedSignOut(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
   useNoticeForAccount();
