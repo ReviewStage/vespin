@@ -29,6 +29,8 @@ import type { MentionNode } from "../description-editor/contract.js";
 import { heldTaskQuery } from "../live-reads.js";
 import type { LinkDrawer } from "../markdown-message.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { useTaskListCollections } from "../task-list-collections.js";
+import { AGENTS_LISTED } from "../use-app-state.js";
 import { agentActor, agentName } from "./agent-model.js";
 import { type MentionDoors, mentionLinkDrawer } from "./mention-chip.js";
 import type {
@@ -39,7 +41,7 @@ import type {
 } from "./mention-picker.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenTask } from "./use-open-link.js";
-import { useWorkspaceAgents } from "./use-workspace-agents.js";
+import { useAgentsListed, workspaceAgentsNow } from "./use-workspace-agents.js";
 import { workspaceAgentSearchQueryOptions } from "./workspace-agent-search.js";
 
 /**
@@ -351,7 +353,7 @@ export function mentionableAgent(
 
 /**
  * Reads the workspace's coding agents as an `@` list offers them: the
- * newest as the task list carries them (`useWorkspaceAgents`), archived
+ * newest as the task list carries them at the call (`workspaceAgentsNow`), archived
  * ones left out, or those the service finds the words name, archived ones
  * among them, each by its tab's name, wearing its tile, with its task
  * named from `tasks`, the tasks the window lists, archived ones among
@@ -370,16 +372,12 @@ export function useMentionAgentsReader(
 ): MentionAgentsReader | undefined {
   const queryClient = useQueryClient();
   const { mutate: refreshTasks } = useMutation(actMutation(ACT_KIND.TASKS_REFRESH));
-  const newest = useWorkspaceAgents(workspaceId, null);
-  const listFailed = newest !== undefined && "failed" in newest;
-  const carried = newest !== undefined && !listFailed;
-  // Note that the names and the newest are read as each read answers, so the reader stands while the window's lists move.
-  const naming = useRef({ tasks, models, newest: NO_AGENTS_HELD });
-  naming.current = {
-    tasks,
-    models,
-    newest: newest !== undefined && "agents" in newest ? newest.agents : NO_AGENTS_HELD,
-  };
+  const collections = useTaskListCollections();
+  const listed = useAgentsListed();
+  const listFailed = workspaceId !== undefined && listed === AGENTS_LISTED.FAILED;
+  // Note that the names are read as each read answers, and the newest agents at the call, so the reader stands, and its holder is not drawn again, while the window's lists move.
+  const naming = useRef({ tasks, models });
+  naming.current = { tasks, models };
 
   const read = useCallback<MentionAgentsReader>(
     (words) => {
@@ -399,7 +397,11 @@ export function useMentionAgentsReader(
           return Promise.reject(new Error(TASKS_READ.FAILED));
         }
 
-        return Promise.resolve(carried ? offered(naming.current.newest) : NO_AGENTS);
+        const newest = workspaceAgentsNow(collections, listed, workspaceId, null);
+
+        return Promise.resolve(
+          newest !== undefined && "agents" in newest ? offered(newest.agents) : NO_AGENTS,
+        );
       }
 
       return queryClient
@@ -410,7 +412,8 @@ export function useMentionAgentsReader(
           return offered(answer.agents);
         });
     },
-    [queryClient, refreshTasks, workspaceId, listFailed, carried],
+    // Note that the reader is made again as the list first carries the agents or fails (`listed`), so a list open before then reads them again.
+    [queryClient, refreshTasks, collections, workspaceId, listed, listFailed],
   );
 
   return workspaceId === undefined ? undefined : read;

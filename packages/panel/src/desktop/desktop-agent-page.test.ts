@@ -174,7 +174,7 @@ test("an agent on no task docks the threads it posted over its box, counted from
     { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
   ]);
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
-  const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [MANAGER] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [MANAGER] });
   const container = await mountAgentPage(history, tasks);
 
   const dock =
@@ -224,7 +224,7 @@ test("a / in an agent on no task's box lists the skills of its own workspace and
   });
   const manager = { ...MANAGER, repository: "acme/relay", runtime: AGENT_RUNTIME.CLAUDE_CODE };
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
-  const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [manager] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
   const container = await mountAgentPage(history, tasks);
 
   typeInComposer(container, "/");
@@ -247,7 +247,7 @@ test("⌘F on an agent on no task's page opens the find bar over its conversatio
     { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
   ]);
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
-  const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [MANAGER] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [MANAGER] });
   const container = await mountAgentPage(history, tasks);
 
   act(() => {
@@ -266,7 +266,7 @@ test("an agent on no task's box offers Talk, as an agent's tab on a task does", 
     { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
   ]);
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
-  const tasks = tasksControl({ shown: true, workspace: ACME, liveAgents: [MANAGER] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [MANAGER] });
   const container = await mountAgentPage(history, tasks);
 
   assert.ok(

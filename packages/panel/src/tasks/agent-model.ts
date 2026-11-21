@@ -1,5 +1,9 @@
 import {
-  agentFailureWords,
+  endLineContinues,
+  failedLineWords,
+  settledFailure,
+} from "@repo/features/agent-continue-model";
+import {
   hostLostWords,
   LIMIT_REACHED_WORDS,
   launchStoppedWords,
@@ -543,14 +547,7 @@ export function endLineParts(
         return { words, failed: true, failure, ...(unstarted !== undefined && { unstarted }) };
       }
 
-      const words =
-        failure === undefined ? undefined : agentFailureWords(failure, starter, continuable);
-
-      return {
-        words: `Failed: ${words ?? "the run ended without saying why"}`,
-        failed: true,
-        failure,
-      };
+      return { words: failedLineWords(failure, starter, continuable), failed: true, failure };
     }
 
     case AGENT_STATUS.STARTING:
@@ -566,14 +563,6 @@ export function refusedAtLimit(cause: unknown): boolean {
     Predicate.hasProperty(cause, "failure") &&
     cause.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
   );
-}
-
-/** What mends a failed turn from its end line: the API keys' page for a key refused; nothing else there is the developer's to mend. */
-export function endLineReason(failure: AgentFailure | undefined, starter?: string): FailureReason {
-  // A teammate's key is theirs to mend, so the reader is offered no Settings of their own.
-  return failure === AGENT_FAILURE.PROVIDER_KEY && starter === undefined
-    ? FAILURE_REASON.API_KEY
-    : FAILURE_REASON.OTHER;
 }
 
 /**
@@ -604,12 +593,6 @@ export const UNHEARD_OFFLINE = {
 /** What the agent's own box says once a message closed it on an ended agent, beside the press that continues it in a new one (`ContinueAgent`), which says the rest. */
 const BOX_RETIRED = "This agent has ended.";
 
-/** What the press that starts a new agent on another's whole transcript says. */
-export const CONTINUE_LABEL = "Continue in new agent";
-
-/** What that press says once another agent continued the agent, in the same place on the failed end line. */
-export const CONTINUE_AGAIN_LABEL = "Continue again";
-
 /** What the press that sends a failed agent a line again says, on the failed end line where a message carries it on (`endLineOffersTryAgain`). */
 export const TRY_AGAIN_LABEL = "Try again";
 
@@ -618,84 +601,6 @@ export const TRYING_AGAIN_LABEL = "Sending again";
 
 /** What the line naming the agents that continued another says before their chips. */
 export const CONTINUED_IN = "Continued in";
-
-/**
- * The agents of the task that continue `agentId`: each started from it on
- * its whole transcript, naming no message, archived ones among them, in the
- * order started. Note that a fork names the message it was cut at, so it
- * continues nothing.
- */
-function continuationsOf(
-  agentId: string,
-  agents: readonly AgentSummary[] | undefined,
-  archived: readonly AgentSummary[] | undefined,
-): readonly AgentSummary[] {
-  return [...(agents ?? []), ...(archived ?? [])]
-    .filter((each) => each.from?.agentId === agentId && each.from.messageId === undefined)
-    .sort((a, b) => a.createdAt - b.createdAt);
-}
-
-/**
- * The ids of the agents that continue `agent`, oldest first: those the
- * service names on its summary (`continuedBy`), so a page that lists the
- * agent alone still names them, then any the task's agents name that the
- * summary does not yet (`continuationsOf`), as one just started. Note that
- * a service older than `continuedBy` leaves the key out, which reads the
- * list alone, and that a fork is never a continuation.
- */
-export function continuedByIds(
-  agent: AgentSummary,
-  agents: readonly AgentSummary[] | undefined,
-  archived: readonly AgentSummary[] | undefined,
-): readonly string[] {
-  const named = (agent.continuedBy ?? [])
-    .filter((each) => !each.forked && each.messageId === undefined)
-    .map((each) => each.agentId);
-
-  const listed = continuationsOf(agent.id, agents, archived).map((each) => each.id);
-
-  return [...new Set([...named, ...listed])];
-}
-
-/** The titles the summary gives the agents that continue it, by id, for a page whose list does not hold them; none for one with no title yet. */
-export function continuedByTitles(agent: AgentSummary): ReadonlyMap<string, string> {
-  const titled = (agent.continuedBy ?? []).flatMap((each) =>
-    each.title === null ? [] : [[each.agentId, each.title] as const],
-  );
-
-  return new Map(titled);
-}
-
-/** Whether a turn's end line is where an agent may be continued: it failed, and not on a refused API key, which a new agent would meet the same. */
-function endLineContinues(status: AgentStatus, endReason: FailureReason): boolean {
-  return status === AGENT_STATUS.FAILED && endReason !== FAILURE_REASON.API_KEY;
-}
-
-/**
- * Whether the end line's row ends on Continue, after its words: where the
- * line continues the agent (`endLineContinues`), as Continue in new agent,
- * and once another agent continued it as Continue again, in the same place,
- * since the continued note that takes the box offers none. Before then, it
- * offers the press only where a new agent is the one way on: a failure only
- * one mends (`mendedByNewAgent`). Every other failure leaves the box open
- * and the agent taking messages, so a message carries it on, as a coding
- * CLI's error leaves its session for the next prompt. A box closed on an
- * ended agent offers the press itself, carrying its words, so the line
- * offers none and one Continue stands on screen.
- */
-export function endLineOffersContinue(input: {
-  readonly status: AgentStatus;
-  readonly endReason: FailureReason;
-  readonly failure: AgentFailure | undefined;
-  readonly continued: boolean;
-  readonly boxClosed: boolean;
-}): boolean {
-  if (!endLineContinues(input.status, input.endReason)) return false;
-
-  if (input.continued) return true;
-
-  return !input.boxClosed && mendedByNewAgent(input.failure);
-}
 
 /**
  * The failures a message sent again would only meet again, since what mends
@@ -1689,12 +1594,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
     phase: workingPhaseOf(turn, open, sends.rewinding),
     waitsUntil: open ? turn?.waitsUntil : undefined,
     status,
-    failure:
-      turn === undefined
-        ? status === AGENT_STATUS.FAILED
-          ? AGENT_FAILURE.NOT_STARTED
-          : undefined
-        : turn.failure,
+    failure: settledFailure({ status, turn }),
   };
 }
 

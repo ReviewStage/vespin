@@ -484,6 +484,14 @@ its title and its vespin.dev link, so Handoff can offer it on your other
 devices signed in to the same Apple Account. iOS hands them to those devices
 directly, and the app does not offer them to Siri suggestions or to search.
 
+So its Search tab can list what you opened last before you type, the app
+keeps on your iPhone or iPad which tasks, threads, and agents you last
+opened, up to 30 of them: for each only what it is, its id, and its
+workspace's id, never its name or words, which the app draws from the lists
+it already holds. It stays in the app's own settings on that device, the
+app sends none of it to us, Search's Clear forgets it, and the app forgets
+it when you sign out.
+
 ### Members' and workspaces' pictures on your iPhone
 
 So a menu can lead each member of a workspace with their face, such as a

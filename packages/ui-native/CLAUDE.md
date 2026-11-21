@@ -52,7 +52,8 @@ builds a control of its own.
   opens Settings, never worded "Allow", and Not Now), `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass in one fixed place, dropping in
   under the top bar inside the safe area as the system's banners drop in,
-  swiped up to let go, with the refusal's words and Try again, said aloud by
+  below an iPad's floating tab bar and a tab's column bars, which the tab
+  in front tells it of (`FailureNoticeBars`), swiped up to let go, with the refusal's words and Try again, said aloud by
   VoiceOver, faded rather than slid where the reader reduces motion, standing
   over the app's root view or the sheet on top (`FailureNoticeLayer`; not a
   `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
@@ -75,7 +76,8 @@ builds a control of its own.
   desktop composer does, its field on top, one line until its words wrap,
   and under it one row of the + and the capsules saying where the
   message runs, then at its end the model chip (`trailing`, whose sheet
-  holds the model, effort, Fast and the permission mode, each once),
+  holds the model, effort, Fast and the permission mode, each once, a
+  popover from the chip in a regular window, `ModelChoicePopover`),
   Dictate, and Send, a dictation under way standing its strip in the row's
   place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
   and its head, inside the same glass, holds an agent's
@@ -88,9 +90,14 @@ builds a control of its own.
   Deny, Always allow and Allow), the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
   offers (the panel's groups and words, a pick written `@Name` and sent as
   its link, since the field draws no chip), its `QueuedLines` (Steer and
-  Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  Delete), two or more folded under one "2 queued" line a press opens, its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
-  taking the keyboard through `focusAsk`), and an `AskNote`.
+  taking the keyboard through `focusAsk`), an `AskNote`, and an agent's
+  `ContinueLine` (why its turn failed and Continue in new agent, where only a
+  new agent goes on, as the panel's failed end line offers it). While the
+  agent is archived, `ArchivedBar` stands in the composer's place, in the
+  same glass, saying so beside Unarchive, as the panel's note stands in its
+  box's.
 - **`PillField`** is the one field whose words hold pills: each mention and
   each marker of a held file drawn as the chip it becomes once sent
   (`pill-look.ts`), selected and deleted as one, copied as its Markdown,
@@ -185,7 +192,9 @@ builds a control of its own.
   stop sign of a blocked task, a thread that needs you, its sub-tasks as a
   ring and "2/5", one mark for its agents, the face of who is on it where
   that is someone other than the reader or the dashed mark where no one is,
-  and when it last moved; a search's finds end in its key; its priority
+  and when it last moved, the agents' mark and then the sub-tasks' progress
+  stepping aside before a long name is cut, as Mail's rows keep the
+  sender's name, `task-row-fit-model.ts`; a search's finds end in its key; its priority
   stands on the task's own Priority chip, not the row; a parent stands as the
   label of `RowDisclosure`, SwiftUI's own `DisclosureGroup`, whose chevron at
   the line's trailing edge folds its sub-tasks, as Files and Notes fold a
@@ -314,7 +323,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left, its rows easing away and back; one given a `glyph` leads its title
+  a press, its chevron at the header's trailing end (before its +) as Mail's mailboxes and
+  Reminders' groups fold, its rows easing away and back; one given a `glyph` leads its title
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an

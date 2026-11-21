@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -158,23 +158,32 @@ internal struct ColumnSubtitleModifier: ViewModifier, Record {
 /// holds and sets that item's `subtitle` (iOS 26), clearing it as it leaves
 /// only while it still reads what the probe wrote. A probe with an empty
 /// subtitle that has written nothing touches nothing.
+///
+/// Where `leading`, it also stands the item's title at the bar's leading
+/// edge beside the back button (`UINavigationItem.ItemStyle.editor`), in
+/// the bar's own row. Note that a centered title had nowhere to stand on an
+/// iPad whose tab bar floats in the middle of that row, so UIKit dropped it
+/// with its subtitle into a row of its own over the page's content.
 internal struct StackSubtitleModifier: ViewModifier, Record {
   @Field var subtitle: String = ""
+  @Field var leading: Bool = false
 
   func body(content: Content) -> some View {
-    content.background(StackSubtitleProbe(subtitle: subtitle))
+    content.background(StackSubtitleProbe(subtitle: subtitle, leading: leading))
   }
 }
 
 /// The probe a screen carries: an empty view that writes its subtitle to the stack's item each time it's placed or redrawn.
 private struct StackSubtitleProbe: UIViewRepresentable {
   let subtitle: String
+  let leading: Bool
 
   func makeUIView(context: Context) -> StackSubtitleView {
     StackSubtitleView()
   }
 
   func updateUIView(_ view: StackSubtitleView, context: Context) {
+    view.leading = leading
     view.subtitle = subtitle
   }
 
@@ -184,11 +193,16 @@ private struct StackSubtitleProbe: UIViewRepresentable {
 }
 
 private final class StackSubtitleView: UIView {
-  /// The item this probe wrote to, and what it wrote there, so it clears only its own.
+  /// The item this probe wrote to, what it wrote there, and the style it found there before it stood the title at the leading edge, so it clears only its own.
   private weak var item: UINavigationItem?
   private var written: String?
+  private var styleFound: UINavigationItem.ItemStyle?
 
   var subtitle = "" {
+    didSet { write() }
+  }
+
+  var leading = false {
     didSet { write() }
   }
 
@@ -212,8 +226,12 @@ private final class StackSubtitleView: UIView {
     if let item, item.subtitle == written {
       item.subtitle = nil
     }
+    if let item, let styleFound, item.style == .editor {
+      item.style = styleFound
+    }
     item = nil
     written = nil
+    styleFound = nil
   }
 
   /// Sets the subtitle on the item of the nearest view controller a navigation controller holds, moving off an item it wrote to before.
@@ -223,11 +241,24 @@ private final class StackSubtitleView: UIView {
       return
     }
     if item !== held.navigationItem { clear() }
+    stand(held.navigationItem)
     if subtitle.isEmpty && written == nil { return }
     let shown = subtitle.isEmpty ? nil : subtitle
     held.navigationItem.subtitle = shown
     item = held.navigationItem
     written = shown
+  }
+
+  /// Stands the item's title at the leading edge while `leading`, keeping the style it found to put back, and puts that back once it isn't.
+  private func stand(_ held: UINavigationItem) {
+    if leading {
+      if styleFound == nil { styleFound = held.style }
+      held.style = .editor
+      item = held
+    } else if let styleFound {
+      if held.style == .editor { held.style = styleFound }
+      self.styleFound = nil
+    }
   }
 
   /// The view controller above the probe whose parent is a navigation controller: the stack's screen, past the hosting controller standing inside it.

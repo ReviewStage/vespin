@@ -77,7 +77,7 @@ function useListedManagers(tasks: TasksControl): ReturnType<typeof useWorkspaceM
 
   return {
     listed,
-    ...useWorkspaceManagers(workspaceId, listed, tasks.liveAgents, tasks.agents),
+    ...useWorkspaceManagers(workspaceId, listed, tasks.agentsCarried, tasks.agents),
   };
 }
 

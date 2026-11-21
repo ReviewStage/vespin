@@ -24,7 +24,7 @@ import { type ReactNode, useMemo } from "react";
 import { appPlatform } from "../app-platform.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { MemberDirectory } from "../member-directory.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useTaskNames } from "../task-list-collections.js";
 import { repositorySkillsQueryOptions } from "../tasks/agent-reads.js";
 import { keptSkills } from "../tasks/repository-skills.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
@@ -84,11 +84,7 @@ export function useOwnAgentPlace(
   );
 
   // The workspace's agents an `@` offers, named by the tasks the window lists.
-  const readAgents = useMentionAgentsReader(
-    workspaceId,
-    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
-    models,
-  );
+  const readAgents = useMentionAgentsReader(workspaceId, useTaskNames(tasks.typedNames), models);
 
   const { onShowMention } = tasks;
 

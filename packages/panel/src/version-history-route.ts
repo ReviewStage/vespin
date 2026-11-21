@@ -16,7 +16,7 @@
 import { type RegisteredRouter, useNavigate, useRouter } from "@tanstack/react-router";
 import { useRoutedExits } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
-import { useRouteAccess } from "./route-gates.js";
+import { type RouteAccess, useRouteAccess } from "./route-gates.js";
 import type { HistorySpot } from "./tasks/use-description-history.js";
 
 /** Which page of the history an address stands. */
@@ -149,6 +149,49 @@ function standingOf(
   return { workspace, task: taskId, spot };
 }
 
+/** Where the history stands as the router's history stands at the call; none off it. */
+function standingNowOf(
+  router: ReturnType<typeof useRouter>,
+  access: RouteAccess,
+): ReturnType<typeof standingOf> {
+  const matches = router.matchRoutes(router.history.location.pathname);
+
+  if (routedPlaceOf(matches, access) !== ROUTED_PLACE.VERSION_HISTORY) return undefined;
+  const last = matches.at(-1);
+
+  return standingOf(last?.routeId, last?.params ?? {});
+}
+
+/**
+ * The history's ways out a page holds: giving its step to its task, and
+ * reading its chunk ahead. Note that both read where the history stands as
+ * they are pressed, so their holder is drawn again for no move of the window.
+ */
+export function useVersionHistoryExits(): Pick<VersionHistoryRoute, "onGiveWay" | "onPreload"> {
+  const router = useRouter();
+  const navigate = useNavigate();
+  const access = useRouteAccess();
+
+  const onGiveWay = () => {
+    const now = standingNowOf(router, access);
+
+    if (now === undefined) return;
+    void navigate({
+      to: "/$workspace/task/$taskId",
+      params: { workspace: now.workspace, taskId: now.task },
+      replace: true,
+    });
+  };
+
+  const onPreload = (into: string, named: string) =>
+    void router.preloadRoute({
+      to: "/$workspace/task/$taskId/versions",
+      params: { workspace: into, taskId: named },
+    });
+
+  return { onGiveWay, onPreload };
+}
+
 /** A task's version history as the router stands it, in a room `narrow` or not, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for where it stands. */
 export function useVersionHistoryRoute(input: { narrow: boolean }): VersionHistoryRoute {
   const exits = useRoutedExits();
@@ -156,19 +199,13 @@ export function useVersionHistoryRoute(input: { narrow: boolean }): VersionHisto
   const navigate = useNavigate();
   const here = useWindowPlace();
   const access = useRouteAccess();
+  const { onGiveWay, onPreload } = useVersionHistoryExits();
 
   const standing =
     here.place === ROUTED_PLACE.VERSION_HISTORY ? standingOf(here.leaf, here.params) : undefined;
 
   // Note that the doors read where the history stands as they are pressed, since a door held from an earlier draw may be pressed after it moved.
-  const standingNow = () => {
-    const matches = router.matchRoutes(router.history.location.pathname);
-
-    if (routedPlaceOf(matches, access) !== ROUTED_PLACE.VERSION_HISTORY) return undefined;
-    const last = matches.at(-1);
-
-    return standingOf(last?.routeId, last?.params ?? {});
-  };
+  const standingNow = () => standingNowOf(router, access);
 
   const go = (href: string, replace: boolean) => {
     // Standing the history where it stands moves nothing, as pressing the place standing always has, and keeps it standing.
@@ -200,17 +237,6 @@ export function useVersionHistoryRoute(input: { narrow: boolean }): VersionHisto
       ? undefined
       : addressOf(router, { ...standing.spot, listed: true }, standing.workspace, standing.task);
 
-  const onGiveWay = () => {
-    const now = standingNow();
-
-    if (now === undefined) return;
-    void navigate({
-      to: "/$workspace/task/$taskId",
-      params: { workspace: now.workspace, taskId: now.task },
-      replace: true,
-    });
-  };
-
   return {
     open: standing !== undefined,
     workspace: standing?.workspace,
@@ -221,10 +247,6 @@ export function useVersionHistoryRoute(input: { narrow: boolean }): VersionHisto
     onMove,
     onClose: () => exits.leave(),
     onGiveWay,
-    onPreload: (into, named) =>
-      void router.preloadRoute({
-        to: "/$workspace/task/$taskId/versions",
-        params: { workspace: into, taskId: named },
-      }),
+    onPreload,
   };
 }

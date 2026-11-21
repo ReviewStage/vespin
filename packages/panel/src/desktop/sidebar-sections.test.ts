@@ -240,7 +240,7 @@ function sidebarOver(
   return drawnSidebar(sidebarProps(tasks));
 }
 
-/** The sidebar over `sections`, Launch unless said, and a way to draw it again over other sections, as a refresh does. */
+/** The sidebar over `sections`, Launch unless said, and a way to draw it again over other sections or tasks, as a refresh does. */
 async function mountSidebarRedrawn(
   writes: TaskSectionWrite[],
   sections = SECTIONS,
@@ -250,14 +250,14 @@ async function mountSidebarRedrawn(
   const root = createRoot(container);
   roots.push(root);
 
-  const draw = async (sections: TaskSections) => {
+  const draw = async (sections: TaskSections, drawnRest = rest) => {
     act(() =>
       root.render(
         withQueryClient(
           createElement(
             Fragment,
             null,
-            sidebarOver(sections, writes, rest),
+            sidebarOver(sections, writes, drawnRest),
             createElement(ToastHost),
           ),
         ),
@@ -860,6 +860,48 @@ test("a plain click on any row, with tasks chosen and no bar to let them go, ope
   noneChosen();
 });
 
+test("⌃⌥↓ pressed again before the host answers the first steps on from the row just asked for", async () => {
+  const opened: string[] = [];
+  const third = task("0a1b2c3d-0000-4000-8000-100000000003", "Rate limits");
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+
+  // The host still has the first row open; the window has asked for `bound`, which it has not answered yet.
+  const draw = async (open: string, bound: string) => {
+    act(() =>
+      root.render(
+        withQueryClient(
+          sidebarOver({ sections: [], entries: [], agentEntries: [] }, [], {
+            tasks: [INVITES, RETRIES, third],
+            activeTaskId: open,
+            boundFor: bound,
+            onResume: (taskId) => opened.push(taskId),
+          }),
+        ),
+      ),
+    );
+    await settle();
+  };
+
+  await draw(INVITES.id, INVITES.id);
+
+  const order = [...container.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].map(
+    (row) => [INVITES, RETRIES, third].find((each) => row.textContent?.includes(each.name))?.id,
+  );
+
+  assert.equal(order.length, 3);
+  const [first, second, last] = order;
+  assert.ok(first !== undefined && second !== undefined && last !== undefined);
+
+  await draw(first, first);
+  act(() => void runAppCommand(APP_COMMAND.NEXT_TASK));
+  await draw(first, second);
+  act(() => void runAppCommand(APP_COMMAND.NEXT_TASK));
+
+  assert.deepEqual(opened, [second, last]);
+});
+
 test("a section's Mark all as read stands while a task in it is unread, and asks the service to mark every unread one read", async () => {
   const marks: string[] = [];
   fakeActPort({
@@ -1281,6 +1323,26 @@ test("Pinned's ⋯ stands while a pinned task is unread, and its Mark all as rea
   await settle();
 
   assert.deepEqual(marks, [`read:${PINNED.id}`]);
+});
+
+test("Pinned's ⋯ comes to stand once a pinned task's agents act after the reader last looked, nothing else of it moved", async () => {
+  const actedAt = (activityAt: number) => ({
+    tasks: [
+      {
+        ...PINNED,
+        readThrough: PINNED.updatedAt,
+        agents: { total: 1, working: 0, activityAt, pullRequestTotal: 0 },
+      },
+    ],
+  });
+
+  const { container, draw } = await mountSidebarRedrawn([], SECTIONS, actedAt(PINNED.updatedAt));
+
+  assert.equal(container.querySelector('[aria-label="Pinned actions"]'), null);
+
+  await draw(SECTIONS, actedAt(PINNED.updatedAt + 1));
+
+  assert.notEqual(container.querySelector('[aria-label="Pinned actions"]'), null);
 });
 
 test("a task row in Pinned and in a section shows when its agents last did something, as a row in Tasks does", async () => {
