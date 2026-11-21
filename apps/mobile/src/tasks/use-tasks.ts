@@ -634,6 +634,42 @@ function useListedRows(): ListedRows {
   return { tasks, agents };
 }
 
+/** A task row's mark and pin, as every list of tasks and a task page's related rows write them. */
+export interface TaskRowWrites {
+  readonly markRead: (taskId: string, unread: boolean) => void;
+  readonly pin: (taskId: string, pinned: boolean) => void;
+}
+
+/** The writes a task's row offers that no list's shape bears on, its mark and its pin, each through `useWrite`. */
+export function useTaskRowWrites(): TaskRowWrites {
+  const acts = useHostActs();
+  const write = useWrite();
+
+  return useMemo(() => {
+    // Note that the host draws a mark and a pin on the row the moment they are asked, and puts either back where the service refused it.
+    const markRead = (taskId: string, unread: boolean) => {
+      const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
+      write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }), {
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_READ, id: taskId },
+      });
+    };
+
+    // Note that a pin taps as a toggle does, lighter than a status's buzz.
+    const pin = (taskId: string, pinned: boolean) => {
+      write(() => acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }), {
+        refused: (landed) =>
+          landed ? undefined : MARK_FAILED_NOTES[pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN],
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_PIN, id: taskId },
+        went: BUZZ.SELECTION,
+      });
+    };
+
+    return { markRead, pin };
+  }, [acts, write]);
+}
+
 /**
  * The chosen workspace's tasks as the panel's phone Tasks lists them, under
  * `search` where one is typed, with each status a press set drawn at once;
@@ -655,6 +691,7 @@ export function useTasksListing(search: string): ReadListing {
   const follow = useFollowWrite();
   const placing = useTaskPlacing(workspace?.id);
   const relations = useTaskRelationWrites();
+  const { markRead, pin } = useTaskRowWrites();
   const pictureOf = useMemberPictures();
   const members = useListedMembers(workspace?.id);
   const searching = useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
@@ -687,26 +724,6 @@ export function useTasksListing(search: string): ReadListing {
 
     const lookOf = (task: TaskSummary) =>
       taskRowLook(task, waiting.byTask.get(task.id) ?? 0, taskPullRequests);
-
-    // Note that the host draws a mark and a pin on the row the moment they are asked, and puts either back where the service refused it.
-    const markRead = (taskId: string, unread: boolean) => {
-      const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
-      write(() => acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }), {
-        retry: true,
-        subject: { kind: WRITE_SUBJECT.TASK_READ, id: taskId },
-      });
-    };
-
-    // Note that a pin taps as a toggle does, lighter than a status's buzz.
-    const pin = (taskId: string, pinned: boolean) => {
-      write(() => acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }), {
-        refused: (landed) =>
-          landed ? undefined : MARK_FAILED_NOTES[pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN],
-        retry: true,
-        subject: { kind: WRITE_SUBJECT.TASK_PIN, id: taskId },
-        went: BUZZ.SELECTION,
-      });
-    };
 
     // Note that the host draws the move on the list the moment it is asked, and puts it back where the service refused it, which the failure notice says.
     const place = (taskId: string, sectionId: string | null) =>
@@ -778,6 +795,8 @@ export function useTasksListing(search: string): ReadListing {
     setPriority,
     setAssignee,
     follow,
+    markRead,
+    pin,
   ]);
 
   return useMemo(() => ({ ...rest, found, searching }), [rest, found, searching]);
@@ -1190,8 +1209,8 @@ function rowQuestion(
   };
 }
 
-type UseListingAsksResult = {
-  readonly listing: TasksListing;
+type UseListingAsksResult<Read> = {
+  readonly listing: Read & Pick<TasksListing, "setStatus" | "askDelete" | "rowAsks" | "doors">;
   readonly status: StatusQuestion;
   readonly deletion: StatusQuestion;
 };
@@ -1203,7 +1222,10 @@ type UseListingAsksResult = {
  * and the two questions, which the screen draws where a page raised them;
  * one a row raised stands by that row (`rowAsks`).
  */
-export function useListingAsks(read: ReadListing, doors: TaskRowDoors): UseListingAsksResult {
+export function useListingAsks<Read extends Pick<ReadListing, "setStatus" | "workingAgents">>(
+  read: Read,
+  doors: TaskRowDoors,
+): UseListingAsksResult<Read> {
   const status = useStatusAsk(read);
   const { remove } = useTaskWrites();
   const deletion = useDeleteAsk(remove);
