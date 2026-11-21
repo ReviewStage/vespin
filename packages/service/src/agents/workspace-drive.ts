@@ -96,7 +96,7 @@ import {
   repositoryFirewallOver,
   repositorySandboxOver,
   type SandboxRunner,
-} from "./machine/sandbox-machine.js";
+} from "./machine/sandbox-checkout.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import {
   prunedWorkspaceFolders,
