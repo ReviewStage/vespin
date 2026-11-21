@@ -153,7 +153,6 @@ import {
   Button,
   CHAT_RUN,
   CHAT_SIDE,
-  CHAT_TONE,
   ChatBubble,
   CodeCard,
   CompactedLine,
@@ -171,6 +170,7 @@ import {
   MESSAGE_LINE_INSET,
   MessageHead,
   MessageLine,
+  type MessageLineInset,
   MovedLine,
   NewSessionLine,
   OneLine,
@@ -218,7 +218,9 @@ import {
   useState,
 } from "react";
 import {
+  ACTOR_SIZE,
   ActorLine,
+  ActorMark,
   ActorRef,
   AutomationCard,
   automationActor,
@@ -661,13 +663,38 @@ const LiveDoors = createContext<Pick<DelegationDoors, "cards"> | undefined>(unde
 /** A Manager's chat in runs (`managerChatRuns`), where the transcript is one (`managerChatLines`), whose messages are drawn as bubbles in their runs; none for every other agent. */
 const ChatRuns = createContext<ManagerChatRuns | undefined>(undefined);
 
-/** A Manager's face, which stands beside each run of its chat's messages (`ChatBubble`'s `avatar`); none for every other agent, and for a Manager a service older than faces answers. */
-const ChatFace = createContext<ManagerFaceValue | undefined>(undefined);
+/** A Manager as its chat draws it: its name over each run of its messages, and its face beside the run (`ChatBubble`'s `avatar`), none where a service older than faces answers. */
+interface ChatManagerLook {
+  readonly name: string;
+  readonly face: ManagerFaceValue | undefined;
+}
+
+/** The Manager whose chat a transcript is; none for every other agent. */
+const ChatManager = createContext<ChatManagerLook | undefined>(undefined);
 
 /** The face beside a Manager's bubbles, at a message's seat; none where it wears none. */
 function chatAvatar(face: ManagerFaceValue | undefined): React.JSX.Element | undefined {
   return face === undefined ? undefined : (
     <ManagerFace face={face} size={MANAGER_FACE_SIZE.MESSAGE} />
+  );
+}
+
+/** Where a run's head and the line under it start: past the face beside its bubbles, or at the bubble's inset where none stands. */
+function chatInset(face: ManagerFaceValue | undefined): MessageLineInset {
+  return face === undefined ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR;
+}
+
+/** A Manager's name over a run of its messages, as a group chat names a speaker over theirs. */
+function ManagerChatHead({ manager }: { manager: ChatManagerLook }): React.JSX.Element {
+  return (
+    <MessageHead
+      inset={chatInset(manager.face)}
+      sender={
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
+          {manager.name}
+        </Text>
+      }
+    />
   );
 }
 
@@ -2114,7 +2141,7 @@ export function AgentMessage({
         <ChatLine
           message={message}
           runs={chatRuns}
-          named={named}
+          sender={sender}
           subject={subject}
           shown={shown}
           words={sentWords}
@@ -2261,10 +2288,10 @@ export function AgentMessage({
 /** A Manager's greeting, drawn as its first message though no one sent it and nothing stores it (`@repo/features/manager-greeting`). */
 function ManagerGreetingMessage({
   words,
-  face,
+  manager,
 }: {
   readonly words: string;
-  readonly face: ManagerFaceValue | undefined;
+  readonly manager: ChatManagerLook | undefined;
 }): React.JSX.Element {
   return (
     <Message
@@ -2272,7 +2299,8 @@ function ManagerGreetingMessage({
       className={RECEIVED_MESSAGE_CLASS}
       data-manager-greeting=""
     >
-      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(face)}>
+      {manager === undefined ? null : <ManagerChatHead manager={manager} />}
+      <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE} avatar={chatAvatar(manager?.face)}>
         <TranscriptWords text={words} />
       </ChatBubble>
     </Message>
@@ -2280,17 +2308,17 @@ function ManagerGreetingMessage({
 }
 
 /**
- * A person's line in a Manager's chat: a bubble at the column's right,
- * whoever sent it, the Manager's standing at the left, shaped by where it
- * stands in its sender's run, its Copy and Edit, and its mark where it did
- * not go, beside it, and when it was sent under the run's last. Note that
- * a sender is named over their run only where more than one person writes
- * in the chat, and the reader never, as a group chat names its speakers.
+ * A person's line in a Manager's chat, as a group chat draws it: the
+ * reader's own in a bubble at the column's right, and anyone else's at its
+ * left, as the Manager's stand, under their name over their run and beside
+ * their picture at the run's foot. Each bubble is shaped by where it stands
+ * in its sender's run, its Copy and Edit, and its mark where it did not go,
+ * beside it, and when it was sent stands under the run's last.
  */
 function ChatLine({
   message,
   runs,
-  named,
+  sender,
   subject,
   shown,
   words,
@@ -2301,8 +2329,8 @@ function ChatLine({
 }: {
   message: AgentTranscriptMessage;
   runs: ManagerChatRuns;
-  /** Who sent it, as the transcript names them; none for the reader's own. */
-  named: ReactNode;
+  /** Who sent it; none for the reader's own. */
+  sender: Actor | undefined;
   /** What heads the line, such as the suggestion it was sent from; none where nothing does. */
   subject: ReactNode;
   /** Its words as drawn, empty for a line of files alone. */
@@ -2314,10 +2342,13 @@ function ChatLine({
   status: string | undefined;
 }): React.JSX.Element {
   const place = runs.places.get(message.id) ?? LONE_RUN;
+  const received = sender !== undefined;
 
   const head =
-    place.opens && runs.people > 1 && named !== null ? (
-      <MessageHead sender={named}>{subject}</MessageHead>
+    received && place.opens ? (
+      <MessageHead inset={MESSAGE_LINE_INSET.AVATAR} sender={<ActorRef actor={sender} nameOnly />}>
+        {subject}
+      </MessageHead>
     ) : (
       subject
     );
@@ -2327,7 +2358,8 @@ function ChatLine({
   return (
     <MessageFiles message={message} words={shown} sending={sending}>
       <Message
-        from={MESSAGE_ROLE.USER}
+        from={received ? MESSAGE_ROLE.ASSISTANT : MESSAGE_ROLE.USER}
+        className={received ? RECEIVED_MESSAGE_CLASS : undefined}
         data-message-id={message.id}
         data-undelivered={marked ? "" : undefined}
       >
@@ -2335,9 +2367,9 @@ function ChatLine({
         <MessageFileChips message={message} sending={sending} />
         {shown !== "" ? (
           <ChatBubble
-            side={CHAT_SIDE.SENT}
+            side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
             run={chatRunOf(place.opens, place.closes)}
-            tone={CHAT_TONE.ACCENT}
+            avatar={received ? <ActorMark actor={sender} size={ACTOR_SIZE.CARD} /> : undefined}
             beside={
               <>
                 {mark}
@@ -2352,6 +2384,8 @@ function ChatLine({
           <MessageBeside mark={mark}>{null}</MessageBeside>
         )}
         <MessageLine
+          align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+          inset={received ? MESSAGE_LINE_INSET.AVATAR : MESSAGE_LINE_INSET.BUBBLE}
           status={status}
           at={place.closes ? message.sentAt : undefined}
           actions={shown === "" ? copy : undefined}
@@ -2363,7 +2397,8 @@ function ChatLine({
 
 /**
  * One of a Manager's chat messages (`managerChatLines`): its words in a
- * bubble at the column's left, shaped by where it stands in its run, its
+ * bubble at the column's left, under the Manager's name where it opens its
+ * run, shaped by where it stands in its run, its
  * Copy beside it once it is whole, and when it was sent under the run's
  * last where its turn has ended. Note that it offers no link, rewind, or
  * fork, because a message after its turn's first stands under its call's
@@ -2382,7 +2417,8 @@ function ChatSent({
   moving: boolean;
   children: ReactNode;
 }): React.JSX.Element {
-  const face = useContext(ChatFace);
+  const manager = useContext(ChatManager);
+  const face = manager?.face;
 
   return (
     <Message
@@ -2390,6 +2426,7 @@ function ChatSent({
       className={RECEIVED_MESSAGE_CLASS}
       data-message-id={message.id}
     >
+      {place.opens && manager !== undefined ? <ManagerChatHead manager={manager} /> : null}
       <ChatBubble
         side={CHAT_SIDE.RECEIVED}
         run={chatRunOf(place.opens, place.closes)}
@@ -2400,7 +2437,7 @@ function ChatSent({
       </ChatBubble>
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
-        inset={face === undefined ? MESSAGE_LINE_INSET.BUBBLE : MESSAGE_LINE_INSET.AVATAR}
+        inset={chatInset(face)}
         at={place.closes && !moving ? message.finishedAt : undefined}
       />
     </Message>
@@ -3071,7 +3108,7 @@ function AgentTranscriptView({
   olderFailed = false,
   fromStart,
   greeting,
-  face,
+  manager,
   chat = false,
   overComposer = false,
   overEnd,
@@ -3145,8 +3182,8 @@ function AgentTranscriptView({
   fromStart: boolean;
   /** The greeting a Manager's conversation opens on, drawn above its first line; none for every other agent. */
   greeting?: string | undefined;
-  /** A Manager's face, beside each run of its chat (`ChatFace`); none for every other agent, and for a Manager a service older than faces answers. */
-  face?: ManagerFaceValue | undefined;
+  /** The Manager whose chat this is, named over each run of its messages and its face beside it (`ChatManager`); none for every other agent. */
+  manager?: ChatManagerLook | undefined;
   /** Whether the messages are a Manager's chat (`managerChatLines`), drawn as bubbles in their runs. */
   chat?: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
@@ -3408,7 +3445,7 @@ function AgentTranscriptView({
             </div>
           )}
           {!working || waitingNotice ? null : chat ? (
-            <ChatWorking words={workingWords} face={face} />
+            <ChatWorking words={workingWords} face={manager?.face} />
           ) : (
             <WorkingLine startedAt={startedAt} words={workingWords} />
           )}
@@ -3463,7 +3500,7 @@ function AgentTranscriptView({
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ChatRuns value={chatRuns}>
-            <ChatFace value={face}>
+            <ChatManager value={manager}>
               <ConnectionNames needed={callsServer}>
                 <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
                   {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
@@ -3513,7 +3550,7 @@ function AgentTranscriptView({
                         return (
                           <>
                             {at === 0 && fromStart && greeting !== undefined ? (
-                              <ManagerGreetingMessage words={greeting} face={face} />
+                              <ManagerGreetingMessage words={greeting} manager={manager} />
                             ) : null}
                             {heads ? (
                               <CallStarts spans={calls.opens.get(message.id)} callerOf={callerOf} />
@@ -3587,7 +3624,7 @@ function AgentTranscriptView({
                   <ConversationScrollButton />
                 </Conversation>
               </ConnectionNames>
-            </ChatFace>
+            </ChatManager>
           </ChatRuns>
         </LiveDoors>
       </TranscriptAgentOn>
@@ -3625,11 +3662,13 @@ function AgentTranscriptView({
 
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {greeting === undefined ? null : <ManagerGreetingMessage words={greeting} face={face} />}
+        {greeting === undefined ? null : (
+          <ManagerGreetingMessage words={greeting} manager={manager} />
+        )}
         {starting ??
           (greeting !== undefined && working ? (
             // Note that a Manager's chat says only that it works, whatever its turn holds, even while nothing it sent stands yet.
-            <ChatWorking words={workingLineWords(phase, waitsUntil)} face={face} />
+            <ChatWorking words={workingLineWords(phase, waitsUntil)} face={manager?.face} />
           ) : greeting !== undefined && leadLine === BLANK_AGENT_LINE.WAITING ? null : (
             <WorkingLine startedAt={undefined} words={leadLine} />
           ))}
@@ -4173,7 +4212,7 @@ function AgentTabView({
                                 olderFailed={transcript.olderFailed}
                                 fromStart={transcript.pages > 0 && !transcript.hasOlder}
                                 greeting={chat ? managerGreeting(agent.title) : undefined}
-                                face={chat ? agent.face : undefined}
+                                manager={chat ? { name, face: agent.face } : undefined}
                                 chat={chat}
                                 overComposer
                                 overEnd={appsRoom}
