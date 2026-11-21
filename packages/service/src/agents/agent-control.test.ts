@@ -8,7 +8,7 @@ import { createTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { DateTime, Effect, Layer, Option } from "effect";
@@ -21,6 +21,7 @@ import {
   openGithubUser,
   openTokenMember,
 } from "../testing/github-app-fake.js";
+import { controlsAgent } from "./agent-reach.js";
 import { agentPullRequestReach } from "./coder-host/published.js";
 import { TAKEN_ON } from "./coder-host/replay.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
@@ -40,7 +41,9 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * forked, are refused before its harness, GitHub, or its sandbox is asked; a
  * teammate who keeps no token reaches nothing. And an agent the App reaches,
  * on a task on its owner's token, takes no message from a teammate who
- * reaches the agent but not the task, nor reads its pull requests. Synthetic accounts, tasks, and words
+ * reaches the agent but not the task, nor reads its pull requests. An agent
+ * on a machine its workspace owns is controlled by every teammate, as one
+ * in the cloud is, since that machine is no one member's to drive. Synthetic accounts, tasks, and words
  * throughout; the harness and GitHub answer nothing.
  */
 
@@ -223,5 +226,20 @@ it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
           copy: { copied: false, miss: SNAPSHOT_MISS.ON_DEVICE },
         });
       }).pipe(Effect.provide(NO_GITHUB)),
+  );
+});
+
+it("a teammate controls an agent on a machine its workspace owns, as one in the cloud, unlike one on its starter's own Mac", () => {
+  const ofStarter = (machine: AgentMachineKind) => ({
+    userId: "user-starter",
+    githubAccess: GITHUB_ACCESS.APP,
+    machine,
+  });
+
+  assert.deepEqual(
+    [AGENT_MACHINE.WORKSPACE, AGENT_MACHINE.VERCEL, AGENT_MACHINE.DEVICE].map((machine) =>
+      controlsAgent("user-teammate", ofStarter(machine)),
+    ),
+    [true, true, false],
   );
 });

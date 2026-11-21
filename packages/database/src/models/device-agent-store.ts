@@ -4,8 +4,10 @@
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * account, so no account queues for, claims, settles, or reads another's
  * agent. A row is queued only for an agent of the account that runs on a
- * Mac, and goes to the Mac the agent is pinned to, which must be the
- * account's too. A host reads, claims, settles, and answers by its
+ * host's machine, and goes to the machine the agent is pinned to, by the
+ * agent's kind of machine (`AGENT_MACHINE`): a local agent's device must be
+ * the account's own, and a workspace-machine agent's machine must be one
+ * its own workspace owns. A host reads, claims, settles, and answers by its
  * principal (`HostPrincipal`): only the rows on its own device, while its
  * owner owns that device, which on a member's own device are that member's
  * alone and on a workspace's machine are every member's. A row is
@@ -236,16 +238,24 @@ function answerOf(row: typeof AnswerRowSchema.Type): typeof AnswerRowSchema.Type
 const lineBefore = alias(deviceAgentLine, "line_before");
 
 /**
- * The agent of the account, running on a Mac, joined to the Mac it is
- * pinned to where the account holds that Mac too: what a queue's insert
- * selects from, so it writes nothing for anyone else's agent or Mac.
+ * The agent of the account, joined to the machine it is pinned to where
+ * that machine's owner is the one its kind names: a local agent on a device
+ * the account owns, or a workspace-machine agent on a machine the agent's
+ * own workspace owns. What a queue's insert selects from, so it writes
+ * nothing for anyone else's agent, onto anyone else's device, or onto
+ * another workspace's machine.
  */
 function pinnedAgent(userId: string, agentId: string) {
   return and(
     eq(agentTable.id, agentId),
     eq(agentTable.userId, userId),
-    eq(agentTable.machine, AGENT_MACHINE.DEVICE),
-    eq(device.userId, userId),
+    or(
+      and(eq(agentTable.machine, AGENT_MACHINE.DEVICE), eq(device.userId, userId)),
+      and(
+        eq(agentTable.machine, AGENT_MACHINE.WORKSPACE),
+        eq(device.organizationId, agentTable.organizationId),
+      ),
+    ),
   );
 }
 
@@ -1049,8 +1059,8 @@ const deleteExpiredRequests = SqlSchema.void({
  * the next place in the order every line is queued in, with the sealed
  * secrets a launch line carries, its caller holding the agent's runner
  * lease; its id and place, or none where the account holds no such agent
- * running on a Mac of its own, or the Mac never registered the capability
- * the line's kind needs.
+ * pinned to a machine its kind admits (`pinnedAgent`), or the machine never
+ * registered the capability the line's kind needs.
  */
 export function queueDeviceAgentLine(
   userId: string,
@@ -1119,9 +1129,10 @@ export function deviceAgentPin(agentId: string): DeviceAgentEffect<Option.Option
 }
 
 /**
- * Whether the account's local agent's device last beat that it waits to
- * switch release (`HOST_UPDATE.WAITING`); false for an agent in a sandbox,
- * one pinned to no device of the account's, and another account's agent.
+ * Whether the machine the account's agent is pinned to last beat that it
+ * waits to switch release (`HOST_UPDATE.WAITING`); false for an agent in a
+ * sandbox, one pinned to no machine its kind admits (`pinnedAgent`), and
+ * another account's agent.
  */
 export function deviceAgentAwaitsUpdate(
   userId: string,
@@ -1322,7 +1333,7 @@ export function settleMovedDeviceAgentLaunches(
 /**
  * Queues one request for the account's agent, to the Mac it is pinned to,
  * under the id its caller minted; false where the account holds no such
- * agent running on a Mac of its own.
+ * agent pinned to a machine its kind admits (`pinnedAgent`).
  */
 export function queueDeviceAgentRequest(
   userId: string,
