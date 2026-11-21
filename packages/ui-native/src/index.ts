@@ -60,7 +60,7 @@ export {
   type StandingCallCard,
 } from "./call.js";
 
-export { ChipMarkProvider } from "./chip-mark.js";
+export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
   CHIP_MARK,

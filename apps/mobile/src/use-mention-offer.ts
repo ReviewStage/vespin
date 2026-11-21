@@ -7,7 +7,9 @@
  * people, the reader first; with words typed, the date they name, then the
  * workspace's agents, tasks and people, the task's pages, the workspace's
  * threads and the task's pull requests the words find, as
- * `@repo/features/mention-offer` groups and scores them. In a field that
+ * `@repo/features/mention-offer` groups and scores them, each row wearing
+ * the mark the chip a pick writes leads with (`useChipMarkOf`), a pull
+ * request its state's and a thread its ask's. In a field that
  * draws pills (`PillField`), the word is the one its caret stands in, as the
  * field tells it, and a pick puts the mention's pill in its place, already
  * the link the panel's chip writes. In the system's field, which draws no
@@ -20,7 +22,14 @@
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { readerZone } from "@repo/features/date-mention";
-import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import { entityOfDestination } from "@repo/features/entity-kind";
+import { inboxLineKind } from "@repo/features/inbox-list-model";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  linkWorkspaceStep,
+} from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   atWordEnding,
@@ -37,12 +46,24 @@ import {
 } from "@repo/features/mention-offer";
 import { agentName } from "@repo/features/model-label";
 import { PAGE_OWNER } from "@repo/features/page-wire";
+import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { sinceText } from "@repo/features/time-format";
 import { taskKey } from "@repo/features/workspace-key";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { BUZZ, buzz, GLYPH, type Glyph, type MentionSuggestionGroup } from "@repo/ui-native";
+import {
+  BUZZ,
+  buzz,
+  CHIP_MARK,
+  type ChipMark,
+  GLYPH,
+  type Glyph,
+  INBOX_LINE_LOOK,
+  type MentionSuggestionGroup,
+  PULL_REQUEST_LOOK,
+  useChipMarkOf,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
@@ -84,6 +105,17 @@ function heldOf(taskId: string | undefined) {
     pages: taskId === undefined ? undefined : state[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows,
     threads: state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK],
   });
+}
+
+/** A thread an `@` offers, and whether it is the task's own, which Suggested holds. */
+interface ThreadCandidate extends MentionCandidate {
+  readonly own: boolean;
+}
+
+/** The groups an `@` word offers, and each row's mark by the link a pick writes. */
+interface Offered {
+  readonly groups: readonly MentionGroup[];
+  readonly marks: ReadonlyMap<string, ChipMark>;
 }
 
 /** What an `@` being typed offers, what stands where nothing matches, and the press that writes one. */
@@ -135,12 +167,24 @@ export function useMentionOffer(
   );
   const held = useQuery({ ...appStateQuery, select: useMemo(() => heldOf(taskId), [taskId]) }).data;
   const taskPullRequests = useTaskListRow(useTaskListCollections().taskPullRequests, taskId);
+  const markOf = useChipMarkOf();
   // The mentions picked into the words, which the send writes as their links where they still stand.
   const picked = useRef<PickedMention[]>([]);
 
-  const groups = useMemo((): readonly MentionGroup[] => {
-    if (!asking || step === undefined) return [];
+  const { groups, marks } = useMemo((): Offered => {
+    if (!asking || step === undefined) return { groups: [], marks: new Map() };
     const now = Date.now();
+    // Each row's mark by the link a pick writes, as the chip it becomes leads with it.
+    const marks = new Map<string, ChipMark>();
+
+    const marked = (destination: LinkDestination): string => {
+      const target = linkOf(destination, step);
+      const mark = markOf(entityOfDestination(destination));
+
+      if (mark !== undefined) marks.set(target, mark);
+
+      return target;
+    };
 
     const ownAgents = agents.filter(
       (agent) => agent.workspaceId === workspaceId && agent.archivedAt === undefined,
@@ -150,7 +194,7 @@ export function useMentionOffer(
       id: agent.id,
       kind: MENTION_OFFER_KIND.AGENT,
       name: agentName(agent),
-      target: linkOf({ kind: LINK_DESTINATION.AGENT, agentId: agent.id }, step),
+      target: marked({ kind: LINK_DESTINATION.AGENT, agentId: agent.id }),
     });
 
     const ownTasks = tasks.filter((task) => task.workspaceId === workspaceId);
@@ -168,7 +212,7 @@ export function useMentionOffer(
         name: task.name,
         detail: key,
         key,
-        target: linkOf({ kind: LINK_DESTINATION.TASK, taskId: task.id }, step),
+        target: marked({ kind: LINK_DESTINATION.TASK, taskId: task.id }),
       };
     });
 
@@ -198,18 +242,29 @@ export function useMentionOffer(
         (one, other) =>
           Number(other.own) - Number(one.own) || other.item.updatedAt - one.item.updatedAt,
       )
-      .map(({ item, threadTaskId, holder, own }): MentionCandidate & { readonly own: boolean } => ({
-        id: item.id,
-        kind: MENTION_OFFER_KIND.THREAD,
-        name: item.title,
-        detail: holder,
-        terms: [holder],
-        target: linkOf(
+      .map(({ item, threadTaskId, holder, own }): ThreadCandidate => {
+        const target = linkOf(
           { kind: LINK_DESTINATION.INBOX_ITEM, taskId: threadTaskId, itemId: item.id },
           step,
-        ),
-        own,
-      }));
+        );
+
+        // Note that a thread wears what its last line asks, as its Inbox row does, and a plain message keeps the thread's glyph.
+        const look = INBOX_LINE_LOOK[inboxLineKind(item)];
+
+        if (look !== undefined) {
+          marks.set(target, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });
+        }
+
+        return {
+          id: item.id,
+          kind: MENTION_OFFER_KIND.THREAD,
+          name: item.title,
+          detail: holder,
+          terms: [holder],
+          target,
+          own,
+        };
+      });
 
     // Note that a pull request with no address yet offers nothing, since a pick writes its GitHub address.
     const pullRequests = (taskPullRequests?.pullRequests ?? []).flatMap(
@@ -218,6 +273,8 @@ export function useMentionOffer(
 
         if (url === undefined) return [];
         const publisher = ownAgents.find((agent) => agent.id === pullRequest.agentId);
+        const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
+        marks.set(url, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });
 
         return [
           {
@@ -247,7 +304,7 @@ export function useMentionOffer(
         name: member.name,
         detail: member.you ? YOU : member.email,
         terms: [member.email],
-        target: linkOf({ kind: LINK_DESTINATION.PERSON, userId: member.userId }, step),
+        target: marked({ kind: LINK_DESTINATION.PERSON, userId: member.userId }),
       })),
       pages,
       threads,
@@ -255,8 +312,9 @@ export function useMentionOffer(
       dates: dateCandidates(word.query, now, readerZone(), { workspace: step, repository: null }),
     };
 
-    return mentionGroups(sources, word.query);
+    return { groups: mentionGroups(sources, word.query), marks };
   }, [
+    markOf,
     asking,
     step,
     agents,
@@ -283,9 +341,10 @@ export function useMentionOffer(
     offered: {
       groups: groups.map((group) => ({
         title: group.title,
-        rows: group.rows.map(({ id, kind, name, detail }) => ({
+        rows: group.rows.map(({ id, kind, name, detail, target }) => ({
           id,
           glyph: KIND_GLYPH[kind],
+          mark: marks.get(target),
           name,
           detail,
         })),
