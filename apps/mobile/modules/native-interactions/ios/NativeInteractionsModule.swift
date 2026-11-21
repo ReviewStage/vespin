@@ -39,6 +39,7 @@ public final class NativeInteractionsModule: Module {
 
     // Note that the modifiers are registered as the module is made, before any view draws, as the registry asks.
     OnCreate {
+      HeardActsProbe.startIfAsked()
       ViewModifierRegistry.register(ModifierName.cellFocusRingOff) { params, appContext, _ in
         return try CellFocusRingOffModifier(from: params, appContext: appContext)
       }
