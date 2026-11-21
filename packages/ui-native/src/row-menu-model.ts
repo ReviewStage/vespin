@@ -236,11 +236,7 @@ function actNode(
     kind: MENU_NODE.ACT,
     label: action.label,
     detail: action.detail,
-    // Note that a destructive act's glyph is drawn in `ink` itself, as the menu's other glyphs stand, beside its red words, because the destructive role reddens a template glyph too, where `@expo/ui`'s menu left it in the menu's ink.
-    icon:
-      action.symbol === undefined
-        ? undefined
-        : glyphIcon(action.symbol, destructive ? ink : undefined),
+    icon: action.symbol === undefined ? undefined : glyphIcon(action.symbol),
     destructive,
     disabled: action.disabled === true,
     tint: destructive ? undefined : ink,
