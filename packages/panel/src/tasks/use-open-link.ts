@@ -409,7 +409,10 @@ function openAddress(
 
 /** The window's router, which a press is matched on; none outside it, as in a test of one surface. */
 export function useLinkRouter(): LinkRouter | undefined {
-  return useRouter({ warn: false });
+  // Note that the router read answers null outside a router whatever its type says, so the null is made none here.
+  const router: LinkRouter | undefined = useRouter({ warn: false });
+
+  return router ?? undefined;
 }
 
 /** The opener for a plan, or one of its sections, as a mention's chip names it: where the place it is pressed on opens it, else in the window; nothing outside the window. */
