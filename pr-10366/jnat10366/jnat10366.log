@@ -1,0 +1,77 @@
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+built main 9c4a331c96 + #10366 2400e138da as 3b1e2103fc
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 03:06:19 14133 MB
+curve 03:06:50 13488 MB
+curve 03:07:20 11897 MB
+curve 03:07:50 11517 MB
+curve 03:08:20 11490 MB
+curve 03:08:50 11418 MB
+curve 03:09:20 11438 MB
+curve 03:09:50 15058 MB
+curve 03:10:21 14990 MB
+curve 03:10:51 15346 MB
+curve 03:11:21 15269 MB
+curve 03:11:51 15233 MB
+curve 03:12:21 15066 MB
+curve 03:12:52 14915 MB
+curve 03:13:22 14788 MB
+curve 03:13:52 14713 MB
+curve 03:14:22 14553 MB
+curve 03:14:52 14492 MB
+curve 03:15:22 14408 MB
+curve 03:15:53 14389 MB
+curve 03:16:23 14374 MB
+curve 03:16:53 14351 MB
+curve 03:17:23 14329 MB
+curve 03:17:53 14307 MB
+curve 03:18:23 14285 MB
+curve 03:18:54 14201 MB
+curve 03:19:24 14082 MB
+curve 03:19:54 14054 MB
+curve 03:20:24 14036 MB
+curve 03:20:54 14002 MB
+curve 03:21:24 13977 MB
+curve 03:21:55 13944 MB
+curve 03:22:25 13651 MB
+curve 03:22:55 13657 MB
+curve 03:23:25 13518 MB
+curve 03:23:55 13058 MB
+curve 03:24:26 12886 MB
+curve 03:24:56 12664 MB
+curve 03:25:26 12537 MB
+curve 03:25:56 12426 MB
+curve 03:26:26 12334 MB
+curve 03:26:56 12297 MB
+curve 03:27:26 12201 MB
+curve 03:27:57 12117 MB
+curve 03:28:27 12042 MB
+curve 03:28:57 12005 MB
+curve 03:29:27 12010 MB
+curve 03:29:57 11988 MB
+curve 03:30:27 11953 MB
+curve 03:30:57 11842 MB
+curve 03:31:28 11780 MB
+curve 03:31:58 11758 MB
+curve 03:32:28 11722 MB
+BUILD EXIT 0 03:32:58
+sizes: Assets.car 23840456 bytes (main Vmain7.app 23840456), .app 119596 KB (main 119000 KB), zipped .app 45124348 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10366.app: replacing existing signature
+p10366-iphone-light-inbox: fails 1 shots 4 Assert that ".*walked the invite flow.*" is visible... FAILED
+p10366-iphone-light-tasks: fails 1 shots 6 Tap on "Rename"... FAILED
+p10366-iphone-light-task-relations: fails 0 shots 5 
+p10366-iphone-dark-inbox: fails 1 shots 4 Assert that ".*walked the invite flow.*" is visible... FAILED
+p10366-iphone-dark-tasks: fails 1 shots 6 Tap on "Rename"... FAILED
+p10366-iphone-dark-task-relations: fails 0 shots 5 
+p10366-ipad27-light-inbox: fails 1 shots 10 Tap on "Done"... FAILED
+p10366-ipad27-light-tasks: fails 2 shots 30   Tap on "Search", Above "Tab Bar"... FAILED
+p10366-ipad27-light-task-relations: fails 0 shots 5 
+p10366-ipad27-dark-inbox: fails 1 shots 10 Tap on "Remind me"... FAILED
+p10366-ipad27-dark-tasks: fails 2 shots 30   Tap on "Search", Above "Tab Bar"... FAILED
+p10366-ipad27-dark-task-relations: fails 0 shots 5 
