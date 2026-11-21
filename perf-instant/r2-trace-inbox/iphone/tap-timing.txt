@@ -1,0 +1,9 @@
+/Users/deanstratakos/vespin-ipad-agent/trace-timing.zsh:25: no matches found: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/BB36C506-B861-4786-B6C5-37DB22BC03B7/Documents/perf-probe-*.jsonl
+probe rows 0, commands 4, frames 208
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+
+most rendered components per path (summed over its taps):
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+
+markdown vs the rest (React render ms per tap, from the components' own times):
