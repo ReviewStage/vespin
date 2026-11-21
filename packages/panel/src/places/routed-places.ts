@@ -725,7 +725,7 @@ export type RoutedPlace = (typeof ROUTED_PLACE)[keyof typeof ROUTED_PLACE];
 const PLACES: readonly RoutedPlace[] = Object.values(ROUTED_PLACE);
 
 /** What a place's gate reads of a match: its route and the params it was matched with. */
-interface RouteMatchSeen {
+export interface RouteMatchSeen {
   readonly routeId: string;
   readonly params: PlaceParams;
 }

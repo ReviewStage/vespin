@@ -15,7 +15,7 @@ import {
   type TaskNames,
 } from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
-import { type Collection, eq, or, useLiveQuery } from "@tanstack/react-db";
+import { type Collection, eq, useLiveQuery } from "@tanstack/react-db";
 import {
   createContext,
   type ReactNode,
@@ -184,29 +184,130 @@ export function useNamedTasks(
   }, [every, typedNames, order]);
 }
 
+/** The tasks a collection holds by their number, in any workspace, and each numbered task's number, as the deliveries left them. */
+interface NumberIndex {
+  readonly byNumber: Map<number, Set<string>>;
+  readonly numberOf: Map<string, number>;
+}
+
+/** Each task collection's numbers, kept from the first read of a step for the collection's life. */
+const numberIndexes = new WeakMap<object, NumberIndex>();
+
+/** Files the task under `key` under its number now, out from under the one it had; none takes it out. */
+function fileNumber(index: NumberIndex, key: string, number: number | undefined): void {
+  const was = index.numberOf.get(key);
+
+  if (was === number) return;
+
+  if (was !== undefined) {
+    const filed = index.byNumber.get(was);
+    filed?.delete(key);
+
+    if (filed?.size === 0) index.byNumber.delete(was);
+    index.numberOf.delete(key);
+  }
+
+  if (number === undefined) return;
+  index.numberOf.set(key, number);
+  index.byNumber.set(number, (index.byNumber.get(number) ?? new Set<string>()).add(key));
+}
+
+/**
+ * The tasks' numbers, read once from the rows held and kept by the rows
+ * each delivery moves, so a step finds the tasks it names without walking
+ * the list, as `history-rows.ts` keeps the tasks ever listed.
+ */
+function numberIndexOf(tasks: Collection<TaskSummary, string>): NumberIndex {
+  const known = numberIndexes.get(tasks);
+
+  if (known !== undefined) return known;
+  const index: NumberIndex = { byNumber: new Map(), numberOf: new Map() };
+
+  for (const [key, task] of tasks.entries()) fileNumber(index, key, task.number);
+  tasks.subscribeChanges((changes) => {
+    for (const change of changes) {
+      fileNumber(index, change.key, change.type === "delete" ? undefined : change.value.number);
+    }
+  });
+  numberIndexes.set(tasks, index);
+
+  return index;
+}
+
+/** The tasks `step` names as `tasks` holds them now: the one whose id it is, then each numbered so where it reads as a number. */
+function steppedOf(
+  tasks: Collection<TaskSummary, string>,
+  step: string | undefined,
+): readonly TaskSummary[] {
+  if (step === undefined) return NO_STEPPED;
+  const byId = tasks.get(step);
+
+  const numbered = NUMBER_STEP.test(step)
+    ? numberIndexOf(tasks).byNumber.get(Number(step))
+    : undefined;
+
+  const stepped = byId === undefined ? [] : [byId];
+
+  for (const key of numbered ?? []) {
+    const task = key === step ? undefined : tasks.get(key);
+
+    if (task !== undefined) stepped.push(task);
+  }
+
+  return stepped.length === 0 ? NO_STEPPED : stepped;
+}
+
+/** Whether two reads of a step hold the same rows, in the same order. */
+function sameStepped(one: readonly TaskSummary[], other: readonly TaskSummary[]): boolean {
+  return one.length === other.length && one.every((task, at) => other[at] === task);
+}
+
 /**
  * The tasks an address's step may name, as the list holds them: the one
  * whose id it is, and, for a step reading as a number, each numbered so in
  * any workspace, for the reader to hold to the workspace the address names;
- * none while no step is given. One live query over those rows keeps them,
- * so the list is the same array across a delivery moving any other task.
+ * none while no step is given. Note that they are looked up by id and by
+ * number (`numberIndexOf`) rather than by a query over the list, because the
+ * step moves with every step between tasks, and a query made for each walked
+ * every task; the list is the same array across a delivery moving any other
+ * task.
  */
 export function useSteppedTasks(step: string | undefined): readonly TaskSummary[] {
-  const collections = useTaskListCollections();
+  const { tasks } = useTaskListCollections();
+  const held = useRef<readonly TaskSummary[]>(NO_STEPPED);
 
-  const stepped = useLiveQuery({
-    query: (q) => {
-      if (step === undefined) return undefined;
-      const from = q.from({ task: collections.tasks });
+  const subscribe = useCallback(
+    (heard: RowHeard) => {
+      if (step === undefined) return LISTEN_TO_NOTHING();
+      const number = NUMBER_STEP.test(step) ? Number(step) : undefined;
+      const index = numberIndexOf(tasks);
 
-      if (!NUMBER_STEP.test(step)) return from.where(({ task }) => eq(task.id, step));
-      const number = Number(step);
+      // Note that a row read last is heard too, since a task numbered so no longer is filed under its new number by now.
+      const subscription = tasks.subscribeChanges((changes) => {
+        const moved = changes.some(
+          ({ key }) =>
+            key === step ||
+            (number !== undefined && index.numberOf.get(key) === number) ||
+            held.current.some((task) => task.id === key),
+        );
 
-      return from.where(({ task }) => or(eq(task.id, step), eq(task.number, number)));
+        if (moved) heard();
+      });
+
+      return () => subscription.unsubscribe();
     },
-  }).data;
+    [tasks, step],
+  );
 
-  return stepped ?? NO_STEPPED;
+  const read = (): readonly TaskSummary[] => {
+    const stepped = steppedOf(tasks, step);
+
+    if (!sameStepped(stepped, held.current)) held.current = stepped;
+
+    return held.current;
+  };
+
+  return useSyncExternalStore(subscribe, read, read);
 }
 
 /** The task list's rows read by id, as the collections hold them now. */

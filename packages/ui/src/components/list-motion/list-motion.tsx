@@ -117,6 +117,7 @@ import {
 } from "react";
 import { MOTION_TOKEN, milliseconds, styleTiming } from "../../motion-timing.js";
 import { runningMotions } from "../../use-disclosure.js";
+import { listenToMotionSetting } from "../../use-motion-held.js";
 
 /** What a list whose children move wears. */
 const ROWS_ATTRIBUTE = "data-motion-rows";
@@ -250,10 +251,15 @@ interface Snapshot {
   readonly frames: Map<HTMLElement, number>;
 }
 
-/** The tokens a commit over a root plays its exits and its glides on. */
+/** The tokens a commit over a root plays its exits, its glides, and its arrivals on, as they stand at the root. */
 interface Timings {
   readonly exit: KeyframeAnimationOptions | undefined;
   readonly spring: KeyframeAnimationOptions | undefined;
+  readonly arrive: KeyframeAnimationOptions | undefined;
+  /** How long each row arriving after the first waits on the one before it, in milliseconds. */
+  readonly stagger: number;
+  /** How far a row slides as it arrives or leaves, in CSS pixels. */
+  readonly travel: number;
 }
 
 /** What the motions over one root playing one commit share: where it started from, how many have still to hear it, and the exits handed them so far. */
@@ -303,6 +309,12 @@ const LEAVING_PLACE = {
 
 /** The commit each root is being played in, by the root, until the last motion over it has heard it. */
 const batches = new WeakMap<Element, Batch>();
+
+/** Each root's motion tokens as last read, null where they leave nothing to play; let go once reduced motion turns on or off (`tokensOf`). */
+let rootTokens = new WeakMap<Element, Timings | null>();
+
+/** Whether `rootTokens` is let go as the reduced-motion setting changes, which it is from the first read on. */
+let followingSetting = false;
 
 /** Whether the DOM plays motions at all. Note that a test's DOM has no animation engine, and runs none. */
 function animates(element: Element): boolean {
@@ -564,18 +576,53 @@ function placesOf(root: HTMLElement, elements: readonly Element[]): Map<Element,
  * animation engine, and tokens that leave its exits or its glides a
  * duration, as reduced motion and a capture run do not. Note that it is
  * asked before anything is measured, because measuring every row reads the
- * layout, which a commit that plays nothing never uses; and that both are
- * kept for the play, from one computed style read before the commit changes
- * the page, because a read after it restyles the page mid-commit, and again
- * after each exit begun between two reads.
+ * layout, which a commit that plays nothing never uses; and that they are
+ * kept for the play, because a read after the commit restyles the page
+ * mid-commit, and again after each exit begun between two reads.
  */
 function movingTimings(root: HTMLElement): Timings | undefined {
   if (!animates(root)) return undefined;
+
+  return tokensOf(root);
+}
+
+/**
+ * Every token a motion over `root` plays on, read from one computed style
+ * the first time the root plays, and kept: none of them changes while the
+ * root stands but by reduced motion, which reads them all again. Note that
+ * a read of a computed style restyles the page wherever a change has not
+ * been drawn yet, a commit's or the step's before it, so reading them on
+ * every commit cost a whole restyle of the window each step between tasks.
+ */
+function tokensOf(root: HTMLElement): Timings | undefined {
+  if (!followingSetting) {
+    followingSetting = true;
+    listenToMotionSetting(() => {
+      rootTokens = new WeakMap();
+    });
+  }
+
+  const known = rootTokens.get(root);
+
+  if (known !== undefined) return known ?? undefined;
   const style = getComputedStyle(root);
   const exit = styleTiming(style, MOTION_TOKEN.DURATION_EXIT, MOTION_TOKEN.EASE_EXIT);
   const spring = styleTiming(style, MOTION_TOKEN.DURATION_SPRING, MOTION_TOKEN.SPRING);
 
-  return exit === undefined && spring === undefined ? undefined : { exit, spring };
+  const read =
+    exit === undefined && spring === undefined
+      ? null
+      : {
+          exit,
+          spring,
+          arrive: styleTiming(style, MOTION_TOKEN.DURATION_QUICK, MOTION_TOKEN.EASE_EXIT),
+          stagger: milliseconds(style.getPropertyValue(MOTION_TOKEN.ROW_STAGGER)),
+          travel: Number.parseFloat(style.getPropertyValue(TRAVEL)) || 0,
+        };
+
+  rootTokens.set(root, read);
+
+  return read ?? undefined;
 }
 
 /** Every frame under `root`, the root itself included, outside any motion of its own inside it. */
@@ -680,12 +727,11 @@ function standingTop(root: HTMLElement, element: HTMLElement, before: Snapshot):
   return was - carrierWas - boxInCarrier - box.clientTop;
 }
 
-/** Where a row stands once gone, the way it arrives and leaves, read where the list stands. */
-function awayOf(root: HTMLElement, way: ListMotionWay): Keyframe {
+/** Where a row stands once gone, the way it arrives and leaves, `travel` its list's length away. */
+function awayOf(travel: number, way: ListMotionWay): Keyframe {
   if (way === LIST_MOTION_WAY.UNROLL) return { clipPath: ROLLED_UP };
 
   if (way === LIST_MOTION_WAY.SCALE) return { transform: `scale(${SCALED_AWAY})` };
-  const travel = Number.parseFloat(getComputedStyle(root).getPropertyValue(TRAVEL)) || 0;
 
   return { transform: `translateX(${-travel}px)` };
 }
@@ -777,17 +823,19 @@ function playExits(
   root: HTMLElement,
   leaving: readonly Exit[],
   before: Snapshot,
-  exit: KeyframeAnimationOptions | undefined,
+  timings: Timings | undefined,
   way: ListMotionWay,
   replay: () => void,
 ): void {
+  const exit = timings?.exit;
+
   if (exit === undefined) {
     for (const each of leaving) each.onLeft();
 
     return;
   }
 
-  const away = awayOf(root, way);
+  const away = awayOf(timings?.travel ?? 0, way);
   // Note that a row out of sight plays nothing, so a list that loses thousands at once, the Inbox's All to its To do, animates no more than a screenful.
   const seen = leaving.filter(({ element }) => before.places.get(element)?.seen === true);
 
@@ -854,6 +902,8 @@ interface MoveTiming {
   readonly travel: KeyframeAnimationOptions;
   readonly arrive: KeyframeAnimationOptions | undefined;
   readonly stagger: number;
+  /** How far a row slides as it arrives, in CSS pixels. */
+  readonly distance: number;
   readonly way: ListMotionWay;
   /** Whether a row arriving travels in from where it would leave to, or only fades in where it stands. */
   readonly travels: boolean;
@@ -1074,7 +1124,7 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
     return wasOf(mover) === undefined && list !== null && before.lists.has(list);
   });
 
-  const away = awayOf(root, timing.way);
+  const away = awayOf(timing.distance, timing.way);
   const seenArriving = arriving.filter((mover) => now.get(mover)?.seen === true);
 
   // Note that rows arriving in a leaving row's place, a choice's next rows, set the beat what they move glides on.
@@ -1273,24 +1323,20 @@ class ListMotionPlayer extends Component<
     const timings = animates(root) ? before.timings : undefined;
     const exit = timings?.exit;
     const { way } = this.props;
-    playExits(root, leaving, before, exit, way, this.props.leaves.replay);
+    playExits(root, leaving, before, timings, way, this.props.leaves.replay);
     const spring = timings?.spring;
 
     if (timings === undefined || spring === undefined) return;
     const left = leaving.length > 0 && exit !== undefined;
-    // Note that the arrivals' and the stagger's tokens are read here, once, only by a commit that glides, since most commits a snapshot is taken of play none.
-    const style = getComputedStyle(root);
     const closes = (left && way === LIST_MOTION_WAY.UNROLL) || (batch.closes && exit !== undefined);
     // Note that the change that ends the read lands the last of it, which arrives as the rest of it did, and rows that unroll arrive together as one body, as a fold's does.
     playMoves(root, before, {
       wait: left && !closes ? Number(exit.duration) : 0,
       travel: spring,
       close: closes ? exit : undefined,
-      arrive: styleTiming(style, MOTION_TOKEN.DURATION_QUICK, MOTION_TOKEN.EASE_EXIT),
-      stagger:
-        reading || way === LIST_MOTION_WAY.UNROLL
-          ? 0
-          : milliseconds(style.getPropertyValue(MOTION_TOKEN.ROW_STAGGER)),
+      arrive: timings.arrive,
+      stagger: reading || way === LIST_MOTION_WAY.UNROLL ? 0 : timings.stagger,
+      distance: timings.travel,
       way,
       travels: !reading,
     });
