@@ -571,7 +571,7 @@ function keepAutomationSwitch(
   stageFixture(state);
 }
 
-/** Keeps a change of one of its agents the fixture took, its model, mode, servers, name, or pin, and lays it over the document at once, as the host draws one; nothing for any other act. */
+/** Keeps a change of one of its agents the fixture took, its model, mode, servers, name, pin, or archive, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepChoice(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
