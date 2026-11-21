@@ -1385,7 +1385,8 @@ function AgentConversation({
     <>
       <Stack.Screen options={barOptions} />
       {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row, the model chosen from the composer's model chip. */}
-      <StackSubtitle words={subtitle?.words ?? ""} />
+      {/* Note that a regular window stands the name at the bar's leading edge, in the bar's own row, since on an iPad whose tab bar floats in the middle of that row UIKit dropped a centered name into a row of its own over the transcript. */}
+      <StackSubtitle words={subtitle?.words ?? ""} leading={regular} />
       <Stack.Toolbar placement="right">
         {copyable || openable || openTask !== undefined ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
