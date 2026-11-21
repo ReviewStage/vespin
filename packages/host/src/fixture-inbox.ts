@@ -2810,6 +2810,8 @@ export interface AgentChange {
   readonly title?: string;
   readonly pinned?: boolean;
   readonly face?: ManagerFace;
+  /** Whether the run archived the agent or brought it back. */
+  readonly archived?: boolean;
 }
 
 /** What a fixture run changed of its agents, by agent. */
@@ -2867,16 +2869,30 @@ export function agentChangeOf(
       return { agentId, change: { pinned } };
     }
 
+    case ACT_KIND.AGENTS_ARCHIVE: {
+      // SAFETY: the payload is the one its case's kind declares.
+      const { agentId, archived } = payload as PortActPayload<typeof ACT_KIND.AGENTS_ARCHIVE>;
+
+      return { agentId, change: { archived } };
+    }
+
     default:
       return undefined;
   }
 }
 
-/** One agent with the run's change to it laid over, the pin left to the list's pins. */
+/** One agent with the run's change to it laid over, the pin left to the list's pins, and archived at the fixture's moment or brought back as the run left it. */
 function changedAgent<A extends AgentSummary>(agent: A, change: AgentChange): A {
-  const { pinned: _pinned, ...fields } = change;
+  const { pinned: _pinned, archived, ...fields } = change;
+  const changed = { ...agent, ...fields };
 
-  return { ...agent, ...fields };
+  if (archived === undefined) return changed;
+
+  if (archived) return { ...changed, archivedAt: agent.archivedAt ?? LANDED };
+  const { archivedAt: _archivedAt, ...back } = changed;
+
+  // SAFETY: the agent less its archive mark is the agent brought back, every other field as it was.
+  return back as A;
 }
 
 /** The fields of an agent a fixture run's change may set: each of `AgentChange`'s but the reader's pin. */
@@ -2886,11 +2902,13 @@ const CHANGED_FIELDS = [
   "permissionMode",
   "disabledServers",
   "title",
-] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face">[];
+] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
 /** Whether every field of the change already stands on the agent, a face by its character and color. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
-  const { face } = change;
+  const { face, archived } = change;
+
+  if (archived !== undefined && archived !== (agent.archivedAt !== undefined)) return false;
 
   if (
     face !== undefined &&
@@ -2938,7 +2956,7 @@ function pinsStand(pins: NonNullable<TasksView["taskAgentPins"]>, choices: Agent
 
 /**
  * The list with each agent the run changed standing as it changed it, its
- * model, its mode, its servers, its name, and the reader's pin, as the host
+ * model, its mode, its servers, its name, whether it is archived, and the reader's pin, as the host
  * draws a change the moment it is asked; the list handed in where every
  * agent already stands so, so laying it again changes nothing.
  */
