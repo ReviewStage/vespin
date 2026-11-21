@@ -4,7 +4,7 @@ import {
   PRODUCT_OPEN_ORDER,
   PRODUCT_SURFACE_EVENT,
   type ProductSurface,
-  productDrawnMilliseconds,
+  productOpenMilliseconds,
 } from "@repo/features/analytics";
 import Constants from "expo-constants";
 import { type NativeStackNavigationProp, useNavigation } from "expo-router";
@@ -23,7 +23,7 @@ const openedKinds = new Set<ProductSurface>();
  * press that pushed it starts in the same task, to its push starting
  * (`transitionStart`, as UIKit starts the slide) and to its push standing
  * (`transitionEnd`, the slide done), each on a rung of
- * `productDrawnMilliseconds`, as `open:drawn` with its kind and whether it
+ * `productOpenMilliseconds`, as `open:drawn` with its kind and whether it
  * was the first of its kind since launch: never which thread, task, or
  * agent, and never a time itself. Note that the slide's first frame falls
  * between the two, once UIKit has laid the page out for its transition,
@@ -56,8 +56,8 @@ export function useOpenDrawnCount(surface: ProductSurface | undefined): void {
 
       count(PRODUCT_SURFACE_EVENT.OPEN_DRAWN, {
         surface,
-        start_ms: productDrawnMilliseconds(startedAt - renderedAt),
-        drawn_ms: productDrawnMilliseconds(performance.now() - renderedAt),
+        start_ms: productOpenMilliseconds(startedAt - renderedAt),
+        stand_ms: productOpenMilliseconds(performance.now() - renderedAt),
         open_order: order,
         ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
       });

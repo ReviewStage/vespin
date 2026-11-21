@@ -269,7 +269,9 @@ thread, rounded down to a step (under 0.1 seconds, then 0.1, 0.2, 0.3, 0.5,
 0.8, 1.3, 2, 3, or 5 seconds or more), and whether it carried pictures, never
 what it said, its pictures, or which thread, and, each time a thread, a task,
 or an agent opens as a page of its own, how long it took to start sliding in
-and to stand, on the same steps, which of the three it was, whether it was the
+and to stand, each rounded down to a step (under 0.1 seconds, then every 0.1
+seconds to 1, every 0.25 seconds to 3, then 4, or 5 seconds or more), which of
+the three it was, whether it was the
 first of its kind since the app started, and the app's build number, never
 which thread, task, or agent it was. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.

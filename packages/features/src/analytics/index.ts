@@ -35,6 +35,7 @@ export {
   type ProductFirstRows,
   type ProductLaunchSeconds,
   type ProductLayout,
+  type ProductOpenMilliseconds,
   type ProductOpenOrder,
   type ProductPermissionResult,
   type ProductPlatform,
@@ -53,6 +54,7 @@ export {
   productEventFromWire,
   productEventsAnswerSchema,
   productLaunchSeconds,
+  productOpenMilliseconds,
   productSessionCountBucket,
   type RecordProductEvent,
 } from "./product-events.js";
