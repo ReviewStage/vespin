@@ -2124,39 +2124,33 @@ function useFirstUsableSpan(tasks: TasksControl): void {
 }
 
 /**
- * The window's left column. At its head stands the workspace chosen, with
- * the menu that chooses another (`workspace-switcher.tsx`) and New task's
- * glyph at its end, or the app's identity while no workspace is read. The
- * places' rows follow above the rule: Search, which opens the command
- * palette, Home (`desktop-home.tsx`), the Inbox, Tasks, Automations, and the
- * Merge queue. The pinned tasks, and the side panel tabs pinned to the
- * sidebar, stand in the Pinned section while any are pinned, whatever the
- * list's view says. The rest stand in the Tasks section, grouped and ordered
- * as its View options say and the workspace keeps on this Mac
- * (`task-list-view.ts`): under their repositories' headers by default, the
- * pinned repositories first, newest pinned first, then the group updated
- * most recently first; or in one run. The account's row at the foot leads
- * to Settings and the rest. A task archived by an older build, before
- * archiving went, stands nowhere. On a phone it is the Tasks page (`mobile-bar.tsx`),
- * whose bar already holds New task, Search, the Inbox, and Tasks, and whose
- * phone opens on the Inbox rather than Home, so it leaves those rows to the bar,
- * and heads itself as every phone place does, its workspaces and account
- * behind the reader's face (`phone-account.tsx`) rather than at its head and foot.
- * The open task's row is marked, or, where the task was opened from a pin,
- * that pin's row, while the task stays open.
- * A task's actions are a right-click on it away, whether or not it is open.
- * The strip above the head is the window's drag handle and the traffic lights'
- * room, with back and forward at its right. Its right edge resizes it, and a drag well past its least width
- * folds it away. Folded away, it is inert as well as out of sight, so no key
- * reaches a row nobody can see, until it floats open over the work
- * (`sidebar-collapse.ts`). A floating sidebar is put away by a choice in it,
- * by Escape, by a press outside, or once the pointer leaves a peek, a press
- * in it or not, though not for a menu it raised, nor while a popup raised
- * from it, as Resources' card, stands open (`hover-pane.ts`). Opened
- * from away, it takes the keyboard at the row it marks, else at Search,
- * holds it there against Tab, and Escape gives the keyboard back where it
- * was. Floating, it has no edge to drag, since only a pinned sidebar is
- * resized.
+ * The window's left column. Pinned shows its pins whatever the list's view
+ * filters, since a pin is already the reader's own choice. The Tasks
+ * section is grouped and ordered as its View options say and the workspace
+ * keeps on this Mac (`task-list-view.ts`): by default under repository
+ * headers, the pinned repositories first, newest pinned first, then the
+ * group updated most recently first. A task archived by an older build,
+ * before archiving went, is drawn nowhere.
+ *
+ * Note that the open task's row is marked, or the pin's row where the task
+ * was opened from a pin, for as long as the task stays open.
+ *
+ * On a phone the column is the Tasks page (`mobile-bar.tsx`). The bar
+ * already holds New task, Search, the Inbox, and Tasks, and the phone opens
+ * on the Inbox rather than Home, so the column leaves those rows to the bar.
+ * Its workspaces and account sit behind the reader's face
+ * (`phone-account.tsx`), as on every phone place.
+ *
+ * Its right edge resizes it, and a drag well past its least width folds it
+ * away. Folded, it is inert as well as hidden, so no key reaches a row
+ * nobody can see, until it floats open over the work (`sidebar-collapse.ts`).
+ * A floating sidebar is put away by a choice in it, by Escape, by a press
+ * outside, or once the pointer leaves a peek. It stays for a menu it raised
+ * and while a popup raised from it is open, such as Resources' card
+ * (`hover-pane.ts`). Opened from away, it takes the keyboard at the row it
+ * marks, else at Search, and holds it against Tab; Escape gives the keyboard
+ * back where it was. Floating, it has no edge to drag, since only a pinned
+ * sidebar is resized.
  */
 function SidebarColumn({
   sidebar,
