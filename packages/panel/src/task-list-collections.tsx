@@ -100,6 +100,9 @@ const NUMBER_STEP = /^\d+$/u;
 /** No step asked: what a read of the tasks a step names answers. */
 const NO_STEPPED: readonly TaskSummary[] = [];
 
+/** No tasks asked: what a read of the tasks held back answers. */
+const NO_NAMED_TASKS: readonly TaskSummary[] = [];
+
 /** Nothing to listen for: what a read with no key subscribes with. */
 const LISTEN_TO_NOTHING = (): (() => void) => () => {};
 
@@ -152,29 +155,33 @@ export function useNamedTask(
  * array until one of them or a typed name moves; for a reader that walks
  * the whole list, as the palette's task rows, the Tasks page, and the
  * Inbox's counts do. Note that these rows are the live query's, never the
- * same objects `.get` answers.
+ * same objects `.get` answers. A reader that draws the rows only at times
+ * says so with `asked`: unasked it holds no query, so a task's change draws
+ * it not, and it reads no tasks.
  */
 export function useNamedTasks(
   typedNames: TaskNames,
   order: NamedOrder,
   workspaceId?: string | undefined,
+  asked = true,
 ): readonly TaskSummary[] {
   const collections = useTaskListCollections();
 
-  const every = useLiveQuery({
-    query: (q) => {
-      const all = q
-        .from({ task: collections.tasks })
-        .orderBy(({ task }) => task.createdAt, "desc")
-        .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+  const every = useLiveQuery((q) => {
+    if (!asked) return undefined;
 
-      return workspaceId === undefined
-        ? all
-        : all.where(({ task }) => eq(task.workspaceId, workspaceId));
-    },
+    const all = q
+      .from({ task: collections.tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+    return workspaceId === undefined
+      ? all
+      : all.where(({ task }) => eq(task.workspaceId, workspaceId));
   }).data;
 
   return useMemo(() => {
+    if (every === undefined) return NO_NAMED_TASKS;
     const named = renamedTasks(every, typedNames);
 
     if (order === NAMED_ORDER.STARTED) return named;

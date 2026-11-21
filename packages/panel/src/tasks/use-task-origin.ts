@@ -87,12 +87,25 @@ const NO_ORIGIN_AGENTS: ReadonlyMap<string, OriginAgent> = new Map();
 export function useTaskOrigin(asked: boolean): (task: OriginTask) => Actor | undefined {
   const collections = useTaskListCollections();
 
+  // Note that each query selects the fields the origin draws, so a delivery that moves none of them
+  // (an agent's step, a task's status) emits no row and draws no one.
   const { data: listedAgents } = useLiveQuery((q) =>
-    asked ? q.from({ agent: collections.agents }) : undefined,
+    asked
+      ? q.from({ agent: collections.agents }).select(({ agent }) => ({
+          id: agent.id,
+          taskId: agent.taskId,
+          title: agent.title,
+          model: agent.model,
+          status: agent.status,
+          automationName: agent.automationName,
+        }))
+      : undefined,
   );
 
   const { data: listedTasks } = useLiveQuery((q) =>
-    asked ? q.from({ task: collections.tasks }) : undefined,
+    asked
+      ? q.from({ task: collections.tasks }).select(({ task }) => ({ id: task.id, name: task.name }))
+      : undefined,
   );
 
   const agents = useMemo(() => {
