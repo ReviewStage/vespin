@@ -503,38 +503,79 @@ function nestedRows(
 /**
  * The window's tasks newest active first, as one live query over its task
  * collection keeps them (`taskTime` under Updated: the later of a task's
- * own update and its agents' last settled activity), so a delivery moves
- * only the tasks it changed rather than sorting every task again.
+ * own update and its agents' last settled activity), each by its id alone.
+ * Note that the query selects nothing but the id, so a delivery that moves
+ * a task's row and leaves its place in the order tells the sidebar nothing,
+ * as each of an agent's turns starting does.
  */
-function useActivityOrder(): readonly TaskSummary[] {
+function useActivityOrder(): readonly Pick<TaskSummary, "id">[] {
   const collections = useTaskListCollections();
 
   return useLiveQuery({
     query: (q) =>
-      q.from({ task: collections.tasks }).orderBy(({ task }) => {
-        const agentsAt = coalesce(task.agents?.activityAt, 0);
+      q
+        .from({ task: collections.tasks })
+        .orderBy(({ task }) => {
+          const agentsAt = coalesce(task.agents?.activityAt, 0);
 
-        return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
-      }, "desc"),
+          return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+        }, "desc")
+        .select(({ task }) => ({ id: task.id })),
   }).data;
 }
 
 /**
- * The listed workspace's tasks, pinned or not as `pinned` asks, as one live
- * query over the window's task collection keeps them, every workspace's
- * while none is listed (`TasksControl.listed`).
+ * The listed workspace's tasks, pinned or not as `pinned` asks, every
+ * workspace's while none is listed (`TasksControl.listed`), each as the
+ * window's task collection holds it.
+ *
+ * Note that the live query keeps each task's row with its agents' counts
+ * left out, the only part that moves while an agent works, and in their
+ * place only what the sidebar's lists read of them: whether a run's task
+ * still has an agent at work (`withoutFinishedRunTasks`), and whether the
+ * agents did anything since the reader last looked (`useUnreadTasks`). So a
+ * delivery that moves only a task's agents and changes neither draws no
+ * sidebar; each row hears its own task (`SidebarTask`). The rows it answers
+ * are the collection's own, read as the query last moved.
  */
 function useListedPart(workspaceId: string | undefined, pinned: boolean): readonly TaskSummary[] {
   const collections = useTaskListCollections();
 
-  return useLiveQuery({
+  const { data } = useLiveQuery({
     query: (q) =>
-      q.from({ task: collections.tasks }).where(({ task }) => {
-        const pin = pinned ? not(isUndefined(task.pinnedAt)) : isUndefined(task.pinnedAt);
+      q
+        .from({ task: collections.tasks })
+        .where(({ task }) => {
+          const pin = pinned ? not(isUndefined(task.pinnedAt)) : isUndefined(task.pinnedAt);
 
-        return workspaceId === undefined ? pin : and(eq(task.workspaceId, workspaceId), pin);
+          return workspaceId === undefined ? pin : and(eq(task.workspaceId, workspaceId), pin);
+        })
+        .select(({ task }) => {
+          const agentsAt = coalesce(task.agents?.activityAt, 0);
+          const newest = caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+
+          return {
+            ...task,
+            agents: undefined,
+            runWorking: caseWhen(
+              and(eq(task.madeByRun, true), gt(coalesce(task.agents?.working, 0), 0)),
+              true,
+              false,
+            ),
+            changedSinceRead: caseWhen(gt(newest, task.readThrough), true, false),
+          };
+        }),
+  });
+
+  return useMemo(
+    () =>
+      data.flatMap((row): TaskSummary[] => {
+        const task = collections.tasks.get(row.id);
+
+        return task === undefined ? [] : [task];
       }),
-  }).data;
+    [data, collections.tasks],
+  );
 }
 
 /**
@@ -662,7 +703,7 @@ function useListedTasks(tasks: TasksControl): ListedTasks {
  */
 function inActivityOrder(
   tasks: readonly TaskSummary[],
-  order: readonly TaskSummary[],
+  order: readonly Pick<TaskSummary, "id">[],
 ): TaskSummary[] {
   const unordered = new Map(tasks.map((task) => [task.id, task] as const));
   const ordered: TaskSummary[] = [];
@@ -774,9 +815,8 @@ function TaskRows({
             task={task}
             current={context.marked(task.id, undefined)}
             open={context.current(task.id)}
-            unread={context.unread(task)}
+            unread={context.unread}
             now={context.now}
-            at={taskTime(task, TASK_ORDER.UPDATED)}
             repository={repository?.(task)}
             faces={faces}
             depth={held.depth}
@@ -1158,9 +1198,8 @@ function PinnedRows({
               task={child}
               current={context.marked(child.id, undefined)}
               open={context.current(child.id)}
-              unread={context.unread(child)}
+              unread={context.unread}
               now={context.now}
-              at={taskTime(child, TASK_ORDER.UPDATED)}
               depth={held.depth}
               nest={nest}
               place={place}
@@ -1181,9 +1220,8 @@ function PinnedRows({
                 task={task}
                 current={context.marked(task.id, undefined)}
                 open={context.current(task.id)}
-                unread={context.unread(task)}
+                unread={context.unread}
                 now={context.now}
-                at={taskTime(task, TASK_ORDER.UPDATED)}
                 nest={nest}
                 place={place}
                 fold={held === undefined ? undefined : childTasksFold(held, context.onFoldTask)}
@@ -3016,8 +3054,7 @@ function SidebarColumn({
                                   task={task}
                                   current={context.marked(task.id, undefined)}
                                   open={current(task.id)}
-                                  unread={unread(task)}
-                                  at={taskTime(task, TASK_ORDER.UPDATED)}
+                                  unread={unread}
                                   now={now}
                                   faces={context.faces}
                                   depth={held.depth}
