@@ -57,7 +57,7 @@ export interface ManagerPullRequest {
   readonly task: TaskSummary;
 }
 
-/** What a Manager's overview lists, and its counts. */
+/** What a Manager's overview lists. */
 export interface ManagerOverview {
   /** The agents it started on listed tasks, those at work first, each part newest first. */
   readonly agents: readonly PersonAgent[];
@@ -67,10 +67,6 @@ export interface ManagerOverview {
   readonly openTasks: readonly TaskSummary[];
   /** Its tasks done in the last week, the latest moved first. */
   readonly doneThisWeek: readonly TaskSummary[];
-  /** How many of its agents are at work. */
-  readonly working: number;
-  /** How many of its pull requests are open, a draft among them. */
-  readonly openPullRequests: number;
 }
 
 /** A task's status, Todo for one from a service before statuses. */
@@ -140,7 +136,5 @@ export function managerOverview({
     doneThisWeek: theirs.filter(
       (task) => task.status === TASK_STATUS.DONE && now - finishedAt(task) <= WEEK_MILLIS,
     ),
-    working: atWork.length,
-    openPullRequests: open.length,
   };
 }
