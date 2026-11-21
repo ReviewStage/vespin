@@ -18,8 +18,11 @@ appId: dev.vespin.ios
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 # A row's long press menu holds Task relation in More, the four kinds under it.
-- longPressOn: "Weekly digest email"
-- assertVisible: "More"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: More
 - tapOn: "More"
 - assertVisible: "Task relation"
 - takeScreenshot: task-relations-row-menu
