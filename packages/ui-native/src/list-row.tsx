@@ -55,7 +55,7 @@ import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import { createContext, Fragment, type ReactElement, type ReactNode, useContext } from "react";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { actContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
@@ -650,6 +650,7 @@ export function RowFrame({
   const disclosed = useContext(RowDisclosedContext);
   const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
+  const voiceOver = useVoiceOver();
   const swiped = [...trailingActions, ...leadingActions];
   const groups = menuGroups.filter(menuGroupFilled);
 
@@ -711,8 +712,10 @@ export function RowFrame({
     question,
   );
 
-  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
-  if (swiped.length === 0) return <HStack modifiers={frameModifiers}>{menu}</HStack>;
+  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal, and so does a heard row while VoiceOver runs: the list's cell offers a swipe's acts as Actions of its own, past the row's, a second copy with a submenu's items unworded, and the menu, which the row's Actions read, already holds each of them.
+  if (swiped.length === 0 || (voiceOver && heard !== undefined)) {
+    return <HStack modifiers={frameModifiers}>{menu}</HStack>;
+  }
 
   return (
     <SwipeActions modifiers={frameModifiers}>

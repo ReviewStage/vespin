@@ -407,8 +407,9 @@ internal struct HeardActsModifier: ViewModifier, Record {
 
   func body(content: Content) -> some View {
     let dispatcher = eventDispatcher
+    // Note that the names are handed over last first, because the Actions SwiftUI makes of them stood in reverse, Open last (seen on the iOS 27.2 simulator's accessibility tree); each still sends its own place.
     return content.accessibilityActions {
-      ForEach(Array(names.enumerated()), id: \.offset) { index, name in
+      ForEach(Array(names.enumerated()).reversed(), id: \.offset) { index, name in
         Button(name) {
           dispatcher?([ModifierName.heardActs: ["index": index]])
         }
