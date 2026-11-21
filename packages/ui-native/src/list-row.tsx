@@ -584,18 +584,11 @@ export function LongPressMenu({
   readonly preview?: ReactElement | undefined;
   readonly children: ReactElement;
 }) {
-  const colors = useColors();
   const filled = groups.filter((group) => group.length > 0);
 
   if (filled.length === 0 && preview === undefined) return children;
 
-  const items = filled.map((group, at) => (
-    // Note that a group is keyed by its first item's words, which a menu holds once.
-    <Fragment key={group[0]?.label ?? at}>
-      {at === 0 ? null : <Divider />}
-      {group.map((item) => swipeMenuButton(item, colors))}
-    </Fragment>
-  ));
+  const items = <LongPressMenuItems groups={filled} />;
 
   return (
     <ContextMenu>
@@ -606,6 +599,25 @@ export function LongPressMenu({
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
     </ContextMenu>
   );
+}
+
+/**
+ * A long press menu's groups as the system's menu items, in the panel's
+ * order, each group after a divider: what `LongPressMenu` opens, and what a
+ * section's header opens as its own menu (`ListSection`).
+ */
+export function LongPressMenuItems({ groups }: { readonly groups: readonly LongPressGroup[] }) {
+  const colors = useColors();
+
+  return groups
+    .filter((group) => group.length > 0)
+    .map((group, at) => (
+      // Note that a group is keyed by its first item's words, which a menu holds once.
+      <Fragment key={group[0]?.label ?? at}>
+        {at === 0 ? null : <Divider />}
+        {group.map((item) => swipeMenuButton(item, colors))}
+      </Fragment>
+    ));
 }
 
 /** A row's content with the question its acts ask standing by it, where its acts ask any. */
