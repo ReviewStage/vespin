@@ -38,7 +38,7 @@ import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
-import { useTaskOverview } from "../tasks/use-tasks.js";
+import { useDrawnTasks, useTaskOverview } from "../tasks/use-tasks.js";
 import { TaskMissing } from "./task-missing.js";
 
 /** The sheet's own words. */
@@ -143,6 +143,8 @@ export function TaskRelationScreen({
   const router = useRouter();
   const colors = useColors();
   const overview = useTaskOverview(taskId);
+  // Note that the sheet offers every task the list holds, which the page under it, reading only the tasks it draws, does not.
+  const drawn = useDrawnTasks();
   const writes = useTaskRelationWrites();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const [search, setSearch] = useState("");
@@ -213,7 +215,7 @@ export function TaskRelationScreen({
   }
 
   const workspaceName = workspaces.find((each) => each.id === subject.workspaceId)?.name;
-  const candidates = candidatesFor(subject, overview.tasks, kind, workspaceName, search);
+  const candidates = candidatesFor(subject, drawn, kind, workspaceName, search);
   const byId = new Map(candidates.map((each) => [each.task.id, each]));
 
   const pick = (id: string) => {

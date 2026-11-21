@@ -98,16 +98,25 @@ import {
   useFailureNotices,
   useHeldValue,
 } from "@repo/ui-native";
-import { caseWhen, coalesce, gt, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import {
+  caseWhen,
+  coalesce,
+  eq,
+  gt,
+  inArray,
+  isUndefined,
+  or,
+  useLiveQuery,
+} from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
-  useListedAgents,
   useListedTasks,
   useTaskListCollections,
+  useTaskListRow,
   useTaskListRows,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -115,6 +124,7 @@ import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useFollowWrite } from "./use-following.js";
+import { useHeldTasksNamed } from "./use-found-task.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
 import { useWorkspaceRepositories } from "./use-start.js";
 
@@ -815,7 +825,7 @@ export interface TaskOverview {
   readonly pages: readonly PageLine[];
   /** How many of its threads wait on the reader whose agent no row lists, which its Inbox line counts. */
   readonly waitingElsewhere: number;
-  /** Every task of the workspace, which its relations name. */
+  /** The tasks its page draws: itself, its parent, its sub-tasks, and the tasks it waits on and holds up, which its relations name. */
   readonly tasks: readonly TaskSummary[];
   readonly setStatus: SetStatus;
   readonly workingAgents: (taskId: string) => number;
@@ -831,11 +841,6 @@ export interface TaskOverview {
 /** Says on the console a description read asked again that did not go; the page still says the read failed. */
 function documentRetryLost(cause: unknown): void {
   console.error("Reading the description again did not go.", cause);
-}
-
-/** Whether a link's word names the task: its id, or its number as a task link spells one. */
-function namesTask(task: TaskSummary, named: string): boolean {
-  return task.id === named || (task.number !== undefined && String(task.number) === named);
 }
 
 /**
@@ -855,6 +860,72 @@ function idNamed(named: string | undefined): string | undefined {
     : undefined;
 }
 
+/** No pull request: what a page reads before its task is named. */
+const NO_PULL_REQUESTS: readonly ListedPullRequest[] = [];
+
+/** No task: what a page reads before its task is named. */
+const NO_PAGE_TASKS: readonly TaskSummary[] = [];
+
+/** No agent: what a page reads while none of its tasks is held. */
+const NO_PAGE_AGENTS: readonly ListedAgent[] = [];
+
+/** The rows a task's page draws (`usePageRows`). */
+interface PageRows {
+  readonly tasks: readonly TaskSummary[];
+  readonly agents: readonly ListedAgent[];
+}
+
+/**
+ * The tasks a task's page draws, the one `taskId` names, its sub-tasks, and
+ * those `related` names, newest first, and every agent on any of them, the
+ * archived among them, first started first, as the whole list orders each
+ * (`useListedTasks`, `useListedAgents`); none of either before a task is
+ * named.
+ */
+function usePageRows(taskId: string | undefined, related: readonly string[]): PageRows {
+  const collections = useTaskListCollections();
+
+  const tasks =
+    useLiveQuery((q) =>
+      taskId === undefined
+        ? undefined
+        : q
+            .from({ task: collections.tasks })
+            .where(({ task }) =>
+              or(
+                eq(task.id, taskId),
+                eq(task.parentTaskId, taskId),
+                inArray(task.id, [...related]),
+              ),
+            )
+            .orderBy(({ task }) => task.createdAt, "desc")
+            .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
+    ).data ?? NO_PAGE_TASKS;
+
+  const ids = tasks.map(({ id }) => id);
+
+  const agents =
+    useLiveQuery((q) =>
+      ids.length === 0
+        ? undefined
+        : q
+            .from({ agent: collections.agents })
+            .where(({ agent }) => inArray(agent.taskId, ids))
+            .orderBy(({ agent }) => agent.createdAt)
+            .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
+    ).data ?? NO_PAGE_AGENTS;
+
+  return { tasks, agents };
+}
+
+/** Every task the list holds, each with the status a press set over the one the document holds, as a screen that picks among them draws them. */
+export function useDrawnTasks(): readonly TaskSummary[] {
+  const tasks = useListedTasks();
+  const held = useHeldValue(heldStatuses);
+
+  return useMemo(() => withHeld(tasks, held), [tasks, held]);
+}
+
 /**
  * One task by its id or its number, as a link names it, with all its page
  * shows, its description and pages followed while the page stands, as the
@@ -867,9 +938,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const acts = useHostActs();
   const workspace = useTasksWorkspace();
   const collections = useTaskListCollections();
-  const tasks = useListedTasks();
-  const listedAgents = useListedAgents();
-  const pullRequests = useTaskListRows(collections.agentPullRequests);
+  const listedId = useHeldTasksNamed(named)[0]?.id;
 
   const { data: agentsListed = false } = useQuery({
     ...appStateQuery,
@@ -877,15 +946,10 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   });
 
   const waiting = useWaiting(workspace?.id);
-  const { held: statuses, setStatus } = useStatusWrites(tasks);
   const { rename, setPriority, setAssignee } = useTaskWrites();
-  const listed = useMemo(() => withHeld(tasks, statuses), [tasks, statuses]);
-
-  const listedTask =
-    named === undefined ? undefined : listed.find((each) => namesTask(each, named));
 
   // Note that an id the list doesn't hold is followed by its own read, while a number it doesn't hold names nothing to follow.
-  const taskId = listedTask?.id ?? idNamed(named);
+  const taskId = listedId ?? idNamed(named);
   const relations = useTaskRelationWrites();
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_HELD_FOLLOW]({ taskId: id }));
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
@@ -902,11 +966,32 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
           },
   });
 
+  // Note that the page reads only the tasks it draws, the task, its parent, its sub-tasks, and those it waits on and holds up, and only their agents and its own agents' pull requests, so a change to any other of the account's tasks or agents, as a working agent's turn makes, draws the page nothing again.
+  const parentId = useTaskListRow(collections.tasks, listedId)?.parentTaskId;
+  const read = held?.document;
+  const relatedDocument = read !== undefined && "task" in read ? read.task : undefined;
+
+  const { tasks, agents: listedAgents } = usePageRows(taskId, [
+    ...(parentId === undefined ? [] : [parentId]),
+    ...(relatedDocument?.blockedBy ?? []),
+    ...(relatedDocument?.blocks ?? []),
+  ]);
+
+  const pullRequests = useLiveQuery((q) =>
+    taskId === undefined
+      ? undefined
+      : q
+          .from({ pullRequest: collections.agentPullRequests })
+          .where(({ pullRequest }) => eq(pullRequest.taskId, taskId)),
+  ).data;
+
+  const { held: statuses, setStatus } = useStatusWrites(tasks);
+  const listed = useMemo(() => withHeld(tasks, statuses), [tasks, statuses]);
+  const listedTask = listedId === undefined ? undefined : listed.find(({ id }) => id === listedId);
+
   useEffect(() => {
     if (listedTask !== undefined) listedOnce.add(listedTask.id);
   }, [listedTask]);
-
-  const read = held?.document;
 
   const unlistedTask =
     taskId !== undefined && !listedOnce.has(taskId) && read !== undefined && "task" in read
@@ -926,7 +1011,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     if (task === undefined) return undefined;
 
     const agents = taskAgentsInOrder(agentsByTask(listedAgents), task.id).map((agent) =>
-      agentLine(agent, waiting.byAgent, pullRequests),
+      agentLine(agent, waiting.byAgent, pullRequests ?? NO_PULL_REQUESTS),
     );
 
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
