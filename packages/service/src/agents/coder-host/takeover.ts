@@ -27,8 +27,8 @@ import {
   AGENT_MACHINE,
   type AgentAttachment,
   type AgentMachineKind,
+  type AgentPlacement,
   type AgentPullRequest,
-  type AgentRunsOnRequest,
   type AgentStartFrom,
   CONTEXT_WINDOW,
   PULL_REQUEST_STATE,
@@ -134,7 +134,7 @@ export type TakeoverAsk = StartWhere & {
   readonly title?: string | undefined;
   readonly startedBy?: Agent | undefined;
   readonly summaryModel?: SummaryModelOf | undefined;
-  readonly runsOn?: AgentRunsOnRequest | undefined;
+  readonly runsOn?: AgentPlacement | undefined;
 };
 
 /** Where a Start puts its agent: a task, or a workspace on no task, which an agent it is started from must stand in too. */
@@ -301,7 +301,8 @@ type InheritedPlace = {
  * its source runs, so a continue or a fork goes on where the work was, but
  * in the cloud for a source on another member's Mac, since a Mac runs its
  * owner's agents alone, and a teammate takes such an agent up in the cloud
- * unless they name a Mac of their own.
+ * unless they name a Mac of their own. A source on a workspace's machine is
+ * taken up there by any member, since it runs every member's agents.
  */
 export function inheritedPlaceOf(
   userId: string,

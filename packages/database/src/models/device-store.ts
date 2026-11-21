@@ -6,10 +6,11 @@
  * workspace's machines, which name only what each machine is and whose,
  * read through a workspace the reader and the owner both stand in
  * (`workspaceMachinesOf`), and the machines a workspace itself owns, read
- * by its members alone (`workspaceOwnedMachinesOf`) and renamed by its
- * admins (`renameWorkspaceMachine`). A host's beat and layout are read by
- * its principal (`HostPrincipal`), its device under that device's owner, a
- * member or a workspace. A register
+ * by its members alone (`workspaceOwnedMachinesOf`), or one of them as a
+ * Start places an agent on it (`workspaceMachineStanding`), and renamed by
+ * its admins (`renameWorkspaceMachine`). A host's beat and layout are read
+ * by its principal (`HostPrincipal`), its device under that device's owner,
+ * a member or a workspace. A register
  * under an id another account holds writes nothing and answers false, so a
  * desktop cannot take over a Mac by naming its id (`../schemas/device.ts`).
  */
@@ -378,6 +379,41 @@ const findNamed = SqlSchema.findAll({
         .from(device)
         // Note that a workspace's machine is no member's device, so it is never named here.
         .where(and(inArray(device.id, [...ids]), isNotNull(device.userId))),
+    ),
+});
+
+/** A machine a workspace owns as a Start placing an agent on it reads it: its name, when it last beat, where its setup stands, and what its host takes. */
+const WorkspaceMachineStandingSchema = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  lastSeenAt: Schema.Date,
+  setup: Schema.NullOr(deviceSetupSchema),
+  capabilities: Schema.Array(Schema.Literals(Object.values(DEVICE_CAPABILITY))),
+});
+
+export type WorkspaceMachineStanding = typeof WorkspaceMachineStandingSchema.Type;
+
+const findWorkspaceMachineStanding = SqlSchema.findOneOption({
+  Request: Schema.Struct({ workspaceId: Schema.String, deviceId: Schema.String }),
+  Result: WorkspaceMachineStandingSchema,
+  execute: ({ workspaceId, deviceId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: device.id,
+          name: device.name,
+          lastSeenAt: device.lastSeenAt,
+          setup: device.setup,
+          capabilities: device.capabilities,
+        })
+        .from(device)
+        .where(
+          and(
+            eq(device.id, deviceId),
+            eq(device.organizationId, workspaceId),
+            isNull(device.removedAt),
+          ),
+        ),
     ),
 });
 
@@ -1201,6 +1237,21 @@ export function workspaceMachinesOf(
         ...(computerUse === null ? undefined : { computerUse }),
       })),
   );
+}
+
+/**
+ * The machine under the id where the workspace owns it and its admins have
+ * not removed it, as a Start places an agent of the workspace's on it;
+ * nothing for a member's own device, another workspace's machine, or one
+ * removed. Note that it is keyed by the workspace alone, because every
+ * member's agents run on its machines; its caller hands it only the
+ * workspace of an agent's place it already admitted the member to.
+ */
+export function workspaceMachineStanding(
+  workspaceId: string,
+  deviceId: string,
+): DeviceEffect<Option.Option<WorkspaceMachineStanding>> {
+  return findWorkspaceMachineStanding({ workspaceId, deviceId });
 }
 
 /**

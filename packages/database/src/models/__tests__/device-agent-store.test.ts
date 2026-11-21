@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_BOUNDS,
   DEVICE_AGENT_LINE_KIND,
@@ -25,6 +25,7 @@ import {
   connectWorkspaceMachine,
   DEVICE_LAYOUT,
   getTestDB,
+  joinWorkspace,
   startTask,
 } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
@@ -53,6 +54,7 @@ import {
   withdrawUnclaimedDeviceAgentLine,
 } from "../device-agent-store.js";
 import { beatDevice, registerDevice } from "../device-store.js";
+import { createTask } from "../task-store.js";
 
 /**
  * The work queued for a local agent's Mac, over a real dialect: a line is
@@ -76,7 +78,9 @@ import { beatDevice, registerDevice } from "../device-store.js";
  * its run ended before the bound, or before the grace on a device waiting to
  * update; and whether an agent's device waits to update, and whether a
  * line was queued after its launch line, are read for its own account
- * alone. A workspace's machine lists, claims, and settles every line on it,
+ * alone. A workspace-machine agent queues only to a machine its own
+ * workspace owns, whichever member connected it, and no local agent queues
+ * to one. A workspace's machine lists, claims, and settles every line on it,
  * and names its workspace's agents live, while no other workspace's host,
  * nor a member's own principal on it, reads or takes any. Synthetic
  * accounts, agents, and Macs throughout.
@@ -89,11 +93,24 @@ const FILE_ANSWER: DeviceAgentAnswer = {
   bytes: new TextEncoder().encode("line one\n"),
 };
 
-/** An agent of the account's on a task of its own, pinned to the Mac given, or running in a sandbox where none is; its id. */
-const startAgent = (userId: string, deviceId?: string) =>
+/**
+ * An agent of the account's on a task of its own, or on one in the
+ * workspace given, pinned to the machine given as the kind of machine
+ * given, or running in a sandbox where none is; its id.
+ */
+const startAgent = (
+  userId: string,
+  deviceId?: string,
+  machine: AgentMachineKind = AGENT_MACHINE.DEVICE,
+  workspaceId?: string,
+) =>
   Effect.gen(function* () {
     const db = yield* Database;
-    const task = yield* startTask(userId, { name: "Invitations" });
+
+    const task =
+      workspaceId === undefined
+        ? yield* startTask(userId, { name: "Invitations" })
+        : yield* createTask(userId, { name: "Invitations", organizationId: workspaceId });
 
     const started = yield* createAgent(userId, {
       taskId: task.id,
@@ -109,10 +126,7 @@ const startAgent = (userId: string, deviceId?: string) =>
     const agentId = Option.getOrThrow(started).agent.id;
 
     if (deviceId !== undefined) {
-      yield* db
-        .update(agentTable)
-        .set({ machine: AGENT_MACHINE.DEVICE, deviceId })
-        .where(eq(agentTable.id, agentId));
+      yield* db.update(agentTable).set({ machine, deviceId }).where(eq(agentTable.id, agentId));
     }
 
     return agentId;
@@ -609,16 +623,12 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const box = yield* connectWorkspaceMachine(workspace, member.userId);
         yield* db
           .update(agentTable)
-          .set({ deviceId: box })
+          .set({ machine: AGENT_MACHINE.WORKSPACE, deviceId: box })
           .where(eq(agentTable.id, member.agentId));
 
-        // Note that the line is written straight over the table, since no queue admits a workspace's machine yet.
-        const [line] = yield* db
-          .insert(deviceAgentLine)
-          .values({ ...launch(member.agentId), userId: member.userId, deviceId: box })
-          .returning({ id: deviceAgentLine.id });
-
-        const lineId = line?.id ?? "";
+        const lineId = Option.getOrThrow(
+          yield* queueDeviceAgentLine(member.userId, launch(member.agentId)),
+        ).id;
 
         const host = {
           deviceId: box,
@@ -658,6 +668,54 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           Option.some(SEALED),
         );
         assert.ok(Option.isSome(settled));
+      }),
+  );
+
+  it.effect(
+    "a member's agent queues to a machine its workspace owns, connected by a teammate, and nothing is queued there for another workspace's agent or a local agent",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const admin = yield* openAccount();
+        const outsider = yield* openAccount();
+
+        const [row] = yield* db
+          .select({ organizationId: agentTable.organizationId })
+          .from(agentTable)
+          .where(eq(agentTable.id, admin.agentId));
+
+        const workspace = row?.organizationId ?? "";
+        const box = yield* connectWorkspaceMachine(workspace, admin.userId);
+        const teammate = `user-${randomUUID()}`;
+        yield* db
+          .insert(user)
+          .values({ id: teammate, name: "Teammate", email: `${teammate}@app.test` });
+        yield* joinWorkspace(workspace, teammate);
+
+        const teammates = yield* startAgent(teammate, box, AGENT_MACHINE.WORKSPACE, workspace);
+        const outsiders = yield* startAgent(outsider.userId, box, AGENT_MACHINE.WORKSPACE);
+        const localOnBox = yield* startAgent(admin.userId, box, AGENT_MACHINE.DEVICE);
+        const onOwnMac = yield* startAgent(admin.userId, admin.deviceId, AGENT_MACHINE.WORKSPACE);
+
+        const queued = yield* queueDeviceAgentLine(teammate, launch(teammates));
+
+        const refused = [
+          yield* queueDeviceAgentLine(outsider.userId, launch(outsiders)),
+          yield* queueDeviceAgentLine(admin.userId, launch(localOnBox)),
+          yield* queueDeviceAgentLine(admin.userId, launch(onOwnMac)),
+        ];
+
+        const host = {
+          deviceId: box,
+          owner: { kind: MACHINE_OWNER.WORKSPACE, workspaceId: workspace },
+        } as const;
+
+        assert.ok(Option.isSome(queued));
+        assert.deepEqual(refused, [Option.none(), Option.none(), Option.none()]);
+        assert.deepEqual(
+          (yield* deviceAgentLinesWaiting(host)).map((line) => line.agentId),
+          [teammates],
+        );
       }),
   );
 

@@ -277,12 +277,20 @@ export type AgentSource = typeof agentSourceSchema.Type;
 
 /**
  * Where an agent's runner and checkout live: a Vercel Sandbox, as every
- * agent from before the column does, or one of the starter's devices, which
- * takes its work as rows it follows (`@repo/features/device-agent-wire`).
+ * agent from before the column does, one of the starter's devices, or a
+ * machine the agent's workspace owns, each agent in its own VM there; a
+ * device and a workspace's machine both take their work as rows their host
+ * follows (`@repo/features/device-agent-wire`).
+ *
+ * Note that no wire schema carries `WORKSPACE` yet: each one a client
+ * decodes names its members one by one, and the service's stores and
+ * placement alone read the whole set, because a released client reads an
+ * agent's machine only as the cloud or a device.
  */
 export const AGENT_MACHINE = {
   VERCEL: "vercel",
   DEVICE: "device",
+  WORKSPACE: "workspace",
 } as const;
 
 export type AgentMachineKind = (typeof AGENT_MACHINE)[keyof typeof AGENT_MACHINE];
@@ -738,6 +746,18 @@ export const agentRunsOnRequestSchema = EffectSchema.Union([
 ]);
 
 export type AgentRunsOnRequest = typeof agentRunsOnRequestSchema.Type;
+
+/**
+ * Where the service places an agent: a place a request names
+ * (`agentRunsOnRequestSchema`), or a machine the agent's workspace owns, by
+ * its id. Note that no request, tool, or automation names a workspace's
+ * machine yet, because no released client reads an agent on one
+ * (`AGENT_MACHINE`); only the service's own reads of where an agent ran
+ * hand one on.
+ */
+export type AgentPlacement =
+  | AgentRunsOnRequest
+  | { readonly machine: typeof AGENT_MACHINE.WORKSPACE; readonly deviceId: string };
 
 /** A move of an agent to another place in the same agent: the cloud, or one of its starter's own devices (`coder-host/move.ts`). */
 export const agentMoveRequestSchema = EffectSchema.Struct({ runsOn: agentRunsOnRequestSchema });

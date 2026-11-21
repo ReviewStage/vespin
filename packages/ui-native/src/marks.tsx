@@ -42,7 +42,7 @@ import { identityLetter } from "@repo/features/workspace-tile";
 import { memo, useState, useSyncExternalStore } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import {
   PRIORITY_MARK_SYMBOL,
@@ -220,6 +220,33 @@ export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority
         modifiers={[opacity(under.opacity), accessibilityHidden()]}
       />
       {lit}
+    </ZStack>
+  );
+}
+
+/**
+ * No one, where a place says who is on something and nobody is, as the
+ * panel's `UnassignedAvatar` draws it at a face's size: its ring of eight
+ * long dashes over its seat drawn faint, so the outline leads, in the muted
+ * ink. It is never heard, since the words beside it say No assignee.
+ */
+export function UnassignedMark({ size }: { readonly size: number }) {
+  const colors = useColors();
+
+  return (
+    <ZStack>
+      <Image
+        {...glyphImage(UNASSIGNED_UNDER.glyph)}
+        size={size}
+        color={colors.TEXT_MUTED}
+        modifiers={[opacity(UNASSIGNED_UNDER.opacity), accessibilityHidden()]}
+      />
+      <Image
+        {...glyphImage(GLYPH.UNASSIGNED)}
+        size={size}
+        color={colors.TEXT_MUTED}
+        modifiers={[accessibilityHidden()]}
+      />
     </ZStack>
   );
 }

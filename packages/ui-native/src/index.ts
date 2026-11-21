@@ -126,6 +126,7 @@ export {
   runsOnGlyph,
   sectionEmoji,
   sectionGlyph,
+  UNASSIGNED_UNDER,
 } from "./glyph.js";
 
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
