@@ -1,19 +1,18 @@
 import {
   AGENT_BOUNDS,
-  AGENT_KIND,
   type AgentPullRequest,
   type AgentSummary,
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
-import { readsUnread } from "@repo/features/read-mark";
 import {
   STARTED_STANDING,
   type StartedAgentsStanding,
   startedHeard,
   startedShown,
 } from "@repo/features/task-agents-model";
+import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import { selectAgentPinned } from "@repo/host/app-state-reads";
 import {
   InlineEdit,
@@ -101,7 +100,7 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * its name in the muted ink, as a done task's does, and its menu offers
  * Unarchive in Archive's place. A Manager's row stands unread, its name in
  * the heavier weight, while its chat said something after the reader's
- * mark of it (`chatUnread`), but on the Manager's own page standing open,
+ * mark of it (`managerChatUnread`), but on the Manager's own page standing open,
  * whose chat the reader sees as it lands, and in a staged run.
  *
  * In the sidebar (`AGENT_ROW_LOOK.SIDEBAR`), as its Managers and Pinned
@@ -145,16 +144,6 @@ function pinGroups(
   const command = pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT;
 
   return [[commandAction(command, () => onPin(agent.id, !pinned), subject)]];
-}
-
-/** Whether a Manager's chat said something after the reader's mark of it (`read-mark.ts`); never a coder's, whose row carries no mark. */
-function chatUnread(agent: AgentSummary): boolean {
-  if (agent.kind !== AGENT_KIND.MANAGER || agent.saidAt === undefined) return false;
-
-  return readsUnread(
-    { ...(agent.readThrough === undefined ? undefined : { readThrough: agent.readThrough }) },
-    agent.saidAt,
-  );
 }
 
 /** One agent's row; see the module's head. */
@@ -326,7 +315,7 @@ export function AgentListRow({
           true,
         );
 
-  const unread = !staged && !current && chatUnread(agent);
+  const unread = !staged && !current && managerChatUnread(agent);
   const hint = card === undefined || editing ? undefined : { Hint: RowHint, label: name };
 
   const row =

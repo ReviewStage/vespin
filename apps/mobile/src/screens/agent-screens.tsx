@@ -7,8 +7,10 @@ import {
   type PortRow,
 } from "@repo/features/agent-ports-model";
 import {
+  AGENT_KIND,
   AGENT_MACHINE,
   type AgentOverviewPullRequest,
+  type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -21,6 +23,7 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
+import { managerChatLines } from "@repo/features/manager-chat";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -141,6 +144,7 @@ import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
 import { type AgentCommandsPlace, useAgentCommandsPlace } from "../agents/use-agent-tools.js";
+import { useManagerChatLooks } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -218,6 +222,14 @@ const MODEL_CHIP_ID = "agent-model-chip";
 
 /** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
+
+/** A transcript's messages as its page draws them: a Manager's as its chat (`managerChatLines`), any other agent's whole. */
+function chatOrTranscript(
+  messages: readonly AgentTranscriptMessage[],
+  chat: boolean,
+): readonly AgentTranscriptMessage[] {
+  return chat ? managerChatLines(messages) : messages;
+}
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
@@ -847,10 +859,14 @@ function AgentConversation({
     ],
   );
 
+  // Note that a Manager's page is its chat, never its transcript, as the panel draws it (`managerChatLines`): people's lines and its `send_to_user` words alone.
+  const chat = shown?.kind === AGENT_KIND.MANAGER;
+  useManagerChatLooks(shown);
+
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
-      transcriptItems(withSending(messages ?? [], sending ?? []), {
+      transcriptItems(chatOrTranscript(withSending(messages ?? [], sending ?? []), chat), {
         writing: status !== undefined && agentStillWriting(status),
         readerId,
         toggles,
@@ -870,6 +886,7 @@ function AgentConversation({
       whole.read,
       origin,
       suggestionAddress,
+      chat,
     ],
   );
 
