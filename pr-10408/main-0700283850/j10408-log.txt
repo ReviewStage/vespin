@@ -1,0 +1,7 @@
+== bundle PJj10408 base 0700283850
+  built 0700283850 base app Vmain7.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-agent: fails 3 shots 25     Tap on "More"... FAILED
