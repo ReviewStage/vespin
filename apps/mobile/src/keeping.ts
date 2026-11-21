@@ -213,19 +213,26 @@ async function opened(kept: Kept): Promise<void> {
 /**
  * Opens a picture full screen in the app's viewer (`modules/picture-viewer/`),
  * grown out of its thumbnail and drawn first from the bitmap the thumbnail
- * shows. Note that one UIKit would not present the viewer over opens in Quick
- * Look instead, which asks the same of UIKit and shares it where refused too.
+ * shows, a swipe stepping through the rest of its set. Note that one UIKit
+ * would not present the viewer over opens in Quick Look instead, which asks
+ * the same of UIKit and shares it where refused too.
  */
-async function viewed(picture: ViewedPicture): Promise<void> {
-  const shown = await pictureViewerModule.show({
-    uri: picture.source,
-    ...picture.place,
-    title: picture.title,
-    subtitle: picture.subtitle ?? null,
-  });
+async function viewed(pictures: readonly ViewedPicture[], index: number): Promise<void> {
+  const shown = await pictureViewerModule.show(
+    pictures.map((picture) => ({
+      uri: picture.source,
+      ...picture.place,
+      title: picture.title,
+      subtitle: picture.subtitle ?? null,
+    })),
+    index,
+  );
 
-  if (!shown)
-    await opened({ kind: KEPT_KIND.PICTURE, source: picture.source, name: picture.title });
+  const pressed = pictures[index];
+
+  if (!shown && pressed !== undefined) {
+    await opened({ kind: KEPT_KIND.PICTURE, source: pressed.source, name: pressed.title });
+  }
 }
 
 /** Each act's work. */
@@ -265,7 +272,7 @@ export function useKeeping(): Keeping {
 
     return {
       open: (kept) => run(() => opened(kept), OPEN_FAILED, false),
-      view: (picture) => run(() => viewed(picture), OPEN_FAILED, false),
+      view: (pictures, index) => run(() => viewed(pictures, index), OPEN_FAILED, false),
       keep: (kept, act) =>
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>

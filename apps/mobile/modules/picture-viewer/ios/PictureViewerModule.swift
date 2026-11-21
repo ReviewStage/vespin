@@ -13,10 +13,14 @@
 // size is read and decoded off the main thread and swapped in once it lands.
 // A pinch or a double tap zooms, a tap hides or shows the bars, the bar names
 // who showed it and when, and Share opens the system's sheet, which holds Copy
-// and Save Image. Files other than pictures still open in Quick Look.
+// and Save Image. A swipe sideways steps through the other pictures of the
+// same thread, message, or description, and the text in a picture, such as a
+// screenshot's, can be selected and copied with Live Text. Files other than
+// pictures still open in Quick Look.
 
 import ExpoModulesCore
 import UIKit
+import VisionKit
 
 /// The most a picture zooms past fitting the screen.
 private let mostZoom: CGFloat = 4
@@ -54,15 +58,28 @@ private func imageView(under view: UIView, covering place: CGRect, in window: UI
   return shared.width * shared.height >= place.width * place.height / 2 ? drawn : nil
 }
 
-/// The thumbnail drawn at `place` in the window: the image view the press landed on or one near it.
+/// Every image view under `view` drawing an image at `size`, give or take a point.
+private func imageViews(under view: UIView, sized size: CGSize) -> [UIImageView] {
+  let own = (view as? UIImageView).flatMap { drawn in
+    drawn.image != nil && abs(drawn.bounds.width - size.width) < 1 && abs(drawn.bounds.height - size.height) < 1 ? drawn : nil
+  }
+  return (own.map { [$0] } ?? []) + view.subviews.filter { !$0.isHidden }.flatMap { imageViews(under: $0, sized: size) }
+}
+
+/// The thumbnail drawn at `place` in the window: the image view the press landed on or one near it, or else the image view of the thumbnail's size nearest the place.
+/// Note that the fallback matters where React Native measures a thumbnail against its own root view rather than the window, as in an iPad split view's detail column, so the place stands shifted by the column's offset while its size holds.
 private func thumbnail(at place: CGRect, in window: UIWindow) -> UIImageView? {
   var node = window.hitTest(CGPoint(x: place.midX, y: place.midY), with: nil)
   for _ in 0..<ancestorReach {
-    guard let view = node, !(view is UIWindow) else { return nil }
+    guard let view = node, !(view is UIWindow) else { break }
     if let found = imageView(under: view, covering: place, in: window) { return found }
     node = view.superview
   }
-  return nil
+  let distance = { (drawn: UIImageView) -> CGFloat in
+    let frame = drawn.convert(drawn.bounds, to: window)
+    return hypot(frame.midX - place.midX, frame.midY - place.midY)
+  }
+  return imageViews(under: window, sized: place.size).min { distance($0) < distance($1) }
 }
 
 /// How long the zoom in and out runs, in seconds, about as long as Photos' own.
@@ -88,31 +105,40 @@ private func bytes(at url: URL) async throws -> Data {
   return try await URLSession.shared.data(from: url).0
 }
 
-/// One picture full screen: a scroll view zooming its image, the bars over it, and its share sheet.
-final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
-  private let source: URL
+/// Space between two pictures as a swipe pages from one to the next, as Photos stands them apart.
+private let pageGap: CGFloat = 20
+
+/// One picture of the set: where it is read from, its thumbnail's place in the window, the bar's words, and the bitmap its thumbnail draws, where it is on screen.
+struct PictureEntry {
+  let source: URL
+  let place: CGRect
+  let title: String
+  let subtitle: String?
+  let first: UIImage?
+}
+
+/// One picture full screen: a scroll view zooming its image, read at full size and decoded off the main thread, with Live Text over it.
+final class PicturePage: UIViewController, UIScrollViewDelegate {
+  let entry: PictureEntry
+  let index: Int
   private let scroll = UIScrollView()
   private let imageView = UIImageView()
-  private let drag = UIPanGestureRecognizer()
-  private var barsHidden = false
-  /// The zoom it opens and closes with, held here since UIKit holds a transitioning delegate weakly.
-  var zoom: PictureZoom?
+  private let liveText = ImageAnalysisInteraction()
+  private let onTap: () -> Void
 
-  init(source: URL, first: UIImage?, title: String, subtitle: String?) {
-    self.source = source
+  init(entry: PictureEntry, index: Int, onTap: @escaping () -> Void) {
+    self.entry = entry
+    self.index = index
+    self.onTap = onTap
     super.init(nibName: nil, bundle: nil)
-    imageView.image = first
-    navigationItem.title = title
-    navigationItem.subtitle = subtitle
+    imageView.image = entry.first
   }
 
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
   /// Whether the picture stands zoomed in, which a drag pans rather than closes.
-  var zoomedIn: Bool { scroll.zoomScale > scroll.minimumZoomScale + 0.01 }
-
-  override var prefersStatusBarHidden: Bool { barsHidden }
+  var zoomedIn: Bool { isViewLoaded && scroll.zoomScale > scroll.minimumZoomScale + 0.01 }
 
   /// The picture as drawn now: its full size once read, its thumbnail's before.
   var image: UIImage? { imageView.image }
@@ -126,20 +152,12 @@ final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIG
   /// Hides the picture while the zoom flies its copy, and shows it once it lands.
   func hidePicture(_ hidden: Bool) { imageView.isHidden = hidden }
 
-  /// The page's ground: the system's in the bars' light, black with the bars hidden, as Photos' is.
-  private var ground: UIColor { barsHidden ? .black : .systemBackground }
-
-  /// Shows how far a drag has run, from 0 to 1: the ground and the bars fading so the page behind shows through.
-  private func showDrag(_ progress: CGFloat) {
-    let left = max(0, 1 - progress * 2)
-    view.backgroundColor = ground.withAlphaComponent(left)
-    navigationController?.navigationBar.alpha = left
-    navigationController?.toolbar.alpha = left
-  }
+  /// Moves and shrinks the picture as a drag down carries it.
+  func carry(_ transform: CGAffineTransform) { scroll.transform = transform }
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .systemBackground
+    view.backgroundColor = .clear
 
     scroll.frame = view.bounds
     scroll.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -156,7 +174,7 @@ final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIG
     imageView.frame = scroll.bounds
     imageView.isAccessibilityElement = true
     imageView.accessibilityTraits = .image
-    imageView.accessibilityLabel = navigationItem.title
+    imageView.accessibilityLabel = entry.title
     scroll.addSubview(imageView)
 
     let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
@@ -165,6 +183,122 @@ final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIG
     let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
     tap.require(toFail: doubleTap)
     scroll.addGestureRecognizer(tap)
+
+    readFullSize()
+  }
+
+  override func viewDidLayoutSubviews() {
+    super.viewDidLayoutSubviews()
+    // Note that the image stands as large as the screen while it isn't zoomed, so a turn of the device fits it anew.
+    guard !zoomedIn else { return }
+    imageView.frame = scroll.bounds
+    scroll.contentSize = scroll.bounds.size
+  }
+
+  override func viewDidDisappear(_ animated: Bool) {
+    super.viewDidDisappear(animated)
+    // Note that a page swiped away stands unzoomed when it comes back, as Photos' do.
+    scroll.setZoomScale(scroll.minimumZoomScale, animated: false)
+  }
+
+  func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+  /// Reads the picture at its full size and decodes it off the main thread, then draws it in the thumbnail's place and reads its words for Live Text.
+  private func readFullSize() {
+    let source = entry.source
+    // Note that the read and the decode run detached from the main actor, so the zoom never waits on a large picture's bytes.
+    let read = Task.detached(priority: .userInitiated) { () -> UIImage? in
+      guard let decoded = UIImage(data: try await bytes(at: source)) else { return nil }
+      return await decoded.byPreparingForDisplay() ?? decoded
+    }
+    Task { [weak self] in
+      do {
+        guard let ready = try await read.value else { return }
+        self?.imageView.image = ready
+        await self?.readWords(of: ready)
+      } catch {
+        NSLog("The picture viewer could not read its picture at full size.")
+      }
+    }
+  }
+
+  /// Finds the words standing in the picture, so a long press selects them as Photos' Live Text does; nothing where the device can't.
+  private func readWords(of image: UIImage) async {
+    guard ImageAnalyzer.isSupported else { return }
+    do {
+      let analysis = try await ImageAnalyzer().analyze(image, configuration: ImageAnalyzer.Configuration([.text]))
+      guard analysis.hasResults(for: .text) else { return }
+      // Note that Live Text joins the image view only once it has found words, so a picture with none, or a device that reads none, keeps the image view as it stands; and that the image view then takes touches so the words can be selected.
+      liveText.analysis = analysis
+      liveText.preferredInteractionTypes = .automatic
+      imageView.isUserInteractionEnabled = true
+      imageView.addInteraction(liveText)
+    } catch {
+      NSLog("The picture viewer could not read the words in its picture.")
+    }
+  }
+
+  @objc private func tapped() { onTap() }
+
+  @objc private func doubleTapped(_ gesture: UITapGestureRecognizer) {
+    if zoomedIn {
+      scroll.setZoomScale(scroll.minimumZoomScale, animated: true)
+      return
+    }
+    let point = gesture.location(in: imageView)
+    let size = CGSize(width: scroll.bounds.width / doubleTapZoom, height: scroll.bounds.height / doubleTapZoom)
+    scroll.zoom(to: CGRect(origin: CGPoint(x: point.x - size.width / 2, y: point.y - size.height / 2), size: size), animated: true)
+  }
+}
+
+/// The pictures full screen, one at a time, a swipe sideways stepping between them: the bars name the one shown, and Share shares it.
+final class PictureViewerController: UIPageViewController, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIGestureRecognizerDelegate {
+  private let entries: [PictureEntry]
+  private let drag = UIPanGestureRecognizer()
+  private var barsHidden = false
+  /// The zoom it opens and closes with, held here since UIKit holds a transitioning delegate weakly.
+  var zoom: PictureZoom?
+
+  init(entries: [PictureEntry], index: Int) {
+    self.entries = entries
+    super.init(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [.interPageSpacing: pageGap])
+    dataSource = self
+    delegate = self
+    setViewControllers([page(index)], direction: .forward, animated: false)
+    name(index)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+  /// The page standing now.
+  var shown: PicturePage? { viewControllers?.first as? PicturePage }
+
+  override var prefersStatusBarHidden: Bool { barsHidden }
+
+  /// The picture shown, as drawn now.
+  var image: UIImage? { shown?.image }
+
+  /// Where the picture shown stands in `space`; none before it has an image.
+  func pictureFrame(in space: UIView) -> CGRect? { shown?.pictureFrame(in: space) }
+
+  /// Hides the picture shown while the zoom flies its copy, and shows it once it lands.
+  func hidePicture(_ hidden: Bool) { shown?.hidePicture(hidden) }
+
+  /// The page's ground: the system's in the bars' light, black with the bars hidden, as Photos' is.
+  private var ground: UIColor { barsHidden ? .black : .systemBackground }
+
+  /// Shows how far a drag has run, from 0 to 1: the ground and the bars fading so the page behind shows through.
+  private func showDrag(_ progress: CGFloat) {
+    let left = max(0, 1 - progress * 2)
+    view.backgroundColor = ground.withAlphaComponent(left)
+    navigationController?.navigationBar.alpha = left
+    navigationController?.toolbar.alpha = left
+  }
+
+  override func viewDidLoad() {
+    super.viewDidLoad()
+    view.backgroundColor = .systemBackground
 
     drag.addTarget(self, action: #selector(dragged(_:)))
     drag.delegate = self
@@ -182,39 +316,36 @@ final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIG
     )
     share.accessibilityIdentifier = "picture-viewer-share"
     toolbarItems = [share, UIBarButtonItem(systemItem: .flexibleSpace)]
-
-    readFullSize()
   }
 
-  override func viewDidLayoutSubviews() {
-    super.viewDidLayoutSubviews()
-    // Note that the image stands as large as the screen while it isn't zoomed, so a turn of the device fits it anew.
-    guard !zoomedIn else { return }
-    imageView.frame = scroll.bounds
-    scroll.contentSize = scroll.bounds.size
+  private func page(_ index: Int) -> PicturePage {
+    PicturePage(entry: entries[index], index: index) { [weak self] in self?.toggleBars() }
   }
 
-  func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
-
-  /// Reads the picture at its full size and decodes it off the main thread, then draws it in the thumbnail's place.
-  private func readFullSize() {
-    let source = source
-    // Note that the read and the decode run detached from the main actor, so the zoom never waits on a large picture's bytes.
-    let read = Task.detached(priority: .userInitiated) { () -> UIImage? in
-      guard let decoded = UIImage(data: try await bytes(at: source)) else { return nil }
-      return await decoded.byPreparingForDisplay() ?? decoded
-    }
-    Task { [weak self] in
-      do {
-        guard let ready = try await read.value else { return }
-        self?.imageView.image = ready
-      } catch {
-        NSLog("The picture viewer could not read its picture at full size.")
-      }
-    }
+  /// Names the picture at `index` in the bar: who showed it, when, and where it stands among the set.
+  private func name(_ index: Int) {
+    let entry = entries[index]
+    navigationItem.title = entry.title
+    let place = entries.count > 1 ? "\(index + 1) of \(entries.count)" : nil
+    let under = [entry.subtitle, place].compactMap { $0 }
+    navigationItem.subtitle = under.isEmpty ? nil : under.joined(separator: " · ")
   }
 
-  @objc private func tapped() {
+  func pageViewController(_ pageViewController: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
+    guard let at = (viewController as? PicturePage)?.index, at > 0 else { return nil }
+    return page(at - 1)
+  }
+
+  func pageViewController(_ pageViewController: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
+    guard let at = (viewController as? PicturePage)?.index, at + 1 < entries.count else { return nil }
+    return page(at + 1)
+  }
+
+  func pageViewController(_ pageViewController: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
+    if completed, let at = shown?.index { name(at) }
+  }
+
+  private func toggleBars() {
     barsHidden.toggle()
     navigationController?.setNavigationBarHidden(barsHidden, animated: true)
     navigationController?.setToolbarHidden(barsHidden, animated: true)
@@ -224,21 +355,21 @@ final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIG
     }
   }
 
-  /// A drag down begins only on a picture that isn't zoomed in, and only downward, so a zoomed picture pans and a sideways swipe stays the scroll's.
+  /// A drag down begins only on a picture that isn't zoomed in, and only downward, so a zoomed picture pans and a sideways swipe stays the pages'.
   func gestureRecognizerShouldBegin(_ gesture: UIGestureRecognizer) -> Bool {
     guard gesture === drag else { return true }
     let velocity = drag.velocity(in: view)
-    return !zoomedIn && velocity.y > 0 && abs(velocity.y) > abs(velocity.x)
+    return !(shown?.zoomedIn ?? false) && velocity.y > 0 && abs(velocity.y) > abs(velocity.x)
   }
 
-  /// Moves and shrinks the picture under a drag down, the page behind showing through, and closes it on a long enough drag or a fling, springing it back otherwise.
+  /// Moves and shrinks the picture shown under a drag down, the page behind showing through, and closes it on a long enough drag or a fling, springing it back otherwise.
   @objc private func dragged(_ gesture: UIPanGestureRecognizer) {
     let moved = gesture.translation(in: view)
     let progress = min(1, max(0, moved.y / view.bounds.height))
     switch gesture.state {
     case .changed:
       let shrink = 1 - progress * 0.35
-      scroll.transform = CGAffineTransform(translationX: moved.x, y: moved.y).scaledBy(x: shrink, y: shrink)
+      shown?.carry(CGAffineTransform(translationX: moved.x, y: moved.y).scaledBy(x: shrink, y: shrink))
       showDrag(progress)
     case .ended, .cancelled:
       if gesture.state == .ended, moved.y > dragToClose || gesture.velocity(in: view).y > flingToClose {
@@ -246,7 +377,7 @@ final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIG
         return
       }
       UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
-        self.scroll.transform = .identity
+        self.shown?.carry(.identity)
         self.showDrag(0)
       }
     default:
@@ -254,26 +385,17 @@ final class PictureViewerController: UIViewController, UIScrollViewDelegate, UIG
     }
   }
 
-  @objc private func doubleTapped(_ gesture: UITapGestureRecognizer) {
-    if zoomedIn {
-      scroll.setZoomScale(scroll.minimumZoomScale, animated: true)
-      return
-    }
-    let point = gesture.location(in: imageView)
-    let size = CGSize(width: scroll.bounds.width / doubleTapZoom, height: scroll.bounds.height / doubleTapZoom)
-    scroll.zoom(to: CGRect(origin: CGPoint(x: point.x - size.width / 2, y: point.y - size.height / 2), size: size), animated: true)
-  }
-
-  /// Opens the system's share sheet on the picture: its file where it is one, and its image otherwise.
+  /// Opens the system's share sheet on the picture shown: its file where it is one, and its image otherwise.
   private func share() {
-    let item: Any = source.isFileURL ? source : (imageView.image as Any)
+    guard let page = shown else { return }
+    let item: Any = page.entry.source.isFileURL ? page.entry.source : (page.image as Any)
     let sheet = UIActivityViewController(activityItems: [item], applicationActivities: nil)
     sheet.popoverPresentationController?.barButtonItem = toolbarItems?.first
     present(sheet, animated: true)
   }
 }
 
-/// What a press opens: the picture's address, the thumbnail's place in the window, in points, and the bar's words.
+/// One picture of what a press opens: its address, its thumbnail's place in the window, in points, and the bar's words.
 struct ShownPicture: Record {
   @Field var uri: String = ""
   @Field var x: Double = 0
@@ -318,7 +440,10 @@ final class PictureZoom: NSObject, UIViewControllerTransitioningDelegate, UIView
     }
 
     // Note that the thumbnail stands hidden while its copy flies, so the picture is never drawn twice.
-    let drawn = thumbnail().flatMap { $0.window == nil ? nil : $0 }
+    // Note that a thumbnail scrolled out of sight, as a set's other pictures may be, takes no flight, and the page fades instead.
+    let drawn = thumbnail().flatMap { found in
+      found.window != nil && found.convert(found.bounds, to: container).intersects(container.bounds) ? found : nil
+    }
     let picture = viewer?.image ?? drawn?.image
     let from = drawn.map { $0.convert($0.bounds, to: container) }
     let to = viewer?.pictureFrame(in: container)
@@ -354,8 +479,8 @@ public final class PictureViewerModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PictureViewer")
 
-    AsyncFunction("show") { (shown: ShownPicture) -> Bool in
-      guard let source = URL(string: shown.uri) else { return false }
+    AsyncFunction("show") { (pictures: [ShownPicture], index: Int) -> Bool in
+      guard pictures.indices.contains(index) else { return false }
 
       guard let window = keyWindow(), let presenter = topmost(window) else {
         NSLog("The picture viewer found no window to stand over.")
@@ -368,17 +493,26 @@ public final class PictureViewerModule: Module {
         return false
       }
 
-      let place = CGRect(x: shown.x, y: shown.y, width: shown.width, height: shown.height)
-      let drawn = thumbnail(at: place, in: window)
-      let viewer = PictureViewerController(source: source, first: drawn?.image, title: shown.title, subtitle: shown.subtitle)
+      // Note that each picture's thumbnail is found where it stands, so a picture on screen opens from its own bitmap and closes back into it; one scrolled out of sight is read at full size alone.
+      let entries = pictures.compactMap { shown -> PictureEntry? in
+        guard let source = URL(string: shown.uri) else { return nil }
+        let place = CGRect(x: shown.x, y: shown.y, width: shown.width, height: shown.height)
+        return PictureEntry(source: source, place: place, title: shown.title, subtitle: shown.subtitle, first: thumbnail(at: place, in: window)?.image)
+      }
+      guard entries.count == pictures.count else { return false }
+
+      let viewer = PictureViewerController(entries: entries, index: index)
       let stack = UINavigationController(rootViewController: viewer)
       stack.setToolbarHidden(false, animated: false)
       // Note that the page behind stays drawn under the viewer, so a drag down shows it through, and that the viewer's bars say whether the status bar stands.
       stack.modalPresentationStyle = .overFullScreen
       stack.modalPresentationCapturesStatusBarAppearance = true
       stack.view.backgroundColor = .clear
-      let zoom = PictureZoom(viewer: viewer) { [weak window] in
-        window.flatMap { thumbnail(at: place, in: $0) }
+
+      // Note that the zoom grows out of the thumbnail pressed and closes back into the thumbnail of the picture shown then.
+      let zoom = PictureZoom(viewer: viewer) { [weak viewer, weak window] in
+        guard let window else { return nil }
+        return thumbnail(at: entries[viewer?.shown?.index ?? index].place, in: window)
       }
       viewer.zoom = zoom
       stack.transitioningDelegate = zoom
