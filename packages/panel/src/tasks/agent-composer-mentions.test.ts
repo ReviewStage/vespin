@@ -42,11 +42,12 @@ import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { ACTOR_KIND, ACTOR_STATE } from "@repo/ui/actor-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
+import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
 import { Clock, Context, Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -431,6 +432,8 @@ async function listSettled(): Promise<void> {
   await vi.waitFor(() =>
     assert.equal(document.querySelector('.mention-menu [role="status"]') === null, true),
   );
+  // Note that the rows past the view are drawn once a frame has painted, which a test holding its frames lets pass here.
+  await settleFrames();
 }
 
 /** What a task's page hands its places, every mention a chip was asked to open kept. */
@@ -1965,6 +1968,9 @@ function eraseInComposer(container: ParentNode, count: number): void {
 }
 
 test("files found by a word typed on are those the longer word finds, and the word typed back finds every file it found before", async () => {
+  // Note that the frames are held, so each list is read with the rows past its view drawn, however long the test takes.
+  holdFrames();
+  onTestFinished(() => vi.restoreAllMocks());
   const { container } = await wideBox();
 
   typeInComposer(container, "See @files:invite-");
