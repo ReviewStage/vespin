@@ -34,7 +34,7 @@
  * glyph its door wears.
  * Its preview is a still of the whole work area, taken once the window has
  * stood on the screen with nothing pressed or scrolled for a beat, and as ⌃Tab
- * leaves a screen that has none yet: main takes a downscaled picture of that
+ * leaves a screen whose still is older than a few seconds, or that has none: main takes a downscaled picture of that
  * part of the window (`window.capture`). Note that a still is taken once a
  * screen, and only once the window is quiet, because each costs main about
  * 10 ms of its own thread, a resize and a JPEG, that a press landing then
@@ -57,6 +57,7 @@ import {
   createWait,
   DIALOG_SIZE,
   Dialog,
+  effectServices,
   TabCard,
   TabCards,
   useRest,
@@ -64,7 +65,7 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
-import { Effect } from "effect";
+import { Clock, Context, Duration, Effect } from "effect";
 import { HistoryIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
@@ -111,6 +112,9 @@ const HOLD_SHOWS = "150 millis";
 
 /** How long the window stands on a screen with nothing pressed or scrolled before its still is taken: longer than a step through tasks at reading pace, so a run of them takes one still, of the screen it ends on. */
 const STILL_SETTLES = "1500 millis";
+
+/** How long a still stands for its screen as ⌃Tab leaves it: younger, it is kept, so flipping between two screens takes none; older, the screen is taken afresh, so no card is minutes old. */
+const STILL_STAYS = Duration.toMillis(Duration.seconds(10));
 
 /** What the window hears as it being used, each holding off the still a screen is owed: a press, a key, a scroll. */
 const BUSY_EVENTS = ["keydown", "pointerdown", "wheel"] as const;
@@ -166,6 +170,13 @@ const holdWait = createWait();
 interface HeldStill {
   readonly place: Place;
   readonly src: string;
+  /** When main answered it, on the renderer's clock. */
+  readonly at: number;
+}
+
+/** Reads the time on the renderer's clock as it stands at the call, for a still's stamp. */
+function clockNow(): number {
+  return Context.get(effectServices.state, Clock.Clock).currentTimeMillisUnsafe();
 }
 
 /** How a card wears its screen: its glyph and name, and under them the words a task's tabs are named by, its agent's glyph before them and its end mark after. */
@@ -404,7 +415,7 @@ export function TabSwitcher({
 
   const keep = (place: Place, src: string) => {
     stills.current = [
-      { place, src },
+      { place, src, at: clockNow() },
       ...stills.current.filter((held) => !sameScreen(held.place, place)),
     ].slice(0, STILLS_KEPT);
 
@@ -478,14 +489,15 @@ export function TabSwitcher({
     if (!next.held) return;
 
     if (!before.held) {
-      // The screen being left is taken before the cards can cover it, where it has no still yet; one it has stands, so flipping between two screens takes none.
+      // The screen being left is taken before the cards can cover it, unless its still is fresh (`STILL_STAYS`).
       const leaving = here();
+      const since = clockNow() - STILL_STAYS;
 
-      const kept = stills.current.some(
-        (held) => leaving !== undefined && sameScreen(held.place, leaving),
+      const fresh = stills.current.some(
+        (held) => leaving !== undefined && sameScreen(held.place, leaving) && held.at > since,
       );
 
-      if (leaving !== undefined && !kept) takeStill(leaving);
+      if (leaving !== undefined && !fresh) takeStill(leaving);
 
       holdWait.start(
         Effect.andThen(

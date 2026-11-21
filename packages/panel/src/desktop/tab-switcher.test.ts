@@ -453,6 +453,47 @@ it.effect(
     }),
 );
 
+it.effect(
+  "⌃Tab leaving a screen keeps a still younger than ten seconds and takes one older afresh",
+  () =>
+    Effect.gen(function* () {
+      serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+      handCapabilities(DESKTOP_CAPABILITIES);
+      let taken = 0;
+      fakeActPort({
+        [ACT_KIND.WINDOW_CAPTURE]: () => {
+          taken += 1;
+
+          return Promise.resolve(STILL);
+        },
+      });
+      const work = document.createElement("main");
+      work.className = "desktop-main";
+      work.getBoundingClientRect = () => new DOMRect(240, 0, 1040, 800);
+      document.body.append(work);
+      yield* Effect.promise(() =>
+        mounted(windowSteps([taskScreen(undefined, README), INBOX]).steps),
+      );
+
+      const heldAndCalledOff = () => {
+        tab();
+        key("keydown", { key: "Escape", ctrlKey: true });
+      };
+
+      // The window stands quiet on the screen, so it takes its still, then ⌃Tab is held and called off at once.
+      yield* TestClock.adjust(Duration.seconds(2));
+      yield* Effect.promise(flushed);
+      heldAndCalledOff();
+      yield* Effect.promise(flushed);
+      assert.equal(taken, 1, "a still two seconds old is kept");
+
+      yield* TestClock.adjust(Duration.seconds(10));
+      heldAndCalledOff();
+      yield* Effect.promise(flushed);
+      assert.equal(taken, 2, "a still past ten seconds is taken afresh");
+    }),
+);
+
 test("a window that is no desktop app leaves ⌃Tab to the browser", async () => {
   handCapabilities(DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP));
   const { steps, visits } = windowSteps([taskScreen(undefined, README), INBOX]);
