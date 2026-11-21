@@ -25,6 +25,7 @@ for:
   - `task-agent`: the open task's second agent.
   - `task`: a background task's own row.
   - `sub-task`: the open task's first sub-task's row.
+  - `tasks`: background tasks in turn, oldest first, each step ending a turn on the next, so each step moves another task to the top of the activity order.
   - `none`: nothing moves.
 
   An agent's step moves its `runStartedAt` by a millisecond, a row change
