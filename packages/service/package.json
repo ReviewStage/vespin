@@ -232,7 +232,6 @@
     "@orpc/experimental-effect": "catalog:",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
-    "@orpc/shared": "catalog:",
     "@repo/agent-runner": "workspace:*",
     "@repo/brand": "workspace:*",
     "@repo/database": "workspace:*",
