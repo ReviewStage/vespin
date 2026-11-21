@@ -1,0 +1,54 @@
+# inbox-trace.yaml -- MEASUREMENT ONLY (chore/probe-tap-instant): five opens each of the media thread and a thread with no media, and back, slowly, for an Instruments trace taken across it, each timed tap labeled "T:<path>".
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: ${FIXTURE}
+      perfStream: ${STREAM}
+      perfLarge: ${LARGE}
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Recorded the invite flow"
+          retryTapIfNoChange: false
+          label: "T:inbox-row"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-thread"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- runFlow:
+    file: ../subflows/to-row.yaml
+    env:
+      ROW: "Invite limits"
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Invite limits"
+          retryTapIfNoChange: false
+          label: "T:inbox-row-plain"
+      - extendedWaitUntil:
+          visible: "A few values the invite flow needs.*"
+          timeout: 10000
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-plain"
+      - assertVisible: "Invite limits"
+      - waitForAnimationToEnd:
+          timeout: 3000
