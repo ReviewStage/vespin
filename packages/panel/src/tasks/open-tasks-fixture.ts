@@ -7,7 +7,7 @@
  * (`@repo/host/fixture-inbox`) and lists beside its tasks a run of tasks
  * as big as a busy account's: each a description of some twenty sections
  * with lists, code, and tables, three agents, and each agent's transcript
- * forty turns of calls and words. A select opens the task it names, as main
+ * forty turns of calls and words. The first task stands open at the start. A select opens the task it names, as main
  * binds one, by moving the task the list holds open and staging the
  * window's document again (`fixture-moves.ts`), and a close leaves it.
  * Every name, path, and line here is invented.
@@ -341,8 +341,8 @@ const TRANSCRIPTS: AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT] = Object.fromEn
   ]),
 );
 
-/** The task the list holds open, as main binds the one a select names; none until one is opened. */
-let opened: string | undefined;
+/** The task the list holds open, as main binds the one a select names; the first task's until another is opened. */
+let opened: string | undefined = taskIdAt(0);
 
 /** The lists staged, one object for each list handed in and task open, as a staged list must be. */
 const STAGED_LISTS = new WeakMap<ListedTasksView, Map<string | undefined, ListedTasksView>>();
