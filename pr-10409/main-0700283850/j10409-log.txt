@@ -1,0 +1,8 @@
+== bundle PJj10409 base 0700283850
+  built 0700283850 base app Vmain7.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-inbox: fails 1 shots 4 Assert that ".*walked the invite flow.*" is visible... FAILED
+ipad27-light-inbox: fails 1 shots 10 Tap on "Done"... FAILED
