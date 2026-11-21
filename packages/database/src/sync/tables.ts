@@ -295,11 +295,13 @@ export const userSync = defineSyncTable(user, {
  * when it was last seen and what it runs, and no view the capture wakes
  * reads them: a window judges a device by its own presence read. Its
  * allowed apps' names and icons are ignored too, since they are read only
- * as an `@` list asks for them (`hosts.allowedApps`).
+ * as an `@` list asks for them (`hosts.allowedApps`). A workspace's machine
+ * names no account, and notifies its workspace's topic alone.
  */
 export const deviceSync = defineSyncTable(device, {
   topics: [
     { kind: TOPIC.ACCOUNT, column: device.userId },
+    { kind: TOPIC.WORKSPACE, column: device.organizationId },
     {
       through: member,
       key: member.userId,
@@ -343,6 +345,7 @@ export const hostPairingSync = defineSyncTable(hostPairing, {
     hostPairing.platform,
     hostPairing.arch,
     hostPairing.version,
+    hostPairing.machineId,
     hostPairing.ip,
     hostPairing.status,
     hostPairing.createdAt,
@@ -544,10 +547,11 @@ export const agentQueueSync = defineSyncTable(agentQueue, {
 });
 
 /**
- * A line queued for a local agent's runner, on its account's topic, which
- * the account's Macs' held read of their lines and a wait for a runner's
- * exit are woken on, and on its agent's, which the agent's transcript is
- * woken on as its launch is claimed, steps, and settles. Note that what the
+ * A line queued for a local agent's runner, on its account's topic, which a
+ * wait for a runner's exit is woken on, on its device's, which that
+ * device's held read of its lines is woken on, and on its agent's, which
+ * the agent's transcript is woken on as its launch is claimed, steps, and
+ * settles. Note that what the
  * line says is ignored, because it is written once as the line is queued
  * and never changed, and an update comparing it would weigh a files line's
  * every file at its claim and its settle.
@@ -555,6 +559,7 @@ export const agentQueueSync = defineSyncTable(agentQueue, {
 export const deviceAgentLineSync = defineSyncTable(deviceAgentLine, {
   topics: [
     { kind: TOPIC.ACCOUNT, column: deviceAgentLine.userId },
+    { kind: TOPIC.DEVICE, column: deviceAgentLine.deviceId },
     { kind: TOPIC.AGENT, column: deviceAgentLine.agentId },
   ],
   ignore: [deviceAgentLine.payload],
@@ -562,13 +567,16 @@ export const deviceAgentLineSync = defineSyncTable(deviceAgentLine, {
 
 /**
  * A request of a local agent's tool to its Mac, on its account's topic,
- * which the Macs' held read of their requests and the tool's wait for the
- * answer are woken on. Note that the file an answer carries is ignored,
+ * which the tool's wait for the answer is woken on, and on its device's,
+ * which that device's held read of its requests is woken on. Note that the file an answer carries is ignored,
  * because an update comparing it would weigh the file, and the answer moves
  * `settled_at` beside it, so it still notifies.
  */
 const deviceAgentRequestSync = defineSyncTable(deviceAgentRequest, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: deviceAgentRequest.userId }],
+  topics: [
+    { kind: TOPIC.ACCOUNT, column: deviceAgentRequest.userId },
+    { kind: TOPIC.DEVICE, column: deviceAgentRequest.deviceId },
+  ],
   ignore: [deviceAgentRequest.bytes],
 });
 

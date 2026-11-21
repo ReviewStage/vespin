@@ -21,7 +21,9 @@
  * background agent's (`agent`, the default), the open task's agent its tab
  * shows (`shown-agent`) or another of its agents (`task-agent`), a
  * background task's own as its agents' turns start and end (`task`), the
- * open task's first sub-task's the same way (`sub-task`), or none
+ * open task's first sub-task's the same way (`sub-task`), a turn ending on
+ * each background task in turn, so each step moves another to the head of
+ * the activity order (`tasks`), or none
  * (`none`), and `every` how many milliseconds apart, 0 for no timer. A bench
  * steps it itself through `vespinFixtureStep()` on the page, so each step is
  * timed alone.
@@ -109,6 +111,8 @@ const LARGE_MOVE = {
   TASK: "task",
   /** The open task's first sub-task's own row, moved as a background task's is, in view on its Overview. */
   SUB_TASK: "sub-task",
+  /** Background tasks in turn, oldest first: each step ends a turn of the next one's agents, so each puts another task at the head of the activity order. */
+  TASKS: "tasks",
   /** Nothing moves. */
   NONE: "none",
 } as const;
@@ -549,7 +553,13 @@ function largeStep(stage: LargeStage, move: LargeMove): void {
   if (move === LARGE_MOVE.NONE) return;
   stage.steps += 1;
 
-  if (move === LARGE_MOVE.TASK || move === LARGE_MOVE.SUB_TASK) {
+  if (move === LARGE_MOVE.TASKS) {
+    const at = (stage.tasks.length - (stage.steps % stage.tasks.length)) % stage.tasks.length;
+    const task = stage.tasks[at];
+
+    if (task?.agents === undefined) return;
+    stage.tasks[at] = { ...task, agents: { ...task.agents, activityAt: LANDED + stage.steps } };
+  } else if (move === LARGE_MOVE.TASK || move === LARGE_MOVE.SUB_TASK) {
     const at = move === LARGE_MOVE.TASK ? stage.tasks.length - 1 : 0;
     const task = stage.tasks[at];
 

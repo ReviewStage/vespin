@@ -748,8 +748,8 @@ export function NewAgentScreen({
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
-  const listed = useListedTasks();
-  const startsOn = listed.find((task) => task.id === (suggestedTask ?? taskId));
+  // Note that the task it starts on is read by its id alone, so the page isn't drawn again as any other of the account's tasks moves while words are typed.
+  const startsOn = useTaskListRow(useTaskListCollections().tasks, suggestedTask ?? taskId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);

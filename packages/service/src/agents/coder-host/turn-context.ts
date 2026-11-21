@@ -58,9 +58,16 @@ const SandboxResizedSchema = Schema.Struct({ memoryGb: Schema.Number, fromGb: Sc
 
 export type SandboxResized = typeof SandboxResizedSchema.Type;
 
-/** A place an agent ran at, as its move tells it: one of the developer's Macs, by the name it had where it is known, or the cloud. */
+/**
+ * A place an agent ran at, as its move tells it: one of the developer's
+ * Macs, or a machine its workspace owns (`workspace`), by the name it had
+ * where it is known, or the cloud. Note that `onMac` is said of a
+ * workspace's machine too, since its folder stays there as a Mac's does,
+ * and a move kept before `workspace` names none.
+ */
 const MovedSideSchema = Schema.Struct({
   onMac: Schema.Boolean,
+  workspace: Schema.optionalKey(Schema.Literal(true)),
   name: Schema.optionalKey(Schema.String),
 });
 
@@ -253,9 +260,15 @@ export function memoriesWithLead(memories: readonly StoredMemory[]): string {
   return [TURN_MESSAGE_LEAD.MEMORIES, ...lines].join("\n");
 }
 
-/** A place a move names: the cloud, or the developer's Mac, by its name where it is known. */
+/** A place a move names: the cloud, a machine of the workspace's, or the developer's Mac, by its name where it is known. */
 function sideWords(side: AgentMoved["from"]): string {
   if (!side.onMac) return "the cloud";
+
+  if (side.workspace === true) {
+    return side.name === undefined
+      ? "a machine of the workspace's"
+      : `the workspace's machine \`${side.name}\``;
+  }
 
   return side.name === undefined ? "the developer's Mac" : `the developer's Mac \`${side.name}\``;
 }
@@ -277,7 +290,7 @@ export function movedWords(moved: AgentMoved): string {
     moved.copiedBranch !== undefined
       ? ` Your checkout there, what you had not committed or pushed included, was copied to the branch \`${moved.copiedBranch}\`: fetch it (\`git fetch origin ${shellQuoted(moved.copiedBranch)}\`) and bring it onto your branch (\`git merge --ff-only FETCH_HEAD\`, or a plain merge where your branch moved on) before you go on.`
       : moved.from.onMac
-        ? " Only what you pushed from there comes along: anything you had not pushed stays in your folder on that Mac, so fetch your branch and redo what is missing."
+        ? ` Only what you pushed from there comes along: anything you had not pushed stays in your folder on that ${moved.from.workspace === true ? "machine" : "Mac"}, so fetch your branch and redo what is missing.`
         : " Your checkout there could not be copied, so fetch your branch and redo what you had not pushed.";
 
   return `You moved from ${sideWords(moved.from)} to ${sideWords(moved.to)} since your last turn, as the developer asked.${paths}${work}`;

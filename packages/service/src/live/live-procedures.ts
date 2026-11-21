@@ -94,6 +94,11 @@
  * its own settings for agents' commands and apps; woken by a machine
  * joining, removed, its settings changed, or its app coming or going
  * (`machinesRead`).
+ * `GET /api/live/workspace-machines?workspaceId=` answers the machines one
+ * workspace owns as one, to a member of it alone, so a workspace it is not
+ * in is not found; woken by a machine of it approved, registered, renamed,
+ * removed, or coming and going, and by a membership moving
+ * (`workspaceMachinesRead`).
  * `GET /api/live/machine-asks` answers the asks the account's machines hold
  * for its answer, each with the answer that stands on it, the account's own
  * alone; woken by an ask posted, answered, or taken down (`machineAsksRead`).
@@ -269,6 +274,7 @@ import {
 } from "./reads/tasks.js";
 import { workspaceIntegrationsRead } from "./reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "./reads/workspace-invitations.js";
+import { workspaceMachinesRead } from "./reads/workspace-machines.js";
 import { workspaceMembersRead } from "./reads/workspace-members.js";
 import { workspaceMemoriesRead } from "./reads/workspace-memories.js";
 import { workspacesRead } from "./reads/workspaces.js";
@@ -1004,6 +1010,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
 
     hosts: signedIn.hosts.effect(answerBoundRead(hostsRead)),
     machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
+    workspaceMachines: signedIn.workspaceMachines.effect(answerBoundRead(workspaceMachinesRead)),
     machineAsks: signedIn.machineAsks.effect(answerBoundRead(machineAsksRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),

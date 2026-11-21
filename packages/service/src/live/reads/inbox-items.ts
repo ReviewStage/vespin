@@ -12,8 +12,13 @@ import { INBOX_ITEMS_READ } from "@repo/features/inbox-live";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { Clock, Effect } from "effect";
 import { TASKLESS_LIVE, tasklessLiveParam } from "../../agents/taskless-reads.js";
+import {
+  WORKSPACE_MACHINE_LIVE,
+  workspaceMachineLiveParam,
+} from "../../agents/workspace-machine-reads.js";
 import { HOSTED_REFUSAL } from "../../http/http-effect.js";
 import {
+  type AccountItemsReader,
   accountItemsDeltaStatements,
   accountItemsLiveStatements,
 } from "../../inbox/inbox-store.js";
@@ -34,8 +39,10 @@ import { ITEM_GATES, SCOPE_INBOX_READS } from "./scope-inbox.js";
  * items it carries are those changed since `settledSince`, which it binds
  * from the clock, since a live statement reads none, and those the reader
  * set a reminder on and has not read since. The items on no task it
- * carries only to a build that reads them (`tasklessLiveParam`), which it
- * binds from the headers the build names itself in. A `since` of no shape, epoch
+ * carries only to a build that reads them (`tasklessLiveParam`), and those
+ * of an agent on a workspace's machine likewise
+ * (`workspaceMachineLiveParam`), each bound from the headers the build
+ * names itself in. A `since` of no shape, epoch
  * milliseconds as text, is refused; none reads every item.
  *
  * A reader past a sync id is answered the items that moved alone, each
@@ -45,20 +52,31 @@ import { ITEM_GATES, SCOPE_INBOX_READS } from "./scope-inbox.js";
  * whatever they name. An item that leaves by the clock, past thirty days
  * settled, logs nothing, and the reader drops it itself.
  */
+/** Whose items the read carries, as its params bind them (`AccountItemsReader`). */
+function itemsReaderOf(params: {
+  readonly userId: string;
+  readonly settledSince: string;
+  readonly taskless: string;
+  readonly workspaceMachines: string;
+}): AccountItemsReader {
+  return {
+    userId: params.userId,
+    settledSince: instantParam(params.settledSince),
+    taskless: params.taskless === TASKLESS_LIVE.CARRIED,
+    workspaceMachines: params.workspaceMachines === WORKSPACE_MACHINE_LIVE.CARRIED,
+  };
+}
+
 export const inboxItemsRead = bindLiveRead(INBOX_ITEMS_READ, {
   reads: SCOPE_INBOX_READS,
   topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
-  statements: ({ userId, since, settledSince, taskless }) =>
-    accountItemsLiveStatements(
-      userId,
-      instantParam(since),
-      instantParam(settledSince),
-      taskless === TASKLESS_LIVE.CARRIED,
-    ),
+  statements: (params) =>
+    accountItemsLiveStatements(itemsReaderOf(params), instantParam(params.since)),
   serve: (_params, _query, request) =>
     Effect.map(Clock.currentTimeMillis, (now) => ({
       settledSince: String(now - ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS),
       taskless: tasklessLiveParam(request),
+      workspaceMachines: workspaceMachineLiveParam(request),
     })),
   // Note that the query is read rather than the param, which binds a `since` left out as empty, and one named empty is refused.
   admit: (_params, query) => {
@@ -75,12 +93,6 @@ export const inboxItemsRead = bindLiveRead(INBOX_ITEMS_READ, {
     anyTopic: [inboxMessageSync, attachmentSync],
     reach: ({ userId }) => readerAndWorkspaceTopics(userId),
     own: { stamps: inboxItemSync, items: inboxItemSync },
-    statements: ({ userId, settledSince, taskless }, moved) =>
-      accountItemsDeltaStatements(
-        userId,
-        instantParam(settledSince),
-        taskless === TASKLESS_LIVE.CARRIED,
-        moved,
-      ),
+    statements: (params, moved) => accountItemsDeltaStatements(itemsReaderOf(params), moved),
   },
 });
