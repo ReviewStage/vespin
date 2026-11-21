@@ -456,7 +456,8 @@ here once, so a screen gets them by composing these pieces.
   a submenu's items worded with their menu or their own `heard` words
   ("Remind me tomorrow", "Set status: Backlog"), as Mail's rows offer theirs,
   never the swipes' copies (`heardActs`, through the native
-  `heardActions`). A row holding a
+  `heardActions`); and in a list that opens its rows it reads as a button,
+  as Mail's rows do, never a pop-up. A row holding a
   button of its own stays apart instead; a row never nests a second press
   over its own, so `AgentRow`'s pull request opens from its long-press menu.
   A group header, a page's heading, and a message's writer line are headings;
