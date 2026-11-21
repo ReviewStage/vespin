@@ -144,7 +144,7 @@ import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
 import { type AgentCommandsPlace, useAgentCommandsPlace } from "../agents/use-agent-tools.js";
-import { useManagerChatLooks } from "../agents/use-managers.js";
+import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -191,6 +191,7 @@ const MENU_WORDS = {
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
   DELETE: "Permanently delete",
+  OVERVIEW: "Overview",
 } as const;
 
 /** What Copy transcript offers, in the panel's words: the transcript concise or whole, copied, and the same words handed to the share sheet. */
@@ -1029,6 +1030,13 @@ function AgentConversation({
       ? undefined
       : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
 
+  // Note that a Manager's overview stands beside its chat on the desktop; here it is pushed from the bar, where the workspace lists its Managers.
+  const overviewShown = useManagersListed(shown?.workspaceId) && chat;
+
+  const openOverview = overviewShown
+    ? () => router.push({ pathname: onOwnTab("/tasks/agent/[id]/overview"), params: { id } })
+    : undefined;
+
   // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || agent !== undefined;
@@ -1200,6 +1208,13 @@ function AgentConversation({
                 </Stack.Toolbar.MenuAction>
               </Stack.Toolbar.Menu>
             )}
+            {openOverview === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LIST)} onPress={openOverview}>
+                  {MENU_WORDS.OVERVIEW}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
             {/* Note that the groups keep the panel's order (`agentMenuGroups`): the copies, then the name, then where it opens, then archiving, and Permanently delete last and alone. */}
             {copyable ? (
               <Stack.Toolbar.Menu inline>
@@ -1304,6 +1319,14 @@ function AgentConversation({
           </Stack.Toolbar.Menu>
         ) : null}
         {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
+        {/* Note that a Manager's Overview stands as a glyph in every window, nearest the ⋯, since on the desktop it is never hidden beside the chat. */}
+        {openOverview === undefined ? null : (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.LIST)}
+            accessibilityLabel={MENU_WORDS.OVERVIEW}
+            onPress={openOverview}
+          />
+        )}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(GLYPH.ARCHIVE)}
