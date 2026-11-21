@@ -43,8 +43,13 @@ export interface NativeWords {
 
 /** The doors the view opens to JavaScript through its ref. */
 export interface NativePillFieldDoors {
-  /** Puts the pill in place of the drawn words from `start` to `end`, with a space after it, unless the field has changed since the `seen`th change JavaScript heard, which the range was read from. */
-  insertPill(start: number, end: number, pill: NativePill, seen: number): Promise<void>;
+  /** Puts the pills in place of the drawn words from `start` to `end`, each with a space after it, unless the field has changed since the `seen`th change JavaScript heard, which the range was read from. */
+  insertPills(
+    start: number,
+    end: number,
+    pills: readonly NativePill[],
+    seen: number,
+  ): Promise<void>;
   focus(): Promise<void>;
   blur(): Promise<void>;
 }

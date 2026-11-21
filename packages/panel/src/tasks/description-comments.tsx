@@ -171,6 +171,7 @@ import { type HeldComment, PAGE_REVIEW_WORDS, type PageReviewControl } from "./p
 import { PendingWords } from "./pending-comments.js";
 import { pressPlace, ReplyPress, roomAround } from "./reply-to-selection.js";
 import { useMentionLink } from "./task-mentions.js";
+import { agentsNow } from "./use-agents.js";
 import { useOpenLink } from "./use-open-link.js";
 import {
   useWordsDatePicker,
@@ -512,7 +513,7 @@ function useWriterSubject(
   const line = useTaskListRow(useTaskListCollections().agents, agentId);
 
   if (agents === undefined || agentId === undefined) return undefined;
-  const subject = agentSubject(agents.control, agentId, NOTHING_HELD, false, line);
+  const subject = agentSubject(agentsNow(agents.control), agentId, NOTHING_HELD, false, line);
 
   return { agentId, subject, elsewhere: subject.agent === undefined && line !== undefined };
 }

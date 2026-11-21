@@ -40,12 +40,16 @@ import {
   glyphSymbol,
   MENU_CHIP_LOOK,
   MenuChip,
+  ModelChoicePopover,
   ModelChoiceSheet,
+  type ModelChoices,
   type PickOption,
   runsOnGlyph,
   STATUS_MARK_SYMBOL,
   StartPage,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useNavigation, useRouter } from "expo-router";
@@ -231,7 +235,7 @@ function notesOf(...lines: readonly (string | undefined)[]): readonly string[] {
 /**
  * The model and effort an agent starts on, as the panel's model chip says
  * them, "Opus 5.5 · High", led by its harness's mark: a capsule that opens
- * the model sheet (`StartModelSheet`) on a tap; where the models could not
+ * the model choices on a tap (`StartModelChip`); where the models could not
  * be read, Try again in its place, the reason said under the words.
  */
 function ModelChip({ pick, onOpen }: { readonly pick: ModelPick; readonly onOpen: () => void }) {
@@ -256,13 +260,37 @@ function ModelChip({ pick, onOpen }: { readonly pick: ModelPick; readonly onOpen
   );
 }
 
+/** Whether a start's model choices pop over from its model capsule, as a regular window's pickers do, rather than rising as a sheet: where the window is regular and the capsule holds models rather than Try again. */
+function useModelPopover(pick: ModelPick): boolean {
+  return useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && pick.models.length > 0;
+}
+
 /**
- * The model sheet a start opens from its model capsule, as the agent's page
- * opens it: the models under each harness's mark, the effort right under the
- * model, and Fast where the model has a fast version. It offers no
- * permission mode, since a start takes none and a new agent runs on the
- * account's default. A pick takes as it is pressed, so Done only closes it.
+ * The model choices a start offers, as the agent's page offers them: the
+ * models under each harness's mark, the effort right under the model, and
+ * Fast where the model has a fast version. It offers no permission mode,
+ * since a start takes none and a new agent runs on the account's default.
+ * A pick takes as it is pressed.
  */
+function startModelChoices(pick: ModelPick): ModelChoices {
+  const models = pick.models.flatMap((option) => {
+    const provider = providerOf(option.id);
+
+    return provider === undefined ? [] : [{ ...option, provider }];
+  });
+
+  return {
+    models,
+    model: pick.model,
+    onModel: pick.pickModel,
+    efforts: pick.efforts,
+    effort: pick.shown?.effort,
+    onEffort: pick.pickEffort,
+    fast: pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle },
+  };
+}
+
+/** The model sheet a start opens from its model capsule in a compact window, Done closing it; none where the choices pop over from the capsule (`StartModelChip`). */
 function StartModelSheet({
   pick,
   presented,
@@ -272,23 +300,33 @@ function StartModelSheet({
   readonly presented: boolean;
   readonly onDismiss: () => void;
 }) {
-  const models = pick.models.flatMap((option) => {
-    const provider = providerOf(option.id);
-
-    return provider === undefined ? [] : [{ ...option, provider }];
-  });
+  if (useModelPopover(pick)) return null;
 
   return (
-    <ModelChoiceSheet
-      presented={presented}
-      onDismiss={onDismiss}
-      models={models}
-      model={pick.model}
-      onModel={pick.pickModel}
-      efforts={pick.efforts}
-      effort={pick.shown?.effort}
-      onEffort={pick.pickEffort}
-      fast={pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle }}
+    <ModelChoiceSheet presented={presented} onDismiss={onDismiss} {...startModelChoices(pick)} />
+  );
+}
+
+/** A start's model capsule, the choices popping over from it in a regular window (`ModelChoicePopover`) and opening the sheet in a compact one. */
+function StartModelChip({
+  pick,
+  shown,
+  onShown,
+}: {
+  readonly pick: ModelPick;
+  readonly shown: boolean;
+  readonly onShown: (shown: boolean) => void;
+}) {
+  const chip = <ModelChip pick={pick} onOpen={() => onShown(true)} />;
+
+  if (!useModelPopover(pick)) return chip;
+
+  return (
+    <ModelChoicePopover
+      chip={chip}
+      presented={shown}
+      onDismiss={() => onShown(false)}
+      {...startModelChoices(pick)}
     />
   );
 }
@@ -841,7 +879,7 @@ export function NewAgentScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
-        trailing={<ModelChip pick={pick} onOpen={() => setModelsShown(true)} />}
+        trailing={<StartModelChip pick={pick} shown={modelsShown} onShown={setModelsShown} />}
         chips={
           <>
             {/* Note that a suggestion's agent runs where the member's agents on the task run, so it offers no Runs on, as the panel's draft hides it. */}
@@ -1220,7 +1258,7 @@ export function NewTaskScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
-        trailing={<ModelChip pick={pick} onOpen={() => setModelsShown(true)} />}
+        trailing={<StartModelChip pick={pick} shown={modelsShown} onShown={setModelsShown} />}
         chips={
           <>
             <RepositoryChip repository={repository} tree={tree} />

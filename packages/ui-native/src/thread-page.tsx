@@ -43,7 +43,7 @@ import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { CopyWordsSwiftMenu } from "./held-menu.js";
+import { CopyWordsSwiftMenu, PictureOriginProvider } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import type { MediaSize } from "./media-frame.js";
@@ -597,27 +597,29 @@ function MessageView({
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
         {message.values === undefined ? null : <AnswerValues values={message.values} />}
         <RNHostView matchContents={{ vertical: true }}>
-          <View style={styles.words}>
-            {message.words.trim() === "" ? null : (
-              <Markdown
-                words={message.words}
-                repository={repository}
-                onOpenLink={onOpenLink}
-                typed={message.typed}
-                pictureSource={pictureSource}
-                onRetryPicture={onRetryPicture}
-                videoAt={videoAt}
-                linkStanding={linkStanding}
-              />
-            )}
-            {mediaRuns(message.media).map((run) =>
-              run.length === 1 && run[0] !== undefined ? (
-                <MediaView key={run[0].key} media={run[0]} />
-              ) : (
-                <PictureSet key={run[0]?.key} pictures={run.flatMap(setPicture)} />
-              ),
-            )}
-          </View>
+          <PictureOriginProvider origin={{ by: writer.name, at: message.at }}>
+            <View style={styles.words}>
+              {message.words.trim() === "" ? null : (
+                <Markdown
+                  words={message.words}
+                  repository={repository}
+                  onOpenLink={onOpenLink}
+                  typed={message.typed}
+                  pictureSource={pictureSource}
+                  onRetryPicture={onRetryPicture}
+                  videoAt={videoAt}
+                  linkStanding={linkStanding}
+                />
+              )}
+              {mediaRuns(message.media).map((run) =>
+                run.length === 1 && run[0] !== undefined ? (
+                  <MediaView key={run[0].key} media={run[0]} />
+                ) : (
+                  <PictureSet key={run[0]?.key} pictures={run.flatMap(setPicture)} />
+                ),
+              )}
+            </View>
+          </PictureOriginProvider>
         </RNHostView>
         {message.undelivered === undefined ? null : (
           <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>

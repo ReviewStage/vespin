@@ -4,6 +4,7 @@ import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import {
+  drawnCallIds,
   NO_TOGGLES,
   openCuts,
   SHOWN_MEDIA,
@@ -555,6 +556,54 @@ describe("withWaitingLine", () => {
 
     expect(folds(items)).toEqual([true]);
     expect(folds(withWaitingLine(items, "Waiting on you · 1 approval"))).toEqual([false]);
+  });
+});
+
+describe("a call the agent holds for the reader's answer", () => {
+  it("keeps the fold that holds it open once a line the reader sent lands after it, so its row and its answers stay drawn", () => {
+    const done = (id: string) => ({
+      type: "tool-bash",
+      toolCallId: id,
+      state: "output-available",
+      input: { command: `pnpm test ${id}` },
+      output: { stdout: "ok" },
+    });
+
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            { type: "step-start" },
+            done("a"),
+            done("b"),
+            {
+              type: "tool-bash",
+              toolCallId: "held",
+              state: "input-available",
+              input: { command: "pnpm test held" },
+            },
+          ],
+        },
+        {
+          id: "steer",
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text", text: "Also cover the expired invite." }],
+          arrivedIn: { journalId: "work", afterStep: 1 },
+        },
+      ],
+      {
+        writing: true,
+        readerId: undefined,
+        toggles: NO_TOGGLES,
+        now: 2,
+        pullRequests: [],
+        waitingCalls: new Set(["held"]),
+      },
+    );
+
+    expect(drawnCallIds(items).has("held")).toBe(true);
   });
 });
 

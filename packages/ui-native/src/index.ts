@@ -60,7 +60,7 @@ export {
   type StandingCallCard,
 } from "./call.js";
 
-export { ChipMarkProvider } from "./chip-mark.js";
+export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
   CHIP_MARK,
@@ -101,6 +101,7 @@ export {
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeBars,
   FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
@@ -137,7 +138,12 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
-export { type HeldAct, type Keeping, KeepingProvider } from "./held-menu.js";
+export {
+  type HeldAct,
+  type Keeping,
+  KeepingProvider,
+  type ViewedPicture,
+} from "./held-menu.js";
 
 export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
 
@@ -211,7 +217,13 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute, useToday } from "./minute.js";
 
-export { type ModeChoice, ModelChoiceSheet, type ModelOption } from "./model-choice-sheet.js";
+export {
+  type ModeChoice,
+  ModelChoicePopover,
+  ModelChoiceSheet,
+  type ModelChoices,
+  type ModelOption,
+} from "./model-choice-sheet.js";
 
 export { SwitchRow } from "./option-rows.js";
 

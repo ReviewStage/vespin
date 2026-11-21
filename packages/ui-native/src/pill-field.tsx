@@ -24,9 +24,10 @@ export interface CaretAtWord extends AtWord {
   readonly end: number;
 }
 
-/** What a screen does to the field: puts a pill in place of the `@` word the caret stands in, or at the caret where it stands in none, and takes or lets go of the keyboard. */
+/** What a screen does to the field: puts a pill in place of the `@` word the caret stands in, or at the caret where it stands in none; puts pills at the caret, such as files' markers as they are attached; and takes or lets go of the keyboard. */
 export interface PillFieldHandle {
   readonly pick: (pill: Pill) => void;
+  readonly place: (pills: readonly Pill[]) => void;
   readonly focus: () => void;
   readonly blur: () => void;
 }
@@ -58,6 +59,13 @@ function caretAtWord(words: NativeWords): CaretAtWord | undefined {
   return word === undefined
     ? undefined
     : { ...word, start: words.caret - word.query.length - 1, end: words.caret + word.rest };
+}
+
+/** A pill as the native field draws it: its Markdown, and its look as the chip it becomes once sent. */
+function drawnPill(pill: Pill, repository: string | null): NativePill {
+  const reading = { repository, now: Date.now(), zone: readerZone() };
+
+  return { markdown: pill.markdown, ...pillLook(pill, reading) };
 }
 
 /** Whether two `@` words are the same word at the same place. */
@@ -94,6 +102,8 @@ export function PillField({
   const [height, setHeight] = useState<number | undefined>(undefined);
   // How many changes the field has told, which the words handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
+  // The same count for the doors, which a pick in the very event that told it reads before the next render.
+  const seenNow = useRef(0);
   // What the field last told: its Markdown, where its caret stands, and its `@` word.
   const told = useRef({ markdown: value, caret: 0 });
   const atWord = useRef<CaretAtWord | undefined>(undefined);
@@ -123,21 +133,31 @@ export function PillField({
     ref,
     () => ({
       pick: (pill) => {
-        const reading = { repository, now: Date.now(), zone: readerZone() };
-        const drawn: NativePill = { markdown: pill.markdown, ...pillLook(pill, reading) };
         const { caret } = told.current;
         const word = atWord.current;
-        void native.current?.insertPill(word?.start ?? caret, word?.end ?? caret, drawn, seen);
+        const drawn = [drawnPill(pill, repository)];
+        void native.current?.insertPills(
+          word?.start ?? caret,
+          word?.end ?? caret,
+          drawn,
+          seenNow.current,
+        );
+      },
+      place: (pills) => {
+        const { caret } = told.current;
+        const drawn = pills.map((pill) => drawnPill(pill, repository));
+        void native.current?.insertPills(caret, caret, drawn, seenNow.current);
       },
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),
     }),
-    [repository, seen],
+    [repository],
   );
 
   const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => {
     const changed = words.markdown !== told.current.markdown;
     told.current = { markdown: words.markdown, caret: words.caret };
+    seenNow.current = words.changes;
     setSeen(words.changes);
 
     if (changed) onChange(words.markdown);

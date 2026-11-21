@@ -17,7 +17,7 @@ builds a control of its own.
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
-  `ColumnBar`: its inline title, what leads it such as the workspace
+  `ColumnBar`: its title, large under the list's bar, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
@@ -52,7 +52,8 @@ builds a control of its own.
   opens Settings, never worded "Allow", and Not Now), `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass in one fixed place, dropping in
   under the top bar inside the safe area as the system's banners drop in,
-  swiped up to let go, with the refusal's words and Try again, said aloud by
+  below an iPad's floating tab bar and a tab's column bars, which the tab
+  in front tells it of (`FailureNoticeBars`), swiped up to let go, with the refusal's words and Try again, said aloud by
   VoiceOver, faded rather than slid where the reader reduces motion, standing
   over the app's root view or the sheet on top (`FailureNoticeLayer`; not a
   `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
@@ -75,7 +76,8 @@ builds a control of its own.
   desktop composer does, its field on top, one line until its words wrap,
   and under it one row of the + and the capsules saying where the
   message runs, then at its end the model chip (`trailing`, whose sheet
-  holds the model, effort, Fast and the permission mode, each once),
+  holds the model, effort, Fast and the permission mode, each once, a
+  popover from the chip in a regular window, `ModelChoicePopover`),
   Dictate, and Send, a dictation under way standing its strip in the row's
   place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
   and its head, inside the same glass, holds an agent's
@@ -96,8 +98,10 @@ builds a control of its own.
   in the app's native pill field (`pill-field-native.ts`, UIKit's text view
   on TextKit 2), its value the wire's Markdown read through
   `@repo/features/pill-words`. It grows from one line to `maxLines` and then
-  scrolls, tells the `@` word the caret stands in (`onAtWord`), and puts a
-  picked pill in that word's place (`pick`).
+  scrolls, tells the `@` word the caret stands in (`onAtWord`), puts a
+  picked pill in that word's place (`pick`), and puts pills at the caret,
+  such as a file's marker as it is attached (`place`); an agent's composer
+  stands its files so, in the words, rather than in a row over them.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
@@ -184,7 +188,9 @@ builds a control of its own.
   stop sign of a blocked task, a thread that needs you, its sub-tasks as a
   ring and "2/5", one mark for its agents, the face of who is on it where
   that is someone other than the reader or the dashed mark where no one is,
-  and when it last moved; a search's finds end in its key; its priority
+  and when it last moved, the agents' mark and then the sub-tasks' progress
+  stepping aside before a long name is cut, as Mail's rows keep the
+  sender's name, `task-row-fit-model.ts`; a search's finds end in its key; its priority
   stands on the task's own Priority chip, not the row; a parent stands as the
   label of `RowDisclosure`, SwiftUI's own `DisclosureGroup`, whose chevron at
   the line's trailing edge folds its sub-tasks, as Files and Notes fold a
@@ -230,8 +236,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   thread's task line, the row's largest words, in the headline style (17 pt
   semibold) with its time at that line's end, and the title under it in the
   subheadline style in the ink (`ROW_SUBJECT`) over its muted preview, both
-  flush with its ring, as Mail's sender leads its subject; a screen's title
-  in the headline style, inline in its bar; and a page's heading, a
+  flush with its ring, as Mail's sender leads its subject; a pushed
+  screen's title in the headline style, inline in its bar; and a page's heading, a
   thread's or a task's title, in title 3 (20 pt) semibold. React Native's
   words, a transcript's and Markdown's, take the same styles' sizes
   (`PROSE_SIZE`, the body's, and `ROLE_SIZE`), which React Native scales by
@@ -239,9 +245,14 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   the text rather than assuming a size (`ROW_INSET.VERTICAL` stands a row of
   one line 44 pt tall, as iOS's rows stand). The navigation bar's words and
   the tab bar are the system's own (`BAR_TITLE`), as its titles stand.
-- **Inline titles, no large titles.** A tab's root shows its name small and
-  inline. A split view's list keeps its title small and inline too, since
-  its bar also holds the switcher, ⋯ and the sidebar button, and its search
+- **Large titles on the tab roots, inline titles on pages** (the developer,
+  Nov 20, 2026). A tab's root (Inbox, Tasks, Search) names itself in the
+  stack's large title under its bar, collapsing into the bar as its list
+  scrolls, as Mail, Notes and Reminders do, its photo, switcher, ⋯ and View
+  options staying in the bar above it. A split view's list stands its title
+  large under its bar too (`toolbarTitleDisplayMode("large")`), never
+  leading it, since its bar also holds the switcher, ⋯ and the sidebar
+  button, which a leading title folds into an overflow, and its search
   is the system's field in its own column, never a lone button over the
   detail, whose bar stays the page's alone. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading

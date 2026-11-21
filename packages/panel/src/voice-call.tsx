@@ -59,9 +59,18 @@ import { ACT_KIND } from "@repo/host/acts";
 import { type CallLevel, type CallLevels, STATUS_TONE } from "@repo/ui";
 import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { sendAct } from "./act.js";
 import { useOpenAiKeyMissing, useOpenApiKeys } from "./openai-key.js";
+import { useSteadyDoor } from "./steady-door.js";
 import { frameLevel } from "./tasks/frame-level.js";
 import {
   MICROPHONE_REFUSAL,
@@ -384,15 +393,23 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     };
   }, [session]);
 
-  const value: VoiceCall = {
-    call,
-    start,
-    startWhenStarted,
-    end: session.end,
-    setMicrophoneMuted: session.setMicrophoneMuted,
-    setSpeakerMuted: session.setSpeakerMuted,
-    levels,
-  };
+  // Note that the call is handed on as one value while it stands as it is, its presses steady, so the window drawn again
+  // for anything else draws nothing beneath that reads it.
+  const steadyStart = useSteadyDoor(start);
+  const steadyStartWhenStarted = useSteadyDoor(startWhenStarted);
+
+  const value = useMemo<VoiceCall>(
+    () => ({
+      call,
+      start: steadyStart,
+      startWhenStarted: steadyStartWhenStarted,
+      end: session.end,
+      setMicrophoneMuted: session.setMicrophoneMuted,
+      setSpeakerMuted: session.setSpeakerMuted,
+      levels,
+    }),
+    [call, steadyStart, steadyStartWhenStarted, session, levels],
+  );
 
   return <VoiceCallContext value={value}>{children}</VoiceCallContext>;
 }

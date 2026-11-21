@@ -19,7 +19,7 @@ import type { GitHubPerson, PullRequestLabel, PullRequestState } from "@repo/fea
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { FieldChip, LabelChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -68,8 +68,8 @@ type PullRequestHeadProps = {
   readonly labels?: readonly PullRequestLabel[] | undefined;
 };
 
-/** One branch, as the panel's header names it: Lucide's branch glyph, then its name in the monospaced face. */
-function Branch({ name }: { readonly name: string }) {
+/** One branch, as the panel's header names it: Lucide's branch glyph, then its name in the monospaced face, on one line, or wrapped where `wraps`. */
+function Branch({ name, wraps }: { readonly name: string; readonly wraps: boolean }) {
   const colors = useColors();
 
   return (
@@ -84,7 +84,7 @@ function Branch({ name }: { readonly name: string }) {
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
           foregroundStyle(colors.TEXT_BODY),
-          lineLimit(1),
+          ...(wraps ? [] : [lineLimit(1)]),
         ]}
       >
         {name}
@@ -97,9 +97,9 @@ function Branch({ name }: { readonly name: string }) {
  * Who opened a pull request and when, as the panel's header says it in one
  * phrase: their face and name, then "opened 3h ago", or, once it merged,
  * "opened · merged 1h ago", the moment that matters once it has; without
- * anyone to name, the phrase alone.
+ * anyone to name, the phrase alone; on one line, or wrapped where `wraps`.
  */
-function OpenedLine({ opened }: { readonly opened: Opened }) {
+function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps: boolean }) {
   const colors = useColors();
   const face = useScaledSize(MARK_SIZE.FACE);
   const verb = opened.by === undefined ? "Opened" : "opened";
@@ -120,7 +120,7 @@ function OpenedLine({ opened }: { readonly opened: Opened }) {
           size={face}
         />
       )}
-      <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), lineLimit(1)]}>
+      <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), ...(wraps ? [] : [lineLimit(1)])]}>
         {opened.by === undefined ? null : (
           <Text modifiers={[foregroundStyle(colors.TEXT_BODY)]}>{`${opened.by.name} `}</Text>
         )}
@@ -137,7 +137,9 @@ function OpenedLine({ opened }: { readonly opened: Opened }) {
  * when, by their face, then its labels filled with their colors, scrolling
  * sideways where they run past the row, then its branches on a line of
  * their own, the one it merges into first, then GitHub's sentence of
- * whether it would merge, in the body's ink.
+ * whether it would merge, in the body's ink. Past the accessibility sizes,
+ * who opened it wraps rather than cuts, and the branches stand on two
+ * lines, the one it merges from under the arrow, each wrapping.
  */
 export function PullRequestHead({
   title,
@@ -151,7 +153,14 @@ export function PullRequestHead({
   labels = [],
 }: PullRequestHeadProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState({ state, queued })];
+
+  const arrow = (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}>
+      {BRANCH_ARROW}
+    </Text>
+  );
 
   return (
     <VStack
@@ -177,7 +186,7 @@ export function PullRequestHead({
       <HStack spacing={SPACE.TIGHT + 2}>
         <FieldChip label={stateLabel} mark={{ glyph: look.symbol, tone: look.tone }} />
       </HStack>
-      {opened === undefined ? null : <OpenedLine opened={opened} />}
+      {opened === undefined ? null : <OpenedLine opened={opened} wraps={large} />}
       {labels.length === 0 ? null : (
         <ScrollView axes="horizontal" showsIndicators={false}>
           <HStack spacing={SPACE.TIGHT}>
@@ -187,18 +196,19 @@ export function PullRequestHead({
           </HStack>
         </ScrollView>
       )}
-      {branches === undefined ? null : (
+      {branches === undefined ? null : large ? (
+        <VStack alignment="leading" spacing={SPACE.TIGHT}>
+          <Branch name={branches.base} wraps />
+          <HStack spacing={SPACE.TIGHT + 2}>
+            {arrow}
+            <Branch name={branches.head} wraps />
+          </HStack>
+        </VStack>
+      ) : (
         <HStack spacing={SPACE.TIGHT + 2}>
-          <Branch name={branches.base} />
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {BRANCH_ARROW}
-          </Text>
-          <Branch name={branches.head} />
+          <Branch name={branches.base} wraps={false} />
+          {arrow}
+          <Branch name={branches.head} wraps={false} />
         </HStack>
       )}
       {sentence === undefined ? null : (

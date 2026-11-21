@@ -60,7 +60,7 @@ import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
-import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
+import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useListedAgentPullRequests, useListedAgents } from "../tasks/use-workspace-agents.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
@@ -175,7 +175,7 @@ function ManagerAgents({
   const queryClient = useQueryClient();
 
   const control: AgentsControl = {
-    ...tasks.agents,
+    ...placeAgents(tasks.agents),
     readAgent: (agentId: string) => readAgentById(queryClient, agentId),
   };
 

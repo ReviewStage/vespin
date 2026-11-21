@@ -19,7 +19,7 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handCapabilities } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, taskAgentsOf, tasksControl } from "../testing/tasks-control.js";
 import { onTerminals, windowTerminals } from "../testing/terminals.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
@@ -134,15 +134,17 @@ async function mount(input: {
       lastTerminal: input.lastTerminal,
       onChoose: (tab) => shown.push(tab),
     },
-    agents: agentsControl({
-      agents: input.agents === undefined ? undefined : [...input.agents],
-      agentIds: input.agents?.map((each) => each.id),
-      start: {
-        available: true,
-        busy: false,
-        onPress: async () => input.started?.(),
-      },
-    }),
+    agents: taskAgentsOf(
+      agentsControl({
+        agents: input.agents === undefined ? undefined : [...input.agents],
+        agentIds: input.agents?.map((each) => each.id),
+        start: {
+          available: true,
+          busy: false,
+          onPress: async () => input.started?.(),
+        },
+      }),
+    ),
   });
 
   act(() =>

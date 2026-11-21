@@ -117,7 +117,7 @@ import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { InboxListSkeleton } from "../tasks/inbox-list.js";
 import { DeviceStandingGlyph, STANDING_WORDS } from "../tasks/runs-on.js";
-import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
+import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems } from "../tasks/use-waiting-items.js";
@@ -348,7 +348,7 @@ function PersonAgentsSection({
   const queryClient = useQueryClient();
 
   const control: AgentsControl = {
-    ...tasks.agents,
+    ...placeAgents(tasks.agents),
     readAgent: (agentId: string) => readAgentById(queryClient, agentId),
   };
 

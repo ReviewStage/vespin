@@ -82,10 +82,7 @@ type StepNameTasks = Pick<TasksControl, "typedNames" | "activeTaskId" | "agents"
 
 /** The name an agent of a task goes by now: as the open task's agents say, else as the list followed live does, where it lists the agent on that task; none where neither names it. */
 function agentNameNow(tasks: StepNameTasks, taskId: string, agentId: string): string | undefined {
-  const open =
-    taskId === tasks.activeTaskId
-      ? tasks.agents.agents?.find((agent) => agent.id === agentId)
-      : undefined;
+  const open = taskId === tasks.activeTaskId ? tasks.agents.rowNow(agentId) : undefined;
 
   const listed = tasks.rows.agent(agentId);
   const line = open ?? (listed?.taskId === taskId ? listed : undefined);

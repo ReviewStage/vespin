@@ -42,7 +42,7 @@ import { automationAgentBrief } from "../desktop/automation-agent-brief.js";
 import { sectionGlyph } from "../desktop/section-icon-picker.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useRelatableTasks } from "../task-list-collections.js";
 import { appStateQuery, selectExperiment, selectNewAgentServersOff } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
@@ -511,7 +511,7 @@ export function NewTaskComposer({
   // The last agent press's key and what it asked, until a start lands.
   const pressed = useRef<NewTaskPress | undefined>(refused?.card.press);
   // Task relation offers the tasks of the card's workspace, in the sidebar's order.
-  const relatable = useNamedTasks(newTask.typedNames, NAMED_ORDER.PINNED_FIRST, workspaceId);
+  const relatable = useRelatableTasks(newTask.typedNames, workspaceId);
 
   // Runs on stands on every card but an automation's agent's.
   const runsOnStands = !forAutomation;

@@ -47,10 +47,15 @@ function said(agentId: string, chat: AgentChat): void {
     .catch(() => undefined);
 }
 
-/** Holds `agent`'s sandbox while its chat is shown in a visible page, said at once and every minute, and lets go as it stops being; nothing for none. */
-export function useWarmAgent(agent: AgentSummary | undefined): void {
+/** Whether an agent's sandbox may be held warm, read of its row; never for none. */
+export function warmableAgent(agent: AgentSummary | undefined): boolean {
+  return agent !== undefined && agentWarmable(agent);
+}
+
+/** Holds the sandbox of `agentId`, an agent `warmableAgent` holds warm, while its chat is shown in a visible page, said at once and every minute, and lets go as it stops being; nothing for none. */
+export function useWarmAgent(agentId: string | undefined): void {
   const visible = usePageVisible();
-  const warmId = visible && agent !== undefined && agentWarmable(agent) ? agent.id : undefined;
+  const warmId = visible ? agentId : undefined;
   useEffect(() => {
     if (warmId === undefined) return undefined;
     const hidden = () => said(warmId, AGENT_CHAT.HIDDEN);

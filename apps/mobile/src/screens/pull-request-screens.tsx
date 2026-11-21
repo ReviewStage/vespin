@@ -97,7 +97,6 @@ const MENU_WORDS = {
   MORE: "More",
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
-  REFRESH: "Refresh",
 } as const;
 
 /** The id the comments row stands under, beside the checks' and the reviewers'. */
@@ -329,18 +328,19 @@ const DESCRIPTION_WORDS = "Description";
 /**
  * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
  * the changes to where the pull request stands, as the panel's state pill
- * offers them, Close in red, then Copy GitHub link and Open on GitHub,
- * then Refresh. The merge stands in the page under the heading, where the
- * panel's head stands it, so the bar's title keeps its place.
+ * offers them, Close in red, then Copy GitHub link and Open on GitHub.
+ * It offers no Refresh, since a pull down on the page reads it again in
+ * every window, as Mail's menu offers none, and a read that failed says so
+ * in the page's place with Try again. The merge stands in the page under
+ * the heading, where the panel's head stands it, so the bar's title keeps
+ * its place.
  */
 function PullRequestToolbar({
   url,
   changes,
-  onRefresh,
 }: {
   readonly url: string | undefined;
   readonly changes: readonly StateChange[];
-  readonly onRefresh: () => void;
 }) {
   return (
     <Stack.Toolbar placement="right">
@@ -373,11 +373,6 @@ function PullRequestToolbar({
             </Stack.Toolbar.MenuAction>
           </Stack.Toolbar.Menu>
         )}
-        <Stack.Toolbar.Menu inline>
-          <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RETRY)} onPress={onRefresh}>
-            {MENU_WORDS.REFRESH}
-          </Stack.Toolbar.MenuAction>
-        </Stack.Toolbar.Menu>
       </Stack.Toolbar.Menu>
     </Stack.Toolbar>
   );
@@ -575,7 +570,7 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} changes={changes} onRefresh={() => void retry()} />
+      <PullRequestToolbar url={url} changes={changes} />
     </>
   );
 
