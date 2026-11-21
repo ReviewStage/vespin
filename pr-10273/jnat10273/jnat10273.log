@@ -1,0 +1,103 @@
+built main af401ec5f2 + #10273 6c7fab29f9 as 8e71b0f6d8
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 15:36:00 16231 MB
+curve 15:36:30 16112 MB
+curve 15:37:00 13586 MB
+curve 15:37:30 13317 MB
+curve 15:38:00 13297 MB
+curve 15:38:30 13273 MB
+curve 15:39:00 13196 MB
+curve 15:39:30 13177 MB
+curve 15:40:00 13130 MB
+curve 15:40:30 12622 MB
+curve 15:41:01 12868 MB
+curve 15:41:31 12801 MB
+curve 15:42:01 12754 MB
+curve 15:42:31 12699 MB
+curve 15:43:01 12192 MB
+curve 15:43:31 12038 MB
+curve 15:44:01 11922 MB
+curve 15:44:31 11869 MB
+curve 15:45:02 11777 MB
+curve 15:45:32 11357 MB
+curve 15:46:02 11335 MB
+curve 15:46:32 11290 MB
+curve 15:47:02 18928 MB
+curve 15:47:32 18889 MB
+curve 15:48:02 18859 MB
+curve 15:48:32 18841 MB
+curve 15:49:03 18810 MB
+curve 15:49:33 18819 MB
+curve 15:50:03 18797 MB
+curve 15:50:33 18745 MB
+curve 15:51:03 18712 MB
+curve 15:51:33 18523 MB
+curve 15:52:04 18550 MB
+curve 15:52:34 18511 MB
+curve 15:53:04 18495 MB
+curve 15:53:34 18461 MB
+curve 15:54:05 18246 MB
+curve 15:54:35 18204 MB
+curve 15:55:05 18209 MB
+curve 15:55:35 18172 MB
+curve 15:56:05 18115 MB
+curve 15:56:36 18005 MB
+curve 15:57:06 17847 MB
+curve 15:57:36 17324 MB
+curve 15:58:06 17197 MB
+curve 15:58:36 17123 MB
+curve 15:59:07 16969 MB
+curve 15:59:37 16822 MB
+curve 16:00:07 16749 MB
+curve 16:00:37 16626 MB
+curve 16:01:08 16567 MB
+curve 16:01:38 16539 MB
+curve 16:02:08 16456 MB
+curve 16:02:38 16366 MB
+curve 16:03:09 16286 MB
+curve 16:03:39 16237 MB
+curve 16:04:09 16206 MB
+curve 16:04:39 16207 MB
+curve 16:05:09 16172 MB
+curve 16:05:39 16157 MB
+curve 16:06:10 16128 MB
+curve 16:06:40 16016 MB
+curve 16:07:10 16008 MB
+curve 16:07:40 16003 MB
+curve 16:08:10 15964 MB
+curve 16:08:40 15899 MB
+BUILD EXIT 0 16:09:11
+sizes: Assets.car 23809880 bytes (main Vmain4 8576376), .app 118920 KB (main 102900 KB), zipped .app 44880214 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10273.app: replacing existing signature
+p10273-iphone-light-compose: fails 0 shots 11 
+p10273-iphone-light-agent: fails 0 shots 23 
+p10273-iphone-light-dictate: fails 0 shots 3 
+p10273-iphone-light-pill-field: fails 0 shots 3 
+p10273-iphone-dark-compose: fails 0 shots 11 
+p10273-iphone-dark-agent: fails 0 shots 23 
+p10273-iphone-dark-dictate: fails 0 shots 3 
+p10273-iphone-dark-pill-field: fails 0 shots 3 
+p10273-ipad27-light-compose: fails 0 shots 11 
+p10273-ipad27-light-agent: fails 0 shots 23 
+p10273-ipad27-light-dictate: fails 0 shots 3 
+p10273-ipad27-light-pill-field: fails 0 shots 3 
+p10273-ipad27-dark-compose: fails 0 shots 11 
+p10273-ipad27-dark-agent: fails 0 shots 23 
+p10273-ipad27-dark-dictate: fails 0 shots 3 
+p10273-ipad27-dark-pill-field: fails 0 shots 3 
+p10273-iphone-light-fsel10213: fails 0 shots 4 
+p10273-iphone-light-fnt10213: fails 0 shots 3 
+p10273-iphone-dark-fsel10213: fails 0 shots 4 
+p10273-iphone-dark-fnt10213: fails 0 shots 3 
+p10273-iphone-light-photo: fails 0 shots 2 
+p10273-iphone-dark-photo: fails 0 shots 3 
+p10273 before: Vmain5 copy, compose.yaml at 0e7f257073 (     126 lines)
+p10273-iphone-light-before-compose: fails 0 shots 9 
+p10273-iphone-light-before-mention: fails 0 shots 1 
+p10273-iphone-dark-before-compose: fails 0 shots 9 
+p10273-iphone-dark-before-mention: fails 0 shots 1 
