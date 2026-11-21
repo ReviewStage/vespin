@@ -1,0 +1,89 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow inbox
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Assert that id: workspace-switcher is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-list... COMPLETED
+Tap on "More"... COMPLETED
+Assert that "Mark all as read" is visible... COMPLETED
+Assert that "Questions.*" is visible... COMPLETED
+Take screenshot inbox-more... COMPLETED
+Run subflows/dismiss.yaml...
+  Tap on point (${POINT})... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/dismiss.yaml... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "All"... COMPLETED
+Scrolling DOWN until "Which day the digest goes out" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-all... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "Open.*"... COMPLETED
+Scrolling UP until "Who can withdraw an invite\?" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Swiping in DOWN direction on "Recorded the invite flow"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-thread... COMPLETED
+Tap on "The invite page"... COMPLETED
+Assert that id: picture-viewer-close is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-picture... COMPLETED
+Tap on id: picture-viewer-close... COMPLETED
+Scrolling DOWN until "invite-flow.webm.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that id: video-player is visible... COMPLETED
+Assert that ".*can't play here.*" is not visible... COMPLETED
+Assert that "invite-flow.*, \d+:\d\d" is visible... COMPLETED
+Take screenshot inbox-video... COMPLETED
+Tap on "invite-flow.*, \d+:\d\d"... COMPLETED
+Assert that "invite-flow.*, \d+:\d\d" is not visible... COMPLETED
+Take screenshot inbox-video-playing... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+    Scrolling DOWN until "${ELEMENT}", Above id: ${ABOVE} is visible with speed 40, visibility percentage 100%, timeout 60000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Take screenshot inbox-file... COMPLETED
+Tap on "invite-test-plan.pdf, PDF.*"... COMPLETED
+Assert that "Done" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-pdf... COMPLETED
+Tap on "Done"... FAILED
+
+Element not found: Text matching regex: Done
+
+Element with Text matching regex: Done not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjmain10366/ipad27-light-inbox/2026-11-21_044027

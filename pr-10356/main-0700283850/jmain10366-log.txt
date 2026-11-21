@@ -1,0 +1,18 @@
+== bundle PJjmain10366 base 0700283850
+  built 0700283850 base app Vmain7.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-inbox: fails 1 shots 4 Assert that ".*walked the invite flow.*" is visible... FAILED
+iphone-light-tasks: fails 3 shots 35     Scrolling DOWN until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 60000 ms, 
+iphone-light-task-relations: fails 0 shots 5 
+iphone-dark-inbox: fails 1 shots 4 Assert that ".*walked the invite flow.*" is visible... FAILED
+iphone-dark-tasks: fails 1 shots 33 Assert that "Archive agent?" is not visible... FAILED
+iphone-dark-task-relations: fails 0 shots 5 
+ipad27-light-inbox: fails 1 shots 10 Tap on "Done"... FAILED
+ipad27-light-tasks: fails TIMEOUT (watchdog; steps 334, shots 31) 
+ipad27-light-task-relations: fails 0 shots 5 
+ipad27-dark-inbox: fails 1 shots 10 Tap on "Done"... FAILED
+ipad27-dark-tasks: fails TIMEOUT (watchdog; steps 334, shots 31) 
+ipad27-dark-task-relations: fails 0 shots 5 
