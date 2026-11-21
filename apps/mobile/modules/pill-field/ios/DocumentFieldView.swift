@@ -363,6 +363,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// Whether an edit of the view's own is under way, which tells JavaScript nothing.
   private var quiet = false
 
+  /// The words an edit typed, where they stand once it lands, whose block and looks are carried on to them.
+  private var typed: NSRange?
+
   var look = Look() {
     didSet {
       guard look != oldValue else { return }
@@ -466,8 +469,15 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   // MARK: The text view's delegate
 
+  func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+    typed = NSRange(location: range.location, length: (text as NSString).length)
+    return true
+  }
+
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
+    if let typed { carryOn(to: typed) }
+    typed = nil
     changes += 1
     placeholderLabel.isHidden = textView.textStorage.length > 0
     tell()
@@ -658,6 +668,40 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
 
     return style
+  }
+
+  /// Lays the block and looks the words around a typed piece carry on the piece, since UIKit types with no attribute of the field's own: its block from the next character, which stands in its paragraph (a word, or the line break that ends it), else the one before; its looks and address from the character before where it stands in the same paragraph, as typing after bold words types bold.
+  private func carryOn(to piece: NSRange) {
+    let storage = textView.textStorage
+    let string = storage.string as NSString
+    guard piece.length > 0, NSMaxRange(piece) <= storage.length else { return }
+    let after = NSMaxRange(piece) < storage.length ? NSMaxRange(piece) : nil
+    let before = piece.location > 0 ? piece.location - 1 : nil
+    let blockFrom = after ?? before
+    let looksFrom = before.flatMap { string.character(at: $0) == 0x0A ? nil : $0 } ?? after
+
+    quiet = true
+    storage.beginEditing()
+
+    if let blockFrom, let facts = storage.attribute(lineKey, at: blockFrom, effectiveRange: nil) {
+      storage.addAttribute(lineKey, value: facts, range: piece)
+    }
+
+    storage.removeAttribute(markStylesKey, range: piece)
+    storage.removeAttribute(linkKey, range: piece)
+
+    if let looksFrom {
+      if let marks = storage.attribute(markStylesKey, at: looksFrom, effectiveRange: nil) {
+        storage.addAttribute(markStylesKey, value: marks, range: piece)
+      }
+
+      if let link = storage.attribute(linkKey, at: looksFrom, effectiveRange: nil) {
+        storage.addAttribute(linkKey, value: link, range: piece)
+      }
+    }
+
+    storage.endEditing()
+    quiet = false
   }
 
   // MARK: Telling JavaScript
