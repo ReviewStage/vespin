@@ -16,6 +16,13 @@ IMAGE="${IMAGE:-}"
 NET_FLAGS=(--net --net-backend "${NET_BACKEND:-virtio-net}")
 mkdir -p "$RESULTS_DIR"
 
+# A row already measured is left out of a rerun by naming it in skip-rows, since the App that pushes
+# here can neither dispatch the workflow nor edit its matrix.
+if [ -n "${ROW:-}" ] && grep -qx -- "$ROW" "$SPIKE_HERE/skip-rows" 2> /dev/null; then
+  echo "skipped=$ROW" | tee "$RESULTS_DIR/$ROW-skipped.txt"
+  exit 0
+fi
+
 export XDG_DATA_HOME="$SPIKE_ROOT/data" XDG_CACHE_HOME="$SPIKE_ROOT/cache" XDG_CONFIG_HOME="$SPIKE_ROOT/config"
 
 now_ms() { date +%s%3N; }
