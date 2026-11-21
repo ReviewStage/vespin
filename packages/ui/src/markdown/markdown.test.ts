@@ -7,6 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, test } from "vitest";
 import { MARKDOWN_LOOK, Markdown, type MarkdownProps, markdownStep, TaskBox } from "./markdown.js";
+import { forgetMarkdownTrees } from "./markdown-trees.js";
 
 /**
  * markdown.test.ts -- the one renderer as a place meets it: a note draws its
@@ -15,7 +16,9 @@ import { MARKDOWN_LOOK, Markdown, type MarkdownProps, markdownStep, TaskBox } fr
  * inline Markdown and its blocks' words as one run with no root; a
  * transcript's line draws its blocks' words on one line; a step a place
  * hands in draws with the values it was handed, however many places hand
- * the same step; a note follows a new address rewriter; a task box a
+ * the same step; a note follows a new address rewriter; words drawn again
+ * draw as they first did, through an address rewriter too, from the tree
+ * kept until the trees are forgotten; a task box a
  * reader may tick is named by its item, asks with its item's place, and
  * flips back when the change is not saved; and one a reader may not tick is
  * the same box, read-only; a box drawn from HTML asks by its place among the
@@ -142,6 +145,34 @@ test("a note follows a new address rewriter for the same words", () => {
     ),
   );
   assert.equal(container.querySelector("a")?.getAttribute("href"), "");
+});
+
+test("words drawn again draw as they first did, their addresses rewritten once, in a note and a transcript", () => {
+  // Note that a note draws the link's address and a transcript the picture's.
+  const words = "[the spec](https://example.com/spec) ![a plan](https://example.com/a.png)";
+  const urlTransform = (url: string) => `${url}?seen`;
+
+  for (const look of [MARKDOWN_LOOK.NOTE, MARKDOWN_LOOK.TRANSCRIPT]) {
+    const first = drawn({ look, words, urlTransform }).container.innerHTML;
+    const again = drawn({ look, words, urlTransform }).container.innerHTML;
+
+    assert.equal(again, first);
+    assert.equal(again.match(/\?seen/gu)?.length, 1);
+  }
+});
+
+test("words drawn again are drawn from the tree kept until the trees are forgotten", () => {
+  let answer = "first";
+  const steps = [markdownStep(stamp, () => answer)];
+
+  const draw = () =>
+    markup({ look: MARKDOWN_LOOK.NOTE, words: "Kept words.", rehypePlugins: steps });
+
+  assert.match(draw(), /data-stamp="first"/u);
+  answer = "second";
+  assert.match(draw(), /data-stamp="first"/u);
+  forgetMarkdownTrees();
+  assert.match(draw(), /data-stamp="second"/u);
 });
 
 test("a task box is named by its item, asks with its item's place in the words, and stands as written while its tick asks nothing", async () => {
