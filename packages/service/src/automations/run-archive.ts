@@ -79,7 +79,13 @@ function finishedStatuses(agents: readonly FinishedAgentRead[], now: number) {
   });
 }
 
-/** The agents archived as their statuses were read, for `reason`, each answered in order, as `archiveFinishedAgents` says. */
+/**
+ * The agents archived as their statuses were read, for `reason`, each
+ * answered in order: one standing unarchived that finished well is archived
+ * only while its lines stand where they were read and it holds no pull
+ * request or inbox item open (`archivedUnmovedAgent`), and a local one
+ * archived, now or before, is let go of on its device.
+ */
 function archiveAsRead<A extends FinishedAgentRead>(
   agents: readonly A[],
   statuses: ReadonlyMap<string, AgentStatus>,
@@ -105,26 +111,6 @@ function archiveAsRead<A extends FinishedAgentRead>(
 
       return { agent, status, ...written, discarded } satisfies FinishedAgentArchive<A>;
     }),
-  );
-}
-
-/**
- * The agents archived under the rule of "Mark finished runs Done", each answered in
- * order: one standing unarchived that finished well, read as its tab reads
- * it, is archived only while its lines stand where they were read and it
- * holds no pull request or inbox item open (`archivedUnmovedAgent`), by the
- * app for `reason`, and a local one archived, now or before, is let go of on
- * its device. Note that the rule is shared, because an agent started from
- * Slack is archived by it too once a turn of its settles
- * (`../slack/slack-agent-starts.ts`).
- */
-export function archiveFinishedAgents<A extends FinishedAgentRead>(
-  agents: readonly A[],
-  now: number,
-  reason: AutomaticArchiveReason,
-) {
-  return Effect.flatMap(finishedStatuses(agents, now), (statuses) =>
-    archiveAsRead(agents, statuses, reason),
   );
 }
 

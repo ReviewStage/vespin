@@ -66,8 +66,6 @@ export const macSkillOriginSchema = EffectSchema.Struct({
   ),
 });
 
-export type MacSkillOrigin = typeof macSkillOriginSchema.Type;
-
 /** A skill read from GitHub: the repository, its folder, the ref asked for, and the commit it resolved to, which the files are pinned at. */
 const installedSkillGithubSourceSchema = EffectSchema.Struct({
   type: EffectSchema.Literal(INSTALLED_SKILL_SOURCE.GITHUB),
