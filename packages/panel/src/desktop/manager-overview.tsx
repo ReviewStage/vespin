@@ -7,7 +7,8 @@
  * page under the window's toolbar (`PAGE_FRAME.TOOLBAR`), named for a
  * reader by its label, its content across the whole room it has. It is
  * dense, every row one line, so a Manager's whole state stands on one
- * screen beside the open sidebar.
+ * screen beside the open sidebar, each of its sections on a card of its
+ * own.
  *
  * It opens on one line of counts: what waits on the reader, its agents at
  * work, its pull requests open, and its tasks done this week, each read
@@ -32,6 +33,9 @@ import type { PersonAgent } from "@repo/features/person-page-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TERM } from "@repo/features/words";
 import {
+  CARD_LOOK,
+  CARD_PADDING,
+  Card,
   CountLine,
   CountParts,
   DetailPage,
@@ -60,7 +64,7 @@ import {
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { type ComponentProps, useMemo, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { MemberDirectory } from "../member-directory.js";
 import { useTaskListCollections, useTaskListRow, useTasksAbout } from "../task-list-collections.js";
@@ -118,6 +122,19 @@ const PULL_REQUEST_ROW_CELLS = [
   TASK_ROW_CELL.SUB_TASKS,
 ] as const satisfies readonly TaskRowCell[];
 
+/**
+ * A section of the overview on a card of its own, as a dashboard's parts
+ * stand: its name and count over its rows (`PersonSectionFrame`), on the
+ * page's surface.
+ */
+function OverviewSection(props: ComponentProps<typeof PersonSectionFrame>): React.JSX.Element {
+  return (
+    <Card look={CARD_LOOK.SURFACE} padding={CARD_PADDING.SNUG}>
+      <PersonSectionFrame {...props} />
+    </Card>
+  );
+}
+
 /** A list's rows standing under its cap, and the foot that lifts it. */
 interface Capped<Row> {
   readonly shown: readonly Row[];
@@ -147,7 +164,7 @@ function WaitingOnYou({ threads }: { threads: AgentThreads }): React.JSX.Element
   if (threads.waiting.length === 0) return null;
 
   return (
-    <PersonSectionFrame
+    <OverviewSection
       label={OVERVIEW_WORDS.WAITING}
       title={OVERVIEW_WORDS.WAITING}
       count={threads.waiting.length}
@@ -162,7 +179,7 @@ function WaitingOnYou({ threads }: { threads: AgentThreads }): React.JSX.Element
           {foot}
         </List>
       </ReplayMask>
-    </PersonSectionFrame>
+    </OverviewSection>
   );
 }
 
@@ -244,7 +261,7 @@ function ManagerAgents({
   if (agents.length === 0) return null;
 
   return (
-    <PersonSectionFrame
+    <OverviewSection
       label={OVERVIEW_WORDS.AGENTS}
       title={OVERVIEW_WORDS.AGENTS}
       count={agents.length}
@@ -265,7 +282,7 @@ function ManagerAgents({
         </TaskRows>
         {foot}
       </ReplayMask>
-    </PersonSectionFrame>
+    </OverviewSection>
   );
 }
 
@@ -303,7 +320,7 @@ function ManagerPullRequests({
   if (pullRequests.length === 0) return null;
 
   return (
-    <PersonSectionFrame
+    <OverviewSection
       label={OVERVIEW_WORDS.PULL_REQUESTS}
       title={OVERVIEW_WORDS.PULL_REQUESTS}
       count={pullRequests.length}
@@ -342,7 +359,7 @@ function ManagerPullRequests({
         </TaskRows>
         {foot}
       </ReplayMask>
-    </PersonSectionFrame>
+    </OverviewSection>
   );
 }
 
@@ -370,7 +387,7 @@ function ManagerTasks({
   if (listed.length === 0) return null;
 
   return (
-    <PersonSectionFrame label={title} title={title} count={listed.length} noun={TERM.TASK}>
+    <OverviewSection label={title} title={title} count={listed.length} noun={TERM.TASK}>
       <ReplayMask>
         <RecentTasks
           tasks={tasks}
@@ -381,7 +398,7 @@ function ManagerTasks({
         />
         {foot}
       </ReplayMask>
-    </PersonSectionFrame>
+    </OverviewSection>
   );
 }
 
@@ -438,7 +455,7 @@ export function ManagerOverview({
       <DetailPage frame={PAGE_FRAME.TOOLBAR} label={OVERVIEW} width={PAGE_WIDTH.FULL}>
         {/* Note that the counts and the sections' heads show in a screen recording, while each section masks its rows. */}
         <ReplayUnmask>
-          <Stack gap={GAP.SECTION}>
+          <Stack gap={GAP.BLOCK}>
             <CountLine
               label={OVERVIEW_WORDS.COUNTS}
               counts={[
