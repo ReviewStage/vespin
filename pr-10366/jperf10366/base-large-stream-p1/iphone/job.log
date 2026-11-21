@@ -1,0 +1,12 @@
+fatal: couldn't find remote ref refs/heads/pin2b/main-7e074e40f
+FETCH FAILED pin2b/main-7e074e40f
+screen.mp4 kept
+merging pin2b/main-7e074e40f at 7e074e40f6
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/host/src/fixture-inbox.ts
+built 1e084d60f8 = probe + pin2b/main-7e074e40f (PROFILE=1)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
