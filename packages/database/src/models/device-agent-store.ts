@@ -347,7 +347,12 @@ const findPin = SqlSchema.findOneOption({
       db
         .select(PIN_COLUMNS)
         .from(agentTable)
-        .where(and(eq(agentTable.id, agentId), eq(agentTable.machine, AGENT_MACHINE.DEVICE))),
+        .where(
+          and(
+            eq(agentTable.id, agentId),
+            inArray(agentTable.machine, [AGENT_MACHINE.DEVICE, AGENT_MACHINE.WORKSPACE]),
+          ),
+        ),
     ),
 });
 
@@ -1123,7 +1128,7 @@ export function deviceAgentOfSession(
   return findPinOfSession({ runtimeSessionId });
 }
 
-/** The local agent under the id, its starter and its Mac; nothing for an agent in a sandbox. Read with no account in hand, as above, only for an id a machine's place carries. */
+/** The agent under the id that runs on a host's machine, a member's own device or a workspace's, its starter and that machine; nothing for an agent in a sandbox. Read with no account in hand, as above, only for an id a machine's place or a host's line carries. */
 export function deviceAgentPin(agentId: string): DeviceAgentEffect<Option.Option<DeviceAgentPin>> {
   return findPin({ agentId });
 }
