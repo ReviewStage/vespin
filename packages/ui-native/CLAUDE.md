@@ -79,6 +79,9 @@ builds a control of its own.
   Dictate, and Send, a dictation under way standing its strip in the row's
   place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
   and its head, inside the same glass, holds an agent's
+  `ThreadsLine` (the panel's threads dock: Inbox and how many of its
+  threads wait, in copper, or quiet, how many it posted, a press opening
+  the thread it names), its
   `DeniesWaiting` (that a message sent now denies the call waiting, a press
   scrolling to the call's row, whose presses alone answer it), a
   `HeldCallBanner` only for a call no row draws, such as a subagent's (with

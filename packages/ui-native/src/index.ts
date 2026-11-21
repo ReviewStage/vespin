@@ -92,6 +92,7 @@ export {
   MentionSuggestions,
   type SkillSuggestion,
   SkillSuggestions,
+  ThreadsLine,
 } from "./composer-head.js";
 
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";

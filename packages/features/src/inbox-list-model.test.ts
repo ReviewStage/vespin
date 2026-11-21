@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { inboxAttachmentAddress } from "./inbox-attachment-link.js";
-import { INBOX_MEDIA, inboxThreadEventsShown, inboxThreadMessages } from "./inbox-list-model.js";
+import {
+  agentThreadsLine,
+  INBOX_MEDIA,
+  inboxThreadEventsShown,
+  inboxThreadMessages,
+} from "./inbox-list-model.js";
 import {
   INBOX_MESSAGE_AUTHOR,
   INBOX_REPLY,
@@ -199,5 +204,67 @@ describe("inboxThreadEventsShown", () => {
         ],
       ],
     ]);
+  });
+});
+
+/** A thread an agent posted, open on the reader or settled, posted and last changed at the given minutes. */
+function posted(
+  id: string,
+  agentId: string,
+  status: InboxItem["status"],
+  postedAt: number,
+  updatedAt: number,
+): InboxItem {
+  return {
+    id,
+    agentId,
+    key: id,
+    revision: 1,
+    version: INBOX_WIRE_VERSION,
+    title: id,
+    needsReply: false,
+    status,
+    postedAt,
+    updatedAt,
+  };
+}
+
+describe("agentThreadsLine", () => {
+  it("counts only the agent's own threads that wait on the reader, opening the oldest posted of them", () => {
+    const line = agentThreadsLine(
+      [
+        posted("newer-open", "agent-1", INBOX_STATUS.OPEN, 3, 9),
+        posted("older-open", "agent-1", INBOX_STATUS.OPEN, 2, 2),
+        posted("answered", "agent-1", INBOX_STATUS.ANSWERED, 1, 10),
+        posted("another-agent's", "agent-2", INBOX_STATUS.OPEN, 0, 0),
+      ],
+      "agent-1",
+      undefined,
+      100,
+    );
+
+    expect(line).toEqual({
+      words: "Inbox",
+      waiting: 2,
+      opens: expect.objectContaining({ id: "older-open" }),
+    });
+  });
+
+  it("says how many threads the agent posted once none waits, opening the latest changed", () => {
+    const line = agentThreadsLine(
+      [
+        posted("answered", "agent-1", INBOX_STATUS.ANSWERED, 1, 4),
+        posted("closed", "agent-1", INBOX_STATUS.CLOSED, 2, 7),
+      ],
+      "agent-1",
+      undefined,
+      100,
+    );
+
+    expect(line).toEqual({
+      words: "2 threads",
+      waiting: 0,
+      opens: expect.objectContaining({ id: "closed" }),
+    });
   });
 });
