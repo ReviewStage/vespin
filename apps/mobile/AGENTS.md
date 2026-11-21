@@ -86,6 +86,13 @@ minutes, so iterate on the Mac and check on Revyl. Neither replaces
 | `revyl device stop` | End the session; always run it when done |
 | `revyl session download <session-id> --include-full-video --no-clips --output-directory /tmp/revyl-session` | The session's recording as `video.mp4`, once it has ended; without `--output-directory` it writes into the checkout |
 
+`revyl device logs --session-id <id> --no-follow` prints the session's
+device log, the app's `NSLog` lines among it, which is how a probe written
+in Swift is read. Note that a probe whose code is Swift only runs in a
+native build of it, here or on the Mac: a run that bundles a branch's
+JavaScript over a native app built from another commit, as the Mac queue's
+preview and timing lanes do over their kept bases, never compiles its
+Swift, so it logs nothing (STAG-3784's VoiceOver Actions check).
 Other launch arguments from the table above pass the same way, one
 `--launch-arg` per token. Builds and sessions spend the workspace's free Revyl
 minutes (1,200 a month). A build carries the JavaScript inside it, so build

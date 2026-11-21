@@ -92,9 +92,10 @@ env:
 # A long press on a task lifts its preview, its Overview at a glance: its
 # status, key and repository, its name, and its agents, the pinned Weekly
 # digest email's at work. Under it stands the panel's row menu, in the
-# panel's order: Open; Copy link and Open in browser; Rename and Mark as
-# unread; Status, Priority and Assignee; Task relation; Unpin on a pinned
-# task; and Permanently delete.
+# panel's order: Open; Copy link; Rename and Mark as unread; Status, Priority
+# and Assignee; Unpin on a pinned task and More, which holds the rarer acts;
+# and Permanently delete, the whole menu standing beside the preview on an
+# iPad (STAG-3801).
 - scrollUntilVisible:
     element: "Weekly digest email"
     direction: UP
@@ -127,19 +128,17 @@ env:
       ROW: Weekly digest email
       ITEM: Open
 - assertVisible: "Copy link"
-- assertVisible: "Open in browser"
 - assertVisible: "Rename"
 - assertVisible: "Mark as unread"
 - assertVisible: "Status"
 - assertVisible: "Priority"
 - assertVisible: "Assignee"
+- assertVisible: "More"
 - scrollUntilVisible:
     element: "Unpin"
     direction: DOWN
 # Note that the menu is scrolled to its last act, which a short window, the
-# iPhone Duo's, stands below its foot. An iPad's menu, clipped beside its
-# preview, is left at its top here, so Rename below stands in it; it is
-# drawn to its foot only before Permanently delete (`menu-foot.yaml`).
+# iPhone Duo's, stands below its foot.
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
@@ -173,8 +172,6 @@ env:
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
-- runFlow:
-    file: subflows/menu-foot.yaml
 - tapOn:
     text: "Permanently delete"
     retryTapIfNoChange: false
