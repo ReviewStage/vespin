@@ -322,6 +322,8 @@ export interface TranscriptReading {
   readonly origin?: TranscriptOrigin | undefined;
   /** The address of an agent whose suggestion a line was sent from, which the line's head opens; none where it can't be named, when the head names the agent alone. */
   readonly suggestionAddress?: ((agentId: string) => string | undefined) | undefined;
+  /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
+  readonly waitingCalls?: ReadonlySet<string> | undefined;
 }
 
 /** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
@@ -923,7 +925,13 @@ function rowItems(
     };
 
     if (row.kind === TURN_ROW.BLOCK) return partItems(row.block, base, reading);
-    const open = row.open !== foldTurned(reading.toggles, base.place);
+
+    // Note that a fold holding a call that waits on the reader stands open as the turn's latest work does, since a line landing after it, such as the reader's own steer, closes the run it stood in and would leave the call undrawn.
+    const waits = row.blocks.some(
+      (block) => block.kind === AGENT_PART.TOOL && reading.waitingCalls?.has(block.callId) === true,
+    );
+
+    const open = (row.open || waits) !== foldTurned(reading.toggles, base.place);
 
     const line: TranscriptItem = {
       ...base,
