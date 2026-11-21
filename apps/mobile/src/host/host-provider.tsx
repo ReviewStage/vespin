@@ -156,28 +156,43 @@ export function useTaskListRows<Row extends object>(
   return useLiveQuery((q) => q.from({ row: collection })).data;
 }
 
-/** The task list's tasks newest started first, as the document lists them, as one live query, drawn again only when one of them moves. */
-export function useListedTasks(): readonly TaskSummary[] {
+/** No task or agent: what a list read while it is not asked for answers. */
+const NOT_READ: readonly never[] = [];
+
+/**
+ * The task list's tasks newest started first, as the document lists them, as one live query, drawn again only when one of them moves; none while `reading` is false, when nothing is read and no change is heard.
+ */
+export function useListedTasks(reading = true): readonly TaskSummary[] {
   const { tasks } = useTaskListCollections();
 
-  return useLiveQuery((q) =>
-    q
-      .from({ task: tasks })
-      .orderBy(({ task }) => task.createdAt, "desc")
-      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
-  ).data;
+  return (
+    useLiveQuery((q) =>
+      reading
+        ? q
+            .from({ task: tasks })
+            .orderBy(({ task }) => task.createdAt, "desc")
+            .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+        : undefined,
+    ).data ?? NOT_READ
+  );
 }
 
-/** The task list's agents, the archived among them, first started first, as the document lists them, as one live query, drawn again only when one of them moves. */
-export function useListedAgents(): readonly ListedAgent[] {
+/**
+ * The task list's agents, the archived among them, first started first, as the document lists them, as one live query, drawn again only when one of them moves; none while `reading` is false, when nothing is read and no change is heard.
+ */
+export function useListedAgents(reading = true): readonly ListedAgent[] {
   const { agents } = useTaskListCollections();
 
-  return useLiveQuery((q) =>
-    q
-      .from({ agent: agents })
-      .orderBy(({ agent }) => agent.createdAt)
-      .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
-  ).data;
+  return (
+    useLiveQuery((q) =>
+      reading
+        ? q
+            .from({ agent: agents })
+            .orderBy(({ agent }) => agent.createdAt)
+            .orderBy(({ agent }) => agent.id, { stringSort: "lexical" })
+        : undefined,
+    ).data ?? NOT_READ
+  );
 }
 
 /**

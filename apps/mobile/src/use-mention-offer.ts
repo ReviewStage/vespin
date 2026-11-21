@@ -115,8 +115,9 @@ export function useMentionOffer(
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   const acts = useHostActs();
   const members = useListedMembers(asking ? workspaceId : undefined);
-  const agents = useListedAgents();
-  const tasks = useListedTasks();
+  // Note that the tasks and agents are read only while an `@` is typed, as its members are, so a change to any of the account's while none is, as each step of a working agent's turn makes, draws the composer's page nothing again.
+  const agents = useListedAgents(asking);
+  const tasks = useListedTasks(asking);
   // Note that the task's pages are followed only while an `@` is typed, as its members are.
   useLiveFollow(asking ? taskId : undefined, (id) =>
     acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }),
