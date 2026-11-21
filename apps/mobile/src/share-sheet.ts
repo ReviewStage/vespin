@@ -22,6 +22,7 @@ import {
 } from "@repo/features/ios-share-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectRepositoryList, selectWorkspaces } from "@repo/host/app-state-reads";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
@@ -35,7 +36,8 @@ import {
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SERVICE_ORIGIN } from "./host/compose-mobile.js";
-import { APP_VERSION, useListedTasks } from "./host/host-provider.js";
+import { APP_VERSION, useTaskListCollections } from "./host/host-provider.js";
+import { useSplashReleased } from "./splash.js";
 
 /** Where the share sheet's Start goes, named as this build. */
 const SHARE_SERVICE = {
@@ -43,15 +45,33 @@ const SHARE_SERVICE = {
   client: { platform: CLIENT_PLATFORM.IOS, version: APP_VERSION },
 };
 
-/** The snapshot's JSON for the account signed in, read off the document as it changes; none while none is. */
+/**
+ * The snapshot's JSON for the account signed in, read off the document as it
+ * changes; none while none is. Note that its tasks are read only once the
+ * launch's first screen stands, in no order and as their repositories and
+ * starts alone (`newestRepositories`), since a read of every task sorted held
+ * the launch's first frame at an account's size, and the snapshot written at
+ * the last launch stands until then.
+ */
 function useSnapshotJson(accountId: string | undefined): string | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosenId = useChosenWorkspace(workspaces).chosen?.id;
-  const tasks = useListedTasks();
+  const collections = useTaskListCollections();
+  const drawn = useSplashReleased();
+
+  const tasks = useLiveQuery((q) =>
+    drawn
+      ? q.from({ task: collections.tasks }).select(({ task }) => ({
+          id: task.id,
+          repository: task.repository,
+          createdAt: task.createdAt,
+        }))
+      : undefined,
+  ).data;
 
   const select = useCallback(
     (state: AppStateSnapshot) =>
-      accountId === undefined
+      accountId === undefined || tasks === undefined
         ? undefined
         : JSON.stringify(
             shareSnapshotOf(

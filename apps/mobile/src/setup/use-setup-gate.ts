@@ -11,11 +11,10 @@ import {
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { SETUP_GATE, type SetupGate, setupGate, setupPlaceFrom } from "@repo/settings";
-import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListHoldsAny } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 
 /** Whether the task list's read landed. */
@@ -59,7 +58,8 @@ export function useSetupGate(signedIn: boolean): SetupGate {
   });
 
   const { data: models } = useQuery({ ...appStateQuery, select: selectModels });
-  const listed = useLiveQuery((q) => q.from({ task: tasks }).findOne()).data !== undefined;
+  // Note that the list is asked only whether it holds a task, with no query over its rows, since this stands at the root as the launch draws.
+  const listed = useTaskListHoldsAny(tasks);
 
   const finished = settings?.setupFinished === true;
 

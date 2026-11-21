@@ -20,20 +20,22 @@ import {
   type IosActivity,
   iosContinuedRouteOf,
   type SpotlightItem,
+  type SpotlightTask,
   spotlightIndexKeeper,
   spotlightItems,
 } from "@repo/features/ios-system-activity";
 import { OPENABLE_LINK, openableLinkOf } from "@repo/features/link-grammar";
-import type { TaskSummary } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useListedTasks } from "../host/host-provider.js";
+import { useTaskListCollections } from "../host/host-provider.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { openInSafari } from "../open-link.js";
+import { useSplashReleased } from "../splash.js";
 import { useOnTab } from "../tab-route.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 import { systemActivityModule } from "./system-activity-module.js";
@@ -82,7 +84,7 @@ export function useScreenActivity(
 /** What the chosen workspace's Spotlight items are built from, as the document last answered it. */
 interface SpotlightReads {
   readonly workspace: Workspace | undefined;
-  readonly tasks: readonly TaskSummary[];
+  readonly tasks: readonly SpotlightTask[];
   readonly groups: readonly InboxGroup[];
   readonly readerId: string | undefined;
 }
@@ -113,11 +115,31 @@ const spotlightIndex = spotlightIndexKeeper(systemActivityModule, refused("The S
 /**
  * Holds the app's Spotlight index to the chosen workspace's lists while an
  * account is signed in, built at most once each `SPOTLIGHT_SETTLE_MS` from
- * the lists as they then stand, and empties it at once when none is.
+ * the lists as they then stand, and empties it at once when none is. Note
+ * that its tasks are read only once the launch's first screen stands, and
+ * as the workspace's alone, in no order, with only what an item shows,
+ * since an index has no order, and a read of every task sorted held the
+ * launch's first frame at an account's size.
  */
 function useSpotlightIndex(signedIn: boolean): void {
   const workspace = useTasksWorkspace();
-  const tasks = useListedTasks();
+  const collections = useTaskListCollections();
+  const drawn = useSplashReleased();
+  const workspaceId = workspace?.id;
+
+  const tasks = useLiveQuery((q) =>
+    !drawn || workspaceId === undefined
+      ? undefined
+      : q
+          .from({ task: collections.tasks })
+          .where(({ task }) => eq(task.workspaceId, workspaceId))
+          .select(({ task }) => ({
+            id: task.id,
+            name: task.name,
+            status: task.status,
+            workspaceId: task.workspaceId,
+          })),
+  ).data;
 
   const groups = useInboxGroupsIn(workspace?.id);
 
@@ -125,8 +147,6 @@ function useSpotlightIndex(signedIn: boolean): void {
   const latest = useRef<SpotlightReads | undefined>(undefined);
   const settling = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(() => {
-    latest.current = { workspace, tasks, groups, readerId };
-
     if (!signedIn) {
       clearTimeout(settling.current);
       settling.current = undefined;
@@ -134,6 +154,9 @@ function useSpotlightIndex(signedIn: boolean): void {
 
       return;
     }
+
+    if (tasks === undefined) return;
+    latest.current = { workspace, tasks, groups, readerId };
 
     // Note that a build already waiting takes these lists when it runs, so lists moving every second still build once each pause.
     if (settling.current !== undefined) return;

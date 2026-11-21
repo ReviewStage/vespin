@@ -102,7 +102,10 @@ export function threadActivity(listed: InboxListed, workspaces: readonly Workspa
  * by its id rather than its number, because a number is its workspace's
  * alone and the app finds a task by number among every workspace's.
  */
-export function taskActivity(task: TaskSummary, workspaces: readonly Workspace[]): IosActivity {
+export function taskActivity(
+  task: Pick<TaskSummary, "id" | "name" | "workspaceId">,
+  workspaces: readonly Workspace[],
+): IosActivity {
   const step = linkWorkspaceStep(task.workspaceId, workspaces);
 
   return {
@@ -213,6 +216,11 @@ export function desktopHandoffOf(link: ReadLink, reads: HandoffReads): HandoffAc
   }
 }
 
+/** What a task's Spotlight item shows of it: its name, its status, and its workspace, under its id. */
+export type SpotlightTask = Pick<TaskSummary, "id" | "name" | "workspaceId"> & {
+  readonly status?: TaskSummary["status"] | undefined;
+};
+
 /**
  * The Spotlight items of one workspace's tasks and Inbox threads: each task
  * by its name, its status and workspace under it, and each thread by its
@@ -220,7 +228,7 @@ export function desktopHandoffOf(link: ReadLink, reads: HandoffReads): HandoffAc
  */
 export function spotlightItems(read: {
   readonly workspace: Workspace;
-  readonly tasks: readonly TaskSummary[];
+  readonly tasks: readonly SpotlightTask[];
   readonly threads: readonly InboxListed[];
   readonly readerId: string | undefined;
 }): readonly SpotlightItem[] {

@@ -117,6 +117,40 @@ export function recentRepositories(tasks: readonly Pick<TaskSummary, "repository
   return recent;
 }
 
+/** Whether `a` started after `b`, a tie going to the greater id, as the list orders tasks newest started first. */
+function startedAfter(
+  a: Pick<TaskSummary, "id" | "createdAt">,
+  b: Pick<TaskSummary, "id" | "createdAt">,
+): boolean {
+  return a.createdAt === b.createdAt ? a.id > b.id : a.createdAt > b.createdAt;
+}
+
+/**
+ * The repositories the account's tasks are about, as `recentRepositories`
+ * reads them off a list ordered newest started first, from tasks in any
+ * order: each repository once, at its newest task's start, so a read that
+ * sorts nothing finds the same few.
+ */
+export function newestRepositories(
+  tasks: readonly Pick<TaskSummary, "id" | "repository" | "createdAt">[],
+): string[] {
+  const newest = new Map<string, Pick<TaskSummary, "id" | "createdAt">>();
+
+  for (const task of tasks) {
+    const { repository } = task;
+
+    if (repository === null) continue;
+    const held = newest.get(repository);
+
+    if (held === undefined || startedAfter(task, held)) newest.set(repository, task);
+  }
+
+  return [...newest]
+    .sort(([, a], [, b]) => (startedAfter(a, b) ? -1 : startedAfter(b, a) ? 1 : 0))
+    .slice(0, RECENT_REPOSITORY_LIMIT)
+    .map(([repository]) => repository);
+}
+
 /**
  * Whether a workspace's GitHub reaches a repository, as far as the window can
  * tell before the service is asked: its installation is active and on the

@@ -154,6 +154,25 @@ export function useTaskListRow<Row extends object>(
 }
 
 /**
+ * Whether one of the task list's collections holds any row, drawn again only
+ * as that answer changes, with no query built over its rows.
+ */
+export function useTaskListHoldsAny<Row extends object>(
+  collection: Collection<Row, string>,
+): boolean {
+  const subscribe = useCallback(
+    (heard: () => void) => {
+      const subscription = collection.subscribeChanges(heard);
+
+      return () => subscription.unsubscribe();
+    },
+    [collection],
+  );
+
+  return useSyncExternalStore(subscribe, () => collection.size > 0);
+}
+
+/**
  * The rows `keys` name in one of the task list's collections (`.get(key)`),
  * in the keys' order, a key it holds no row for left out, drawn again only
  * when one of those rows moves, and the same array until one does or the
