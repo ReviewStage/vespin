@@ -1,9 +1,8 @@
 screen.mp4 kept
-merging chore/probe-tap-instant at aa45bae6aa
-built aa45bae6aa = probe + chore/probe-tap-instant (PROFILE=0)
+merging chore/probe-tap-instant at 828a0ece1b
+built 828a0ece1b = probe + chore/probe-tap-instant (PROFILE=0)
 install 0
 export 0
 signed 0
-iphone: maestro exit 0
-ipad: maestro exit 1
+ipad: maestro exit 0
 ALLDONE
