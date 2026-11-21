@@ -62,12 +62,12 @@ import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropLink, heardActions, sideMargins, stackScrollEdge } from "./interactions.js";
+import { dropLink, rowHeard, sideMargins, stackScrollEdge } from "./interactions.js";
 import { type LongPressGroup, LongPressMenuItems } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
-import { heardActs } from "./row-heard-acts.js";
+import { menuPressAt, menuTree } from "./row-menu-model.js";
 import {
   RowChoosingContext,
   RowOpenContext,
@@ -75,7 +75,7 @@ import {
   RowSelectedContext,
 } from "./row-open.js";
 import { sectionInk } from "./section-ink.js";
-import { type BrandColors, useColors } from "./tokens/colors.js";
+import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -737,6 +737,7 @@ export function ListSection({
   const folded = held ?? own;
   const look = useContext(ListLookContext);
   const reduceMotion = useReduceMotion();
+  const colors = useColors();
 
   const setFolded = (next: boolean) => {
     setOwn(next);
@@ -775,13 +776,25 @@ export function ListSection({
       : []),
   ];
 
-  // Note that a header with a menu is the system's menu button, its primary action the fold, so a tap folds it and a long press opens its menu, as Reminders' and Files' headers do; SwiftUI's context menu on a list's section header never opened, its long press lost to the fold's button or dropped. Its VoiceOver Actions are read from the same menu (`heardActs`). The long press holds the header's title, never its +, Show all or Edit, which take their own presses.
+  // Note that a header with a menu is the system's menu button, its primary action the fold, so a tap folds it and a long press opens its menu, as Reminders' and Files' headers do; SwiftUI's context menu on a list's section header never opened, its long press lost to the fold's button or dropped. Its VoiceOver Actions are read natively from the same menu's tree (`rowHeard`), only while something reads them. The long press holds the header's title, never its +, Show all or Edit, which take their own presses.
   const pressed =
     label === undefined ? undefined : menu.some((group) => group.length > 0) ? (
       <Menu
         label={label}
         {...(fold === undefined ? {} : { onPrimaryAction: fold })}
-        modifiers={[buttonStyle("plain"), ...heading, heardActions(heardActs(menu))]}
+        modifiers={[
+          buttonStyle("plain"),
+          ...heading,
+          rowHeard(
+            JSON.stringify({
+              groups: menuTree(menu, {
+                act: colors.TEXT_MUTED,
+                tone: (tone) => toneColor(colors, tone),
+              }),
+            }),
+            (path) => menuPressAt(menu, path)?.(),
+          ),
+        ]}
       >
         <LongPressMenuItems groups={menu} />
       </Menu>

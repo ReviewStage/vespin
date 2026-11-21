@@ -120,15 +120,33 @@ env:
       ABOVE: composer-field
 - takeScreenshot: inbox-file
 - tapOn: "invite-test-plan.pdf, PDF.*"
-# The PDF opens in the system's Quick Look, titled with its name, and its Done
-# closes it.
+# The PDF opens in the system's Quick Look, titled with its name, and its
+# close button closes it. Note that the button is found by Quick Look's own
+# id, since it reads "Done" on an iPhone and "close" on an iPad, and that an
+# iPad's Quick Look hides its bar a moment after it opens, so a tap on the
+# page brings the bar back first where the button no longer stands.
 - extendedWaitUntil:
-    visible: "Done"
+    visible:
+      id: "QLOverlayDoneButtonAccessibilityIdentifier"
     timeout: 15000
 - waitForAnimationToEnd
 - takeScreenshot: inbox-pdf
-- tapOn: "Done"
+- runFlow:
+    when:
+      notVisible:
+        id: "QLOverlayDoneButtonAccessibilityIdentifier"
+    commands:
+      - tapOn:
+          point: "50%, 50%"
+      - extendedWaitUntil:
+          visible:
+            id: "QLOverlayDoneButtonAccessibilityIdentifier"
+          timeout: 5000
+- tapOn:
+    id: "QLOverlayDoneButtonAccessibilityIdentifier"
 - waitForAnimationToEnd
+- assertNotVisible:
+    id: "QLOverlayDoneButtonAccessibilityIdentifier"
 # Remind me's times stand in a menu: a compact window's ⋯ holds it as a
 # submenu, and a regular window's detail bar stands it as its own clock
 # (`bar-act.yaml`). Each time says when it comes due, and Pick a date and

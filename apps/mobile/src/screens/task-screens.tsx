@@ -111,9 +111,9 @@ import {
 import { EXPERIMENT } from "@repo/settings";
 import {
   AGENT_ROW_STATE,
-  AgentPreview,
   AgentRow,
   type AgentRowState,
+  agentPreview,
   askForName,
   BAR_TITLE,
   type BarAction,
@@ -163,8 +163,8 @@ import {
   sectionGlyph,
   sectionGlyphColor,
   TaskHead,
-  TaskPreview,
   TaskRow,
+  taskPreview,
   UNASSIGNED_UNDER,
   useColors,
   useMinute,
@@ -768,24 +768,22 @@ function rowActs(
 }
 
 /** A task's long press preview, its Overview at a glance: its status, key and repository, its name, what needs the reader, and its agents. */
-function taskPreview(task: TaskSummary, listing: TasksListing) {
+function taskRowPreview(task: TaskSummary, listing: TasksListing) {
   const glance = listing.glanceOf(task.id);
 
-  return (
-    <TaskPreview
-      name={task.name}
-      status={task.status ?? TASK_STATUS.TODO}
-      taskKey={keyOf(task, listing.workspace)}
-      repository={task.repository?.split("/").at(-1)}
-      needsYou={glance.waiting}
-      agents={glance.agents.map((agent) => ({
-        id: agent.id,
-        name: agentName(agent),
-        harness: providerOf(agent.model),
-        status: agent.status,
-      }))}
-    />
-  );
+  return taskPreview({
+    name: task.name,
+    status: task.status ?? TASK_STATUS.TODO,
+    taskKey: keyOf(task, listing.workspace),
+    repository: task.repository?.split("/").at(-1),
+    needsYou: glance.waiting,
+    agents: glance.agents.map((agent) => ({
+      id: agent.id,
+      name: agentName(agent),
+      harness: providerOf(agent.model),
+      status: agent.status,
+    })),
+  });
 }
 
 /** A task's question as a page raised it, Done or Canceled while its agents work or Permanently delete, as the system asks it: every list of tasks draws it, the Search tab's among them. One a row raised stands by that row instead (`RowAsks`). */
@@ -870,7 +868,7 @@ export function TaskListRow({
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       {...rowActs(task, look.unread, listing, asks, openRelation)}
       statusMenu={statusSubmenu(task, asks.setStatus)}
-      preview={taskPreview(task, listing)}
+      preview={taskRowPreview(task, listing)}
       link={
         listing.workspace === undefined
           ? undefined
@@ -2461,19 +2459,17 @@ export function TaskAgentRow({
               },
         onCopyLink: keeping.copyWords,
       })}
-      preview={
-        <AgentPreview
-          name={name}
-          harness={harness}
-          status={agent.status}
-          task={task === undefined ? undefined : { name: task.name, status: task.status }}
-          model={modelLabel(agent.model)}
-          runsOn={runsOn}
-          step={step}
-          waiting={waiting}
-          pullRequest={pullRequest}
-        />
-      }
+      preview={agentPreview({
+        name,
+        harness,
+        status: agent.status,
+        task: task === undefined ? undefined : { name: task.name, status: task.status },
+        model: modelLabel(agent.model),
+        runsOn,
+        step,
+        waiting,
+        pullRequest,
+      })}
     />
   );
 }
