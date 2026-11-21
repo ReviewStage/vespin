@@ -58,7 +58,7 @@ probe() { # machine
   record "$m.public_http" "$(hc http://example.com/)"
   local r
   r=$(x sh -c 'curl -s --compressed --max-time 10 https://httpbin.org/headers -H "Authorization: Bearer $ECHO_KEY"')
-  record "$m.substitution" "$([ "$(grep -cF "$ECHO_KEY" <<< "$r")" -gt 0 ] && echo yes || echo no)"
+  record "$m.substitution" "$([ "$(grep -cF '[smolvm-redacted]' <<< "$r")" -gt 0 ] && echo yes || echo no)"
   record "$m.imds" "$(hc -H Metadata:true 'http://169.254.169.254/metadata/instance?api-version=2021-02-01')"
   record "$m.wireserver" "$(hc 'http://168.63.129.16/?comp=versions')"
   record "$m.box_eth0" "$(hc "http://$ETH0:18080/")"

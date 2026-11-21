@@ -11,7 +11,9 @@
 # workspace: a real install that fits 16 disks on a runner), all at once.
 
 N=${1:-4}
-MEM=${2:-$([ "$N" = 4 ] && echo host-default || echo 4096)}
+# Second rerun: the caps' sum stays at 12 GiB of the 16 GiB host, since a busy guest's page cache
+# grows to its cap (the runs at 8 GiB and at 4 GiB each lost the runner).
+MEM=${2:-$((12288 / N))}
 ROW=row4-n$N
 source "$(dirname "$0")/lib.sh"
 prepare_host

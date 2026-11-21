@@ -113,17 +113,21 @@ host_used_mb() { free -m | awk '/^Mem:/{print $3}'; }
 # The VMM processes: each machine's pid as `machine ls --json` reports it, and their children.
 vmm_pids() {
   local p
+  {
   for p in $(smol machine ls --json 2> /dev/null | jq -r '.[] | .pid // empty'); do
     [ -d "/proc/$p" ] || continue
     echo "$p"
     pgrep -P "$p" 2> /dev/null
-  done | sort -u
+  done
+  # Each VMM as ps names it (`libkrun VM`, run as `/proc/self/exe _boot-vm-owned`).
+  pgrep -x "libkrun VM" 2> /dev/null
+  } | sort -u
 }
 
 pss_of_pids() {
   local total=0 p kb
   for p in "$@"; do
-    kb=$(awk '/^Pss:/{print $2}' "/proc/$p/smaps_rollup" 2> /dev/null)
+    kb=$(sudo -n awk '/^Pss:/{print $2}' "/proc/$p/smaps_rollup" 2> /dev/null)
     total=$((total + ${kb:-0}))
   done
   echo $((total / 1024))
@@ -135,7 +139,7 @@ vmm_pss_mb() {
   pss_of_pids $(vmm_pids)
 }
 
-vmm_count() { smol machine ls --json 2> /dev/null | jq '[.[] | select(.pid != null)] | length'; }
+vmm_count() { pgrep -cx "libkrun VM" 2> /dev/null || echo 0; }
 
 # One machine's VMM PSS, MiB.
 vmm_pss_of() {

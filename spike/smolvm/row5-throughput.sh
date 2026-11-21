@@ -18,7 +18,7 @@ set -u
 w=$1
 export ELECTRON_SKIP_BINARY_DOWNLOAD=1 CI=1 HUSKY=0 npm_config_store_dir=$w/.store
 ms() { date +%s%3N; }
-t=$(ms); git clone -q --no-checkout /mirror/vespin.git $w/vespin; t2=$(ms); git -C $w/vespin checkout -q '"$COMMIT"'; t3=$(ms); echo "clone_ms=$(( t3 - t ))"; echo "fetch_ms=$(( t2 - t ))"; echo "checkout_ms=$(( t3 - t2 ))"
+t=$(ms); git clone -q --no-local --no-checkout file:///mirror/vespin.git $w/vespin; t2=$(ms); git -C $w/vespin checkout -q '"$COMMIT"'; t3=$(ms); echo "clone_ms=$(( t3 - t ))"; echo "fetch_ms=$(( t2 - t ))"; echo "checkout_ms=$(( t3 - t2 ))"
 cd $w/vespin
 t=$(ms); pnpm install --frozen-lockfile --reporter=append-only > /tmp/install.log 2>&1; rc=$?; echo "install_ms=$(( $(ms) - t ))"; echo "install_rc=$rc"
 [ $rc -eq 0 ] || grep -E "ERR|error|Error" /tmp/install.log | tail -6 | cut -c1-200 | sed "s/^/# install: /"; echo "node_modules_mb=$(du -sm node_modules 2>/dev/null | cut -f1)"
@@ -33,11 +33,12 @@ case "$(uname -m)" in x86_64) na=x64 ;; aarch64) na=arm64 ;; esac
 nf=$(curl -fsSL https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt | awk -v a="linux-$na.tar.xz" '$2 ~ a"$" {print $2}')
 curl -fsSL "https://nodejs.org/dist/latest-v24.x/$nf" | sudo tar -xJ -C /usr/local --strip-components=1
 hash -r
-sudo npm install --global --no-audit --no-fund pnpm@10.34.5 > /dev/null 2>&1
+sudo /usr/local/bin/npm install --global --prefix /usr/local --no-audit --no-fund pnpm@10.34.5 > /dev/null 2>&1
+export PATH=/usr/local/bin:$PATH
 record bare.node "$(node --version) pnpm $(pnpm --version)"
 sudo mkdir -p /mirror && sudo mount --bind "$SPIKE_ROOT/mirror" /mirror
 mkdir -p "$SPIKE_ROOT/bare"
-bash "$SPIKE_ROOT/steps.sh" "$SPIKE_ROOT/bare" 2>&1 | sed 's/^\([a-z]\)/bare.\1/' | tee -a "$RESULTS_DIR/$ROW.txt"
+PATH=/usr/local/bin:$PATH bash "$SPIKE_ROOT/steps.sh" "$SPIKE_ROOT/bare" 2>&1 | sed 's/^\([a-z]\)/bare.\1/' | tee -a "$RESULTS_DIR/$ROW.txt"
 rm -rf "$SPIKE_ROOT/bare"
 
 # Network: a 100 MB download on the box.

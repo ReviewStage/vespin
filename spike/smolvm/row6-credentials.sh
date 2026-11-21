@@ -44,22 +44,31 @@ for v in ECHO_KEY ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN OPENAI_API_KEY CURSO
 done
 record guest.ssl_cert_file "$(x -- sh -c 'echo $SSL_CERT_FILE $NODE_EXTRA_CA_CERTS')"
 
-# 1. Substitution, by an echo host, in the header shapes the CLIs use. The first run found
-# neither value in what curl printed: the response is now decompressed and its status kept.
+# 1. Substitution, by an echo host, in the header shapes the CLIs use, one placeholder a request
+# (smolvm refuses two). smolvm 1.35 scrubs a credential value out of the response, so an echo of
+# the real value reaches the guest as "[smolvm-redacted]": that marker, where the guest sent a
+# placeholder, is the proof the upstream saw the real value.
 for echo_url in https://postman-echo.com/headers https://httpbin.org/headers; do
   host=$(cut -d/ -f3 <<< "$echo_url" | cut -d. -f1)
-  r=$(x -- sh -c 'curl -s --compressed -D /tmp/h.txt "$0" -H "Authorization: Bearer $ECHO_KEY" -H "x-api-key: $ECHO_KEY"; echo; echo "STATUS $(head -1 /tmp/h.txt | tr -d "\r")"; grep -i "^content-encoding" /tmp/h.txt | tr -d "\r"' "$echo_url")
-  record "echo.$host.status" "$(grep '^STATUS' <<< "$r" | cut -c8-)"
-  record "echo.$host.real_value_seen_times" "$(grep -oF "$ECHO_KEY" <<< "$r" | wc -l)"
-  record "echo.$host.placeholder_seen_times" "$(grep -o 'SMOL_PLACEHOLDER' <<< "$r" | wc -l)"
-  record "echo.$host.has_authorization_key" "$(grep -ci '"authorization"' <<< "$r")"
-  record "echo.$host.body_bytes" "$(wc -c <<< "$r")"
+  for hdr in "Authorization: Bearer" "x-api-key:"; do
+    tag=$(cut -d: -f1 <<< "$hdr" | tr 'A-Z' 'a-z')
+    r=$(x -- sh -c 'curl -s -D /tmp/h.txt "$0" -H "$1 $ECHO_KEY"; echo; echo "STATUS $(head -1 /tmp/h.txt | tr -d "\r")"' "$echo_url" "$hdr")
+    record "echo.$host.$tag.status" "$(grep '^STATUS' <<< "$r" | cut -c8-)"
+    record "echo.$host.$tag.redacted_seen" "$(grep -oF '[smolvm-redacted]' <<< "$r" | wc -l)"
+    record "echo.$host.$tag.placeholder_seen" "$(grep -o 'SMOL_PLACEHOLDER' <<< "$r" | wc -l)"
+    record "echo.$host.$tag.real_value_seen" "$(grep -oF "$ECHO_KEY" <<< "$r" | wc -l)"
+  done
 done
-check substitution_curl $([ "$(grep -E '^echo\.[a-z-]+\.real_value_seen_times=' "$RESULTS_DIR/$ROW.txt" | cut -d= -f2 | paste -sd+ | bc)" -gt 0 ] && echo 0 || echo 1)
+r=$(x -- sh -c 'curl -s https://httpbin.org/headers -H "Authorization: Bearer $ECHO_KEY" -H "x-api-key: $ECHO_KEY"')
+record refuse.two_placeholders "$(tr -d '\n' <<< "$r" | cut -c1-90)"
+n_red=$(grep -E '^echo\.[a-z-]+\.[a-z-]+\.redacted_seen=' "$RESULTS_DIR/$ROW.txt" | cut -d= -f2 | paste -sd+ | bc)
+n_real=$(grep -E '^echo\.[a-z-]+\.[a-z-]+\.real_value_seen=' "$RESULTS_DIR/$ROW.txt" | cut -d= -f2 | paste -sd+ | bc)
+check substitution_curl $([ "$n_red" -gt 0 ] && echo 0 || echo 1)
+check response_scrubbed $([ "$n_real" -eq 0 ] && echo 0 || echo 1)
 # Node's fetch (undici), the runner's client, trusts the machine CA through NODE_EXTRA_CA_CERTS.
 r=$(x -- node -e 'fetch("https://httpbin.org/headers",{headers:{authorization:"Bearer "+process.env.ECHO_KEY}}).then(async r=>console.log(r.status, await r.text()),e=>console.log("ERR",e.cause?.code||e.message))')
 record echo.node_fetch_status "$(head -c 3 <<< "$r")"
-check substitution_node_fetch $([ "$(grep -cF "$ECHO_KEY" <<< "$r")" -gt 0 ] && echo 0 || echo 1)
+check substitution_node_fetch $([ "$(grep -cF '[smolvm-redacted]' <<< "$r")" -gt 0 ] && [ "$(grep -cF "$ECHO_KEY" <<< "$r")" -eq 0 ] && echo 0 || echo 1)
 # Refusals: in a query string, in a JSON body, to a host the binding does not name.
 record refuse.query "$(x -- sh -c 'curl -s -o /dev/null -w %{http_code} "https://postman-echo.com/get?k=$ECHO_KEY"')"
 record refuse.json_body "$(x -- sh -c 'curl -s -o /dev/null -w %{http_code} https://postman-echo.com/post -H content-type:application/json -d "{\"k\":\"$ECHO_KEY\"}"')"
@@ -70,10 +79,10 @@ record stream.drip_ttfb_total "$(x -- sh -c 'curl -s -o /dev/null -H "Authorizat
 
 # 2. Claude Code, plan token then API key, through the interceptor: a real auth refusal, not TLS.
 cc() { x --timeout 90s -- sh -c "$1" 2>&1 | tr '\n' ' ' | cut -c1-400; }
-out=$(cc 'cd /tmp && env -u ANTHROPIC_API_KEY claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -E "api_retry|\"type\":\"result\"|rror" | tail -2')
+out=$(cc 'cd /tmp && env -u ANTHROPIC_API_KEY claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -oE "\"error_status\":[0-9]+,\"error\":\"[a-z_]+\"|CERT[A-Z_]*|certificate[^\"]*|ECONNREFUSED|ENOTFOUND" | sort | uniq -c')
 record claude.oauth_out "$out"
 check claude_oauth_reaches_anthropic $(grep -qiE '401|authentication|invalid|OAuth' <<< "$out" && ! grep -qiE 'certificate|self.signed|UNABLE_TO|ECONNREFUSED|ENOTFOUND' <<< "$out"; echo $?)
-out=$(cc 'cd /tmp && env -u CLAUDE_CODE_OAUTH_TOKEN claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -E "api_retry|\"type\":\"result\"|rror" | tail -2')
+out=$(cc 'cd /tmp && env -u CLAUDE_CODE_OAUTH_TOKEN claude -p "say ok" --output-format stream-json --verbose 2>&1 | grep -oE "\"error_status\":[0-9]+,\"error\":\"[a-z_]+\"|CERT[A-Z_]*|certificate[^\"]*|ECONNREFUSED|ENOTFOUND" | sort | uniq -c')
 record claude.apikey_out "$out"
 check claude_apikey_reaches_anthropic $(grep -qiE '401|authentication|invalid|api key' <<< "$out" && ! grep -qiE 'certificate|self.signed|UNABLE_TO|ECONNREFUSED|ENOTFOUND' <<< "$out"; echo $?)
 
