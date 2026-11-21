@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a view's VoiceOver Actions by name; and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -22,8 +22,9 @@ private enum ModifierName {
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
+  static let heardActs = "vespinHeardActs"
   static let all = [
-    cellFocusRingOff, columnSubtitle, stackSubtitle, sideMargins, dragLink, dropPictures, dropLink,
+    cellFocusRingOff, columnSubtitle, stackSubtitle, sideMargins, dragLink, dropPictures, dropLink, heardActs,
   ]
 }
 
@@ -56,6 +57,9 @@ public final class NativeInteractionsModule: Module {
       }
       ViewModifierRegistry.register(ModifierName.dropLink) { params, appContext, eventDispatcher in
         return try DropLinkModifier(from: params, appContext: appContext, eventDispatcher: eventDispatcher)
+      }
+      ViewModifierRegistry.register(ModifierName.heardActs) { params, appContext, eventDispatcher in
+        return try HeardActsModifier(from: params, appContext: appContext, eventDispatcher: eventDispatcher)
       }
     }
 
@@ -378,6 +382,37 @@ internal struct DropLinkModifier: ViewModifier, Record {
         }
       }
       return true
+    }
+  }
+}
+
+// MARK: - VoiceOver
+
+/// A view's VoiceOver Actions, the rotor's list, each by its name in order, which hand JavaScript the place of the one VoiceOver ran (`heardActions` in `interactions.ts`).
+///
+/// Note that SwiftUI's own rows offer a swipe's acts and each item of a
+/// context menu as Actions on their own, the same act twice and a
+/// submenu's items with no verb; a row that ignores its children's
+/// accessibility offers these alone, read once from its menu.
+internal struct HeardActsModifier: ViewModifier, Record {
+  @Field var names: [String] = []
+  var eventDispatcher: EventDispatcher?
+
+  init() {}
+
+  init(from params: Dict, appContext: AppContext, eventDispatcher: EventDispatcher) throws {
+    try self = .init(from: params, appContext: appContext)
+    self.eventDispatcher = eventDispatcher
+  }
+
+  func body(content: Content) -> some View {
+    let dispatcher = eventDispatcher
+    return content.accessibilityActions {
+      ForEach(Array(names.enumerated()), id: \.offset) { index, name in
+        Button(name) {
+          dispatcher?([ModifierName.heardActs: ["index": index]])
+        }
+      }
     }
   }
 }

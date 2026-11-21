@@ -451,7 +451,12 @@ here once, so a screen gets them by composing these pieces.
 - **VoiceOver.** A row hands `RowFrame` what it is heard as (`RowHeard`): one
   element whose label is its title, so Voice Control and the Maestro flows
   find it by the words on screen, and whose value says its marks in words
-  (unread, needs you, its status, its time by `sinceHeard`). A row holding a
+  (unread, needs you, its status, its time by `sinceHeard`), and whose
+  Actions are its long press menu's acts, each once and in the menu's order,
+  a submenu's items worded with their menu or their own `heard` words
+  ("Remind me tomorrow", "Set status: Backlog"), as Mail's rows offer theirs,
+  never the swipes' copies (`heardActs`, through the native
+  `heardActions`). A row holding a
   button of its own stays apart instead; a row never nests a second press
   over its own, so `AgentRow`'s pull request opens from its long-press menu.
   A group header, a page's heading, and a message's writer line are headings;

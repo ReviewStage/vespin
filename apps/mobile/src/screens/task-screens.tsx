@@ -288,6 +288,8 @@ const WORDS = {
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
+  /** How VoiceOver's Actions hear a status of the Status menu, with its verb. */
+  SET_STATUS: "Set status",
   PRIORITY: "Priority",
   ASSIGNEE: "Assignee",
   MORE: { label: "More", symbol: GLYPH.MORE },
@@ -366,6 +368,7 @@ function statusSubmenu(
     symbol: GLYPH.STATUS,
     choices: STATUS_ORDER.map((status) => ({
       label: TASK_STATUS_WORDS[status],
+      heard: `${WORDS.SET_STATUS}: ${TASK_STATUS_WORDS[status]}`,
       symbol: STATUS_MARK_SYMBOL[status],
       tone: TASK_STATUS_TONE[status],
       on: task.status === status,
