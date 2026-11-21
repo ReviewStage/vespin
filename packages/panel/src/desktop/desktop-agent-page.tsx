@@ -20,7 +20,9 @@
  * as in a task's column, and a phone's ⋯ offers Find in its place. A
  * Manager's page, while its workspace has Managers on, stands its chat in a
  * column at its right instead, and in the room it leaves what the Manager is
- * doing (`manager-overview.tsx`); a phone's keeps the chat alone. The agent is read from the task list where it carries it,
+ * doing (`manager-overview.tsx`); a phone's keeps the chat alone. The chat's
+ * left edge resizes it as a task's side panel's does, one width for every
+ * Manager, kept across launches (`folded-groups.ts`). The agent is read from the task list where it carries it,
  * and else once by its id.
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
@@ -45,6 +47,7 @@ import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
+  cssCustomProperties,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_ELEMENT,
@@ -53,9 +56,12 @@ import {
   moreLabel,
   NOT_FOUND_THING,
   NotFound,
+  RESIZE_EDGE_SIDE,
+  ResizeEdge,
   Toolbar,
   type ToolbarTitleEdit,
   useMenu,
+  useResizeEdge,
 } from "@repo/ui";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
@@ -79,6 +85,7 @@ import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
+import { MANAGER_CHAT_WIDTH, useManagerChatWidth } from "./folded-groups.js";
 import { AgentPane } from "./main-tabs.js";
 import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
@@ -102,6 +109,17 @@ const OWN_AGENT_KEYS: readonly KeyedCommand[] = [
 
 /** What the agent's menu is named, as its head's ⋯ names it. */
 const AGENT_THING = "Agent";
+
+/** What a Manager's chat's edge is named, which a drag or the keyboard resizes it by. */
+const CHAT_RESIZE_LABEL = "Resize chat";
+
+/** The share of the page's row a Manager's chat may take, as the stylesheet holds it (`.manager-page-chat`'s 50%), so the overview keeps the rest. */
+const CHAT_SHARE = 0.5;
+
+/** What a drag of a Manager's chat leaves the overview beside it in their row, in CSS pixels: the rest of the row past the chat's share. */
+function overviewReserve(row: HTMLElement): number {
+  return row.getBoundingClientRect().width * (1 - CHAT_SHARE);
+}
 
 /** Where the agent of the page's address stands: on a task, on none, nowhere the reader may open, not read yet, or not read at all. */
 type AgentFound =
@@ -360,6 +378,18 @@ function OwnAgentPage({
     agent.kind === AGENT_KIND.MANAGER &&
     away === undefined;
 
+  const chatWidth = useManagerChatWidth();
+
+  // Note that the edge is the page's, as a task's side panel's is, so a drag outlives what it resizes.
+  const chatEdge = useResizeEdge({
+    side: RESIZE_EDGE_SIDE.LEFT,
+    width: chatWidth.width,
+    bounds: MANAGER_CHAT_WIDTH,
+    reserve: overviewReserve,
+    label: CHAT_RESIZE_LABEL,
+    onResize: chatWidth.onResize,
+  });
+
   const openTarget = (target: ToolTarget) => {
     if (target.kind !== TOOL_TARGET.TASK) return;
 
@@ -391,14 +421,20 @@ function OwnAgentPage({
           {overview ? (
             <Fill flow={FILL_FLOW.ROW} className="manager-page">
               <ManagerOverview tasks={tasks} manager={agent} threads={threads} />
-              {/* Note that the chat's column is the find scope, so ⌘F finds in its conversation alone. */}
-              <FindScope
-                className="manager-page-chat desktop-task-column flex min-h-0 flex-col"
-                active={tasks.shown}
-                subject={findSubject}
+              <div
+                className="manager-page-chat"
+                style={cssCustomProperties({ "--manager-chat-width": `${chatWidth.width}px` })}
               >
-                {pane}
-              </FindScope>
+                <ResizeEdge edge={chatEdge} />
+                {/* Note that the chat's column is the find scope, so ⌘F finds in its conversation alone. */}
+                <FindScope
+                  className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+                  active={tasks.shown}
+                  subject={findSubject}
+                >
+                  {pane}
+                </FindScope>
+              </div>
             </Fill>
           ) : (
             // Note that the scope stands as the column's own box, as its fill did.

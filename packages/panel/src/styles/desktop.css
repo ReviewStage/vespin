@@ -1489,11 +1489,15 @@ body,
 }
 
 /* A Manager's chat stands in a column at its page's right
-   (`desktop-agent-page.tsx`), as wide as a conversation reads well, a
-   hairline between it and the overview in the room it leaves. */
+   (`desktop-agent-page.tsx`), as wide as it was last dragged, never past
+   half the row so the overview keeps its two columns, a hairline between
+   it and the overview in the room it leaves, on which its edge stands. */
 .manager-page > .manager-page-chat {
+  position: relative;
+  display: flex;
   flex: none;
-  width: clamp(360px, 32%, 440px);
+  width: min(var(--manager-chat-width), 50%);
+  min-height: 0;
   border-left: 1px solid var(--ui-color-border);
 }
 
