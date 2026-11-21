@@ -174,6 +174,9 @@ def main():
         anchor = moment or start
         changed = [f for f in frames if anchor - 30 <= f < end]
         first_frame = changed[0] if changed else None
+        # The push's smoothness: the longest gap between recorded frames over the 350 ms a push slides after the screen first moves, where a frame at 60 fps comes every 17 ms.
+        sliding = [f for f in changed if first_frame is not None and f <= first_frame + 350]
+        max_gap = max((b - a for a, b in zip(sliding, sliding[1:])), default=None)
         settle = None
         if changed:
             settle = changed[0]
@@ -198,6 +201,8 @@ def main():
                 "walk": round(walk_ms),
                 "to_first_frame": round(first_frame - anchor) if first_frame else None,
                 "to_settle": round(settle - anchor) if settle else None,
+                "max_gap": round(max_gap) if max_gap is not None else None,
+                "event_t": moment,
                 "top": rendered.most_common(12),
                 "slow": slow.most_common(12),
                 "render_ms": round(sum(c.get("renderMs", 0) for c in mine)),
@@ -207,7 +212,7 @@ def main():
     print(f"probe rows {len(probe)}, commands {len(commands)}, frames {len(frames)}")
     print(
         "path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | "
-        "to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle"
+        "to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap"
     )
     for path, rows in taps.items():
         print(
@@ -229,6 +234,7 @@ def main():
                     median([r["to_big"] for r in rows]),
                     median([r["cmd_to_big"] for r in rows]),
                     median([r["to_settle"] for r in rows]),
+                    median([r["max_gap"] for r in rows]),
                 ]
             )
         )
