@@ -30,6 +30,7 @@ import {
   devicesNamed,
   devicesSeenSince,
   joinCommandDevice,
+  machinesNamed,
   markAwayDevices,
   markCommandsAwayDevices,
   registerDevice,
@@ -110,7 +111,7 @@ it.layer(getTestDB())("the device store", (it) => {
   );
 
   it.effect(
-    "a machine a workspace owns is listed to its members alone, and is no member's own",
+    "a machine a workspace owns is listed to its members alone, and is no member's own, though a read of where agents run names it",
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
@@ -136,6 +137,11 @@ it.layer(getTestDB())("the device store", (it) => {
         assert.deepEqual(yield* workspaceOwnedMachinesOf(other, shared), [], "not a member");
         assert.deepEqual(yield* workspaceMachinesOf(owner, shared, new Date(0)), []);
         assert.equal((yield* devicesNamed([box])).size, 0);
+        assert.equal(
+          (yield* machinesNamed([box])).get(box)?.name,
+          "build-box",
+          "where its agents run",
+        );
       }),
   );
 

@@ -27,8 +27,8 @@ import {
   AGENT_MACHINE,
   type AgentAttachment,
   type AgentMachineKind,
-  type AgentPlacement,
   type AgentPullRequest,
+  type AgentRunsOnRequest,
   type AgentStartFrom,
   CONTEXT_WINDOW,
   PULL_REQUEST_STATE,
@@ -134,7 +134,7 @@ export type TakeoverAsk = StartWhere & {
   readonly title?: string | undefined;
   readonly startedBy?: Agent | undefined;
   readonly summaryModel?: SummaryModelOf | undefined;
-  readonly runsOn?: AgentPlacement | undefined;
+  readonly runsOn?: AgentRunsOnRequest | undefined;
 };
 
 /** Where a Start puts its agent: a task, or a workspace on no task, which an agent it is started from must stand in too. */
