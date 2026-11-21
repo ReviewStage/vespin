@@ -122,7 +122,7 @@ function GitHubMarkGlyph(): React.JSX.Element {
  * issue and nothing else.
  *
  * The values are components that take no props, `glyphs.tsx`'s own or
- * Lucide's behind `lucide-glyph.tsx`, so `GlyphIcon` seats any of them alike.
+ * Lucide's behind `lucide-glyph.tsx`, so `GlyphSlot` seats any of them alike.
  * A brand's mark is a glyph here only where a concept is the brand: "Open on
  * GitHub" opens GitHub.
  */

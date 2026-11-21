@@ -346,8 +346,8 @@ export class AccountClient {
    * different account. A refusal carries its status and Better Auth's code:
    * a session signed in longer ago than it deletes an account for
    * (`SESSION_EXPIRED`) is answered by a new session
-   * (`deletionNeedsNewSession`), and one it does not take at all by signing
-   * out (`deletionSessionGone`).
+   * (`deletionNeedsNewSession`), and one it does not take at all
+   * (`deletionSessionRefused`) by looking for the account first.
    */
   deleteUser(sessionToken: string): Effect.Effect<void, AccountClientFailure> {
     return Effect.gen({ self: this }, function* () {
