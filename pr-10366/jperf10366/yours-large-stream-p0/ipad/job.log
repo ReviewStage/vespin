@@ -1,0 +1,13 @@
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-row-menus-native
+FETCH FAILED pin2b/agent/ios-row-menus-native
+screen.mp4 kept
+merging pin2b/agent/ios-row-menus-native at 4a144d4deb
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/host/src/fixture-inbox.ts
+built ab91d906b1 = probe + pin2b/agent/ios-row-menus-native (PROFILE=0)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ipad: maestro exit 0
+ALLDONE
