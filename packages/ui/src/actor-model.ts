@@ -29,8 +29,7 @@ import { TAB_WORDS } from "./tab-strip-model.js";
  * picture, email, and role, so the wire's every person field needs no
  * picture of its own; a member the read no longer lists has left.
  *
- * A description's edit is named by its actor (`editActor`), and the app's also by
- * whose call it wrote it on (`editCallOwner`). A person's or the app's card
+ * A description's edit is named by its actor (`editActor`). A person's or the app's card
  * says what they last did in the description, read off who last changed each of
  * its sections (`latestActivity`), which the window already holds.
  */
