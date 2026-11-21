@@ -55,6 +55,8 @@ export type MenuChoice = {
   readonly photo?: string | undefined;
   /** The integration whose mark leads it in the glyph's place, as the panel's MCP server rows lead with their provider's mark. */
   readonly mark?: IntegrationProvider | undefined;
+  /** An emoji drawn as its image in the glyph's place, as a section the member gave an emoji leads with it in the panel's Move to, so its words line up with its glyphs' choices. */
+  readonly emoji?: string | undefined;
   /** What the menu says under its words, such as a member's email, or You for the reader, as the panel's people menus say it. */
   readonly detail?: string | undefined;
   readonly on: boolean;
@@ -99,6 +101,7 @@ export const MENU_ICON = {
   GLYPH: "glyph",
   PHOTO: "photo",
   MARK: "mark",
+  EMOJI: "emoji",
 } as const;
 
 /**
@@ -117,7 +120,8 @@ export type MenuIcon =
       readonly under?: { readonly asset: string; readonly opacity: number } | undefined;
     }
   | { readonly kind: typeof MENU_ICON.PHOTO; readonly photo: string; readonly size: number }
-  | { readonly kind: typeof MENU_ICON.MARK; readonly asset: string };
+  | { readonly kind: typeof MENU_ICON.MARK; readonly asset: string }
+  | { readonly kind: typeof MENU_ICON.EMOJI; readonly emoji: string; readonly size: number };
 
 /**
  * One node of a row's menu tree, a field it lacks standing `undefined`,
@@ -198,6 +202,9 @@ function choiceIcon(choice: MenuChoice, inks: MenuInks): MenuIcon | undefined {
   if (choice.mark !== undefined)
     return { kind: MENU_ICON.MARK, asset: INTEGRATION_MARK_ASSET[choice.mark] };
 
+  if (choice.emoji !== undefined)
+    return { kind: MENU_ICON.EMOJI, emoji: choice.emoji, size: MARK_SIZE.MENU_PHOTO };
+
   if (choice.photo !== undefined)
     return { kind: MENU_ICON.PHOTO, photo: choice.photo, size: MARK_SIZE.MENU_PHOTO };
 
@@ -256,8 +263,9 @@ function submenuNode(
         (choice): MenuNode => ({
           kind: MENU_NODE.CHOICE,
           label: choice.label,
-          // Note that a choice led by an integration's mark says nothing under its words, as `markContent` drew it.
-          detail: choice.mark === undefined ? choice.detail : undefined,
+          // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
+          detail:
+            choice.mark === undefined && choice.emoji === undefined ? choice.detail : undefined,
           icon: choiceIcon(choice, inks),
           on: choice.on,
           heard: heard(choice, within),

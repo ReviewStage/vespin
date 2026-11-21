@@ -10,6 +10,7 @@ import {
   ROW_ACTION_TONE,
   type RowAction,
 } from "./row-menu-model.js";
+import { MARK_SIZE } from "./tokens/space.js";
 
 // Note that the inks are a fixture's, which the tree hands on as given.
 const INKS: MenuInks = { act: "#4d4d4d", tone: (tone) => `ink:${tone}` };
@@ -58,6 +59,19 @@ describe("menuTree", () => {
             },
           ],
           actions: [act("Remove from section")],
+        },
+        {
+          label: "Move to",
+          symbol: GLYPH.STATUS,
+          choices: [
+            {
+              label: "Garden",
+              emoji: "🌱",
+              detail: "3 tasks",
+              on: false,
+              onPress: () => pressed.push("Garden"),
+            },
+          ],
         },
         act("Unfollow", { disabled: true, detail: "You're the assignee" }),
       ],
@@ -116,6 +130,21 @@ describe("menuTree", () => {
           ],
         },
         {
+          kind: MENU_NODE.MENU,
+          label: "Move to",
+          icon: glyph(glyphImage(GLYPH.STATUS)),
+          tint: "#4d4d4d",
+          nodes: [
+            {
+              kind: MENU_NODE.CHOICE,
+              label: "Garden",
+              icon: { kind: MENU_ICON.EMOJI, emoji: "🌱", size: MARK_SIZE.MENU_PHOTO },
+              on: false,
+              heard: "Move to: Garden",
+            },
+          ],
+        },
+        {
           kind: MENU_NODE.ACT,
           label: "Unfollow",
           detail: "You're the assignee",
@@ -142,6 +171,7 @@ describe("menuTree", () => {
       [1, 0, 0],
       [1, 0, 1, 0],
       [1, 0, 2],
+      [1, 1, 0],
       [2, 0],
       [1, 0],
       [3, 0],
@@ -154,6 +184,7 @@ describe("menuTree", () => {
       "Backlog",
       "Canceled",
       "Remove from section",
+      "Garden",
       "Permanently delete",
     ]);
   });

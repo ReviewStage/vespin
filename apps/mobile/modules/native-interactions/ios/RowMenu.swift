@@ -15,7 +15,7 @@ import UIKit
 
 /// How a node's icon is drawn: a glyph, a person's photo from a file on this device, or an integration's mark (`MENU_ICON`).
 private enum MenuIconKind: String, Decodable {
-  case glyph, photo, mark
+  case glyph, photo, mark, emoji
 }
 
 /// A node's icon (`MenuIcon`).
@@ -27,6 +27,7 @@ private struct MenuIconData: Decodable {
   let under: UnderGlyph?
   let photo: String?
   let size: Double?
+  let emoji: String?
 
   struct UnderGlyph: Decodable {
     let asset: String
@@ -154,6 +155,19 @@ private func photoIcon(_ icon: MenuIconData) -> Image? {
   return Image(uiImage: round.withRenderingMode(.alwaysOriginal))
 }
 
+/// An emoji in a system menu, drawn into a square at its size and kept as it is, as `@expo/ui`'s patched image draws one (`emojiContent`), so a menu keeps its colors and lines its words up with its glyphs' items.
+private func emojiIcon(_ icon: MenuIconData) -> Image? {
+  guard let side = icon.size, side > 0, let emoji = icon.emoji, !emoji.isEmpty else { return nil }
+  let size = CGSize(width: side, height: side)
+  // Note that the emoji is set a little under the square's side, since its line stands taller than its face.
+  let words = NSAttributedString(string: emoji, attributes: [.font: UIFont.systemFont(ofSize: side * 0.8)])
+  let face = words.size()
+  let drawn = UIGraphicsImageRenderer(size: size).image { _ in
+    words.draw(at: CGPoint(x: (side - face.width) / 2, y: (side - face.height) / 2))
+  }
+  return Image(uiImage: drawn.withRenderingMode(.alwaysOriginal))
+}
+
 /// A node's icon as an image, or nothing for a node of words alone.
 private func iconImage(_ icon: MenuIconData?) -> Image? {
   guard let icon else { return nil }
@@ -161,6 +175,7 @@ private func iconImage(_ icon: MenuIconData?) -> Image? {
   case .glyph: return glyphIcon(icon)
   case .photo: return photoIcon(icon)
   case .mark: return icon.asset.map { Image($0) }
+  case .emoji: return emojiIcon(icon)
   }
 }
 
