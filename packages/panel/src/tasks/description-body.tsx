@@ -643,39 +643,17 @@ function drawnUnits(task: Task, held: DrawnUnits | undefined): DrawnUnits {
 
 /**
  * The sections of the description handed in, cut again as each newer
- * document arrives; none while `drawn` is false, so a description never yet
- * shown cuts nothing.
+ * document arrives.
  */
-function useDrawnUnits(task: Task, drawn: boolean): DrawnUnits | undefined {
-  const [held, setHeld] = useState(() => (drawn ? drawnUnits(task, undefined) : undefined));
+function useDrawnUnits(task: Task): DrawnUnits {
+  const [held, setHeld] = useState(() => drawnUnits(task, undefined));
 
-  if (!drawn) return undefined;
-
-  if (held !== undefined && held.taskId === task.id && held.body === task.description.body) {
-    return held;
-  }
+  if (held.taskId === task.id && held.body === task.description.body) return held;
 
   const current = drawnUnits(task, held);
   setHeld(current);
 
   return current;
-}
-
-/**
- * Whether the task's sections are drawn: from the first draw that shows
- * the description on, and for as long as the same task stands, so a
- * description kept hidden behind an agent's tab parses none of its
- * Markdown until it is shown, and one shown once keeps its sections, and
- * its scroll, while hidden again.
- */
-function useSectionsDrawn(taskId: string, shown: boolean): boolean {
-  const [held, setHeld] = useState({ taskId, drawn: shown });
-  // Note that another task starts over, so a task shown, left, and come back to while hidden draws nothing.
-  const drawn = shown || (held.taskId === taskId && held.drawn);
-
-  if (held.taskId !== taskId || held.drawn !== drawn) setHeld({ taskId, drawn });
-
-  return drawn;
 }
 
 function unitClass(changed: boolean): string {
@@ -843,10 +821,6 @@ const TASK_ITEM_ANYWHERE = /(?:[-*+]|\d{1,9}[.)])[ \t]+\[[ \txX]\]/u;
 
 /** No section's save named, as a description from a service before sections were named has. */
 const NO_SECTION_EDITS: readonly DescriptionSectionEdit[] = [];
-
-/** The sections of a description not yet shown, which draws none. */
-const NO_VIEWS: readonly UnitView[] = [];
-const NO_TEXT_SECTIONS: readonly DescriptionSection[] = [];
 
 /** A unit drawn with its section's byline, where a save has changed the section, and its ⋯, where it has a link. */
 function attributed(
@@ -1282,10 +1256,8 @@ export const DescriptionBody = memo(function DescriptionBody({
   /** Whether the description is the tab its column shows, rather than kept hidden behind another; shown unless said. */
   shown?: boolean;
 }): React.JSX.Element {
-  // Note that the sections wait for the description's first showing, because each parses its Markdown as it is drawn.
-  const units = useDrawnUnits(task, useSectionsDrawn(task.id, shown));
-  const views = units?.views ?? NO_VIEWS;
-  const textSections = units?.sections ?? NO_TEXT_SECTIONS;
+  const units = useDrawnUnits(task);
+  const { views, sections: textSections } = units;
   // While its workspace has Descriptions off the task's head stands alone: its path, title, chips, who created it, and what `head` holds, with none of the document under it.
   const documented = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const onSince = useWorkspaceExperimentOnSince(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
@@ -1456,9 +1428,6 @@ export const DescriptionBody = memo(function DescriptionBody({
     const element = scroller.current;
 
     if (reveal === undefined || element === null || revealed.current === reveal.ask) return;
-
-    // Note that an ask waits for the sections, which a description not yet shown has not drawn.
-    if (units === undefined) return;
     revealed.current = reveal.ask;
     const at = reveal.anchor === undefined ? -1 : anchors.indexOf(reveal.anchor);
 
@@ -1761,7 +1730,7 @@ export const DescriptionBody = memo(function DescriptionBody({
             {/* A hairline parts the head from the description's text, as Notion's parts a page's properties from its body. */}
             {documented ? <DocumentRule /> : null}
             {documented ? intro : null}
-            {!documented || units === undefined ? null : editing.editor === undefined ? (
+            {!documented ? null : editing.editor === undefined ? (
               editable && views.length === 0 ? (
                 <EmptyDocumentBlock entry={entry === EDITOR_PLACE.EMPTY} editing={editing}>
                   <EmptyDescriptionWords />
@@ -1807,7 +1776,7 @@ export const DescriptionBody = memo(function DescriptionBody({
         room={scroller}
         editing={editing}
         handle={editorHandle}
-        editable={editable && units !== undefined}
+        editable={editable}
       />
     </DocumentScroll>
   );

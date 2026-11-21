@@ -6,6 +6,7 @@ import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
+import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
 import { Effect } from "effect";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -19,7 +20,6 @@ import { SentWords, SkillFiles } from "./tasks/skill-chip.js";
 import type { SkillSource } from "./tasks/skill-picker.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
-import { holdFrames, settleFrames } from "./testing/frames.js";
 import { restOn } from "./testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "./testing/markdown.js";
 

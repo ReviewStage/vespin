@@ -1149,8 +1149,10 @@ function panelPage(tab: SidePanelTab, overrides: Partial<TasksControl> = {}) {
   };
 }
 
-test("the description stays drawn, hidden, while an agent's tab of the column is shown, so an edit not yet saved outlives the switch", () => {
+test("a task opened on an agent's tab draws none of its description behind it until Overview first shows it, which then stays drawn, hidden, while the agent's tab is shown again, so an edit not yet saved outlives the switch", () => {
+  // Note that this catches the hidden description's head, its title, chips, and agents, mounting in the commit that opens a task on an agent's tab.
   const agentId = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+  const other: Task = { ...TASK, id: "task-other", name: "Another task" };
 
   const column = (tab: MainTab): Partial<TasksControl> => ({
     mainTabs: {
@@ -1161,9 +1163,14 @@ test("the description stays drawn, hidden, while an agent's tab of the column is
     },
   });
 
-  const page = panelPage(NOTES, column(MAIN_TAB.OVERVIEW));
+  const heading = () => page.container.querySelector(".desktop-document h1")?.textContent;
+  const page = panelPage(NOTES, column(agentTab(agentId)));
+  assert.equal(heading(), undefined, "nothing of the description is drawn behind the agent's tab");
+
+  page.draw(NOTES, column(MAIN_TAB.OVERVIEW));
   const document = page.container.querySelector(".desktop-document");
   assert.ok(document, "the description is drawn on Overview");
+  assert.equal(heading(), TASK.name);
   assert.equal(document.hasAttribute("hidden"), false);
 
   page.draw(NOTES, column(agentTab(agentId)));
@@ -1172,11 +1179,26 @@ test("the description stays drawn, hidden, while an agent's tab of the column is
     document,
     "the same description stands",
   );
+  assert.equal(heading(), TASK.name, "its words stay drawn");
   assert.equal(document.hasAttribute("hidden"), true);
 
   page.draw(NOTES, column(MAIN_TAB.OVERVIEW));
   assert.equal(page.container.querySelector(".desktop-document"), document);
   assert.equal(document.hasAttribute("hidden"), false);
+
+  const opening = (task: Task) => ({
+    ...column(agentTab(agentId)),
+    activeTaskId: task.id,
+    region: { kind: TASK_REGION.READY, task },
+  });
+
+  page.draw(NOTES, opening(other));
+  page.draw(NOTES, opening(TASK));
+  assert.equal(
+    heading(),
+    undefined,
+    "a task come back to on an agent's tab, after another, draws none",
+  );
   page.unmount();
 });
 
