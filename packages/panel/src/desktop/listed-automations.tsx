@@ -2,7 +2,7 @@ import { and, isNull, isUndefined, not, useLiveQuery } from "@tanstack/react-db"
 import { type ReactNode, useCallback } from "react";
 import { AutomationDirectory } from "../automation-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
-import { useTaskListCollections } from "../task-list-collections.js";
+import { useTaskListCollections, useTaskListRows } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
@@ -20,10 +20,13 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
  * listed task's, followed live, or the open task's, as Home's rows name it.
  * Note that the live query holds only the unarchived agents an automation
  * started, each as its id and task, so a step of an agent's turn tells it
- * nothing.
+ * nothing, and that their tasks are read by id (`useTaskListRows`), which
+ * follows each, so a task the list carries after its agent is heard as it
+ * lands, while no other task's move is.
  */
 function useNamesAutomation(tasks: TasksControl): boolean {
   const collections = useTaskListCollections();
+  const rows = useTaskListRows();
 
   const { data: started } = useLiveQuery((q) =>
     tasks.agentsCarried
@@ -41,7 +44,7 @@ function useNamesAutomation(tasks: TasksControl): boolean {
   );
 
   const listed = (started ?? []).some(
-    ({ taskId }) => taskId !== null && collections.tasks.has(taskId),
+    ({ taskId }) => taskId !== null && rows.task(taskId) !== undefined,
   );
 
   const agents = [...(tasks.agents.agents ?? []), ...(tasks.agents.archived ?? [])];
