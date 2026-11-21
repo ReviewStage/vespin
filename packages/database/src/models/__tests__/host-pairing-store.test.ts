@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM, MACHINE_OWNER } from "@repo/features/device-agent-wire";
 import { HOST_PAIRING_POLL_STATUS } from "@repo/features/host-wire";
 import { inArray } from "drizzle-orm";
 import { Effect, Exit, Option } from "effect";
@@ -23,7 +23,8 @@ import { enrollOwnDevice, hostBySecret, hostsOf, removeHost } from "../host-stor
 /**
  * A box's pairings, over a real dialect: once one account approved or
  * denied a code, no account reads, approves, or denies it again, and the
- * approve made one host, listed under its approver alone; an approve never
+ * approve made one host on the machine its box named, listed under its
+ * approver alone; an approve never
  * takes over a device that stands; a box that polls past its collect
  * grace is handed no secret; and a start deletes a lapsed pairing, the
  * address it kept with it, a host whose box never collected its secret, and
@@ -45,6 +46,9 @@ const openAccounts = Effect.gen(function* () {
   return { owner, other };
 });
 
+/** The machine every test box names at its start, a digest's shape. */
+const MACHINE_ID = "a".repeat(64);
+
 /** A pending pairing opened under a fresh code and poll secret hash: that code and hash. */
 const opened = Effect.gen(function* () {
   const userCode = randomUUID();
@@ -57,6 +61,7 @@ const opened = Effect.gen(function* () {
     platform: DEVICE_PLATFORM.LINUX,
     arch: DEVICE_ARCH.X64,
     version: "0.1.0",
+    machineId: MACHINE_ID,
     ip: "203.0.113.7",
   });
 
@@ -69,7 +74,7 @@ const MISSED = { guess: HOST_PAIRING_GUESS.MISSED };
 
 it.layer(getTestDB())("a box's pairings", (it) => {
   it.effect(
-    "once one account approved or denied a code, no account reads, approves, or denies it again, and the approve made one host, its approver's alone",
+    "once one account approved or denied a code, no account reads, approves, or denies it again, and the approve made one host on the box's machine, its approver's alone",
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
@@ -97,8 +102,8 @@ it.layer(getTestDB())("a box's pairings", (it) => {
           Array.from({ length: 8 }, () => MISSED),
         );
         assert.deepEqual(
-          (yield* hostsOf(owner)).map((host) => host.id),
-          [deviceId],
+          (yield* hostsOf(owner)).map((host) => [host.id, host.machineId]),
+          [[deviceId, MACHINE_ID]],
         );
         assert.deepEqual(yield* hostsOf(other), []);
       }),
@@ -122,8 +127,8 @@ it.layer(getTestDB())("a box's pairings", (it) => {
 
       assert.ok(Exit.isFailure(taken));
       assert.deepEqual(
-        Option.map(yield* hostBySecret(standing.secretHash), (host) => host.userId),
-        Option.some(other),
+        Option.map(yield* hostBySecret(standing.secretHash), (host) => host.owner),
+        Option.some({ kind: MACHINE_OWNER.USER, userId: other }),
       );
       assert.equal((yield* readHostPairing(owner, pairing.userCode)).guess, "found");
       assert.deepEqual(yield* hostsOf(owner), []);

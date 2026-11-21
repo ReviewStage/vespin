@@ -1,15 +1,26 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_ARCH,
+  DEVICE_PLATFORM,
+  HOST_UPDATE,
+  MACHINE_NETWORK,
+} from "@repo/features/device-agent-wire";
 import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Option } from "effect";
+import { Clock, Effect, Exit, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
-import { user } from "../../schemas/auth.js";
+import { organization, user } from "../../schemas/auth.js";
 import { device } from "../../schemas/device.js";
-import { DEVICE_LAYOUT, getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
+import {
+  connectWorkspaceMachine,
+  DEVICE_LAYOUT,
+  getTestDB,
+  joinWorkspace,
+  openWorkspace,
+} from "../../testing/index.js";
 import {
   allowedAppsOf,
   beatDevice,
@@ -24,6 +35,7 @@ import {
   saveCommandDeviceSettings,
   saveDeviceAppLooks,
   workspaceMachinesOf,
+  workspaceOwnedMachinesOf,
 } from "../device-store.js";
 import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
 import { commandMachinesOf, markMachineListening } from "../machine-command-store.js";
@@ -39,7 +51,10 @@ import { commandMachinesOf, markMachineListening } from "../machine-command-stor
  * goes quiet, and the apps each machine always allows are read by its own
  * account alone. A workspace's machines are read by its members alone, and
  * name only those of its members, each online while it beats as a host or
- * its app listened lately.
+ * its app listened lately. A machine a workspace owns is listed to its
+ * members alone and is no member's own, stays with the workspace when the
+ * account that connected it is deleted, and goes with the workspace; a
+ * device with both owners or neither is refused.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -89,6 +104,89 @@ it.layer(getTestDB())("the device store", (it) => {
           "a workspace the member is not in",
         );
       }),
+  );
+
+  it.effect(
+    "a machine a workspace owns is listed to its members alone, and is no member's own",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const shared = yield* openWorkspace(owner);
+        yield* openWorkspace(other);
+        const box = yield* connectWorkspaceMachine(shared, owner);
+
+        assert.deepEqual(yield* workspaceOwnedMachinesOf(owner, shared), [
+          {
+            id: box,
+            name: "build-box",
+            platform: DEVICE_PLATFORM.LINUX,
+            arch: DEVICE_ARCH.X64,
+            connectedBy: owner,
+            network: MACHINE_NETWORK.PUBLIC_ONLY,
+          },
+        ]);
+        assert.deepEqual(yield* workspaceOwnedMachinesOf(other, shared), [], "not a member");
+        assert.deepEqual(yield* workspaceMachinesOf(owner, shared, new Date(0)), []);
+        assert.equal((yield* devicesNamed([box])).size, 0);
+      }),
+  );
+
+  it.effect(
+    "a workspace's machine stays with it when the account that connected it is deleted, and goes with the workspace",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { owner, other } = yield* openAccounts;
+        const shared = yield* openWorkspace(owner);
+        yield* joinWorkspace(shared, other);
+        const box = yield* connectWorkspaceMachine(shared, other);
+        yield* db.delete(user).where(eq(user.id, other));
+
+        assert.deepEqual(
+          (yield* workspaceOwnedMachinesOf(owner, shared)).map((machine) => [
+            machine.id,
+            machine.connectedBy,
+          ]),
+          [[box, null]],
+        );
+
+        yield* db.delete(organization).where(eq(organization.id, shared));
+
+        assert.deepEqual(
+          yield* db.select({ id: device.id }).from(device).where(eq(device.id, box)),
+          [],
+        );
+      }),
+  );
+
+  it.effect("a device owned by both an account and a workspace, or by neither, is refused", () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const { owner } = yield* openAccounts;
+      const shared = yield* openWorkspace(owner);
+      const now = yield* Clock.currentTimeMillis;
+
+      const row = {
+        name: "build-box",
+        platform: DEVICE_PLATFORM.LINUX,
+        arch: DEVICE_ARCH.X64,
+        lastSeenAt: new Date(now),
+      };
+
+      const both = yield* Effect.exit(
+        db.insert(device).values({
+          ...row,
+          id: randomUUID(),
+          userId: owner,
+          organizationId: shared,
+          network: MACHINE_NETWORK.PUBLIC_ONLY,
+        }),
+      );
+
+      const neither = yield* Effect.exit(db.insert(device).values({ ...row, id: randomUUID() }));
+
+      assert.deepEqual([Exit.isFailure(both), Exit.isFailure(neither)], [true, true]);
+    }),
   );
 
   it.effect(

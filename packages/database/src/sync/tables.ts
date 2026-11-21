@@ -295,11 +295,13 @@ export const userSync = defineSyncTable(user, {
  * when it was last seen and what it runs, and no view the capture wakes
  * reads them: a window judges a device by its own presence read. Its
  * allowed apps' names and icons are ignored too, since they are read only
- * as an `@` list asks for them (`hosts.allowedApps`).
+ * as an `@` list asks for them (`hosts.allowedApps`). A workspace's machine
+ * names no account, and notifies its workspace's topic alone.
  */
 export const deviceSync = defineSyncTable(device, {
   topics: [
     { kind: TOPIC.ACCOUNT, column: device.userId },
+    { kind: TOPIC.WORKSPACE, column: device.organizationId },
     {
       through: member,
       key: member.userId,
@@ -343,6 +345,7 @@ export const hostPairingSync = defineSyncTable(hostPairing, {
     hostPairing.platform,
     hostPairing.arch,
     hostPairing.version,
+    hostPairing.machineId,
     hostPairing.ip,
     hostPairing.status,
     hostPairing.createdAt,

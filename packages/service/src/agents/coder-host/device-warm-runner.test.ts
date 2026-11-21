@@ -12,6 +12,7 @@ import { latestTurnsOf, recordAgentNativeSession } from "@repo/database/models/a
 import {
   deviceAgentLinesWaiting,
   latestDeviceAgentLaunch,
+  ownDeviceHost,
 } from "@repo/database/models/device-agent-store";
 import { beatDevice } from "@repo/database/models/device-store";
 import { turns } from "@repo/database/schemas/storage";
@@ -152,7 +153,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const canceled = yield* stopped(warm, ending.id);
           // The Mac took the stop, on which the idle runner ended, and has yet to settle its launch;
           // then the turn's IDLE landed and settled it.
-          const [stop] = yield* deviceAgentLinesWaiting(userId, deviceId);
+          const [stop] = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
           assert.ok(stop !== undefined);
           yield* claimedDeviceAgentLine(userId, deviceId, stop.id);
           yield* settledDeviceAgentLine(userId, deviceId, stop.id);
@@ -199,7 +200,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
 
           assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
 
-          const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).find(
+          const relaunch = (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).find(
             (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
           );
 

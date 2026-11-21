@@ -14,6 +14,7 @@ import {
   syncListenerOverPglite,
 } from "@repo/database/testing";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
+import { MACHINE_OWNER } from "@repo/features/device-agent-wire";
 import { INBOX_CURSOR_START } from "@repo/features/inbox-wire";
 import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
@@ -179,10 +180,8 @@ it.effect("Dean reads back acme, its tasks, his Inbox, and his agents' credentia
           [DEMO_HOST.id],
         );
         assert.deepEqual(
-          Option.getOrUndefined(
-            Option.map(caller, ({ deviceId, userId }) => ({ deviceId, userId })),
-          ),
-          { deviceId: DEMO_HOST.id, userId: DEMO_DEAN.id },
+          Option.getOrUndefined(Option.map(caller, ({ deviceId, owner }) => ({ deviceId, owner }))),
+          { deviceId: DEMO_HOST.id, owner: { kind: MACHINE_OWNER.USER, userId: DEMO_DEAN.id } },
         );
         assert.deepEqual(Option.getOrUndefined(pick), {
           machine: AGENT_MACHINE.DEVICE,

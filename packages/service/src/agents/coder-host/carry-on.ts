@@ -45,7 +45,7 @@ import {
   latestTurnsOf,
   readAgent,
 } from "@repo/database/models/agent-store";
-import { liveDeviceAgents } from "@repo/database/models/device-agent-store";
+import { liveDeviceAgents, ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { type LostLine, storeWriter, turnOpeningLine } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -376,7 +376,7 @@ export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostRet
   deviceId: string,
   handOn: QueueHandOn,
 ) {
-  const agentIds = yield* liveDeviceAgents(userId, deviceId);
+  const agentIds = yield* liveDeviceAgents(ownDeviceHost(userId, deviceId));
   let went = 0;
 
   for (const agentId of agentIds) {

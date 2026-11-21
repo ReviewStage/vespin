@@ -182,9 +182,10 @@ export type OwnDeviceEnrollRequest = typeof ownDeviceEnrollRequestSchema.Type;
  * it read it (`deviceMachineFields`), its daemon's version riding in
  * `HOST_WIRE.VERSION_HEADER` as on every call of a host's. The service
  * mints the device's id once a member approves; the box never names one.
- * Note that the service keeps no machine of the start's yet, since the
- * box's first register follows its approve at once and names it again; it
- * rides here so a service that does keep it needs no newer host.
+ * The service keeps the start's machine id on the pairing and makes the
+ * host row with it, so an approve can tell a machine that already stands
+ * as another owner's host; the model it leaves to the box's first
+ * register, which follows its approve at once and names it again.
  */
 export const hostPairingStartRequestSchema = EffectSchema.Struct({
   ...enrollingMachineFields,

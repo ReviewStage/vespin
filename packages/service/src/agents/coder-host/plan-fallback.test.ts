@@ -17,7 +17,7 @@ import {
   latestTurnsOfReached,
   readAgentRouting,
 } from "@repo/database/models/agent-store";
-import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
+import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
 import {
@@ -517,7 +517,7 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
 
     const launches = onMac
       ? Effect.gen(function* () {
-          const waiting = yield* deviceAgentLinesWaiting(userId, deviceId);
+          const waiting = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
           const after: string[][] = claimed.map(() => []);
 
           for (const line of waiting) {
