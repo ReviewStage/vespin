@@ -519,6 +519,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   /// The lines drawn: each a paragraph in its block's look, a task led by its box, a rule and a card as one character across the line, and a line break after every line but the last.
   private func drawn(_ lines: [DocumentLine]) -> NSAttributedString {
     let built = NSMutableAttributedString()
+    // Note that a list's lines share one list, so its markers count on from one item to the next rather than each starting again.
+    var lists: [Int: NSTextList] = [:]
 
     for (index, line) in lines.enumerated() {
       let piece = NSMutableAttributedString()
@@ -554,7 +556,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       let whole = NSRange(location: 0, length: piece.length)
       if whole.length == 0 { continue }
       piece.addAttribute(lineKey, value: line.facts, range: whole)
-      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts), range: whole)
+      let list = textList(line.facts, in: &lists)
+      piece.addAttribute(.paragraphStyle, value: paragraphStyle(line.facts, list: list), range: whole)
       piece.enumerateAttribute(.font, in: whole) { value, range, _ in
         if value == nil { piece.addAttributes(wordAttributes(kind, line.facts.level, [], nil), range: range) }
       }
@@ -609,21 +612,37 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     return base.fontDescriptor.withSymbolicTraits(traits).map { UIFont(descriptor: $0, size: 0) } ?? base
   }
 
-  /// A line's paragraph: a list's marker and indent, a quote's indent, and the room between blocks.
-  private func paragraphStyle(_ facts: LineFacts) -> NSParagraphStyle {
+  /// The list a list's line stands in, one per block, made the first time a block's line asks for it; none for a line in no list.
+  private func textList(_ facts: LineFacts, in lists: inout [Int: NSTextList]) -> NSTextList? {
+    if let made = lists[facts.block] { return made }
+
+    let list: NSTextList
+    switch facts.drawnKind {
+    case .bulletList:
+      list = NSTextList(markerFormat: .disc, options: 0)
+    case .orderedList:
+      list = NSTextList(markerFormat: NSTextList.MarkerFormat(rawValue: "{decimal}."), options: 0)
+      list.startingItemNumber = facts.start ?? 1
+    default:
+      return nil
+    }
+
+    lists[facts.block] = list
+    return list
+  }
+
+  /// A line's paragraph: its list's marker and indent, a quote's indent, and the room between blocks.
+  private func paragraphStyle(_ facts: LineFacts, list: NSTextList?) -> NSParagraphStyle {
     let style = NSMutableParagraphStyle()
     style.paragraphSpacing = DocumentSpace.blockGap
+    if let list { style.textLists = [list] }
 
     switch facts.drawnKind {
     case .bulletList:
-      style.textLists = [NSTextList(markerFormat: .disc, options: 0)]
       style.headIndent = DocumentSpace.indent
       style.firstLineHeadIndent = DocumentSpace.indent
       style.paragraphSpacing = DocumentSpace.itemGap
     case .orderedList:
-      let list = NSTextList(markerFormat: .decimal, options: 0)
-      list.startingItemNumber = facts.start ?? 1
-      style.textLists = [list]
       style.headIndent = DocumentSpace.indent
       style.firstLineHeadIndent = DocumentSpace.indent
       style.paragraphSpacing = DocumentSpace.itemGap
