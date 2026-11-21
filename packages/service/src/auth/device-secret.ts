@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
+import type { HostPrincipal } from "@repo/database/models/device-agent-store";
 import { hostBySecret, recordHostVersion } from "@repo/database/models/host-store";
-import { MACHINE_OWNER } from "@repo/features/device-agent-wire";
 import {
   HOST_USER_CODE,
   HOST_WIRE,
@@ -40,10 +40,11 @@ import { CREDENTIAL_HEADER } from "./session-credential.js";
  * `hostRemoved` (`HOST_REMOVED_REFUSAL`) so a host tells it from any other
  * 401 on the service's origin; and a host whose daemon is below `HOST_VERSION.FLOOR`,
  * or sent no version, is refused as needing an upgrade, after its version
- * was recorded, so its Hosts row says which it runs. A secret naming a
- * workspace's machine is refused as removed too, since every host-facing
- * route acts for a member's own device alone until they read a workspace
- * owner.
+ * was recorded, so its Hosts row says which it runs. A standing host is
+ * answered as its principal (`HostPrincipal`): its device and that device's
+ * owner, a member for their own machine or a workspace for one it owns, so
+ * every host-facing route acts for the device's owner and never assumes a
+ * member.
  */
 
 export const HOST_VERSION = {
@@ -61,12 +62,6 @@ const BEARER_PREFIX = "Bearer ";
 export interface MintedSecret {
   readonly secret: string;
   readonly hash: string;
-}
-
-/** The host a device secret named: its device, its account, and the version it called with. */
-export interface HostCaller {
-  readonly userId: string;
-  readonly deviceId: string;
 }
 
 /** A secret's SHA-256 in hex, which is all the store keeps of it. */
@@ -137,17 +132,14 @@ export function admittedHostVersion(
  */
 export const hostCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: Request,
-): Effect.fn.Return<Option.Option<HostCaller>, HostedRefusal, DatabaseServices> {
+): Effect.fn.Return<Option.Option<HostPrincipal>, HostedRefusal, DatabaseServices> {
   const secret = presentedDeviceSecret(request);
 
   if (secret === undefined) return Option.none();
   const host = yield* hostedStoreOrUnavailable(hostBySecret(hostSecretHash(secret)));
 
-  if (Option.isNone(host) || host.value.owner.kind !== MACHINE_OWNER.USER) {
-    return yield* Effect.fail(HOST_REMOVED_REFUSAL);
-  }
-
-  const { owner } = host.value;
+  if (Option.isNone(host)) return yield* Effect.fail(HOST_REMOVED_REFUSAL);
+  const { deviceId, owner } = host.value;
   const version = presentedHostVersion(request);
 
   // Note that only a version that reads is recorded, so a header of junk never lands on the Hosts row.
@@ -161,5 +153,5 @@ export const hostCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   yield* admittedHostVersion(version);
 
-  return Option.some({ userId: owner.userId, deviceId: host.value.deviceId });
+  return Option.some({ deviceId, owner });
 });

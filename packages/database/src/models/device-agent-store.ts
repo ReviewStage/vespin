@@ -103,7 +103,7 @@ const HostPrincipalSchema = Schema.Struct({
 
 export type HostPrincipal = typeof HostPrincipalSchema.Type;
 
-/** The host of a member's own device, as every host's call reads until a call can act for a workspace's machine. */
+/** The host of a member's own device. */
 export function ownDeviceHost(userId: string, deviceId: string): HostPrincipal {
   return { deviceId, owner: { kind: MACHINE_OWNER.USER, userId } };
 }
@@ -152,6 +152,28 @@ function agentOnHost(host: HostPrincipal) {
     ownedBy(host.owner, agentTable),
     hostOwnsDevice(host),
   );
+}
+
+/**
+ * The lines or requests the owner holds, on whichever device: the member's
+ * own, queued for their agents, or those on the workspace's machines,
+ * whichever member queued them.
+ */
+function rowsOfOwner(
+  table: { readonly userId: AnyPgColumn; readonly deviceId: AnyPgColumn },
+  owner: MachineOwner,
+): SQL {
+  switch (owner.kind) {
+    case MACHINE_OWNER.USER:
+      return eq(table.userId, owner.userId);
+    case MACHINE_OWNER.WORKSPACE:
+      return exists(
+        queryBuilder
+          .select({ one: sql`1` })
+          .from(device)
+          .where(and(eq(device.id, table.deviceId), ownedBy(owner, device))),
+      );
+  }
 }
 
 /** A line as a Mac lists it: everything but its secrets. */
@@ -449,6 +471,25 @@ const findLineStanding = SqlSchema.findOneOption({
         })
         .from(deviceAgentLine)
         .where(and(eq(deviceAgentLine.id, id), eq(deviceAgentLine.userId, userId))),
+    ),
+});
+
+/** A line the host settled, by its id. */
+const findSettledOnHost = SqlSchema.findOneOption({
+  Request: HostRowKeySchema,
+  Result: DeviceAgentSettledLineSchema,
+  execute: ({ host, id }) =>
+    Database.use((db) =>
+      db
+        .select({ agentId: deviceAgentLine.agentId, kind: deviceAgentLine.kind })
+        .from(deviceAgentLine)
+        .where(
+          and(
+            eq(deviceAgentLine.id, id),
+            heldByHost(deviceAgentLine, host),
+            isNotNull(deviceAgentLine.settledAt),
+          ),
+        ),
     ),
 });
 
@@ -883,12 +924,12 @@ const deleteUnclaimedLine = SqlSchema.void({
 });
 
 const deleteExpiredLines = SqlSchema.void({
-  Request: Schema.Struct({ userId: Schema.String, before: Schema.Date }),
-  execute: ({ userId, before }) =>
+  Request: Schema.Struct({ owner: machineOwnerSchema, before: Schema.Date }),
+  execute: ({ owner, before }) =>
     Database.use((db) =>
       db.delete(deviceAgentLine).where(
         and(
-          eq(deviceAgentLine.userId, userId),
+          rowsOfOwner(deviceAgentLine, owner),
           lt(deviceAgentLine.createdAt, before),
           // A line claimed and not yet settled is a runner still at work, whose exit is still to come.
           or(isNull(deviceAgentLine.claimedAt), isNotNull(deviceAgentLine.settledAt)),
@@ -1033,13 +1074,13 @@ const writeAgentLaunchesSettled = SqlSchema.void({
 });
 
 const deleteExpiredRequests = SqlSchema.void({
-  Request: Schema.Struct({ userId: Schema.String, before: Schema.Date }),
-  execute: ({ userId, before }) =>
+  Request: Schema.Struct({ owner: machineOwnerSchema, before: Schema.Date }),
+  execute: ({ owner, before }) =>
     Database.use((db) =>
       db
         .delete(deviceAgentRequest)
         .where(
-          and(eq(deviceAgentRequest.userId, userId), lt(deviceAgentRequest.createdAt, before)),
+          and(rowsOfOwner(deviceAgentRequest, owner), lt(deviceAgentRequest.createdAt, before)),
         ),
     ),
 });
@@ -1240,6 +1281,14 @@ export function settleDeviceAgentLine(
   );
 }
 
+/** A line the host already settled, its agent and kind, as its settle answered them; none for one it has not, or another device's. */
+export function deviceAgentLineSettledOn(
+  host: HostPrincipal,
+  id: string,
+): DeviceAgentEffect<Option.Option<DeviceAgentSettledLine>> {
+  return findSettledOnHost({ host, id });
+}
+
 /** A line's exit code once its Mac settled it, null for one settled with none; nothing while it waits or runs. */
 export function deviceAgentLineSettlement(
   userId: string,
@@ -1399,16 +1448,17 @@ export function withdrawUnclaimedDeviceAgentLine(
 }
 
 /**
- * Withdraws the account's lines and requests queued before the instant
- * given: every request, and every line but one claimed and not yet
- * settled, whose runner is still at work and whose exit is still to come.
+ * Withdraws the owner's lines and requests queued before the instant
+ * given (`rowsOfOwner`): every request, and every line but one claimed and
+ * not yet settled, whose runner is still at work and whose exit is still to
+ * come.
  */
 export function withdrawExpiredDeviceAgentRows(
-  userId: string,
+  owner: MachineOwner,
   before: Date,
 ): DeviceAgentEffect<void> {
   return Effect.andThen(
-    deleteExpiredLines({ userId, before }),
-    deleteExpiredRequests({ userId, before }),
+    deleteExpiredLines({ owner, before }),
+    deleteExpiredRequests({ owner, before }),
   );
 }

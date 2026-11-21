@@ -27,7 +27,11 @@ import {
   readRunnerTokenConversation,
   recordAgentRunnerToken,
 } from "../agent-store.js";
-import { latestDeviceAgentLaunch, queueDeviceAgentLine } from "../device-agent-store.js";
+import {
+  latestDeviceAgentLaunch,
+  ownDeviceHost,
+  queueDeviceAgentLine,
+} from "../device-agent-store.js";
 import { deviceLayout, registerDevice } from "../device-store.js";
 import {
   enrollOwnDevice,
@@ -327,18 +331,16 @@ it.layer(getTestDB())("the host store", (it) => {
         const { owner } = yield* openAccounts;
         const machineId = "c".repeat(64);
         const running = yield* enrolledHost(owner, { name: "Air", machineId });
-        yield* registerHost(owner, { id: running.id, name: "Air", ...DEVICE_LAYOUT });
+        yield* registerHost(ownDeviceHost(owner, running.id), { name: "Air", ...DEVICE_LAYOUT });
         // Note that a host older than the field names no machine at its first register.
         const older = yield* enrolledHost(owner, { name: "Studio" });
 
-        const first = yield* registerHost(owner, {
-          id: older.id,
+        const first = yield* registerHost(ownDeviceHost(owner, older.id), {
           name: "Studio",
           ...DEVICE_LAYOUT,
         });
 
-        const later = yield* registerHost(owner, {
-          id: older.id,
+        const later = yield* registerHost(ownDeviceHost(owner, older.id), {
           name: "Studio",
           ...DEVICE_LAYOUT,
           machineId,

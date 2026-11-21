@@ -1363,7 +1363,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(launch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH);
 
         const claimed = Option.getOrThrow(
-          yield* claimedDeviceAgentLine(userId, deviceId, launch.id).pipe(
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.id).pipe(
             Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
           ),
         );
@@ -1413,7 +1413,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(relaunch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH && relaunch.id !== launch.id);
 
         const reclaimed = Option.getOrThrow(
-          yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id).pipe(
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), relaunch.id).pipe(
             Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
           ),
         );

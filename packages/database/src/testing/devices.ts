@@ -3,11 +3,22 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { DEVICE_ARCH, DEVICE_PLATFORM, MACHINE_NETWORK } from "@repo/features/device-agent-wire";
-import { DateTime, Effect } from "effect";
-import { Database } from "../core/query.js";
+import {
+  DEVICE_ARCH,
+  DEVICE_PLATFORM,
+  MACHINE_NETWORK,
+  MACHINE_OWNER,
+} from "@repo/features/device-agent-wire";
+import { HOST_VERSION_FOR } from "@repo/features/host-wire";
+import { Effect } from "effect";
 import type { DeviceRegistration } from "../models/device-store.js";
-import { device } from "../schemas/device.js";
+import {
+  approveHostPairing,
+  HOST_PAIRING_APPROVAL,
+  HOST_PAIRING_GUESS,
+  openHostPairing,
+  pollHostPairing,
+} from "../models/host-pairing-store.js";
 
 /** A Mac's platform, home, temp, and attachments folders, and bundled CLI, synthetic. */
 export const DEVICE_LAYOUT: DeviceRegistration = {
@@ -19,11 +30,16 @@ export const DEVICE_LAYOUT: DeviceRegistration = {
   claudeExecutable: "/Applications/Vespin.app/Contents/Resources/claude-code/cli.js",
 };
 
+/** The daemon version a test box pairs with, the first a workspace may own. */
+const WORKSPACE_BOX_VERSION = HOST_VERSION_FOR.WORKSPACE_MACHINE;
+
 /**
- * A Linux box the workspace owns, connected by the account given, its
- * agents kept to the open internet, with the secret hash given where the
- * test reads it by one; its id. Note that it is written straight over the
- * table, since no store function connects a workspace's machine yet.
+ * A Linux box the workspace owns, approved for it by the account given as
+ * its admins approve one, its agents kept to the open internet: its pairing
+ * opened, approved to the workspace, and, where a secret hash is given,
+ * collected under that hash as its box's poll collects it; its id. Note
+ * that whether the account may connect it is the service's to judge, not
+ * the store's.
  */
 export const connectWorkspaceMachine = (
   workspaceId: string,
@@ -31,20 +47,35 @@ export const connectWorkspaceMachine = (
   secretHash: string | null = null,
 ) =>
   Effect.gen(function* () {
-    const db = yield* Database;
     const id = randomUUID();
-    const now = yield* DateTime.nowAsDate;
-    yield* db.insert(device).values({
-      id,
-      organizationId: workspaceId,
-      connectedBy,
-      network: MACHINE_NETWORK.PUBLIC_ONLY,
+    const userCode = randomUUID();
+    const pollSecretHash = `poll-${randomUUID()}`;
+
+    yield* openHostPairing({
+      pollSecretHash,
+      userCode,
       name: "build-box",
       platform: DEVICE_PLATFORM.LINUX,
       arch: DEVICE_ARCH.X64,
-      secretHash,
-      lastSeenAt: now,
+      version: WORKSPACE_BOX_VERSION,
+      machineId: randomUUID(),
+      ip: null,
     });
+
+    const approved = yield* approveHostPairing(connectedBy, userCode, id, {
+      kind: MACHINE_OWNER.WORKSPACE,
+      workspaceId,
+      network: MACHINE_NETWORK.PUBLIC_ONLY,
+    });
+
+    if (
+      approved.guess !== HOST_PAIRING_GUESS.FOUND ||
+      approved.found.approval !== HOST_PAIRING_APPROVAL.APPROVED
+    ) {
+      return yield* Effect.die(new Error("A test box's pairing was not approved."));
+    }
+
+    if (secretHash !== null) yield* pollHostPairing(pollSecretHash, secretHash);
 
     return id;
   });

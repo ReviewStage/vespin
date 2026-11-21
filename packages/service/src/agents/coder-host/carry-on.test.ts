@@ -233,7 +233,7 @@ const launchClaimed = (warm: WarmLocalAgent) =>
     const launch = waiting.filter((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH).at(-1);
 
     if (launch === undefined) return undefined;
-    yield* claimedDeviceAgentLine(warm.userId, warm.deviceId, launch.id);
+    yield* claimedDeviceAgentLine(ownDeviceHost(warm.userId, warm.deviceId), launch.id);
 
     return launch.id;
   });
@@ -261,7 +261,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const lost = yield* turnRunning(warm, "Now the emails.");
           // The clock moves before each settle too, so the carry-on's turn is queued after the lost one.
           yield* TestClock.adjust("1 second");
-          yield* settledDeviceAgentLine(userId, warm.deviceId, warm.launchId, 1);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), warm.launchId, 1);
 
           yield* turnEnded(warm);
 
@@ -297,7 +297,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             turnId: resumed?.id ?? "",
           });
           yield* TestClock.adjust("1 second");
-          yield* settledDeviceAgentLine(userId, warm.deviceId, relaunch, 1);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), relaunch, 1);
           yield* turnEnded(warm);
 
           const left = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
@@ -334,8 +334,13 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           assert.equal(yield* carriedOnStands(warm, lost), false);
           assert.equal((yield* agentQueueNow(agent.id)).paused, undefined);
 
-          yield* beatDevice(userId, deviceId);
-          const went = yield* carryOnHostReturned(sessionsFor, userId, deviceId, () => Effect.void);
+          yield* beatDevice(ownDeviceHost(userId, deviceId));
+
+          const went = yield* carryOnHostReturned(
+            sessionsFor,
+            ownDeviceHost(userId, deviceId),
+            () => Effect.void,
+          );
 
           assert.equal(went, 1);
           assert.equal(yield* carriedOnStands(warm, lost), true);
@@ -360,7 +365,12 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           yield* reconcileAgent(agent);
 
           const hostWrite = <A, E, R>(write: Effect.Effect<A, E, R>) =>
-            hostWriteCarriedOn(sessionsFor, userId, deviceId, () => Effect.void, write);
+            hostWriteCarriedOn(
+              sessionsFor,
+              ownDeviceHost(userId, deviceId),
+              () => Effect.void,
+              write,
+            );
 
           // The host starts again: it registers, then beats.
           yield* hostWrite(
@@ -368,7 +378,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           );
           assert.equal(yield* carriedOnStands(warm, lost), true);
           assert.notEqual(yield* launchClaimed(warm), undefined);
-          yield* hostWrite(beatDevice(userId, deviceId));
+          yield* hostWrite(beatDevice(ownDeviceHost(userId, deviceId)));
 
           assert.deepEqual(yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId)), []);
         }),
@@ -383,17 +393,16 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const lost = yield* turnRunning(warm, "Now the emails.");
           // The Mac's beats stopped reaching us, and its runner's end is the first word back.
           yield* TestClock.adjust("6 minutes");
-          yield* settledDeviceAgentLine(userId, deviceId, warm.launchId, 1);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), warm.launchId, 1);
           yield* turnEnded(warm);
           assert.equal(yield* carriedOnStands(warm, lost), false, "nothing goes while away");
           assert.equal((yield* agentQueueNow(agent.id)).paused, undefined);
 
           yield* hostWriteCarriedOn(
             sessionsFor,
-            userId,
-            deviceId,
+            ownDeviceHost(userId, deviceId),
             () => Effect.void,
-            beatDevice(userId, deviceId),
+            beatDevice(ownDeviceHost(userId, deviceId)),
           );
 
           assert.equal(yield* carriedOnStands(warm, lost), true);
@@ -419,10 +428,9 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
 
           yield* hostWriteCarriedOn(
             sessionsFor,
-            userId,
-            deviceId,
+            ownDeviceHost(userId, deviceId),
             (back) => queueAtTouch(sessionsFor, back),
-            beatDevice(userId, deviceId),
+            beatDevice(ownDeviceHost(userId, deviceId)),
           );
 
           assert.equal(yield* carriedOnStands(warm, lost), false);
@@ -463,9 +471,11 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           );
 
           for (const each of [warm, paused]) {
-            yield* beatDevice(each.userId, each.deviceId);
-            yield* carryOnHostReturned(sessionsFor, each.userId, each.deviceId, (back) =>
-              queueAtTouch(sessionsFor, back),
+            yield* beatDevice(ownDeviceHost(each.userId, each.deviceId));
+            yield* carryOnHostReturned(
+              sessionsFor,
+              ownDeviceHost(each.userId, each.deviceId),
+              (back) => queueAtTouch(sessionsFor, back),
             );
           }
 

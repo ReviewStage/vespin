@@ -87,7 +87,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
         Effect.gen(function* () {
           const kept = yield* warmLocalAgent;
           const updating = yield* warmLocalAgent;
-          yield* beatDevice(updating.userId, updating.deviceId, {
+          yield* beatDevice(ownDeviceHost(updating.userId, updating.deviceId), {
             update: HOST_UPDATE.WAITING,
           });
 
@@ -155,8 +155,8 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           // then the turn's IDLE landed and settled it.
           const [stop] = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
           assert.ok(stop !== undefined);
-          yield* claimedDeviceAgentLine(userId, deviceId, stop.id);
-          yield* settledDeviceAgentLine(userId, deviceId, stop.id);
+          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), stop.id);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), stop.id);
           yield* db
             .update(turns)
             .set({ status: TURN_STATUS.SETTLED, settledAt: yield* DateTime.nowAsDate })
@@ -191,7 +191,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           const launch = yield* latestDeviceAgentLaunch(userId, agent.id);
           assert.ok(Option.isSome(launch));
           yield* TestClock.adjust("1 minute");
-          yield* settledDeviceAgentLine(userId, deviceId, launch.value.id, 0);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.value.id, 0);
 
           const sent = yield* warm.sessions.send(
             warm.sessionId,
@@ -207,7 +207,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           assert.ok(relaunch !== undefined);
 
           const claimed = Option.getOrThrow(
-            yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id),
+            yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), relaunch.id),
           );
 
           assert.ok("secrets" in claimed);
@@ -231,7 +231,7 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           assert.ok(Option.isSome(launch));
           yield* TestClock.adjust("1 minute");
 
-          yield* settledDeviceAgentLine(userId, deviceId, launch.value.id, 0);
+          yield* settledDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.value.id, 0);
 
           const newest = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
             agent.conversationId,
