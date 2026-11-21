@@ -57,6 +57,7 @@ import { NO_HOLDER_INBOXES, UNREAD } from "@repo/host/app-state";
 import { AGENT_INBOX_ACT_KIND, type PortActResult } from "@repo/host/contract";
 import { DRAFT_WORD } from "@repo/ui";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
+import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Predicate } from "effect";
@@ -96,7 +97,6 @@ import {
 } from "./composer.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "./copy-feedback.js";
 import { sidebarProps } from "./desktop-sidebar.js";
-import { holdFrames, settleFrames } from "./frames.js";
 import { heardWords } from "./heard-words.js";
 import { restOn } from "./hint-rest.js";
 import { relayout } from "./resize-observer.js";

@@ -455,6 +455,24 @@ function discardDraftItem(onSelect: () => void): MenuEntry {
  * and no name is guessed before the read says it; a task that could not be
  * drawn has no tab at all.
  */
+/**
+ * Whether the task's description is drawn: from the first draw that shows
+ * Overview on, and for as long as the same task stands. A task opened on an
+ * agent's tab draws none of its description behind it, its head included,
+ * so the commit that opens the task mounts only what its first frame shows;
+ * one shown once stays drawn while hidden again, so an edit not yet saved
+ * and its scroll outlive the switch. Note that another task starts over, so
+ * a task shown, left, and come back to while hidden draws nothing.
+ */
+function useDocumentDrawn(taskId: string | undefined, shown: boolean): boolean {
+  const [held, setHeld] = useState({ taskId, drawn: shown });
+  const drawn = shown || (held.taskId === taskId && held.drawn);
+
+  if (held.taskId !== taskId || held.drawn !== drawn) setHeld({ taskId, drawn });
+
+  return drawn;
+}
+
 function DescriptionDocument({
   tasks,
   looks,
@@ -537,14 +555,6 @@ function DescriptionDocument({
   const headingTask = region.kind === TASK_REGION.READY ? region.task.id : undefined;
   const columnHeld = useMemo(() => ({ current: column }), [column]);
 
-  // Note that only a phone watches the heading, because its row alone picks it up, and the words it reads off the drawn
-  // heading would draw the whole document again for nothing, after the draw that opened the task.
-  const documentHeld = useMemo(
-    () => ({ current: !phone || headingTask === undefined ? null : documentBox }),
-    [documentBox, headingTask, phone],
-  );
-
-  const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
   // The clock the plan's tab's card counts its update back from.
   const now = useMinute();
   const { open: onOpenAutomations } = useAutomationsDoor(tasks);
@@ -589,6 +599,20 @@ function DescriptionDocument({
 
   // The task renamed is the one the page stands on, so its rename opens while its description is still read.
   const taskId = opened?.id;
+  // The description stands in the column only once Overview has shown it (`useDocumentDrawn`).
+  const documentDrawn = useDocumentDrawn(taskId, isOverviewTab(tasks.mainTabs.tab));
+
+  // Note that only a phone watches the heading, because its row alone picks it up, and the words it reads off the drawn
+  // heading would draw the whole document again for nothing, after the draw that opened the task.
+  // The heading is watched again once the description is first drawn, which it was not while another tab stood over it.
+  const documentHeld = useMemo(
+    () => ({
+      current: !phone || headingTask === undefined || !documentDrawn ? null : documentBox,
+    }),
+    [documentBox, headingTask, phone, documentDrawn],
+  );
+
+  const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
   const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_TERMS));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
@@ -1450,7 +1474,7 @@ function DescriptionDocument({
     >
       {/* The way back to the agents stays pinned at the card's top left, over the details as they scroll. */}
       {detailsWide ? <div className="task-details-back">{detailsLead}</div> : null}
-      {read === undefined ? (
+      {!documentDrawn ? null : read === undefined ? (
         <DescriptionBodySkeleton task={task} standing={standing} head={descriptionHead} />
       ) : (
         <DescriptionBody

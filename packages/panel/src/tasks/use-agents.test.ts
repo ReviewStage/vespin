@@ -16,6 +16,7 @@ import { IDLE_TASKS_VIEW, type ListedTasksView, TASKS_READ } from "@repo/feature
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind, PortActPayload } from "@repo/host/contract";
 import { taskListFollowing } from "@repo/host/task-list-following";
+import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
 import type { WireBoundaryInput } from "@repo/wire";
 import { MutationObserver } from "@tanstack/react-query";
 import { act, createElement, Fragment, useState } from "react";
@@ -26,7 +27,6 @@ import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import { type FakeActPort, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads } from "../testing/app-state.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
-import { holdFrames, settleFrames } from "../testing/frames.js";
 import { listedAgent } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
