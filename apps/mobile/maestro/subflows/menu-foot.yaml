@@ -1,0 +1,24 @@
+# menu-foot.yaml -- scrolls a task row's long press menu to its foot on an iPad, where Permanently delete stands.
+#
+# Note that an iPad stands the menu beside the row's preview at a height of
+# its own and scrolls the rest inside it, while Maestro's tree calls the
+# acts below its edge visible, so `scrollUntilVisible` scrolls nothing and a
+# tap on Permanently delete lands off the menu, which closes it unasked
+# (jnat10310, Nov 21). So the menu is dragged up from its Assignee, which
+# every task's menu holds above the fold. Note that a compact window is
+# left alone, because its menu scrolls with the window, which
+# `scrollUntilVisible` moves, and a drag over a menu that does not scroll
+# picks the act it ends on.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - swipe:
+          from: "Assignee"
+          direction: UP
+          duration: 900
+      - waitForAnimationToEnd

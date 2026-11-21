@@ -66,9 +66,11 @@ env:
     when:
       notVisible: "No task selected"
     commands:
-      - scrollUntilVisible:
-          element: "Usage alerts"
-          direction: DOWN
+      # Note that the row is brought clear of the tab bar first (`to-row.yaml`), because the empty sections the list stands since #10305 put it at the window's foot, where the swipe ran over the tab bar and moved to the Inbox.
+      - runFlow:
+          file: subflows/to-row.yaml
+          env:
+            ROW: Usage alerts
       - waitForAnimationToEnd
       - swipe:
           from: "Usage alerts"
@@ -132,10 +134,14 @@ env:
     element: "Unpin"
     direction: DOWN
 # Note that the menu is scrolled to its last act, which a short window, the
-# iPhone Duo's, stands below its foot.
+# iPhone Duo's, stands below its foot, and which an iPad's menu, clipped
+# beside its preview, holds out of sight though the tree calls it visible
+# (`menu-foot.yaml`).
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
+- runFlow:
+    file: subflows/menu-foot.yaml
 - takeScreenshot: tasks-row-menu
 # Rename asks for the name in the system's alert, opened on the task's name,
 # and Cancel keeps it.
@@ -161,6 +167,8 @@ env:
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
+- runFlow:
+    file: subflows/menu-foot.yaml
 - tapOn:
     text: "Permanently delete"
     retryTapIfNoChange: false
@@ -193,7 +201,7 @@ env:
 - tapOn: "Mark as unread"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-row-unread
-# Mark done on a task whose agent is at work asks first, as the panel does,
+# Done on a task whose agent is at work asks first, as the panel does,
 # and Cancel leaves the task where it stands. Its menu now offers Mark as
 # read, so the unread mark held.
 - runFlow:
@@ -201,7 +209,10 @@ env:
     env:
       ROW: Weekly digest email
       ITEM: Mark as read
-- tapOn: "Mark done"
+# Note that Done is set from the menu's Status, since the panel's row menu
+# offers Mark done only by the row's swipe.
+- tapOn: "Status"
+- tapOn: "Done"
 - assertVisible: "Mark as Done?"
 - assertVisible: "Stop agent"
 - takeScreenshot: tasks-mark-done-ask
