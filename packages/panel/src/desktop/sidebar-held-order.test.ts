@@ -18,7 +18,9 @@ import { tasksControl } from "../testing/tasks-control.js";
  * were first drawn in while the pointer is over the sidebar, so an update
  * that would sort a task elsewhere moves nothing under the reader's hand;
  * once the pointer leaves, or the sidebar is folded away and back, the list
- * is sorted anew. Synthetic throughout.
+ * is sorted anew. A delivery moving only a task's agents still reaches its
+ * row, and the lists where what they read of the agents moved. Synthetic
+ * throughout.
  */
 
 const WORKSPACE: Workspace = {
@@ -201,4 +203,49 @@ test("a chosen child task the view comes to hide with its parent is no longer ch
   draw(listed(TASK_STATUS.DONE));
   assert.deepEqual(names(container), ["Usage report"]);
   assert.notEqual(heading(), "2 tasks");
+});
+
+/** A task's agents as its row counts them, `working` of them at work and `failed` failed. */
+function agentsOf(working: number, failed = 0): Pick<TaskSummary, "agents"> {
+  return { agents: { total: 1, working, failed, activityAt: 1, pullRequestTotal: 0 } };
+}
+
+/** The names a row's marks are heard by, its state's among them. */
+function marksOf(sidebar: HTMLElement, name: string): string[] {
+  const row = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li")].find((each) =>
+    each.textContent?.includes(name),
+  );
+
+  return [...(row?.querySelectorAll("[aria-label]") ?? [])].map(
+    (mark) => mark.getAttribute("aria-label") ?? "",
+  );
+}
+
+test("a row says its agents stopped once only its agents moved, the list around it holding", () => {
+  const { container, draw } = mountSidebar([
+    { ...task("t-1", "Invite expiry", 3), ...agentsOf(1) },
+    task("t-2", "Retry audit", 2),
+  ]);
+
+  assert.ok(marksOf(container, "Invite expiry").includes("Working"));
+
+  draw([{ ...task("t-1", "Invite expiry", 3), ...agentsOf(0) }, task("t-2", "Retry audit", 2)]);
+
+  assert.ok(!marksOf(container, "Invite expiry").includes("Working"));
+});
+
+test("a run's task leaves Tasks once its last agent stops, nothing but its agents moved", () => {
+  const run = (working: number) => ({
+    ...task("t-1", "Copy sweep", 3),
+    madeByRun: true as const,
+    ...agentsOf(working, 1 - working),
+  });
+
+  const { container, draw } = mountSidebar([run(1), task("t-2", "Retry audit", 2)]);
+
+  assert.deepEqual(names(container), ["Copy sweep", "Retry audit"]);
+
+  draw([run(0), task("t-2", "Retry audit", 2)]);
+
+  assert.deepEqual(names(container), ["Retry audit"]);
 });
