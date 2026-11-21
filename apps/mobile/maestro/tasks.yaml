@@ -326,6 +326,12 @@ env:
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"
     timeout: 90000
+# Note that the page's words are heard only once its loading ground, heard
+# as Loading while it stands, has faded from over them (`SealedPage`), so
+# the shot is taken once it has gone rather than of the ground.
+- extendedWaitUntil:
+    notVisible: "Loading"
+    timeout: 5000
 - takeScreenshot: task-page
 # Note that the page is pushed over the whole window in every window, on
 # the tab's own stack, so its ⋯ holds Open in browser on an iPad too.

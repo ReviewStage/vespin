@@ -7,7 +7,7 @@ import {
   type PageThemeVariable,
 } from "@repo/features/page-theme";
 import { sealedPageDocument } from "@repo/features/sealed-page";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -41,6 +41,9 @@ const PAGE_INSET = "16px";
 
 /** How long the loading ground takes to give way to the page once it has loaded, as a cross-fade. */
 const REVEAL_MS = 200;
+
+/** What the loading ground is heard as while it stands, as Safari's own page is heard while it loads. */
+const LOADING_HEARD = "Loading";
 
 const styles = StyleSheet.create({
   page: { flex: 1 },
@@ -134,28 +137,36 @@ type SealedPageProps = {
 /**
  * The system's spinner on the brand's ground over a page until its web view
  * has loaded, then fading to the page, as Safari's own views stand while
- * they load, rather than a blank body while WebKit starts cold. It is heard
- * as nothing, since the page's own words stand under it the whole while.
+ * they load, rather than a blank body while WebKit starts cold. While it
+ * stands it is heard as one element, Loading, as the system's progress
+ * indicator is, and the page under it is not heard at all, so its words
+ * reach VoiceOver, and a flow waiting for them, only once they are seen.
  */
-function PageLoading({ loaded }: { readonly loaded: boolean }) {
+function PageLoading({
+  loaded,
+  onGone,
+}: {
+  readonly loaded: boolean;
+  readonly onGone: () => void;
+}) {
   const colors = useColors();
   const [shown] = useState(() => new Animated.Value(1));
-  const [gone, setGone] = useState(false);
 
   // Note that the fade runs once, the first time the page loads, since a later load of the same view redraws a page already standing.
   useEffect(() => {
     if (!loaded) return;
 
-    Animated.timing(shown, { toValue: 0, duration: REVEAL_MS, useNativeDriver: true }).start(() =>
-      setGone(true),
+    Animated.timing(shown, { toValue: 0, duration: REVEAL_MS, useNativeDriver: true }).start(
+      onGone,
     );
-  }, [loaded, shown]);
+  }, [loaded, shown, onGone]);
 
-  return gone ? null : (
+  return (
     <Animated.View
       pointerEvents="none"
-      importantForAccessibility="no-hide-descendants"
-      accessibilityElementsHidden
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={LOADING_HEARD}
       style={[styles.loading, { backgroundColor: colors.GROUND, opacity: shown }]}
     >
       <ActivityIndicator color={colors.TEXT_MUTED} />
@@ -172,12 +183,15 @@ function SealedPageAt({
   const colors = useColors();
   const dark = useColorScheme() === "dark";
   const [loaded, setLoaded] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const reveal = useCallback(() => setRevealed(true), []);
 
   const document = useMemo(
     () => sealedPageDocument(html, themeOf(colors, dark)),
     [html, colors, dark],
   );
 
+  // Note that the web view is hidden from accessibility until the ground has gone, because WebKit hands its words to accessibility before they are drawn.
   return (
     <View style={styles.page}>
       <WebView
@@ -197,8 +211,10 @@ function SealedPageAt({
         contentInsetAdjustmentBehavior="automatic"
         style={[styles.page, { backgroundColor: colors.GROUND }]}
         accessibilityLabel={title}
+        accessibilityElementsHidden={!revealed}
+        importantForAccessibility={revealed ? "auto" : "no-hide-descendants"}
       />
-      <PageLoading loaded={loaded} />
+      {revealed ? null : <PageLoading loaded={loaded} onGone={reveal} />}
     </View>
   );
 }
@@ -210,7 +226,7 @@ function SealedPageAt({
  * in; its scripts run, so a chart draws and a table sorts. It reads the
  * brand's theme in the window's scheme at the reader's text size, and is
  * drawn anew as either changes. Until it first loads, the system's spinner
- * stands over it (`PageLoading`).
+ * stands over it, heard as Loading in the page's place (`PageLoading`).
  */
 export function SealedPage({ html, title }: SealedPageProps) {
   const { fontScale } = useWindowDimensions();
