@@ -94,10 +94,10 @@ import { TASKS_GROUP } from "@repo/features/tasks-page-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
-  CHOOSE_AN_ITEM_WORDS,
   countWords,
   NO_RESULTS_HINT,
   noResultsForWords,
+  noSelectionWords,
   readFailedWords,
   readingWords,
   TERM,
@@ -3046,7 +3046,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
         entered
       />
     ) : selected === undefined ? (
-      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
+      <NoSelection title={noSelectionWords(TERM.TASK)} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (

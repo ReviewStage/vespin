@@ -18,7 +18,7 @@ onFlowComplete:
     visible: "Recorded the invite flow"
     timeout: 30000
 - waitForAnimationToEnd
-# A regular window, which stands "Choose an item" beside the Inbox's list, is
+# A regular window, which stands "No item selected" beside the Inbox's list, is
 # turned to landscape: the system's tab sidebar stands the Inbox with its
 # count, Tasks, and Search beside the tab's list and detail. Tasks heads its
 # list with Pinned, Following, and the member's sections as groups, one task
@@ -27,7 +27,7 @@ onFlowComplete:
 # the account, which opens Settings, the one way there besides ⌘,.
 - runFlow:
     when:
-      visible: "Choose an item"
+      visible: "No item selected"
     commands:
       - setOrientation: LANDSCAPE_LEFT
       - waitForAnimationToEnd
@@ -82,7 +82,7 @@ onFlowComplete:
 # staying on its own glass beside it.
 - runFlow:
     when:
-      notVisible: "Choose an item"
+      notVisible: "No item selected"
     commands:
       - tapOn:
           id: "workspace-switcher"
