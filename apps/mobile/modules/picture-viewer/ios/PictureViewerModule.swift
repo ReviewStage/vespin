@@ -284,7 +284,7 @@ struct ShownPicture: Record {
   @Field var subtitle: String?
 }
 
-/// The viewer's zoom, as Photos' runs: a copy of the picture flies from the thumbnail's place to the screen while the viewer's page fades in, and back into the thumbnail as it closes, from wherever a drag left it; with no thumbnail to fly from or to, the page fades.
+/// The viewer's zoom, as Photos' runs: a copy of the picture flies from the thumbnail's place to the screen while the viewer's page fades in, and back into the thumbnail as it closes, from wherever a drag left it; with no thumbnail to fly from or to, or with Reduce Motion on, the page cross-fades.
 final class PictureZoom: NSObject, UIViewControllerTransitioningDelegate, UIViewControllerAnimatedTransitioning {
   private weak var viewer: PictureViewerController?
   /// Finds the thumbnail on screen now, which a scroll behind the viewer may have moved or taken away.
@@ -325,7 +325,8 @@ final class PictureZoom: NSObject, UIViewControllerTransitioningDelegate, UIView
     let flying = UIImageView(image: picture)
     flying.contentMode = .scaleAspectFill
     flying.clipsToBounds = true
-    let flies = picture != nil && from != nil && to != nil
+    // Note that with Reduce Motion on, the page cross-fades in and out with no picture flying, as Photos does.
+    let flies = !UIAccessibility.isReduceMotionEnabled && picture != nil && from != nil && to != nil
     if flies, let from, let to {
       flying.frame = opening ? from : to
       container.addSubview(flying)
