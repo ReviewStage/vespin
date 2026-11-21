@@ -1,7 +1,8 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands it, its groups untitled and each row led by the panel's glyph for its page, in the panel's sidebar order: the account at its head pushing to Account; the workspace the app works in pushing to its page, then its Cloud environment and its Memory; Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and the build, What's new, Help, Send feedback, and Email us.
+// index.tsx -- Settings' main list, as iOS's own Settings stands it, its groups untitled and each row led by the panel's glyph for its page, in the panel's sidebar order: the account at its head pushing to Account; the workspace the app works in pushing to its page, then its Cloud environment, its Memory, and its Automations; Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and the build, What's new, Help, Send feedback, and Email us.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { AUTOMATION_PHONE_WORDS } from "@repo/features/automation-words";
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { LINK_PAGE } from "@repo/features/link-home";
 import {
@@ -127,6 +128,13 @@ export default function SettingsScreen() {
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
+              />
+              <PushRow
+                symbol={GLYPH.AUTOMATION}
+                label={AUTOMATION_PHONE_WORDS.TITLE}
+                goes={PUSH_ROW_GOES.PAGE}
+                onPress={() => router.push(SETTINGS_ROUTE.AUTOMATIONS)}
+                testId="settings-automations"
               />
             </ListSection>
           )}

@@ -1,4 +1,5 @@
 import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot";
+import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
@@ -86,7 +87,6 @@ import {
   AutomationsActsSkeleton,
   AutomationsToolbar,
 } from "./automation-list-frame.js";
-import { READING_AUTOMATIONS } from "./automation-words.js";
 import { awayPlaceOf, backPlaceOf } from "./back-place.js";
 import { AgentRoutePage } from "./desktop-agent-page.js";
 import { DesktopInbox } from "./desktop-inbox.js";

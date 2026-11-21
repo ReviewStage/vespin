@@ -8,6 +8,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
+import { automationNextText, automationOwnerFor } from "@repo/features/automation-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
@@ -55,7 +56,6 @@ import { GLYPH } from "@repo/ui/icons";
 import { HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAutomation } from "./automation-directory.js";
-import { automationNextText, automationOwnerFor } from "./desktop/automation-words.js";
 import { EntityGlyph } from "./entities/entity-glyph.js";
 import { useCreator } from "./member-directory.js";
 import { useActorDoor, usePreloadedPerson } from "./person-door.js";

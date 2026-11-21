@@ -280,6 +280,7 @@ export {
   AccountHead,
   AccountRow,
   ActionRow,
+  AutomationRow,
   CodeRow,
   type ConnectionLine,
   ConnectionRow,
