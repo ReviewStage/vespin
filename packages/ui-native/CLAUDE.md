@@ -319,7 +319,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left, its rows easing away and back; one given a `glyph` leads its title
+  a press, its chevron at the header's trailing end (before its +) as Mail's mailboxes and
+  Reminders' groups fold, its rows easing away and back; one given a `glyph` leads its title
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
