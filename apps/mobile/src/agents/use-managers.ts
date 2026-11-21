@@ -13,9 +13,10 @@
 
 import { managerCreateRefusalWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_KIND, type ListedAgent } from "@repo/features/agent-wire";
+import { AGENT_KIND, type AgentRunsOnRequest, type ListedAgent } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
+import { placeIdOf } from "@repo/features/runs-on-places";
 import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
@@ -26,7 +27,7 @@ import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
-import { runsOnOf, startRefusalWords } from "../tasks/use-start.js";
+import { startRefusalWords } from "../tasks/use-start.js";
 
 /** No Manager, the same array every render. */
 const NO_MANAGERS: readonly ListedAgent[] = [];
@@ -125,7 +126,7 @@ export function useManagerChatLooks(
 export interface ManagerAsk {
   readonly name: string;
   readonly repositories: readonly [string, ...string[]];
-  readonly runsOn: string;
+  readonly runsOn: AgentRunsOnRequest;
   readonly choice: ModelChoice;
 }
 
@@ -136,7 +137,8 @@ export type ManagerMade = { readonly agentId: string } | { readonly refused: str
 function sameAsk(one: ManagerAsk, other: ManagerAsk): boolean {
   return (
     one.name === other.name &&
-    one.runsOn === other.runsOn &&
+    one.runsOn.machine === other.runsOn.machine &&
+    placeIdOf(one.runsOn) === placeIdOf(other.runsOn) &&
     one.choice.model === other.choice.model &&
     one.choice.effort === other.choice.effort &&
     one.repositories.length === other.repositories.length &&
@@ -172,7 +174,7 @@ export function useCreateManager(
       workspaceId,
       name: ask.name,
       repositories: [...ask.repositories],
-      runsOn: runsOnOf(ask.runsOn),
+      runsOn: ask.runsOn,
       model: ask.choice.model,
       effort: ask.choice.effort,
     }).catch((cause: unknown) => {

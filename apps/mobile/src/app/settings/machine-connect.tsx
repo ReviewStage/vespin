@@ -1,5 +1,6 @@
-// machine-connect.tsx -- a machine's pairing approved or denied on Settings › Machines, by the code its link named, under the panel's own checks: the machine as it named itself, what it is and the address its start came from, the code to hold against its terminal and when it expires, then Connect or Deny.
+// machine-connect.tsx -- a machine's pairing approved or denied on Settings › Machines, by the code its link named, under the panel's own checks: the machine as it named itself, what it is and the address its start came from, the code to hold against its terminal and when it expires, who it's for where the service offers a workspace, then Connect or Deny.
 
+import { MACHINE_NETWORK, MACHINE_OWNER } from "@repo/features/device-agent-wire";
 import {
   HOST_CONNECT_WORDS,
   hostBoxFacts,
@@ -15,6 +16,7 @@ import {
 } from "@repo/features/host-pairing-view";
 import {
   type HostPairingAnswer,
+  type HostPairingTarget,
   hostUserCodeOf,
   shownHostUserCode,
 } from "@repo/features/host-wire";
@@ -28,9 +30,12 @@ import {
   GLYPH,
   ListSection,
   NoteRow,
+  type PickOption,
+  PickRows,
   SCREEN_GROUND,
   Screen,
   SettingsForm,
+  ToggleRow,
 } from "@repo/ui-native";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
@@ -89,6 +94,9 @@ const SENDING = {
 } as const;
 
 type Sending = (typeof SENDING)[keyof typeof SENDING];
+
+/** The pick that keeps the machine the member's own. Note that it is the empty string, which no workspace's id is (`hostPairingTargetSchema`), so it never stands for one, as the panel's dialog keeps it. */
+const JUST_ME = "";
 
 type Standing =
   | { readonly kind: typeof STANDING.READING | typeof STANDING.UNREAD }
@@ -185,14 +193,19 @@ function Pairing({ code }: { readonly code: string }) {
   const out = useRef(false);
   const now = afterPress ?? readStanding(pairing);
 
-  const answer = (box: HostPairingAnswer, pressed: Answer) => {
+  const answer = (
+    box: HostPairingAnswer,
+    pressed: Answer,
+    target: HostPairingTarget | undefined,
+  ) => {
     if (out.current) return;
     out.current = true;
     setAfterPress({ kind: STANDING.ASKING, box, sending: pressed });
 
+    // Note that Just me sends no target, as every approve before the field did.
     const sent =
       pressed === ANSWER.CONNECT
-        ? acts[ACT_KIND.HOSTS_PAIRING_APPROVE]({ code })
+        ? acts[ACT_KIND.HOSTS_PAIRING_APPROVE](target === undefined ? { code } : { code, target })
         : acts[ACT_KIND.HOSTS_PAIRING_DENY]({ code });
 
     void sent
@@ -232,7 +245,7 @@ function Pairing({ code }: { readonly code: string }) {
           box={now.box}
           sending={now.kind === STANDING.ASKING ? now.sending : undefined}
           connected={now.kind === STANDING.CONNECTED}
-          onAnswer={(pressed) => answer(now.box, pressed)}
+          onAnswer={(pressed, target) => answer(now.box, pressed, target)}
         />
       );
     case STANDING.DENIED:
@@ -274,7 +287,9 @@ function Pairing({ code }: { readonly code: string }) {
  * The question, as the panel's dialog asks it: whose machine, by the name
  * and platform it reported, its architecture and the address its start came
  * from; to connect it only if the member ran the command and the code
- * matches; the code and when it expires; then Connect and Deny, neither
+ * matches; the code and when it expires; who it's for, where the service
+ * offers the member a workspace for it, as the panel's dialog asks it
+ * (`OwnerChoice`); then Connect and Deny, neither
  * taking a press while an answer is out or once the machine is made. Back,
  * and the sheet's own swipe, are held only while an answer is out, so a
  * page left standing connected can always be left.
@@ -290,11 +305,24 @@ function Ask({
   readonly box: HostPairingAnswer;
   readonly sending: Sending | undefined;
   readonly connected: boolean;
-  readonly onAnswer: (answer: Answer) => void;
+  readonly onAnswer: (answer: Answer, target: HostPairingTarget | undefined) => void;
 }) {
   const navigation = useNavigation();
   const inFlight = sending === SENDING.CONNECT || sending === SENDING.DENY;
   const settled = inFlight || connected;
+  const [picked, setPicked] = useState<string>(JUST_ME);
+  const [privateNetwork, setPrivateNetwork] = useState(false);
+  const workspace = box.workspaces?.find((each) => each.id === picked);
+
+  const target: HostPairingTarget | undefined =
+    workspace === undefined
+      ? undefined
+      : {
+          kind: MACHINE_OWNER.WORKSPACE,
+          workspaceId: workspace.id,
+          network: privateNetwork ? MACHINE_NETWORK.PRIVATE_ALLOWED : MACHINE_NETWORK.PUBLIC_ONLY,
+        };
+
   // Note that the Settings sheet itself is held too while an answer is out, as the panel's dialog holds its dismiss, so its answer is always seen.
   useEffect(() => {
     const sheet = navigation.getParent();
@@ -326,6 +354,14 @@ function Ask({
           <ListSection footer={hostCodeExpiryText(box.expiresAt)}>
             <CodeRow code={shownHostUserCode(code)} testId={TEST_IDS.CODE} />
           </ListSection>
+          <OwnerChoice
+            box={box}
+            picked={picked}
+            privateNetwork={privateNetwork}
+            disabled={settled}
+            onPick={setPicked}
+            onPrivateNetwork={setPrivateNetwork}
+          />
           <ListSection
             footer={sending === SENDING.UNANSWERED ? HOST_CONNECT_WORDS.UNANSWERED : undefined}
           >
@@ -336,18 +372,81 @@ function Ask({
                   : HOST_CONNECT_WORDS.CONNECT
               }
               disabled={settled}
-              onPress={() => onAnswer(ANSWER.CONNECT)}
+              onPress={() => onAnswer(ANSWER.CONNECT, target)}
             />
             <ActionRow
               label={
                 sending === SENDING.DENY ? HOST_CONNECT_WORDS.DENYING : HOST_CONNECT_WORDS.DENY
               }
               disabled={settled}
-              onPress={() => onAnswer(ANSWER.DENY)}
+              onPress={() => onAnswer(ANSWER.DENY, undefined)}
             />
           </ListSection>
         </SettingsForm>
       </Screen>
+    </>
+  );
+}
+
+/**
+ * Who the machine is for, where the service offers the member a workspace
+ * for it, which it does only for one they own or admin and a daemon that
+ * can be a workspace's machine: Just me, picked until another is, or each
+ * workspace offered, and under a workspace picked, the switch that lets its
+ * agents reach the machine's private network, off until switched on.
+ * Nothing where none is offered, so the machine is the member's own. No pick
+ * moves while an answer is out or once the machine is made.
+ */
+function OwnerChoice({
+  box,
+  picked,
+  privateNetwork,
+  disabled,
+  onPick,
+  onPrivateNetwork,
+}: {
+  readonly box: HostPairingAnswer;
+  readonly picked: string;
+  readonly privateNetwork: boolean;
+  readonly disabled: boolean;
+  readonly onPick: (picked: string) => void;
+  readonly onPrivateNetwork: (on: boolean) => void;
+}) {
+  const workspaces = box.workspaces ?? [];
+
+  if (workspaces.length === 0) return null;
+
+  const options: readonly PickOption[] = [
+    { id: JUST_ME, label: HOST_CONNECT_WORDS.JUST_ME, hint: HOST_CONNECT_WORDS.JUST_ME_DETAIL },
+    ...workspaces.map((workspace) => ({
+      id: workspace.id,
+      label: workspace.name,
+      hint: HOST_CONNECT_WORDS.WORKSPACE_DETAIL,
+    })),
+  ];
+
+  return (
+    <>
+      <ListSection title={HOST_CONNECT_WORDS.FOR}>
+        <PickRows
+          options={options}
+          picked={picked}
+          onPick={(next) => {
+            if (!disabled) onPick(next);
+          }}
+        />
+      </ListSection>
+      {picked === JUST_ME ? null : (
+        <ListSection>
+          <ToggleRow
+            label={HOST_CONNECT_WORDS.PRIVATE_NETWORK}
+            detail={HOST_CONNECT_WORDS.PRIVATE_NETWORK_DETAIL}
+            on={privateNetwork}
+            disabled={disabled}
+            onChange={onPrivateNetwork}
+          />
+        </ListSection>
+      )}
     </>
   );
 }
