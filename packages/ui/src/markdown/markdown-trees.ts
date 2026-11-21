@@ -12,10 +12,12 @@
  * JSX) runs on the copy as it ran on the tree, so what is drawn is the same.
  *
  * Note that this holds only for steps whose tree is the words' and the
- * values they were attached with alone: a step reading anything else as it
- * runs keeps the tree it drew then. The one such step, the HTML parser that
- * lands after the first paint, forgets every tree as it lands
- * (`forgetMarkdownTrees`).
+ * values they were attached with alone, and that write what they find into
+ * the tree, never beside it keyed by a node, since a copy's nodes are new (a
+ * task item's box is placed in its node's data for this). A step reading
+ * anything else as it runs keeps the tree it drew then: the one such step,
+ * the HTML parser that lands after the first paint, forgets every tree as it
+ * lands (`forgetMarkdownTrees`).
  */
 
 import type { ElementContent, Properties, Root, RootContent } from "hast";
