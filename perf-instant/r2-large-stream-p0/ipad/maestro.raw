@@ -10,19 +10,90 @@ WARNING: Please consider reporting this to the maintainers of class com.oracle.t
 WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
  COMPLETED
 Set orientation LANDSCAPE_LEFT... COMPLETED
-Assert that "Recorded the invite flow" is visible... FAILED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Repeat 5 times...
+  T:inbox-row... COMPLETED
+  Assert that "The test plan I followed:" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:inbox-row... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:more-menu... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  Tap on point (60%, 95%)... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:new-task... COMPLETED
+  Assert that "Describe the task" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:new-task-cancel... COMPLETED
+  Assert that "Describe the task" is not visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:tab-tasks... COMPLETED
+  Assert that "Teammate invitations" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:tab-inbox... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Tap on "Tasks"... COMPLETED
+Assert that "Teammate invitations" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times...
+  T:tasks-row... COMPLETED
+  Assert that "Created by .*" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:tasks-row... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times...
+  T:status-chip-open... COMPLETED
+  Assert that "Backlog" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-pick... COMPLETED
+  Assert that "Status, Todo" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-chip-open... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-pick... COMPLETED
+  Assert that "Status, Backlog" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}, perfLarge=${LARGE}, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Stop" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times...
+  Tap on id: composer-field... COMPLETED
+  Input text Show the expiry too.... COMPLETED
+  Assert that "Send" is visible... COMPLETED
+  Wait for animation to end within 2000 ms... COMPLETED
+  T:send... COMPLETED
+  Assert that "Stop" is visible... COMPLETED
+  Wait for animation to end within 2000 ms... COMPLETED
+Repeat 3 times... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}, perfLarge=${LARGE}})... COMPLETED
+Set orientation LANDSCAPE_LEFT... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on "Tasks"... COMPLETED
+Assert that "Teammate invitations" is visible... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "Build teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times...
+  T:agent-row... COMPLETED
+  Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:back-from-agent... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
 Set orientation PORTRAIT... COMPLETED
-App crashed (SIGABRT)
-
-Assertion is false: "Recorded the invite flow" is visible
-
-Assertion '"Recorded the invite flow" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
-
-Possible causes:
-- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
-- Element may be temporarily unavailable due to loading state
-- This could be a real regression that needs to be addressed
-
-==== Debug output (logs & screenshots) ====
-
-/Users/deanstratakos/vespin-perf/jinstant2-large-stream-p0/ipad/debug

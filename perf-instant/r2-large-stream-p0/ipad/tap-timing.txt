@@ -1,9 +1,59 @@
-/Users/deanstratakos/vespin-ipad-agent/perf-wt/apps/mobile/scripts/perf/tap-timing.sh:15: no matches found: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/BAD5C9D5-2CB3-466D-8272-09ADD64A74E8/data/Containers/Data/Application/C55D6CDD-CDE4-4C75-A810-C3483A13F1DB/Documents/perf-probe-*.jsonl
-probe rows 0, commands 6, frames 364
+probe rows 3977, commands 247, frames 7289
 path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle | slide max frame gap
+inbox-row | 11 | topTouchEnd | 975 | 0 | 0 | 0 | 0 | None | 177 | 0 | 313 | 318 | 1302 | 578 | 73
+more-menu | 6 | topTouchEnd | 930 | 0 | 0 | 0 | 0 | None | 136 | 0 | -4 | 381 | 1313 | 1107 | 32
+new-task | 6 | topTouchEnd | 836 | 0 | 0 | 0 | 0 | None | 389 | 0 | 78 | 672 | 1503 | 1363 | 18
+new-task-cancel | 5 | topTouchEnd | 829 | 0 | 0 | 0 | 0 | None | 102 | 0 | 81 | 273 | 1122 | 971 | 28
+tab-tasks | 6 | topTouchEnd | 1093 | 0 | 0 | 0 | 0 | None | 85 | 0 | 156 | 150 | 1276 | 546 | 120
+tab-inbox | 5 | topTouchEnd | 1684 | 0 | 0 | 0 | 0 | None | 80 | 0 | 136 | 136 | 1821 | 136 | 52
+tasks-row | 11 | topTouchEnd | 2184 | 0 | 0 | 0 | 0 | None | 299 | 0 | 15 | 725 | 4843 | 201 | 91
+status-chip-open | 7 | topTouchEnd | 1217 | 0 | 0 | 0 | 0 | None | 375 | 0 | 122 | 200 | 1412 | 2725 | 42
+status-pick | 6 | topWindowChange | 208 | 0 | 0 | 0 | 0 | None | 546 | 0 | 104 | 1954 | 2220 | 3290 | 196
+send | 4 | topTouchEnd | 1182 | 0 | 0 | 0 | 0 | None | 85 | 0 | -6 | 313 | 1565 | 610 | 60
+agent-row | 6 | topTouchEnd | 910 | 0 | 0 | 0 | 0 | None | 202 | 0 | 81 | None | None | 201 | 118
+back-from-agent | 5 | topTouchEnd | 1077 | 0 | 0 | 0 | 0 | None | 256 | 0 | -16 | 215 | 1316 | 920 | 50
 
 most rendered components per path (summed over its taps):
+inbox-row: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+status-chip-open: 
+status-pick: 
+send: 
+agent-row: 
+back-from-agent: 
 
 slowest components per path (React's own render ms, summed over its taps, then per tap):
+inbox-row: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+status-chip-open: 
+status-pick: 
+send: 
+agent-row: 
+back-from-agent: 
 
 markdown vs the rest (React render ms per tap, from the components' own times):
+inbox-row: markdown 0.0, rest 0.0
+more-menu: markdown 0.0, rest 0.0
+new-task: markdown 0.0, rest 0.0
+new-task-cancel: markdown 0.0, rest 0.0
+tab-tasks: markdown 0.0, rest 0.0
+tab-inbox: markdown 0.0, rest 0.0
+tasks-row: markdown 0.0, rest 0.0
+status-chip-open: markdown 0.0, rest 0.0
+status-pick: markdown 0.0, rest 0.0
+send: markdown 0.0, rest 0.0
+agent-row: markdown 0.0, rest 0.0
+back-from-agent: markdown 0.0, rest 0.0
+
+whole run: 346s, 0 commits, 0 components rendered, 60923 ms of stalls over 699 stalls
+events: topTransitionProgress×740, topWindowChange×421, topHeaderHeightChange×260, topGlobalEvent×259, topWords×123, topWillAppear×71, topTouchStart×71, topTouchEnd×71, topLoad×65, topLoadEnd×65, topLoadStart×65, topWillDisappear×62, topFinishTransitioning×58, topAppear×51, topDisappear×40
