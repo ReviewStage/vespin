@@ -1,0 +1,10 @@
+== bundle PJj10410 base 0700283850
+  built 0700283850 base app Vmain7.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-tasks: fails 1 shots 33 Assert that "Archive agent?" is not visible... FAILED
+iphone-light-tasks-view: fails 0 shots 2 
+ipad27-light-tasks: fails TIMEOUT (watchdog; steps 334, shots 31) 
+ipad27-light-tasks-view: fails 0 shots 2 
