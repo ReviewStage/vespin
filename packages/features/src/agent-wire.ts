@@ -778,8 +778,6 @@ export type AgentRunsOnRequest = typeof agentRunsOnRequestSchema.Type;
 /** A move of an agent to another place in the same agent: the cloud, one of its starter's own devices, or a machine its workspace owns (`coder-host/move.ts`). */
 export const agentMoveRequestSchema = EffectSchema.Struct({ runsOn: agentRunsOnRequestSchema });
 
-export type AgentMoveRequest = typeof agentMoveRequestSchema.Type;
-
 /** A branch a Start names for a checkout to be cloned at: a name git takes, with no space and none of the characters a ref refuses. */
 export const startBranchSchema = EffectSchema.String.check(
   EffectSchema.isNonEmpty(),
@@ -970,8 +968,6 @@ export const agentVoiceLineRequestSchema = EffectSchema.Struct({
   speaker: EffectSchema.Literals(Object.values(VOICE_SPEAKER)),
   text: trimmedText(VOICE_LINE_BOUNDS.TEXT_CHARS),
 });
-
-export type AgentVoiceLineRequest = typeof agentVoiceLineRequestSchema.Type;
 
 /** A line of a call recorded: the transaction that wrote it, where this record wrote or grew it. */
 export const agentVoiceLineAnswerSchema = EffectSchema.Struct({

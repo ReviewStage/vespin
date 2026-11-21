@@ -1175,13 +1175,6 @@ export const agentDefaultMachineParamsSchema = EffectSchema.Struct({
   machineId: EffectSchema.NonEmptyString,
 });
 
-/** What the reviewer and label pickers of an agent's Pull request tab offer, as the window hears it: the labels, users, and teams, or why there is no answer. */
-const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptions, {
-  as: AGENT_NOT_FOUND_RENAMES,
-});
-
-export type AgentReviewOptionsAnswerView = typeof agentReviewOptionsAnswerViewSchema.Type;
-
 /** How GitHub took a change to an agent's pull request, as the window hears it: made, the member to sign in with GitHub again, GitHub's refusal in its words, or why there is no answer. */
 export const agentPullRequestWriteAnswerViewSchema = answerView(agentPullRequestsContract.action, {
   as: PULL_REQUEST_WRITE_VIEW_RENAMES,

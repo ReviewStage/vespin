@@ -1859,10 +1859,6 @@ export const orStoreRefusal = <R>(
     Effect.as(logStoreFailure(failure), agentToolRejected(AGENT_TOOL_REFUSAL.STORE)),
   );
 
-/** The repository the caller works in: the calling agent's own; none where it names none, or for a member, who works in none. */
-export const workedRepository = (caller: AgentCaller) =>
-  Effect.succeed<string | null>(callerAgent(caller)?.repository ?? null);
-
 /**
  * What a call made before, run again after its start landed: the agent made
  * under its key, while that agent is still of the caller's workspace, and
