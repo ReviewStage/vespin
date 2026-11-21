@@ -477,6 +477,159 @@ export function useTaskPullRequestsOf(
   return "rows" in control ? pullRequests : control.pullRequests;
 }
 
+/** A place's agents by id, in the order started: those standing, and those archived. */
+export interface AgentIdsOf {
+  readonly standing: readonly string[] | undefined;
+  readonly archived: readonly string[] | undefined;
+}
+
+/**
+ * A place's agents by id, standing and archived, in the order started: the
+ * open task's as its control carries them, which a step of a turn never
+ * moves, a Start still making its agent left out, since its tab stands
+ * under the press's key; a place's own from the rows it lists.
+ */
+export function agentIdsOf(control: AgentsSource): AgentIdsOf {
+  if (!("rows" in control)) {
+    return {
+      standing: control.agents?.map((agent) => agent.id),
+      archived: control.archived?.map((agent) => agent.id),
+    };
+  }
+
+  const pending = control.start.pending?.key;
+
+  return {
+    standing:
+      pending === undefined
+        ? control.agentIds
+        : control.agentIds?.filter((agentId) => agentId !== pending),
+    archived: control.archivedIds,
+  };
+}
+
+/**
+ * What a list of a task's agents lays its rows out by, and chooses them by:
+ * which each is, when it started and what started it, its name for its
+ * fold, where it stands, and how its newest turn ended, none of which a
+ * step of a turn moves.
+ */
+export type ListedAgentPlace = Pick<
+  AgentSummary,
+  | "id"
+  | "createdAt"
+  | "title"
+  | "status"
+  | "archivedAt"
+  | "startedBy"
+  | "startedByAgentId"
+  | "from"
+  | "turn"
+>;
+
+/** A place as it is laid in key by key: a row's own optional keys stand only where the row has them. */
+interface ListedAgentPlaceDraft {
+  id: string;
+  createdAt: number;
+  title: AgentSummary["title"];
+  status: AgentSummary["status"];
+  archivedAt?: number;
+  startedBy?: NonNullable<AgentSummary["startedBy"]>;
+  startedByAgentId?: string;
+  from?: NonNullable<AgentSummary["from"]>;
+  turn?: NonNullable<AgentSummary["turn"]>;
+}
+
+/** A place picked of its row as the live query answers it, its every key one the row has, as the row's own type holds them. */
+function listedPlaceOf(picked: {
+  readonly id: string;
+  readonly createdAt: number;
+  readonly title: AgentSummary["title"];
+  readonly status: AgentSummary["status"];
+  readonly archivedAt?: number | undefined;
+  readonly startedBy?: AgentSummary["startedBy"] | undefined;
+  readonly startedByAgentId?: string | undefined;
+  readonly from?: AgentSummary["from"] | undefined;
+  readonly turn?: AgentSummary["turn"] | undefined;
+}): ListedAgentPlace {
+  const place: ListedAgentPlaceDraft = {
+    id: picked.id,
+    createdAt: picked.createdAt,
+    title: picked.title,
+    status: picked.status,
+  };
+
+  if (picked.archivedAt !== undefined) place.archivedAt = picked.archivedAt;
+
+  if (picked.startedBy !== undefined) place.startedBy = picked.startedBy;
+
+  if (picked.startedByAgentId !== undefined) place.startedByAgentId = picked.startedByAgentId;
+
+  if (picked.from !== undefined) place.from = picked.from;
+
+  if (picked.turn !== undefined) place.turn = picked.turn;
+
+  return place;
+}
+
+/** A place's agents as a list lays them out (`ListedAgentPlace`): those standing, and those archived, in the order started. */
+export interface ListedAgentPlaces {
+  readonly agents: readonly ListedAgentPlace[] | undefined;
+  readonly archived: readonly ListedAgentPlace[] | undefined;
+}
+
+/**
+ * A place's agents as a list lays them out, standing and archived, in the
+ * order started: the open task's read by a live query picking only what
+ * lays a row out (`ListedAgentPlace`), which a step of a turn never moves,
+ * so the list is drawn again only as an agent starts, stops, is renamed, or
+ * is archived, and each row reads its own agent (`useTaskAgentsFor`); a
+ * place's own from the rows it lists.
+ */
+export function useListedAgentPlaces(control: AgentsSource): ListedAgentPlaces {
+  const collections = useTaskListCollections();
+  const rows = "rows" in control ? control.rows : undefined;
+  const taskId = rows?.taskId;
+
+  const { data: listed } = useLiveQuery((q) =>
+    taskId === undefined
+      ? undefined
+      : q
+          .from({ agent: collections.agents })
+          .where(({ agent }) => eq(agent.taskId, taskId))
+          .orderBy(({ agent }) => agent.createdAt)
+          .orderBy(({ agent }) => agent.id)
+          .select(({ agent }) => ({
+            id: agent.id,
+            createdAt: agent.createdAt,
+            title: agent.title,
+            status: agent.status,
+            archivedAt: agent.archivedAt,
+            startedBy: agent.startedBy,
+            startedByAgentId: agent.startedByAgentId,
+            from: agent.from,
+            turn: agent.turn,
+          })),
+  );
+
+  const places = useMemo(() => listed?.map(listedPlaceOf), [listed]);
+
+  const standing = useStanding<ListedAgentPlace>(
+    taskId,
+    rows?.followed === true ? places : undefined,
+    rows?.held,
+  );
+
+  return useMemo(() => {
+    if (!("rows" in control)) return { agents: control.agents, archived: control.archived };
+
+    return {
+      agents: standing?.filter((agent) => agent.archivedAt === undefined),
+      archived: standing?.filter((agent) => agent.archivedAt !== undefined),
+    };
+  }, [control, standing]);
+}
+
 /**
  * The open task's control with its agents' rows: those of the task's agents
  * standing and archived, and their pull requests, each a live query over
