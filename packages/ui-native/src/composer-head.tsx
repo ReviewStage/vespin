@@ -3,6 +3,7 @@
 import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityHint,
   accessibilityLabel,
   buttonStyle,
@@ -13,9 +14,10 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { AvatarPhoto } from "./marks.js";
-import { useColors } from "./tokens/colors.js";
+import { Avatar, AvatarPhoto, HarnessMark } from "./marks.js";
+import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -180,6 +182,55 @@ const SUGGESTIONS_SHOWN = 4;
 const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
 
 /**
+ * What a suggestion's row leads with, in a square the size of a row's
+ * glyph, so the names line up whatever leads them: the mark of the entity
+ * it names, as the chip a pick writes leads with it (`ChipMark`), a
+ * person's photo or letters, a task's status ring in its tone, an agent's
+ * harness, a pull request's state, a thread's ask; else its kind's glyph in
+ * the muted ink. It is never heard, since the name beside it is.
+ */
+function SuggestionMark({
+  glyph,
+  mark,
+}: {
+  readonly glyph: Glyph;
+  readonly mark: ChipMark | undefined;
+}) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const square = frame({ width: size, height: size });
+
+  switch (mark?.kind) {
+    case CHIP_MARK.FACE:
+      return (
+        <ZStack modifiers={[square, accessibilityHidden()]}>
+          <Avatar name={mark.name} picture={mark.picture} size={size} />
+        </ZStack>
+      );
+    case CHIP_MARK.HARNESS:
+      return <HarnessMark provider={mark.harness} size={size} />;
+    case CHIP_MARK.GLYPH:
+      return (
+        <Image
+          {...glyphImage(mark.glyph)}
+          size={size}
+          color={toneColor(colors, mark.tone)}
+          modifiers={[square, accessibilityHidden()]}
+        />
+      );
+    default:
+      return (
+        <Image
+          {...glyphImage(glyph)}
+          size={size}
+          color={colors.TEXT_MUTED}
+          modifiers={[square, accessibilityHidden()]}
+        />
+      );
+  }
+}
+
+/**
  * One row a composer's head offers over the field, as a `/` offers a skill
  * and an `@` a mention: its glyph, its words, and a muted line after them,
  * the row's whole width taking the press. Note that at an accessibility
@@ -187,19 +238,20 @@ const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
  */
 function SuggestionRow({
   glyph,
+  mark,
   title,
   detail,
   onPress,
 }: {
   readonly glyph: Glyph;
+  readonly mark?: ChipMark | undefined;
   readonly title: string;
   readonly detail?: string | undefined;
   readonly onPress: () => void;
 }) {
-  const colors = useColors();
   const large = useAccessibilitySize();
-  const size = useScaledSize(MARK_SIZE.GLYPH);
   const lines = large ? [] : [lineLimit(1)];
+  const colors = useColors();
 
   return (
     <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(title)]}>
@@ -215,7 +267,7 @@ function SuggestionRow({
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
-        <Image {...glyphImage(glyph)} size={size} color={colors.TEXT_MUTED} />
+        <SuggestionMark glyph={glyph} mark={mark} />
         <VStack alignment="leading" spacing={1}>
           <Text
             modifiers={[
@@ -243,10 +295,11 @@ function SuggestionRow({
   );
 }
 
-/** One thing an `@` offers: its id, its kind's glyph, the name it goes under, and what its row says after the name. */
+/** One thing an `@` offers: its id, its kind's glyph, the mark of the entity it names where the app holds one, the name it goes under, and what its row says after the name. */
 export type MentionSuggestion = {
   readonly id: string;
   readonly glyph: Glyph;
+  readonly mark?: ChipMark | undefined;
   readonly name: string;
   readonly detail?: string | undefined;
 };
@@ -259,8 +312,11 @@ export type MentionSuggestionGroup = {
 
 /**
  * What an `@` being typed offers, as the panel's mention picker groups it:
- * each group under its small muted heading, its rows led by their kind's
- * glyph, a person's "You" or address and a task's key after the name, and
+ * each group under its small muted heading, its rows led by the mark of
+ * the entity each names, as the chip a pick writes leads with it (a
+ * person's face, a task's status, an agent's harness, a pull request's
+ * state, a thread's ask), else their kind's glyph, a person's "You" or
+ * address and a task's key after the name, and
  * the row picked written into the message; what stands where nothing
  * matches said in the muted ink. It stands over the field inside the
  * composer's glass, as the skills a `/` offers do, and scrolls past a few
@@ -310,6 +366,7 @@ export function MentionSuggestions({
             <SuggestionRow
               key={row.id}
               glyph={row.glyph}
+              mark={row.mark}
               title={row.name}
               detail={row.detail}
               onPress={() => onPick(group.title, row.id)}
