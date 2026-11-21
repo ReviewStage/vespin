@@ -6,7 +6,8 @@ import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-pictu
 import { identityLetter } from "@repo/features/workspace-tile";
 import { useState } from "react";
 import { PixelRatio, useColorScheme } from "react-native";
-import { AvatarPhoto, TILE_ROUNDING } from "./marks.js";
+import { TILE_ROUNDING } from "./mark-look.js";
+import { AvatarPhoto } from "./marks.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { tileHue } from "./workspace-tile-model.js";

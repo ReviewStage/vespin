@@ -1,8 +1,8 @@
-# VespinNativeInteractions.podspec -- the SwiftUI modifiers @expo/ui lacks (`NativeInteractionsModule.swift`): a list row's focus ring left off, a bar's subtitle, and drag and drop. Expo's autolinking finds it under `modules/` and builds it into the app.
+# VespinNativeInteractions.podspec -- the SwiftUI modifiers @expo/ui lacks (`NativeInteractionsModule.swift`): a list row's focus ring left off, a bar's subtitle, drag and drop, and a row's menu and swipes built from data (`RowMenu.swift`). Expo's autolinking finds it under `modules/` and builds it into the app.
 Pod::Spec.new do |s|
   s.name           = 'VespinNativeInteractions'
   s.version        = '0.1.0'
-  s.summary        = "The focus ring, bar subtitle, drag, and drop modifiers Vespin's screens hand @expo/ui"
+  s.summary        = "The focus ring, bar subtitle, drag, drop, and row menu modifiers Vespin's screens hand @expo/ui"
   s.license        = 'UNLICENSED'
   s.author         = 'Vespin'
   s.homepage       = 'https://vespin.dev'
@@ -13,6 +13,7 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
   s.dependency 'ExpoUI'
+  s.frameworks = 'GameController'
 
   s.source_files = '*.swift'
   s.pod_target_xcconfig = {
