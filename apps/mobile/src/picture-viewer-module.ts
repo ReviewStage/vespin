@@ -7,7 +7,7 @@
 
 import { type NativeModule, requireNativeModule } from "expo";
 
-/** What the viewer opens: the picture's address, the thumbnail's place in the window, in points, and the bar's words. */
+/** One picture the viewer opens: its address, its thumbnail's place in the window, in points, and the bar's words. */
 interface ShownPicture {
   /** A `file://`, `data:`, or web address, read at full size while the thumbnail's own bitmap stands in. */
   readonly uri: string;
@@ -20,8 +20,8 @@ interface ShownPicture {
 }
 
 declare class PictureViewerModule extends NativeModule {
-  /** Opens the picture full screen; answers false where UIKit would not present it. */
-  show(shown: ShownPicture): Promise<boolean>;
+  /** Opens `pictures` full screen at `index`, a swipe stepping through the rest; answers false where UIKit would not present it. */
+  show(pictures: readonly ShownPicture[], index: number): Promise<boolean>;
 }
 
 /** The module. */

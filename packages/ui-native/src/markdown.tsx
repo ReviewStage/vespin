@@ -45,7 +45,7 @@ import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import {
   HeldMenu,
-  type PicturePlace,
+  PictureSetProvider,
   useKeeping,
   useKeptActs,
   usePictureView,
@@ -1061,14 +1061,6 @@ function unreadWords(alt: string): string {
   return `${alt.trim() === "" ? "This picture" : alt} ${MEDIA_READ_WORDS.COULD_NOT_READ}`;
 }
 
-/** Opens a picture's viewer from where its thumbnail stands as it is pressed, since the viewer grows out of that place and a scroll moves it. */
-function viewFrom(
-  drawn: RefObject<ComponentRef<typeof Image> | null>,
-  view: (place: PicturePlace) => void,
-): void {
-  drawn.current?.measureInWindow((x, y, width, height) => view({ x, y, width, height }));
-}
-
 type PictureProps = {
   /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone, and `null` where it could not be read, which says so in its well. */
   readonly source: string | null | undefined;
@@ -1115,9 +1107,8 @@ export function Picture({
     source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard };
 
   const acts = useKeptActs(kept);
-  const view = usePictureView(source, heard);
   const drawn = useRef<ComponentRef<typeof Image>>(null);
-  const show = view === undefined ? undefined : () => viewFrom(drawn, view);
+  const show = usePictureView(source, heard, drawn);
 
   // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(size ?? natural, bounds) : undefined;
@@ -1164,7 +1155,7 @@ export function Picture({
           <HeldMenu acts={acts} width={boxWidth}>
             <Press
               onPress={show}
-              disabled={view === undefined}
+              disabled={source == null}
               accessibilityRole="imagebutton"
               accessibilityLabel={heard}
               accessibilityHint="Opens full screen"
@@ -1493,22 +1484,25 @@ export function Markdown({
     suggestion,
   };
 
+  // Note that the words' pictures are one set a viewer swipes through, as a description's are, or join the set of the thread or message around them.
   return (
-    <View
-      onLayout={(event) => {
-        // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
-        const laid = event.nativeEvent.layout.width;
+    <PictureSetProvider>
+      <View
+        onLayout={(event) => {
+          // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
+          const laid = event.nativeEvent.layout.width;
 
-        if (laid > 0) setMeasured(laid);
-      }}
-    >
-      {diagrams ? (
-        <DiagramRenderer>
+          if (laid > 0) setMeasured(laid);
+        }}
+      >
+        {diagrams ? (
+          <DiagramRenderer>
+            <Blocks blocks={blocks} drawing={drawing} />
+          </DiagramRenderer>
+        ) : (
           <Blocks blocks={blocks} drawing={drawing} />
-        </DiagramRenderer>
-      ) : (
-        <Blocks blocks={blocks} drawing={drawing} />
-      )}
-    </View>
+        )}
+      </View>
+    </PictureSetProvider>
   );
 }

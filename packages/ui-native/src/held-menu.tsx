@@ -89,7 +89,8 @@ export interface PictureOrigin {
  */
 export interface Keeping {
   readonly open: (kept: Kept) => void;
-  readonly view: (picture: ViewedPicture) => void;
+  /** Opens `pictures` full screen at `index`, a swipe stepping through the rest. */
+  readonly view: (pictures: readonly ViewedPicture[], index: number) => void;
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
   /** Shares words in the system's share sheet, such as a message's. */
@@ -100,6 +101,27 @@ export interface Keeping {
 const KeepingDoor = createContext<Keeping | undefined>(undefined);
 
 const OriginDoor = createContext<PictureOrigin | undefined>(undefined);
+
+/** A thumbnail whose place in the window can be measured, as a React Native view's can. */
+export interface MeasuredThumbnail {
+  readonly measureInWindow: (
+    done: (x: number, y: number, width: number, height: number) => void,
+  ) => void;
+}
+
+/** Where a drawn thumbnail is held, as a React Native view's ref holds it. */
+export interface ThumbnailRef {
+  readonly current: MeasuredThumbnail | null;
+}
+
+/** One picture of a set its viewer steps through: what it opens as, but where it stands, which is measured as the press lands. */
+interface SetMember {
+  readonly picture: Omit<ViewedPicture, "place">;
+  readonly drawn: ThumbnailRef;
+}
+
+/** The pictures of one thread, message, or description, each standing while it is drawn. */
+const SetDoor = createContext<Set<SetMember> | undefined>(undefined);
 
 /** Whether the message around a view has its words selected in place, and what ends it, as `MessageWords` reads it; none outside a message's menu. */
 const SelectingDoor = createContext<
@@ -128,28 +150,93 @@ export function PictureOriginProvider({
   return <OriginDoor value={origin}>{children}</OriginDoor>;
 }
 
+/** Gathers the pictures under it into one set, which a picture's viewer steps through with a swipe, as one thread's, message's, or description's are; a set inside another joins the outer one. */
+export function PictureSetProvider({ children }: { readonly children: ReactNode }) {
+  const outer = useContext(SetDoor);
+  const [members] = useState(() => new Set<SetMember>());
+
+  return outer === undefined ? <SetDoor value={members}>{children}</SetDoor> : children;
+}
+
+/** Where a thumbnail stands in the window now; none where it stands in no window. */
+function placeOf(drawn: ThumbnailRef): Promise<PicturePlace | undefined> {
+  return new Promise((done) => {
+    const thumbnail = drawn.current;
+
+    if (thumbnail === null) {
+      done(undefined);
+
+      return;
+    }
+
+    thumbnail.measureInWindow((x, y, width, height) => done({ x, y, width, height }));
+  });
+}
+
+/** Opens `pressed` among the set's pictures, each in the order it stands on the page, top to bottom and then left to right, as a reader meets them. */
+async function viewAmong(
+  keeping: Keeping,
+  members: readonly SetMember[],
+  pressed: SetMember,
+): Promise<void> {
+  const placed = await Promise.all(
+    members.map(async (member) => ({ member, place: await placeOf(member.drawn) })),
+  );
+
+  const inOrder = placed
+    .filter((each) => each.place !== undefined || each.member === pressed)
+    .map((each) => ({ ...each, place: each.place ?? { x: 0, y: 0, width: 0, height: 0 } }))
+    .sort((a, b) => a.place.y - b.place.y || a.place.x - b.place.x);
+
+  keeping.view(
+    inOrder.map(({ member, place }) => ({ ...member.picture, place })),
+    inOrder.findIndex((each) => each.member === pressed),
+  );
+}
+
 /**
  * A thumbnail's press that opens its picture full screen in the app's
  * viewer, grown out of the thumbnail's place, its bar naming who showed it
- * and when where a message says, and the picture's own words otherwise; none
- * where nothing is drawn yet or no app answers it.
+ * and when where a message says, and the picture's own words otherwise, a
+ * swipe stepping through the other pictures of its set (`PictureSetProvider`);
+ * none where nothing is drawn yet or no app answers it. Note that the set
+ * holds each picture while it is drawn, and that each one's place is measured
+ * as the press lands, since a scroll moves them.
  */
 export function usePictureView(
   source: string | null | undefined,
   name: string,
-): ((place: PicturePlace) => void) | undefined {
+  drawn: ThumbnailRef,
+): (() => void) | undefined {
   const keeping = useContext(KeepingDoor);
   const origin = useContext(OriginDoor);
+  const set = useContext(SetDoor);
+  const title = origin?.by ?? name;
+  const subtitle = origin?.at === undefined ? undefined : dayAndTimeText(origin.at);
+
+  // Note that each picture stands in its set while it is drawn, as it is drawn now, so a press reads the set as the page stands.
+  useEffect(() => {
+    if (set === undefined || source == null) return;
+    const standing: SetMember = { picture: { source, title, subtitle }, drawn };
+    set.add(standing);
+
+    return () => {
+      set.delete(standing);
+    };
+  }, [set, source, title, subtitle, drawn]);
 
   if (keeping === undefined || source == null) return undefined;
 
-  return (place) =>
-    keeping.view({
-      source,
-      title: origin?.by ?? name,
-      subtitle: origin?.at === undefined ? undefined : dayAndTimeText(origin.at),
-      place,
-    });
+  return () => {
+    const members = set === undefined ? [] : [...set];
+
+    const pressed = members.find((each) => each.drawn === drawn) ?? {
+      picture: { source, title, subtitle },
+      drawn,
+    };
+
+    void viewAmong(keeping, members.includes(pressed) ? members : [pressed], pressed);
+  };
 }
 
 /** Copies words to the pasteboard through the app's keeping, as a held link's Copy link does; none where no app answers it. */
