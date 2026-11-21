@@ -1,0 +1,66 @@
+// document-field-model.test.ts -- a document laid into a rich field's lines and told back unchanged writes the same bytes, and a Return typed in it makes the block a rich editor's Return makes.
+
+import { documentBlocks, INLINE_RUN, writtenDocument } from "@repo/features/document-blocks";
+import { describe, expect, it } from "vitest";
+import { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
+
+/** A description holding each block the field draws, and a table it stands as a card. */
+const DOCUMENT = [
+  "# Plan",
+  "",
+  "Ship the **invite** flow.",
+  "",
+  "- [x] Model",
+  "- [ ] Screen",
+  "",
+  "> Owners may withdraw.",
+  "",
+  "```ts",
+  "const days = 7;",
+  "",
+  "export { days };",
+  "```",
+  "",
+  "---",
+  "",
+  "| a | b |",
+  "| - | - |",
+  "| 1 | 2 |",
+  "",
+].join("\n");
+
+/** The lines with one typed after the line at `after`, carrying on that line's block as a Return does. */
+function returnedAfter(
+  lines: readonly FieldLine[],
+  after: number,
+  text: string,
+): readonly FieldLine[] {
+  const line = lines[after];
+
+  if (line === undefined) return lines;
+  const typed: FieldLine = { ...line, runs: [{ kind: INLINE_RUN.WORDS, text, marks: [] }] };
+
+  return [...lines.slice(0, after + 1), typed, ...lines.slice(after + 1)];
+}
+
+describe("editedBlocks", () => {
+  it("tells a document laid in and left alone back as its same bytes", () => {
+    expect(writtenDocument(DOCUMENT, editedBlocks(fieldLines(documentBlocks(DOCUMENT))))).toBe(
+      DOCUMENT,
+    );
+  });
+
+  it("makes a Return after a heading a paragraph of its own", () => {
+    const markdown = "# Plan\n\nBody.\n";
+    const lines = returnedAfter(fieldLines(documentBlocks(markdown)), 0, "Next");
+
+    expect(writtenDocument(markdown, editedBlocks(lines))).toBe("# Plan\n\nNext\n\nBody.\n");
+  });
+
+  it("makes a Return in a list another item", () => {
+    const markdown = "- one\n- two\n";
+    const lines = returnedAfter(fieldLines(documentBlocks(markdown)), 1, "three");
+
+    expect(writtenDocument(markdown, editedBlocks(lines))).toBe("- one\n- two\n- three\n");
+  });
+});

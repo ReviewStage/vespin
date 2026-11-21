@@ -10,6 +10,12 @@ appId: dev.vespin.ios
 # column (`BESIDE`), because a scroll at the window's middle lands on the
 # list column of a landscape window, and the page never moved
 # (`scroll-in.yaml`).
+# Note that an iPad stands in landscape, where its transcript stands in the
+# detail column beside the list, and that the window is turned back upright
+# however the flow ends, because a run left in landscape fails every flow
+# after it.
+onFlowComplete:
+  - setOrientation: PORTRAIT
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
@@ -22,6 +28,11 @@ env:
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
 # Note that the launch waits up to half a minute for its first words, as
 # `pull-request.yaml`'s do.
 - extendedWaitUntil:
@@ -113,6 +124,16 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-pull-request
+# Note that an iPad opens the fold upright and then turns back: in landscape
+# on iOS 27.2 the first tap on the fold does not take, where a tap by hand
+# does, which STAG-3807 traces, while upright it opens at once.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: PORTRAIT
+      - waitForAnimationToEnd:
+          timeout: 5000
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
@@ -121,28 +142,18 @@ env:
       BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd:
     timeout: 5000
-# Note that the fold is tapped once, with Maestro's retry off, because its
-# rows land a moment after the tap in a landscape window, where the retry,
-# seeing no change yet, tapped a second time and folded it shut again; a
-# fold still closed once its rows had time to land is tapped once more.
-- tapOn:
-    text: ".*tool calls.*"
-    retryTapIfNoChange: false
-- extendedWaitUntil:
-    visible: "Read.*"
-    timeout: 3000
-    optional: true
-- runFlow:
-    when:
-      notVisible: "Read.*"
-    commands:
-      - tapOn:
-          text: ".*tool calls.*"
-          retryTapIfNoChange: false
+- tapOn: ".*tool calls.*"
 - assertVisible: "Read.*"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-fold
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+      - waitForAnimationToEnd:
+          timeout: 5000
 # At the top, the page older than the transcript's first is read; the
 # fixture's first read is not heard back, so it offers Try again, and the
 # next lays the older turn before the first.
