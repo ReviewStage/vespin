@@ -945,6 +945,14 @@ pushed. A token Apple answers 410, `Unregistered`, or `BadDeviceToken` is
 deleted; any other refusal or failure is logged by its status and Apple's
 reason alone, never a token or a notification's words.
 
+The Android app registers its FCM registration token the same way, naming
+`fcm` as its provider, and the service pushes to it through Firebase Cloud
+Messaging's HTTP v1 API (`packages/service/src/push/fcm.ts`). It needs
+`FCM_SERVICE_ACCOUNT`, the Firebase project's service account key as the
+console downloads it, its JSON whole; without it the build logs it once by
+name and the sender answers unavailable, sending nothing to an Android
+phone. A token FCM answers `UNREGISTERED` is deleted.
+
 ## Sentry
 
 The functions report to Sentry's `vespin-web` project, set

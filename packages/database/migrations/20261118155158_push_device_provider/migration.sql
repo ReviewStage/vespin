@@ -1,0 +1,1 @@
+ALTER TABLE "push_device" ADD COLUMN "provider" text DEFAULT 'apns' NOT NULL;

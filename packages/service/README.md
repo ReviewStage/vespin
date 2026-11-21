@@ -1819,6 +1819,20 @@ the signer alone, the provider token into the authorization header alone, and
 a log line names a status and Apple's reason, never a token, a payload, or a
 key.
 
+`FcmSender` (`fcm.ts`) is the Android phone's door, beside it: a message
+names the phone and the HTTP v1 `Message` Google delivers, composed by the
+caller, to which the sender adds the token. It exchanges an RS256 JWT the
+Firebase service account's key signs for an OAuth access token scoped to
+messaging, reused for fifty minutes, posts to
+`/v1/projects/<project>/messages:send` over the runtime's `HttpClient`, and
+answers one of `FCM_DELIVERY`, Apple's outcomes: `UNREGISTERED` or a 404
+deletes the row, a 400 or 403 otherwise is refused for good, and anything
+else may be retried. It reads `FCM_SERVICE_ACCOUNT`, the key's JSON; unset
+or unreadable, it answers unavailable and sends nothing. `inbox-pushes.ts`
+sends each phone through its row's `provider`, an Android phone the same
+alert as Android's notification and the app's keys as string data
+(`fcmMessageOf`); a Live Activity is Apple's alone.
+
 `inbox-pushes.ts` decides when to push, in three kinds of its own
 (`PUSH_KIND`) so one can be dropped alone: an agent's post that asks the
 member its thread waits on something (decide, do, or answer), any other post

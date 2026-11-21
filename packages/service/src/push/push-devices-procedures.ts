@@ -7,8 +7,9 @@
  * idempotent, and a token another account registered moves to the caller,
  * since the phone is signed in here now; an unregister of a token the
  * account does not hold is done all the same, so a phone signing out after
- * its token moved answers no differently. The token is kept in lower case,
- * however the app spelled its hex, so one token is one row. A read of the
+ * its token moved answers no differently. An APNs token is kept in lower
+ * case, however the app spelled its hex, so one token is one row, and an
+ * FCM token as sent, since its case is part of it (`storedPushToken`). A read of the
  * phone's standing and a set of its "Notify me" act on the account's own
  * phone alone, and a token it does not hold is answered not found, exactly
  * as one no account holds, so no account reads or changes another's phone.
@@ -21,7 +22,7 @@ import {
   setPushDeviceNotify,
   unregisterPushDevice,
 } from "@repo/database/models/push-device-store";
-import type { PushDeviceDoneAnswer } from "@repo/features/push-device-wire";
+import { type PushDeviceDoneAnswer, storedPushToken } from "@repo/features/push-device-wire";
 import { Effect, Option } from "effect";
 import {
   HOSTED_REFUSAL,
@@ -44,9 +45,10 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
     register: signedIn.register.effect(function* ({ input, context: { userId } }) {
       yield* hostedStoreOrUnavailable(
         registerPushDevice(userId, {
-          token: input.token.toLowerCase(),
+          token: storedPushToken(input.token),
           environment: input.environment,
           bundleId: input.bundleId,
+          ...(input.provider === undefined ? undefined : { provider: input.provider }),
         }),
       );
 
@@ -56,7 +58,7 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
     unregister: signedIn.unregister.effect(function* ({ input, context: { userId } }) {
       yield* hostedStoreOrUnavailable(
         unregisterPushDevice(userId, {
-          token: input.token.toLowerCase(),
+          token: storedPushToken(input.token),
           environment: input.environment,
         }),
       );
@@ -67,7 +69,7 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
     status: signedIn.status.effect(function* ({ input, context: { userId } }) {
       const standing = yield* hostedStoreOrUnavailable(
         readPushDeviceStatus(userId, {
-          token: input.token.toLowerCase(),
+          token: storedPushToken(input.token),
           environment: input.environment,
         }),
       );
@@ -81,7 +83,7 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
       const held = yield* hostedStoreOrUnavailable(
         setPushDeviceNotify(
           userId,
-          { token: input.token.toLowerCase(), environment: input.environment },
+          { token: storedPushToken(input.token), environment: input.environment },
           input.notify,
         ),
       );

@@ -5,7 +5,7 @@ import { Database } from "@repo/database/core/query";
 import { listPushDevices } from "@repo/database/models/push-device-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
-import { PUSH_ENVIRONMENT, PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { PUSH_ENVIRONMENT, PUSH_NOTIFY, PUSH_PROVIDER } from "@repo/features/push-device-wire";
 import { HTTP_METHOD, type WireBoundaryInput } from "@repo/wire";
 import { Clock, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
@@ -19,8 +19,8 @@ import { pushDevicesProcedures } from "./push-devices-procedures.js";
  * lower case, and again under another account moves it there; an unregister
  * takes it out, and one of a token the account does not hold is done all the
  * same; a phone's standing is read and its "Notify me" set by its own
- * account alone, another's answered not found; and a token that is not
- * Apple's hex is refused. Synthetic accounts,
+ * account alone, another's answered not found; and a token is held to its
+ * own service's spelling, an FCM token kept as sent. Synthetic accounts,
  * bearers, and tokens throughout.
  */
 
@@ -165,23 +165,42 @@ it.layer(getTestDB())("the push devices route", (it) => {
       }),
   );
 
-  it.effect("a token that is not Apple's hex is refused, and nothing is registered", () =>
-    Effect.gen(function* () {
-      const { owner, ask } = yield* openAccounts;
+  it.effect(
+    "a token is held to its own service's spelling: Apple's hex alone for a phone that names no service, and an FCM token kept as sent, case and all",
+    () =>
+      Effect.gen(function* () {
+        const { owner, ask } = yield* openAccounts;
+        const fcmToken = "dQw4w9WgXcQ:APA91bHun4MxP5egoKMwt2KZFBaFUH-1RYqx";
 
-      const refused = yield* ask(
-        post(REGISTER_PATH, owner, {
-          token: "not-a-device-token-but-long-enough-to-pass-the-length",
+        const refused = yield* ask(
+          post(REGISTER_PATH, owner, {
+            token: fcmToken,
+            environment: PUSH_ENVIRONMENT.PRODUCTION,
+            bundleId: BUNDLE_ID,
+          }),
+        );
+
+        assert.deepEqual(refused, {
+          status: HOSTED_HTTP_STATUS.BAD_REQUEST,
+          body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
+        });
+        assert.deepEqual(yield* listPushDevices(owner), []);
+
+        const android = {
+          token: fcmToken,
           environment: PUSH_ENVIRONMENT.PRODUCTION,
-          bundleId: BUNDLE_ID,
-        }),
-      );
+          bundleId: "dev.vespin.android",
+          provider: PUSH_PROVIDER.FCM,
+        };
 
-      assert.deepEqual(refused, {
-        status: HOSTED_HTTP_STATUS.BAD_REQUEST,
-        body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
-      });
-      assert.deepEqual(yield* listPushDevices(owner), []);
-    }),
+        assert.deepEqual(yield* ask(post(REGISTER_PATH, owner, android)), DONE);
+        assert.deepEqual(
+          (yield* listPushDevices(owner)).map((row) => [row.token, row.provider]),
+          [[fcmToken, PUSH_PROVIDER.FCM]],
+        );
+        const key = { token: fcmToken, environment: PUSH_ENVIRONMENT.PRODUCTION };
+        assert.deepEqual(yield* ask(post(UNREGISTER_PATH, owner, key)), DONE);
+        assert.deepEqual(yield* listPushDevices(owner), []);
+      }),
   );
 });

@@ -41,6 +41,7 @@ import { cursorModelCatalogLayer } from "./providers/cursor-models.js";
 import { modelCatalogLayer } from "./providers/model-catalog.js";
 import { apnsSenderFromEnvironment } from "./push/apns.js";
 import { apnsHttp2Transport } from "./push/apns-http2.js";
+import { fcmSenderFromEnvironment } from "./push/fcm.js";
 import { slackAppFromEnvironment } from "./slack/slack-app.js";
 import { slackBotFromEnvironment } from "./slack/slack-bot.js";
 import { syncFromEnvironment } from "./sync/hub.js";
@@ -94,6 +95,9 @@ const slackBot = slackBotFromEnvironment.pipe(
 
 /** The APNs sender as the environment names it, named once so the turn listener and every request share one provider token and connection. */
 const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transport));
+
+/** The FCM sender as the environment names it, named once so the turn listener and every request share one access token. */
+const fcmSender = fcmSenderFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer));
 
 /**
  * `UsageQueues` publishes each sandbox's usage check and each charge's send
@@ -213,7 +217,14 @@ export const webServices = Layer.mergeAll(
   signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(
     Layer.provide(
-      Layer.mergeAll(FetchHttpClient.layer, githubApp, hostedEnvironment, slackBot, apnsSender),
+      Layer.mergeAll(
+        FetchHttpClient.layer,
+        githubApp,
+        hostedEnvironment,
+        slackBot,
+        apnsSender,
+        fcmSender,
+      ),
     ),
   ),
   sentryAppFromEnvironment,
@@ -245,6 +256,7 @@ export const webServices = Layer.mergeAll(
   welcomeMailFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   onboardingEventsFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   apnsSender,
+  fcmSender,
 ).pipe(Layer.provide(webConfigProvider));
 
 /** What an effect run on a runtime over these services may require. */

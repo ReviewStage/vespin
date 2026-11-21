@@ -1,5 +1,5 @@
 /**
- * push-device-store.ts -- an account's phones that take pushes: register one, unregister one, read them, and delete a token Apple says is gone.
+ * push-device-store.ts -- an account's phones that take pushes: register one, unregister one, read them, and delete a token its push service says is gone.
  *
  * Every function but the last is an effect over the ambient `SqlClient`,
  * keyed by the account, so no account reads or unregisters another's phone.
@@ -15,11 +15,14 @@
 
 import {
   PUSH_FAILURE_REASON_MAX_CHARS,
+  PUSH_PROVIDER,
   type PushDeviceStatusAnswer,
   type PushEnvironment,
   type PushNotify,
+  type PushProvider,
   pushEnvironmentSchema,
   pushNotifySchema,
+  pushProviderSchema,
 } from "@repo/features/push-device-wire";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
@@ -37,9 +40,10 @@ export interface PushDeviceToken {
   readonly environment: PushEnvironment;
 }
 
-/** What a phone registers: its token and gateway, and the app Apple issued the token to. */
+/** What a phone registers: its token and gateway, the app the token was issued to, and the push service it belongs to, Apple's where unsaid. */
 export interface PushDeviceRegistration extends PushDeviceToken {
   readonly bundleId: string;
+  readonly provider?: PushProvider;
 }
 
 const TokenKeySchema = Schema.Struct({
@@ -47,11 +51,12 @@ const TokenKeySchema = Schema.Struct({
   environment: pushEnvironmentSchema,
 });
 
-/** One phone as a push reads it: whose it is, where to address it, when it last registered, and when it takes an alert. */
+/** One phone as a push reads it: whose it is, which service and where to address it, when it last registered, and when it takes an alert. */
 const PushDeviceSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
   token: Schema.String,
+  provider: pushProviderSchema,
   environment: pushEnvironmentSchema,
   bundleId: Schema.String,
   createdAt: InstantColumnSchema,
@@ -73,6 +78,7 @@ const PUSH_DEVICE_COLUMNS = {
   id: pushDevice.id,
   userId: pushDevice.userId,
   token: pushDevice.token,
+  provider: pushDevice.provider,
   environment: pushDevice.environment,
   bundleId: pushDevice.bundleId,
   createdAt: pushDevice.createdAt,
@@ -85,17 +91,18 @@ const upsertDevice = SqlSchema.void({
     ...TokenKeySchema.fields,
     userId: Schema.String,
     bundleId: Schema.String,
+    provider: pushProviderSchema,
     now: Schema.Date,
   }),
-  execute: ({ userId, token, environment, bundleId, now }) =>
+  execute: ({ userId, token, environment, bundleId, provider, now }) =>
     Database.use((db) =>
       db
         .insert(pushDevice)
-        .values({ userId, token, environment, bundleId, createdAt: now, lastSeenAt: now })
+        .values({ userId, token, environment, bundleId, provider, createdAt: now, lastSeenAt: now })
         .onConflictDoUpdate({
           target: [pushDevice.environment, pushDevice.token],
           // The phone is signed in to this account now, whichever held the token before.
-          set: { userId, bundleId, lastSeenAt: now },
+          set: { userId, bundleId, provider, lastSeenAt: now },
         }),
     ),
 });
@@ -247,9 +254,16 @@ export function registerPushDevice(
   registration: PushDeviceRegistration,
 ): PushDeviceEffect<void> {
   return Effect.gen(function* () {
-    const { token, environment } = registration;
+    const { token, environment, bundleId, provider = PUSH_PROVIDER.APNS } = registration;
     yield* deleteMovedLiveActivity({ userId, token, environment });
-    yield* upsertDevice({ userId, ...registration, now: yield* DateTime.nowAsDate });
+    yield* upsertDevice({
+      userId,
+      token,
+      environment,
+      bundleId,
+      provider,
+      now: yield* DateTime.nowAsDate,
+    });
   });
 }
 
@@ -266,7 +280,7 @@ export function listPushDevices(userId: string): PushDeviceEffect<readonly PushD
   return findDevices(userId);
 }
 
-/** A token Apple has said is gone, deleted whichever account holds it, answering whether a row stood. */
+/** A token its push service has said is gone, deleted whichever account holds it, answering whether a row stood. */
 export function deletePushDeviceToken(key: PushDeviceToken): PushDeviceEffect<boolean> {
   return Effect.map(deleteDeviceByToken(key), (rows) => rows.length > 0);
 }

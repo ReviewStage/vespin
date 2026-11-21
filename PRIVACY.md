@@ -374,6 +374,18 @@ with your account. Beside the token we keep each phone's "Notify me" choice,
 when a push to it last reached Apple, and, while its pushes fail, since when
 and Apple's reason, which the phone's Settings shows.
 
+If you sign in to the Vespin Android app and allow notifications, the app
+registers the Firebase Cloud Messaging token Google hands it in the same
+way, with the app it was issued to, and we keep it with your account beside
+that it is Google's. When the Service pushes a notification to that phone,
+it sends Google's Firebase Cloud Messaging that token and the same
+notification, **its title and body, which may carry the words of an Inbox
+thread, and the agent's or the task's name**, with the ids the app opens on
+a tap, under Google's own policies. We keep and delete the token, its
+"Notify me" choice, and how its pushes fare as we do an iPhone's, with
+Google's reason in place of Apple's. Live Activities are the iPhone's
+alone.
+
 If your iPhone allows the app's Live Activities, the app also registers the
 two tokens Apple hands it for the one Live Activity that shows your running
 agents: one that lets the Service start the activity, and one for the
