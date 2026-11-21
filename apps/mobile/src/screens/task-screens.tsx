@@ -1,6 +1,11 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentStatus,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
@@ -98,6 +103,7 @@ import {
   VERB,
 } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
+import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
@@ -177,6 +183,7 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
+import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -1245,6 +1252,15 @@ type TasksTreeProps = {
 function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
   const { tree } = listing;
   const read = useTasksReadStatus();
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const managers = useWorkspaceManagers(listing.workspace?.id);
+
+  // Note that a Manager's row opens its page over the list in either window, as an agent's row on a task's page does, since the split view's detail stands a task alone.
+  const open = (id: string) => {
+    if (managers.some((agent) => agent.id === id)) router.push(onOwnTab(iosAgentRoute(id)));
+    else onSelect(id);
+  };
 
   const found = listing.found;
 
@@ -1271,12 +1287,13 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
   }
 
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) {
+  if (treeEmpty(tree) && managers.length === 0) {
     return notRead(read, onRefresh) ?? <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
   }
 
   return (
-    <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
+    <RowList look={look} selected={selected} onSelect={open} onRefresh={onRefresh}>
+      <ManagersSection managers={managers} hold={hold} />
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
@@ -1293,6 +1310,51 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
     </RowList>
+  );
+}
+
+/** The Managers section's name, on its header. */
+const MANAGERS_HEAD = "Managers";
+
+/** The Managers section's key among the tree's groups, by which its fold is held. */
+const MANAGERS_KEY = "managers";
+
+/**
+ * The workspace's Managers as the Tasks list's first section, above Pinned,
+ * as the desktop's sidebar stands them (`sidebar-managers.tsx`): each an
+ * agent's row, newest started first, its unread dot standing while its chat
+ * said something the reader has not read, and its press opening its chat
+ * (`TasksTree`), its long press and swipes an agent's own. It folds under
+ * its header and count as the other groups do, and stands nowhere while the
+ * workspace has none or has the Managers experiment off.
+ */
+function ManagersSection({
+  managers,
+  hold,
+}: {
+  readonly managers: readonly ListedAgent[];
+  readonly hold: TreeHold;
+}) {
+  const asking = useAgentRowAsk();
+
+  if (managers.length === 0) return null;
+
+  return (
+    <ListSection
+      title={MANAGERS_HEAD}
+      count={managers.length}
+      foldable
+      folded={hold.folded.has(MANAGERS_KEY)}
+      onFold={(shut) => hold.setFolded(MANAGERS_KEY, shut)}
+    >
+      {managers.map((agent) => (
+        <TaskAgentRow
+          key={agent.id}
+          line={{ agent, waiting: 0, pullRequest: undefined }}
+          asking={asking}
+        />
+      ))}
+    </ListSection>
   );
 }
 
@@ -2144,6 +2206,7 @@ export function TaskAgentRow({
       depth={nest?.depth}
       fold={nest?.fold}
       started={nest?.started}
+      unread={managerChatUnread(agent)}
       task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
