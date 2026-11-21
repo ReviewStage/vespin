@@ -60,7 +60,7 @@ import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-sugges
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useListedTasks, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
 import {
   CLOUD,
