@@ -71,7 +71,7 @@ import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent, emojiContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { cellFocusRingOff, dragLink, heardActions, rowMenu, rowSwipes } from "./interactions.js";
+import { cellFocusRingOff, dragLink, rowHeard, rowMenu, rowSwipes } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -86,7 +86,6 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { useMinute } from "./minute.js";
-import { heardActs } from "./row-heard-acts.js";
 import {
   filledGroups,
   isSubmenu,
@@ -195,6 +194,9 @@ const SWIPE_FILL = {
 function menuGroupFilled(group: RowMenuGroup): boolean {
   return (group.submenus?.length ?? 0) + (group.actions?.length ?? 0) > 0;
 }
+
+/** The tree of a row whose menu offers nothing, such as one in Select mode: no groups, so no menu and no Actions. */
+const EMPTY_TREE = JSON.stringify({ groups: [] });
 
 /** The acts a row carries: a swipe from either edge, the same acts in its long press menu, what that menu holds alone, and the preview it lifts. */
 type RowActs = {
@@ -543,7 +545,7 @@ function asking(content: ReactElement, question: RowQuestion | undefined): React
  * row given what it is heard as reads to VoiceOver as one element, its title
  * then where it stands, rather than each mark and word apart, and offers its
  * menu's acts once each as its Actions, a submenu's items worded with their
- * menu (`heardActs`), as Mail's rows offer theirs.
+ * menu (`rowHeard`), as Mail's rows offer theirs.
  */
 export function RowFrame({
   id,
@@ -609,7 +611,36 @@ export function RowFrame({
         ]
       : [opening, ...ordered];
 
-  // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu instead (`heardActs`), and Select mode offers none, as it offers no long press.
+  const ownGroup =
+    ordered === undefined
+      ? swiped.length + menuSubmenus.length + menuActions.length > 0
+      : ordered.some((group) => group.length > 0);
+
+  // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
+  const plain = choosing || (!ownGroup && groups.length === 0 && preview === undefined);
+  const inks: MenuInks = { act: colors.TEXT_MUTED, tone: (tone) => toneColor(colors, tone) };
+
+  // Note that the menu, its preview, and its VoiceOver Actions reach the native module as one string, read only as a long press opens the menu or while something reads the Actions, so the row holds no view of either and builds nothing for them as it draws; a press comes back as its place, which finds its handler here.
+  const tree = plain
+    ? EMPTY_TREE
+    : JSON.stringify({
+        groups: menuTree(menuGroupsDrawn, inks),
+        preview:
+          preview === undefined
+            ? undefined
+            : previewTree(preview, {
+                colors,
+                tone: inks.tone,
+                scale,
+                dark,
+                pixelRatio: PixelRatio.get(),
+                now: now ?? Date.now(),
+              }),
+      });
+
+  const pressMenu = (path: readonly number[]) => menuPressAt(menuGroupsDrawn, path)?.();
+
+  // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu's tree instead (`rowHeard`), and Select mode offers none, as it offers no long press.
   const frameModifiers = [
     tag(id),
     ...rowPlacement(
@@ -628,49 +659,19 @@ export function RowFrame({
           accessibilityValue(heardValue(heard.value)),
           // Note that a row of a list that opens its rows reads as a button, as Mail's message rows do, whatever it draws, its menu reached through its Actions rather than as a pop-up.
           ...(open === undefined ? [] : [accessibilityAddTraits(["isButton"])]),
-          heardActions(choosing ? [] : heardActs(menuGroupsDrawn)),
+          rowHeard(tree, pressMenu),
         ]),
     ...(link === undefined ? [] : [dragLink(link)]),
     // Note that a row of a list that opens its rows draws no keyboard focus ring around its cell, as iPadOS's own sidebars draw none, since its selection already stands on the `SELECTED` fill; it's set by whether the row opens at all, not by whether it's selected now, so the modifiers don't change as the selection does.
     ...(open === undefined ? [] : [cellFocusRingOff()]),
   ];
 
-  const ownGroup =
-    ordered === undefined
-      ? swiped.length + menuSubmenus.length + menuActions.length > 0
-      : ordered.some((group) => group.length > 0);
-
-  // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
-  if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
+  if (plain) {
     return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
-  const inks: MenuInks = { act: colors.TEXT_MUTED, tone: (tone) => toneColor(colors, tone) };
-
-  // Note that the menu and its preview reach the native module as one string, read only as a long press opens them, so the row holds no view of either; a press comes back as its place, which finds its handler here.
-  const tree = JSON.stringify({
-    groups: menuTree(menuGroupsDrawn, inks),
-    preview:
-      preview === undefined
-        ? undefined
-        : previewTree(preview, {
-            colors,
-            tone: inks.tone,
-            scale,
-            dark,
-            pixelRatio: PixelRatio.get(),
-            now: now ?? Date.now(),
-          }),
-  });
-
   const menu = asking(
-    <HStack
-      modifiers={[
-        rowMenu(tree, preview !== undefined, (path) => menuPressAt(menuGroupsDrawn, path)?.()),
-      ]}
-    >
-      {row}
-    </HStack>,
+    <HStack modifiers={[rowMenu(tree, preview !== undefined, pressMenu)]}>{row}</HStack>,
     question,
   );
 

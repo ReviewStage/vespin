@@ -7,6 +7,7 @@
 // handlers stay in JavaScript, which walks its own groups to the one pressed.
 
 import ExpoModulesCore
+import GameController
 import SwiftUI
 import UIKit
 
@@ -49,6 +50,7 @@ private struct MenuNodeData: Decodable {
   let tint: String?
   let on: Bool?
   let nodes: [MenuNodeData]?
+  let heard: String?
 }
 
 /// A row's menu: its groups, set apart by dividers, and the preview it lifts, where it has one.
@@ -319,6 +321,85 @@ private struct SwipeEdge: ViewModifier {
       }
     } else {
       content
+    }
+  }
+}
+
+// MARK: - VoiceOver
+
+/// One of a row's VoiceOver Actions: what it's heard as, and the place of the menu item it presses.
+private struct HeardAct {
+  let name: String
+  let place: [Int]
+}
+
+/// A row's VoiceOver Actions, read from its menu's tree (`heardActs` before it, #10342): every act and choice the menu offers, in the menu's order, each by its `heard` words, a dimmed act left out, and a name standing twice, such as an act the menu offers in two groups, heard once, at its first place.
+private func heardActs(_ groups: [[MenuNodeData]]) -> [HeardAct] {
+  var named = Set<String>()
+  var acts: [HeardAct] = []
+  func walk(_ node: MenuNodeData, _ place: [Int]) {
+    switch node.kind {
+    case .act, .choice:
+      guard node.disabled != true, let name = node.heard, named.insert(name).inserted else { return }
+      acts.append(HeardAct(name: name, place: place))
+    case .menu:
+      for (index, inner) in (node.nodes ?? []).enumerated() { walk(inner, place + [index]) }
+    }
+  }
+  for (group, nodes) in groups.enumerated() {
+    for (index, node) in nodes.enumerated() { walk(node, [group, index]) }
+  }
+  return acts
+}
+
+/// Whether a launch on a fixture asks for the rows' Actions whatever reads them, so a run on the simulator, where no VoiceOver runs, can log and compare them (`-logHeardActs true` beside `-fixture`).
+private let heardActsAsked: Bool = {
+  let defaults = UserDefaults.standard
+  return defaults.bool(forKey: "logHeardActs") && defaults.string(forKey: "fixture") != nil
+}()
+
+/// A row's VoiceOver Actions, the rotor's list, built from its menu's tree; a press sends the place of the menu item it runs, as the menu's own press does (`rowHeard` in `interactions.ts`).
+///
+/// Note that the tree is read only while something reads the Actions:
+/// VoiceOver, Switch Control, or a hardware keyboard, which Full Keyboard
+/// Access needs, so a row's redraw pays nothing for them otherwise. It
+/// stands on the row's frame after the row is made one element, since a
+/// view that ignores its children's accessibility offers its own Actions
+/// alone.
+internal struct RowHeardModifier: ViewModifier, Record {
+  static let name = "vespinRowHeard"
+
+  @Field var menu: String = ""
+  var eventDispatcher: EventDispatcher?
+
+  init() {}
+
+  init(from params: Dict, appContext: AppContext, eventDispatcher: EventDispatcher) throws {
+    try self = .init(from: params, appContext: appContext)
+    self.eventDispatcher = eventDispatcher
+  }
+
+  func body(content: Content) -> some View {
+    let dispatcher = eventDispatcher
+    content.modifier(HeardActions(json: menu) { place in dispatcher?([Self.name: ["path": place]]) })
+  }
+}
+
+/// The Actions themselves, read from the tree only while something reads them.
+private struct HeardActions: ViewModifier {
+  let json: String
+  let press: PressPlace
+  @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+  @Environment(\.accessibilitySwitchControlEnabled) private var switchControl
+
+  func body(content: Content) -> some View {
+    let read = voiceOver || switchControl || GCKeyboard.coalesced != nil || heardActsAsked
+    let acts = read ? heardActs(readTree(json, as: RowMenuData.self)?.groups ?? []) : []
+    // Note that the Actions are handed over last first, because the Actions SwiftUI makes of them stood in reverse, Open last (seen on the iOS 27.2 simulator's accessibility tree); each still sends its own place. An empty list keeps the modifier, so the row's views stay the same as a reader turns on.
+    return content.accessibilityActions {
+      ForEach(Array(acts.enumerated()).reversed(), id: \.offset) { _, act in
+        Button(act.name) { press(act.place) }
+      }
     }
   }
 }

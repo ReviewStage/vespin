@@ -37,7 +37,7 @@ export type RowAction = {
   readonly onPress: () => void;
   /** Whether it stands dimmed and takes no press, its `detail` saying why, as the panel's Unfollow stands for the assignee. */
   readonly disabled?: boolean | undefined;
-  /** What VoiceOver's Actions call it where its words lean on the menu it stands in, such as Remind me's "Tomorrow" heard as "Remind me tomorrow"; its menu's name before its label where none is given (`heardActs`). */
+  /** What VoiceOver's Actions call it where its words lean on the menu it stands in, such as Remind me's "Tomorrow" heard as "Remind me tomorrow"; its menu's name before its label where none is given (`menuTree`'s `heard`). */
   readonly heard?: string | undefined;
 };
 
@@ -59,7 +59,7 @@ export type MenuChoice = {
   readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
-  /** What VoiceOver's Actions call it, such as a status heard as "Set status: Backlog"; its menu's name before its label where none is given (`heardActs`). */
+  /** What VoiceOver's Actions call it, such as a status heard as "Set status: Backlog"; its menu's name before its label where none is given (`menuTree`'s `heard`). */
   readonly heard?: string | undefined;
 };
 
@@ -136,6 +136,8 @@ export type MenuNode =
       readonly destructive: boolean;
       readonly disabled: boolean;
       readonly tint?: string | undefined;
+      /** What VoiceOver's Actions call it (`heard`). */
+      readonly heard: string;
     }
   | {
       readonly kind: typeof MENU_NODE.CHOICE;
@@ -143,6 +145,8 @@ export type MenuNode =
       readonly detail?: string | undefined;
       readonly icon?: MenuIcon | undefined;
       readonly on: boolean;
+      /** What VoiceOver's Actions call it (`heard`). */
+      readonly heard: string;
     }
   | {
       readonly kind: typeof MENU_NODE.MENU;
@@ -207,8 +211,18 @@ function choiceIcon(choice: MenuChoice, inks: MenuInks): MenuIcon | undefined {
   );
 }
 
-/** An act as a node: red through the destructive role where `roled` and it takes something away, and otherwise in `ink`. */
-function actNode(action: RowAction, ink: string, roled: boolean): MenuNode {
+/** How VoiceOver's Actions name an item within the menus `path` names: its own `heard`, or its menus' names before its words, so "Backlog" in Status reads "Status: Backlog". */
+function heard(item: RowAction | MenuChoice, path: readonly string[]): string {
+  return item.heard ?? [...path, item.label].join(": ");
+}
+
+/** An act as a node, within the menus `path` names: red through the destructive role where `roled` and it takes something away, and otherwise in `ink`. */
+function actNode(
+  action: RowAction,
+  ink: string,
+  roled: boolean,
+  path: readonly string[] = [],
+): MenuNode {
   const destructive = roled && action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return {
@@ -219,11 +233,19 @@ function actNode(action: RowAction, ink: string, roled: boolean): MenuNode {
     destructive,
     disabled: action.disabled === true,
     tint: destructive ? undefined : ink,
+    heard: heard(action, path),
   };
 }
 
-/** A menu as a node: its choices, then its menus within, in `ink`, then its acts in the menu's own ink. */
-function submenuNode(submenu: RowSubmenu, inks: MenuInks, ink: string): MenuNode {
+/** A menu as a node, within the menus `path` names: its choices, then its menus within, in `ink`, then its acts in the menu's own ink. */
+function submenuNode(
+  submenu: RowSubmenu,
+  inks: MenuInks,
+  ink: string,
+  path: readonly string[] = [],
+): MenuNode {
+  const within = [...path, submenu.label];
+
   return {
     kind: MENU_NODE.MENU,
     label: submenu.label,
@@ -238,10 +260,11 @@ function submenuNode(submenu: RowSubmenu, inks: MenuInks, ink: string): MenuNode
           detail: choice.mark === undefined ? choice.detail : undefined,
           icon: choiceIcon(choice, inks),
           on: choice.on,
+          heard: heard(choice, within),
         }),
       ),
-      ...(submenu.submenus ?? []).map((inner) => submenuNode(inner, inks, ink)),
-      ...(submenu.actions ?? []).map((action) => actNode(action, inks.act, true)),
+      ...(submenu.submenus ?? []).map((inner) => submenuNode(inner, inks, ink, within)),
+      ...(submenu.actions ?? []).map((action) => actNode(action, inks.act, true, within)),
     ],
   };
 }

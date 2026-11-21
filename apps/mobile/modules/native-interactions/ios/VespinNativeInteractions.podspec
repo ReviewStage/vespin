@@ -13,6 +13,7 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
   s.dependency 'ExpoUI'
+  s.frameworks = 'GameController'
 
   s.source_files = '*.swift'
   s.pod_target_xcconfig = {

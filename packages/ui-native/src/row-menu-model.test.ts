@@ -22,7 +22,7 @@ function glyph(name: ReturnType<typeof glyphImage>) {
 }
 
 describe("menuTree", () => {
-  it("stands a task row's menu as SwiftUI builds it, and finds each press by its place", () => {
+  it("stands a task row's menu as SwiftUI builds it, each item named as VoiceOver hears it, and finds each press by its place", () => {
     const pressed: string[] = [];
 
     const act = (label: string, more: Partial<RowAction> = {}): RowAction => ({
@@ -47,6 +47,7 @@ describe("menuTree", () => {
               tone: "neutral",
               on: true,
               onPress: () => pressed.push("Backlog"),
+              heard: "Set status: Backlog",
             },
           ],
           submenus: [
@@ -72,6 +73,7 @@ describe("menuTree", () => {
           destructive: false,
           disabled: false,
           tint: "#4d4d4d",
+          heard: "Open",
         },
       ],
       [
@@ -86,13 +88,22 @@ describe("menuTree", () => {
               label: "Backlog",
               icon: { ...glyph(glyphImage(GLYPH.STATUS_BACKLOG)), color: "ink:neutral" },
               on: true,
+              heard: "Set status: Backlog",
             },
             {
               kind: MENU_NODE.MENU,
               label: "More",
               icon: glyph(glyphImage(GLYPH.STATUS)),
               tint: "#4d4d4d",
-              nodes: [{ kind: MENU_NODE.CHOICE, label: "Canceled", icon: undefined, on: false }],
+              nodes: [
+                {
+                  kind: MENU_NODE.CHOICE,
+                  label: "Canceled",
+                  icon: undefined,
+                  on: false,
+                  heard: "Status: More: Canceled",
+                },
+              ],
             },
             {
               kind: MENU_NODE.ACT,
@@ -100,6 +111,7 @@ describe("menuTree", () => {
               destructive: false,
               disabled: false,
               tint: "#4d4d4d",
+              heard: "Status: Remove from section",
             },
           ],
         },
@@ -110,6 +122,7 @@ describe("menuTree", () => {
           destructive: false,
           disabled: true,
           tint: "#4d4d4d",
+          heard: "Unfollow",
         },
       ],
       [
@@ -118,6 +131,7 @@ describe("menuTree", () => {
           label: "Permanently delete",
           destructive: true,
           disabled: false,
+          heard: "Permanently delete",
         },
       ],
     ]);

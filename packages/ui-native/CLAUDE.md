@@ -471,8 +471,9 @@ here once, so a screen gets them by composing these pieces.
   Actions are its long press menu's acts, each once and in the menu's order,
   a submenu's items worded with their menu or their own `heard` words
   ("Remind me tomorrow", "Set status: Backlog"), as Mail's rows offer theirs,
-  never the swipes' copies (`heardActs`, through the native
-  `heardActions`). A row holding a
+  never the swipes' copies, read natively from the same tree as its menu
+  (each node's `heard` words, `rowHeard`) only while VoiceOver, Switch
+  Control, or a hardware keyboard reads them. A row holding a
   button of its own stays apart instead; a row never nests a second press
   over its own, so `AgentRow`'s pull request opens from its long-press menu.
   A group header, a page's heading, and a message's writer line are headings;

@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, a view's VoiceOver Actions, and a row's long press menu and swipes built from data.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a row's long press menu, swipes, and VoiceOver Actions built from data.
 
 import {
   createModifier,
@@ -17,9 +17,9 @@ const MODIFIER = {
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
-  HEARD_ACTS: "vespinHeardActs",
   ROW_MENU: "vespinRowMenu",
   ROW_SWIPES: "vespinRowSwipes",
+  ROW_HEARD: "vespinRowHeard",
 } as const;
 
 /** Which bar a subtitle stands under: a split view column's, SwiftUI's own, or the native stack's a compact screen is pushed under. */
@@ -85,11 +85,6 @@ const PressedPlaceSchema = Schema.Struct({ path: Schema.Array(Schema.Number) });
 
 const decodePressedPlace = Schema.decodeUnknownOption(PressedPlaceSchema);
 
-/** What an Action VoiceOver ran sends: its place among the names the view was given. */
-const HeardActSchema = Schema.Struct({ index: Schema.Number });
-
-const decodeHeardAct = Schema.decodeUnknownOption(HeardActSchema);
-
 const decodeDroppedPictures = Schema.decodeUnknownOption(DroppedPicturesSchema);
 const decodeDroppedLink = Schema.decodeUnknownOption(DroppedLinkSchema);
 
@@ -121,25 +116,6 @@ export function dropLink(onDrop: (url: string) => void): ModifierConfig {
       decodeDroppedLink,
       Option.map(({ url }) => onDrop(url)),
     ),
-  );
-}
-
-/**
- * A view's VoiceOver Actions, the rotor's list a person flicks through, each
- * by its name, in order: the press of the one VoiceOver ran is handed on to
- * it. Note that they stand as the view's own `accessibilityActions`, so a
- * view that ignores its children's accessibility offers these and no others.
- */
-export function heardActions(
-  acts: readonly { readonly name: string; readonly onPress: () => void }[],
-): ModifierConfig {
-  return createModifierWithEventListener(
-    MODIFIER.HEARD_ACTS,
-    flow(
-      decodeHeardAct,
-      Option.map(({ index }) => acts[index]?.onPress()),
-    ),
-    { names: acts.map((act) => act.name) },
   );
 }
 
@@ -184,5 +160,26 @@ export function rowSwipes(
       Option.map(({ path }) => onPress(path)),
     ),
     { swipes },
+  );
+}
+
+/**
+ * A row's VoiceOver Actions, the rotor's list a person flicks through, which
+ * the native module reads from `menu`, the same tree its long press menu is
+ * built from (each node's `heard` words), only while VoiceOver, Switch
+ * Control, or a hardware keyboard reads them, so a row's redraw builds
+ * nothing for them otherwise. The press of the one run hands on its place
+ * in the menu, as the menu's own press does. Note that it stands on the
+ * row's frame after the row is made one element, since a view that ignores
+ * its children's accessibility offers these and no others.
+ */
+export function rowHeard(menu: string, onPress: (path: readonly number[]) => void): ModifierConfig {
+  return createModifierWithEventListener(
+    MODIFIER.ROW_HEARD,
+    flow(
+      decodePressedPlace,
+      Option.map(({ path }) => onPress(path)),
+    ),
+    { menu },
   );
 }
