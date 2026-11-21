@@ -161,12 +161,18 @@ it.layer(getTestDB())("a workspace's billing", (it) => {
         [outsider, HOSTED_REFUSAL.NOT_FOUND],
         [member, HOSTED_REFUSAL.NOT_PERMITTED],
       ] as const) {
-        for (const operation of [billingStatus, billingSetup, billingPortal]) {
-          assert.deepEqual(
-            yield* operation(caller, acme).pipe(Effect.provide(services), Effect.flip),
-            refusal,
-          );
-        }
+        assert.deepEqual(
+          yield* billingStatus(caller, acme).pipe(Effect.provide(services), Effect.flip),
+          refusal,
+        );
+        assert.deepEqual(
+          yield* billingSetup(caller, acme).pipe(Effect.provide(services), Effect.flip),
+          refusal,
+        );
+        assert.deepEqual(
+          yield* billingPortal(caller, acme).pipe(Effect.provide(services), Effect.flip),
+          refusal,
+        );
       }
 
       assert.deepEqual(fake.sent, []);
