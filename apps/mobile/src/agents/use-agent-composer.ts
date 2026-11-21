@@ -54,6 +54,7 @@ import {
   type AgentStatus,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import { mentionPill } from "@repo/features/pill-words";
 import {
   QUEUE_EDIT_SEND,
   type QueueEditSend,
@@ -74,7 +75,10 @@ import {
   type AttachedPicture,
   BUZZ,
   buzz,
+  type CaretAtWord,
+  type ComposerPills,
   type ComposerSaving,
+  type PillFieldHandle,
   type QueuedLine,
 } from "@repo/ui-native";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -191,6 +195,8 @@ export interface AgentComposer {
   readonly skills: SkillsOffered | undefined;
   /** The agents, tasks and people an `@` being typed offers; none while no `@` word ends the words, or while a `/` offers its skills. */
   readonly mentions: MentionsOffered | undefined;
+  /** The field's pills: its door, which a pick of the `@` offer puts the mention's pill through, and the `@` word its caret stands in. */
+  readonly pills: ComposerPills;
   /** Lays one of the member's sent lines' words in the field to send again in its place, the field's own kept aside, and has it take the keyboard. */
   readonly editMessage: (line: MessageEdit) => void;
   /** Gives up the edit of a sent line, the field given back what it held; none while the field holds no sent line's words. */
@@ -332,7 +338,19 @@ export function useAgentComposer(
   const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
   const taskId = agent?.taskId ?? undefined;
   const skills = useSkillOffer(words, setWords, taskId === undefined ? undefined : { taskId });
-  const mentions = useMentionOffer(words, setWords, { workspaceId: agent?.workspaceId, taskId });
+  // The field, which draws each mention as its pill, and the `@` word its caret stands in.
+  const pillField = useRef<PillFieldHandle>(null);
+  const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
+
+  const mentions = useMentionOffer(
+    words,
+    setWords,
+    { workspaceId: agent?.workspaceId, taskId },
+    {
+      word: atWord,
+      pick: (mention) => pillField.current?.pick(mentionPill(mention.name, mention.target)),
+    },
+  );
 
   // Whether the screen still stands, since a refusal may land after it was left.
   const mounted = useRef(true);
@@ -802,6 +820,7 @@ export function useAgentComposer(
     note,
     skills,
     mentions: skills === undefined ? mentions.offered : undefined,
+    pills: { field: pillField, onAtWord: setAtWord },
     editMessage,
     cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),
     sendingEdit: {

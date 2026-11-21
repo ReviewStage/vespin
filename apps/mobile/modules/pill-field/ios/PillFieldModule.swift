@@ -568,14 +568,21 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     let held = heldRuns()
     guard force || runs != held else { return }
     let selected = textView.selectedRange
+    let atEnd = selected.length == 0 && selected.location == textView.textStorage.length
     let selectionStart = markdownOffset(of: selected.location, in: held)
     let selectionEnd = markdownOffset(of: NSMaxRange(selected), in: held)
     textView.attributedText = drawn(runs)
     // Note that words laid in whole leave nothing for undo's earlier steps to stand on, so they are let go rather than landing on the wrong words.
     textView.undoManager?.removeAllActions()
-    let start = drawnOffset(of: selectionStart, in: runs)
-    let end = max(drawnOffset(of: selectionEnd, in: runs), start)
-    textView.selectedRange = NSRange(location: start, length: end - start)
+
+    // Note that a caret at the words' end stays at their end, so words added there, as dictation's or a picked skill's, leave it after them.
+    if atEnd {
+      textView.selectedRange = NSRange(location: textView.textStorage.length, length: 0)
+    } else {
+      let start = drawnOffset(of: selectionStart, in: runs)
+      let end = max(drawnOffset(of: selectionEnd, in: runs), start)
+      textView.selectedRange = NSRange(location: start, length: end - start)
+    }
     textView.typingAttributes = baseAttributes()
     placeholderLabel.isHidden = textView.textStorage.length > 0
     setNeedsLayout()

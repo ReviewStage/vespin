@@ -77,6 +77,7 @@ export {
   type ComposerDictation,
   ComposerFoot,
   type ComposerMenu,
+  type ComposerPills,
   type ComposerSaving,
   type ComposerSendAs,
   DICTATION_PHASE,

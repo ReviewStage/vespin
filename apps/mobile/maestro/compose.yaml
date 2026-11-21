@@ -1,4 +1,4 @@
-# compose.yaml -- an agent's composer: the message queued behind its turn listed over the field with Steer and Delete, a follow-up typed and sent, the + menu's Photos and MCP servers, the model chip's permission mode, a `/` offering the task's skills, and the turn stopped.
+# compose.yaml -- an agent's composer: the message queued behind its turn listed over the field with Steer and Delete, a follow-up typed and sent, the + menu's Photos and MCP servers, the model chip's permission mode, a `/` offering the task's skills, an `@` picked into a pill, and the turn stopped.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -113,7 +113,19 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: compose-skill-picked
-- eraseText: 20
+# An `@` typed after it offers what the words find, read at the caret, and a
+# press stands the picked thread as its pill in the words, as the desktop's
+# box draws its chip, the message carrying its link.
+- inputText: "@Invite li"
+- assertVisible: "Invite limits"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-mention-offered
+- tapOn: "Invite limits"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: compose-mention-picked
+- eraseText: 40
 - swipe:
     start: "50%, 25%"
     end: "50%, 92%"
