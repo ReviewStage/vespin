@@ -647,10 +647,12 @@ function moveToEntries(
  * What a task row's long press holds one level down, in More, as Reminders
  * folds a list's rarer acts and as the row's menu held them before it took
  * the panel's order (#10104): Task relation, Move to and its repository as
- * menus, then Remove parent where it has one, Follow or Unfollow, and Open in
- * browser. Note that they wait here so the whole menu stands beside its
- * preview on an iPad, where the system clipped the longer menu at Unpin and
- * left the acts under it to a scroll nothing on screen hinted at (STAG-3801).
+ * menus, then Copy link, Open in browser, Version history where the
+ * workspace's descriptions stand on, Remove parent where it has one, and
+ * Follow or Unfollow. Note that they wait here so the whole menu stands
+ * beside its preview on an iPad and under it on an iPhone 18 Pro, where the
+ * system clipped the longer menu and left the acts under the clip to a scroll
+ * nothing on screen hinted at (STAG-3801).
  */
 function moreSubmenu(
   task: TaskSummary,
@@ -668,9 +670,12 @@ function moreSubmenu(
       ...present(repositorySubmenu(task, listing.placing)),
     ],
     actions: [
-      ...removeParentActs(task, listing.relations),
-      ...followActs(task, listing),
-      ...moveTo.filter((entry): entry is RowAction => !isRowSubmenu(entry)),
+      {
+        label: WORDS.COPY_LINK,
+        symbol: GLYPH.LINK,
+        tone: ROW_ACTION_TONE.NEUTRAL,
+        onPress: () => copyTaskLink(task, listing.workspace),
+      },
       {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
@@ -678,6 +683,10 @@ function moreSubmenu(
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
       },
+      ...rowActions(historyActions(task, listing.doors.history)),
+      ...removeParentActs(task, listing.relations),
+      ...followActs(task, listing),
+      ...moveTo.filter((entry): entry is RowAction => !isRowSubmenu(entry)),
     ],
   };
 }
@@ -719,8 +728,7 @@ type RowListing = Pick<
  * Status; behind its leading swipe Pin or Unpin, whichever the task is not,
  * which a full swipe runs. Its long press menu is the panel's right-click
  * (`taskActionGroups`), in its groups and order, each set apart by a
- * divider: Copy link; Rename, Version history where the workspace's
- * descriptions stand on, and Mark as read or unread; Status, Priority and
+ * divider: Rename and Mark as read or unread; Status, Priority and
  * Assignee; Pin, and More, which holds the rarer acts one level down
  * (`moreSubmenu`); and Permanently delete alone, last. What asks first, Done or Canceled where it stops
  * agents and Permanently delete, asks by the row pressed (`asks`), as Mail
@@ -749,20 +757,11 @@ function rowActs(
     menu: [
       [
         {
-          label: WORDS.COPY_LINK,
-          symbol: GLYPH.LINK,
-          tone: ROW_ACTION_TONE.NEUTRAL,
-          onPress: () => copyTaskLink(task, listing.workspace),
-        },
-      ],
-      [
-        {
           label: WORDS.RENAME,
           symbol: GLYPH.RENAME,
           tone: ROW_ACTION_TONE.NEUTRAL,
           onPress: () => askRename(task, listing.rename),
         },
-        ...rowActions(historyActions(task, listing.doors.history)),
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
           symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
