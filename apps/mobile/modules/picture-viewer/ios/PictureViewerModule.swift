@@ -343,7 +343,8 @@ final class PictureZoom: NSObject, UIViewControllerTransitioningDelegate, UIView
       flying.removeFromSuperview()
       drawn?.isHidden = false
       self.viewer?.hidePicture(false)
-      context.completeTransition(!context.transitionWasCancelled)
+      // Note that the zoom runs to its end once begun, since no gesture drives it, so it always completes.
+      context.completeTransition(true)
     }
     animator.startAnimation()
   }
