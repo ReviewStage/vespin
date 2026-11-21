@@ -110,7 +110,7 @@ function fieldOf(encoded: string | undefined): string {
 const readId = readEither(wireUuidSchema);
 
 /** The platform's signals by name, which a signal tmux printed by name is read through. */
-const { signals } = constants;
+const SIGNALS = new Map<string, number>(Object.entries(constants.signals));
 
 /** The session a shell is, by its id. */
 function sessionOf(terminalId: string): string {
@@ -337,12 +337,7 @@ export function killTerminal(terminalId: string): CommandAsk {
 function signalOf(printed: string): number | undefined {
   if (/^\d+$/.test(printed)) return Number(printed);
 
-  // SAFETY: a name the platform's table lacks reads undefined, which the type here says.
-  const named: number | undefined = (signals as Record<string, number | undefined>)[
-    `SIG${printed}`
-  ];
-
-  return named;
+  return SIGNALS.get(`SIG${printed}`);
 }
 
 /** How a run action's pane stands, from its dead flag, status, and signal: none while its process runs, or how it ended. */
