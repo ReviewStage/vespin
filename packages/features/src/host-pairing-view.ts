@@ -1,5 +1,5 @@
 import { hostsContract } from "./contract/hosts.js";
-import { hostPairingCodeRequestSchema } from "./host-wire.js";
+import { hostPairingApproveRequestSchema, hostPairingCodeRequestSchema } from "./host-wire.js";
 import { answerView, failureSetOf } from "./hosted-failure.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
 
@@ -48,6 +48,9 @@ export const HOST_PAIRING_CALL_FAILURE = failureSetOf(HOST_PAIRING_CALLS, {
 
 /** What a read, an approve, or a deny names: the code as typed or as its link named it. */
 export const hostPairingParamsSchema = hostPairingCodeRequestSchema;
+
+/** What an approve names: the code, and who it connects the box for, the member alone where it names none. */
+export const hostPairingApproveParamsSchema = hostPairingApproveRequestSchema;
 
 /** A pending pairing, as the screen hears it read: the box and where its start came from, or why there is none. */
 export const hostPairingViewSchema = answerView(hostsContract.readPairing, {
