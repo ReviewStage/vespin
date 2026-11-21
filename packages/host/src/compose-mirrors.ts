@@ -110,7 +110,7 @@ import type { RunMode } from "./run-mode.js";
  * `TRACED_ATTEMPTS` attempts in a run are traced, so an agent on screen
  * whose mirror keeps failing does not trace every minute. A
  * failure is counted (`PRODUCT_EVENT.MIRROR_FAIL`) each time what failed
- * changes, and the first header heard in a run is counted
+ * changes, bar a stopped sandbox under a worktree that already stands, and the first header heard in a run is counted
  * (`PRODUCT_EVENT.MIRROR_READY`). Until its worktree stands, how each
  * mirror stands, waiting on the sandbox, cloning, preparing its files, or
  * failed, is told to the windows as `MIRRORS_CHANGED`,
@@ -632,11 +632,14 @@ export function composeMirrors(
         }),
       );
 
-    /** The attempt's failure laid on the mirror for the windows, and counted. */
+    /** The attempt's failure laid on the mirror for the windows, and counted where something waits on it. */
     const failed = (mirror: Mirror, dropped: MirrorDropped) =>
       Effect.gen(function* () {
         mirror.failed = dropped;
         yield* told;
+
+        // Note that a stopped sandbox under a worktree that stands is not counted, because the mirror never wakes one and its Local tab is told nothing: it is how every mirror on disk stands at the host's start.
+        if (mirror.stands && dropped.failure === MIRROR_FAILURE.NOT_RUNNING) return;
         yield* counted(mirror, dropped);
       });
 
