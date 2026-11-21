@@ -2040,6 +2040,7 @@ const ON_AGENT_TAB: TasksControl = tasksControl({
           turnId: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
         },
       ],
+      agentIds: [LINKED_AGENT],
     }),
   ),
 });
