@@ -6,7 +6,6 @@ import {
   type ChangedSection,
   changedSections,
   VERSION_CHANGE,
-  versionDiff,
 } from "@repo/features/description-version-diff";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
@@ -100,6 +99,7 @@ import {
   VersionPageSkeleton,
   type VersionRestore,
   VersionView,
+  versionDiffOf,
 } from "../tasks/version-view.js";
 import { type MenuAction, rowMenu } from "./action-menu.js";
 import { backPlaceOf } from "./back-place.js";
@@ -648,7 +648,7 @@ function openedSections(
 
   if (read.kind !== HISTORY_READ.READY) return undefined;
 
-  return changedSections(versionDiff(read.previous, read.description), read.previous === null);
+  return changedSections(versionDiffOf(read), read.previous === null);
 }
 
 /** Whether the open revision's version failed to read, so its sections will not stand until it is read again. */
