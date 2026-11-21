@@ -340,8 +340,6 @@ export function useAgentComposer(
   const pillField = usePillField(words, setWords, pictures);
 
   const mentions = useMentionOffer(
-    words,
-    setWords,
     { workspaceId: agent?.workspaceId, taskId, agentId },
     pillField.mentions,
   );
@@ -392,11 +390,10 @@ export function useAgentComposer(
       return rewriting.line.cuts ? setAskingEdit(true) : sendRewritten(rewriting);
     }
 
-    const typed = words.trim();
+    // Note that the field holds each picked mention as its link already, so its words go as they stand.
+    const text = words.trim();
 
-    if (typed === "" && pictures.files === undefined) return;
-    // Note that the message goes with each picked mention written as its link, while the words the field gets back on a refusal are those typed.
-    const text = mentions.sendable(typed);
+    if (text === "" && pictures.files === undefined) return;
 
     if (suggested !== undefined && suggestionOut) return;
 
@@ -410,7 +407,7 @@ export function useAgentComposer(
     const attachments =
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
-    const sent: Sent = { id: randomUUID(), words: typed, pictures: pictures.take() };
+    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
     setWords("");
     setNote(undefined);
 
@@ -488,16 +485,15 @@ export function useAgentComposer(
    * Note that it stops the turn under way rather than steering it.
    */
   const sendRewritten = (stash: Rewriting) => {
-    const typed = words.trim();
+    const text = words.trim();
 
-    if (typed === "") return;
-    const text = mentions.sendable(typed);
+    if (text === "") return;
 
     // Note that pictures attached while the line was written again go with it, as the panel's Edit takes files.
     const attachments =
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
-    const sent: Sent = { id: randomUUID(), words: typed, pictures: pictures.take() };
+    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
     heldSends.set(sentLineId(sent.id), sent);
     setNote(undefined);
     giveBackRewritten(stash);
@@ -811,7 +807,7 @@ export function useAgentComposer(
           },
     note,
     skills,
-    mentions: skills === undefined ? mentions.offered : undefined,
+    mentions: skills === undefined ? mentions : undefined,
     pills: pillField.pills,
     editMessage,
     cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),

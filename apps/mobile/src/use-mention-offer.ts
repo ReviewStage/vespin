@@ -1,7 +1,7 @@
 /**
  * use-mention-offer.ts -- what an `@` being typed offers in a composer, as the panel's mention picker offers it: the place's agents, tasks, people, pages, threads, pull requests and dates, and each pick sent as the mention's link.
  *
- * An `@` starting the word the words end with offers, with nothing typed
+ * An `@` starting the word the caret stands in offers, with nothing typed
  * after it, what the task suggests (its own agents, threads, pull requests
  * and pages, as the panel's Suggested holds them) and then the workspace's
  * people, the reader first; with words typed, the date they name, then the
@@ -9,15 +9,12 @@
  * threads and the task's pull requests the words find, as
  * `@repo/features/mention-offer` groups and scores them, each row wearing
  * the mark the chip a pick writes leads with (`useChipMarkOf`), a pull
- * request its state's and a thread its ask's. In a field that
- * draws pills (`PillField`), the word is the one its caret stands in, as the
- * field tells it, and a pick puts the mention's pill in its place, already
- * the link the panel's chip writes. In the system's field, which draws no
- * chip and hands no caret, the word is the one the words end with, a pick
- * writes `@Name ` in its place, and the send writes each picked `@Name`
- * still standing as that link (`[@Name](https://vespin.dev/…)`, a pull
- * request's GitHub address, a date's `mention://date`). The people and the
- * task's pages are followed only while an `@` is being typed.
+ * request its state's and a thread its ask's. Every composer draws pills
+ * (`PillField`), so the word is the one its caret stands in, as the field
+ * tells it; a pick puts the mention's pill in its place, already the link
+ * the panel's chip writes, and a kind's row or the crumb rewrites the word
+ * (`@people:`, or back to `@`). The people and the task's pages are
+ * followed only while an `@` is being typed.
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
@@ -34,7 +31,6 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_FROM, typedMentionKind } from "@repo/features/mention-kind";
 import {
-  atWordEnding,
   dateCandidates,
   isKindChoice,
   MENTION_NO_MATCH,
@@ -46,8 +42,6 @@ import {
   type MentionOfferRow,
   mentionOffer,
   type PickedMention,
-  withMentionLinks,
-  wordsWithPick,
 } from "@repo/features/mention-offer";
 import { agentName } from "@repo/features/model-label";
 import { PAGE_OWNER } from "@repo/features/page-wire";
@@ -72,7 +66,7 @@ import {
   useChipMarkOf,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import {
   useHostActs,
@@ -171,33 +165,22 @@ export interface MentionPills {
   readonly rewrite: (words: string) => void;
 }
 
-/** What `useMentionOffer` hands its composer: the offer while an `@` is typed, and the words as they are sent, each pick written as its link. */
-export interface MentionOffer {
-  readonly offered: MentionsOffered | undefined;
-  readonly sendable: (words: string) => string;
-}
-
 /**
- * What the `@` word `words` end with offers in the place, a pick handing
- * the words with the name written in to `onWords`, or, in a field drawing
- * `pills`, what the word its caret stands in offers, a pick putting the
- * mention's pill there; none while no `@` word stands, or before the
- * place's workspace is known.
+ * What the `@` word the caret of the field drawing `pills` stands in
+ * offers in the place, a pick putting the mention's pill there; none while
+ * no `@` word stands, or before the place's workspace is known.
  */
 export function useMentionOffer(
-  words: string,
-  onWords: (words: string) => void,
   place: {
     readonly workspaceId: string | undefined;
     readonly taskId: string | undefined;
     /** The agent whose composer it is, which its own `@` never offers, as the panel's leaves it out. */
     readonly agentId?: string | undefined;
   },
-  pills?: MentionPills | undefined,
-): MentionOffer {
+  pills: MentionPills,
+): MentionsOffered | undefined {
   const { workspaceId, taskId, agentId } = place;
-  const ending = useMemo(() => atWordEnding(words), [words]);
-  const word = pills === undefined ? ending : pills.word;
+  const { word } = pills;
   const asking = word !== undefined && workspaceId !== undefined;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const step = linkWorkspaceStep(workspaceId, workspaces);
@@ -214,8 +197,6 @@ export function useMentionOffer(
   const held = useQuery({ ...appStateQuery, select: useMemo(() => heldOf(taskId), [taskId]) }).data;
   const taskPullRequests = useTaskListRow(useTaskListCollections().taskPullRequests, taskId);
   const markOf = useChipMarkOf();
-  // The mentions picked into the words, which the send writes as their links where they still stand.
-  const picked = useRef<PickedMention[]>([]);
 
   const { offer, marks } = useMemo((): Offered => {
     if (!asking || step === undefined) return { offer: NO_OFFER, marks: new Map() };
@@ -377,24 +358,14 @@ export function useMentionOffer(
     taskPullRequests,
   ]);
 
-  // Note that a field drawing pills holds each mention as its link already, so its words go as they stand.
-  const sendable = (text: string) =>
-    pills === undefined ? withMentionLinks(text, picked.current) : text;
-
-  if (!asking) return { offered: undefined, sendable };
+  if (!asking) return undefined;
   const { groups, narrowed } = offer;
 
   // Note that once the words run past a space with nothing found, the offer closes, as the panel's list closes, so a sentence that began with an `@` goes on unhindered.
-  if (groups.length === 0 && word.query.includes(" ")) return { offered: undefined, sendable };
+  if (groups.length === 0 && word.query.includes(" ")) return undefined;
 
   // The `@` word written anew as `@` and `query`, as a kind's row narrows the list and its crumb widens it.
-  const retype = (query: string) => {
-    const typed = `${MENTION_SIGIL}${query}`;
-
-    if (pills !== undefined) return pills.rewrite(typed);
-
-    if (ending !== undefined) onWords(`${words.slice(0, ending.start)}${typed}`);
-  };
+  const retype = (query: string) => pills.rewrite(`${MENTION_SIGIL}${query}`);
 
   const typed = typedMentionKind(word.query);
 
@@ -409,31 +380,22 @@ export function useMentionOffer(
         };
 
   return {
-    offered: {
-      groups: groups.map((group) => ({
-        title: group.title,
-        rows: group.rows.map((row) => suggestion(row, marks)),
-      })),
-      empty: groups.length === 0 ? MENTION_NO_MATCH : undefined,
-      crumb,
-      pick: (title, id) => {
-        const row = groups
-          .find((group) => group.title === title)
-          ?.rows.find((each) => (isKindChoice(each) ? each.query : each.id) === id);
+    groups: groups.map((group) => ({
+      title: group.title,
+      rows: group.rows.map((row) => suggestion(row, marks)),
+    })),
+    empty: groups.length === 0 ? MENTION_NO_MATCH : undefined,
+    crumb,
+    pick: (title, id) => {
+      const row = groups
+        .find((group) => group.title === title)
+        ?.rows.find((each) => (isKindChoice(each) ? each.query : each.id) === id);
 
-        if (row === undefined) return;
-        buzz(BUZZ.SELECTION);
+      if (row === undefined) return;
+      buzz(BUZZ.SELECTION);
 
-        if (isKindChoice(row)) return retype(row.query);
-        const mention = { name: row.name, target: row.target };
-
-        if (pills !== undefined) return pills.pick(mention);
-
-        if (ending === undefined) return;
-        picked.current = [...picked.current, mention];
-        onWords(wordsWithPick(words, ending.start, row.name));
-      },
+      if (isKindChoice(row)) return retype(row.query);
+      pills.pick({ name: row.name, target: row.target });
     },
-    sendable,
   };
 }

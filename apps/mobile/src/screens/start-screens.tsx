@@ -89,7 +89,7 @@ import { useTaskPlacing } from "../tasks/use-tasks.js";
 import { useAttachedPictures } from "../use-attached-pictures.js";
 import { useDictation } from "../use-dictation.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
-import { type MentionOffer, useMentionOffer } from "../use-mention-offer.js";
+import { type MentionsOffered, useMentionOffer } from "../use-mention-offer.js";
 import { usePillField } from "../use-pill-field.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -698,9 +698,7 @@ function useClosingStart(
 }
 
 /** What an `@` offers, as the start page takes it; none while a `/` offers its skills, which stand in its place. */
-function offeredMentions(mentions: MentionOffer, skills: SkillsOffered | undefined) {
-  const offered = mentions.offered;
-
+function offeredMentions(offered: MentionsOffered | undefined, skills: SkillsOffered | undefined) {
   return skills !== undefined || offered === undefined
     ? undefined
     : { groups: offered.groups, empty: offered.empty, crumb: offered.crumb, onPick: offered.pick };
@@ -779,14 +777,12 @@ export function NewAgentScreen({
   const pillField = usePillField(prompt, setPrompt, pictures);
 
   const mentions = useMentionOffer(
-    prompt,
-    setPrompt,
     { workspaceId: startsOn?.workspaceId, taskId: startsOn?.id },
     pillField.mentions,
   );
 
   // The prompt as it is sent, each mention already its link in the field of pills.
-  const sendablePrompt = () => mentions.sendable(prompt.trim());
+  const sendablePrompt = () => prompt.trim();
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
@@ -1200,15 +1196,10 @@ export function NewTaskScreen({
   // The field, which draws each mention and each picture attached as its pill.
   const pillField = usePillField(prompt, setPrompt, pictures);
 
-  const mentions = useMentionOffer(
-    prompt,
-    setPrompt,
-    { workspaceId, taskId: undefined },
-    pillField.mentions,
-  );
+  const mentions = useMentionOffer({ workspaceId, taskId: undefined }, pillField.mentions);
 
   // The prompt as it is sent, each mention already its link in the field of pills.
-  const sendablePrompt = () => mentions.sendable(prompt.trim());
+  const sendablePrompt = () => prompt.trim();
 
   const unreached =
     tree !== undefined
