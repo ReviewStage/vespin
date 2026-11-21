@@ -54,8 +54,12 @@ public final class PillFieldModule: Module {
         view.editable = editable ?? true
       }
 
-      AsyncFunction("insertPills") { (view: PillFieldView, start: Int, end: Int, pills: [PillRecord], seen: Int) in
-        view.insertPills(pills.map(Pill.init), replacing: NSRange(location: start, length: end - start), seen: seen)
+      AsyncFunction("insertPills") { (view: PillFieldView, pills: [PillRecord], word: WordRecord?) in
+        view.insertPills(pills.map(Pill.init), over: word.map(Word.init))
+      }
+
+      AsyncFunction("rewriteWord") { (view: PillFieldView, text: String, word: WordRecord?) in
+        view.rewriteWord(text, over: word.map(Word.init))
       }
 
       AsyncFunction("focus") { (view: PillFieldView) in
@@ -101,6 +105,23 @@ struct PillRecord: Record {
 struct RunRecord: Record {
   @Field var text: String? = nil
   @Field var pill: PillRecord? = nil
+}
+
+/// The words a pick replaces, as JavaScript read them: where they stood in the drawn words, and the words themselves, such as `@Invite li`.
+struct WordRecord: Record {
+  @Field var start: Int = 0
+  @Field var text: String = ""
+}
+
+/// The words a pick replaces.
+struct Word {
+  let start: Int
+  let text: String
+
+  init(_ record: WordRecord) {
+    start = record.start
+    text = record.text
+  }
 }
 
 struct ValueRecord: Record {
@@ -352,6 +373,9 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   /// The height last told to JavaScript; none yet.
   private var toldHeight: CGFloat?
 
+  /// The words' length and the width the field last measured its words at, which a field already at its most lines skips measuring again while its words only grow.
+  private var measured: (length: Int, width: CGFloat)?
+
   /// Whether an edit of the view's own is under way, which tells JavaScript once it is whole rather than as the text view reports each step.
   private var quiet = false
 
@@ -418,10 +442,30 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     redraw(runs, force: false)
   }
 
-  /// Puts the pills in place of the range of the drawn words, such as the `@` word a pick answers or the caret a picture is attached at, each followed by a space, the last unless one stands there, once JavaScript has heard every change typed, so the range is the words it was read from.
-  func insertPills(_ pills: [Pill], replacing range: NSRange, seen: Int) {
+  /// The range the pills go in: the word a pick replaces where it still stands where JavaScript read it, else the nearest such words before the caret on its line, else the caret, so a pick made while words were still being typed lands rather than being dropped.
+  private func pickRange(over word: Word?) -> NSRange {
+    let string = textView.textStorage.string as NSString
+    let caret = textView.selectedRange
+    guard let word, !word.text.isEmpty else { return caret }
+    let length = (word.text as NSString).length
+    let read = NSRange(location: word.start, length: length)
+
+    if word.start >= 0, NSMaxRange(read) <= string.length, string.substring(with: read) == word.text {
+      return read
+    }
+
+    let lineStart = string.lineRange(for: NSRange(location: min(caret.location, string.length), length: 0)).location
+    let reach = min(NSMaxRange(caret) + length, string.length)
+    let found = string.range(of: word.text, options: .backwards, range: NSRange(location: lineStart, length: reach - lineStart))
+
+    return found.location == NSNotFound ? caret : found
+  }
+
+  /// Puts the pills in the range a pick names (`pickRange`), or at the caret, each followed by a space, the last unless one stands there.
+  func insertPills(_ pills: [Pill], over word: Word?) {
     let storage = textView.textStorage
-    guard editable, !pills.isEmpty, seen >= changes, range.location >= 0, range.length >= 0, NSMaxRange(range) <= storage.length else { return }
+    let range = pickRange(over: word)
+    guard editable, !pills.isEmpty, NSMaxRange(range) <= storage.length else { return }
     guard let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
       let end = textView.position(from: start, offset: range.length),
       let replaced = textView.textRange(from: start, to: end)
@@ -444,6 +488,23 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     quiet = false
     let after = range.location + (typed as NSString).length + (next == space ? 1 : 0)
     textView.selectedRange = NSRange(location: after, length: 0)
+    textView.typingAttributes = baseAttributes()
+    changed()
+  }
+
+  /// Writes plain words in the range a pick names (`pickRange`), such as `@people:` in place of the `@` word as a kind is picked to narrow it, the caret after them.
+  func rewriteWord(_ text: String, over word: Word?) {
+    let range = pickRange(over: word)
+    guard editable, NSMaxRange(range) <= textView.textStorage.length,
+      let start = textView.position(from: textView.beginningOfDocument, offset: range.location),
+      let end = textView.position(from: start, offset: range.length),
+      let replaced = textView.textRange(from: start, to: end)
+    else { return }
+
+    quiet = true
+    textView.replace(replaced, withText: text)
+    quiet = false
+    textView.selectedRange = NSRange(location: range.location + (text as NSString).length, length: 0)
     textView.typingAttributes = baseAttributes()
     changed()
   }
@@ -655,6 +716,17 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     guard width > 0 else { return }
     let line = ceil(bodyFont().lineHeight)
     let most = line * CGFloat(maxLines)
+    let length = textView.textStorage.length
+
+    // Note that a field already scrolling at its most lines, whose words only grew at the same width, stays at its most, so its long words are not laid out whole again on every key, as SwiftUI's field did until it hung.
+    if textView.isScrollEnabled, let measured, measured.width == width, length >= measured.length {
+      textView.frame = bounds
+      placeholderLabel.frame = CGRect(x: 0, y: 0, width: width, height: line)
+      if textView.isFirstResponder { textView.scrollRangeToVisible(textView.selectedRange) }
+      return
+    }
+
+    measured = (length, width)
     let natural = ceil(textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
     let height = max(line, min(natural, most))
     let scrolls = natural > most

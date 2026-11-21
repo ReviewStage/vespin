@@ -41,15 +41,18 @@ export interface NativeWords {
   readonly changes: number;
 }
 
+/** The `@` word a pick replaces, as JavaScript was told it: where it started in the drawn words, and its words. */
+export interface NativeWord {
+  readonly start: number;
+  readonly text: string;
+}
+
 /** The doors the view opens to JavaScript through its ref. */
 export interface NativePillFieldDoors {
-  /** Puts the pills in place of the drawn words from `start` to `end`, each with a space after it, unless the field has changed since the `seen`th change JavaScript heard, which the range was read from. */
-  insertPills(
-    start: number,
-    end: number,
-    pills: readonly NativePill[],
-    seen: number,
-  ): Promise<void>;
+  /** Puts the pills in place of the `@` word a pick names, found again by its words where it moved, or at the caret where none is named or found, each with a space after it. */
+  insertPills(pills: readonly NativePill[], word: NativeWord | undefined): Promise<void>;
+  /** Writes plain words in place of the `@` word a pick names, found as `insertPills` finds it. */
+  rewriteWord(words: string, word: NativeWord | undefined): Promise<void>;
   focus(): Promise<void>;
   blur(): Promise<void>;
 }

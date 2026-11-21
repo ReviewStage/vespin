@@ -10,6 +10,7 @@ import {
   NativePillField,
   type NativePillFieldDoors,
   type NativeValue,
+  type NativeWord,
   type NativeWords,
 } from "./pill-field-native.js";
 import { pillLook } from "./pill-look.js";
@@ -18,15 +19,25 @@ import { useColors } from "./tokens/colors.js";
 /** No files held: every marker stays words. */
 const NO_FILES: ReadonlySet<string> = new Set();
 
-/** The `@` word the caret stands in, and the drawn words a pick replaces. */
+/** The `@` word the caret stands in, and the drawn words a pick replaces: where they start and end, and the words themselves, `@` and all. */
 export interface CaretAtWord extends AtWord {
   readonly start: number;
   readonly end: number;
+  readonly text: string;
 }
 
-/** What a screen does to the field: puts a pill in place of the `@` word the caret stands in, or at the caret where it stands in none; puts pills at the caret, such as files' markers as they are attached; and takes or lets go of the keyboard. */
+/**
+ * What a screen does to the field: puts a pill in place of the `@` word the
+ * caret stands in, or at the caret where it stands in none; writes plain
+ * words in that word's place, such as `@people:` as a kind is picked to
+ * narrow it; puts pills at the caret, such as files' markers as they are
+ * attached; and takes or lets go of the keyboard. Note that the field finds
+ * the word again by its words where it moved since it was told, so a pick
+ * made while words are still being typed lands rather than being dropped.
+ */
 export interface PillFieldHandle {
   readonly pick: (pill: Pill) => void;
+  readonly rewrite: (words: string) => void;
   readonly place: (pills: readonly Pill[]) => void;
   readonly focus: () => void;
   readonly blur: () => void;
@@ -56,9 +67,20 @@ function caretAtWord(words: NativeWords): CaretAtWord | undefined {
   if (words.selected) return undefined;
   const word = atWordAround(words.before, words.after);
 
-  return word === undefined
-    ? undefined
-    : { ...word, start: words.caret - word.query.length - 1, end: words.caret + word.rest };
+  if (word === undefined) return undefined;
+  const typed = `@${word.query}`;
+
+  return {
+    ...word,
+    start: words.caret - typed.length,
+    end: words.caret + word.rest,
+    text: typed + words.after.slice(0, word.rest),
+  };
+}
+
+/** The `@` word as the native field finds it again: where it stood and its words; none where the caret stands in none. */
+function toldWord(word: CaretAtWord | undefined): NativeWord | undefined {
+  return word === undefined ? undefined : { start: word.start, text: word.text };
 }
 
 /** A pill as the native field draws it: its Markdown, and its look as the chip it becomes once sent. */
@@ -102,10 +124,8 @@ export function PillField({
   const [height, setHeight] = useState<number | undefined>(undefined);
   // How many changes the field has told, which the words handed it say were heard, so it never sets back words typed since.
   const [seen, setSeen] = useState(0);
-  // The same count for the doors, which a pick in the very event that told it reads before the next render.
-  const seenNow = useRef(0);
-  // What the field last told: its Markdown, where its caret stands, and its `@` word.
-  const told = useRef({ markdown: value, caret: 0 });
+  // What the field last told: its Markdown, and its `@` word.
+  const told = useRef({ markdown: value });
   const atWord = useRef<CaretAtWord | undefined>(undefined);
 
   const handed = useMemo((): NativeValue => {
@@ -133,20 +153,14 @@ export function PillField({
     ref,
     () => ({
       pick: (pill) => {
-        const { caret } = told.current;
-        const word = atWord.current;
-        const drawn = [drawnPill(pill, repository)];
-        void native.current?.insertPills(
-          word?.start ?? caret,
-          word?.end ?? caret,
-          drawn,
-          seenNow.current,
-        );
+        void native.current?.insertPills([drawnPill(pill, repository)], toldWord(atWord.current));
       },
+      rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
       place: (pills) => {
-        const { caret } = told.current;
-        const drawn = pills.map((pill) => drawnPill(pill, repository));
-        void native.current?.insertPills(caret, caret, drawn, seenNow.current);
+        void native.current?.insertPills(
+          pills.map((pill) => drawnPill(pill, repository)),
+          undefined,
+        );
       },
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),
@@ -156,8 +170,7 @@ export function PillField({
 
   const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => {
     const changed = words.markdown !== told.current.markdown;
-    told.current = { markdown: words.markdown, caret: words.caret };
-    seenNow.current = words.changes;
+    told.current = { markdown: words.markdown };
     setSeen(words.changes);
 
     if (changed) onChange(words.markdown);

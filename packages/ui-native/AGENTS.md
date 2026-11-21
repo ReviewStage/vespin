@@ -99,7 +99,10 @@ builds a control of its own.
   on TextKit 2), its value the wire's Markdown read through
   `@repo/features/pill-words`. It grows from one line to `maxLines` and then
   scrolls, tells the `@` word the caret stands in (`onAtWord`), puts a
-  picked pill in that word's place (`pick`), and puts pills at the caret,
+  picked pill in that word's place (`pick`), or plain words such as
+  `@people:` as a kind is picked to narrow it (`rewrite`), the word found
+  again by its words where typing moved it, so no pick is dropped, and puts
+  pills at the caret,
   such as a file's marker as it is attached (`place`); an agent's composer
   stands its files so, in the words, rather than in a row over them.
 - **React Native views only where SwiftUI has no piece**, such as the
