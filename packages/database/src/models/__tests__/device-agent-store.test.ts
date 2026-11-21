@@ -37,6 +37,7 @@ import {
   deviceAgentLineQueuedAfter,
   deviceAgentLineSettlement,
   deviceAgentLinesWaiting,
+  deviceAgentPin,
   deviceAgentRequestAnswer,
   deviceAgentRequestsWaiting,
   latestDeviceAgentLaunch,
@@ -672,7 +673,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
   );
 
   it.effect(
-    "a member's agent queues to a machine its workspace owns, connected by a teammate, and nothing is queued there for another workspace's agent or a local agent",
+    "a member's agent queues to a machine its workspace owns, connected by a teammate, and is pinned there to its starter, and nothing is queued there for another workspace's agent or a local agent",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -715,6 +716,11 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         assert.deepEqual(
           (yield* deviceAgentLinesWaiting(host)).map((line) => line.agentId),
           [teammates],
+        );
+        assert.deepEqual(
+          yield* deviceAgentPin(teammates),
+          Option.some({ userId: teammate, agentId: teammates, deviceId: box }),
+          "a host's line is read back to the agent's own starter",
         );
       }),
   );
