@@ -9,7 +9,6 @@ import { task } from "@repo/database/schemas/task";
 import { getTestDB } from "@repo/database/testing";
 import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
-import { LIVE_CLIENT_EVENT, LIVE_SERVER_EVENT } from "@repo/features/voice-delegation";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { asc, eq } from "drizzle-orm";
 import { Deferred, Effect, Fiber, Layer, Option, Queue } from "effect";
@@ -31,6 +30,7 @@ import {
 import { voiceCallDelegations } from "./voice-call-delegations.js";
 import type { VoiceCallObserver } from "./voice-call-holder.js";
 import { holdVoiceCall, VOICE_CALL_HELD } from "./voice-call-lease.js";
+import { LIVE_CLIENT_EVENT, LIVE_SERVER_EVENT } from "./voice-delegation.js";
 
 /**
  * A voice call's delegations run by the lease holding it, over a fake

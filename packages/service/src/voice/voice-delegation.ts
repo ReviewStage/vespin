@@ -59,10 +59,10 @@
  * by. It ends with the session (`session.closed`) or with its input.
  */
 
+import { VOICE_SPEAKER, type VoiceSpeaker } from "@repo/features/agent-wire";
 import { EXCESS_KEYS, unparsedWire, type WireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Result, Schema, Stream } from "effect";
-import { VOICE_SPEAKER, type VoiceSpeaker } from "./agent-wire.js";
 
 /** GPT-Live's server events the loop reads; every other one passes it by. */
 export const LIVE_SERVER_EVENT = {

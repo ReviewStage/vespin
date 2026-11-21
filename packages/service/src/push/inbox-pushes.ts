@@ -96,7 +96,6 @@ import {
   openAskOf,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
-import { markdownLeads } from "@repo/features/markdown-leads";
 import { clippedWords, markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agentName } from "@repo/features/model-label";
 import { PRESENCE } from "@repo/features/presence-wire";
@@ -114,6 +113,7 @@ import {
 } from "../inbox/inbox-store.js";
 import { APNS_PUSH_TYPE, type ApnsPayload, ApnsSender } from "./apns.js";
 import { LIVE_ACTIVITY_CAUSE, refreshLiveActivity } from "./live-activities.js";
+import { markdownLeads } from "./markdown-leads.js";
 
 /** The most characters of a title and a body an alert says; Apple caps a payload at 4 KB. */
 const ALERT_BOUND = { TITLE_CHARS: 120, BODY_CHARS: 240 } as const;
