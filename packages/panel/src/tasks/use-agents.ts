@@ -1695,7 +1695,7 @@ export function useAgents(input: {
     if ("failure" in answer) {
       // Only a service that never answered is asked again under the same key.
       if (answer.failure !== AGENT_CALL_FAILURE.UNANSWERED) forgetPress();
-      const refused = continueFailureNote(answer, taskId ?? null);
+      const refused = continueFailureNote(answer, taskId);
 
       const shown = {
         surface: FAILURE_SURFACE.AGENT_START,
@@ -2134,7 +2134,7 @@ export function useAgents(input: {
 
     const answer = await askStart(taskId, asked);
 
-    if ("failure" in answer) return { ...startFailureNote(answer, taskId ?? null), cause: answer };
+    if ("failure" in answer) return { ...startFailureNote(answer, taskId), cause: answer };
     // Note that only this draft is let go, since another suggestion pressed while it went may stand in its place.
     dropHeld(taskId, draftId);
     writer.drop((kept) => kept.kind === DRAFT_PLACE.NEW_AGENT && kept.draftId === draftId);

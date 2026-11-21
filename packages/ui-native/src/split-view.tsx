@@ -3,9 +3,11 @@
 import {
   Divider,
   HStack,
+  Image,
   Menu,
   NavigationSplitView,
   Button as SwiftUIButton,
+  Text,
   Toggle,
   Toolbar,
   ToolbarItem,
@@ -13,11 +15,16 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
+  accessibilityLabel,
   background,
   buttonStyle,
   disabled,
+  font,
+  foregroundStyle,
   frame,
   ignoreSafeArea,
+  lineLimit,
   type ModifierConfig,
   menuIndicator,
   menuStyle,
@@ -30,11 +37,13 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, memo, type ReactElement, type ReactNode, useEffect } from "react";
 import { BarContent } from "./bar-content.js";
-import type { Glyph } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
-import { PathTitle } from "./thread-page.js";
+import { TaskStatusMark } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /**
  * A bar menu's trigger as its glyph alone, with no button of its own, so the
@@ -44,6 +53,9 @@ import { useColors } from "./tokens/colors.js";
  * glass, where Mail's ⋯ stands in the bar's glass alone.
  */
 export const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
+
+/** What parts a thread's path, as the panel's crumbs part a task from its agent. */
+export const PATH_PART = " › ";
 
 /** An act a bar holds by its symbol alone, such as Settings, or by its words where it has no symbol, such as a Select mode's Done. */
 export type BarAction = {
@@ -319,6 +331,70 @@ function barHolds(bar: ColumnBar): boolean {
     bar.menu !== undefined ||
     bar.action !== undefined ||
     (bar.foot ?? []).length > 0
+  );
+}
+
+/**
+ * A split view's detail column's bar: a page's path, small and muted after
+ * its task's ring, in the bar's middle, as a compact window's stack draws it
+ * in its own bar. Given what it opens, the path is a menu of them under a
+ * small chevron, as iOS's own title menus stand, so a thread leads to its
+ * task and its agent as the panel's crumbs do.
+ */
+export function PathTitle({
+  path,
+  status,
+  actions = [],
+  wrap = false,
+}: {
+  /** Where the page stands, its task and then its agent, as the panel's crumbs name them. */
+  readonly path: readonly string[];
+  /** The status of the task it stands in, its ring leading the path; none for an agent's own page. */
+  readonly status?: TaskStatus | undefined;
+  readonly actions?: BarMenu["actions"] | undefined;
+  /** Whether the words wrap rather than cut to one line, as where the path heads the page rather than standing in a bar. */
+  readonly wrap?: boolean | undefined;
+}) {
+  const colors = useColors();
+  const words = path.join(PATH_PART);
+
+  const title = (
+    <HStack spacing={SPACE.TIGHT + 2}>
+      {status === undefined ? null : <TaskStatusMark status={status} />}
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+          foregroundStyle(colors.TEXT_MUTED),
+          ...(wrap ? [] : [lineLimit(1)]),
+        ]}
+      >
+        {words}
+      </Text>
+      {actions.length === 0 ? null : (
+        <Image
+          {...glyphImage(GLYPH.UNFOLDED)}
+          size={MARK_SIZE.GLYPH - 4}
+          color={colors.TEXT_MUTED}
+          modifiers={[accessibilityHidden(true)]}
+        />
+      )}
+    </HStack>
+  );
+
+  if (actions.length === 0) return title;
+
+  return (
+    // Note that the menu takes a bar item's plain look, so the bar's glass is the one layer around the path, as the ⋯ stands.
+    <Menu label={title} modifiers={[...BAR_ITEM_MENU, accessibilityLabel(words)]}>
+      {actions.map((action) => (
+        <SwiftUIButton
+          key={action.label}
+          {...actContent(action.label, action.symbol)}
+          onPress={action.onPress}
+          modifiers={[disabled(action.disabled === true)]}
+        />
+      ))}
+    </Menu>
   );
 }
 

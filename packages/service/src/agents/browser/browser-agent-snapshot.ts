@@ -12,10 +12,14 @@
  * saying the rest was left out.
  */
 
+import {
+  BROWSER_AGENT_LIMITS,
+  browserRefOf,
+  cutBrowserText,
+} from "@repo/features/browser-agent-actions";
 import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Predicate, Result, Schema } from "effect";
-import { BROWSER_AGENT_LIMITS, browserRefOf, cutBrowserText } from "./browser-agent-actions.js";
 
 /** Roles a node is printed under only where it has a name: wrappers that say nothing themselves. */
 const WRAPPER_ROLES: ReadonlySet<string> = new Set([

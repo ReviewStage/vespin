@@ -22,7 +22,6 @@ import type { Agent } from "@repo/database/models/agent-store";
 import { readTurnCheckoutRange } from "@repo/database/models/conversation-rewind";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { AgentTurnChangesAnswer } from "@repo/features/agent-wire";
-import { checkoutDiffFiles } from "@repo/features/checkout-diff";
 import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option } from "effect";
@@ -35,6 +34,7 @@ import {
 import { CHECKOUT_DIFF_OUTCOME } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
 import type { AgentSandbox } from "../terminal/agent-sandbox.js";
+import { checkoutDiffFiles } from "./checkout-diff.js";
 import { refusedByMachine } from "./rewind.js";
 
 /**

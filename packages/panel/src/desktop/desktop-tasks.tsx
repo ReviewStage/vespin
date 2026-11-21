@@ -1540,8 +1540,8 @@ function DescriptionDocument({
   };
 
   // The plan's screen by the task's name, which a phone's Back says from an agent's screen, so the
-  // way to the task reads as the task itself; Overview where the task is not read or has no name.
-  const planLabel = opened?.name.trim() || TAB_WORDS.OVERVIEW;
+  // way to the task reads as the task itself; Overview where the task has no name.
+  const planLabel = task.name.trim() || TAB_WORDS.OVERVIEW;
 
   // What the column shows, by name: the agent's or the draft's screen, and where a tab of the panel goes back to.
   const columnLabel =

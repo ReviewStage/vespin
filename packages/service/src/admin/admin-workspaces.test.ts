@@ -8,6 +8,7 @@ import {
   GITHUB_INSTALLATION_STATUS,
   type GitHubInstallationStatus,
 } from "@repo/database/github-installation-vocabulary";
+import { INVITATION_STATUS } from "@repo/database/models/invitation-store";
 import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { invitation, member, organization, user } from "@repo/database/schemas/auth";
@@ -31,11 +32,7 @@ import { Effect } from "effect";
 import { describe, test } from "vitest";
 import { USER_ROLE } from "./admin-access.js";
 import { buildAdminWorkspaceDetail } from "./admin-workspace.js";
-import {
-  type AdminWorkspaceListSource,
-  buildAdminWorkspaceList,
-  INVITATION_STATUS,
-} from "./admin-workspaces.js";
+import { type AdminWorkspaceListSource, buildAdminWorkspaceList } from "./admin-workspaces.js";
 import { readAdminWorkspaceSource, readAdminWorkspacesSource } from "./admin-workspaces-queries.js";
 
 /**

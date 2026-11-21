@@ -31,7 +31,7 @@ import {
 } from "../../integrations/connection-door.js";
 import type { AgentMachine, MachineLayout } from "../machine/agent-machine.js";
 import { agentMachinesLayer } from "../machine/agent-machines.js";
-import type { SandboxRunner } from "../machine/sandbox-machine.js";
+import type { SandboxRunner } from "../machine/sandbox-checkout.js";
 import { RUNNER_EVENTS_PATH } from "../native-events/runner-events-app.js";
 import { RUNNER_LINES_PATH } from "../native-events/runner-lines-app.js";
 import { RUNNER_TOKEN_PATH } from "../native-events/runner-token-app.js";

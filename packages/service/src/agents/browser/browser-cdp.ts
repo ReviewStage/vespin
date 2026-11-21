@@ -2,8 +2,8 @@
  * browser-cdp.ts -- a DevTools protocol session with a browser, as the agent's browser actions drive one: its commands, its events, its page targets, and how a command fails.
  *
  * The session is whatever speaks CDP for a browser: the Chromium in an
- * agent's sandbox, reached over its PTY (`packages/service`'s
- * `agent-browser.ts`). The actions run over it (`browser-agent-cdp.ts`).
+ * agent's sandbox, reached over its PTY
+ * (`agent-browser.ts`). The actions run over it (`browser-agent-cdp.ts`).
  * Nothing a page holds is kept here; it reaches only the caller.
  */
 

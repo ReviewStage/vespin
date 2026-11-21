@@ -197,9 +197,10 @@ export function useVirtualFind(input: {
       // Each row's count as it was last drawn under the query.
       drawn: new Map<string, number>(),
       listeners: new Set<(tally: FindTally) => void>(),
-      // SAFETY: nothing is watched before the first search, which keeps the stop it is handed here.
-      unwatch: undefined as (() => void) | undefined,
     };
+
+    // The stop of what the last search watches; none before the first.
+    let unwatch: (() => void) | undefined;
 
     const tell = () => {
       const tally = { count: state.matches.length, at: state.at, left: state.left };
@@ -334,9 +335,9 @@ export function useVirtualFind(input: {
     const search = (query: string) => {
       state.query = query;
       state.drawn.clear();
-      state.unwatch?.();
+      unwatch?.();
       const box = root.current;
-      state.unwatch = box === null ? undefined : watchText(box, refresh);
+      unwatch = box === null ? undefined : watchText(box, refresh);
       const grouped = drawnRanges();
       state.matches = readMatches(grouped);
       state.at = startAt(grouped);
@@ -362,8 +363,8 @@ export function useVirtualFind(input: {
         state.left = 0;
         state.pending = false;
         state.drawn.clear();
-        state.unwatch?.();
-        state.unwatch = undefined;
+        unwatch?.();
+        unwatch = undefined;
 
         for (const listener of state.listeners) listener(NO_TALLY);
       },

@@ -55,7 +55,7 @@ import {
 import { createRateBrake, type RateBrake } from "../../http/rate-brake.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { CODEX_TOKEN_MARGIN } from "../coder-host/codex-sessions.js";
-import { admitRunnerBearer, presentedBearer, presentedLaunch } from "../workspace-mcp/bearer.js";
+import { admitRunnerRequest } from "../workspace-mcp/bearer.js";
 
 /** The path a cloud Codex runner asks for the plan's token at. */
 export const RUNNER_TOKEN_PATH = HOSTED_SERVICE_PATH.RUNNER_TOKEN;
@@ -96,16 +96,7 @@ const runnerTokenEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTokenEndpoint")
   }
 
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
-  const bearer = presentedBearer(request);
-
-  if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-
-  const admitted = yield* hostedStoreOrUnavailable(
-    admitRunnerBearer(bearer, presentedLaunch(request)),
-  );
-
-  if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-  const { target } = admitted.value;
+  const { target } = (yield* admitRunnerRequest(request)).runner;
 
   const agent = yield* hostedStoreOrUnavailable(
     readAgentHeaderOfConversation(target.userId, target.conversationId),

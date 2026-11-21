@@ -18,7 +18,6 @@ import {
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_KIND,
-  AGENT_MACHINE,
   type AgentOverviewPullRequest,
   type AgentStatus,
   type AgentTranscriptMessage,
@@ -162,6 +161,7 @@ import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
+import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { type AgentServers, useAgentServers } from "../agents/use-agent-servers.js";
@@ -180,6 +180,7 @@ import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useAgentThreadsLine } from "../inbox/use-agent-threads.js";
 import { useNewestNote } from "../newest-note.js";
+import { useOpenDrawnCount } from "../open-drawn.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
   type PullRequestKey,
@@ -191,7 +192,6 @@ import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
-import { useDevicePlatform } from "../tasks/use-start.js";
 import { useDictation } from "../use-dictation.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
@@ -715,11 +715,10 @@ function AgentMachineChip({
   agent,
   commands,
 }: {
-  readonly agent: Pick<FollowedAgent, "machine" | "mac">;
+  readonly agent: Pick<FollowedAgent, "machine" | "mac" | "workspaceId">;
   readonly commands: AgentCommandsPlace | undefined;
 }) {
-  const platform = useDevicePlatform(agent.mac?.deviceId);
-  const symbol = runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform });
+  const symbol = useAgentPlaceGlyph(agent);
 
   const menu =
     commands === undefined || commands.machines.length === 0
@@ -850,6 +849,8 @@ export function AgentScreen() {
     /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
     brief?: string;
   }>();
+
+  useOpenDrawnCount(PRODUCT_SURFACE.AGENT);
 
   return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
 }

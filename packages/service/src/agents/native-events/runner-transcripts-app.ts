@@ -53,7 +53,7 @@ import {
   readBodyBytesEffect,
 } from "../../http/http-effect.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
-import { admitRunnerBearer, presentedBearer, presentedLaunch } from "../workspace-mcp/bearer.js";
+import { admitRunnerRequest } from "../workspace-mcp/bearer.js";
 
 /** The path a runner keeps its CLI's transcript at. */
 export const RUNNER_TRANSCRIPTS_PATH = "/api/agents/runner-transcripts";
@@ -137,16 +137,7 @@ const runnerTranscriptsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTranscrip
     }
 
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
-    const bearer = presentedBearer(request);
-
-    if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-
-    const admitted = yield* hostedStoreOrUnavailable(
-      admitRunnerBearer(bearer, presentedLaunch(request)),
-    );
-
-    if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-    const { target } = admitted.value;
+    const { target } = (yield* admitRunnerRequest(request)).runner;
     const body = yield* readBodyBytesEffect(MAX_BODY_BYTES);
     const call = decodeCall(yield* parseJsonBytes(body));
 

@@ -26,7 +26,6 @@
     "react": "catalog:mobile",
     "react-native": "catalog:",
     "react-native-safe-area-context": "catalog:",
-    "react-native-screens": "catalog:",
     "react-native-webview": "catalog:"
   },
   "devDependencies": {

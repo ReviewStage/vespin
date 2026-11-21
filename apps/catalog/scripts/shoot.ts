@@ -28,7 +28,7 @@ const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const REPOSITORY_ROOT = path.resolve(APP_ROOT, "../..");
 const DEFAULT_OUT = path.join(REPOSITORY_ROOT, "artifacts", "polish", "catalog");
 
-// The catalog's own vocabulary (`@repo/ui`'s PROFILE and THEME), which a plain node script cannot import.
+// The catalog's own vocabulary (`@repo/ui`'s PROFILE and `@repo/settings`' THEME), which a plain node script cannot import.
 const PROFILE = { DESKTOP: "desktop", WEB: "web" } as const;
 const THEME = { DARK: "dark", LIGHT: "light" } as const;
 const PROFILES = [PROFILE.DESKTOP, PROFILE.WEB] as const;

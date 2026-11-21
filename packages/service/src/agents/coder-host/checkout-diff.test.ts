@@ -4,8 +4,8 @@
 
 import assert from "node:assert/strict";
 import { CHECKOUT_DIFF_BOUNDS } from "@repo/agent-runner/checkout-diff";
+import { CHANGED_FILE_STATUS, CHANGES_BOUNDS, PATCH_OMITTED } from "@repo/features/agent-wire";
 import { test } from "vitest";
-import { CHANGED_FILE_STATUS, CHANGES_BOUNDS, PATCH_OMITTED } from "./agent-wire.js";
 import { checkoutDiffFiles } from "./checkout-diff.js";
 
 const DIFF = [

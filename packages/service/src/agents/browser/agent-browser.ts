@@ -33,15 +33,6 @@
  * each attempt failed is logged by its kind alone.
  */
 
-import {
-  CDP_FAILURE,
-  type CdpCommand,
-  type CdpEvent,
-  CdpFailure,
-  type CdpFailureKind,
-  type CdpSession,
-  type PageTarget,
-} from "@repo/features/browser-cdp";
 import { RECORDING_FAILURE, type RecordingFailure } from "@repo/features/recording-wire";
 import {
   ptyLinesOf,
@@ -76,6 +67,15 @@ import { agentSandboxOf, openAgentSandboxPromptly, reopenedOf } from "../agent-s
 import { AgentImage, type AgentImageService } from "../coder-host/agent-image.js";
 import { phoneVideoAsk, phoneVideoOf } from "../machine/phone-video.js";
 import { type SandboxPtyService, sandboxPtyOf } from "../sandbox-pty.js";
+import {
+  CDP_FAILURE,
+  type CdpCommand,
+  type CdpEvent,
+  CdpFailure,
+  type CdpFailureKind,
+  type CdpSession,
+  type PageTarget,
+} from "./browser-cdp.js";
 import {
   BRIDGE_WORD,
   BROWSER_START_EXIT,

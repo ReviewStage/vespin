@@ -1,5 +1,6 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
+import { THEME } from "@repo/settings";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
@@ -27,7 +28,7 @@ import {
 import { HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
-import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
+import { PROFILE, surfaceAttributes } from "../../tokens/surface.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, IconButton } from "../button/button.js";

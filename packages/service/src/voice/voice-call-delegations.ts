@@ -1,7 +1,7 @@
 /**
  * voice-call-delegations.ts -- a voice call's delegation loop as the lease holding the call runs it: the session's events and the agent's turn in; the call's lines, the caller's requests, and the voice's context out.
  *
- * The loop itself is `@repo/features/voice-delegation`, fed unchanged: the
+ * The loop itself is `voice-delegation.ts`, fed unchanged: the
  * session's events as the sideband hands them, and the agent's turn as its
  * conversation shows it, through one queue, so the loop takes them in the
  * order they came. What it answers is carried out here, in that order:
@@ -67,17 +67,6 @@ import { AGENT_PART, type AgentPart, agentPart } from "@repo/features/agent-part
 import { QUEUE_CHANGE, VOICE_SPEAKER } from "@repo/features/agent-wire";
 import { toolCallView } from "@repo/features/tool-call-model";
 import { callLine } from "@repo/features/turn-rows";
-import {
-  AGENT_TURN,
-  type AgentTurnEvent,
-  type StoredVoiceLine,
-  VOICE_INPUT,
-  VOICE_OUTPUT,
-  type VoiceCallStart,
-  type VoiceInput,
-  type VoiceOutput,
-  voiceDelegations,
-} from "@repo/features/voice-delegation";
 import { failureKind } from "@repo/runtime/effect";
 import { hostMintedId } from "@repo/wire/host-ids";
 import { Effect, Option, Queue, Result, Stream } from "effect";
@@ -98,6 +87,17 @@ import {
 } from "../core.js";
 import { Sync } from "../sync/watch.js";
 import type { VoiceCallHolder, VoiceCallObserver } from "./voice-call-holder.js";
+import {
+  AGENT_TURN,
+  type AgentTurnEvent,
+  type StoredVoiceLine,
+  VOICE_INPUT,
+  VOICE_OUTPUT,
+  type VoiceCallStart,
+  type VoiceInput,
+  type VoiceOutput,
+  voiceDelegations,
+} from "./voice-delegation.js";
 
 /** What a line of a call's key is minted under, apart from every other id the host mints. */
 const VOICE_LINE_KIND = "voice-line";
