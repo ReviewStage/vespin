@@ -65,6 +65,7 @@ export const installedSkillPreviewParamsSchema = installedSkillPreviewRequestSch
 /** A paste installed, as the service takes it. */
 export const installedSkillInstallParamsSchema = installedSkillInstallRequestSchema;
 
+/** What an install sends: the paste, whose the skills are, and for a source the skills chosen and the commit previewed, for text its name and description. */
 export type InstalledSkillInstallParams = typeof installedSkillInstallParamsSchema.Type;
 
 /** One skill's folder read from a Mac, installed as the service takes it. */

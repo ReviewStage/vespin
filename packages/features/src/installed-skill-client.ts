@@ -4,10 +4,13 @@ import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import type {
   InstalledSkillImportRequest,
-  installedSkillInstallRequestSchema,
   installedSkillRefusedDataSchema,
 } from "./installed-skill-route-wire.js";
-import { INSTALLED_SKILL_CALL_FAILURE, INSTALLED_SKILL_RENAMES } from "./installed-skill-view.js";
+import {
+  INSTALLED_SKILL_CALL_FAILURE,
+  INSTALLED_SKILL_RENAMES,
+  type InstalledSkillInstallParams,
+} from "./installed-skill-view.js";
 import type { InstalledSkillRefusal } from "./installed-skill-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
@@ -28,9 +31,6 @@ import { HOSTED_API_ERROR } from "./service-wire.js";
  * service's answer whole, the transaction it committed in among it, which
  * the host waits for on the skills it holds live (`INSTALLED_SKILLS_READ`).
  */
-
-/** What an install sends: the paste, whose the skills are, and for a source the skills chosen and the commit previewed, for text its name and description. */
-export type InstalledSkillInstallParams = typeof installedSkillInstallRequestSchema.Type;
 
 const UNANSWERED = { failure: INSTALLED_SKILL_CALL_FAILURE.UNANSWERED } as const;
 
