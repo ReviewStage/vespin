@@ -901,10 +901,12 @@ export function Tooltip({
   useLayoutEffect(() => {
     if (label === undefined) return;
     // Note that a control the tooltip hands no ref is found by the
-    // description it was first drawn with, which every control starts on.
-    let element = control.current;
+    // description it was drawn with, so the window is searched only while it
+    // is described, because one its props name carries no such description
+    // and a search for it would walk the whole page on every draw to find nothing.
+    let element = control.current?.isConnected === true ? control.current : null;
 
-    if (element === null || !element.isConnected) {
+    if (element === null && heard === HEARD.DESCRIBED) {
       element = document.querySelector<HTMLElement>(`[aria-describedby~="${wordsId}"]`);
     }
 
