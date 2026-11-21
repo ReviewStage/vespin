@@ -1017,13 +1017,14 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     ...(relatedDocument?.blocks ?? []),
   ]);
 
-  const pullRequests = useLiveQuery((q) =>
-    taskId === undefined
-      ? undefined
-      : q
-          .from({ pullRequest: collections.agentPullRequests })
-          .where(({ pullRequest }) => eq(pullRequest.taskId, taskId)),
-  ).data;
+  const pullRequests =
+    useLiveQuery((q) =>
+      taskId === undefined
+        ? undefined
+        : q
+            .from({ pullRequest: collections.agentPullRequests })
+            .where(({ pullRequest }) => eq(pullRequest.taskId, taskId)),
+    ).data ?? NO_PULL_REQUESTS;
 
   const { held: statuses, setStatus } = useStatusWrites(tasks);
   const listed = useMemo(() => withHeld(tasks, statuses), [tasks, statuses]);
@@ -1051,7 +1052,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     if (task === undefined) return undefined;
 
     const agents = taskAgentsInOrder(agentsByTask(listedAgents), task.id).map((agent) =>
-      agentLine(agent, waiting.byAgent, pullRequests ?? NO_PULL_REQUESTS),
+      agentLine(agent, waiting.byAgent, pullRequests),
     );
 
     // Note that the list holds the archived agents too, oldest started first, as the panel's phone Overview folds them.
