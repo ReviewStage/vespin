@@ -3031,7 +3031,8 @@ function OverviewPage({
       : { label: WORDS.EDIT, heard: WORDS.EDIT_DESCRIPTION, onPress: () => editDoor(task) };
 
   const related = new Set(overview.tasks.map((each) => each.id));
-  const agents = new Set(overview.agents.map(({ agent }) => agent.id));
+  // Note that an archived agent's row opens its page too, where its transcript is read and it is brought back.
+  const agents = new Set([...overview.agents, ...overview.archived].map(({ agent }) => agent.id));
   const commented = new Set(threads.map((thread) => thread.id));
 
   // A related task opens on its own Overview, an agent on its page, where its transcript and its composer stand, and a comment thread on its own.
