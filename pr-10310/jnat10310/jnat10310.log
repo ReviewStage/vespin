@@ -1,0 +1,76 @@
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/src/list-row.tsx
+Auto-merging pnpm-lock.yaml
+Auto-merging pnpm-workspace.yaml
+built main 6e6927a40a + #10310 a0caf39087 as 96e48fc1db
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 00:03:35 17387 MB
+curve 00:04:05 17022 MB
+curve 00:04:35 15165 MB
+curve 00:05:05 14868 MB
+curve 00:05:35 14699 MB
+curve 00:06:06 14005 MB
+curve 00:06:36 14753 MB
+curve 00:07:06 14635 MB
+curve 00:07:36 14420 MB
+curve 00:08:06 14143 MB
+curve 00:08:36 14648 MB
+curve 00:09:07 14608 MB
+curve 00:09:37 14448 MB
+curve 00:10:07 14244 MB
+curve 00:10:37 14143 MB
+curve 00:11:07 14108 MB
+curve 00:11:37 14053 MB
+curve 00:12:07 14197 MB
+curve 00:12:38 14111 MB
+curve 00:13:08 14076 MB
+curve 00:13:38 14059 MB
+curve 00:14:08 14034 MB
+curve 00:14:38 14027 MB
+curve 00:15:09 13985 MB
+curve 00:15:39 13960 MB
+curve 00:16:09 13882 MB
+curve 00:16:39 13780 MB
+curve 00:17:09 13762 MB
+curve 00:17:40 13729 MB
+curve 00:18:10 13701 MB
+curve 00:18:40 13654 MB
+curve 00:19:10 13628 MB
+curve 00:19:40 13589 MB
+curve 00:20:11 13515 MB
+curve 00:20:41 13392 MB
+curve 00:21:11 13383 MB
+curve 00:21:41 13333 MB
+curve 00:22:11 12943 MB
+curve 00:22:42 12762 MB
+curve 00:23:12 12683 MB
+curve 00:23:42 12436 MB
+curve 00:24:12 12293 MB
+curve 00:24:42 12196 MB
+curve 00:25:12 12156 MB
+curve 00:25:43 12086 MB
+curve 00:26:13 11976 MB
+curve 00:26:43 11919 MB
+curve 00:27:13 11764 MB
+curve 00:27:43 11731 MB
+curve 00:28:14 11688 MB
+curve 00:28:44 11574 MB
+curve 00:29:14 11567 MB
+curve 00:29:44 11543 MB
+curve 00:30:14 11479 MB
+BUILD EXIT 0 00:30:44
+sizes: Assets.car 23840456 bytes (main Vmain4 8576376), .app 119132 KB (main 102900 KB), zipped .app 45019073 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10310.app: replacing existing signature
+p10310-iphone-light-menu: fails 0 shots 4 
+p10310-iphone-dark-menu: fails 0 shots 4 
+p10310-ipad27-light-menu: fails 0 shots 3 
+p10310-ipad27-dark-menu: fails 0 shots 3 
+p10310-iphone-light-tasks: fails 2 shots 4   Tap on "Mark done"... FAILED
+p10310-iphone-dark-tasks: fails 2 shots 4   Tap on "Mark done"... FAILED
+p10310-ipad27-light-tasks: fails 1 shots 6 Assert that "Permanently delete task?" is visible... FAILED
+p10310-ipad27-dark-tasks: fails 1 shots 6 Assert that "Permanently delete task?" is visible... FAILED
