@@ -1,0 +1,85 @@
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/brand/scripts/generate-surface-shared.mjs
+Auto-merging packages/ui-native/src/glyph.ts
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/list-row.tsx
+built main 630ff2ffb5 + #10094 2f17497503 as 6aedce2a45
+install 0
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 20:26:43 13959 MB
+curve 20:27:13 13652 MB
+curve 20:27:44 11859 MB
+curve 20:28:14 11693 MB
+curve 20:28:44 11534 MB
+curve 20:29:14 11350 MB
+curve 20:29:44 11331 MB
+curve 20:30:14 18923 MB
+curve 20:30:45 18673 MB
+curve 20:31:15 18547 MB
+curve 20:31:45 18375 MB
+curve 20:32:15 18236 MB
+curve 20:32:46 18724 MB
+curve 20:33:16 18624 MB
+curve 20:33:46 18593 MB
+curve 20:34:16 18573 MB
+curve 20:34:46 18456 MB
+curve 20:35:17 18301 MB
+curve 20:35:47 18192 MB
+curve 20:36:17 18102 MB
+curve 20:36:47 18081 MB
+curve 20:37:17 18043 MB
+curve 20:37:48 18002 MB
+curve 20:38:18 17927 MB
+curve 20:38:48 17900 MB
+curve 20:39:19 17886 MB
+curve 20:39:49 17704 MB
+curve 20:40:19 17673 MB
+curve 20:40:49 17655 MB
+curve 20:41:19 17628 MB
+curve 20:41:50 17612 MB
+curve 20:42:20 17425 MB
+curve 20:42:50 17411 MB
+curve 20:43:20 17084 MB
+curve 20:43:50 16976 MB
+curve 20:44:21 16947 MB
+curve 20:44:51 16916 MB
+curve 20:45:21 16911 MB
+curve 20:45:51 16863 MB
+curve 20:46:22 16706 MB
+curve 20:46:52 16776 MB
+curve 20:47:22 16486 MB
+curve 20:47:52 16275 MB
+curve 20:48:22 16049 MB
+curve 20:48:52 15926 MB
+curve 20:49:22 15753 MB
+curve 20:49:53 15631 MB
+curve 20:50:23 15578 MB
+curve 20:50:53 15449 MB
+curve 20:51:23 15411 MB
+curve 20:51:54 15338 MB
+curve 20:52:24 15228 MB
+curve 20:52:54 15183 MB
+curve 20:53:24 15145 MB
+curve 20:53:54 15157 MB
+curve 20:54:25 15132 MB
+curve 20:54:55 14932 MB
+curve 20:55:25 14985 MB
+curve 20:55:55 14982 MB
+curve 20:56:25 14908 MB
+BUILD EXIT 0 20:56:55
+sizes: Assets.car 23840456 bytes (main Vmain4 8576376), .app 119120 KB (main 102900 KB), zipped .app 45005632 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat10094.app: replacing existing signature
+p10094-iphone-light: fails 0 shots 2 
+p10094-iphone-dark: fails 0 shots 2 
+p10094-iphone-light-fnobody10094: fails 0 shots 2 
+p10094-iphone-light-fassign10094: fails 0 shots 1 
+p10094-iphone-dark-fnobody10094: fails 0 shots 2 
+p10094-iphone-dark-fassign10094: fails 0 shots 1 
+p10094-ipad27-light-fnobody10094: fails 1 shots 1 Tap on "Search Vespin"... FAILED
+p10094-ipad27-light-fassign10094: fails 0 shots 1 
+p10094-ipad27-dark-fnobody10094: fails 1 shots 1 Tap on "Search Vespin"... FAILED
+p10094-ipad27-dark-fassign10094: fails 0 shots 1 
