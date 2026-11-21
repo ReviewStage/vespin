@@ -180,6 +180,7 @@ import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useAgentThreadsLine } from "../inbox/use-agent-threads.js";
 import { useNewestNote } from "../newest-note.js";
+import { useOpenDrawnCount } from "../open-drawn.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
   type PullRequestKey,
@@ -848,6 +849,8 @@ export function AgentScreen() {
     /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
     brief?: string;
   }>();
+
+  useOpenDrawnCount(PRODUCT_SURFACE.AGENT);
 
   return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
 }
