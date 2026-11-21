@@ -1,9 +1,9 @@
-# settings-machine-connect.yaml -- a machine's pairing on the Inbox fixture, as its link opens it: Settings › Machines asks "Connect Ada's Mac mini?" over the machine, what it is and where its start came from, the code and when it expires, then Deny says it's denied.
+# settings-machine-connect.yaml -- a machine's pairing on the Inbox fixture, as its link opens it: Settings › Machines asks "Connect Ada's Mac mini?" over the machine, what it is and where its start came from, the code and when it expires, and who it's for, the workspace picked showing its private-network switch, then Deny says it's denied.
 #
 # Launched with `-connect <code>`, which hands the app the code as the
 # pairing's link would (`host-connect-link.ts`), on the host's Inbox fixture,
-# whose one waiting pairing is that code's (`@repo/host/fixture-inbox`), so
-# no server is reached. Deny is pressed rather than Connect, since it ends
+# whose one waiting pairing is that code's and offers Ada's workspace
+# (`@repo/host/fixture-inbox`), so no server is reached. Deny is pressed rather than Connect, since it ends
 # on a page of its own to shoot; Connect goes on to the list of machines.
 appId: dev.vespin.ios
 ---
@@ -22,6 +22,14 @@ appId: dev.vespin.ios
     id: "machine-connect-code"
 - assertVisible: "This code expires at .*"
 - takeScreenshot: settings-machine-connect
+# Just me stands picked until the workspace is, whose agents' private network is then asked of.
+- scrollUntilVisible:
+    element: "Just me"
+- tapOn: "Ada Lovelace"
+- assertVisible: "Let agents reach this machine's private network"
+- takeScreenshot: settings-machine-connect-workspace
+- scrollUntilVisible:
+    element: "Deny"
 - tapOn: "Deny"
 - extendedWaitUntil:
     visible: "Denied Ada's Mac mini"

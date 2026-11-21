@@ -1,11 +1,6 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import {
-  AGENT_MACHINE,
-  AGENT_STATUS,
-  type AgentStatus,
-  type ListedAgent,
-} from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
@@ -159,7 +154,6 @@ import {
   type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
-  runsOnGlyph,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -193,6 +187,7 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
+import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -224,7 +219,6 @@ import { useFollowWrite } from "../tasks/use-following.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
-import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type RowAsks,
@@ -2403,8 +2397,8 @@ export function TaskAgentRow({
           linkStep,
         );
 
-  // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
-  const platform = useDevicePlatform(agent.mac?.deviceId);
+  // Note that a machine's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac, whether it is the member's device or the workspace's.
+  const placeGlyph = useAgentPlaceGlyph(agent);
 
   return (
     <AgentRow
@@ -2413,7 +2407,7 @@ export function TaskAgentRow({
       harness={harness}
       state={agentState(agent.status)}
       runsOn={runsOn}
-      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
+      runsOnGlyph={placeGlyph}
       waiting={waiting}
       depth={nest?.depth}
       fold={nest?.fold}

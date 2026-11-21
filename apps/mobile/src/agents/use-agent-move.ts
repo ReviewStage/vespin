@@ -5,9 +5,12 @@
  * behind the member's Move agents experiment as there, and only for an
  * agent the task list holds and that is not archived. The places are the
  * panel's (`@repo/features/agent-move-model`): the cloud for an agent on a
- * device, and each device of the member's but its own, named as every list
- * of machines names it, each saying under its name that the agent is
- * stopped first or that only pushed work comes along. A move of an agent
+ * device or a workspace's machine, and each device of the member's but its
+ * own, named as every list of machines names it, then each machine the
+ * agent's workspace owns but its own that takes an agent now, as the
+ * panel's Move to › offers them after the devices, each saying under its
+ * name that the agent is stopped first or that only pushed work comes
+ * along. A move of an agent
  * still writing sends Stop first and moves it only once the Stop took, so
  * its session ends on a whole step; a Stop refused, or with nothing to stop
  * yet, moves nothing. The move is sent as the panel sends it
@@ -24,6 +27,8 @@ import { MOVE_FAILED, STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent
 import type { AgentRunsOnRequest } from "@repo/features/agent-wire";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { machineName } from "@repo/features/machine-name";
+import type { MacOffer } from "@repo/features/models-wire";
+import { runsOnPlaces } from "@repo/features/runs-on-places";
 import { agentStillWriting, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectExperiment } from "@repo/host/app-state-reads";
@@ -33,8 +38,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
-import { useModelCatalog } from "../tasks/use-start.js";
+import { placeGlyph, useModelCatalog } from "../tasks/use-start.js";
 import { useWrite } from "../use-write.js";
+import { useOfferedWorkspaceMachines } from "../workspace-machines.js";
 
 /** One place Move to offers: its name, its glyph, what it says under its name, and the move there. */
 export interface MovePlace {
@@ -52,6 +58,9 @@ export interface AgentMove {
   readonly note: string | undefined;
 }
 
+/** No devices, for the places only the workspace's machines fill. */
+const NO_DEVICES: readonly MacOffer[] = [];
+
 /** The agents a move is out for, from its Stop to its answer, so a second pick meanwhile is dropped, as the panel drops it. */
 const MOVING = new Set<string>();
 
@@ -59,7 +68,9 @@ const MOVING = new Set<string>();
  * The Move to of the agent `agent` names, the task list's own row of it,
  * none before it is read: its places, and the move to each.
  */
-export function useAgentMove(agent: MovedAgent | undefined): AgentMove {
+export function useAgentMove(
+  agent: (MovedAgent & { readonly workspaceId: string }) | undefined,
+): AgentMove {
   const acts = useHostActs();
   const write = useWrite();
   const [note, setNote] = useState<string | undefined>(undefined);
@@ -68,6 +79,8 @@ export function useAgentMove(agent: MovedAgent | undefined): AgentMove {
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.MOVE_AGENTS) }).data === true;
 
   const catalog = useModelCatalog();
+  // Note that the workspace's machines are read only where a move is offered, so a page with none reads nothing.
+  const owned = useOfferedWorkspaceMachines(on ? agent?.workspaceId : undefined);
 
   if (!on || agent === undefined || agent.archivedAt !== undefined) {
     return { places: undefined, note };
@@ -142,6 +155,20 @@ export function useAgentMove(agent: MovedAgent | undefined): AgentMove {
       detail,
       onPress: () => void move({ machine: AGENT_MACHINE.DEVICE, deviceId: device.deviceId })(),
     })),
+    // Note that the machine the agent runs on is not offered, as its own device is not.
+    ...runsOnPlaces(NO_DEVICES, owned).shared.flatMap((place) =>
+      place.id === agent.mac?.deviceId
+        ? []
+        : [
+            {
+              key: place.id,
+              label: place.label,
+              glyph: placeGlyph(place),
+              detail,
+              onPress: () => void move(place.runsOn)(),
+            },
+          ],
+    ),
   ];
 
   return { places: listed.length === 0 ? undefined : listed, note };
