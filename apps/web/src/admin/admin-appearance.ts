@@ -9,7 +9,7 @@
  * `public/app-theme.js` does the same before the first frame.
  */
 
-import { THEME, type Theme } from "@repo/ui";
+import { THEME, type Theme } from "@repo/settings";
 import { wearTheme } from "@repo/ui/appearance";
 import { THEME_KEY, tintChrome } from "../theme-chrome";
 

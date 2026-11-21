@@ -13,7 +13,7 @@ the tokens every component reads (`src/tokens/surface.ts`):
 | Attribute | Values | What it chooses |
 | --- | --- | --- |
 | `data-ui-profile` | `PROFILE.DESKTOP`, `PROFILE.WEB` | Which app's role values: the window's density or the site's |
-| `data-ui-theme` | `THEME.DARK`, `THEME.LIGHT`, `THEME.SYSTEM` | Which palette; `system` follows the Mac and is the desktop's alone |
+| `data-ui-theme` | `@repo/settings`' `THEME.DARK`, `THEME.LIGHT`, `THEME.SYSTEM` | Which palette; `system` follows the Mac and is the desktop's alone |
 | `data-ui-density` | `DENSITY.COMPACT` | The site's dashboard size, a step under a public page's; web only, and only with a fine pointer: on a coarse one the site's full roles stand |
 
 The desktop's window page (`index.html`) and each web entry's

@@ -1,4 +1,5 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { THEME, type Theme } from "@repo/settings";
 import {
   BUTTON_TYPE,
   BUTTON_VARIANT,
@@ -12,8 +13,6 @@ import {
   TEXT_VARIANT,
   Text,
   TextField,
-  THEME,
-  type Theme,
 } from "@repo/ui";
 import { useState } from "react";
 import type { Example } from "./example";
