@@ -1,0 +1,8 @@
+== bundle PJj10434 base e33483e18d
+  built e33483e18d base app Vmain9.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-inbox: fails 0 shots 16 
+ipad27-light-inbox: fails 0 shots 14 
