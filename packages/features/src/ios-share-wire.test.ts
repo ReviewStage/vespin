@@ -31,7 +31,7 @@ function task(number: number, repository: string): TaskSummary {
     workspaceId: ACME.id,
     number,
     name: `Task ${number}`,
-    createdAt: 0,
+    createdAt: number,
     updatedAt: 0,
     repository,
     status: TASK_STATUS.TODO,
@@ -40,8 +40,8 @@ function task(number: number, repository: string): TaskSummary {
 }
 
 test("a workspace is offered the repositories its GitHub reaches, the newest worked in first", () => {
-  // Listed newest first, as the Tasks list orders them.
-  const tasks = [task(3, "globex/site"), task(2, "acme/ledger"), task(1, "acme/web")];
+  // Note that the tasks come in no order, as a read that sorts nothing hands them, and the newest worked in still leads.
+  const tasks = [task(1, "acme/web"), task(3, "globex/site"), task(2, "acme/ledger")];
   // Note that the workspace's own list is unread, as it is until New task has opened on it.
   const snapshot = shareSnapshotOf("user-ada", ACME.id, [ACME], tasks, () => undefined, SERVICE);
   expect(snapshot.workspaces).toEqual([
