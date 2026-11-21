@@ -242,6 +242,7 @@
     "./description-edit": "./src/description-edit.js",
     "./description-history-words": "./src/description-history-words.js",
     "./description-markdown": "./src/description-markdown.js",
+    "./document-blocks": "./src/document-blocks.js",
     "./description-notes": "./src/description-notes.js",
     "./task-section-wire": "./src/task-section-wire.js",
     "./task-section-writes": "./src/task-section-writes.js",

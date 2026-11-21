@@ -19,13 +19,13 @@ import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_KIND,
   type AgentOverviewPullRequest,
+  type AgentPullRequest,
   type AgentStatus,
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
-import type { AgentThreadsLine } from "@repo/features/inbox-list-model";
 import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
 import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
@@ -79,7 +79,6 @@ import {
   type ComposerMenu,
   ConfirmAsk,
   ContinueLine,
-  DeniesWaiting,
   drawnCallIds,
   EditingLine,
   FORM_SPACING,
@@ -88,7 +87,6 @@ import {
   GlassDock,
   type Glyph,
   glyphSymbol,
-  HeldCallBanner,
   ListSection,
   MENU_CHIP_LOOK,
   MentionSuggestions,
@@ -102,7 +100,6 @@ import {
   NO_TOGGLES,
   openCuts,
   PERMISSION_MODE_GLYPH,
-  QueuedLines,
   runsOnGlyph,
   Screen,
   SettingsForm,
@@ -110,7 +107,6 @@ import {
   StackSubtitle,
   shownFiles,
   shownMediaIds,
-  ThreadsLine,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
@@ -137,6 +133,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { type AgentThreadsDock, useAgentDock } from "../agents/agent-dock.js";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -197,11 +194,6 @@ import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
 
 /** The agent's threads line over its box, and what a press on it opens. */
-interface AgentThreadsDock {
-  readonly line: AgentThreadsLine;
-  readonly onOpen: (threadId: string) => void;
-}
-
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
 
@@ -426,6 +418,8 @@ function AgentComposerBar({
   trailing,
   dictation,
   threads,
+  pullRequest,
+  onOpenPullRequest,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -448,19 +442,32 @@ function AgentComposerBar({
   readonly dictation: ComposerDictation;
   /** The agent's threads line and its press, while it has posted threads. */
   readonly threads: AgentThreadsDock | undefined;
+  /** The pull request the agent opened, which the row over the field opens; none before it opened one. */
+  readonly pullRequest: AgentPullRequest | undefined;
+  readonly onOpenPullRequest: (url: string) => void;
 }) {
-  const { banner, waiting } = approvals;
+  const { waiting } = approvals;
   // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
   // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
   const denies = waiting !== undefined && !composer.sendQueues;
-  // Note that while a `/` or an `@` offers its list, the threads line and the denial's line step aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it.
+  // Note that while a `/` or an `@` offers its list, the row of capsules over the composer steps aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it.
   const picking = composer.skills !== undefined || composer.mentions !== undefined;
 
+  const dock = useAgentDock(
+    {
+      composer,
+      approvals,
+      denies,
+      onShowWaiting,
+      threads,
+      pullRequest,
+      onOpenPullRequest,
+    },
+    picking,
+  );
+
   const head =
-    threads === undefined &&
-    !denies &&
-    banner === undefined &&
     composer.cancelMessageEdit === undefined &&
     composer.skills === undefined &&
     composer.mentions === undefined &&
@@ -469,13 +476,6 @@ function AgentComposerBar({
     note === undefined ? undefined : (
       <>
         {ending}
-        {threads === undefined || picking ? null : (
-          <ThreadsLine
-            words={threads.line.words}
-            waiting={threads.line.waiting}
-            onOpen={() => threads.onOpen(threads.line.opens.id)}
-          />
-        )}
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
         )}
@@ -497,8 +497,6 @@ function AgentComposerBar({
         {composer.cancelMessageEdit === undefined ? null : (
           <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
-        {banner === undefined ? null : <HeldCallBanner {...banner} />}
-        {denies && !picking ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         {note === undefined ? null : <AskNote words={note} />}
       </>
     );
@@ -519,19 +517,7 @@ function AgentComposerBar({
     stopping: composer.stopping,
     call,
     head,
-    above:
-      composer.queued.length === 0 && composer.paused === undefined ? undefined : (
-        <QueuedLines
-          lines={composer.queued}
-          paused={composer.paused}
-          onSteer={composer.steer}
-          onDelete={composer.remove}
-          onMove={composer.move}
-          onResume={composer.resume}
-          onEdit={composer.edit}
-          onCancelEdit={composer.cancelEdit}
-        />
-      ),
+    above: dock ?? undefined,
     saving: composer.saving,
     focusAsk: composer.focusAsk,
     pills: composer.pills,
@@ -569,6 +555,8 @@ function AgentComposerArea({
   tools,
   trailing,
   onOpenThread,
+  pullRequest,
+  onOpenPullRequest,
 }: {
   readonly id: string;
   readonly agent: Parameters<typeof useAgentComposer>[1];
@@ -591,6 +579,9 @@ function AgentComposerArea({
   readonly trailing: ReactNode;
   /** Opens one of the agent's Inbox threads by its id. */
   readonly onOpenThread: (threadId: string) => void;
+  /** The pull request the agent opened, which the row over the field opens; none before it opened one. */
+  readonly pullRequest: AgentPullRequest | undefined;
+  readonly onOpenPullRequest: (url: string) => void;
 }) {
   const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
@@ -616,6 +607,8 @@ function AgentComposerArea({
         tools={tools}
         trailing={trailing}
         dictation={dictated.dictation}
+        pullRequest={pullRequest}
+        onOpenPullRequest={onOpenPullRequest}
         threads={
           threadsLine === undefined ? undefined : { line: threadsLine, onOpen: onOpenThread }
         }
@@ -1260,6 +1253,8 @@ function AgentConversation({
   ) : (
     <AgentComposerArea
       id={id}
+      pullRequest={pullRequests[0]}
+      onOpenPullRequest={openPullRequest}
       agent={agent}
       transcript={transcript}
       status={status}

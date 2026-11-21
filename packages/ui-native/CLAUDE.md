@@ -80,20 +80,23 @@ builds a control of its own.
   popover from the chip in a regular window, `ModelChoicePopover`),
   Dictate, and Send, a dictation under way standing its strip in the row's
   place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
-  and its head, inside the same glass, holds an agent's
-  `ThreadsLine` (the panel's threads dock: Inbox and how many of its
-  threads wait, in copper, or quiet, how many it posted, a press opening
-  the thread it names), its
-  `DeniesWaiting` (that a message sent now denies the call waiting, a press
-  scrolling to the call's row, whose presses alone answer it), a
-  `HeldCallBanner` only for a call no row draws, such as a subagent's (with
-  Deny, Always allow and Allow), the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
+  and over it stands one row of capsules (`DockChips`, the
+  developer's pick, Nov 21, 2026), each the system's glass button with a
+  count and a noun, copper only on a count that waits on the reader: an
+  agent's calls waiting ("Approval 1", which scrolls to the call's row, or
+  opens the `HeldCallBanner` of a call no row draws, such as a subagent's,
+  in a `DockPanel` under the row, VoiceOver hearing that a message sent now
+  denies them), its Inbox threads ("Inbox 7", the panel's threads dock,
+  opening the thread it names), its pull request ("#128", opening its
+  page), and its queue ("2 queued", opening its `QueuedLines`, with Steer
+  and Delete, under the row, held open while one is edited), the row
+  scrolling sideways where it outruns the column and stepping aside while
+  a `/` or an `@` offers its list; and its head, inside the same glass,
+  holds the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
   offers (the panel's groups and words, each row led by the mark its pill
   wears, a bare `@` listing Suggested then Browse, a row per kind with
   iOS's chevron, and a list narrowed to one kind, `@people:`, standing
-  under its crumb, whose ‹ widens it; the threads and denial lines step
-  aside while it stands), its `QueuedLines` (Steer and
-  Delete), two or more folded under one "2 queued" line a press opens, its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  under its crumb, whose ‹ widens it), its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
   taking the keyboard through `focusAsk`), an `AskNote`, and an agent's
   `ContinueLine` (why its turn failed and Continue in new agent, where only a
@@ -301,7 +304,7 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   ⌘,, as Notion's and Linear's iPad apps keep it. Nothing draws a
   copy of glass, and glass is one layer: a bar's own, one glass view
   (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest), or a
-  control's own glass button style in a `DockRow`, never inside a bar. A
+  control's own glass button style, as the composer's `DockChips` stand, never inside a bar. A
   glass that holds buttons takes no press of its own (not `interactive`),
   so only the button under a finger or the pointer reacts, and no button
   is handed a hover effect: the system draws its own on each style, where

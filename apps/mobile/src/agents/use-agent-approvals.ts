@@ -57,6 +57,8 @@ export interface WaitingBanner {
 export interface Waiting {
   /** As the panel's working line says it: "Waiting on you · 1 approval". */
   readonly words: string;
+  /** How many calls wait, which the composer's Approval capsule counts. */
+  readonly count: number;
   /** What the newest call waiting asks, as the agent's CLI put it, which VoiceOver hears with the words, so each call that starts waiting is told as it comes. */
   readonly asks: string;
   readonly callId: string | undefined;
@@ -238,6 +240,7 @@ export function useAgentApprovals(
           ? undefined
           : {
               words: waitingOnYouWords(waiting.length),
+              count: waiting.length,
               asks: newest.approval.title,
               callId: oldestDrawn?.approval.toolUseId,
             },

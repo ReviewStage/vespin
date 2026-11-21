@@ -96,8 +96,11 @@ export {
   MentionSuggestions,
   type SkillSuggestion,
   SkillSuggestions,
-  ThreadsLine,
 } from "./composer-head.js";
+
+export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
+
+export { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
 
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
@@ -133,7 +136,6 @@ export {
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
 
 export {
-  DeniesWaiting,
   HELD_ANSWER,
   type HeldAnswer,
   type HeldCall,
