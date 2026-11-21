@@ -106,7 +106,7 @@ export function fakeAppBridgeCalls(): Partial<AppBridge> {
   return answering;
 }
 
-/** The holds a window keeps on a read the host lays on app state: a task's inbox, its pages and cloud Browser tabs, an agent's or a worker's transcript, a pull request's chapters and parts, the account's beats, hosts, machines, models, integrations, provider keys, and GitHub token, an agent's or a server's tools, the outside MCP clients, a workspace's memories, skills, and repositories, a link's standing, the automations' lists and histories, a description's or a page's comments, a task's description history, the run that started an agent, a workspace's people, token repositories, invitations, own integrations, and Slack channels, and a task's description. */
+/** The holds a window keeps on a read the host lays on app state: a task's inbox, its pages and cloud Browser tabs, an agent's or a worker's transcript, a pull request's chapters and parts, the account's beats, hosts, machines, models, integrations, provider keys, and GitHub token, an agent's or a server's tools, the outside MCP clients, a workspace's memories, skills, and repositories, a link's standing, the automations' lists and histories, a description's or a page's comments, a task's description history, the run that started an agent, a workspace's people, token repositories, invitations, own integrations, Slack channels, and own machines, and a task's description. */
 type HoldKind =
   | typeof AGENT_ACT_KIND.AGENTS_ORIGIN_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_TRANSCRIPT
@@ -139,6 +139,7 @@ type HoldKind =
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW
   | typeof WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW
+  | typeof WORKSPACE_ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW
   | typeof TASKS_ACT_KIND.TASKS_HELD_FOLLOW;
 
 /** Every hold a window keeps on a read the host lays on app state, which a test's port holds quietly unless it answers it. */
@@ -174,6 +175,7 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW,
   WORKSPACE_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW,
+  WORKSPACE_ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW,
   TASKS_ACT_KIND.TASKS_HELD_FOLLOW,
 ]);
 

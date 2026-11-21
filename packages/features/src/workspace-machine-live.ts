@@ -1,6 +1,13 @@
 import { Schema } from "effect";
 import { refuses } from "./contract/base.js";
-import { LIVE_MODE, LIVE_PARAM, liveRead, liveRows, ORDER } from "./live-read.js";
+import {
+  LIVE_MODE,
+  LIVE_PARAM,
+  type LiveReadAnswer,
+  liveRead,
+  liveRows,
+  ORDER,
+} from "./live-read.js";
 import { LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
@@ -11,8 +18,8 @@ import { HOSTED_API_ERROR } from "./service-wire.js";
  * The service answers one statement, every machine the workspace owns that
  * was not removed, by name and then id, to a member of it alone; a
  * workspace the reader is not in is answered not found. Each row says what
- * the section draws: the machine's name, its platform as a string, so a
- * kind this build does not know hides none of the others, who
+ * the section draws: the machine's name, its platform and architecture as
+ * strings, so a kind this build does not know hides none of the others, who
  * connected it, null once that account is gone, which networks its agents
  * may reach, where its setup stands, whether its host program has called
  * in since it joined, whether its beat went past fresh, and, for one whose
@@ -33,6 +40,7 @@ export const WORKSPACE_MACHINES_READ = liveRead({
         id: Schema.String,
         name: Schema.String,
         platform: Schema.String,
+        arch: Schema.String,
         connectedBy: Schema.NullOr(Schema.String),
         network: Schema.String,
         /** Where its setup stands (`DEVICE_SETUP`), null once it is ready. */
@@ -53,3 +61,5 @@ export const WORKSPACE_MACHINES_READ = liveRead({
   },
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND),
 });
+
+export type WorkspaceMachinesLiveAnswer = LiveReadAnswer<typeof WORKSPACE_MACHINES_READ>;

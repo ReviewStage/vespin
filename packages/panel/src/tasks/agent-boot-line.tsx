@@ -126,13 +126,21 @@ function startingSaid(
 ): StartingSaid {
   const words = bootStartingWords(machine, host?.name);
 
-  if (machine === AGENT_MACHINE.VERCEL || host?.deviceId === undefined) return { words };
-
-  return {
-    words: BOOT_WORDS.STARTING_ON_BEFORE,
-    after: <OnMachine machine={{ id: host.deviceId, name: host.name }} />,
-    heard: words,
-  };
+  switch (machine) {
+    case AGENT_MACHINE.VERCEL:
+      return { words };
+    // Note that a workspace's machine is named in words, since a machine's chip draws a member's own (`workspace-machines.tsx`).
+    case AGENT_MACHINE.WORKSPACE:
+      return { words };
+    case AGENT_MACHINE.DEVICE:
+      return host?.deviceId === undefined
+        ? { words }
+        : {
+            words: BOOT_WORDS.STARTING_ON_BEFORE,
+            after: <OnMachine machine={{ id: host.deviceId, name: host.name }} />,
+            heard: words,
+          };
+  }
 }
 
 /** The empty transcript's line while the agent's first launch stands, as `line` says it. */

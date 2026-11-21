@@ -69,6 +69,7 @@ import {
 import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
+import type { WorkspaceMachineLine } from "@repo/features/workspace-machine-view";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import type { WorkspaceMembersAnswer } from "@repo/features/workspace-wire";
 import type { SessionReplayBootstrap } from "@repo/gateway/window-session";
@@ -517,6 +518,16 @@ export type AppWorkspaceInvitations = Readonly<
 >;
 
 /**
+ * The machines each workspace owns the host holds for its windows
+ * (`workspace-machines-follow.ts`), by the workspace's id, each by name, with
+ * a rename still out drawn over it and a removal drawn gone, once its read
+ * answered. One absent is held by nobody.
+ */
+export type AppWorkspaceMachines = Readonly<
+  Record<string, AppHostRead<readonly WorkspaceMachineLine[]>>
+>;
+
+/**
  * This Mac as its host reads it (`compose-this-mac-host.ts`): the machine's
  * id in the keyed hash every host reports (`@repo/host/node`'s
  * `machine-identity.ts`), where it could be read, and the device of the
@@ -746,6 +757,7 @@ export interface AppHostReads {
   [LIVE_READ.MACHINES]: readonly MachineLine[];
   [LIVE_READ.MACHINE_ASKS]: readonly MachineAskLine[];
   [LIVE_READ.WORKSPACE_INVITATIONS]: readonly WorkspaceInvitation[];
+  [LIVE_READ.WORKSPACE_MACHINES]: readonly WorkspaceMachineLine[];
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHost;
   [LIVE_READ.TRANSCRIPT]: AppTranscript;
   [LIVE_READ.WORKSPACE_MEMBERS]: WorkspaceMembersAnswer;
@@ -926,6 +938,7 @@ export interface AppState {
   [LIVE_READ.MACHINE_ASKS]: AppMachineAsks;
   /** Each workspace's pending invitations an owner's or an admin's windows draw, held while a window draws them and a while after: what Settings › Workspace lists under Invitations. */
   [LIVE_READ.WORKSPACE_INVITATIONS]: AppWorkspaceInvitations;
+  [LIVE_READ.WORKSPACE_MACHINES]: AppWorkspaceMachines;
   /** Which machine This Mac is and the device its host's record names, held for the signed-in session and told as it moves: what Settings › Hosts and Runs on name This Mac by. */
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHosts;
   /** Each agent's or worker's transcript the windows' tabs show, held while a tab shows it and a while after, followed only while one does: what an agent's tab and a worker's draw. Never written to disk. */
@@ -1137,6 +1150,7 @@ export const HOST_READ_SLICE = {
     on: KEYS_ON.SLICE,
     rowId: "id" satisfies keyof WorkspaceInvitation,
   },
+  [LIVE_READ.WORKSPACE_MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.THIS_MAC_HOST]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   // Note that a transcript crosses as the messages that moved, since each step of a turn rewrites one message, its journal, while the rest stand.
   [LIVE_READ.TRANSCRIPT]: {

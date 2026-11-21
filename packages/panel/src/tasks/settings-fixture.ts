@@ -26,7 +26,13 @@ import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import { samePrefix } from "@repo/features/allowed-command-model";
 import type { AllowedCommand } from "@repo/features/allowed-command-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
-import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_ARCH,
+  DEVICE_PLATFORM,
+  DEVICE_SETUP,
+  HOST_UPDATE,
+  MACHINE_NETWORK,
+} from "@repo/features/device-agent-wire";
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
@@ -81,6 +87,7 @@ import {
   type AppTokenRepositories,
   type AppWorkspaceIntegrations,
   type AppWorkspaceInvitations,
+  type AppWorkspaceMachines,
   type AppWorkspaceMembers,
   EVERY_WORKSPACE,
   RUN_PROFILE,
@@ -1064,6 +1071,51 @@ const STAGED_HOSTS: AppHosts = {
   },
 };
 
+/**
+ * The machines the account's first workspace owns, the one Settings and New
+ * task show first, as the host holds them for Settings › Machines and the
+ * Machine picker: a Linux box online whose agents may reach its private
+ * network, a second box gone quiet, and a Mac set aside for it still
+ * pulling its agent image. No other workspace owns any.
+ */
+const STAGED_OWNED_MACHINES: AppWorkspaceMachines = {
+  [WORKSPACE.PERSONAL]: {
+    rows: [
+      {
+        id: "5c0f6c84-0000-4000-8000-0000000000b1",
+        name: "build-01",
+        platform: DEVICE_PLATFORM.LINUX,
+        arch: DEVICE_ARCH.X64,
+        connectedBy: ACCOUNT_ID,
+        network: MACHINE_NETWORK.PRIVATE_ALLOWED,
+        calledIn: true,
+        away: false,
+      },
+      {
+        id: "5c0f6c84-0000-4000-8000-0000000000b2",
+        name: "build-02",
+        platform: DEVICE_PLATFORM.LINUX,
+        arch: DEVICE_ARCH.X64,
+        connectedBy: ACCOUNT_ID,
+        network: MACHINE_NETWORK.PUBLIC_ONLY,
+        calledIn: true,
+        away: true,
+      },
+      {
+        id: "5c0f6c84-0000-4000-8000-0000000000b3",
+        name: "Team Mac Studio",
+        platform: DEVICE_PLATFORM.DARWIN,
+        arch: DEVICE_ARCH.ARM64,
+        connectedBy: null,
+        network: MACHINE_NETWORK.PUBLIC_ONLY,
+        setup: DEVICE_SETUP.PREPARING,
+        calledIn: true,
+        away: false,
+      },
+    ],
+  },
+};
+
 /** The apps the staged Mac always allows, by bundle id and name: enough of them that the list folds. */
 const STAGED_ALLOWED_APPS = [
   { bundleId: "com.apple.Notes", name: "Notes" },
@@ -1402,6 +1454,7 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.INSTALLED_SKILLS]: STAGED_SKILLS,
     [LIVE_READ.INTEGRATIONS]: STAGED_INTEGRATIONS,
     [LIVE_READ.WORKSPACE_INVITATIONS]: HELD_INVITATIONS,
+    [LIVE_READ.WORKSPACE_MACHINES]: STAGED_OWNED_MACHINES,
     [LIVE_READ.INTEGRATION_TOOLS]: STAGED_TOOLS,
     [LIVE_READ.MEMORIES]: memoriesStaged(),
     [LIVE_READ.MODELS]: STAGED_MODELS,

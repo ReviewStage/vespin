@@ -295,6 +295,13 @@ export const AGENT_MACHINE = {
 
 export type AgentMachineKind = (typeof AGENT_MACHINE)[keyof typeof AGENT_MACHINE];
 
+/** The kind of machine an agent runs on, as its summary says it: the cloud where it names none, so a reader can switch over every kind. */
+export function agentMachineOf(agent: {
+  readonly machine?: AgentMachineKind | undefined;
+}): AgentMachineKind {
+  return agent.machine ?? AGENT_MACHINE.VERCEL;
+}
+
 /** Why a Start on This Mac was refused, which the refusal names (`local-agent-refused`). */
 export const LOCAL_AGENT_REFUSAL = {
   /** No Mac of the account's beat lately, so none would take the agent. */

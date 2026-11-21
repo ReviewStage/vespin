@@ -288,7 +288,9 @@ export const userSync = defineSyncTable(user, {
  * every workspace it is in, so a Mac's new name reaches the task lists that
  * name the local agents on it, and a host's platform, machine, model,
  * update, setup, first register (its home folder), and its going away or
- * coming back reach every surface that reads the hosts (`hostsRead`), as do
+ * coming back reach every surface that reads the hosts (`hostsRead`), and
+ * a workspace's machine's architecture the workspace's machines
+ * (`workspaceMachinesRead`), as do
  * its enrolling, which writes its version, its removal, and its being
  * picked as its account's default machine (`machinesRead`). Note that every other column is
  * ignored, because the device beats and registers again often, rewriting
@@ -310,7 +312,6 @@ export const deviceSync = defineSyncTable(device, {
     },
   ],
   ignore: [
-    device.arch,
     device.agentsFolder,
     device.tempFolder,
     device.attachmentsFolder,

@@ -2,7 +2,7 @@
  * workspace-machines.ts -- the machines one workspace owns' live read bound, to a member of it: its one statement, the tables it reads, the topic that wakes it, and who it admits.
  *
  * Every machine the workspace owns and was not removed, each with its id,
- * name, platform, who connected it, the networks its
+ * name, platform and architecture, who connected it, the networks its
  * agents may reach, where its setup stands, whether its host program has
  * called in, whether its beat went past fresh, and, while its box has yet to
  * collect its secret, when the pairing that made it lapses
@@ -11,8 +11,7 @@
  * rule its endpoint checked. Note that a lapsed pairing is the reader's to
  * judge, since a live statement reads no clock, as the hosts read leaves it
  * (`hosts.ts`). The secret's hash is never selected, since what a
- * statement selects is what leaves, and nor is its architecture, which
- * `deviceSync` ignores; the list answers it (`workspaceMachines.list`).
+ * statement selects is what leaves.
  * Note that a box collecting its secret wakes nothing here, since its
  * pairing notifies the account that approved it, but its first register,
  * which follows at once, does.
@@ -57,6 +56,7 @@ export const workspaceMachinesRead = bindLiveRead(WORKSPACE_MACHINES_READ, {
           id: device.id,
           name: device.name,
           platform: device.platform,
+          arch: device.arch,
           connectedBy: device.connectedBy,
           network,
           setup: device.setup,

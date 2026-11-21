@@ -5,6 +5,7 @@ import {
   type AgentFailure,
   type AgentStatus,
   type AgentSummary,
+  agentMachineOf,
   type ListedAgent,
   PULL_REQUEST_STATE,
 } from "./agent-wire.js";
@@ -418,6 +419,10 @@ export const RUNS_ON_WORDS = {
   SETTING_UP: "Setting up",
   FAILED: "Failed",
   REMOVED: "Removed device",
+  /** A workspace's machine the service no longer names, as an agent's row says it. */
+  REMOVED_MACHINE: "Removed machine",
+  /** The heading over the workspace's own machines in a list of places. */
+  WORKSPACE_MACHINES: "Workspace machines",
   NO_MATCH: "No devices match",
 } as const;
 
@@ -427,13 +432,19 @@ type RunsOnMac = NonNullable<AgentSummary["mac"]>;
 /**
  * Where an agent runs, as its row says it: Cloud for one in a sandbox, the
  * device it runs on by `deviceName` (its own name where none is given), and
- * Removed device for a local agent whose Mac is gone.
+ * Removed device for a local agent whose Mac is gone; and the workspace's
+ * machine it runs on by its name, or Removed machine once it is gone.
  */
 export function agentRunsOnWords(
   agent: Pick<AgentSummary, "machine" | "mac">,
   deviceName: (mac: RunsOnMac) => string = (mac) => mac.name,
 ): string {
-  if (agent.machine !== AGENT_MACHINE.DEVICE) return RUNS_ON_WORDS.CLOUD;
-
-  return agent.mac === undefined ? RUNS_ON_WORDS.REMOVED : deviceName(agent.mac);
+  switch (agentMachineOf(agent)) {
+    case AGENT_MACHINE.VERCEL:
+      return RUNS_ON_WORDS.CLOUD;
+    case AGENT_MACHINE.DEVICE:
+      return agent.mac === undefined ? RUNS_ON_WORDS.REMOVED : deviceName(agent.mac);
+    case AGENT_MACHINE.WORKSPACE:
+      return agent.mac === undefined ? RUNS_ON_WORDS.REMOVED_MACHINE : agent.mac.name;
+  }
 }
