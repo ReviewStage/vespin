@@ -105,20 +105,20 @@ export function StandingCallProvider({
     ),
   }).data?.messages;
 
-  const line = callAgentLine(facts?.status, messages ?? NO_MESSAGES);
+  const line = callAgentLine(facts.status, messages ?? NO_MESSAGES);
   const action = line?.action;
   const working = line !== undefined;
 
   const standing = useMemo<StandingCall | null>(() => {
     if (call === undefined) return null;
     const agent = working ? { agent: action === undefined ? {} : { action: bounded(action) } } : {};
-    const provider = facts?.provider === undefined ? {} : { provider: facts.provider };
-    const taskName = facts?.taskName === undefined ? {} : { taskName: bounded(facts.taskName) };
+    const provider = facts.provider === undefined ? {} : { provider: facts.provider };
+    const taskName = facts.taskName === undefined ? {} : { taskName: bounded(facts.taskName) };
 
     return {
       agentId: call.agentId,
       taskId: call.taskId,
-      agentName: bounded(facts?.agentName ?? UNNAMED_AGENT),
+      agentName: bounded(facts.agentName),
       ...provider,
       ...taskName,
       stage: call.stage,
@@ -126,7 +126,7 @@ export function StandingCallProvider({
       speakerMuted: call.speakerMuted,
       ...agent,
     };
-  }, [call, facts?.agentName, facts?.provider, facts?.taskName, working, action]);
+  }, [call, facts.agentName, facts.provider, facts.taskName, working, action]);
 
   useEffect(() => appPlatform().voiceCall?.(standing), [standing]);
 

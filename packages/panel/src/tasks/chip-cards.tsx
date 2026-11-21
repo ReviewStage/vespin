@@ -97,7 +97,7 @@ export function useSectionHeading(taskId: string | undefined, anchor: string): s
     taskId === undefined
       ? undefined
       : page?.holder?.taskId === taskId
-        ? page?.text()
+        ? page.text()
         : held !== undefined && "task" in held
           ? held.task.description.body
           : undefined;

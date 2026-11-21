@@ -409,9 +409,7 @@ function openAddress(
 
 /** The window's router, which a press is matched on; none outside it, as in a test of one surface. */
 export function useLinkRouter(): LinkRouter | undefined {
-  const router: LinkRouter | undefined = useRouter({ warn: false });
-
-  return router ?? undefined;
+  return useRouter({ warn: false });
 }
 
 /** The opener for a plan, or one of its sections, as a mention's chip names it: where the place it is pressed on opens it, else in the window; nothing outside the window. */
