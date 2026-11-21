@@ -1,0 +1,9 @@
+== bundle PJjprobe409 base 8b7cab985d
+  built 8b7cab985d base app Vmain9.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-fprobe409a: fails 1 shots 8 Assert that ".*walked the invite flow.*" is visible... FAILED
+iphone-light-fprobe409b: fails 1 shots 7 Assert that ".*walked the invite flow.*" is visible... FAILED
+iphone-light-fprobe409c: fails 1 shots 7 Assert that ".*walked the invite flow.*" is visible... FAILED
