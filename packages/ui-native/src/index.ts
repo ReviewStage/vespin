@@ -377,6 +377,7 @@ export {
   type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
+  type ThreadUndelivered,
 } from "./thread-page.js";
 
 export { BRAND_COLOR } from "./tokens/brand-colors.js";

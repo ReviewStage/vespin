@@ -179,7 +179,7 @@ a thread's file read, a reply or a resolve, an agent's message, queue
 change, Stop, change of model, permission mode, or MCP servers, rename, pin,
 or archive, its task's skills, or a New agent or New task start, answered by the fixture,
 the models and repositories those sheets pick among staged, the
-migration's approval refused so a flow sees a refused answer taken back
+migration's approval unanswered so a flow sees an answer standing Not delivered
 (`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
 flows run with no server. A change to one of the fixture agent's pull
 requests is taken as GitHub would take it and moves it on the document,
