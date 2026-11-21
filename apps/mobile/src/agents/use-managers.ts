@@ -20,11 +20,12 @@ import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
+import { and, eq, isNull, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useListedAgents } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
 import { runsOnOf, startRefusalWords } from "../tasks/use-start.js";
 
 /** No Manager, the same array every render. */
@@ -45,15 +46,38 @@ export function useManagersListed(workspaceId: string | undefined): boolean {
   return listed;
 }
 
-/** The unarchived Managers of `workspaceId`, newest started first; none while it has the Managers experiment off. */
+/**
+ * The unarchived Managers of `workspaceId`, newest started first; none while
+ * it has the Managers experiment off. Note that the live query holds the
+ * workspace's unarchived Managers alone, as the panel's sidebar reads them,
+ * so a step of any other agent's turn tells it nothing, and nothing is read
+ * while the experiment is off.
+ */
 export function useWorkspaceManagers(workspaceId: string | undefined): readonly ListedAgent[] {
   const listed = useManagersListed(workspaceId);
-  const agents = useListedAgents();
+  const { agents } = useTaskListCollections();
+
+  const held = useLiveQuery((q) =>
+    !listed || workspaceId === undefined
+      ? undefined
+      : q
+          .from({ agent: agents })
+          .where(({ agent }) =>
+            and(
+              eq(agent.kind, AGENT_KIND.MANAGER),
+              isNull(agent.taskId),
+              eq(agent.workspaceId, workspaceId),
+              isUndefined(agent.archivedAt),
+            ),
+          ),
+  ).data;
 
   return useMemo(
     () =>
-      !listed || workspaceId === undefined ? NO_MANAGERS : workspaceManagersOf(agents, workspaceId),
-    [listed, workspaceId, agents],
+      held === undefined || workspaceId === undefined
+        ? NO_MANAGERS
+        : workspaceManagersOf(held, workspaceId),
+    [held, workspaceId],
   );
 }
 
