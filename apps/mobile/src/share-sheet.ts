@@ -22,6 +22,7 @@ import {
 } from "@repo/features/ios-share-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectRepositoryList, selectWorkspaces } from "@repo/host/app-state-reads";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
@@ -35,7 +36,7 @@ import {
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SERVICE_ORIGIN } from "./host/compose-mobile.js";
-import { APP_VERSION, useListedTasks } from "./host/host-provider.js";
+import { APP_VERSION, useTaskListCollections } from "./host/host-provider.js";
 
 /** Where the share sheet's Start goes, named as this build. */
 const SHARE_SERVICE = {
@@ -47,7 +48,16 @@ const SHARE_SERVICE = {
 function useSnapshotJson(accountId: string | undefined): string | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosenId = useChosenWorkspace(workspaces).chosen?.id;
-  const tasks = useListedTasks();
+  const collections = useTaskListCollections();
+
+  // Note that the tasks are read as their repositories alone, newest first, which is all the snapshot names, so a change to any other field of a task, as a working agent's turn makes, writes nothing and draws the root, where this stands, nothing again.
+  const tasks = useLiveQuery((q) =>
+    q
+      .from({ task: collections.tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+      .select(({ task }) => ({ id: task.id, repository: task.repository })),
+  ).data;
 
   const select = useCallback(
     (state: AppStateSnapshot) =>

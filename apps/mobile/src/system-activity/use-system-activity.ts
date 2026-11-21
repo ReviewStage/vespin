@@ -20,18 +20,19 @@ import {
   type IosActivity,
   iosContinuedRouteOf,
   type SpotlightItem,
+  type SpotlightTask,
   spotlightIndexKeeper,
   spotlightItems,
 } from "@repo/features/ios-system-activity";
 import { OPENABLE_LINK, openableLinkOf } from "@repo/features/link-grammar";
-import type { TaskSummary } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useListedTasks } from "../host/host-provider.js";
+import { useTaskListCollections } from "../host/host-provider.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { openInSafari } from "../open-link.js";
 import { useOnTab } from "../tab-route.js";
@@ -82,7 +83,7 @@ export function useScreenActivity(
 /** What the chosen workspace's Spotlight items are built from, as the document last answered it. */
 interface SpotlightReads {
   readonly workspace: Workspace | undefined;
-  readonly tasks: readonly TaskSummary[];
+  readonly tasks: readonly SpotlightTask[];
   readonly groups: readonly InboxGroup[];
   readonly readerId: string | undefined;
 }
@@ -117,7 +118,21 @@ const spotlightIndex = spotlightIndexKeeper(systemActivityModule, refused("The S
  */
 function useSpotlightIndex(signedIn: boolean): void {
   const workspace = useTasksWorkspace();
-  const tasks = useListedTasks();
+  const collections = useTaskListCollections();
+
+  // Note that the tasks are read as the fields an item shows, its name, status, and workspace, so a change to any other field of a task, as a working agent's turn makes, settles no new index and draws the root, where this stands, nothing again.
+  const tasks = useLiveQuery((q) =>
+    q
+      .from({ task: collections.tasks })
+      .orderBy(({ task }) => task.createdAt, "desc")
+      .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+      .select(({ task }) => ({
+        id: task.id,
+        name: task.name,
+        status: task.status,
+        workspaceId: task.workspaceId,
+      })),
+  ).data;
 
   const groups = useInboxGroupsIn(workspace?.id);
 
