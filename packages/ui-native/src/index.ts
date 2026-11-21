@@ -339,6 +339,7 @@ export {
   groupKey,
   isBarMenu,
   menuWithout,
+  PATH_PART,
   SplitView,
 } from "./split-view.js";
 
@@ -390,7 +391,6 @@ export {
 } from "./task-rows.js";
 
 export {
-  PATH_PART,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
