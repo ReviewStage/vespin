@@ -62,6 +62,35 @@ export function removeCommandMachineQuestion(label: string) {
   } as const;
 }
 
+/** What Settings › Machines says of the machines a workspace owns, which every member's agents may run on, each in a VM of its own. */
+export const WORKSPACE_MACHINES_WORDS = {
+  /** What the section's head says before the workspace's name. */
+  TITLE_LEAD: "Shared machines in ",
+  CAPTION: "Every member's agents can run on these, each in its own VM.",
+  /** What a member who is no owner or admin reads where the workspace owns none. */
+  NONE: "None yet. An owner or an admin can connect one.",
+  /** What an owner or an admin reads where the workspace owns none. */
+  NONE_MANAGED:
+    "None yet. Run the command under Add a machine on a Linux server with KVM or a Mac set aside for it, and pick this workspace as you approve it.",
+  RENAME: "Rename",
+  REMOVE: "Remove",
+  NAME: "Machine name",
+  RENAME_FAILED: "Could not rename this machine. Try again.",
+  REMOVE_FAILED: "Could not remove this machine. Try again.",
+  /** What a machine's line says where its agents may reach the network it stands on. */
+  PRIVATE_NETWORK: "Reaches its private network",
+} as const;
+
+/** What Remove asks of the workspace's machine called `label`: every member's agents stop running on it, and its box removes the host. */
+export function removeWorkspaceMachineQuestion(label: string) {
+  return {
+    title: `Remove ${label}?`,
+    body: `It stops taking agents now, for everyone in the workspace, and ${PRODUCT_NAME} removes itself from the machine. Agents running on it stop. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
+    verb: "Remove machine",
+    running: "Removing",
+  } as const;
+}
+
 /** What a machine's line leads with, by where it stands; a standing not yet told says nothing. */
 export const MACHINE_STANDING_WORDS = {
   [DEVICE_STANDING.ONLINE]: "Online",

@@ -1,4 +1,4 @@
-import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentSummary, agentMachineOf } from "@repo/features/agent-wire";
 import {
   primaryRunAction,
   RUN_ACTION_WORDS,
@@ -315,7 +315,8 @@ export function useRunActions(
   const [busy, setBusy] = useState(false);
   const openSettings = useOpenSettings();
   const agentId = agent?.id ?? "";
-  const local = agent?.machine === AGENT_MACHINE.DEVICE;
+  const machine = agent === undefined ? undefined : agentMachineOf(agent);
+  const local = machine === AGENT_MACHINE.DEVICE;
 
   // Note that a local agent's actions run through the host of the Mac it runs on, so only the desktop app there offers them, as it alone offers the agent's Terminal.
   const macShells =
@@ -324,8 +325,10 @@ export function useRunActions(
 
   const thisMac = useThisMac()?.deviceId;
 
+  // Note that a workspace's machine opens no shell to its agents, so their actions are run nowhere.
   const reached =
     agent !== undefined &&
+    machine !== AGENT_MACHINE.WORKSPACE &&
     (!local || (macShells && thisMac !== undefined && agent.mac?.deviceId === thisMac));
 
   const { place, actions: kept } = useRepositoryRunActions(agentId, reached);
