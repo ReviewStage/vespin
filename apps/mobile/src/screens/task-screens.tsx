@@ -77,6 +77,7 @@ import {
   type TaskTree,
   type TaskTreeGroup,
   taskBranches,
+  taskRowLook,
 } from "@repo/features/task-tree-model";
 import {
   TASK_PRIORITY_ORDER,
@@ -107,7 +108,11 @@ import {
 import { taskKey } from "@repo/features/workspace-key";
 import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
+import {
+  selectInboxReader,
+  selectWorkspaceExperiment,
+  selectWorkspaces,
+} from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
 import {
   AGENT_ROW_STATE,
@@ -213,6 +218,7 @@ import {
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import { useFollowWrite } from "../tasks/use-following.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
@@ -231,10 +237,13 @@ import {
   useListingAsks,
   useStatusAsk,
   useTaskOverview,
+  useTaskPlacing,
   useTaskReadOnOpen,
+  useTaskRowWrites,
   useTasksListing,
   useTasksRead,
   useTasksReadStatus,
+  useTasksWorkspace,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -568,7 +577,10 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
  * panel's row offers it beside Pin while the task carries its followers;
  * Unfollow dimmed for the assignee, who follows while assigned.
  */
-function followActs(task: TaskSummary, listing: TasksListing): readonly RowAction[] {
+function followActs(
+  task: TaskSummary,
+  listing: Pick<TasksListing, "follow" | "readerId">,
+): readonly RowAction[] {
   const { readerId } = listing;
 
   if (task.followers === undefined || readerId === undefined) return [];
@@ -608,7 +620,10 @@ const MOVE_TO_WORDS = { MOVE_TO: "Move to", ANOTHER_WORKSPACE: "Another workspac
  * Remove from section, then Another workspace where the task may leave its
  * workspace; where the member keeps no section, Move to workspace alone.
  */
-function moveToEntries(task: TaskSummary, listing: TasksListing): LongPressGroup {
+function moveToEntries(
+  task: TaskSummary,
+  listing: Pick<TasksListing, "placing" | "doors">,
+): LongPressGroup {
   const section = sectionSubmenu(task, listing.placing);
   const another = listing.doors.moveDoor(task);
 
@@ -638,6 +653,25 @@ type RowActsResult = {
   readonly question: RowQuestion;
 };
 
+/** What a task row's acts write through, which every list of tasks holds and a task page's related rows hold without one. */
+type RowListing = Pick<
+  TasksListing,
+  | "workspace"
+  | "pin"
+  | "markRead"
+  | "rename"
+  | "setPriority"
+  | "setAssignee"
+  | "members"
+  | "pictureOf"
+  | "relations"
+  | "placing"
+  | "follow"
+  | "readerId"
+  | "doors"
+  | "rowAsks"
+>;
+
 /**
  * A row's acts, as the panel's row offers them: behind its trailing swipe
  * Mark done, offered on a task not yet done, which a full swipe runs, and
@@ -656,7 +690,7 @@ type RowActsResult = {
 function rowActs(
   task: TaskSummary,
   unread: boolean,
-  listing: TasksListing,
+  listing: RowListing,
   asks: RowAsks,
   openRelation: OpenRelation,
 ): RowActsResult {
@@ -1840,7 +1874,7 @@ function RelatedTaskRow({
   readonly overview: TaskOverview;
   readonly id: string;
   readonly kind: TaskRelationKind;
-  readonly listing: TasksListing;
+  readonly listing: RowListing;
 }) {
   const openRelation = useOpenRelation();
   const asker = useRowAsker();
@@ -1852,7 +1886,13 @@ function RelatedTaskRow({
   const acts =
     other === undefined
       ? undefined
-      : rowActs(other, listing.lookOf(other).unread, listing, listing.rowAsks(asker), openRelation);
+      : rowActs(
+          other,
+          taskRowLook(other, 0, undefined).unread,
+          listing,
+          listing.rowAsks(asker),
+          openRelation,
+        );
 
   return (
     <RelationRow
@@ -1897,6 +1937,60 @@ function subTasksFinishedWords(finished: number, total: number): string {
 }
 
 /**
+ * What a task page's related rows act through, as a Tasks row does: the
+ * page's own writes, and the mark, the pin, the members, and the repository
+ * placing of the workspace the phone works in, as the Tasks tab's listing
+ * holds them.
+ */
+function useRelatedRowsListing(
+  overview: TaskOverview,
+): Omit<RowListing, "doors" | "rowAsks"> & Pick<TasksListing, "setStatus" | "workingAgents"> {
+  const workspace = useTasksWorkspace();
+  const { markRead, pin } = useTaskRowWrites();
+  const follow = useFollowWrite();
+  const members = useListedMembers(workspace?.id);
+  const pictureOf = useMemberPictures();
+  const placing = useTaskPlacing(workspace?.id);
+  const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  const { setStatus, workingAgents, rename, setPriority, setAssignee, relations } = overview;
+
+  return useMemo(
+    () => ({
+      workspace,
+      markRead,
+      pin,
+      follow,
+      readerId,
+      members,
+      pictureOf,
+      placing,
+      setStatus,
+      workingAgents,
+      rename,
+      setPriority,
+      setAssignee,
+      relations,
+    }),
+    [
+      workspace,
+      markRead,
+      pin,
+      follow,
+      readerId,
+      members,
+      pictureOf,
+      placing,
+      setStatus,
+      workingAgents,
+      rename,
+      setPriority,
+      setAssignee,
+      relations,
+    ],
+  );
+}
+
+/**
  * The task's relations as the panel's two groups list them (`overview-relations.tsx`):
  * its sub-tasks, counted finished of all of them, its header's + offering
  * New sub-task, which opens New task for one, and Link existing task, which
@@ -1911,8 +2005,13 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
   const { task, document, tasks } = overview;
-  // Note that a related row's menu holds its task's own, as its Tasks row does, so the rows act through the list's own doors; each question one raises stands by its row.
-  const { listing } = useListingAsks(useTasksListing(""), useTaskRowDoors(task.workspaceId));
+
+  // Note that a related row's menu holds its task's own, as its Tasks row does, so the rows act through the same doors and writes a list's rows do, each question one raises standing by its row; they are built from what the page already holds rather than the Tasks tab's whole listing, whose tree every change made anew.
+  const { listing } = useListingAsks(
+    useRelatedRowsListing(overview),
+    useTaskRowDoors(task.workspaceId),
+  );
+
   const subTasks = subTasksOf(tasks, task.id);
   const finished = subTaskCount(task, subTasks);
 
@@ -2840,14 +2939,14 @@ function OverviewComments({
 }
 
 /**
- * Whether a task's page draws the sections under its head yet: not on the
+ * Whether a task's page draws its description and comments yet: not on the
  * render that opens it, and on the next, which React renders after the
  * first is committed and drops if another task opens first. Note that the
- * first render is the head alone, from what the task's row already holds,
- * so a push or a column's swap starts at once, and the sections, which
- * cost most of the page, follow behind it.
+ * first render is the head and the sections the phone already holds, its
+ * relations, agents, and pages, so a push or a column's swap starts with
+ * them, and the description, which costs most of the page, follows behind.
  */
-function useSectionsShown(taskId: string): boolean {
+function useDescriptionShown(taskId: string): boolean {
   // Note that the first value is null, since React reads an undefined one as none given and defers nothing.
   return useDeferredValue<string | null>(taskId, null) === taskId;
 }
@@ -2881,8 +2980,9 @@ function OverviewPage({
   /**
    * Whether the page has come in: a pushed page once its push has ended
    * (`usePushStood`), and a split view's detail, which slides in nothing,
-   * at once. Note that a pushed page's sections wait for it, since their
-   * mount during the push dropped its frames.
+   * at once. Note that a pushed page's description waits for it, since its
+   * mount during the push dropped the push's frames; the sections above it
+   * are drawn with the push's first frame instead, so none mounts mid-slide.
    */
   readonly entered: boolean;
 }) {
@@ -2891,7 +2991,7 @@ function OverviewPage({
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
   useNoteOpened({ kind: SEARCH_FOUND_KIND.TASKS, id: task.id, workspaceId: task.workspaceId });
-  const sections = useSectionsShown(task.id) && entered;
+  const described = useDescriptionShown(task.id) && entered;
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -2924,11 +3024,11 @@ function OverviewPage({
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>
-      {sections ? <OverviewRelations overview={overview} /> : null}
-      {sections ? <OverviewAgents overview={overview} asking={asking} /> : null}
-      {sections ? <OverviewArchived overview={overview} asking={asking} /> : null}
-      {sections ? <OverviewPages overview={overview} /> : null}
-      {!sections || !descriptions ? null : overview.documentRetry !== undefined ? (
+      <OverviewRelations overview={overview} />
+      <OverviewAgents overview={overview} asking={asking} />
+      <OverviewArchived overview={overview} asking={asking} />
+      <OverviewPages overview={overview} />
+      {!described || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
@@ -2943,7 +3043,7 @@ function OverviewPage({
       ) : (
         <OverviewDescription overview={overview} body={document.description.body} edit={edit} />
       )}
-      {sections && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
+      {described && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
   );
 }
