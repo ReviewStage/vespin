@@ -1,0 +1,13 @@
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-launch-root-reads
+FETCH FAILED pin2b/agent/ios-launch-root-reads
+screen.mp4 kept
+merging pin2b/agent/ios-launch-root-reads at ce709d9e6b
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging apps/mobile/src/splash.ts
+Auto-merging packages/host/src/fixture-inbox.ts
+built 5344c5d6fe = probe + pin2b/agent/ios-launch-root-reads (PROFILE=1)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
