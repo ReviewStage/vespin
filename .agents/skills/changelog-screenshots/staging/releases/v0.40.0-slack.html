@@ -8,7 +8,7 @@
 @font-face{font-family:Lato;src:url(fonts/lato-latin-400-normal.woff2) format("woff2");font-weight:400}
 @font-face{font-family:Lato;src:url(fonts/lato-latin-700-normal.woff2) format("woff2");font-weight:700}
 @font-face{font-family:Lato;src:url(fonts/lato-latin-900-normal.woff2) format("woff2");font-weight:900}
-:root{--chrome:#1b3a33;--side:#1d2120;--pane:#1a1d21;--line:#34383c;--text:#d1d2d3;--dim:#9a9b9d;--white:#f8f8f8;--blue:#1d9bd1;--sel:#0f5c6e}
+:root{--chrome:#3f0e40;--side:#2b0d2c;--pane:#1a1d21;--line:#34383c;--text:#d1d2d3;--dim:#9a9b9d;--white:#f8f8f8;--blue:#1d9bd1;--sel:#1164a3}
 html,body{margin:0;background:transparent}
 body{width:1720px;height:1120px;display:flex;align-items:center;justify-content:center;font-family:Lato,sans-serif;-webkit-font-smoothing:antialiased;color:var(--text)}
 svg{display:block}
@@ -51,6 +51,7 @@ svg{display:block}
 .day:before,.day:after{content:"";flex:1;border-top:1px solid var(--line)}
 .day b{font-size:13px;border:1px solid var(--line);border-radius:14px;padding:3px 12px;font-weight:700;color:var(--text)}
 .m{display:grid;grid-template-columns:40px 1fr;gap:9px;padding:6px 18px;font-size:15px;line-height:1.46}
+.main .m>div:last-child{max-width:560px}
 .m.hi{background:#3a2c0c}
 .av{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#1a1d21;overflow:hidden;font-size:15px}
 .av img{width:100%;height:100%;object-fit:cover}

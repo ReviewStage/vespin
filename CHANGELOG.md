@@ -95,7 +95,7 @@ the Vespin bot is in, and DM you unless you turned Slack notifications off.
 [#10176](https://github.com/ReviewStage/vespin/pull/10176),
 [#10182](https://github.com/ReviewStage/vespin/pull/10182)
 
-![A mockup of acme's Slack, #relay-eng open with its thread beside it: Dana asks Vespin to name the workspace in the invite email, and the agent answers in short messages, shares a picture of the new email, links the pull request with checks passing, then takes Dana's plain reply about the button's color, reacting 👍 and pushing the change, with 👀 and ✅ on her first message](apps/web/public/changelog/0.40.0/vespin-in-slack.png)
+![A mockup of acme's Slack, its #relay-eng thread open: Dana asks Vespin to name the workspace in the invite email, and the agent answers in short messages, shares a picture of the new email, links the pull request with checks passing, then takes Dana's plain reply about the button's color, reacting 👍 and pushing the change, with 👀 and ✅ on her first message](apps/web/public/changelog/0.40.0/vespin-in-slack.png)
 
 ### A Settings page for everything
 
