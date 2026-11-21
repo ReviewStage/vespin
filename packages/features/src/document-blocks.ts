@@ -560,7 +560,8 @@ export function writtenDocument(
 ): string {
   const read = documentBlocks(markdown, files);
   const ending = markdown.includes(CRLF) ? CRLF : "\n";
-  const close = /\s*$/u.exec(markdown)?.[0] ?? "";
+  // Note that the blank lines closing the document are found by trimming rather than by a pattern, which would try every run of spaces in a long document again from each of its characters.
+  const close = markdown.slice(markdown.trimEnd().length);
 
   return edited
     .map((block, index) => {
