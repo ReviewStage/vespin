@@ -2707,8 +2707,11 @@ function SidebarColumn({
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
   const chooseOrder = drawn.map((task) => task.id);
   // Moving up and down the list as it reads: down from the home page, where
-  // no row is open, is the first row. The ends go no further.
-  const at = drawn.findIndex((task) => task.id === tasks.activeTaskId);
+  // no row is open, is the first row. The ends go no further. Note that we
+  // step from the task the window last asked for (`boundFor`), not the one the
+  // host has open, because presses faster than its round trip would otherwise
+  // each step from the same row.
+  const at = drawn.findIndex((task) => task.id === tasks.boundFor);
 
   const step = (by: number) => {
     const task = drawn[at + by];
