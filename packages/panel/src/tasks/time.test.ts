@@ -8,11 +8,12 @@ import { Time } from "@repo/ui";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
-import { SidebarTask } from "../desktop/task-actions.js";
+
 import { lineWords } from "../testing/actor-line.js";
 import { withExperiments } from "../testing/app-state.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
+import { sidebarTaskRow } from "../testing/sidebar-task.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { DescriptionBody } from "./description-body.js";
 
@@ -56,14 +57,7 @@ function saidOf(at: number) {
   };
 
   const row = mount(
-    createElement(SidebarTask, {
-      tasks: tasksControl({ tasks: [task] }),
-      task,
-      current: false,
-      unread: () => false,
-      now: NOW,
-      onOpen: () => undefined,
-    }),
+    sidebarTaskRow(tasksControl({ tasks: [task] }), task, { now: NOW, onOpen: () => undefined }),
   );
 
   const body = mount(createElement(DescriptionBody, { task, reader: { readerId: DANA.userId } }));

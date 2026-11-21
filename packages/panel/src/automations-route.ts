@@ -23,6 +23,7 @@ import {
   ROUTED_PLACE,
   useWindowPlace,
   useWindowPlaceNow,
+  useWindowPlaceOf,
   type WindowPlace,
 } from "./places/routed-places.js";
 import { pathUnder } from "./route-gates.js";
@@ -164,6 +165,13 @@ function standingAt(here: WindowPlace): AutomationsStanding {
 /** Which Automations page the router stands, if any. */
 export function useAutomationsPlace(): AutomationsStanding {
   return standingAt(useWindowPlace());
+}
+
+/** What a part draws of which Automations page the router stands (`useAutomationsPlace`), `select`ed from it, drawn again only as that answer moves (`useWindowPlaceOf`). */
+export function useAutomationsPlaceOf<Answer>(
+  select: (standing: AutomationsStanding) => Answer,
+): Answer {
+  return useWindowPlaceOf((here) => select(standingAt(here)));
 }
 
 /** The Automations pages' presses, read against where the window stands as each is pressed (`useAutomationsOpen`). */

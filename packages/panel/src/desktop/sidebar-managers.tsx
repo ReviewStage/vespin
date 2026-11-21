@@ -38,14 +38,17 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useMemo } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
-import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { pinnedManagersOf, useWorkspaceManagers } from "../tasks/workspace-managers.js";
+import {
+  pinnedManagersOf,
+  useManagerAgents,
+  useWorkspaceManagers,
+} from "../tasks/workspace-managers.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { AGENT_ROW_LOOK, AgentListRow } from "./agent-list-row.js";
 import type { FoldedGroups } from "./folded-groups.js";
 import { NEW_MANAGER, useNewManagerDialog } from "./new-manager-dialog.js";
 import { type CountNoun, sidebarHead } from "./sidebar-fold.js";
+import { type SidebarTasksControl, useSidebarOpen } from "./sidebar-open.js";
 
 /** What the section is called, on its head and its list alike. */
 const MANAGERS_HEAD = "Managers";
@@ -62,14 +65,13 @@ const NO_MANAGERS: readonly ListedAgent[] = [];
 /** No pull request, which a Manager's row never names, since a Manager opens none of its own. */
 const NO_PULL_REQUESTS: ReadonlyMap<string, AgentPullRequest> = new Map();
 
-/** The Managers the reader pinned, as Pinned draws them, and the agents control their rows act through. */
+/** The Managers the reader pinned, as Pinned draws them. */
 export interface PinnedManagers {
   readonly managers: readonly ListedAgent[];
-  readonly agents: AgentsControl;
 }
 
-/** The workspace's Managers, while its Managers experiment is on and the reader is signed in, and the agents control their rows act through; none while it is off. */
-function useListedManagers(tasks: TasksControl): ReturnType<typeof useWorkspaceManagers> & {
+/** The workspace's Managers, while its Managers experiment is on and the reader is signed in; none while it is off. */
+function useListedManagers(tasks: SidebarTasksControl): ReturnType<typeof useWorkspaceManagers> & {
   readonly listed: boolean;
 } {
   const workspaceId = tasks.workspace?.id;
@@ -77,23 +79,23 @@ function useListedManagers(tasks: TasksControl): ReturnType<typeof useWorkspaceM
 
   return {
     listed,
-    ...useWorkspaceManagers(workspaceId, listed, tasks.agentsCarried, tasks.agents),
+    ...useWorkspaceManagers(workspaceId, listed, tasks.agentsCarried),
   };
 }
 
-/** The Managers the reader pinned, by `taskAgentPins`, the reader's pins of agents, which Pinned draws (`pinnedManagersOf`), and the agents control their rows act through; none while the Managers experiment is off. */
+/** The Managers the reader pinned, by `taskAgentPins`, the reader's pins of agents, which Pinned draws (`pinnedManagersOf`); none while the Managers experiment is off. */
 export function usePinnedManagers(
-  tasks: TasksControl,
+  tasks: SidebarTasksControl,
   taskAgentPins: readonly TaskAgentPin[],
 ): PinnedManagers {
-  const { managers, agents } = useListedManagers(tasks);
+  const { managers } = useListedManagers(tasks);
 
   const pinned = useMemo(
     () => (managers === undefined ? NO_MANAGERS : pinnedManagersOf(managers, taskAgentPins)),
     [managers, taskAgentPins],
   );
 
-  return { managers: pinned, agents };
+  return { managers: pinned };
 }
 
 /**
@@ -104,20 +106,20 @@ export function usePinnedManagers(
  */
 export function ManagerRows({
   managers,
-  agents,
   tasks,
   shown,
   onOpen,
 }: {
   managers: readonly ListedAgent[];
-  agents: AgentsControl;
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
   /** Whether the rows are in sight, which their menus ask on. */
   shown: boolean;
   onOpen: (agentId: string) => void;
 }): React.JSX.Element {
   const more = !useCoarsePointer();
   const openId = tasks.agentView.agentId;
+  // Note that the rows act through the window's agents control as it stands, which moves as a task opens, so they read it themselves rather than the sidebar handing it on (`sidebar-open.tsx`).
+  const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents));
 
   return (
     <ReplayMask>
@@ -163,14 +165,14 @@ export function SidebarManagers({
   inSight,
   onOpen,
 }: {
-  tasks: TasksControl;
+  tasks: SidebarTasksControl;
   folds: FoldedGroups;
   /** Whether the sidebar is in sight, which its rows' menus ask on. */
   inSight: boolean;
   /** Opens a Manager's page, the sidebar put away where it floats. */
   onOpen: (agentId: string) => void;
 }): React.JSX.Element | null {
-  const { listed, managers, agents } = useListedManagers(tasks);
+  const { listed, managers } = useListedManagers(tasks);
   const newManager = useNewManagerDialog({ tasks, onOpen });
 
   if (!listed) return null;
@@ -183,7 +185,7 @@ export function SidebarManagers({
   const standing = listedManagers.filter((agent) => agent.id === openId);
 
   const rows = (drawn: readonly ListedAgent[]) => (
-    <ManagerRows managers={drawn} agents={agents} tasks={tasks} shown={shown} onOpen={onOpen} />
+    <ManagerRows managers={drawn} tasks={tasks} shown={shown} onOpen={onOpen} />
   );
 
   return (

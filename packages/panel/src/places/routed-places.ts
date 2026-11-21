@@ -892,6 +892,24 @@ export function useWindowPlace(): WindowPlace {
 }
 
 /**
+ * What a part draws of where the window stands, `select`ed from it (`useWindowPlace`),
+ * a value compared by identity: the part is drawn again only as that answer moves,
+ * so one drawing which place stands, not the address, holds as the window moves
+ * from one task's address to another's.
+ */
+export function useWindowPlaceOf<Answer>(select: (here: WindowPlace) => Answer): Answer {
+  const router = useRouter();
+  const access = useRouteAccess();
+  const { history } = router;
+
+  return useSyncExternalStore(history.subscribe, () => {
+    const { pathname, href, search } = entryOf(history);
+
+    return select(windowPlaceOf(router.matchRoutes(pathname), access, href, search));
+  });
+}
+
+/**
  * Where the window stands as it is called, as `useWindowPlace` reads it, for
  * a door that acts on it at a press: its holder draws nothing of it, so is
  * drawn again for no move of the window.

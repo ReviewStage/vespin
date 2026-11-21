@@ -34,7 +34,7 @@ import {
   useDraftWriter,
 } from "./composer-drafts.js";
 import { DesktopTasks } from "./desktop/desktop-tasks.js";
-import { SidebarTask } from "./desktop/task-actions.js";
+
 import {
   type AgentComposerControl,
   type MessageSender,
@@ -57,6 +57,7 @@ import { withQueryClient } from "./testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "./testing/desktop-sidebar.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "./testing/outbox.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
+import { sidebarTaskRow } from "./testing/sidebar-task.js";
 import { agentsControl, listedAgent, taskAgentsOf, tasksControl } from "./testing/tasks-control.js";
 import { windowRouter } from "./testing/window-router.js";
 
@@ -212,12 +213,9 @@ function openWindow() {
     });
 
     const rows = [INVITES.plan, BILLING.plan].map((summary) =>
-      createElement(SidebarTask, {
+      sidebarTaskRow(tasks, summary, {
         key: summary.id,
-        tasks: tasks,
-        task: summary,
         current: summary.id === open.plan.id,
-        unread: () => false,
         now: 3,
         onOpen: () => undefined,
       }),
@@ -910,11 +908,8 @@ async function columnOn(
             createElement(
               "ul",
               null,
-              createElement(SidebarTask, {
-                tasks: tasks,
-                task: INVITES.plan,
+              sidebarTaskRow(tasks, INVITES.plan, {
                 current: true,
-                unread: () => false,
                 now: 3,
                 onOpen: () => undefined,
               }),

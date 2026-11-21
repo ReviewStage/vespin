@@ -48,6 +48,7 @@ import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js
 import { overEveryTask } from "../testing/history-rows.js";
 import { peopleRead, withPeopleRead } from "../testing/people-read.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
+import { sidebarTaskRow } from "../testing/sidebar-task.js";
 import { openTaskMenu } from "../testing/task-menu.js";
 import { listedTasksOf, tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
@@ -55,7 +56,6 @@ import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { forgetUndo, UNDO_RAN, undoLast } from "../undo-stack.js";
 import { DesktopTasks } from "./desktop-tasks.js";
-import { SidebarTask } from "./task-actions.js";
 import { taskCardOf } from "./task-card.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
@@ -199,11 +199,8 @@ function sidebarTask(
   return createElement(
     "ul",
     null,
-    createElement(SidebarTask, {
-      tasks,
-      task,
+    sidebarTaskRow(tasks, task, {
       current,
-      unread: () => false,
       now: task.updatedAt,
       onOpen: () => asked.opened.push(task.id),
     }),
