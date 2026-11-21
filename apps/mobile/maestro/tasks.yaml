@@ -556,7 +556,14 @@ env:
 - waitForAnimationToEnd
 - tapOn: "Archive"
 - assertVisible: "Archive agent?"
-- tapOn: "Archive agent"
+# Note that the ask's act is Stop agent where it says the agent is still
+# running, as it says of this one, which needs the reader, and Archive agent
+# otherwise, and that it stands last in the tree, under the ask's title,
+# which a tap on its words alone found instead and left the ask open
+# (j10410).
+- tapOn:
+    text: "(Stop|Archive) agent"
+    index: -1
 - assertNotVisible: "Archive agent?"
 - runFlow:
     file: subflows/scroll-to.yaml
