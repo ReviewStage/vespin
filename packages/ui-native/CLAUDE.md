@@ -88,7 +88,7 @@ builds a control of its own.
   Deny, Always allow and Allow), the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
   offers (the panel's groups and words, a pick written `@Name` and sent as
   its link, since the field draws no chip), its `QueuedLines` (Steer and
-  Delete), its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  Delete), two or more folded under one "2 queued" line a press opens, its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
   taking the keyboard through `focusAsk`), and an `AskNote`.
 - **`PillField`** is the one field whose words hold pills: each mention and
