@@ -33,6 +33,9 @@ import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   BUTTON_VARIANT,
   Button,
+  CHAT_RUN,
+  CHAT_SIDE,
+  ChatBubble,
   DISCLOSURE_BODY,
   Disclosure,
   DisclosureBody,
@@ -56,7 +59,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronsUpIcon, SplitIcon, TextQuoteIcon } from "lucide-react";
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { ActorRef } from "../actor-ref.js";
-import { Message, MessageContent, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
+import { Message, RECEIVED_MESSAGE_CLASS } from "../ai-elements/message.js";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { pullRequestPublishedQuery } from "../live-reads.js";
@@ -276,9 +279,9 @@ function LineStep({
       data-replay-step={REPLAY_STEP_KIND.LINE}
     >
       {received ? <MessageHead sender={sender} /> : null}
-      <MessageContent>
+      <ChatBubble side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT} run={CHAT_RUN.ALONE}>
         <TranscriptWords text={view.words} />
-      </MessageContent>
+      </ChatBubble>
       <MessageLine
         align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
         at={view.at}
@@ -370,9 +373,9 @@ function BriefStep({
         {received ? <MessageHead sender={<ActorRef actor={sender} />} /> : null}
         <MessageFileChips message={message} />
         {words === "" ? null : (
-          <MessageContent>
+          <ChatBubble side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT} run={CHAT_RUN.ALONE}>
             <SentWords text={words} />
-          </MessageContent>
+          </ChatBubble>
         )}
         <MessageLine
           align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}

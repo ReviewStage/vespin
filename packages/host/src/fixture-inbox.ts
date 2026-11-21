@@ -906,6 +906,7 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       ),
       permissionMode: AGENT_PERMISSION_MODE.ASK,
       pendingApprovals: [INVITES_HELD],
+      startedByAgentId: AGENT.MANAGER,
     },
   ],
   // Note that the digest's agent runs on Codex, so the agents' marks show both harnesses.
@@ -921,6 +922,7 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
       ),
       model: CODEX_MODEL,
       runtime: AGENT_RUNTIME.CODEX,
+      startedByAgentId: AGENT.MANAGER,
     },
   ],
   [
@@ -935,7 +937,9 @@ const MANAGER_STARTED = LANDED - 2 * HOUR;
 /**
  * The workspace's one Manager, an agent on no task, which the Tasks list
  * stands above Pinned and Search finds: at rest, its chat having said
- * something since the account last read it, so its row stands unread.
+ * something since the account last read it, so its row stands unread. It
+ * started the invitations and digest agents, which its overview lists with
+ * the invitations agent's pull request.
  */
 const MANAGER: AgentSummary = {
   ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.COMPLETED, 2 * HOUR),

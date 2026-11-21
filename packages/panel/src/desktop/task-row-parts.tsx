@@ -7,6 +7,7 @@ import {
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { priorityOf, statusOf } from "@repo/features/tasks-page-model";
 import {
   CHIP_LOOK,
   CHIP_SIZE,
@@ -24,7 +25,6 @@ import {
 } from "@repo/ui";
 import { actorName, creatorActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard } from "../actor-ref.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";

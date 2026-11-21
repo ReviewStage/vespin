@@ -14,7 +14,7 @@
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, type SendingMessage } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
@@ -28,7 +28,12 @@ import {
   type TaskListParts,
 } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
+import {
+  type AppStateSnapshot,
+  OWN_TRANSCRIPT,
+  RUN_PROFILE,
+  type RunProfile,
+} from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type {
   ActPortClient,
@@ -67,6 +72,7 @@ import {
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
+import { sentLineId } from "@repo/wire/host-ids";
 import { Predicate } from "effect";
 
 /** The one workspace a fixture run's account is in. */
@@ -268,6 +274,80 @@ function stagedKeys(held: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.P
   return { ...keys, [accountId]: { rows: { keys: [], subscriptions: [] } } };
 }
 
+/** The messages to an agent `-refuseWrites` left unanswered, by the agent, in the order sent, kept as the host keeps a refused line. */
+const REFUSED_SENDS = new WeakMap<object, ReadonlyMap<string, readonly SendingMessage[]>>();
+
+/** No refused messages. */
+const NO_REFUSED_SENDS: ReadonlyMap<string, readonly SendingMessage[]> = new Map();
+
+/**
+ * The document with each refused message standing in its agent's transcript
+ * as the host draws one (`AppTranscript.sending`), so a flow sees it marked
+ * Not delivered with Retry, Edit, and Delete, which the fixture answers at
+ * the act port before the host's own record could keep it.
+ */
+function refusedSendsAppState(
+  state: AppStateSnapshot,
+  refused: ReadonlyMap<string, readonly SendingMessage[]>,
+): AppStateSnapshot {
+  if (refused.size === 0) return state;
+  const held = state[LIVE_READ.TRANSCRIPT];
+  const laid = { ...held };
+
+  for (const [agentId, lines] of refused) {
+    const rows = held[agentId]?.[OWN_TRANSCRIPT]?.rows;
+
+    if (rows !== undefined)
+      laid[agentId] = { ...held[agentId], [OWN_TRANSCRIPT]: { rows: { ...rows, sending: lines } } };
+  }
+
+  return { ...state, [LIVE_READ.TRANSCRIPT]: laid };
+}
+
+/**
+ * Keeps a message to an agent `-refuseWrites` left unanswered as a refused
+ * line under its key, in place of one sent before under the same key, as a
+ * Retry is, or lets one go on its Unsend, and lays them over the document at
+ * once; answers whether the act was one of those.
+ */
+function keepRefusedSend(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): boolean {
+  const held = REFUSED_SENDS.get(state) ?? NO_REFUSED_SENDS;
+
+  if (kind === ACT_KIND.AGENTS_UNSEND) {
+    // SAFETY: the payload is the kind's, which the guard above names.
+    const { agentId, lineId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_UNSEND>;
+    const lines = (held.get(agentId) ?? []).filter((line) => line.id !== lineId);
+    REFUSED_SENDS.set(state, new Map(held).set(agentId, lines));
+    stageFixture(state);
+
+    return true;
+  }
+
+  if (kind !== ACT_KIND.AGENTS_MESSAGE) return false;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const sent = payload as PortActPayload<typeof ACT_KIND.AGENTS_MESSAGE>;
+  const id = sentLineId(sent.clientKey);
+
+  const line: SendingMessage = {
+    id,
+    clientKey: sent.clientKey,
+    text: sent.text,
+    sentAt: Date.now(),
+    steers: sent.steers === true,
+    refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+  };
+
+  const lines = [...(held.get(sent.agentId) ?? []).filter((each) => each.id !== id), line];
+  REFUSED_SENDS.set(state, new Map(held).set(sent.agentId, lines));
+  stageFixture(state);
+
+  return true;
+}
+
 /**
  * Lays the fixture profile's data over the host's document; nothing in a
  * live run. Where `updateNeeded`, as `-updateNeeded true` asks, the network
@@ -318,9 +398,11 @@ export function stageFixture(
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
 
+  const sendsRefused = refusedSendsAppState(saved, REFUSED_SENDS.get(state) ?? NO_REFUSED_SENDS);
+
   const reminded = MACHINE_ASKED.has(state)
-    ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
-    : saved;
+    ? machineAskAppState(sendsRefused, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
+    : sendsRefused;
 
   const listed = stagedTasks(
     held,
@@ -584,7 +666,8 @@ function editConflict({
  * added, a memory deleted or a thread's reminder or reply unanswered, so a
  * flow sees the notice over Add a follower's sheet, Settings', and a
  * thread's composer, the keyboard up or down, and a reply standing on its
- * thread marked Not delivered, and a description's edit met by the
+ * thread marked Not delivered, a message to an agent standing in its
+ * transcript marked Not delivered (`keepRefusedSend`), and a description's edit met by the
  * invitations agent's note written meanwhile over the same lines, so a flow
  * sees Edit description's conflict ask.
  */
@@ -637,8 +720,8 @@ function memberAt<Member>(
  * mark and a task's each move their row's dot (`keepInboxReadMark`,
  * `keepReadMark`), and a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
- * would, so a screen draws it merged or out of the queue, and a reminder
- * set or cleared moves its item there, as the host draws one, so the Inbox
+ * would, so a screen draws it merged, out of the queue, closed, or a
+ * draft, and a reminder set or cleared moves its item there, as the host draws one, so the Inbox
  * puts it away under Reminders, and a change of an agent's model, permission
  * mode, servers, name, or pin moves the agent there, as the host draws one,
  * and a change to its queue moves the queue there, a Stop pausing it, so a
@@ -664,6 +747,16 @@ export function fixtureActs(
         const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
 
         if (refused !== undefined) return Promise.resolve(refused(payload));
+
+        // Note that a message to an agent is left unanswered too, and kept as the host keeps a refused line, so a flow sees it stand Not delivered.
+        // SAFETY: the port is keyed by act kind.
+        if (refusesWrites && keepRefusedSend(state, kind as PortActKind, payload)) {
+          return Promise.resolve(
+            kind === ACT_KIND.AGENTS_UNSEND
+              ? undefined
+              : { failure: AGENT_CALL_FAILURE.UNANSWERED },
+          );
+        }
 
         // SAFETY: the port is keyed by act kind.
         const startRefused = refusesWrites

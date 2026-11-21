@@ -87,7 +87,7 @@ import {
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
-  type ThreadUndelivered,
+  type UndeliveredLine,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -1097,7 +1097,7 @@ function ThreadDetail({
 function undeliveredOf(
   line: UndeliveredReply | undefined,
   answer: Pick<ThreadAnswer, "retryUndelivered" | "editUndelivered" | "deleteUndelivered">,
-): ThreadUndelivered | undefined {
+): UndeliveredLine | undefined {
   if (line === undefined) return undefined;
   const { key } = line;
   const lost = filesLost(line);

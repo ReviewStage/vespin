@@ -995,19 +995,18 @@ function inRuns(items: readonly TranscriptItem[], now: number): readonly Transcr
  * The transcript with the member's messages on their way at its end, each
  * as their own line under the id its row lands under, so the row takes its
  * place, as the host draws them (`AppTranscript.sending`); a message the
- * service refused is the composer's to give back, and stands nowhere here.
+ * service refused stands there too, where it went, which the page marks Not
+ * delivered (`AgentTranscript`'s `undelivered`), as the panel keeps it.
  */
 export function withSending(
   messages: readonly AgentTranscriptMessage[],
   sending: readonly SendingMessage[],
 ): readonly AgentTranscriptMessage[] {
-  const going = sending.filter((message) => message.refused === undefined);
-
-  if (going.length === 0) return messages;
+  if (sending.length === 0) return messages;
 
   return [
     ...messages,
-    ...going.map(
+    ...sending.map(
       (message): AgentTranscriptMessage => ({
         id: message.id,
         role: MESSAGE_ROLE.USER,

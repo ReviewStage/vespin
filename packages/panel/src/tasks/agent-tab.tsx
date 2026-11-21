@@ -153,6 +153,7 @@ import {
   Button,
   CHAT_RUN,
   CHAT_SIDE,
+  CHAT_TONE,
   ChatBubble,
   CodeCard,
   CompactedLine,
@@ -714,9 +715,9 @@ function AgentMessageRow({ message }: { message: AgentTranscriptMessage }): Reac
         }
       />
       {words === "" ? null : (
-        <MessageContent>
+        <ChatBubble side={CHAT_SIDE.RECEIVED} run={CHAT_RUN.ALONE}>
           <TranscriptWords text={words} />
-        </MessageContent>
+        </ChatBubble>
       )}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
@@ -2125,7 +2126,7 @@ export function AgentMessage({
       );
     }
 
-    const content = <MessageContent>{sentWords}</MessageContent>;
+    const mark = marked ? <UndeliveredMark messageId={message.id} /> : null;
 
     return (
       <MessageFiles message={message} words={shown} sending={sending}>
@@ -2137,17 +2138,18 @@ export function AgentMessage({
         >
           {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
           <MessageFileChips message={message} sending={sending} />
-          {shown === "" ? null : marked ? (
-            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>
-              {content}
-            </MessageBeside>
-          ) : (
-            content
+          {shown !== "" ? (
+            <ChatBubble
+              side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+              run={CHAT_RUN.ALONE}
+              beside={mark}
+            >
+              {sentWords}
+            </ChatBubble>
+          ) : mark === null ? null : (
+            // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
+            <MessageBeside mark={mark}>{null}</MessageBeside>
           )}
-          {/* A line of files alone stands its mark on a row of its own, kept clear of the files' fade. */}
-          {shown === "" && marked ? (
-            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{null}</MessageBeside>
-          ) : null}
           <MessageLine
             align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
             status={status}
@@ -2335,6 +2337,7 @@ function ChatLine({
           <ChatBubble
             side={CHAT_SIDE.SENT}
             run={chatRunOf(place.opens, place.closes)}
+            tone={CHAT_TONE.ACCENT}
             beside={
               <>
                 {mark}

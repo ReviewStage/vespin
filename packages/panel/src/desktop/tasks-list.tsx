@@ -32,6 +32,21 @@ import {
 } from "@repo/features/task-wire";
 import { TASK_MARK } from "@repo/features/tasks-model";
 import {
+  COMPLETED_WINDOW,
+  LIST_COLUMN,
+  type ListColumn,
+  mayHoldSettled,
+  settledRowsDrawn,
+  TASK_PROPERTY,
+  TASKS_GROUP,
+  TASKS_GROUPING,
+  type TasksGroup,
+  type TasksGroupHead,
+  type TasksSection,
+  taskIdOf,
+  tasksListGroups,
+} from "@repo/features/tasks-page-model";
+import {
   noneYetWords,
   REFRESH_FAILED_WORDS,
   readFailedWords,
@@ -83,21 +98,6 @@ import {
 import { actorName, creatorActor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { GLYPH, ListTodoIcon, PinIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  COMPLETED_WINDOW,
-  LIST_COLUMN,
-  type ListColumn,
-  mayHoldSettled,
-  settledRowsDrawn,
-  TASK_PROPERTY,
-  TASKS_GROUP,
-  TASKS_GROUPING,
-  type TasksGroup,
-  type TasksGroupHead,
-  type TasksSection,
-  taskIdOf,
-  tasksListGroups,
-} from "@repo/ui/tasks-page-model";
 import {
   useVirtualRuns,
   VIRTUAL_ROW_KEY_ATTRIBUTE,

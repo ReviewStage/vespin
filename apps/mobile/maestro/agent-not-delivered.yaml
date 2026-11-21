@@ -1,0 +1,69 @@
+# agent-not-delivered.yaml -- a message to an agent left unanswered: it stays in the transcript where it went, marked Not delivered, never back in the field, as the panel keeps it, and its mark's menu offers Retry, which goes again under its key, Edit, which lays its words back in the field, and Delete, which lets it go.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its agent still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
+---
+# Launched on the host's Inbox fixture with `-refuseWrites true`, opened on
+# its invitations agent's page as `compose.yaml` is, so the fixture leaves
+# each message to the agent unanswered and keeps it as the host keeps a
+# refused line (`src/host/fixture-host.ts`'s `keepRefusedSend`); nothing
+# reaches a server. Note that the value is quoted, as `failure-notice.yaml`
+# says why.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      refuseWrites: "true"
+- extendedWaitUntil:
+    visible: "Then add a Resend button beside each pending invite."
+    timeout: 30000
+# A follow-up sent and left unanswered stands at the transcript's end marked
+# Not delivered, the field empty under it.
+- tapOn:
+    id: "composer-field"
+- inputText: "Show the invite's expiry in the email too."
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Not delivered.*"
+    timeout: 5000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-undelivered
+# The mark's menu says why, with Retry, Edit and Delete; Retry goes again
+# and is left unanswered again, so the line stands marked still.
+- tapOn: "Not delivered.*"
+- assertVisible: "Retry"
+- assertVisible: "Edit"
+- assertVisible: "Delete"
+- takeScreenshot: agent-undelivered-menu
+- tapOn: "Retry"
+- extendedWaitUntil:
+    visible: "Not delivered.*"
+    timeout: 5000
+# Edit lays its words back in the field and lets the line go.
+- tapOn: "Not delivered.*"
+- tapOn: "Edit"
+- extendedWaitUntil:
+    notVisible: "Not delivered.*"
+    timeout: 5000
+- assertVisible:
+    id: "composer-field"
+    text: "Show the invite's expiry in the email too\\."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-undelivered-edited
+# Sent again, it stands marked once more, and Delete lets it go.
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Not delivered.*"
+    timeout: 5000
+- tapOn: "Not delivered.*"
+- tapOn: "Delete"
+- extendedWaitUntil:
+    notVisible: "Not delivered.*"
+    timeout: 5000
