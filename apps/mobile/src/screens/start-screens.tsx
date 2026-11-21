@@ -264,7 +264,7 @@ function ModelChip({ pick, onOpen }: { readonly pick: ModelPick; readonly onOpen
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.COMPOSER}
-      label={effort === undefined ? model : `${model}${JOINED}${effort}`}
+      label={model}
       {...(harness === undefined ? {} : { harness })}
       onOpen={onOpen}
     />

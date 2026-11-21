@@ -690,7 +690,7 @@ function AgentModelChip({
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.COMPOSER}
-      label={effort === undefined ? model : `${model}${MODEL_JOINED}${effort}`}
+      label={model}
       {...(harness === undefined ? {} : { harness })}
       onOpen={onOpen}
       testId={MODEL_CHIP_ID}

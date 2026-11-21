@@ -27,6 +27,7 @@ import {
   background,
   buttonStyle,
   disabled,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -913,7 +914,7 @@ function ComposerRow({
   const end = (
     <HStack
       spacing={TOOL_SPACING}
-      modifiers={[layoutPriority(1), onGeometryChange(({ width }) => measuredEnd(width))]}
+      modifiers={[layoutPriority(1), fixedSize(), onGeometryChange(({ width }) => measuredEnd(width))]}
     >
       {trailing}
       {dictation === undefined ? null : (
