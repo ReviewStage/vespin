@@ -52,12 +52,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentRowActs } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import {
-  useHostActs,
-  useListedTasks,
-  useTaskListCollections,
-  useTaskListRow,
-} from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
@@ -65,6 +60,7 @@ import { SEARCH_FOCUS_PARAM } from "../search-field.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
+import { useHeldTasksNamed } from "../tasks/use-found-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
@@ -171,11 +167,6 @@ function ownPageAddress(
   }
 }
 
-/** Whether a link's word names the task: its id, or its number as a task link spells one. */
-function namesTask(task: TaskSummary, named: string): boolean {
-  return task.id === named || (task.number !== undefined && String(task.number) === named);
-}
-
 /** Reads what the route stands in front into what each command may do to it. */
 function useSubject(signedIn: boolean): Subject {
   const pathname = usePathname();
@@ -185,7 +176,6 @@ function useSubject(signedIn: boolean): Subject {
 
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const collections = useTaskListCollections();
-  const tasks = useListedTasks();
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
 
   const agent = useTaskListRow(
@@ -196,11 +186,10 @@ function useSubject(signedIn: boolean): Subject {
   const pinnedOf = useMemo(() => selectAgentPinned(agent?.id ?? ""), [agent?.id]);
   const agentPinned = useQuery({ ...appStateQuery, select: pinnedOf }).data ?? false;
 
-  const taskNamed =
-    focus.kind === MENU_SUBJECT.TASK ? tasks.find((each) => namesTask(each, focus.id)) : undefined;
+  // Note that the task in front is read by its key alone, so the menu bar is drawn again only as that task moves, never as any other of the account's tasks does.
+  const taskNamed = useHeldTasksNamed(focus.kind === MENU_SUBJECT.TASK ? focus.id : undefined)[0];
 
-  const task =
-    taskNamed ?? (agent === undefined ? undefined : tasks.find(({ id }) => id === agent.taskId));
+  const task = useTaskListRow(collections.tasks, taskNamed?.id ?? agent?.taskId ?? undefined);
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
