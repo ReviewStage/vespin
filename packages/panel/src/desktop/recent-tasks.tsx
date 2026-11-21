@@ -17,13 +17,12 @@ import { assigneeFace } from "@repo/ui/actor-model";
 import { type ReactNode, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
-import { useNamedTask } from "../task-list-collections.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { SectionSkeleton } from "./person-frame.js";
 import { openedTaskOf, taskRowTab } from "./task-actions.js";
 import { taskCardOf } from "./task-card.js";
-import { TaskListRow } from "./task-list-row.js";
+import { OwnTask, TaskListRow } from "./task-list-row.js";
 import { useStandingDoor } from "./task-row-parts.js";
 
 /**
@@ -114,24 +113,6 @@ function GlanceRows({
   );
 }
 
-/**
- * Draws a row of the task `handed` as the list holds it now, so a delivery
- * moving that task alone, as each turn of its agents does, draws this row and
- * not the list (`useRecentTasks`); the task handed stands until the list
- * holds it, as a row leaving does.
- */
-function OwnTask({
-  handed,
-  tasks,
-  children,
-}: {
-  handed: TaskSummary;
-  tasks: TasksControl;
-  children: (task: TaskSummary) => ReactNode;
-}): React.JSX.Element {
-  return <>{children(useNamedTask(handed.id, tasks.typedNames) ?? handed)}</>;
-}
-
 /** Tasks at a glance, newest first as their owner lists them, each opening its task. */
 export function RecentTasks({
   tasks,
@@ -171,7 +152,7 @@ export function RecentTasks({
       <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
         {(cells, more) =>
           listed.map((handed) => (
-            <OwnTask key={handed.id} handed={handed} tasks={tasks}>
+            <OwnTask key={handed.id} handed={handed} typedNames={tasks.typedNames}>
               {(task) => (
                 <TaskListRow
                   tasks={rowTab}

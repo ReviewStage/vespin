@@ -110,6 +110,17 @@ function draw(
     },
   });
 
+  act(() => root?.render(head(container, listed, blocks)));
+
+  return container;
+}
+
+/** The head's groups for the open task, its blocks as given, over `listed`, drawn in `container`. */
+function head(
+  container: HTMLElement,
+  listed: readonly TaskSummary[],
+  blocks: { blockedBy?: string[]; blocks?: string[] },
+): React.ReactElement {
   const tasks = tasksControl({
     tasks: [...listed],
     workspace: ACME,
@@ -118,26 +129,29 @@ function draw(
   });
 
   const task = { ...DOCUMENT_TASK, ...blocks };
-  act(() =>
-    root?.render(
-      withQueryClient(
-        overEveryTask(
-          tasks,
-          createElement(OverviewHead, {
-            task,
-            tasks,
-            door: { workspaceName: ACME.name, tasks: listed },
-            room: { scroller: { current: container }, column: { current: container } },
-            agents: null,
-            pages: null,
-            onOpenTask: tasks.onSelect,
-          }),
-        ),
-      ),
+
+  return withQueryClient(
+    overEveryTask(
+      tasks,
+      createElement(OverviewHead, {
+        task,
+        tasks,
+        door: { workspaceName: ACME.name, tasks: listed },
+        room: { scroller: { current: container }, column: { current: container } },
+        agents: null,
+        pages: null,
+        onOpenTask: tasks.onSelect,
+      }),
     ),
   );
+}
 
-  return container;
+/** The names a sub-task's row's marks are heard by, its agents' state among them. */
+function marksOf(container: HTMLElement, taskId: string): string[] {
+  return [
+    ...(container.querySelector(`li[data-task-id='${taskId}']`)?.querySelectorAll("[aria-label]") ??
+      []),
+  ].map((mark) => mark.getAttribute("aria-label") ?? "");
 }
 
 /** The ids of the rows a group's list draws, in order. */
@@ -163,6 +177,20 @@ test("a sub-task's own stand under it once its fold opens, and a task with no re
     container.querySelector<HTMLButtonElement>("button[aria-label='Sub-tasks of Task 2']")?.click(),
   );
   assert.deepEqual(rowIds(container, "Sub-tasks"), ["t-2", "t-3"]);
+});
+
+test("a sub-task's row says its agents stopped once only its agents moved", () => {
+  const working = (count: number): TaskSummary => ({
+    ...summary("t-2", 2, DOCUMENT_TASK.id),
+    agents: { total: 1, working: count, failed: 0, activityAt: 2, pullRequestTotal: 0 },
+  });
+
+  const container = draw([working(1)], {}, { changes: [], removed: [] });
+  assert.ok(marksOf(container, "t-2").includes("Working"));
+
+  act(() => root?.render(head(container, [working(0)], {})));
+
+  assert.ok(!marksOf(container, "t-2").includes("Working"));
 });
 
 test("New sub-task's + on a folded group opens it on a draft, whose Return adds a sub-task of the open task and opens the next", async () => {

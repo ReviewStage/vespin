@@ -71,7 +71,7 @@ import { useSteadyDoor } from "../steady-door.js";
 import {
   NAMED_ORDER,
   useNamedTask,
-  useNamedTasks,
+  useNamedTasksAtRest,
   useTaskListCollections,
   useTaskNames,
 } from "../task-list-collections.js";
@@ -1106,7 +1106,14 @@ function DescriptionDocument({
   const { onSelect: selectTask, relationMenu } = tasks;
   const onNewRelatedTask = tasks.newTask.onOpenRelated;
   const { onSetTaskBlock, onSetTaskParent } = relationWrites;
-  const ofWorkspace = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, openedWorkspace);
+
+  // Note that the path and the add menu draw no agents, so the tasks are held still while only their agents move.
+  const ofWorkspace = useNamedTasksAtRest(
+    tasks.typedNames,
+    NAMED_ORDER.PINNED_FIRST,
+    openedWorkspace,
+  );
+
   // Note that with no task open there is no workspace whose tasks it may relate.
   const blockTasks = openedWorkspace === undefined ? NO_TASKS : ofWorkspace;
 
