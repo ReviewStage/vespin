@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -24,6 +24,11 @@ env:
       TAB: Tasks
 - assertVisible: "Pinned"
 - assertVisible: "Weekly digest email"
+# The fixture's two empty sections stand as their headers alone, each with
+# its + (New task in it), as the desktop's sidebar keeps an empty section.
+- assertVisible: "Experiments"
+- assertVisible: "Ideas"
+- assertVisible: "New task in Ideas"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-list
 # A group folds under its header, heard by its title and count (whether it is

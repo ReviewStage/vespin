@@ -175,6 +175,7 @@ import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
+  type ComponentProps,
   type ReactElement,
   type ReactNode,
   useDeferredValue,
@@ -1073,6 +1074,7 @@ function TaskBranchRows({
 
 /** The words of a section header's long press menu, as the panel's sidebar says them. */
 const SECTION_MENU_WORDS = {
+  NEW_TASK: "New task",
   RENAME_SECTION: "Rename section",
   DELETE_SECTION: "Delete section",
   OPEN_ON_GITHUB: "Open on GitHub",
@@ -1082,13 +1084,17 @@ const SECTION_MENU_WORDS = {
  * What a long press on a group's header offers, as the panel's right-click
  * on the sidebar's same header does: Mark all as read on Pinned, Following
  * and the tasks with no repository, only while one of its tasks is unread;
- * on one of the member's sections, Rename and Mark all as read, then Delete
- * section, its Undo in the notice; and on a repository's group, Open on
- * GitHub, then Mark all as read. Note that the panel's New task, Change
- * icon, and a repository's Keep at top are left out, since the phone starts
- * no task in a section, picks no icon, and keeps no repository at top.
+ * on one of the member's sections, New task, then Rename and Mark all as
+ * read, then Delete section, its Undo in the notice; and on a repository's
+ * group, Open on GitHub, then Mark all as read. Note that the panel's Change
+ * icon and a repository's Keep at top are left out, since the phone picks
+ * no icon and keeps no repository at top.
  */
-function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPressGroup[] {
+function groupMenu(
+  group: TaskTreeGroup,
+  listing: TasksListing,
+  newTaskIn: (sectionId: string) => void,
+): readonly LongPressGroup[] {
   const unread = group.rows.map(({ task }) => task).filter((task) => listing.lookOf(task).unread);
 
   const read: LongPressGroup =
@@ -1111,6 +1117,14 @@ function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPr
     if (section === undefined) return [read];
 
     return [
+      [
+        {
+          label: SECTION_MENU_WORDS.NEW_TASK,
+          symbol: GLYPH.NEW_TASK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => newTaskIn(section.id),
+        },
+      ],
       [
         {
           label: WORDS.RENAME,
@@ -1154,11 +1168,36 @@ function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPr
   return [read];
 }
 
+/** Opens New task on one of the member's sections, which files the task in it once it starts, as the panel's section header's + and New task open its card. */
+function useNewTaskIn(): (sectionId: string) => void {
+  const router = useRouter();
+
+  return (sectionId) => router.push({ pathname: "/start-task", params: { section: sectionId } });
+}
+
+/**
+ * The + a section of the member's ends its header in, as the panel's
+ * sidebar section's does: New task in it (`useNewTaskIn`); none on any
+ * other group, which the panel's sidebar heads with no +.
+ */
+function sectionAdd(
+  group: TaskTreeGroup,
+  newTaskIn: (sectionId: string) => void,
+): ComponentProps<typeof ListSection>["add"] {
+  if (group.kind !== TASK_TREE_GROUP.SECTION) return undefined;
+  const label = `${SECTION_MENU_WORDS.NEW_TASK} in ${group.title ?? ""}`;
+
+  return { label, acts: [{ label, symbol: GLYPH.ADD, onPress: () => newTaskIn(group.key) }] };
+}
+
 /**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
- * heads a repository group the tree draws no heading for. A task's row dragged onto
- * its header, as an iPad drags, moves the task there (`placeIn`).
+ * heads a repository group the tree draws no heading for. A section of the
+ * member's holding no task stands as its header alone, its icon, menu and +
+ * still there, as the panel's sidebar keeps an empty section, and folds
+ * nothing. A task's row dragged onto its header, as an iPad drags, moves
+ * the task there (`placeIn`).
  */
 function GroupSection({
   group,
@@ -1169,9 +1208,11 @@ function GroupSection({
   readonly listing: TasksListing;
   readonly hold: TreeHold;
 }) {
+  const newTaskIn = useNewTaskIn();
+
   return (
     <ListSection
-      menu={groupMenu(group, listing)}
+      menu={groupMenu(group, listing, newTaskIn)}
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
       glyphColor={
@@ -1180,10 +1221,11 @@ function GroupSection({
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
-      foldable
+      foldable={group.rows.length > 0}
       folded={hold.folded.has(group.key)}
       onFold={(shut) => hold.setFolded(group.key, shut)}
       onDropLink={dropOnto(group, listing)}
+      add={sectionAdd(group, newTaskIn)}
     >
       <FoldedRows rows={group.rows} listing={listing} parents={groupParents(hold, group.key)} />
     </ListSection>
@@ -1303,12 +1345,9 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
-      {/* Note that a section holding no task is left out, as Reminders keeps an empty list off a grouped view. */}
-      {tree.sections
-        .filter((group) => group.rows.length > 0)
-        .map((group) => (
-          <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
-        ))}
+      {tree.sections.map((group) => (
+        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+      ))}
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
