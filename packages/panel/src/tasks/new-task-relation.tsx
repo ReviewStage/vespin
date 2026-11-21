@@ -6,7 +6,6 @@ import {
   TASK_CREATE_RELATION_KIND,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
-  type TaskSummary,
 } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
 import {
@@ -29,6 +28,7 @@ import {
 import { CornerLeftUpIcon, GLYPH, HandIcon, NetworkIcon, OctagonMinusIcon } from "@repo/ui/icons";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useState } from "react";
+import type { RelatableTask } from "../task-list-collections.js";
 import { RelationKindPill } from "./relation-kind-pill.js";
 import { TaskKey } from "./task-standing.js";
 
@@ -98,7 +98,7 @@ const ROW_CELLS: readonly TaskRowCell[] = [
 /** A relation New task's card starts its task in: how it stands to the other task, and that task. */
 export interface NewTaskRelation {
   readonly kind: TaskCreateRelationKind;
-  readonly task: TaskSummary;
+  readonly task: RelatableTask;
 }
 
 /** The repository a card's tree relations are judged against: the card's, and whether a tree relation already holds it. */
@@ -146,7 +146,7 @@ function kindIcon(kind: TaskCreateRelationKind): React.JSX.Element {
 
 /** Why `other` cannot take `kind` on a card standing at `place`, none chosen and none held judging no repository; none where it can. */
 function relationWhyNot(
-  other: TaskSummary,
+  other: RelatableTask,
   kind: TaskCreateRelationKind,
   place: RelationPlace,
 ): string | undefined {
@@ -215,7 +215,7 @@ function withKind(
 function withTask(
   relations: readonly NewTaskRelation[],
   at: number,
-  task: TaskSummary,
+  task: RelatableTask,
 ): readonly NewTaskRelation[] {
   return relations.flatMap((each, index) => {
     if (index === at) return [{ kind: each.kind, task }];
@@ -231,7 +231,7 @@ function withTask(
  * the card holds its most.
  */
 function relationRows(
-  tasks: readonly TaskSummary[],
+  tasks: readonly RelatableTask[],
   workspaceName: string,
   relations: readonly NewTaskRelation[],
   kind: TaskCreateRelationKind,
@@ -268,7 +268,7 @@ export interface NewTaskRelations {
   /** The relations the card starts its task in, in the order they were picked. */
   readonly relations: readonly NewTaskRelation[];
   /** The tasks of the card's workspace, which the search lists. */
-  readonly tasks: readonly TaskSummary[];
+  readonly tasks: readonly RelatableTask[];
   /** The workspace's name, which a task's key is drawn from. */
   readonly workspaceName: string;
   /** The repository the card's chip chose, held to a tree relation's task's where one stands; none chosen. */

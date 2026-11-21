@@ -346,6 +346,12 @@ const NO_LINGER: Linger = { leave: () => undefined, stop: () => undefined };
 
 /** What the tooltip adds to its control's props. */
 interface AnchorProps {
+  /** The control's own name, where its props give one, which its first draw reads (`heardByProps`). */
+  "aria-label"?: string | undefined;
+  /** The name an IconButton is given, or whatever else a control calls its label, read only where it is words. */
+  label?: unknown;
+  /** What the control holds, read only where it is words alone. */
+  children?: unknown;
   "aria-describedby"?: string | undefined;
   "aria-keyshortcuts"?: string | undefined;
   onPointerEnter?: PointerEventHandler<HTMLElement> | undefined;
@@ -473,6 +479,25 @@ function heardOver(element: HTMLElement, label: string): Heard {
   const spoken = !element.matches(TAKES_FOCUS) && !element.matches(HOLDS_NO_WORDS);
 
   return spoken ? HEARD.SPOKEN : HEARD.DESCRIBED;
+}
+
+/**
+ * How a reader hears `label` over `control` as its own props name it, before
+ * it is drawn: named, where its `aria-label`, the `label` an IconButton is
+ * named by, or the words it holds alone already say it, else described.
+ * Note that it is only the first guess, which the control drawn corrects
+ * (`heardOver`) before it paints, so a control its props name rightly is
+ * drawn once rather than drawn again as it is first read.
+ */
+function heardByProps(control: ReactElement<AnchorProps>, label: string | undefined): Heard {
+  const { "aria-label": named, label: own, children: words } = control.props;
+  const name = named ?? own ?? words;
+
+  if (label === undefined || !Predicate.isString(name)) return HEARD.DESCRIBED;
+
+  return name.replace(SPACING, "").includes(label.replace(SPACING, ""))
+    ? HEARD.NAMED
+    : HEARD.DESCRIBED;
 }
 
 /** Hears no change, since whether this is a window never changes once drawn. */
@@ -883,7 +908,7 @@ export function Tooltip({
   // How a reader hears the label, read off the control once it is drawn and
   // again as it draws anew, ahead of any focus landing on it.
   const wordsId = useId();
-  const [heard, setHeard] = useState<Heard>(HEARD.DESCRIBED);
+  const [heard, setHeard] = useState<Heard>(() => heardByProps(children, label));
   useLayoutEffect(() => {
     if (label === undefined) return;
     // Note that a control the tooltip hands no ref is found by the

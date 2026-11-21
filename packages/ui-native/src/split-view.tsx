@@ -108,8 +108,9 @@ export type BarPath = {
 };
 
 /**
- * What a column's bar holds: its title, small and inline as every screen's
- * stands, which the back button and the reader name it by; what leads it
+ * What a column's bar holds: its title, large under the list's bar as a tab
+ * root's stands and leading the detail's, which the back button and the
+ * reader name it by; what leads it
  * (a SwiftUI view such as the workspace switcher), a page's path in its
  * middle, its menu and its act at its trailing edge, such as Select mode's
  * Done, a search field over its list, and the acts at its foot, in its
@@ -353,12 +354,9 @@ function Column({
         // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
         background(colors.GROUND),
-        // Note that the list keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        // Note that the list stands its title large under its bar, collapsing into it as the list scrolls, as Mail's list column does, rather than leading the bar (`inlineLarge`), because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
-          ? [
-              navigationTitle(bar.title),
-              toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
-            ]
+          ? [navigationTitle(bar.title), toolbarTitleDisplayMode(sidebar ? "large" : "inlineLarge")]
           : [toolbarTitleDisplayMode("inline")]),
       ]}
     >

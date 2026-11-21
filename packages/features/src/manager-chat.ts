@@ -19,6 +19,17 @@
  * messages from one sender, none further from the one before than
  * `CHAT_RUN_GAP_MS`, are one run, which the page draws close together with
  * one time under its last (`managerChatRuns`).
+ *
+ * A person may answer one of the Manager's messages, as a chat app's Reply
+ * does. The reply is no field of the line's own but its words: the
+ * Manager's message, as one line of plain words cut to `REPLY_QUOTE_CHARS`,
+ * as a Markdown quote over the person's own words (`chatReplyText`), so the
+ * Manager reads what is answered at the head of its turn's input, a client
+ * that knows nothing of replies draws it as any quote, and it stands
+ * through a reload with nothing stored beside it. Read back, a person's
+ * line that opens on such a quote of a Manager's message before it is that
+ * message's reply (`ManagerChatRuns`' `replies`); a quote of no message
+ * the chat holds is the words it is.
  */
 
 import {
@@ -30,13 +41,24 @@ import {
 } from "@repo/wire";
 import { AGENT_PART, type AgentPart, arrivedParts, messageWords } from "./agent-parts.js";
 import { AGENT_TOOL } from "./agent-tools.js";
-import type { AgentTranscriptMessage } from "./agent-wire.js";
+import { AGENT_BOUNDS, type AgentTranscriptMessage } from "./agent-wire.js";
+import { plainWords } from "./plain-words.js";
+import { cutReply, MESSAGE_BLOCK, messageBlocks, messageText, QUOTE_GAP } from "./reply-quote.js";
 import { TOOL_STATE } from "./tool-call-block.js";
 import { isPersonLine } from "./transcript-lines.js";
 import { isAgentTurn, isVoiceLine } from "./voice-call-lines.js";
 
 /** The longest pause, in milliseconds, between two messages of one sender that still stand in one run. */
 const CHAT_RUN_GAP_MS = 10 * 60 * 1000;
+
+/** The most characters of a Manager's message a reply quotes, its ellipsis included: enough to say which it answers. */
+const REPLY_QUOTE_CHARS = 280;
+
+/** The ellipsis a quote cut short ends on (`cutReply`). */
+const ELLIPSIS = "…";
+
+/** What a quote's line opens on before its words (`quoteOf`). */
+const QUOTE_MARK = "> ";
 
 /** Who sent a chat message, which a run keeps to: the Manager, or a person by their account. */
 type ChatSender =
@@ -160,15 +182,71 @@ export function managerChatLines(
   });
 }
 
+/** A Manager's message as a reply quotes it: its words as one line of plain words, links by their names. */
+function quotedWords(words: string): string {
+  return plainWords(words).replace(/\s+/gu, " ").trim();
+}
+
+/**
+ * The words a reply to the Manager's message `quoted` sends: the message
+ * as one quoted line, cut to `REPLY_QUOTE_CHARS` or to what room the
+ * person's `words` leave in a message, over their words. Their words alone
+ * where no word of the message fits, or the message has none.
+ */
+export function chatReplyText(quoted: string, words: string): string {
+  const room = AGENT_BOUNDS.MAX_MESSAGE_CHARS - words.length - QUOTE_GAP.length - QUOTE_MARK.length;
+  const quote = cutReply(quotedWords(quoted), Math.min(REPLY_QUOTE_CHARS, room));
+
+  if (quote === "") return words;
+
+  return messageText([
+    { kind: MESSAGE_BLOCK.QUOTE, words: quote },
+    { kind: MESSAGE_BLOCK.WORDS, lines: words.split("\n") },
+  ]);
+}
+
+/** A person's line that answers one of the Manager's messages: the message it answers, by its chat id, the quote it opens on, and the person's own words under it. */
+export interface ChatReply {
+  readonly to: string;
+  readonly quote: string;
+  readonly words: string;
+}
+
+/** Whether `quote` is the Manager's message `words` as a reply quotes it, whole or cut short. */
+function quotes(quote: string, words: string): boolean {
+  const said = quotedWords(words);
+
+  return quote.endsWith(ELLIPSIS)
+    ? quote.length > ELLIPSIS.length && said.startsWith(quote.slice(0, -ELLIPSIS.length))
+    : said === quote;
+}
+
+/** The reply the chat's line at `index` is, where it opens on a quote of one of the Manager's messages before it, the nearest such; none for any other line. */
+function replyOf(lines: readonly AgentTranscriptMessage[], index: number): ChatReply | undefined {
+  const line = lines[index];
+  const [head, ...rest] = line === undefined ? [] : messageBlocks(messageWords(line));
+
+  if (head?.kind !== MESSAGE_BLOCK.QUOTE || head.words.includes("\n")) return undefined;
+  const quote = head.words;
+
+  const to = lines.findLast(
+    (message, at) =>
+      at < index && message.role === MESSAGE_ROLE.ASSISTANT && quotes(quote, messageWords(message)),
+  );
+
+  return to === undefined ? undefined : { to: to.id, quote, words: messageText(rest) };
+}
+
 /** Where a chat message stands in its run: whether it opens it, under its sender's name where one is drawn, and whether it closes it, over the run's one time. */
 export interface ChatRunPlace {
   readonly opens: boolean;
   readonly closes: boolean;
 }
 
-/** A Manager's chat in runs: where each message stands in its run, by its id. */
+/** A Manager's chat in runs: where each message stands in its run, by its id, and the people's lines that answer one of the Manager's messages, by their ids. */
 export interface ManagerChatRuns {
   readonly places: ReadonlyMap<string, ChatRunPlace>;
+  readonly replies: ReadonlyMap<string, ChatReply>;
 }
 
 /** Who sent a chat message: the Manager for its own, else the person's account, the reader's for a line of theirs still on its way. */
@@ -201,21 +279,25 @@ function continuesRun(
   return was === undefined || is === undefined || is - was <= CHAT_RUN_GAP_MS;
 }
 
-/** A Manager's chat lines (`managerChatLines`) in runs: where each stands in its run, the reader's lines still on their way counted as the reader's. */
+/** A Manager's chat lines (`managerChatLines`) in runs: where each stands in its run, the reader's lines still on their way counted as the reader's, and which of the people's lines are replies. */
 export function managerChatRuns(
   lines: readonly AgentTranscriptMessage[],
   readerId: string | undefined,
 ): ManagerChatRuns {
   const places = new Map<string, ChatRunPlace>();
+  const replies = new Map<string, ChatReply>();
 
   lines.forEach((message, index) => {
     const before = lines[index - 1];
     const after = lines[index + 1];
+    const reply = message.role === MESSAGE_ROLE.USER ? replyOf(lines, index) : undefined;
+
+    if (reply !== undefined) replies.set(message.id, reply);
     places.set(message.id, {
       opens: before === undefined || !continuesRun(before, message, readerId),
       closes: after === undefined || !continuesRun(message, after, readerId),
     });
   });
 
-  return { places };
+  return { places, replies };
 }

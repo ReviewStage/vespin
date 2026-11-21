@@ -48,6 +48,7 @@ import {
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import {
   agentRunsOnWords,
@@ -67,7 +68,6 @@ import {
   AgentTranscript,
   ArchivedBar,
   AskNote,
-  AttachedPictures,
   askForName,
   BAR_TITLE,
   type BarSubtitle,
@@ -96,7 +96,9 @@ import {
   MenuChip,
   MenuRow,
   type MenuRowAct,
+  ModelChoicePopover,
   ModelChoiceSheet,
+  type ModelChoices,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
@@ -184,6 +186,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
@@ -451,13 +454,14 @@ function AgentComposerBar({
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
   // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
   const denies = waiting !== undefined && !composer.sendQueues;
+  // Note that while a `/` or an `@` offers its list, the threads line and the denial's line step aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it.
+  const picking = composer.skills !== undefined || composer.mentions !== undefined;
 
   const head =
     threads === undefined &&
     !denies &&
     banner === undefined &&
     composer.cancelMessageEdit === undefined &&
-    composer.attached.length === 0 &&
     composer.skills === undefined &&
     composer.mentions === undefined &&
     otherCall === undefined &&
@@ -465,7 +469,7 @@ function AgentComposerBar({
     note === undefined ? undefined : (
       <>
         {ending}
-        {threads === undefined ? null : (
+        {threads === undefined || picking ? null : (
           <ThreadsLine
             words={threads.line.words}
             waiting={threads.line.waiting}
@@ -493,8 +497,7 @@ function AgentComposerBar({
           <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
-        {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
-        <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
+        {denies && !picking ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         {note === undefined ? null : <AskNote words={note} />}
       </>
     );
@@ -971,6 +974,17 @@ function AgentConversation({
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
 
+  // The calls the agent holds for the member's answer, whose folds stand open so their rows draw them; a subagent's call has no row of its own.
+  const pending = agent?.pendingApprovals;
+
+  const waitingCalls = useMemo(
+    () =>
+      new Set(
+        (pending ?? []).flatMap((ask) => (ask.subagentId === undefined ? [ask.toolUseId] : [])),
+      ),
+    [pending],
+  );
+
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
@@ -983,8 +997,10 @@ function AgentConversation({
         wholePart: whole.read,
         origin,
         suggestionAddress,
+        waitingCalls,
       }),
     [
+      waitingCalls,
       messages,
       sending,
       status,
@@ -1077,6 +1093,11 @@ function AgentConversation({
           },
           workspaces,
         ),
+  );
+  useNoteOpened(
+    shown === undefined
+      ? undefined
+      : { kind: SEARCH_FOUND_KIND.AGENTS, id, workspaceId: shown.workspaceId },
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 
@@ -1185,8 +1206,11 @@ function AgentConversation({
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
   });
 
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
-  const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
+  const barActs = regular && agent !== undefined;
+  // Note that a regular window's model choices pop over from the model chip rather than rising as a sheet, whichever opens them, the chip or the bar's subtitle; with no chip standing they keep the sheet.
+  const modelPopover = regular && openModels !== undefined && pick.model !== undefined;
 
   // Archive asks first. Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
   const askArchive = () => {
@@ -1260,7 +1284,18 @@ function AgentConversation({
       tools={
         agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />
       }
-      trailing={<AgentModelChip pick={pick} onOpen={openModels} />}
+      trailing={
+        modelPopover ? (
+          <ModelChoicePopover
+            chip={<AgentModelChip pick={pick} onOpen={openModels} />}
+            presented={modelsShown}
+            onDismiss={() => setModelsShown(false)}
+            {...agentModelChoices(pick, mode)}
+          />
+        ) : (
+          <AgentModelChip pick={pick} onOpen={openModels} />
+        )
+      }
     />
   );
 
@@ -1308,12 +1343,14 @@ function AgentConversation({
 
   const asks = (
     <>
-      <AgentModelSheet
-        pick={pick}
-        mode={mode}
-        presented={modelsShown}
-        onDismiss={() => setModelsShown(false)}
-      />
+      {modelPopover ? null : (
+        <AgentModelSheet
+          pick={pick}
+          mode={mode}
+          presented={modelsShown}
+          onDismiss={() => setModelsShown(false)}
+        />
+      )}
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
           pullRequestKey={merging}
@@ -1358,7 +1395,8 @@ function AgentConversation({
     <>
       <Stack.Screen options={barOptions} />
       {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row, the model chosen from the composer's model chip. */}
-      <StackSubtitle words={subtitle?.words ?? ""} />
+      {/* Note that a regular window stands the name at the bar's leading edge, in the bar's own row, since on an iPad whose tab bar floats in the middle of that row UIKit dropped a centered name into a row of its own over the transcript. */}
+      <StackSubtitle words={subtitle?.words ?? ""} leading={regular} />
       <Stack.Toolbar placement="right">
         {copyable || openable || openTask !== undefined ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
@@ -1596,64 +1634,70 @@ function AgentPage({
 }
 
 /**
- * The agent's model sheet (`ModelChoiceSheet`), as the desktop's model chip
- * opens its menu, each change sent at once and drawn on the agent as it is
- * asked, one the service refused reading back and saying why: its model,
- * among the models New agent offers that its harness runs, each under its
- * harness's mark, its effort right under it, and Fast where the model has a
- * fast version, which take effect from its next step; and last its
- * permission mode, each with its glyph and what it does, where its harness
- * takes one, which takes effect from its next turn. Done closes it.
+ * The agent's model choices, as the desktop's model chip opens its menu,
+ * each change sent at once and drawn on the agent as it is asked, one the
+ * service refused reading back and saying why: its model, among the models
+ * New agent offers that its harness runs, each under its harness's mark,
+ * its effort right under it, and Fast where the model has a fast version,
+ * which take effect from its next step; and last its permission mode, each
+ * with its glyph and what it does, where its harness takes one, which takes
+ * effect from its next turn. The page's own model and mode are handed in,
+ * so a change clears the one refusal and counts as the one latest change.
  */
-function AgentModelSheet({
-  pick,
-  mode,
-  presented,
-  onDismiss,
-}: {
-  /** The page's own model and mode, so a change from the sheet clears the one refusal and counts as the one latest change. */
-  readonly pick: AgentModelPick;
-  readonly mode: AgentMode | undefined;
-  readonly presented: boolean;
-  readonly onDismiss: () => void;
-}) {
+function agentModelChoices(pick: AgentModelPick, mode: AgentMode | undefined): ModelChoices {
   const models = pick.models.flatMap((option) => {
     const provider = providerOf(option.id);
 
     return provider === undefined ? [] : [{ ...option, provider }];
   });
 
+  return {
+    models,
+    model: pick.model,
+    onModel: pick.pickModel,
+    efforts: pick.efforts,
+    effort: pick.effort,
+    onEffort: pick.pickEffort,
+    fast: pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle },
+    note: pick.note,
+    mode:
+      mode === undefined
+        ? undefined
+        : {
+            title: PERMISSION_MODE_WORDS.QUESTION,
+            options: mode.modes.map((option) => ({
+              ...option,
+              symbol: PERMISSION_MODE_GLYPH[option.id],
+            })),
+            picked: mode.mode,
+            onPick: (picked) => {
+              const chosen = mode.modes.find((option) => option.id === picked);
+
+              if (chosen !== undefined) mode.choose(chosen.id);
+            },
+            footer: PERMISSION_MODE_WORDS.APPLIES,
+            note: mode.note,
+          },
+  };
+}
+
+/** The agent's model choices as a sheet (`ModelChoiceSheet`), as a compact window opens them; Done closes it. */
+function AgentModelSheet({
+  pick,
+  mode,
+  presented,
+  onDismiss,
+}: {
+  readonly pick: AgentModelPick;
+  readonly mode: AgentMode | undefined;
+  readonly presented: boolean;
+  readonly onDismiss: () => void;
+}) {
   return (
     <ModelChoiceSheet
       presented={presented}
       onDismiss={onDismiss}
-      models={models}
-      model={pick.model}
-      onModel={pick.pickModel}
-      efforts={pick.efforts}
-      effort={pick.effort}
-      onEffort={pick.pickEffort}
-      fast={pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle }}
-      note={pick.note}
-      mode={
-        mode === undefined
-          ? undefined
-          : {
-              title: PERMISSION_MODE_WORDS.QUESTION,
-              options: mode.modes.map((option) => ({
-                ...option,
-                symbol: PERMISSION_MODE_GLYPH[option.id],
-              })),
-              picked: mode.mode,
-              onPick: (picked) => {
-                const chosen = mode.modes.find((option) => option.id === picked);
-
-                if (chosen !== undefined) mode.choose(chosen.id);
-              },
-              footer: PERMISSION_MODE_WORDS.APPLIES,
-              note: mode.note,
-            }
-      }
+      {...agentModelChoices(pick, mode)}
     />
   );
 }

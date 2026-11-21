@@ -30,7 +30,7 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { absurd, Option, Predicate, Schema, SchemaTransformation } from "effect";
 import { InboxIcon } from "lucide-react";
-import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import {
   type ByPullRequest,
@@ -2559,11 +2559,16 @@ export function useSidePanel(
     [update, drawn, taskId, pagePlace, opener],
   );
 
-  const tabOwner = useCallback(
-    (on: string, tab: SidePanelTab) =>
-      ownerOf(state, { ...drawn, task: { ...drawn.task, id: on } }, tab),
-    [state, drawn],
-  );
+  // Note that the state is read as it stands at the call, so the reader stays one function while the panel's tabs move,
+  // and a move the task's page draws nothing of hands it nothing new.
+  const ownedNow = useRef({ state, drawn });
+  ownedNow.current = { state, drawn };
+
+  const tabOwner = useCallback((on: string, tab: SidePanelTab) => {
+    const now = ownedNow.current;
+
+    return ownerOf(now.state, { ...now.drawn, task: { ...now.drawn.task, id: on } }, tab);
+  }, []);
 
   // Note that a file with a tab of its own is chosen there, because a file
   // stands in one tab at most (`withFileShown`).

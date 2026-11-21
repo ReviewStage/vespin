@@ -29,7 +29,12 @@ import { NO_LOOKS } from "../tasks/use-task-looks.js";
 import { handInboxItems } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  pushedTranscripts,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 
@@ -167,10 +172,12 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
       strip: [SIDE_PANEL_TAB.DESCRIPTION, SIDE_PANEL_TAB.INBOX],
       tab: SIDE_PANEL_TAB.INBOX,
     },
-    agents: agentsControl({
-      agents: [AGENT],
-      agentIds: [AGENT.id, OTHER_AGENT],
-    }),
+    agents: taskAgentsOf(
+      agentsControl({
+        agents: [AGENT],
+        agentIds: [AGENT.id, OTHER_AGENT],
+      }),
+    ),
   });
 
   const container = document.body.appendChild(document.createElement("div"));

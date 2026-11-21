@@ -64,8 +64,6 @@ const SUB_TASK: NewTaskRelation = {
     id: "3c9f1e2a-5b7d-4e8f-9a0b-1c2d3e4f5a6b",
     workspaceId: ACME.id,
     name: "Child tasks",
-    createdAt: 1,
-    updatedAt: 1,
     repository: "acme/web",
   },
 };

@@ -1,4 +1,4 @@
-import { BUTTON_SIZE, cn, IconButton, MessageFrame, Tooltip } from "@repo/ui";
+import { BUTTON_SIZE, cn, HeldMessageAction, IconButton, MessageFrame, Tooltip } from "@repo/ui";
 import { MARKDOWN_LOOK, Markdown, type MarkdownProps } from "@repo/ui/markdown";
 import { useQuery } from "@tanstack/react-query";
 import type { UIMessage } from "ai";
@@ -133,15 +133,21 @@ export function MessageAction({
 
   if (card !== undefined) {
     return (
-      <Tooltip label={label} card={card}>
-        {button}
-      </Tooltip>
+      <HeldMessageAction>
+        <Tooltip label={label} card={card}>
+          {button}
+        </Tooltip>
+      </HeldMessageAction>
     );
   }
 
-  if (tooltip === false) return button;
+  if (tooltip === false) return <HeldMessageAction>{button}</HeldMessageAction>;
 
-  return <Tooltip label={tooltip === true ? label : tooltip}>{button}</Tooltip>;
+  return (
+    <HeldMessageAction>
+      <Tooltip label={tooltip === true ? label : tooltip}>{button}</Tooltip>
+    </HeldMessageAction>
+  );
 }
 
 export type MessageResponseProps = Omit<MarkdownProps, "look" | "className"> & {

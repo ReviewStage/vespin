@@ -10,6 +10,7 @@ import {
 } from "@repo/features/agent-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { EXPERIMENT, type ExperimentChoices } from "@repo/settings";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement } from "react";
@@ -231,6 +232,8 @@ async function drawnTab(
     ),
   );
   await settle();
+  // The pointer comes onto the messages, as a reader's does to reach their actions.
+  pointAtTurns(container);
 
   const message = (id: string) =>
     container.querySelector<HTMLElement>(`[data-message-id="${id}"]`) ??

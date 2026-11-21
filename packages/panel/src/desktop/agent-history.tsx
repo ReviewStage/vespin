@@ -22,7 +22,12 @@ import { useRef, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { agentName } from "../tasks/agent-model.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import {
+  type AgentsControl,
+  type AgentsSource,
+  agentIdsOf,
+  useTaskAgents,
+} from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import { rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
@@ -146,7 +151,7 @@ function historyAgents(
 /** The panel History hangs: the search field, then the groups that hold a row, or a note that nothing matches. */
 function HistoryPanel({
   main,
-  agents,
+  agents: source,
   held,
   shown,
   search,
@@ -154,13 +159,15 @@ function HistoryPanel({
   onPicked,
 }: {
   main: MainTabsControl;
-  agents: AgentsControl;
+  agents: AgentsSource;
   held: HeldTranscripts;
   shown: boolean;
   search: React.RefObject<HTMLInputElement | null>;
   onOpenAgent: (agentId: string) => void;
   onPicked: () => void;
 }): React.JSX.Element {
+  // Note that the panel reads the agents' rows while it stands open, so a step of a turn draws its button nothing.
+  const agents = useTaskAgents(source);
   const [query, setQuery] = useState("");
   const { closed, archived } = historyAgents(main, agents, query);
   const directory = useMemberDirectory();
@@ -246,7 +253,7 @@ export function AgentHistory({
   onOpenAgent,
 }: {
   main: MainTabsControl;
-  agents: AgentsControl;
+  agents: AgentsSource;
   held: HeldTranscripts;
   /** Whether the task's page is on screen, for the panel and an archived row's menu not to outlive it. */
   shown: boolean;
@@ -255,7 +262,11 @@ export function AgentHistory({
 }): React.JSX.Element | null {
   const [open, setOpen] = useState(false);
   const search = useRef<HTMLInputElement | null>(null);
-  const { closed, archived } = historyAgents(main, agents);
+  // Note that the button stands on the agents' ids alone, which a step of a turn never moves, and its panel reads their rows.
+  const ids = agentIdsOf(agents);
+  const inHistory = (agentId: string) => main.openAgents?.includes(agentId) !== true;
+  const closed = ids.standing?.filter(inHistory) ?? [];
+  const archived = ids.archived?.filter(inHistory) ?? [];
 
   // Note that the button goes with its last row, putting its panel away so it never comes back
   // open, and the panel goes with the page it hangs from.

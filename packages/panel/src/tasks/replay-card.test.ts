@@ -19,6 +19,7 @@ import {
 import { LINK_DESTINATION, type LinkDestination, type ReadLink } from "@repo/features/link-grammar";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement } from "react";
@@ -179,6 +180,8 @@ async function drawn(
     ),
   );
   await settle();
+  // The pointer comes onto the messages, as a reader's does to reach their actions.
+  pointAtTurns(container);
 
   return { container, opened, places };
 }
@@ -769,6 +772,7 @@ test("a replayed line stands under who sent it, over when and Copy, and the card
     line?.querySelector("time")?.getAttribute("dateTime"),
     new Date(SENT_AT).toISOString(),
   );
+  pointAtTurns(container);
   press(line?.querySelector('button[aria-label="Copy message"]'));
   await settle();
   assert.deepEqual(copied, ["Use seven days."]);

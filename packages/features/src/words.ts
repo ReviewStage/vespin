@@ -179,6 +179,11 @@ export const SHELL_EXITED_WORDS = "exited";
 /** What the pane beside the Inbox's list says while none of its items is chosen. */
 export const CHOOSE_AN_ITEM_WORDS = "Choose an item";
 
+/** What an iPad's detail column says while its list has none picked, as Mail says "No Message Selected": "No task selected". */
+export function noSelectionWords(noun: Noun): string {
+  return `No ${noun.one} selected`;
+}
+
 /** What the foot of a capped list says once it shows every row, which puts them back. */
 export const SHOW_LESS_WORDS = "Show less";
 
