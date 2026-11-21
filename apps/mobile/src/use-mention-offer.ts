@@ -147,10 +147,15 @@ export interface MentionOffer {
 export function useMentionOffer(
   words: string,
   onWords: (words: string) => void,
-  place: { readonly workspaceId: string | undefined; readonly taskId: string | undefined },
+  place: {
+    readonly workspaceId: string | undefined;
+    readonly taskId: string | undefined;
+    /** The agent whose composer it is, which its own `@` never offers, as the panel's leaves it out. */
+    readonly agentId?: string | undefined;
+  },
   pills?: MentionPills | undefined,
 ): MentionOffer {
-  const { workspaceId, taskId } = place;
+  const { workspaceId, taskId, agentId } = place;
   const ending = useMemo(() => atWordEnding(words), [words]);
   const word = pills === undefined ? ending : pills.word;
   const asking = word !== undefined && workspaceId !== undefined;
@@ -187,7 +192,8 @@ export function useMentionOffer(
     };
 
     const ownAgents = agents.filter(
-      (agent) => agent.workspaceId === workspaceId && agent.archivedAt === undefined,
+      (agent) =>
+        agent.workspaceId === workspaceId && agent.archivedAt === undefined && agent.id !== agentId,
     );
 
     const agentRow = (agent: (typeof ownAgents)[number]): MentionCandidate => ({
@@ -322,6 +328,7 @@ export function useMentionOffer(
     members,
     workspaceId,
     taskId,
+    agentId,
     workspace,
     word,
     held,
