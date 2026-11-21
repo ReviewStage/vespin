@@ -1,4 +1,4 @@
-# accessibility.yaml -- the main screens at the largest accessibility text size (AX5, Accessibility XXXL): the Inbox, a thread, the Tasks tab, a task's page, an agent's page, New task, Settings, and Settings' Workspace, Machines, and Integrations pages, each shot to check that words wrap rather than cut, rows grow and stack their ends under their titles, chips stand one to a line, and bars do not overflow.
+# accessibility.yaml -- the main screens at the largest accessibility text size (AX5, Accessibility XXXL): the Inbox, a thread, a decide's card with its Recommended tag, the Tasks tab, a task's page, an agent's page, a pull request's page, New task, Settings, and Settings' Workspace, Machines, and Integrations pages, each shot to check that words wrap rather than cut, rows grow and stack their ends under their titles, chips stand one to a line, and bars do not overflow.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -98,6 +98,41 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-agent
+# A pull request's page: who opened it wrapping rather than cut, and its
+# branches on two lines, the one it merges into, then the arrow and the one
+# it merges from.
+- launchApp:
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "128"
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-pull-request
+# A decide's card: its Recommended tag on a line of its own under the
+# option's label, its word whole rather than broken inside the tag.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "How should a finished turn end\\?"
+    direction: DOWN
+    centerElement: true
+- tapOn: "How should a finished turn end\\?"
+- scrollUntilVisible:
+    element: "Recommended"
+    direction: DOWN
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: accessibility-decide
 # New task, the sheet the tab bar's round + opens.
 - launchApp:
     arguments:
