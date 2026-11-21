@@ -1970,7 +1970,9 @@ function eraseInComposer(container: ParentNode, count: number): void {
 test("files found by a word typed on are those the longer word finds, and the word typed back finds every file it found before", async () => {
   // Note that the frames are held, so each list is read with the rows past its view drawn, however long the test takes.
   holdFrames();
-  onTestFinished(() => vi.restoreAllMocks());
+  onTestFinished(() => {
+    vi.restoreAllMocks();
+  });
   const { container } = await wideBox();
 
   typeInComposer(container, "See @files:invite-");
