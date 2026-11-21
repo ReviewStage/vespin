@@ -138,7 +138,7 @@ const NO_FORK: AgentFork = { agentId: "", opening: "" };
 /** What a fork's source is named while it is read, as the panel names an agent of no name. */
 const AGENT_WORD = "agent";
 
-/** How a capsule joins what it says, as the panel's model chip joins a model and its effort. */
+/** How a capsule joins what it says, as the panel's crumbs join theirs. */
 const JOINED = " · ";
 
 /** A suggestion's start refused, said as New agent's own Start says it. */
@@ -244,10 +244,11 @@ function notesOf(...lines: readonly (string | undefined)[]): readonly string[] {
 }
 
 /**
- * The model and effort an agent starts on, as the panel's model chip says
- * them, "Opus 5.5 · High", led by its harness's mark: a capsule that opens
- * the model choices on a tap (`StartModelChip`); where the models could not
- * be read, Try again in its place, the reason said under the words.
+ * The model an agent starts on, alone, "Opus 5.5", led by its harness's
+ * mark, its effort left to the sheet as the agent page's chip leaves it: a
+ * capsule that opens the model choices on a tap (`StartModelChip`); where
+ * the models could not be read, Try again in its place, the reason said
+ * under the words.
  */
 function ModelChip({ pick, onOpen }: { readonly pick: ModelPick; readonly onOpen: () => void }) {
   if (pick.models.length === 0) {
@@ -256,9 +257,7 @@ function ModelChip({ pick, onOpen }: { readonly pick: ModelPick; readonly onOpen
     );
   }
 
-  const efforts = pick.efforts.length > 1 ? pick.efforts : [];
   const model = labelOf(pick.models, pick.model) ?? WORDS.MODEL;
-  const effort = labelOf(efforts, pick.shown?.effort);
   const harness = pick.model === undefined ? undefined : providerOf(pick.model);
 
   return (

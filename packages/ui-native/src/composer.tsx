@@ -910,11 +910,15 @@ function ComposerRow({
     </HStack>
   );
 
-  // Note that what is picked for the message, such as the model, is offered the row first and takes its whole words, so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room.
+  // Note that what is picked for the message, such as the model, is offered the row first and holds its whole words (`fixedSize`), so the capsules before it give way rather than cut its name short, as Apple's own rows never cut a control's word where they have room; a priority alone still left the agent page's chip "Op…" beside the capsules' scroll.
   const end = (
     <HStack
       spacing={TOOL_SPACING}
-      modifiers={[layoutPriority(1), fixedSize(), onGeometryChange(({ width }) => measuredEnd(width))]}
+      modifiers={[
+        layoutPriority(1),
+        fixedSize(),
+        onGeometryChange(({ width }) => measuredEnd(width)),
+      ]}
     >
       {trailing}
       {dictation === undefined ? null : (
