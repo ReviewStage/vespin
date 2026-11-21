@@ -17,7 +17,7 @@ builds a control of its own.
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `SplitView` (a tab's list
   and its detail beside the system's tab sidebar, each column under its own
-  `ColumnBar`: its inline title, what leads it such as the workspace
+  `ColumnBar`: its title, large under the list's bar, what leads it such as the workspace
   switcher, its `lead` glyphs such as compose,
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
@@ -230,8 +230,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   thread's task line, the row's largest words, in the headline style (17 pt
   semibold) with its time at that line's end, and the title under it in the
   subheadline style in the ink (`ROW_SUBJECT`) over its muted preview, both
-  flush with its ring, as Mail's sender leads its subject; a screen's title
-  in the headline style, inline in its bar; and a page's heading, a
+  flush with its ring, as Mail's sender leads its subject; a pushed
+  screen's title in the headline style, inline in its bar; and a page's heading, a
   thread's or a task's title, in title 3 (20 pt) semibold. React Native's
   words, a transcript's and Markdown's, take the same styles' sizes
   (`PROSE_SIZE`, the body's, and `ROLE_SIZE`), which React Native scales by
@@ -239,9 +239,14 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   the text rather than assuming a size (`ROW_INSET.VERTICAL` stands a row of
   one line 44 pt tall, as iOS's rows stand). The navigation bar's words and
   the tab bar are the system's own (`BAR_TITLE`), as its titles stand.
-- **Inline titles, no large titles.** A tab's root shows its name small and
-  inline. A split view's list keeps its title small and inline too, since
-  its bar also holds the switcher, ⋯ and the sidebar button, and its search
+- **Large titles on the tab roots, inline titles on pages** (the developer,
+  Nov 20, 2026). A tab's root (Inbox, Tasks, Search) names itself in the
+  stack's large title under its bar, collapsing into the bar as its list
+  scrolls, as Mail, Notes and Reminders do, its photo, switcher, ⋯ and View
+  options staying in the bar above it. A split view's list stands its title
+  large under its bar too (`toolbarTitleDisplayMode("large")`), never
+  leading it, since its bar also holds the switcher, ⋯ and the sidebar
+  button, which a leading title folds into an overflow, and its search
   is the system's field in its own column, never a lone button over the
   detail, whose bar stays the page's alone. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
