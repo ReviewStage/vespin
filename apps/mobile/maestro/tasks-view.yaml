@@ -35,13 +35,16 @@ env:
 - waitForAnimationToEnd
 - assertVisible: "Todo"
 - assertNotVisible: "ledger"
-# Show completed's Past month stands the fixture's finished tasks under Done.
+# Show completed's Past month stands the reader's finished tasks by their
+# status. Note that the fixture's only Done task of the reader's is a
+# sub-task, which stands under its open parent, so its Canceled task heads
+# a group of its own.
 - tapOn: "View options"
 - tapOn: "Show completed"
 - waitForAnimationToEnd
 - tapOn: "Past month"
 - waitForAnimationToEnd
-- assertVisible: "Done"
+- assertVisible: "Canceled"
 - takeScreenshot: tasks-view-status
 # Reset view puts the sidebar's view back: the reader's open tasks by repository.
 - tapOn: "View options"
