@@ -8,6 +8,7 @@ import {
 } from "@repo/features/automation-list-model";
 import { automationRun } from "@repo/features/model-label";
 import { momentText, sinceText } from "@repo/features/time-format";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import {
   FiringGlyph,
   GAP,
@@ -123,10 +124,12 @@ export function automationTrail(
  * it yet, which reads it and opens it on its task or says it is not found.
  */
 export function openRunAgent(
-  tasks: Pick<TasksControl, "liveAgents" | "onShowAgent" | "agentView">,
+  tasks: Pick<TasksControl, "agentsCarried" | "onShowAgent" | "agentView">,
+  collections: Pick<TaskListCollections, "agents">,
   agentId: string,
 ): void {
-  const taskId = tasks.liveAgents?.find((each) => each.id === agentId)?.taskId ?? undefined;
+  const listed = tasks.agentsCarried ? collections.agents.get(agentId) : undefined;
+  const taskId = listed?.taskId ?? undefined;
 
   if (taskId === undefined) tasks.agentView.onOpen(agentId);
   else tasks.onShowAgent(taskId, agentId);

@@ -12,7 +12,7 @@ import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { holdExits } from "@repo/ui/testing/held-exits";
 import { Clock, Context, Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { act, createElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
@@ -26,8 +26,9 @@ import { fakeActPort } from "../testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES, handCapabilities } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { holdMotion, releaseMotion } from "../testing/motion-held.js";
-import { tasksControl } from "../testing/tasks-control.js";
+import { listedAgentsOf, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { TabSwitcher } from "./tab-switcher.js";
 
@@ -148,10 +149,16 @@ async function mounted(
   roots.push(root);
   const { provide } = windowRouter();
 
+  // The agents a tab lists stand in the window's collections, as the list followed live carries them.
+  const over = (switcher: ReactElement) =>
+    listedAgentsOf(tasks) === undefined ? switcher : overEveryTask(tasks, switcher);
+
   const redraw = async () => {
     act(() =>
       root.render(
-        withQueryClient(provide(createElement(TabSwitcher, { available: true, steps, tasks }))),
+        withQueryClient(
+          provide(over(createElement(TabSwitcher, { available: true, steps, tasks }))),
+        ),
       ),
     );
     await flushed();
@@ -555,7 +562,7 @@ async function agentCardAfter(agent: ListedAgent): Promise<HTMLElement | undefin
     agentId: agent.id,
   });
 
-  await mounted(windowSteps([INBOX, page]).steps, { ...tasksControl(), liveAgents: [agent] });
+  await mounted(windowSteps([INBOX, page]).steps, tasksControl({ listedAgents: [agent] }));
   tab();
   tab();
 

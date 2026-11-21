@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
@@ -83,6 +83,8 @@ const AUTOMATION_ID = "5d1e7a9c-3b2f-4c6d-8e0a-9f1b2c3d4e5a";
 type Standing = TasksControl & {
   /** The tasks the window's task list holds, which its collections stand on. */
   readonly tasks?: readonly TaskSummary[];
+  /** The agents the window's task list holds, which its collections stand on. */
+  readonly listedAgents?: readonly ListedAgent[];
   readonly inboxStands?: { readonly chosen?: InboxChoice | undefined } | undefined;
 };
 
@@ -140,8 +142,12 @@ function mount(
   // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
   let leaveTo: (to: Standing) => void = () => undefined;
   let taskRoute: TaskRoute | undefined;
+
   // The window's task-list collections, standing on the tasks and agents the tab stands on, as the window's follow writes them.
-  const taskList = standingTaskList({ tasks: initial.tasks ?? [], taskAgents: initial.liveAgents });
+  const taskList = standingTaskList({
+    tasks: initial.tasks ?? [],
+    taskAgents: initial.listedAgents,
+  });
 
   function Probe() {
     const [standing, setTasks] = useState(initial);
@@ -154,7 +160,7 @@ function mount(
     exits.stay = placeLeave.stays;
     restand = (tasks) => {
       wanted = tasks;
-      taskList.stand({ tasks: tasks.tasks ?? [], taskAgents: tasks.liveAgents });
+      taskList.stand({ tasks: tasks.tasks ?? [], taskAgents: tasks.listedAgents });
       setTasks(tasks);
     };
 
@@ -812,6 +818,31 @@ test("a workspace's slug or a task's number read after the visit moves the stand
   }
 });
 
+test("a task pressed while another is drawn stands at its own address until it opens, never written at the address of the task it leaves", async () => {
+  const drawn = { ...DOCUMENT_TASK, workspaceId: ACME.id, number: 42 };
+  const pressed = { ...drawn, id: TASK_ID, name: "Billing export", number: 43 };
+
+  const open = (task: typeof drawn): Standing => ({
+    ...onTask([ACME]),
+    activeTaskId: task.id,
+    boundFor: task.id,
+    region: { kind: TASK_REGION.READY, task },
+    tasks: [drawn, pressed],
+  });
+
+  const window = mount(open(drawn));
+  // The press binds the window to the task asked for at once and stands its own place, the task before it still drawn.
+  window.leaveFor({ ...open(drawn), boundFor: pressed.id });
+  await settle();
+  assert.deepEqual(window.addresses(), ["/acme/task/42", "/acme/task/43"]);
+
+  // The host opens it.
+  window.stand(open(pressed));
+  await settle();
+  assert.deepEqual(window.addresses(), ["/acme/task/42", "/acme/task/43"]);
+  assert.equal(window.at(), "/acme/task/43");
+});
+
 test("a link loaded before the workspaces are read writes no Home step: its task takes the entry it loaded on, and Back on that one entry stays on the task", () => {
   const loaded = `/acme/task/${DOCUMENT_TASK.id}`;
   const held = windowRouter(createMemoryHistory({ initialEntries: [loaded] }));
@@ -1005,7 +1036,7 @@ test("Back's list names a task and its agent's tab by the names they go by now, 
   window.stand(
     listedTab({
       tasks: [listedTask("Auth rewrite")],
-      liveAgents: [listedAgent(openAgent("Token renewal"))],
+      listedAgents: [listedAgent(openAgent("Token renewal"))],
     }),
   );
   assert.deepEqual(window.history().steps.back[0]?.title, {
@@ -1058,7 +1089,7 @@ test("Back's list names a renamed agent's tab by its name now beside a page's ta
   window.stand(
     listedTab({
       tasks: [listedTask("Auth refactor")],
-      liveAgents: [listedAgent(openAgent("Token renewal"))],
+      listedAgents: [listedAgent(openAgent("Token renewal"))],
     }),
   );
   assert.deepEqual(window.history().steps.back[0]?.title, {

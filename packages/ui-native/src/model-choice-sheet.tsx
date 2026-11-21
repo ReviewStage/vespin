@@ -1,4 +1,4 @@
-// model-choice-sheet.tsx -- the sheet a coding agent's model is chosen in, as the panel's model menu holds it: Effort and Fast first, as labeled rows, then every model under its harness's name, each led by its mark, the chosen one checked, and Permissions where the agent's harness takes a mode, with Done in the sheet's bar.
+// model-choice-sheet.tsx -- where a coding agent's model is chosen, as the panel's model menu holds it: Effort and Fast first, as labeled rows, then every model under its harness's name, each led by its mark, the chosen one checked, and Permissions where the agent's harness takes a mode; a sheet with Done in its bar in a compact window, and a popover from the model chip in a regular one.
 
 import {
   BottomSheet,
@@ -6,6 +6,7 @@ import {
   Group,
   Host,
   NavigationStack,
+  Popover,
   Section,
   Button as SwiftUIButton,
   Toolbar,
@@ -13,6 +14,7 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   background,
+  frame,
   navigationBarTitleDisplayMode,
   navigationTitle,
   presentationBackground,
@@ -24,6 +26,7 @@ import {
 import { HARNESS_INFO } from "@repo/features/agent-credentials-model";
 import { FAST_WORD } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
+import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { MenuPickRow } from "./form-rows.js";
 import { HarnessMark } from "./marks.js";
@@ -32,6 +35,9 @@ import { FOOTER_TONE, SectionFooter } from "./row-list.js";
 import { type PickOption, PickRows } from "./settings-form.js";
 import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
+
+/** How large a popover of the choices stands at most, in points: a phone's width, and tall enough for the efforts, a harness's models and the permission modes before it scrolls; the system shrinks it to the room the window leaves. */
+const POPOVER_SIZE = { WIDTH: 375, HEIGHT: 600 } as const;
 
 /** What the sheet names its rows and its bar's act. */
 const CHOICE_WORDS = {
@@ -56,10 +62,23 @@ export type ModeChoice = {
   readonly note?: string | undefined;
 };
 
-type ModelChoiceSheetProps = {
+type ModelChoiceSheetProps = ModelChoices & {
   readonly presented: boolean;
   /** Called as the sheet goes, by Done or a drag down; each pick has already been made as it was pressed. */
   readonly onDismiss: () => void;
+};
+
+/** The model chip a popover of the choices stands from, and whether it is open. */
+type ModelChoicePopoverProps = ModelChoices & {
+  /** The chip it is anchored to, a `MenuChip` whose press opens it. */
+  readonly chip: ReactNode;
+  readonly presented: boolean;
+  /** Called as the popover goes, by a tap outside it; each pick has already been made as it was pressed. */
+  readonly onDismiss: () => void;
+};
+
+/** What the choices hold: the models, efforts, Fast and permission mode, and what a pick changes. */
+export type ModelChoices = {
   readonly models: readonly ModelOption[];
   readonly model: string | undefined;
   readonly onModel: (model: string) => void;
@@ -161,10 +180,8 @@ export function ModelChoiceSheet(props: ModelChoiceSheetProps) {
 
 /** The sheet itself, under its lifted ground. */
 function ModelChoiceForm(props: ModelChoiceSheetProps) {
-  const { presented, onDismiss, models, model, onModel, efforts, effort, onEffort } = props;
+  const { presented, onDismiss } = props;
   const colors = useColors();
-  const choosesEffort = efforts.length > 1;
-  const hint = chosenHint(efforts, effort, props.fast?.on === true);
 
   return (
     <Host matchContents style={{ position: "absolute" }}>
@@ -181,71 +198,130 @@ function ModelChoiceForm(props: ModelChoiceSheetProps) {
             presentationBackground(colors.GROUPED),
           ]}
         >
-          <NavigationStack modifiers={[tint(colors.TEXT)]}>
-            <Toolbar>
-              <Form
-                modifiers={[
-                  scrollContentBackground("hidden"),
-                  background(colors.GROUPED),
-                  navigationTitle(CHOICE_WORDS.MODEL),
-                  navigationBarTitleDisplayMode("inline"),
-                ]}
-              >
-                {!choosesEffort && props.fast === undefined && props.note === undefined ? null : (
-                  <Section
-                    footer={
-                      props.note === undefined ? undefined : (
-                        <SectionFooter words={props.note} tone={FOOTER_TONE.FAILURE} />
-                      )
-                    }
-                  >
-                    {choosesEffort ? (
-                      <MenuPickRow
-                        label={CHOICE_WORDS.EFFORT}
-                        options={efforts}
-                        picked={effort}
-                        onPick={onEffort}
-                      />
-                    ) : null}
-                    {props.fast === undefined ? null : (
-                      <SwitchRow
-                        label={FAST_WORD}
-                        on={props.fast.on}
-                        onSwitch={props.fast.onSwitch}
-                        testId="options-fast"
-                      />
-                    )}
-                  </Section>
-                )}
-                {byHarness(models).map((group) => (
-                  <Section key={group.provider} title={HARNESS_INFO[group.provider].name}>
-                    <HarnessModels
-                      models={group.models}
-                      model={model}
-                      hint={hint}
-                      onModel={onModel}
-                    />
-                  </Section>
-                ))}
-                {props.mode === undefined ? null : (
-                  <Section title={props.mode.title} footer={modeFooter(props.mode)}>
-                    <PickRows
-                      options={props.mode.options}
-                      picked={props.mode.picked}
-                      onPick={props.mode.onPick}
-                    />
-                  </Section>
-                )}
-              </Form>
-              <Toolbar.Content>
-                <ToolbarItem placement="confirmationAction">
-                  <SwiftUIButton label={CHOICE_WORDS.DONE} onPress={onDismiss} />
-                </ToolbarItem>
-              </Toolbar.Content>
-            </Toolbar>
-          </NavigationStack>
+          <ModelChoiceList {...props} onDone={onDismiss} />
         </Group>
       </BottomSheet>
     </Host>
+  );
+}
+
+/**
+ * The choices themselves, under their title: Effort and Fast, then the
+ * models under each harness's name, then the permission mode, with Done in
+ * the bar where it stands in a sheet, which a popover, let go by a tap
+ * outside it, has no need of.
+ */
+function ModelChoiceList(props: ModelChoices & { readonly onDone?: (() => void) | undefined }) {
+  const { models, model, onModel, efforts, effort, onEffort, onDone } = props;
+  const colors = useColors();
+  const choosesEffort = efforts.length > 1;
+  const hint = chosenHint(efforts, effort, props.fast?.on === true);
+
+  return (
+    <NavigationStack modifiers={[tint(colors.TEXT)]}>
+      <Toolbar>
+        <Form
+          modifiers={[
+            scrollContentBackground("hidden"),
+            background(colors.GROUPED),
+            navigationTitle(CHOICE_WORDS.MODEL),
+            navigationBarTitleDisplayMode("inline"),
+          ]}
+        >
+          {!choosesEffort && props.fast === undefined && props.note === undefined ? null : (
+            <Section
+              footer={
+                props.note === undefined ? undefined : (
+                  <SectionFooter words={props.note} tone={FOOTER_TONE.FAILURE} />
+                )
+              }
+            >
+              {choosesEffort ? (
+                <MenuPickRow
+                  label={CHOICE_WORDS.EFFORT}
+                  options={efforts}
+                  picked={effort}
+                  onPick={onEffort}
+                />
+              ) : null}
+              {props.fast === undefined ? null : (
+                <SwitchRow
+                  label={FAST_WORD}
+                  on={props.fast.on}
+                  onSwitch={props.fast.onSwitch}
+                  testId="options-fast"
+                />
+              )}
+            </Section>
+          )}
+          {byHarness(models).map((group) => (
+            <Section key={group.provider} title={HARNESS_INFO[group.provider].name}>
+              <HarnessModels models={group.models} model={model} hint={hint} onModel={onModel} />
+            </Section>
+          ))}
+          {props.mode === undefined ? null : (
+            <Section title={props.mode.title} footer={modeFooter(props.mode)}>
+              <PickRows
+                options={props.mode.options}
+                picked={props.mode.picked}
+                onPick={props.mode.onPick}
+              />
+            </Section>
+          )}
+        </Form>
+        {onDone === undefined ? null : (
+          <Toolbar.Content>
+            <ToolbarItem placement="confirmationAction">
+              <SwiftUIButton label={CHOICE_WORDS.DONE} onPress={onDone} />
+            </ToolbarItem>
+          </Toolbar.Content>
+        )}
+      </Toolbar>
+    </NavigationStack>
+  );
+}
+
+/**
+ * The same choices as a popover from the model chip, as a regular window's
+ * pickers pop over from the control that opens them rather than rising as a
+ * sheet, which on an iPad stood short in the middle of the window and cut
+ * its own list. It stands as tall as its choices up to `POPOVER_SIZE`, on
+ * the lifted ground, and goes on a tap outside it; a pick takes as it is
+ * pressed, as the sheet's does. Note that it wraps the chip itself, which
+ * stands where its caller puts it, so the popover's arrow points at it.
+ */
+export function ModelChoicePopover(props: ModelChoicePopoverProps) {
+  const { chip, presented, onDismiss } = props;
+
+  return (
+    <Popover
+      isPresented={presented}
+      onIsPresentedChange={(shown) => {
+        if (!shown) onDismiss();
+      }}
+    >
+      <Popover.Trigger>{chip}</Popover.Trigger>
+      <Popover.Content>
+        <ElevatedGround>
+          <PopoverChoices {...props} />
+        </ElevatedGround>
+      </Popover.Content>
+    </Popover>
+  );
+}
+
+/** A popover's choices, sized and grounded under its lifted ground. */
+function PopoverChoices(props: ModelChoices) {
+  const colors = useColors();
+
+  return (
+    <Group
+      modifiers={[
+        frame({ idealWidth: POPOVER_SIZE.WIDTH, idealHeight: POPOVER_SIZE.HEIGHT }),
+        presentationBackground(colors.GROUPED),
+      ]}
+    >
+      <ModelChoiceList {...props} />
+    </Group>
   );
 }

@@ -20,7 +20,7 @@ appId: dev.vespin.ios
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - extendedWaitUntil:
-    visible: "Then add a Resend button beside each pending invite."
+    visible: "2 queued"
     timeout: 30000
 - assertVisible:
     id: "dictation-dictate"

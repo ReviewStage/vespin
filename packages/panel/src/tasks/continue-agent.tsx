@@ -1,3 +1,4 @@
+import { CONTINUE_LABEL } from "@repo/features/agent-continue-model";
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
 import {
   FAILURE_REASON,
@@ -34,7 +35,7 @@ import { ActionMenu } from "../desktop/action-menu.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { COMPOSER_ROOM_CLASS } from "./agent-composer.js";
-import { CONTINUE_LABEL, CONTINUED_IN, modelLabel, modelsRunOn } from "./agent-model.js";
+import { CONTINUED_IN, modelLabel, modelsRunOn } from "./agent-model.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { useContinueDoor } from "./fork-action.js";
 import { ModelMenu, settledChoice } from "./model-menu.js";

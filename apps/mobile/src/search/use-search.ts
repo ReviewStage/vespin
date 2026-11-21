@@ -1,5 +1,5 @@
 /**
- * use-search.ts -- the Search tab as its screen reads it: the tasks, Inbox items, and agents a query finds, each kind best first.
+ * use-search.ts -- the Search tab as its screen reads it: the tasks, Inbox items, and agents a query finds, each kind best first, and before anything is typed, those last opened.
  *
  * Each kind is found by its own list's search over the host's document, so
  * a row found here is one its own tab would find: the Tasks tab's
@@ -19,6 +19,7 @@ import {
   rankedBySearch,
   taskSearchSubject,
 } from "@repo/features/search-found-model";
+import { type RecentRow, recentRows } from "@repo/features/search-recent-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { isManager } from "@repo/features/workspace-managers-model";
@@ -43,6 +44,7 @@ import {
   useTasksListing,
   useWaiting,
 } from "../tasks/use-tasks.js";
+import { useRecentOpened } from "./recent-opened.js";
 
 /** Where a read of the task list stands. */
 type TasksRead = (typeof TASKS_READ)[keyof typeof TASKS_READ];
@@ -148,5 +150,61 @@ export function useSearchFound(typed: string): SearchFound {
       current: query === typed,
     }),
     [ranked, listing, inbox.readerId, inboxReading, tasksReading, query, typed],
+  );
+}
+
+/** A row Search's Recent lists: a task, an Inbox thread, or an agent's line. */
+export type SearchRecentRow = RecentRow<TaskSummary, InboxListed, TaskAgentLine>;
+
+/** What Search lists before anything is typed: the chosen workspace's openings its lists still hold, newest first, and what their rows are drawn and acted on through. */
+export interface SearchRecent {
+  readonly rows: readonly SearchRecentRow[];
+  readonly listing: ReadListing;
+  readonly readerId: string | undefined;
+  /** Every task the list holds, by its id, which an agent's row is named by. */
+  readonly tasksById: ReadonlyMap<string, TaskSummary>;
+}
+
+/**
+ * The tasks, Inbox threads, and agents last opened on this phone in the
+ * chosen workspace, each drawn from the list its own tab reads, so a row here
+ * is the one that tab draws: a task from the task list, a thread from the
+ * Inbox while the member keeps it on, and an agent not archived from the
+ * agents the task list holds. One no list holds any longer is passed over.
+ */
+export function useSearchRecent(): SearchRecent {
+  const kept = useRecentOpened();
+  const listing = useTasksListing("");
+  const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: "" });
+  const inboxShown = useInboxShown();
+  const listedTasks = useListedTasks();
+  const listedAgents = useListedAgents();
+  const pullRequests = useTaskListRows(useTaskListCollections().agentPullRequests);
+  const workspace = listing.workspace;
+  const waiting = useWaiting(workspace?.id);
+
+  const found = useMemo(() => {
+    const tasksById = new Map(listedTasks.map((task) => [task.id, task]));
+    const threadsById = new Map(inbox.listed.map((listed) => [listed.item.id, listed]));
+    const agentsById = new Map(listedAgents.map((agent) => [agent.id, agent]));
+
+    const rows = recentRows(kept, workspace?.id, {
+      task: (id) => tasksById.get(id),
+      thread: (id) => (inboxShown ? threadsById.get(id) : undefined),
+      agent: (id) => {
+        const agent = agentsById.get(id);
+
+        return agent === undefined || agent.archivedAt !== undefined
+          ? undefined
+          : agentLine(agent, waiting.byAgent, pullRequests);
+      },
+    });
+
+    return { rows, tasksById };
+  }, [kept, workspace, listedTasks, inbox.listed, inboxShown, listedAgents, waiting, pullRequests]);
+
+  return useMemo(
+    () => ({ ...found, listing, readerId: inbox.readerId }),
+    [found, listing, inbox.readerId],
   );
 }

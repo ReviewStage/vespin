@@ -21,7 +21,7 @@ import {
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
-import type { ListedTasksView } from "@repo/features/tasks-view";
+import type { ListedTasksView, TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppStateSnapshot,
@@ -383,6 +383,34 @@ export function openTasksView(profile: string, list: ListedTasksView): ListedTas
 const STAGED_DOCUMENTS = new WeakMap<object, AppStateSnapshot[typeof LIVE_READ.HELD_TASK]>();
 const STAGED_TRANSCRIPTS = new WeakMap<object, AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]>();
 
+/** Main's tasks naming the task opened last open, one object for each of main's and each task opened. */
+const STAGED_OPEN = new WeakMap<TasksView, Map<string | undefined, TasksView>>();
+
+/**
+ * Main's tasks naming the task opened last as the open one, as main's
+ * document names the task it binds. Note that the document must name it,
+ * because a select is answered with no delivery here, and a document staged
+ * again the same as the last draws no window, so the window would read the
+ * task opened only on its next draw, and step from the one before it.
+ */
+function openedTasks(tasks: TasksView): TasksView {
+  let byOpen = STAGED_OPEN.get(tasks);
+
+  if (byOpen === undefined) {
+    byOpen = new Map();
+    STAGED_OPEN.set(tasks, byOpen);
+  }
+
+  const kept = byOpen.get(opened);
+
+  if (kept !== undefined) return kept;
+  const { activeTaskId: _open, ...rest } = tasks;
+  const laid: TasksView = opened === undefined ? rest : { ...rest, activeTaskId: opened };
+  byOpen.set(opened, laid);
+
+  return laid;
+}
+
 /** Main's document with every task's description and every agent's transcript held, under the profile; the very document under any other. */
 export function openTasksAppState(state: AppStateSnapshot): AppStateSnapshot {
   if (!opensTasks(state.run.profile)) return state;
@@ -398,7 +426,12 @@ export function openTasksAppState(state: AppStateSnapshot): AppStateSnapshot {
   STAGED_DOCUMENTS.set(heldTasks, documents);
   STAGED_TRANSCRIPTS.set(heldTranscripts, transcripts);
 
-  return { ...state, [LIVE_READ.HELD_TASK]: documents, [LIVE_READ.TRANSCRIPT]: transcripts };
+  return {
+    ...state,
+    tasks: openedTasks(state.tasks),
+    [LIVE_READ.HELD_TASK]: documents,
+    [LIVE_READ.TRANSCRIPT]: transcripts,
+  };
 }
 
 /**

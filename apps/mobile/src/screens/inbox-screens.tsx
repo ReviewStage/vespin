@@ -42,14 +42,16 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
-  CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
   noResultsForWords,
+  noSelectionWords,
   PATH_OPENS,
   SELECTION_WORDS,
   selectedWords,
+  TERM,
 } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -120,11 +122,13 @@ import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pic
 import { NotificationAsk } from "../notification-ask.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useReplyDrawnCount } from "../reply-drawn.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+
 import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -315,17 +319,28 @@ export function InboxItemRows({
 }: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
   return (
     <RowForEach data={listed} keyOf={(each) => each.item.id}>
-      {({ holder: { task }, item }) => (
-        <InboxRow
-          item={item}
-          taskId={task.id}
-          workspaceId={task.workspaceId}
-          taskName={task.name}
-          taskStatus={task.status}
-          {...acts}
-        />
-      )}
+      {(each) => <InboxItemRow listed={each} {...acts} />}
     </RowForEach>
+  );
+}
+
+/** One Inbox item's row, under its task, as every list of Inbox items draws it, Search's Recent among them, where it stands among other kinds' rows. */
+export function InboxItemRow({
+  listed: {
+    holder: { task },
+    item,
+  },
+  ...acts
+}: InboxRowActs & { readonly listed: InboxListed }) {
+  return (
+    <InboxRow
+      item={item}
+      taskId={task.id}
+      workspaceId={task.workspaceId}
+      taskName={task.name}
+      taskStatus={task.status}
+      {...acts}
+    />
   );
 }
 
@@ -808,6 +823,11 @@ function ThreadDetail({
   useReplyDrawnCount(item.thread);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
+  useNoteOpened({
+    kind: SEARCH_FOUND_KIND.INBOX,
+    id: item.id,
+    workspaceId: holder.task.workspaceId,
+  });
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
 
@@ -1435,7 +1455,7 @@ function InboxSplitScreen({
 
   const detail =
     selected === undefined ? (
-      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
+      <NoSelection title={noSelectionWords(TERM.INBOX_ITEM)} />
     ) : (
       <ThreadColumn key={selected} id={selected} remindMenu={remind.itemMenu} onOpen={select} />
     );

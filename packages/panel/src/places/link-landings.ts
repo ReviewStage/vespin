@@ -17,10 +17,16 @@ import { savesStep } from "./window-steps.js";
 export function useLinkDestinationLandings(open: (link: ReadLink) => void): void {
   const router = useRouter();
   const { history } = router;
-  const location = useSyncExternalStore(history.subscribe, () => history.location);
+
+  // Note that an entry holding a step reads as none, so the window's own writes of its steps, in place as it goes, draw nothing here.
+  const location = useSyncExternalStore(history.subscribe, () =>
+    savesStep(history.location) ? undefined : history.location,
+  );
+
   const landed = useRef<HistoryLocation | undefined>(undefined);
+
   useEffect(() => {
-    if (landed.current === location || savesStep(location)) return;
+    if (location === undefined || landed.current === location) return;
     landed.current = location;
     const routed = landedLinkOf(router, location);
 

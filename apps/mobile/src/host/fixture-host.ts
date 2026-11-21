@@ -283,27 +283,29 @@ function stagedKeys(held: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.P
   return { ...keys, [accountId]: { rows: { keys: [], subscriptions: [] } } };
 }
 
-/** The messages to an agent `-refuseWrites` left unanswered, by the agent, in the order sent, kept as the host keeps a refused line. */
-const REFUSED_SENDS = new WeakMap<object, ReadonlyMap<string, readonly SendingMessage[]>>();
+/** The messages to an agent the run sent, by the agent, in the order sent: on their way where the run took them, and left unanswered where `-refuseWrites` refused them, kept as the host keeps a refused line. */
+const KEPT_SENDS = new WeakMap<object, ReadonlyMap<string, readonly SendingMessage[]>>();
 
-/** No refused messages. */
-const NO_REFUSED_SENDS: ReadonlyMap<string, readonly SendingMessage[]> = new Map();
+/** No messages sent. */
+const NO_KEPT_SENDS: ReadonlyMap<string, readonly SendingMessage[]> = new Map();
 
 /**
- * The document with each refused message standing in its agent's transcript
- * as the host draws one (`AppTranscript.sending`), so a flow sees it marked
- * Not delivered with Retry, Edit, and Delete, which the fixture answers at
- * the act port before the host's own record could keep it.
+ * The document with each message the run sent standing in its agent's
+ * transcript as the host draws one (`AppTranscript.sending`): one taken on
+ * its way, since nothing the run stages moves and the host lays its own
+ * lines over no transcript it did not read, and one refused marked Not
+ * delivered with Retry, Edit, and Delete, which the fixture answers at the
+ * act port before the host's own record could keep it.
  */
-function refusedSendsAppState(
+function sendsAppState(
   state: AppStateSnapshot,
-  refused: ReadonlyMap<string, readonly SendingMessage[]>,
+  sends: ReadonlyMap<string, readonly SendingMessage[]>,
 ): AppStateSnapshot {
-  if (refused.size === 0) return state;
+  if (sends.size === 0) return state;
   const held = state[LIVE_READ.TRANSCRIPT];
   const laid = { ...held };
 
-  for (const [agentId, lines] of refused) {
+  for (const [agentId, lines] of sends) {
     const rows = held[agentId]?.[OWN_TRANSCRIPT]?.rows;
 
     if (rows !== undefined)
@@ -314,23 +316,25 @@ function refusedSendsAppState(
 }
 
 /**
- * Keeps a message to an agent `-refuseWrites` left unanswered as a refused
- * line under its key, in place of one sent before under the same key, as a
- * Retry is, or lets one go on its Unsend, and lays them over the document at
- * once; answers whether the act was one of those.
+ * Keeps a message to an agent as a line under its key, refused where
+ * `-refuseWrites` left it unanswered and on its way where the run took it,
+ * in place of one sent before under the same key, as a Retry is, or lets one
+ * go on its Unsend, and lays them over the document at once; answers whether
+ * the act was one of those.
  */
-function keepRefusedSend(
+function keepSend(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
+  refused: boolean,
 ): boolean {
-  const held = REFUSED_SENDS.get(state) ?? NO_REFUSED_SENDS;
+  const held = KEPT_SENDS.get(state) ?? NO_KEPT_SENDS;
 
   if (kind === ACT_KIND.AGENTS_UNSEND) {
     // SAFETY: the payload is the kind's, which the guard above names.
     const { agentId, lineId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_UNSEND>;
     const lines = (held.get(agentId) ?? []).filter((line) => line.id !== lineId);
-    REFUSED_SENDS.set(state, new Map(held).set(agentId, lines));
+    KEPT_SENDS.set(state, new Map(held).set(agentId, lines));
     stageFixture(state);
 
     return true;
@@ -347,11 +351,11 @@ function keepRefusedSend(
     text: sent.text,
     sentAt: Date.now(),
     steers: sent.steers === true,
-    refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+    ...(refused ? { refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } } : undefined),
   };
 
   const lines = [...(held.get(sent.agentId) ?? []).filter((each) => each.id !== id), line];
-  REFUSED_SENDS.set(state, new Map(held).set(sent.agentId, lines));
+  KEPT_SENDS.set(state, new Map(held).set(sent.agentId, lines));
   stageFixture(state);
 
   return true;
@@ -407,8 +411,8 @@ export function stageFixture(
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
 
-  const sendsRefused = refusedSendsAppState(saved, REFUSED_SENDS.get(state) ?? NO_REFUSED_SENDS);
-  const switched = inboxAutomationsAppState(sendsRefused, SWITCHES.get(state) ?? NO_SWITCHES);
+  const sendsKept = sendsAppState(saved, KEPT_SENDS.get(state) ?? NO_KEPT_SENDS);
+  const switched = inboxAutomationsAppState(sendsKept, SWITCHES.get(state) ?? NO_SWITCHES);
 
   const reminded = MACHINE_ASKED.has(state)
     ? machineAskAppState(switched, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
@@ -691,7 +695,7 @@ function editConflict({
  * flow sees the notice over Add a follower's sheet, Settings', and a
  * thread's composer, the keyboard up or down, and a reply standing on its
  * thread marked Not delivered, a message to an agent standing in its
- * transcript marked Not delivered (`keepRefusedSend`), and a description's edit met by the
+ * transcript marked Not delivered (`keepSend`), and a description's edit met by the
  * invitations agent's note written meanwhile over the same lines, so a flow
  * sees Edit description's conflict ask.
  */
@@ -775,7 +779,7 @@ export function fixtureActs(
 
         // Note that a message to an agent is left unanswered too, and kept as the host keeps a refused line, so a flow sees it stand Not delivered.
         // SAFETY: the port is keyed by act kind.
-        if (refusesWrites && keepRefusedSend(state, kind as PortActKind, payload)) {
+        if (refusesWrites && keepSend(state, kind as PortActKind, payload, true)) {
           return Promise.resolve(
             kind === ACT_KIND.AGENTS_UNSEND
               ? undefined
@@ -824,6 +828,9 @@ export function fixtureActs(
         keepMachineAnswer(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepSentReply(state, kind as PortActKind, payload, staged.answer);
+        // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
+        // SAFETY: as above.
+        keepSend(state, kind as PortActKind, payload, false);
 
         return Promise.resolve(staged.answer);
       };

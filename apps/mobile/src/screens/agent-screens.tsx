@@ -1,5 +1,14 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, or Unarchive in its place while it is archived, Continue in new agent over it where only a new agent goes on, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions, its Move to › and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
 
+import {
+  CONTINUE_AGAIN_LABEL,
+  CONTINUE_LABEL,
+  continuedByIds,
+  endLineOffersContinue,
+  endLineReason,
+  failedLineWords,
+  settledFailure,
+} from "@repo/features/agent-continue-model";
 import {
   AGENT_PORTS_WORDS,
   PORT_ACT,
@@ -11,6 +20,7 @@ import {
   AGENT_KIND,
   AGENT_MACHINE,
   type AgentOverviewPullRequest,
+  type AgentStatus,
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
@@ -38,6 +48,7 @@ import {
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import {
   agentRunsOnWords,
@@ -55,6 +66,7 @@ import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   AgentTranscript,
+  ArchivedBar,
   AskNote,
   askForName,
   BAR_TITLE,
@@ -67,6 +79,7 @@ import {
   type ComposerDictation,
   type ComposerMenu,
   ConfirmAsk,
+  ContinueLine,
   DeniesWaiting,
   drawnCallIds,
   EditingLine,
@@ -83,7 +96,9 @@ import {
   MenuChip,
   MenuRow,
   type MenuRowAct,
+  ModelChoicePopover,
   ModelChoiceSheet,
+  type ModelChoices,
   NO_GROUND,
   NO_TOGGLES,
   openCuts,
@@ -145,6 +160,7 @@ import {
 } from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
+import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
@@ -170,6 +186,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
@@ -203,6 +220,8 @@ const MENU_WORDS = {
   PIN: "Pin",
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
+  UNARCHIVE: "Unarchive",
+  MOVE_TO: "Move to",
   DELETE: "Permanently delete",
   OVERVIEW: "Overview",
   SETTINGS: "Settings…",
@@ -346,6 +365,53 @@ function CardMergeAsk({
   );
 }
 
+/** Continue in new agent as the agent page offers it: why the turn failed, and what the press says. */
+interface ContinueOffer {
+  readonly words: string;
+  readonly label: string;
+}
+
+/**
+ * Where the agent page offers Continue in new agent, as the panel's failed
+ * end line does (`endLineOffersContinue`): the agent's last turn failed in a
+ * way only a new agent goes on past, or another agent continued it already,
+ * when it says Continue again. Note that the phone draws no end line, so the
+ * press stands over the composer and in ⋯, and that the end line reads a
+ * teammate's refused key as theirs to mend, so it names the starter where
+ * the reader did not start the agent.
+ */
+function continueOffer(
+  agent: FollowedAgent | undefined,
+  status: AgentStatus | undefined,
+  readerId: string | undefined,
+): ContinueOffer | undefined {
+  if (agent === undefined || status === undefined) return undefined;
+  const failure = settledFailure({ status, turn: agent.turn });
+  const { startedBy } = agent;
+
+  const starter =
+    startedBy === undefined || readerId === undefined || startedBy.userId === readerId
+      ? undefined
+      : startedBy.name;
+
+  const continued = continuedByIds(agent, undefined, undefined).length > 0;
+
+  const offered = endLineOffersContinue({
+    status,
+    endReason: endLineReason(failure, starter),
+    failure,
+    continued,
+    boxClosed: false,
+  });
+
+  if (!offered) return undefined;
+
+  return {
+    words: failedLineWords(failure, starter, true),
+    label: continued ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL,
+  };
+}
+
 /** The agent's composer at the page's foot: that a message denies the call waiting, a call waiting that no row draws, the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
 function AgentComposerBar({
   composer,
@@ -355,6 +421,7 @@ function AgentComposerBar({
   note,
   call,
   otherCall,
+  ending,
   tools,
   trailing,
   dictation,
@@ -371,6 +438,8 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** Continue in new agent and why, where only a new agent goes on past the agent's failed turn; none elsewhere. */
+  readonly ending: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -385,6 +454,8 @@ function AgentComposerBar({
   useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
   // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
   const denies = waiting !== undefined && !composer.sendQueues;
+  // Note that while a `/` or an `@` offers its list, the threads line and the denial's line step aside, so the list stands alone over the field, as Messages' and Slack's suggestions do, and comes back once a pick closes it.
+  const picking = composer.skills !== undefined || composer.mentions !== undefined;
 
   const head =
     threads === undefined &&
@@ -394,9 +465,11 @@ function AgentComposerBar({
     composer.skills === undefined &&
     composer.mentions === undefined &&
     otherCall === undefined &&
+    ending === undefined &&
     note === undefined ? undefined : (
       <>
-        {threads === undefined ? null : (
+        {ending}
+        {threads === undefined || picking ? null : (
           <ThreadsLine
             words={threads.line.words}
             waiting={threads.line.waiting}
@@ -424,7 +497,7 @@ function AgentComposerBar({
           <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
-        {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
+        {denies && !picking ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         {note === undefined ? null : <AskNote words={note} />}
       </>
     );
@@ -491,6 +564,7 @@ function AgentComposerArea({
   note,
   call,
   otherCall,
+  ending,
   tools,
   trailing,
   onOpenThread,
@@ -509,6 +583,7 @@ function AgentComposerArea({
   readonly note: string | undefined;
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  readonly ending: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -536,6 +611,7 @@ function AgentComposerArea({
         note={said}
         call={call}
         otherCall={otherCall}
+        ending={ending}
         tools={tools}
         trailing={trailing}
         dictation={dictated.dictation}
@@ -1005,6 +1081,11 @@ function AgentConversation({
           workspaces,
         ),
   );
+  useNoteOpened(
+    shown === undefined
+      ? undefined
+      : { kind: SEARCH_FOUND_KIND.AGENTS, id, workspaceId: shown.workspaceId },
+  );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 
   // Note that the model sheet stands as the page's own beside it, as its asks do, so the model chip and the bar's line open the one sheet.
@@ -1067,8 +1148,11 @@ function AgentConversation({
   const commands = useAgentCommandsPlace(id);
 
   // Note that the newest refusal of the page's own acts stands over the field, so a server's switch refused after a Pin says its own words rather than the older one's.
+  const move = useAgentMove(agent);
+
   const note = useNewestNote([
     actions.note,
+    move.note,
     transcriptCopy.note,
     servers.note,
     mode?.note,
@@ -1109,8 +1193,11 @@ function AgentConversation({
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
   });
 
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
-  const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
+  const barActs = regular && agent !== undefined;
+  // Note that a regular window's model choices pop over from the model chip rather than rising as a sheet, whichever opens them, the chip or the bar's subtitle; with no chip standing they keep the sheet.
+  const modelPopover = regular && openModels !== undefined && pick.model !== undefined;
 
   // Archive asks first. Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
   const askArchive = () => {
@@ -1144,7 +1231,18 @@ function AgentConversation({
     router.push(onOwnTab(iosRepositoryPullRequestRoute(key, id)));
   };
 
-  const composerBar = (
+  // Note that an archived agent takes no message until it is brought back, so its bar stands in the composer's place, as the panel's note stands in its box's.
+  const archived = shown?.archivedAt !== undefined;
+
+  const continueOf =
+    taskId === undefined || archived ? undefined : continueOffer(shown, status, readerId);
+
+  const continueAgent = () =>
+    router.push({ pathname: "/start-agent", params: { task: taskId, continueOf: id } });
+
+  const composerBar = archived ? (
+    <ArchivedBar unarchiving={actions.unarchiving} note={note} onUnarchive={actions.unarchive} />
+  ) : (
     <AgentComposerArea
       id={id}
       agent={agent}
@@ -1161,10 +1259,30 @@ function AgentConversation({
       note={note}
       call={talk.call}
       otherCall={otherCall}
+      ending={
+        continueOf === undefined ? undefined : (
+          <ContinueLine
+            words={continueOf.words}
+            label={continueOf.label}
+            onContinue={continueAgent}
+          />
+        )
+      }
       tools={
         agent === undefined ? undefined : <AgentMachineChip agent={agent} commands={commands} />
       }
-      trailing={<AgentModelChip pick={pick} onOpen={openModels} />}
+      trailing={
+        modelPopover ? (
+          <ModelChoicePopover
+            chip={<AgentModelChip pick={pick} onOpen={openModels} />}
+            presented={modelsShown}
+            onDismiss={() => setModelsShown(false)}
+            {...agentModelChoices(pick, mode)}
+          />
+        ) : (
+          <AgentModelChip pick={pick} onOpen={openModels} />
+        )
+      }
     />
   );
 
@@ -1212,12 +1330,14 @@ function AgentConversation({
 
   const asks = (
     <>
-      <AgentModelSheet
-        pick={pick}
-        mode={mode}
-        presented={modelsShown}
-        onDismiss={() => setModelsShown(false)}
-      />
+      {modelPopover ? null : (
+        <AgentModelSheet
+          pick={pick}
+          mode={mode}
+          presented={modelsShown}
+          onDismiss={() => setModelsShown(false)}
+        />
+      )}
       {merging === undefined || asked === undefined ? null : (
         <CardMergeAsk
           pullRequestKey={merging}
@@ -1262,7 +1382,8 @@ function AgentConversation({
     <>
       <Stack.Screen options={barOptions} />
       {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row, the model chosen from the composer's model chip. */}
-      <StackSubtitle words={subtitle?.words ?? ""} />
+      {/* Note that a regular window stands the name at the bar's leading edge, in the bar's own row, since on an iPad whose tab bar floats in the middle of that row UIKit dropped a centered name into a row of its own over the transcript. */}
+      <StackSubtitle words={subtitle?.words ?? ""} leading={regular} />
       <Stack.Toolbar placement="right">
         {copyable || openable || openTask !== undefined ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
@@ -1373,11 +1494,44 @@ function AgentConversation({
                 )}
               </Stack.Toolbar.Menu>
             ) : null}
-            {agent === undefined || barActs ? null : (
+            {continueOf === undefined ? null : (
               <Stack.Toolbar.Menu inline>
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
-                  {MENU_WORDS.ARCHIVE}
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(GLYPH.CONTINUE)}
+                  onPress={continueAgent}
+                >
+                  {continueOf.label}
                 </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
+            {agent === undefined || (barActs && move.places === undefined) ? null : (
+              <Stack.Toolbar.Menu inline>
+                {move.places === undefined ? null : (
+                  <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MOVE)} title={MENU_WORDS.MOVE_TO}>
+                    {move.places.map((place) => (
+                      <Stack.Toolbar.MenuAction
+                        key={place.key}
+                        icon={glyphSymbol(place.glyph)}
+                        {...(place.detail === undefined ? undefined : { subtitle: place.detail })}
+                        onPress={place.onPress}
+                      >
+                        {place.label}
+                      </Stack.Toolbar.MenuAction>
+                    ))}
+                  </Stack.Toolbar.Menu>
+                )}
+                {barActs ? null : archived ? (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.UNARCHIVE)}
+                    onPress={actions.unarchive}
+                  >
+                    {MENU_WORDS.UNARCHIVE}
+                  </Stack.Toolbar.MenuAction>
+                ) : (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
+                    {MENU_WORDS.ARCHIVE}
+                  </Stack.Toolbar.MenuAction>
+                )}
               </Stack.Toolbar.Menu>
             )}
             {agent === undefined ? null : (
@@ -1404,9 +1558,9 @@ function AgentConversation({
         )}
         {barActs ? (
           <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.ARCHIVE)}
-            accessibilityLabel={MENU_WORDS.ARCHIVE}
-            onPress={askArchive}
+            icon={glyphSymbol(archived ? GLYPH.UNARCHIVE : GLYPH.ARCHIVE)}
+            accessibilityLabel={archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
+            onPress={archived ? actions.unarchive : askArchive}
           />
         ) : null}
         {barActs ? (
@@ -1467,64 +1621,70 @@ function AgentPage({
 }
 
 /**
- * The agent's model sheet (`ModelChoiceSheet`), as the desktop's model chip
- * opens its menu, each change sent at once and drawn on the agent as it is
- * asked, one the service refused reading back and saying why: its model,
- * among the models New agent offers that its harness runs, each under its
- * harness's mark, its effort right under it, and Fast where the model has a
- * fast version, which take effect from its next step; and last its
- * permission mode, each with its glyph and what it does, where its harness
- * takes one, which takes effect from its next turn. Done closes it.
+ * The agent's model choices, as the desktop's model chip opens its menu,
+ * each change sent at once and drawn on the agent as it is asked, one the
+ * service refused reading back and saying why: its model, among the models
+ * New agent offers that its harness runs, each under its harness's mark,
+ * its effort right under it, and Fast where the model has a fast version,
+ * which take effect from its next step; and last its permission mode, each
+ * with its glyph and what it does, where its harness takes one, which takes
+ * effect from its next turn. The page's own model and mode are handed in,
+ * so a change clears the one refusal and counts as the one latest change.
  */
-function AgentModelSheet({
-  pick,
-  mode,
-  presented,
-  onDismiss,
-}: {
-  /** The page's own model and mode, so a change from the sheet clears the one refusal and counts as the one latest change. */
-  readonly pick: AgentModelPick;
-  readonly mode: AgentMode | undefined;
-  readonly presented: boolean;
-  readonly onDismiss: () => void;
-}) {
+function agentModelChoices(pick: AgentModelPick, mode: AgentMode | undefined): ModelChoices {
   const models = pick.models.flatMap((option) => {
     const provider = providerOf(option.id);
 
     return provider === undefined ? [] : [{ ...option, provider }];
   });
 
+  return {
+    models,
+    model: pick.model,
+    onModel: pick.pickModel,
+    efforts: pick.efforts,
+    effort: pick.effort,
+    onEffort: pick.pickEffort,
+    fast: pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle },
+    note: pick.note,
+    mode:
+      mode === undefined
+        ? undefined
+        : {
+            title: PERMISSION_MODE_WORDS.QUESTION,
+            options: mode.modes.map((option) => ({
+              ...option,
+              symbol: PERMISSION_MODE_GLYPH[option.id],
+            })),
+            picked: mode.mode,
+            onPick: (picked) => {
+              const chosen = mode.modes.find((option) => option.id === picked);
+
+              if (chosen !== undefined) mode.choose(chosen.id);
+            },
+            footer: PERMISSION_MODE_WORDS.APPLIES,
+            note: mode.note,
+          },
+  };
+}
+
+/** The agent's model choices as a sheet (`ModelChoiceSheet`), as a compact window opens them; Done closes it. */
+function AgentModelSheet({
+  pick,
+  mode,
+  presented,
+  onDismiss,
+}: {
+  readonly pick: AgentModelPick;
+  readonly mode: AgentMode | undefined;
+  readonly presented: boolean;
+  readonly onDismiss: () => void;
+}) {
   return (
     <ModelChoiceSheet
       presented={presented}
       onDismiss={onDismiss}
-      models={models}
-      model={pick.model}
-      onModel={pick.pickModel}
-      efforts={pick.efforts}
-      effort={pick.effort}
-      onEffort={pick.pickEffort}
-      fast={pick.fast === undefined ? undefined : { on: pick.fast.on, onSwitch: pick.fast.toggle }}
-      note={pick.note}
-      mode={
-        mode === undefined
-          ? undefined
-          : {
-              title: PERMISSION_MODE_WORDS.QUESTION,
-              options: mode.modes.map((option) => ({
-                ...option,
-                symbol: PERMISSION_MODE_GLYPH[option.id],
-              })),
-              picked: mode.mode,
-              onPick: (picked) => {
-                const chosen = mode.modes.find((option) => option.id === picked);
-
-                if (chosen !== undefined) mode.choose(chosen.id);
-              },
-              footer: PERMISSION_MODE_WORDS.APPLIES,
-              note: mode.note,
-            }
-      }
+      {...agentModelChoices(pick, mode)}
     />
   );
 }
