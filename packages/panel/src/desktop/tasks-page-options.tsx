@@ -7,6 +7,35 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import { TASK_PRIORITY_ORDER, TASK_STATUS_ORDER, type TaskSummary } from "@repo/features/task-wire";
+import {
+  BOARD_GROUPINGS,
+  BOARD_PROPERTIES,
+  boardGrouping,
+  COMPLETED_WINDOW,
+  COMPLETED_WINDOW_WORDS,
+  clearedField,
+  filteredFields,
+  filterValues,
+  TASK_MAKER,
+  TASK_MAKER_ORDER,
+  TASK_PROPERTY,
+  TASK_PROPERTY_ORDER,
+  TASKS_FILTER_FIELD,
+  TASKS_GROUPING,
+  TASKS_GROUPING_WORDS,
+  TASKS_ORDER,
+  TASKS_ORDER_WORDS,
+  TASKS_VIEW_WORDS,
+  type TaskMaker,
+  type TaskProperty,
+  type TasksDisplay,
+  type TasksFilter,
+  type TasksFilterField,
+  type TasksGrouping,
+  type TasksOrder,
+  toggledFilter,
+  valueCounts,
+} from "@repo/features/tasks-page-model";
 import { noMatchWords, TERM } from "@repo/features/words";
 import {
   CHIP_LOOK,
@@ -55,32 +84,6 @@ import {
   UserPenIcon,
 } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  BOARD_GROUPINGS,
-  BOARD_PROPERTIES,
-  boardGrouping,
-  COMPLETED_WINDOW,
-  type CompletedWindow,
-  clearedField,
-  filteredFields,
-  filterValues,
-  TASK_MAKER,
-  TASK_MAKER_ORDER,
-  TASK_PROPERTY,
-  TASK_PROPERTY_ORDER,
-  TASKS_FILTER_FIELD,
-  TASKS_GROUPING,
-  TASKS_ORDER,
-  type TaskMaker,
-  type TaskProperty,
-  type TasksDisplay,
-  type TasksFilter,
-  type TasksFilterField,
-  type TasksGrouping,
-  type TasksOrder,
-  toggledFilter,
-  valueCounts,
-} from "@repo/ui/tasks-page-model";
 import type { VirtualRowMeasurements } from "@repo/ui/virtual-rows";
 import type { Store } from "@tanstack/react-store";
 import { Fragment, type ReactNode, type RefObject, useMemo, useRef } from "react";
@@ -141,9 +144,6 @@ export interface TasksViewFrame {
   readonly column?: Store<string | undefined> | undefined;
 }
 
-/** What the switch is called that stands each sub-task beside its parent, as Linear's "Sub-issues" does, rather than only under it. */
-export const SHOW_SUB_TASKS = "Show sub-tasks";
-
 /** What the buttons are called, on their tooltips and their menus alike. */
 export const FILTER = "Filter";
 export const VIEW_OPTIONS = "View options";
@@ -168,14 +168,6 @@ const FIELD_ICON = {
   [TASKS_FILTER_FIELD.REPOSITORY]: <GLYPH.REPOSITORY />,
 } as const satisfies Record<TasksFilterField, React.JSX.Element>;
 
-/** What each completed window is called, in the order the menu lists them. */
-const COMPLETED_WORDS = {
-  [COMPLETED_WINDOW.NONE]: "None",
-  [COMPLETED_WINDOW.PAST_WEEK]: "Past week",
-  [COMPLETED_WINDOW.PAST_MONTH]: "Past month",
-  [COMPLETED_WINDOW.ALL]: "All",
-} as const satisfies Record<CompletedWindow, string>;
-
 /**
  * What each maker is called in Made by. Note that an agent an automation's
  * run started makes its tasks as an agent, which the task names by the
@@ -192,16 +184,6 @@ const MAKER_ICON = {
   [TASK_MAKER.AGENT]: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
 } as const satisfies Record<TaskMaker, React.JSX.Element>;
 
-/** What a grouping is called. */
-const GROUPING_WORDS = {
-  [TASKS_GROUPING.STATUS]: "Status",
-  [TASKS_GROUPING.PRIORITY]: "Priority",
-  [TASKS_GROUPING.REPOSITORY]: "Repository",
-  [TASKS_GROUPING.ASSIGNEE]: "Assignee",
-  [TASKS_GROUPING.CREATOR]: "Creator",
-  [TASKS_GROUPING.NONE]: "None",
-} as const satisfies Record<TasksGrouping, string>;
-
 const GROUPING_ICON = {
   [TASKS_GROUPING.STATUS]: <GLYPH.STATUS />,
   [TASKS_GROUPING.PRIORITY]: <SignalHighIcon />,
@@ -210,14 +192,6 @@ const GROUPING_ICON = {
   [TASKS_GROUPING.CREATOR]: <UserIcon />,
   [TASKS_GROUPING.NONE]: <ListIcon />,
 } as const satisfies Record<TasksGrouping, React.JSX.Element>;
-
-/** What an order is called. */
-const ORDER_WORDS = {
-  [TASKS_ORDER.PRIORITY]: "Priority",
-  [TASKS_ORDER.UPDATED]: "Last updated",
-  [TASKS_ORDER.CREATED]: "Created",
-  [TASKS_ORDER.NAME]: "Name",
-} as const satisfies Record<TasksOrder, string>;
 
 const ORDER_ICON = {
   [TASKS_ORDER.PRIORITY]: <SignalHighIcon />,
@@ -794,7 +768,7 @@ function displayEntries({
       {
         ...commandHead(PANEL_COMMAND.GROUP_BY),
         items: groupings.map((each) => ({
-          label: GROUPING_WORDS[each],
+          label: TASKS_GROUPING_WORDS[each],
           icon: GROUPING_ICON[each],
           checked: grouping === each,
           onSelect: () => set({ grouping: each }),
@@ -803,7 +777,7 @@ function displayEntries({
       {
         ...commandHead(PANEL_COMMAND.ORDER_BY),
         items: Object.values(TASKS_ORDER).map((each) => ({
-          label: ORDER_WORDS[each],
+          label: TASKS_ORDER_WORDS[each],
           icon: ORDER_ICON[each],
           checked: display.order === each,
           onSelect: () => set({ order: each }),
@@ -825,14 +799,14 @@ function displayEntries({
             }),
           ]
         : []),
-      toggle(SHOW_SUB_TASKS, display.subTasks, { subTasks: !display.subTasks }),
+      toggle(TASKS_VIEW_WORDS.SHOW_SUB_TASKS, display.subTasks, { subTasks: !display.subTasks }),
     ],
     [
       {
-        label: "Show completed",
+        label: TASKS_VIEW_WORDS.SHOW_COMPLETED,
         icon: <CircleCheckIcon />,
         items: Object.values(COMPLETED_WINDOW).map((each) => ({
-          label: COMPLETED_WORDS[each],
+          label: COMPLETED_WINDOW_WORDS[each],
           checked: display.completed === each,
           onSelect: () => set({ completed: each }),
         })),
@@ -857,7 +831,7 @@ function displayEntries({
         })),
       },
       {
-        label: "Reset view",
+        label: TASKS_VIEW_WORDS.RESET_VIEW,
         icon: <RotateCcwIcon />,
         disabled: sameDisplay(display, initial),
         onSelect: () => onDisplay(initial),

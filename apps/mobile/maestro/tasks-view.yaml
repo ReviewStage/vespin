@@ -1,0 +1,51 @@
+# tasks-view.yaml -- the Tasks tab's View options: its menu, the list grouped by status, the finished tasks of the past month shown, and Reset view putting the sidebar's view back.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, as `tasks.yaml` is, so the list holds
+# the fixture's tasks, in two repositories and of every status, and no server
+# is reached. Note that the state is cleared, so the view starts as the
+# sidebar's whatever an earlier run chose.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- assertVisible: "Pinned"
+- assertVisible: "ledger"
+- tapOn: "View options"
+- assertVisible: "Group by"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-view-menu
+# Group by stands its choices as a submenu over the menu. Note that its
+# Status is tapped as the last in the tree, because the menu's own Status
+# filter, under which the submenu opens, shares the name.
+- tapOn: "Group by"
+- waitForAnimationToEnd
+- tapOn:
+    text: "Status"
+    index: -1
+- waitForAnimationToEnd
+- assertVisible: "Todo"
+- assertNotVisible: "ledger"
+# Show completed's Past month stands the fixture's finished tasks under Done.
+- tapOn: "View options"
+- tapOn: "Show completed"
+- waitForAnimationToEnd
+- tapOn: "Past month"
+- waitForAnimationToEnd
+- assertVisible: "Done"
+- takeScreenshot: tasks-view-status
+# Reset view puts the sidebar's view back: the reader's open tasks by repository.
+- tapOn: "View options"
+- tapOn: "Reset view"
+- waitForAnimationToEnd
+- assertVisible: "ledger"
+- assertNotVisible: "Todo"

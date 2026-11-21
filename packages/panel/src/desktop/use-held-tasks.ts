@@ -1,12 +1,12 @@
 import type { TaskSummary } from "@repo/features/task-wire";
-import { readAlike } from "@repo/features/turn-rows";
 import {
   filterValues,
   TASKS_FILTER_FIELD,
   type TasksDisplay,
   type TasksFilter,
   type TasksGroup,
-} from "@repo/ui/tasks-page-model";
+} from "@repo/features/tasks-page-model";
+import { readAlike } from "@repo/features/turn-rows";
 import { useLayoutEffect, useRef } from "react";
 import { useHeldOrder } from "../tasks/use-held-order.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
