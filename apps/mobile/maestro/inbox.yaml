@@ -66,12 +66,15 @@ env:
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread
-# The picture opens in the system's Quick Look, whose Done closes it.
+# The picture opens full screen in the app's viewer, grown out of its
+# thumbnail, whose close button closes it.
 - tapOn: "The invite page"
-- assertVisible: "Done"
+- assertVisible:
+    id: "picture-viewer-close"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-picture
-- tapOn: "Done"
+- tapOn:
+    id: "picture-viewer-close"
 - scrollUntilVisible:
     element: "invite-flow.webm.*"
     direction: DOWN
