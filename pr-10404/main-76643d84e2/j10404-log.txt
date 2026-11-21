@@ -1,0 +1,10 @@
+== bundle PJj10404 base 76643d84e2
+  built 76643d84e2 base app Vmain7.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-tasks: fails 4 shots 8       Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi
+iphone-light-tasks-view: fails 1 shots 2 Assert that "Done" is visible... FAILED
+ipad27-light-tasks: fails 1 shots 5 Tap on "Rename"... FAILED
+ipad27-light-tasks-view: fails 1 shots 2 Assert that "Done" is visible... FAILED
