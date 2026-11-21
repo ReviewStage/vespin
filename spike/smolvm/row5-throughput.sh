@@ -30,13 +30,14 @@ printf '%s' "$steps" > "$SPIKE_ROOT/steps.sh"
 
 # Bare box: Node 24 and pnpm as the image has them, and the mirror at the same path the VMs see.
 case "$(uname -m)" in x86_64) na=x64 ;; aarch64) na=arm64 ;; esac
+# Node in a folder of its own: unpacked over /usr/local it mixed with the runner's own npm.
 nf=$(curl -fsSL https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt | awk -v a="linux-$na.tar.xz" '$2 ~ a"$" {print $2}')
-curl -fsSL "https://nodejs.org/dist/latest-v24.x/$nf" | sudo tar -xJ -C /usr/local --strip-components=1
+mkdir -p "$SPIKE_ROOT/node"
+curl -fsSL "https://nodejs.org/dist/latest-v24.x/$nf" | tar -xJ -C "$SPIKE_ROOT/node" --strip-components=1
+export PATH="$SPIKE_ROOT/node/bin:$PATH"
 hash -r
-# pnpm into a prefix of our own, by the Node just unpacked (a global install left none on PATH twice).
-mkdir -p "$SPIKE_ROOT/pnpm"
-/usr/local/bin/node /usr/local/bin/npm install --prefix "$SPIKE_ROOT/pnpm" --no-audit --no-fund pnpm@10.34.5 2>&1 | tail -3 | sed 's/^/# pnpm install: /' | tee -a "$RESULTS_DIR/$ROW.txt"
-export PATH="$SPIKE_ROOT/pnpm/node_modules/.bin:/usr/local/bin:$PATH"
+npm install --global --no-audit --no-fund pnpm@10.34.5 2>&1 | tail -2 | sed 's/^/# pnpm install: /' | tee -a "$RESULTS_DIR/$ROW.txt"
+hash -r
 record bare.node "$(node --version) pnpm $(pnpm --version)"
 sudo mkdir -p /mirror && sudo mount --bind "$SPIKE_ROOT/mirror" /mirror
 mkdir -p "$SPIKE_ROOT/bare"
