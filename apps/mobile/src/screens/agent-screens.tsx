@@ -48,6 +48,7 @@ import {
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import {
   agentRunsOnWords,
@@ -184,6 +185,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
@@ -1079,6 +1081,11 @@ function AgentConversation({
           },
           workspaces,
         ),
+  );
+  useNoteOpened(
+    shown === undefined
+      ? undefined
+      : { kind: SEARCH_FOUND_KIND.AGENTS, id, workspaceId: shown.workspaceId },
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
 

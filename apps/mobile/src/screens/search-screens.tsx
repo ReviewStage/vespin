@@ -1,8 +1,8 @@
-// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, each row drawn by its own list's row.
+// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, or those last opened before anything is typed, each row drawn by its own list's row.
 
-import { READING_INBOX } from "@repo/features/inbox-list-model";
+import { type InboxListed, READING_INBOX } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
+import { IOS_TAB, iosAgentRoute, iosAppRouteOf, iosTabOfGroup } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
   SEARCH_FOUND_KIND,
@@ -17,6 +17,8 @@ import {
   showAllHeard,
   shownOfWords,
 } from "@repo/features/search-found-model";
+import { RECENT_WORDS } from "@repo/features/search-recent-model";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { NO_RESULTS_HINT, noResultsForWords, readingWords } from "@repo/features/words";
 import {
   EmptyState,
@@ -25,19 +27,26 @@ import {
   LIST_LOOK,
   type ListScopes,
   ListSection,
+  RowForEach,
   RowList,
   type RowSubmenu,
   Screen,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { lowerKeyboard } from "../native-interactions-module.js";
-import { type SearchFound, useSearchFound } from "../search/use-search.js";
+import { forgetRecentOpened } from "../search/recent-opened.js";
+import {
+  type SearchFound,
+  type SearchRecentRow,
+  useSearchFound,
+  useSearchRecent,
+} from "../search/use-search.js";
 import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
@@ -45,11 +54,12 @@ import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { PLUS_TAB, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
-import { InboxItemRows } from "./inbox-screens.js";
+import { InboxItemRow, InboxItemRows } from "./inbox-screens.js";
 import {
   type AgentAsking,
   StatusQuestionAsk,
   TaskAgentRow,
+  TaskListRow,
   TaskRows,
   useAgentRowAsk,
   useTaskRowDoors,
@@ -70,25 +80,64 @@ const SCOPES: readonly SearchScope[] = Object.values(SEARCH_SCOPE);
 /** The scopes while the member turned the Inbox off, which leave its own out. */
 const SCOPES_WITHOUT_INBOX = SCOPES.filter((each) => each !== SEARCH_SCOPE.INBOX);
 
+/** The screen a task's row opens: its Overview, on its own tab. */
+function taskRoute(task: TaskSummary): string | undefined {
+  return iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id });
+}
+
+/** The screen a thread's row opens: the thread, under its task. */
+function threadRoute({ holder, item }: InboxListed): string | undefined {
+  return iosAppRouteOf({
+    kind: LINK_DESTINATION.INBOX_ITEM,
+    taskId: holder.task.id,
+    itemId: item.id,
+  });
+}
+
 /** The screen each row found opens, by the row's id: a task's Overview, an item's thread, an agent's page, each in its own tab. */
 function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined> {
   return new Map([
-    ...found.tasks.map(
-      (task) => [task.id, iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: task.id })] as const,
-    ),
-    ...found.inbox.map(
-      ({ holder, item }) =>
-        [
-          item.id,
-          iosAppRouteOf({
-            kind: LINK_DESTINATION.INBOX_ITEM,
-            taskId: holder.task.id,
-            itemId: item.id,
-          }),
-        ] as const,
-    ),
+    ...found.tasks.map((task) => [task.id, taskRoute(task)] as const),
+    ...found.inbox.map((listed) => [listed.item.id, threadRoute(listed)] as const),
     ...found.agents.map(({ agent }) => [agent.id, iosAgentRoute(agent.id)] as const),
   ]);
+}
+
+/** The screen a recent row opens, as the same row found opens. */
+function recentRoute(recent: SearchRecentRow): string | undefined {
+  switch (recent.kind) {
+    case SEARCH_FOUND_KIND.TASKS:
+      return taskRoute(recent.row);
+    case SEARCH_FOUND_KIND.INBOX:
+      return threadRoute(recent.row);
+    case SEARCH_FOUND_KIND.AGENTS:
+      return iosAgentRoute(recent.id);
+  }
+}
+
+/**
+ * Opens a row's route on the tab it belongs on, as a pick from the results
+ * or from Recent does: the keyboard the field raised lowered first, as Mail
+ * and Notes lower it, and the search ended before the route opens where
+ * `leave` is given.
+ */
+function useOpenPicked(
+  routes: ReadonlyMap<string, string | undefined>,
+  leave?: () => void,
+): (id: string) => void {
+  const router = useRouter();
+  const onTab = useOnTab();
+
+  return (id) => {
+    lowerKeyboard();
+    const route = routes.get(id);
+
+    if (route === undefined) return;
+
+    // Note that the search is ended before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search; blurring the field alone left it folded.
+    leave?.();
+    router.push(onTab(route));
+  };
 }
 
 /**
@@ -230,8 +279,110 @@ function FoundList({
   );
 }
 
-/** What Search draws before anything is typed, in either window: nothing, as Apple's own search screens wait on the field. */
-const SEARCH_IDLE = null;
+/**
+ * What Search draws before anything is typed, in either window, as Apple's
+ * own search tabs list their recents under the field: the tasks, threads,
+ * and agents last opened on this phone, newest first, each drawn as its own
+ * list draws it, under Recent with Clear at its end; nothing where none was
+ * opened, so the page waits on the field. A pick opens as a result's does,
+ * and the questions and sheets a row's acts raise stand beside it.
+ */
+function SearchRecentList({ leave }: { readonly leave: (() => void) | undefined }) {
+  const recent = useSearchRecent();
+  const { mark, resolve, refresh, refreshTasks } = useInboxActs();
+  const pictureOf = useMemberPictures();
+  const doors = useTaskRowDoors(recent.listing.workspace?.id);
+  const { listing, status, deletion } = useListingAsks(recent.listing, doors);
+  const remind = useRemind();
+  const asking = useAgentRowAsk();
+
+  const open = useOpenPicked(
+    new Map(recent.rows.map((row) => [row.id, recentRoute(row)] as const)),
+    leave,
+  );
+
+  return (
+    <>
+      <Screen>
+        <RowList
+          look={LIST_LOOK.PLAIN}
+          onSelect={open}
+          onRefresh={async () => {
+            await Promise.all([refresh(), refreshTasks()]);
+          }}
+        >
+          {recent.rows.length === 0 ? null : (
+            <ListSection
+              title={RECENT_WORDS.TITLE}
+              act={{
+                label: RECENT_WORDS.CLEAR,
+                heard: RECENT_WORDS.CLEAR_HEARD,
+                onPress: forgetRecentOpened,
+              }}
+            >
+              <RowForEach data={recent.rows} keyOf={(row) => row.id}>
+                {(row) => {
+                  switch (row.kind) {
+                    case SEARCH_FOUND_KIND.TASKS:
+                      return <TaskListRow task={row.row} listing={listing} keyed={false} />;
+                    case SEARCH_FOUND_KIND.INBOX:
+                      return (
+                        <InboxItemRow
+                          listed={row.row}
+                          readerId={recent.readerId}
+                          pictureOf={pictureOf}
+                          onMark={mark}
+                          remindMenu={remind.itemMenu}
+                          onResolve={resolve}
+                        />
+                      );
+                    case SEARCH_FOUND_KIND.AGENTS:
+                      return (
+                        <TaskAgentRow
+                          line={row.row}
+                          task={
+                            row.row.agent.taskId === null
+                              ? undefined
+                              : recent.tasksById.get(row.row.agent.taskId)
+                          }
+                          named
+                          asking={asking}
+                        />
+                      );
+                  }
+                }}
+              </RowForEach>
+            </ListSection>
+          )}
+        </RowList>
+      </Screen>
+      <StatusQuestionAsk question={status} />
+      <StatusQuestionAsk question={deletion} />
+      {remind.sheet}
+    </>
+  );
+}
+
+/**
+ * Whether the Search tab is the one shown, by the route's segments
+ * (`(tabs)`, `(search)`, ...): its root or a page pushed on its own stack;
+ * while a sheet stands over the tabs, as it stood under the sheet. Note that
+ * Recent reads the task list and the Inbox whole, so it stands only while
+ * Search is shown, since the tab stays mounted behind the others and a read
+ * there would be built again on each delivery for nothing.
+ */
+function useSearchTabShown(): boolean {
+  const segments: readonly string[] = useSegments();
+  const tab = iosTabOfGroup(segments[1]);
+  const shown = tab === IOS_TAB.SEARCH;
+  const [kept, keep] = useState(shown);
+
+  useEffect(() => {
+    if (tab !== undefined) keep(shown);
+  }, [tab, shown]);
+
+  return tab === undefined ? kept : shown;
+}
 
 /**
  * What the Search tab reads and draws once something is typed, in either
@@ -244,7 +395,6 @@ const SEARCH_IDLE = null;
  * app.
  */
 function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => void) {
-  const router = useRouter();
   const found = useSearchFound(query);
   const inboxShown = useInboxShown();
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
@@ -252,20 +402,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const { listing, status, deletion } = useListingAsks(found.listing, doors);
   const remind = useRemind();
   const asking = useAgentRowAsk();
-  const routes = foundRoutes(found);
-  const onTab = useOnTab();
-
-  const open = (id: string) => {
-    // Note that a pick lowers the keyboard the query raised, as Mail and Notes do.
-    lowerKeyboard();
-    const route = routes.get(id);
-
-    if (route === undefined) return;
-
-    // Note that the search is ended before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search; blurring the field alone left it folded.
-    leave?.();
-    router.push(onTab(route));
-  };
+  const open = useOpenPicked(foundRoutes(found), leave);
 
   const shown = scopedFound(found, scope);
   const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
@@ -344,6 +481,9 @@ function SearchStackScreen(words: SearchWords) {
   const compose = useComposeAction();
   const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
   const router = useRouter();
+  const shown = useSearchTabShown();
+  // Note that only a regular window ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to.
+  const leave = regular ? () => field.current?.cancelSearch() : undefined;
 
   // Note that the field is focused here only where code opened Search, since the system focuses it as the tab is tapped.
   const { [SEARCH_FOCUS_PARAM]: focusAsked } = useLocalSearchParams<{
@@ -381,14 +521,12 @@ function SearchStackScreen(words: SearchWords) {
           />
         </Stack.Toolbar>
       )}
-      {query.trim() === "" ? (
-        <Screen>{SEARCH_IDLE}</Screen>
+      {query.trim() !== "" ? (
+        <SearchStackFound {...words} leave={leave} />
+      ) : shown ? (
+        <SearchRecentList leave={leave} />
       ) : (
-        <SearchStackFound
-          {...words}
-          // Note that only a regular window ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to.
-          leave={regular ? () => field.current?.cancelSearch() : undefined}
-        />
+        <Screen>{null}</Screen>
       )}
     </>
   );
