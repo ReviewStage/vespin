@@ -54,8 +54,9 @@ private struct MenuNodeData: Decodable {
   let heard: String?
 }
 
-/// A row's menu: its groups, set apart by dividers, and the preview it lifts, where it has one.
+/// A row's menu: what heads it, where anything does, its groups, set apart by dividers, and the preview it lifts, where it has one.
 private struct RowMenuData: Decodable {
+  let title: String?
   let groups: [[MenuNodeData]]
   let preview: PreviewTreeData?
 }
@@ -230,13 +231,21 @@ private func menuNode(_ node: MenuNodeData, at place: [Int], press: @escaping Pr
   }
 }
 
-/// A row's menu items, read from its tree as the menu opens: each group after a divider but the first.
+/// A row's menu items, read from its tree as the menu opens: each group after a divider but the first, under the menu's title where it has one, as Messages heads a held message's menu by its time.
 private struct RowMenuItems: View {
   let json: String
   let press: PressPlace
 
   var body: some View {
-    let groups = readTree(json, as: RowMenuData.self)?.groups ?? []
+    let tree = readTree(json, as: RowMenuData.self)
+    if let title = tree?.title {
+      Section(title) { groupItems(tree?.groups ?? []) }
+    } else {
+      groupItems(tree?.groups ?? [])
+    }
+  }
+
+  private func groupItems(_ groups: [[MenuNodeData]]) -> some View {
     ForEach(Array(groups.enumerated()), id: \.offset) { group, nodes in
       if group > 0 { Divider() }
       ForEach(Array(nodes.enumerated()), id: \.offset) { index, node in
