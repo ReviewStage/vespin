@@ -365,12 +365,7 @@ export function ThreadComposer({
   const pillField = usePillField(draft.note, onNote, { attached: pictures, detach });
 
   // Note that the thread's own agent, whom the reply goes to, is left out of what an `@` offers, as on its own page.
-  const mentions = useMentionOffer(
-    draft.note,
-    onNote,
-    { ...place, agentId: item.agentId },
-    pillField.mentions,
-  ).offered;
+  const mentions = useMentionOffer({ ...place, agentId: item.agentId }, pillField.mentions);
 
   // Note that the box's head holds what an `@` offers, then what the picker refused, then why the last send didn't go.
   const head =

@@ -1,6 +1,5 @@
-// mention-offer.ts -- the people, agents, tasks, pages, threads, pull requests and dates an `@` typed in a phone's composer offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`), and the message's words with each picked mention written as the link the wire carries.
+// mention-offer.ts -- the people, agents, tasks, pages, threads, pull requests and dates an `@` typed in a phone's composer offers, as the panel's mention picker groups, words and narrows them by kind (`@people:`).
 
-import { atWordAround } from "./at-word.js";
 import {
   type DateSpan,
   dateChipText,
@@ -8,7 +7,6 @@ import {
   dateOfWords,
   suggestedDates,
 } from "./date-mention.js";
-import { MENTION_SIGIL, mentionMarkdownLink } from "./link-grammar.js";
 import {
   MENTION_BROWSE,
   MENTION_FROM,
@@ -151,17 +149,6 @@ export interface MentionSources {
 export interface PickedMention {
   readonly name: string;
   readonly target: string;
-}
-
-/** The `@` word the words end with, where the field's caret stands as it is typed: where its `@` stands, and what is typed after it; none where they end no `@` word. */
-export function atWordEnding(
-  words: string,
-): { readonly start: number; readonly query: string } | undefined {
-  const word = atWordAround(words, "");
-
-  return word === undefined
-    ? undefined
-    : { start: words.length - word.query.length - 1, query: word.query };
 }
 
 /** The candidates the query finds, best first. */
@@ -328,38 +315,4 @@ export function mentionOffer(sources: MentionSources, query: string): MentionOff
   ];
 
   return { narrowed: undefined, groups: groups.filter((each) => each.rows.length > 0) };
-}
-
-/** The words with the `@` word they end with written as the picked name and a space after it, as the field shows a pick. */
-export function wordsWithPick(words: string, start: number, name: string): string {
-  return `${words.slice(0, start)}${MENTION_SIGIL}${name} `;
-}
-
-/** A name's characters read literally inside a pattern. */
-function literal(text: string): string {
-  return text.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-}
-
-/**
- * The words as they are sent: each picked `@name` still standing in them,
- * at a word's start and not run on into another word, written as the
- * mention's link (`[@name](target)`), as the panel's chip is written; a
- * longer name is written first, so a name inside another never takes its
- * place. Words the reader typed with no pick, and a pick they have since
- * edited, go as typed.
- */
-export function withMentionLinks(words: string, picked: readonly PickedMention[]): string {
-  const longestFirst = [...picked].sort((one, other) => other.name.length - one.name.length);
-
-  return longestFirst.reduce((text, mention) => {
-    const typed = new RegExp(
-      `(^|\\s)${literal(`${MENTION_SIGIL}${mention.name}`)}(?=$|[\\s.,;:!?)])`,
-      "gu",
-    );
-
-    return text.replace(
-      typed,
-      (_whole, lead: string) => `${lead}${mentionMarkdownLink(mention.name, mention.target)}`,
-    );
-  }, words);
 }
