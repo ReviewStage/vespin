@@ -71,6 +71,7 @@ import {
   useStartFork,
   useStartTask,
 } from "../tasks/use-start.js";
+import { useTaskPlacing } from "../tasks/use-tasks.js";
 import { useAttachedPictures } from "../use-attached-pictures.js";
 import { useDictation } from "../use-dictation.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
@@ -1035,6 +1036,30 @@ function RelationChip({ pick }: { readonly pick: RelationPick }) {
 }
 
 /**
+ * A task's start that, once the task is made, files it on top of one of the
+ * member's sections of its workspace, as the panel's New task opened from a
+ * section's + places the task it started (`placeInSection`); the start alone
+ * where no section is named, or the one named is not the workspace's.
+ */
+function useStartedIn(
+  start: ReturnType<typeof useStartTask>,
+  workspaceId: string | undefined,
+  section: string | undefined,
+): ReturnType<typeof useStartTask> {
+  const placing = useTaskPlacing(workspaceId);
+  const placed = placing.sections.some((each) => each.id === section) ? section : undefined;
+
+  if (placed === undefined) return start;
+
+  return (ask) =>
+    start(ask).then((answer) => {
+      if ("taskId" in answer) placing.placeStarted(answer.taskId, placed);
+
+      return answer;
+    });
+}
+
+/**
  * New task, Home's composer as a page of its own: the task described and the
  * pictures that go with it, the task it is related to, picked from the +
  * and shown at the page's head once picked, and, as capsules under the
@@ -1048,9 +1073,12 @@ function RelationChip({ pick }: { readonly pick: RelationPick }) {
  */
 export function NewTaskScreen({
   parent,
+  section,
   draft,
 }: {
   readonly parent?: string | undefined;
+  /** The member's section the task is filed in once it starts, as the panel's section header's + files it. */
+  readonly section?: string | undefined;
   readonly draft?: NewTaskDraft | undefined;
 }) {
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
@@ -1070,7 +1098,7 @@ export function NewTaskScreen({
   const relation = useRelationPick(listed, workspaceId, parent);
   const pick = useModelPick();
   const [modelsShown, setModelsShown] = useState(false);
-  const startTask = useStartTask(workspaceId);
+  const startTask = useStartedIn(useStartTask(workspaceId), workspaceId, section);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote, draft?.pictures);
   // Note that a share draft's pictures are read as the sheet opens, and nothing starts until they are in, so its words never go without them.

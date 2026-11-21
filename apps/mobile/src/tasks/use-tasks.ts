@@ -91,6 +91,7 @@ import {
 } from "@repo/host/app-state-reads";
 import {
   BUZZ,
+  type Buzz,
   heldValue,
   NOTICE_KIND,
   QUIET_ROW_QUESTION,
@@ -329,6 +330,8 @@ export interface TaskPlacing {
   readonly sectionOf: (taskId: string) => string | undefined;
   /** Puts a task on top of a section, or takes it out of every section under null, as the panel's Move to section does. */
   readonly moveToSection: (taskId: string, sectionId: string | null) => void;
+  /** Puts a task just started on top of a section, as Move to section does but with no buzz of its own, since the start's buzz says both went; a refusal is still said. */
+  readonly placeStarted: (taskId: string, sectionId: string) => void;
   /** The repositories the workspace's GitHub reaches, which a task's repository is picked among. */
   readonly repositories: readonly string[];
   /** Gives a task its repository, or takes it away under null, as the panel's Change repository does. */
@@ -418,7 +421,7 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       );
     };
 
-    const moveToSection = (taskId: string, sectionId: string | null) => {
+    const move = (taskId: string, sectionId: string | null, went: Buzz | undefined) => {
       const [first, ...rest] =
         sectionId === null
           ? unplaceAllWrites([taskId])
@@ -431,7 +434,7 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
         refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
         retry: alone,
         subject: { kind: WRITE_SUBJECT.TASK_SECTION, id: taskId },
-        went: BUZZ.SUCCESS,
+        went,
       });
     };
 
@@ -448,7 +451,9 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
     return {
       sections: workspaceId === undefined ? [] : workspaceSections(state, workspaceId),
       sectionOf: (taskId: string) => sectionOfTask(state, taskId),
-      moveToSection,
+      moveToSection: (taskId: string, sectionId: string | null) =>
+        move(taskId, sectionId, BUZZ.SUCCESS),
+      placeStarted: (taskId: string, sectionId: string) => move(taskId, sectionId, undefined),
       repositories: listed,
       setRepository,
       renameSection,
