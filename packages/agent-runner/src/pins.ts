@@ -131,7 +131,7 @@ export const CLAUDE_EXECUTABLE = `${CLAUDE_CODE_PIN.DIRECTORY}/${CLAUDE_CODE_PIN
  * the threads it keeps there outlive a stop.
  */
 export const CODEX_PIN = {
-  VERSION: "0.170.0",
+  VERSION: "0.171.0",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/codex`,
   /** Where the image links the binary as `codex`. */
   LINK: "/usr/local/bin/codex",
@@ -287,7 +287,7 @@ export const NODE_MAC_PIN: AgentToolPin = {
  */
 const HOST_CLI_VERSION = {
   CLAUDE_CODE: "0.3.329",
-  CODEX: "0.170.0",
+  CODEX: "0.171.0",
   CURSOR_SDK: "1.4.2",
   GH: "2.103.3",
 } as const;
@@ -320,16 +320,16 @@ export const CODEX_MAC_PIN: AgentToolPin = {
   NAME: "codex",
   VERSION: HOST_CLI_VERSION.CODEX,
   ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-darwin-arm64.tgz`,
-  SHA256: "ab7ba154261db88eef760dfe69978fbb67018c2e1200ff536dc8c51ed9c758b5",
-  BYTES: 154_915_137,
+  SHA256: "185e1c789e5fd528390c1a89a6968dca791e9aa3138db830d53afffdc9079ae3",
+  BYTES: 157_740_951,
   ROOT: "package/vendor/aarch64-apple-darwin",
   MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
   BINARY: "bin/codex",
   TEAM: "2DC432GLL2",
   FILES: {
-    "bin/codex": "9248cfeebec9b4cc3034d5114caab10fbf426cbfa79dba410c5fa1b72762abd6",
-    "bin/codex-code-mode-host": "7007fd77fcc428d80542dc272013a187691f5aab3014b0c7a4f11fad3b47c40e",
-    "codex-path/rg": "5899d42cf98592ec0f95a2cb24b243fab870c25de5e77c9861591fde766d4bf7",
+    "bin/codex": "fc8d77cf7585aded2b9bc487dad29c4ee2f066123e4e76dd3b17653a8322ce42",
+    "bin/codex-code-mode-host": "32c165500689c61b4946197406870fb8f61cff113c7215fe1dbca0d66fd403e2",
+    "codex-path/rg": "8e6162ff63d0f0909ad47c8e1df575a8ac716a69a4dc6a9da1f5589bef7b1a25",
   },
 };
 
@@ -479,34 +479,34 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-x64.tgz`,
-    SHA256: "67c4bccce8e6c3a2b9ae0e586750e0efac7e0b8cd85e6b4734ad474317d2cc32",
-    BYTES: 168_279_228,
+    SHA256: "e13d67afb0533cc6160b5f4140e4ad07e2acd87adbaa081bbf69b82e90cf4e55",
+    BYTES: 172_033_439,
     ROOT: "package/vendor/x86_64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "880819aab735adcf16f36cd628940b9f1e652a36c01d10a5d32f83cc84902971",
+      "bin/codex": "b76a027d6b210f9a8da7aaf321dd235c700f0ef7a794d4a5314b9af6c134f0f0",
       "bin/codex-code-mode-host":
-        "ffc1ad7023864bfc209c408887d6834a8f644201eff4432fb9558b7f1c40e9dc",
+        "f49bd4f0c0cc73cf1ec3a719009e07ce5b6e100520d023c760cc203fb37e5c6f",
       "codex-path/rg": "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849",
-      "codex-resources/bwrap": "15fd5f2673d2e1c2f80e34e5108462fd014f5e8bbc7b0731f1ab23d1ff1ac140",
+      "codex-resources/bwrap": "91a245ea678a7ae642f383a22576c3c476d0d6d3e2321a553f3ed8d4d487ed74",
     },
   },
   arm64: {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-arm64.tgz`,
-    SHA256: "72a1b05ee522eb7b57a96ad60d26056da8adda20c630f54079c53dd8c292613a",
-    BYTES: 173_169_777,
+    SHA256: "26ae27788c7d962ae64321aba4673f918b99b40c4655246930bf962fa5b81b01",
+    BYTES: 176_542_339,
     ROOT: "package/vendor/aarch64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "6a95492ca9d85ee76bd9fc5a4d8f72dd98a6130d1bb409bcfc50e61573106616",
+      "bin/codex": "9ba12ec7712e2905b2ea00791f4ebddc9528629cc955d11d25272de445e10643",
       "bin/codex-code-mode-host":
-        "3c0e282eab51c572b4494f94cf20a7ddbaebcacf82408d36438eaa7f62891042",
+        "f330aa2016dc441e63084cc7030dce79f3815ed14e5de6b18608528e86826656",
       "codex-path/rg": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b",
-      "codex-resources/bwrap": "c547cbdc762a70ed216789ffaa4c6c0e7d2beabe32245a498f8e365a9fc8dab4",
+      "codex-resources/bwrap": "f5065eb8b9ddd9c89cac0ce79ed1aafab5841c7d9c3e73674c94724d6bf8f7c0",
     },
   },
 };
