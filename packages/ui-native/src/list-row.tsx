@@ -65,12 +65,12 @@ import {
   useContext,
   useState,
 } from "react";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { actContent, markContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { cellFocusRingOff, dragLink } from "./interactions.js";
+import { cellFocusRingOff, dragLink, heardActions } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -84,6 +84,7 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { useMinute } from "./minute.js";
+import { heardActs } from "./row-heard-acts.js";
 import {
   RowChoosingContext,
   RowOpenContext,
@@ -196,6 +197,8 @@ export type RowAction = {
   readonly onPress: () => void;
   /** Whether it stands dimmed and takes no press, its `detail` saying why, as the panel's Unfollow stands for the assignee. */
   readonly disabled?: boolean | undefined;
+  /** What VoiceOver's Actions call it where its words lean on the menu it stands in, such as Remind me's "Tomorrow" heard as "Remind me tomorrow"; its menu's name before its label where none is given (`heardActs`). */
+  readonly heard?: string | undefined;
 };
 
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
@@ -216,6 +219,8 @@ export type MenuChoice = {
   readonly detail?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
+  /** What VoiceOver's Actions call it, such as a status heard as "Set status: Backlog"; its menu's name before its label where none is given (`heardActs`). */
+  readonly heard?: string | undefined;
 };
 
 /** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
@@ -619,7 +624,9 @@ function asking(content: ReactElement, question: RowQuestion | undefined): React
  * then leads with Open. Note that SwiftUI's preview takes no tap of its own,
  * a tap on it closing the menu, so Open is what opens the row from there. A
  * row given what it is heard as reads to VoiceOver as one element, its title
- * then where it stands, rather than each mark and word apart.
+ * then where it stands, rather than each mark and word apart, and offers its
+ * menu's acts once each as its Actions, a submenu's items worded with their
+ * menu (`heardActs`), as Mail's rows offer theirs.
  */
 export function RowFrame({
   id,
@@ -654,42 +661,9 @@ export function RowFrame({
   const disclosed = useContext(RowDisclosedContext);
   const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
+  const voiceOver = useVoiceOver();
   const swiped = [...trailingActions, ...leadingActions];
-
-  // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
-  const frameModifiers = [
-    tag(id),
-    ...rowPlacement(
-      colors,
-      selected,
-      vertical,
-      indent,
-      leading,
-      disclosed ? SPACE.EDGE + chevronRoom : 0,
-    ),
-    ...(heard === undefined
-      ? []
-      : [
-          accessibilityElement("combine"),
-          accessibilityLabel(heard.label),
-          accessibilityValue(heardValue(heard.value)),
-        ]),
-    ...(link === undefined ? [] : [dragLink(link)]),
-    // Note that a row of a list that opens its rows draws no keyboard focus ring around its cell, as iPadOS's own sidebars draw none, since its selection already stands on the `SELECTED` fill; it's set by whether the row opens at all, not by whether it's selected now, so the modifiers don't change as the selection does.
-    ...(open === undefined ? [] : [cellFocusRingOff()]),
-  ];
-
   const groups = menuGroups.filter(menuGroupFilled);
-
-  const ownGroup =
-    ordered === undefined
-      ? swiped.length + menuSubmenus.length + menuActions.length > 0
-      : ordered.some((group) => group.length > 0);
-
-  // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
-  if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
-    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
-  }
 
   const opening: readonly RowAction[] =
     preview === undefined || open === undefined
@@ -704,26 +678,60 @@ export function RowFrame({
           },
         ];
 
+  const menuGroupsDrawn: readonly LongPressGroup[] =
+    ordered === undefined
+      ? [
+          opening,
+          [...swiped, ...menuSubmenus, ...menuActions],
+          ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
+        ]
+      : [opening, ...ordered];
+
+  // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu instead (`heardActs`), and Select mode offers none, as it offers no long press.
+  const frameModifiers = [
+    tag(id),
+    ...rowPlacement(
+      colors,
+      selected,
+      vertical,
+      indent,
+      leading,
+      disclosed ? SPACE.EDGE + chevronRoom : 0,
+    ),
+    ...(heard === undefined
+      ? []
+      : [
+          accessibilityElement("ignore"),
+          accessibilityLabel(heard.label),
+          accessibilityValue(heardValue(heard.value)),
+          heardActions(choosing ? [] : heardActs(menuGroupsDrawn)),
+        ]),
+    ...(link === undefined ? [] : [dragLink(link)]),
+    // Note that a row of a list that opens its rows draws no keyboard focus ring around its cell, as iPadOS's own sidebars draw none, since its selection already stands on the `SELECTED` fill; it's set by whether the row opens at all, not by whether it's selected now, so the modifiers don't change as the selection does.
+    ...(open === undefined ? [] : [cellFocusRingOff()]),
+  ];
+
+  const ownGroup =
+    ordered === undefined
+      ? swiped.length + menuSubmenus.length + menuActions.length > 0
+      : ordered.some((group) => group.length > 0);
+
+  // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
+  if (choosing || (!ownGroup && groups.length === 0 && preview === undefined)) {
+    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
+  }
+
   const menu = asking(
-    <LongPressMenu
-      groups={
-        ordered === undefined
-          ? [
-              opening,
-              [...swiped, ...menuSubmenus, ...menuActions],
-              ...groups.map((group) => [...(group.submenus ?? []), ...(group.actions ?? [])]),
-            ]
-          : [opening, ...ordered]
-      }
-      preview={preview}
-    >
+    <LongPressMenu groups={menuGroupsDrawn} preview={preview}>
       {row}
     </LongPressMenu>,
     question,
   );
 
-  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
-  if (swiped.length === 0) return <HStack modifiers={frameModifiers}>{menu}</HStack>;
+  // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal, and so does a heard row while VoiceOver runs: the list's cell offers a swipe's acts as Actions of its own, past the row's, a second copy with a submenu's items unworded, and the menu, which the row's Actions read, already holds each of them.
+  if (swiped.length === 0 || (voiceOver && heard !== undefined)) {
+    return <HStack modifiers={frameModifiers}>{menu}</HStack>;
+  }
 
   return (
     <SwipeActions modifiers={frameModifiers}>
