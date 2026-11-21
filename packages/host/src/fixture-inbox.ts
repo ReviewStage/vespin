@@ -2532,7 +2532,7 @@ export function inboxRemindersAppState(
   state: AppStateSnapshot,
   reminders: InboxReminders,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
+  const fed = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK];
 
   if (reminders.size === 0 || fed === undefined) return state;
 
@@ -2616,7 +2616,7 @@ export function inboxSentRepliesAppState(
   state: AppStateSnapshot,
   sent: InboxSentReplies,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
+  const fed = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK];
 
   if (sent.size === 0 || fed === undefined) return state;
 
@@ -2670,7 +2670,7 @@ export function inboxReadMarksAppState(
   state: AppStateSnapshot,
   marks: InboxReadMarks,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
+  const fed = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK];
 
   if (marks.size === 0 || fed === undefined) return state;
 
