@@ -15,14 +15,21 @@
  * Under it stands Waiting on you, the Manager's own threads that wait on
  * the reader, each the row the line over its box lists (`NeedsYouRow`): an
  * ask of two short options answered from its buttons, any other opening its
- * thread in the window's Inbox; nothing while none waits. A list longer than
- * its cap shows its first rows and the rest on a press (`ShowMoreRow`).
+ * thread in the window's Inbox; nothing while none waits. Under it stand two
+ * columns. The first lists its agents, each the row a task's agents stand
+ * in (`AgentListRow`), and the pull requests they opened, each in a task
+ * row's anatomy as the Merge queue page draws one, opening in its Pull
+ * request tab. The second lists its open tasks and those done this week,
+ * each the Tasks page's own row (`RecentTasks`). A section with nothing to
+ * list stands nowhere, and a list longer than its cap shows its first rows
+ * and the rest on a press (`ShowMoreRow`).
  */
 
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import { type ManagerPullRequest, managerOverview } from "@repo/features/manager-overview-model";
 import type { PersonAgent } from "@repo/features/person-page-model";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { TERM } from "@repo/features/words";
 import {
   CountLine,
@@ -61,6 +68,7 @@ import { AgentCard, listedRowSubject } from "../tasks/agent-ref.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { type AgentThreads, NeedsYouRow } from "../tasks/threads-dock.js";
 import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
+import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
   agentTaskIds,
@@ -69,6 +77,7 @@ import {
 } from "../tasks/use-workspace-agents.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { PersonSectionFrame } from "./person-frame.js";
+import { RecentTasks } from "./recent-tasks.js";
 
 /** What the panel is called, said to a reader as its region's name. */
 const OVERVIEW = "Overview";
@@ -83,6 +92,8 @@ const OVERVIEW_WORDS = {
   DONE_THIS_WEEK: "done this week",
   AGENTS: "Agents",
   PULL_REQUESTS: "Pull requests",
+  OPEN_TASKS: "Open tasks",
+  DONE: "Done this week",
 } as const;
 
 /** The most threads Waiting on you lists before its foot shows the rest. */
@@ -93,6 +104,12 @@ const AGENT_ROWS = 6;
 
 /** The most pull requests Pull requests lists before its foot shows the rest. */
 const PULL_REQUEST_ROWS = 5;
+
+/** The most tasks Open tasks lists before its foot shows the rest. */
+const OPEN_TASK_ROWS = 6;
+
+/** The most tasks Done this week lists before its foot shows the rest. */
+const DONE_ROWS = 4;
 
 /** The cells a pull request's row draws: its number where a task's key stands, its mark where a task's status does, then how many lines it changes. */
 const PULL_REQUEST_ROW_CELLS = [
@@ -329,18 +346,62 @@ function ManagerPullRequests({
   );
 }
 
+/**
+ * A section of the Manager's tasks, each the Tasks page's own row as Home's
+ * Recent and a person's page list them (`RecentTasks`), a press opening its
+ * task; nothing while it lists none.
+ */
+function ManagerTasks({
+  tasks,
+  title,
+  listed,
+  cap,
+  unread,
+}: {
+  tasks: TasksControl;
+  title: string;
+  listed: readonly TaskSummary[];
+  /** The most rows it lists before its foot shows the rest. */
+  cap: number;
+  unread: (task: TaskSummary) => boolean;
+}): React.JSX.Element | null {
+  const { shown, foot } = useCapped(listed, cap);
+
+  if (listed.length === 0) return null;
+
+  return (
+    <PersonSectionFrame label={title} title={title} count={listed.length} noun={TERM.TASK}>
+      <ReplayMask>
+        <RecentTasks
+          tasks={tasks}
+          label={title}
+          listed={shown}
+          unread={unread}
+          onOpen={tasks.onSelect}
+        />
+        {foot}
+      </ReplayMask>
+    </PersonSectionFrame>
+  );
+}
+
 /** A Manager's overview, under the page's head and beside its chat. */
 export function ManagerOverview({
   tasks,
   manager,
   threads,
+  staged,
 }: {
   tasks: TasksControl;
   manager: ListedAgent;
   /** The threads the Manager posted, as the line over its box reads them; none while it posted none. */
   threads: AgentThreads | undefined;
+  /** Whether a fixture stages the window, whose tasks' looks are its own rather than kept (`useUnreadTasks`). */
+  staged: boolean;
 }): React.JSX.Element {
   const now = useMinute();
+  // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
+  const unread = useUnreadTasks({ staged });
   // Note that only the agents the Manager started are read, and those only for what lays the overview out, so a step of another's turn draws no overview (`useAgentsStartedBy`).
   const liveAgents = useAgentsStartedBy(tasks.agentsCarried, { agentId: manager.id });
   const workedOn = useMemo(() => agentTaskIds(liveAgents), [liveAgents]);
@@ -396,6 +457,22 @@ export function ManagerOverview({
               <div className="manager-overview-column">
                 <ManagerAgents tasks={tasks} agents={overview.agents} pullRequests={byAgent} />
                 <ManagerPullRequests tasks={tasks} pullRequests={overview.pullRequests} />
+              </div>
+              <div className="manager-overview-column">
+                <ManagerTasks
+                  tasks={tasks}
+                  title={OVERVIEW_WORDS.OPEN_TASKS}
+                  listed={overview.openTasks}
+                  cap={OPEN_TASK_ROWS}
+                  unread={unread}
+                />
+                <ManagerTasks
+                  tasks={tasks}
+                  title={OVERVIEW_WORDS.DONE}
+                  listed={overview.doneThisWeek}
+                  cap={DONE_ROWS}
+                  unread={unread}
+                />
               </div>
             </div>
           </Stack>
