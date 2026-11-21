@@ -1,0 +1,15 @@
+screen.mp4 kept
+merging agent/ios-chip-marks-narrow at d4f901de65
+merging agent/ios-inbox-groups-holders at 28bbe4b057
+merging agent/ios-task-by-key at 97b6c88b31
+merging agent/ios-mention-lists-on-ask at 118c855c9f
+Auto-merging apps/mobile/src/host/host-provider.tsx
+merging agent/ios-task-open-instant at 75b256cf88
+Auto-merging apps/mobile/src/tasks/use-tasks.ts
+merging agent/ios-status-mark-memo at 2c2d701baf
+built 15a8528ef9 = probe + agent/ios-chip-marks-narrow agent/ios-inbox-groups-holders agent/ios-task-by-key agent/ios-mention-lists-on-ask agent/ios-task-open-instant agent/ios-status-mark-memo (PROFILE=1)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
