@@ -1,0 +1,15 @@
+# row-previews.yaml -- for measurement only, never merged: each kind of row's long press preview (a thread's, a task's, an agent's), at the default text size and at the largest accessibility size (AX5), to compare a build's previews with another's.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    file: subflows/row-previews-at.yaml
+    env:
+      SIZE: UICTContentSizeCategoryL
+      SHOT: default
+- runFlow:
+    file: subflows/row-previews-at.yaml
+    env:
+      SIZE: UICTContentSizeCategoryAccessibilityXXXL
+      SHOT: ax5

@@ -1,0 +1,55 @@
+# row-previews-at.yaml -- for measurement only, never merged: launches at the text size `SIZE` names and shoots a thread's, a task's, and an agent's long press preview, each named after `SHOT`.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      logHeardActs: "true"
+      UIPreferredContentSizeCategoryName: ${SIZE}
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- runFlow:
+    file: row-menu.yaml
+    env:
+      ROW: acceptInvite can add a member twice
+      ITEM: Open
+- takeScreenshot: preview-thread-${SHOT}
+- runFlow:
+    file: dismiss.yaml
+    env:
+      POINT: 50%, 8%
+- runFlow:
+    file: tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Open
+- takeScreenshot: preview-task-${SHOT}
+- runFlow:
+    file: dismiss.yaml
+    env:
+      POINT: 50%, 8%
+- runFlow:
+    file: open-row.yaml
+    env:
+      ROW: Teammate invitations
+- extendedWaitUntil:
+    visible: "Build teammate invitations"
+    timeout: 10000
+- runFlow:
+    file: row-menu.yaml
+    env:
+      ROW: Build teammate invitations
+      ITEM: Open
+- takeScreenshot: preview-agent-${SHOT}
+- runFlow:
+    file: dismiss.yaml
+    env:
+      POINT: 50%, 8%
