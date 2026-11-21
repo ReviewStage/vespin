@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -26,9 +26,10 @@ private enum ModifierName {
   static let rowMenu = RowMenuModifier.name
   static let rowSwipes = RowSwipesModifier.name
   static let rowHeard = RowHeardModifier.name
+  static let headerMenu = HeaderMenuModifier.name
   static let all = [
     cellFocusRingOff, columnSubtitle, stackSubtitle, stackScrollEdge, sideMargins, dragLink, dropPictures,
-    dropLink, rowMenu, rowSwipes, rowHeard,
+    dropLink, rowMenu, rowSwipes, rowHeard, headerMenu,
   ]
 }
 
@@ -73,6 +74,9 @@ public final class NativeInteractionsModule: Module {
       }
       ViewModifierRegistry.register(ModifierName.rowHeard) { params, appContext, eventDispatcher in
         return try RowHeardModifier(from: params, appContext: appContext, eventDispatcher: eventDispatcher)
+      }
+      ViewModifierRegistry.register(ModifierName.headerMenu) { params, appContext, eventDispatcher in
+        return try HeaderMenuModifier(from: params, appContext: appContext, eventDispatcher: eventDispatcher)
       }
     }
 

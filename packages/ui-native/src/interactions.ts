@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a row's long press menu, swipes, and VoiceOver Actions built from data.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list followed by the stack's large title, a list's rows set in from its sides, a view dragged out as its link, pictures or a link dropped on a view, and a row's long press menu, swipes, and VoiceOver Actions and a section header's menu built from data.
 
 import {
   createModifier,
@@ -20,6 +20,7 @@ const MODIFIER = {
   ROW_MENU: "vespinRowMenu",
   ROW_SWIPES: "vespinRowSwipes",
   ROW_HEARD: "vespinRowHeard",
+  HEADER_MENU: "vespinHeaderMenu",
 } as const;
 
 /** Which bar a subtitle stands under: a split view column's, SwiftUI's own, or the native stack's a compact screen is pushed under. */
@@ -84,6 +85,14 @@ const DroppedLinkSchema = Schema.Struct({ url: Schema.String });
 const PressedPlaceSchema = Schema.Struct({ path: Schema.Array(Schema.Number) });
 
 const decodePressedPlace = Schema.decodeUnknownOption(PressedPlaceSchema);
+
+/** What a section header's menu sends: an item's place, as a row's menu sends it, or its fold, the menu button's primary action. */
+const HeaderMenuEventSchema = Schema.Union([
+  PressedPlaceSchema,
+  Schema.Struct({ fold: Schema.Literal(true) }),
+]);
+
+const decodeHeaderMenuEvent = Schema.decodeUnknownOption(HeaderMenuEventSchema);
 
 const decodeDroppedPictures = Schema.decodeUnknownOption(DroppedPicturesSchema);
 const decodeDroppedLink = Schema.decodeUnknownOption(DroppedLinkSchema);
@@ -181,5 +190,28 @@ export function rowHeard(menu: string, onPress: (path: readonly number[]) => voi
       Option.map(({ path }) => onPress(path)),
     ),
     { menu },
+  );
+}
+
+/**
+ * A section header's menu: the system's menu button around the header,
+ * which the native module builds from `menu`, the header's menu tree as JSON
+ * (`menuTree`), only as the menu opens. A tap runs `fold` where one is
+ * given, its primary action, and a long press opens the menu; a header with
+ * no fold opens it on a tap. A press hands on the place of the item pressed
+ * (`menuPressAt`).
+ */
+export function headerMenu(
+  menu: string,
+  onPress: (path: readonly number[]) => void,
+  fold: (() => void) | undefined,
+): ModifierConfig {
+  return createModifierWithEventListener(
+    MODIFIER.HEADER_MENU,
+    flow(
+      decodeHeaderMenuEvent,
+      Option.map((event) => ("path" in event ? onPress(event.path) : fold?.())),
+    ),
+    { menu, folds: fold !== undefined },
   );
 }
