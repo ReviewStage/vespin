@@ -69,6 +69,7 @@ import {
   type TaskWrite,
   taskInput,
 } from "./markdown-tasks.js";
+import { keepMarkdownTrees } from "./markdown-trees.js";
 
 export type {
   MarkdownTaskBox,
@@ -467,7 +468,7 @@ function WholeWords({
   drawer.current = taskBox;
   const toggles = taskBox !== undefined;
 
-  // Note that every box is named by its item, so one the reader cannot tick is placed too.
+  // Note that every box is named by its item, so one the reader cannot tick is placed too, and that the tree is kept last, once every step has drawn it.
   const steps = useMemo(
     () => [
       placeTaskItems,
@@ -475,6 +476,7 @@ function WholeWords({
       ...(look === MARKDOWN_LOOK.NOTE ? [htmlBlocksAsParagraphs] : []),
       ...(rehypePlugins ?? []),
       ...(look === MARKDOWN_LOOK.INLINE ? [unwrapBlocks] : []),
+      keepMarkdownTrees,
     ],
     [look, rehypePlugins],
   );
@@ -525,9 +527,15 @@ function ParsedMarkdown({
   } = whole;
 
   // Note that a transcript's task boxes are drawn as a note's read-only ones, named by their items, and its alerts as a note's.
+  // Note that settled words' tree is kept, but no tree of words still arriving, because each is read once and its every prefix would push out trees read again.
   const transcriptSteps = useMemo(
-    () => [...(rehypePlugins ?? transcriptHtmlSteps(allowedTags)), placeTaskItems, alertQuotes],
-    [rehypePlugins, allowedTags],
+    () => [
+      ...(rehypePlugins ?? transcriptHtmlSteps(allowedTags)),
+      placeTaskItems,
+      alertQuotes,
+      ...(streaming ? [] : [keepMarkdownTrees]),
+    ],
+    [rehypePlugins, allowedTags, streaming],
   );
 
   const lineSteps = useMemo(
@@ -606,10 +614,13 @@ function PlainWords({ words, look, className }: MarkdownProps): React.JSX.Elemen
 
 /**
  * Words drawn as the Markdown they were written in. A note and a document
- * are drawn again only when what they are handed changes, since the words
- * are parsed afresh on every draw, and a description redrawn on a save would parse
- * every section; a place hands its components and steps memoised for the
- * same reason. A chip in the words wraps across lines as they do
+ * are drawn again only when what they are handed changes, since a draw
+ * turns the words' tree into elements afresh even where the tree is kept
+ * (`markdown-trees.ts`); a place hands its components and steps memoised,
+ * since a step is told apart by its values, and new values read the words
+ * again. Settled words are read once for each set of steps and kept, so a
+ * task opened again draws its messages and its description without parsing
+ * them. A chip in the words wraps across lines as they do
  * (`InlineRefFitScope`), but in a transcript's line, which keeps to one.
  */
 export const Markdown = memo(function Markdown(props: MarkdownProps): React.JSX.Element {

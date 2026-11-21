@@ -1,8 +1,7 @@
-import { AGENT_BOUNDS, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
 import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { agentsOfTask, pullRequestsOfTask } from "@repo/features/task-agents-model";
-import type { TaskPullRequestLine, TaskPullRequests, TaskSummary } from "@repo/features/task-wire";
+import type { TaskPullRequestLine, TaskSummary } from "@repo/features/task-wire";
 import {
   BUTTON_SIZE,
   HOVER_CARD_ROW_LOOK,
@@ -38,6 +37,7 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { agentPlace, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { agentName, RENAME_FAILED } from "../tasks/agent-model.js";
 import { agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
@@ -48,7 +48,7 @@ import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { useListedPullRequest } from "../tasks/use-agent-pull-request.js";
 import type { HeldPeople } from "../tasks/use-agents.js";
 import { isAgentPin, type SidebarPin } from "../tasks/use-side-panel.js";
-import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
+import { useTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuAction, type MenuEntry, rowMenu } from "./action-menu.js";
@@ -176,21 +176,20 @@ function openListedOf(pin: SidebarPin, tasks: TasksControl): ReturnType<typeof l
 
 /**
  * The pull request a pin of a Pull request tab shows, as the window last
- * read it from GitHub: the task's line for it (`pullRequestsOfTask`), its
+ * read it from GitHub: the task's line for it (`useTaskPullRequests`), its
  * repository and number matched. Nothing for any other pin, or where the
  * task's lines name none; the pin then keeps the label and the gray icon it
  * was pinned with.
  */
 function pinPullRequest(
   pin: SidebarPin,
-  on: PinnedOn,
-  taskPullRequests: readonly TaskPullRequests[] | undefined,
+  onTask: readonly TaskPullRequestLine[],
 ): PinnedPullRequest | undefined {
   const address = pinnedAddress(pin);
 
   if (address === undefined) return undefined;
 
-  return pullRequestsOfTask(taskPullRequests, on.task.id).find((line) => {
+  return onTask.find((line) => {
     const named = line.url === undefined ? undefined : pullRequestAddressOf(line.url);
 
     return named !== undefined && samePullRequestAddress(named, address);
@@ -248,17 +247,22 @@ function openAgentOf(pin: SidebarPin, tasks: TasksControl): AgentSummary | undef
 
 /**
  * The agent an agent's pin opens, as the window last read it: the open
- * task's own list where the pin is on it, else the agents the list followed
- * live holds, the archived left out. Nothing for any other pin, or an agent
+ * task's own list where the pin is on it, else the agent as the list
+ * followed live holds it (`listed`), on the pin's task and unarchived. Nothing for any other pin, or an agent
  * neither names.
  */
-function pinAgent(pin: SidebarPin, on: PinnedOn, tasks: TasksControl): AgentSummary | undefined {
+function pinAgent(
+  pin: SidebarPin,
+  on: PinnedOn,
+  tasks: TasksControl,
+  listed: ListedAgent | undefined,
+): AgentSummary | undefined {
   if (!isAgentPin(pin)) return undefined;
   const open = pin.task === tasks.activeTaskId ? tasks.agents.agents : undefined;
 
-  return (open ?? agentsOfTask(tasks.liveAgents, on.task.id)).find(
-    (agent) => agent.id === pin.tab.agent,
-  );
+  if (open !== undefined) return open.find((agent) => agent.id === pin.tab.agent);
+
+  return listed?.taskId === on.task.id && listed.archivedAt === undefined ? listed : undefined;
 }
 
 /**
@@ -579,8 +583,11 @@ export function SidebarPinnedTab({
   /** Takes the row out of Pinned: a tab's pin on this Mac, an agent's on the account. */
   onUnpin: () => void;
 }): React.JSX.Element {
-  const livePullRequest = pinPullRequest(kept, on, useListedTaskPullRequests());
-  const agent = pinAgent(kept, on, tasks);
+  const livePullRequest = pinPullRequest(kept, useTaskPullRequests(on.task.id));
+  // Note that the pinned agent is read by its id alone, so a step of any other agent's turn draws the row nothing.
+  const pinnedAgentId = isAgentPin(kept) && tasks.agentsCarried ? kept.tab.agent : undefined;
+  const listedAgent = useTaskListRow(useTaskListCollections().agents, pinnedAgentId);
+  const agent = pinAgent(kept, on, tasks, listedAgent);
   const pin = namedPin(kept, agent, livePullRequest, tasks.agents.models);
   const gone = pinGone(pin, tasks);
   const taskId = pinTaskId(pin);

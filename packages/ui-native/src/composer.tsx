@@ -28,6 +28,7 @@ import {
   font,
   foregroundStyle,
   frame,
+  layoutPriority,
   lineLimit,
   opacity,
   padding,
@@ -763,9 +764,9 @@ const TOOL_SPACING = SPACE.TIGHT * 2;
  * The row under the field, as the desktop composer's foot stands it: the +
  * at its start and the capsules saying where the message runs after it,
  * scrolling sideways where they outrun the bar, then at its end what is
- * picked for it, such as the model, a call's presses, and Send or Stop,
- * inside the composer's own glass, so the keyboard that lifts the composer
- * never covers them.
+ * picked for it, such as the model, whole, the capsules giving way first, a
+ * call's presses, and Send or Stop, inside the composer's own glass, so the
+ * keyboard that lifts the composer never covers them.
  */
 function ComposerRow({
   props,
@@ -789,7 +790,10 @@ function ComposerRow({
           {tools}
         </HStack>
       </ScrollView>
-      {trailing}
+      {/* Note that what is picked for the message, such as the model, is offered the row first and takes its whole words, so the capsules before it scroll rather than cut its name short, as Apple's own rows never cut a control's word where they have room. */}
+      {trailing === undefined || trailing === null ? null : (
+        <HStack modifiers={[layoutPriority(1)]}>{trailing}</HStack>
+      )}
       {dictation === undefined ? null : (
         <DictationPress
           glyph={GLYPH.DICTATE}

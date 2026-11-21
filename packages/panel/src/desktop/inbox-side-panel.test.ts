@@ -325,8 +325,6 @@ async function inbox(
     const tasks = tasksControl({
       workspace: ACME,
       tasks: [TASK, OTHER],
-      liveAgents: LISTED_AGENTS,
-      listedPullRequests: LISTED_PULL_REQUESTS,
       inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
       sidePanel,
       onShowTask: (taskId) => left.tasks.push(taskId),

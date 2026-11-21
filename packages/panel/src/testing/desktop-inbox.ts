@@ -841,8 +841,8 @@ export function mount({
       ...(readerKnown && { me: READER.userId }),
       workspace: listedWorkspace,
       tasks: inListed,
-      // The agents the task list followed live carries, none while it has carried none yet.
-      liveAgents: world.agentListHeld ? undefined : liveAgents,
+      // Whether the task list followed live carries the agents, which it lays in the window's collections; none while it has carried none yet.
+      agentsCarried: !world.agentListHeld,
       listRead,
       sidePanel: sidePanel ?? {
         ...tasksControl().sidePanel,

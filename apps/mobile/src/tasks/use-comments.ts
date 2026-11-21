@@ -42,7 +42,7 @@ import { BUZZ, buzz, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { cachedFile } from "../cached-media.js";
+import { cachedFile, cachedPicture } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -90,12 +90,22 @@ function pictured(file: DescriptionCommentFile): boolean {
   );
 }
 
-/** What a comment's file is drawn from once its bytes land: a picture's `data:` address, or any other file's address under the app's caches. */
+/** What a comment's file is drawn from once its bytes land: its address under the app's caches, or a picture's `data:` address where no file can be named for its type. */
 async function sourceOf(
   file: DescriptionCommentFile,
   read: { readonly contentType: string; readonly base64: string },
 ): Promise<string> {
-  if (pictured(file)) return `data:${read.contentType};base64,${read.base64}`;
+  // Note that a picture is written to a file as it lands, so a press opens Quick Look on that file at once.
+  if (pictured(file)) {
+    const written = await cachedPicture(
+      COMMENT_MEDIA_PREFIX,
+      file.attachmentId,
+      read.contentType,
+      read.base64,
+    );
+
+    return written ?? `data:${read.contentType};base64,${read.base64}`;
+  }
 
   return cachedFile(
     COMMENT_MEDIA_PREFIX,

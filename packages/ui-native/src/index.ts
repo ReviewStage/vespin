@@ -4,6 +4,8 @@ export { useAnnounced, useReduceTransparency } from "./accessibility.js";
 
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
+export { ArchivedBar, ContinueLine } from "./agent-end.js";
+
 export {
   ANSWER_FIELD,
   type AnswerField,
@@ -58,7 +60,7 @@ export {
   type StandingCallCard,
 } from "./call.js";
 
-export { ChipMarkProvider } from "./chip-mark.js";
+export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
 
 export {
   CHIP_MARK,
@@ -99,6 +101,7 @@ export {
 export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeBars,
   FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
@@ -209,7 +212,13 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute, useToday } from "./minute.js";
 
-export { type ModeChoice, ModelChoiceSheet, type ModelOption } from "./model-choice-sheet.js";
+export {
+  type ModeChoice,
+  ModelChoicePopover,
+  ModelChoiceSheet,
+  type ModelChoices,
+  type ModelOption,
+} from "./model-choice-sheet.js";
 
 export { SwitchRow } from "./option-rows.js";
 

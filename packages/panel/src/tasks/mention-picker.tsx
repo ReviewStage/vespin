@@ -23,6 +23,14 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { machineName, THIS_MAC, type ThisMac } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
+  MENTION_BROWSE,
+  MENTION_FROM,
+  MENTION_WIDEN,
+  type MentionFrom,
+  narrowingQuery,
+  typedMentionKind,
+} from "@repo/features/mention-kind";
+import {
   encodeMention,
   isMentionableTool,
   MENTION_KIND,
@@ -301,29 +309,8 @@ const MENTION_GROUP = {
   /** The machines of the workspace's members, which an agent's commands and computer use may be sent to by id. */
   MACHINES: "Machines",
   SERVERS: MCP_SERVER_LABEL.many,
-  FROM: "Browse",
+  FROM: MENTION_BROWSE,
 } as const;
-
-/** The kinds a list may be narrowed to, each but a server by its own word typed before a colon after the `@`. */
-const MENTION_FROM = {
-  FILES: "files",
-  DESCRIPTION: "description",
-  TASKS: "tasks",
-  PAGES: "pages",
-  AGENTS: "agents",
-  PEOPLE: "people",
-  THREADS: "threads",
-  AUTOMATIONS: "automations",
-  PULL_REQUESTS: "prs",
-  SKILLS: "skills",
-  DATES: "dates",
-  APPS: "apps",
-  MACHINES: "machines",
-  SERVERS: "servers",
-  SERVER: "server",
-} as const;
-
-type MentionFrom = (typeof MENTION_FROM)[keyof typeof MENTION_FROM];
 
 /** The entity each kind of the list lists, whose glyph its row and its crumb wear (`../entities/entity-glyph.tsx`). */
 const KIND_ENTITY = {
@@ -346,11 +333,6 @@ const KIND_ENTITY = {
   >,
   EntityKind
 >;
-
-/** Words that narrow the list as a kind's own word does: `plan`, the description's word before it was renamed. */
-const MENTION_FROM_ALIAS: ReadonlyMap<string, MentionFrom> = new Map([
-  ["plan", MENTION_FROM.DESCRIPTION],
-]);
 
 /** The kind a list is narrowed to: one of the place's own, or one connected server by its connection, wearing its provider's mark. */
 type Narrow =
@@ -450,7 +432,7 @@ const NO_MATCH = noMatchWords(TERM.RESULT);
 
 /** What a narrowed list's back arrow is read by: back to every kind, or up out of a folder. */
 const BACK_LABEL = {
-  WIDEN: "All kinds",
+  WIDEN: MENTION_WIDEN,
   UP: "Up",
 } as const;
 
@@ -582,19 +564,20 @@ function scopeOf(
     };
   }
 
-  const typed = /^([^\s:]+):/u.exec(query);
-  const typedWord = typed?.[1]?.toLowerCase();
+  const typed = typedMentionKind(query);
+  const kind = typed === undefined ? undefined : kinds.find((each) => each.keyword === typed.word);
 
-  const word =
-    typedWord === undefined ? undefined : (MENTION_FROM_ALIAS.get(typedWord) ?? typedWord);
-
-  const kind = word === undefined ? undefined : kinds.find((each) => each.keyword === word);
-
-  if (typed === null || kind === undefined) {
+  if (typed === undefined || kind === undefined) {
     return { kind: undefined, entry: "", typed: false, walked: [], term: query };
   }
 
-  return { kind, entry: typed[0], typed: true, walked: [], term: query.slice(typed[0].length) };
+  return {
+    kind,
+    entry: typed.entry,
+    typed: true,
+    walked: [],
+    term: query.slice(typed.entry.length),
+  };
 }
 
 /** A step back out of a narrowed list: the narrowing held after it, and what the `@` word is written as where the step deletes the `kind:` it spells; none where the word stands. */
@@ -2563,13 +2546,13 @@ export function useMentionPicker({
       narrowTo(
         keyword === undefined ? { start, narrow, entry: "", typed: false, walked: [] } : undefined,
       );
-      onRetype(keyword === undefined ? words : `${keyword}:${words}`);
+      onRetype(keyword === undefined ? words : narrowingQuery(keyword, words));
 
       return;
     }
 
     if (!("mention" in row) || row.mention.kind !== MENTION_KIND.FOLDER) return;
-    const entry = `${MENTION_FROM.FILES}:`;
+    const entry = narrowingQuery(MENTION_FROM.FILES, "");
     const within = scope.kind?.narrow.from === MENTION_FROM.FILES;
     const walked = { path: row.mention.path, entry };
     narrowTo({

@@ -191,6 +191,7 @@ import {
   type KnownSteps,
   type ListedSteps,
   MOUSE_BUTTON,
+  matchesAt,
   nearest,
   type Place,
   pathOf,
@@ -924,7 +925,7 @@ export function useWindowHistory(input: {
     | "agents"
     | "pages"
     | "workspaces"
-    | "liveAgents"
+    | "agentsCarried"
     | "agentThreads"
   >;
 }): WindowHistory & TaskVisits & HistoryBehind & RecentSteps {
@@ -1090,7 +1091,7 @@ export function useWindowHistory(input: {
 
   // The task the version history standing is of, by its address, which it is counted as from the moment it stands, before that task opens under it.
   const routedHistory =
-    routed === undefined ? undefined : historyTaskOf(router.matchRoutes(pathOf(routed.address)));
+    routed === undefined ? undefined : historyTaskOf(matchesAt(router, routed.address));
 
   // Each surface the place shows is counted as it opens, from here rather than from the doors that open it, as the history is written.
   useSurfaceOpen(
@@ -1133,7 +1134,7 @@ export function useWindowHistory(input: {
       return;
     }
 
-    const matches = router.matchRoutes(pathOf(to.address));
+    const matches = matchesAt(router, to.address);
 
     if (routedPlaceOf(matches, access)?.overThePlan !== true) return;
     // An Inbox item's step stands the side panel beside it as it stood, on the item's own task.
@@ -1201,8 +1202,7 @@ export function useWindowHistory(input: {
 
   // Whether an address is on a task's own place, whose entry the router wrote before the window wrote the task's step in it.
   const onTaskRoute = useCallback(
-    (address: string) =>
-      routedPlaceOf(router.matchRoutes(pathOf(address)), access) === ROUTED_PLACE.TASK,
+    (address: string) => routedPlaceOf(matchesAt(router, address), access) === ROUTED_PLACE.TASK,
     [router, access],
   );
 
@@ -1210,7 +1210,7 @@ export function useWindowHistory(input: {
   const samePlace = useCallback(
     (one: Place, other: Place) => {
       const onSettings = (to: Place) =>
-        routedPlaceOf(router.matchRoutes(pathOf(to.address)), access) === ROUTED_PLACE.SETTINGS;
+        routedPlaceOf(matchesAt(router, to.address), access) === ROUTED_PLACE.SETTINGS;
 
       return samePage(one, other) || (onSettings(one) && onSettings(other));
     },
@@ -1273,7 +1273,7 @@ export function useWindowHistory(input: {
       const standingNow = standingPlace();
 
       return recent().map((place) => {
-        const matches = router.matchRoutes(pathOf(place.address));
+        const matches = matchesAt(router, place.address);
 
         return {
           place,

@@ -102,7 +102,7 @@ import { OfflineMark } from "./offline-mark.js";
 import { PaneGlide } from "./pane-motion.js";
 import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
-import { PhoneHead, phoneBar } from "./phone-head.js";
+import { PhoneHead, phoneBar, type TaskHeadBack } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
 import { SidePanelChord, SidePanelToggle, usePanelToggleRoom } from "./side-panel.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -1292,7 +1292,7 @@ export function AgentPlace(): React.JSX.Element {
 
   if (ownPage === undefined) return <StatePlace />;
 
-  return <AgentRoutePage tasks={tasks} away={room === SHELL_ROOM.NARROW ? away : undefined} />;
+  return <AgentRoutePage tasks={tasks} away={phoneAway(room, away)} />;
 }
 
 /**
@@ -1321,6 +1321,15 @@ export function UnknownWorkspacePlace(): React.JSX.Element {
 }
 
 /**
+ * The way back a page's row leads with, which only a phone's draws. Note that
+ * a wider room hands none, because its words name the step behind, which
+ * every step moves, and the page would be drawn again for a row it never shows.
+ */
+function phoneAway(room: ShellRoom, away: TaskHeadBack): TaskHeadBack | undefined {
+  return room === SHELL_ROOM.NARROW ? away : undefined;
+}
+
+/**
  * What a task's place draws in the places' content slot: the task bound
  * for, or its page in the shape it lands in while the host opens it, as a
  * link to it waits on its task. Every route of a task's draws this one
@@ -1329,7 +1338,7 @@ export function UnknownWorkspacePlace(): React.JSX.Element {
 export function StatePlace(): React.JSX.Element {
   const { tasks, room, looks, away } = useShellPlaces();
 
-  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+  return <DesktopTasks tasks={tasks} looks={looks} room={room} away={phoneAway(room, away)} />;
 }
 
 /**
@@ -1345,7 +1354,7 @@ export function HomePlace(): React.JSX.Element {
   const { account } = settings;
 
   if (tasks.boundFor !== undefined) {
-    return <DesktopTasks tasks={tasks} looks={looks} room={room} away={away} />;
+    return <DesktopTasks tasks={tasks} looks={looks} room={room} away={phoneAway(room, away)} />;
   }
 
   return (
@@ -1353,7 +1362,7 @@ export function HomePlace(): React.JSX.Element {
       tasks={tasks}
       looks={looks}
       room={room}
-      away={away}
+      away={phoneAway(room, away)}
       accountName={account.status === ACCOUNT_STATUS.SIGNED_IN ? account.name : undefined}
       staged={sidebar.staged}
     />

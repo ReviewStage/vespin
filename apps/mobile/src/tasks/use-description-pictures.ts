@@ -25,7 +25,7 @@ import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { MarkdownFile, MarkdownVideo } from "@repo/ui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cachedFile, cachedPlayed } from "../cached-media.js";
+import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
 import { useHostActs } from "../host/host-provider.js";
 import { openInSafari } from "../open-link.js";
 
@@ -122,9 +122,12 @@ async function readOf(id: string, contentType: string, base64: string): Promise<
     return { kind: played, source };
   }
 
-  return PICTURE_TYPES.has(contentType)
-    ? { kind: PICTURE_READ.PICTURE, source: `data:${contentType};base64,${base64}` }
-    : { kind: PICTURE_READ.UNREAD };
+  if (!PICTURE_TYPES.has(contentType)) return { kind: PICTURE_READ.UNREAD };
+
+  // Note that a picture is written to a file as it lands, as an agent's is, so a press opens Quick Look on that file at once rather than hashing and writing its bytes first.
+  const written = await cachedPicture(DESCRIPTION_MEDIA_PREFIX, id, contentType, base64);
+
+  return { kind: PICTURE_READ.PICTURE, source: written ?? `data:${contentType};base64,${base64}` };
 }
 
 /**
