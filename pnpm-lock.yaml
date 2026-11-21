@@ -263,7 +263,7 @@ patchedDependencies:
     hash: 829d8b0fcf544927826d479c0c77414f4f9340bba16c1080ecf961587bbc971f
     path: patches/@better-auth__oauth-provider@1.7.7.patch
   '@expo/ui@58.0.27':
-    hash: ba7f042b343910a8e432792b5192e4c18028895883b55c324abfd5913682beb4
+    hash: 399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab
     path: patches/@expo__ui@58.0.27.patch
   '@sentry/browser@11.8.0':
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
@@ -589,7 +589,7 @@ importers:
         version: 0.10.1
       '@expo/ui':
         specifier: 'catalog:'
-        version: 58.0.27(patch_hash=ba7f042b343910a8e432792b5192e4c18028895883b55c324abfd5913682beb4)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
+        version: 58.0.27(patch_hash=399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       '@formatjs/intl-datetimeformat':
         specifier: 8.0.3
         version: 8.0.3
@@ -1805,7 +1805,7 @@ importers:
     dependencies:
       '@expo/ui':
         specifier: 'catalog:'
-        version: 58.0.27(patch_hash=ba7f042b343910a8e432792b5192e4c18028895883b55c324abfd5913682beb4)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
+        version: 58.0.27(patch_hash=399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       '@repo/features':
         specifier: workspace:*
         version: link:../features
@@ -12431,7 +12431,7 @@ snapshots:
 
   '@expo/sudo-prompt@9.3.2': {}
 
-  '@expo/ui@58.0.27(patch_hash=ba7f042b343910a8e432792b5192e4c18028895883b55c324abfd5913682beb4)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)':
+  '@expo/ui@58.0.27(patch_hash=399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)':
     dependencies:
       expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
       react: 19.3.0
@@ -16550,7 +16550,7 @@ snapshots:
       sf-symbols-typescript: 2.2.0
       standard-navigation: 0.0.5
     optionalDependencies:
-      '@expo/ui': 58.0.27(patch_hash=ba7f042b343910a8e432792b5192e4c18028895883b55c324abfd5913682beb4)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
+      '@expo/ui': 58.0.27(patch_hash=399efe9d6087fbfdc4b213e42e093a00cae226c934ba793f8806d5153cbfb2ab)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       expo-symbols: 58.0.4(patch_hash=3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c)(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       react-dom: 19.2.8(react@19.3.0)
       react-native-gesture-handler: 3.5.0(react-native@0.88.1)(react@19.3.0)
