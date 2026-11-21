@@ -21,6 +21,7 @@ import {
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  accessibilityRemoveTraits,
   accessibilityValue,
   alignmentGuide,
   background,
@@ -1224,6 +1225,8 @@ export function RowDisclosure({
       modifiers={[
         listRowInsets({ leading: 0, trailing: SPACE.EDGE, top: 0, bottom: 0 }),
         listRowBackground("clear"),
+        // Note that the system heads a disclosure's label as a heading, which stood a parent task in VoiceOver's Headings rotor beside the list's sections; a parent is a row like any other, and the rows under it are no headings either, so the trait is taken off the whole disclosure.
+        accessibilityRemoveTraits(["isHeader"]),
       ]}
     >
       <DisclosureGroup.Label>
