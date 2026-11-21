@@ -215,6 +215,39 @@ function itemKey(item: TranscriptItem): string {
   return JSON.stringify(item.place satisfies TranscriptPlace);
 }
 
+/** The message id of the reader's own newest line, a line on its way among them; none where they sent none. */
+function newestOwnLine(items: readonly TranscriptItem[]): string | undefined {
+  return items.findLast((item) => item.kind === TRANSCRIPT_ITEM.SAID && !item.received)?.place
+    .message;
+}
+
+/**
+ * Tells `onSent` each time a line of the reader's own lands as the
+ * transcript's newest, as a send of theirs does: never for the lines the
+ * transcript opens on or reads in later, nor for an older line of theirs
+ * becoming the newest again once a refused one is deleted.
+ */
+function useOwnSend(items: readonly TranscriptItem[], onSent: () => void): void {
+  const newest = newestOwnLine(items);
+  const hasRows = items.length > 0;
+  // The reader's lines already seen, and whether the list stood rows when it last looked, so the lines it opens on never count as sent.
+  const seen = useRef(new Set(newest === undefined ? [] : [newest]));
+  const stood = useRef(hasRows);
+  const told = useRef(onSent);
+  useEffect(() => {
+    told.current = onSent;
+  }, [onSent]);
+
+  useEffect(() => {
+    const sent = newest !== undefined && stood.current && !seen.current.has(newest);
+
+    if (newest !== undefined) seen.current.add(newest);
+    stood.current = hasRows;
+
+    if (sent) told.current();
+  }, [newest, hasRows]);
+}
+
 type InsetResult = { readonly paddingLeft: number };
 
 /** The step a row stands in by, for the folds that hold it. */
@@ -1163,9 +1196,10 @@ const REVEAL_POSITION = 0.35;
  * since SwiftUI has no piece for its rows: FlashList's own chat list, which
  * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
  * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
- * while one that lands as they read back holds their place; a reader scrolled
- * back is offered Jump to latest. Only the rows near the screen are drawn,
- * however long the transcript runs.
+ * while one that lands as they read back holds their place; a line the reader
+ * sends brings it into view wherever they stood, just over the composer's
+ * stack, as Messages' does; a reader scrolled back is offered Jump to latest.
+ * Only the rows near the screen are drawn, however long the transcript runs.
  */
 export function AgentTranscript({
   items,
@@ -1195,6 +1229,8 @@ export function AgentTranscript({
   const list = useRef<FlashListRef<TranscriptItem>>(null);
   // Whether the reader stands at the newest row, which the keyboard's rise keeps in view; it opens there.
   const anchored = useRef(true);
+  // Whether the list keeps its end in view each time its content grows, since the reader sent a line and has neither scrolled nor opened a row since.
+  const following = useRef(false);
   const [away, setAway] = useState(false);
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
@@ -1235,7 +1271,18 @@ export function AgentTranscript({
     [focusSentTo],
   );
 
-  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), column, placeCall };
+  // Note that a row the reader opens lets the end go, so the call or fold they opened stays where they pressed it rather than scrolling away under the body it opens.
+  const rowDrawing: RowDrawing = {
+    ...drawing,
+    now: now ?? Date.now(),
+    column,
+    placeCall,
+    onToggle: (item) => {
+      following.current = false;
+      drawing.onToggle(item);
+    },
+  };
+
   // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
   const measured = width > 0;
   const hasRows = items.length > 0;
@@ -1247,9 +1294,21 @@ export function AgentTranscript({
   // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
   const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
+  // Note that a line the reader sends brings the end into view, wherever they stood, as Messages' does, and holds it there as the line's row is measured, takes its Not delivered mark, and the composer's stack changes under it, which FlashList's own autoscroll leaves behind the stack: it scrolls once as the row lands, before the row is measured, and skips a growth that follows a scroll within 100 ms.
+  useOwnSend(items, () => {
+    anchored.current = true;
+    following.current = true;
+    list.current?.scrollToEnd({ animated: !reduceMotion });
+  });
+
+  const onContentSize = useCallback(() => {
+    if (following.current && anchored.current) list.current?.scrollToEnd({ animated: false });
+  }, []);
+
   // Note that only the reader's own scroll moves the anchor, never the list's own: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
+    following.current = false;
   }, []);
 
   // The older pages as they stand now, which the scroll reads without being made anew for each.
@@ -1371,6 +1430,7 @@ export function AgentTranscript({
           keyboardDismissMode="interactive"
           onScroll={onScroll}
           onScrollBeginDrag={onScrollBegin}
+          onContentSizeChange={onContentSize}
           onScrollEndDrag={onDragEnd}
           onMomentumScrollEnd={(event) => {
             onScrollSettled(event);
