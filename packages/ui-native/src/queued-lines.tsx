@@ -1,12 +1,10 @@
-// queued-lines.tsx -- the messages queued behind an agent's turn, standing in a glass of their own over its composer, as the panel stands its queue over the box: each with Steer and Delete, a long press offering them with Edit, Move Up and Move Down, one being edited muted with Cancel, Resume while the queue stands paused, and two or more folded under one line that opens them.
+// queued-lines.tsx -- the messages queued behind an agent's turn, standing in a glass of their own over its composer, as the panel stands its queue over the box: each with Steer and Delete, a long press offering them with Edit, Move Up and Move Down, one being edited muted with Cancel, and Resume while the queue stands paused.
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
-  accessibilityHint,
   accessibilityLabel,
-  accessibilityValue,
   buttonStyle,
   font,
   foregroundStyle,
@@ -14,7 +12,6 @@ import {
   lineLimit,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
-import { useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BAR_GLASS } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -33,17 +30,6 @@ const WORDS = {
   MOVE_UP: "Move Up",
   MOVE_DOWN: "Move Down",
 } as const;
-
-/** What the line a folded queue stands as says: how many wait, as the panel's dock counts them, and what a press on it does, as VoiceOver hears it. */
-const FOLD_WORDS = {
-  count: (count: number) => `${count} queued`,
-  HINT: "Shows or hides the queued messages",
-  OPEN: "Expanded",
-  FOLDED: "Collapsed",
-} as const;
-
-/** How many queued messages fold under one line, so the queue and the composer's head leave the transcript most of the screen while the keyboard stands. */
-const FOLD_AT = 2;
 
 /** How many lines a queued message keeps at an accessibility size before it is cut. */
 const QUEUED_LINES_LARGE = 3;
@@ -277,100 +263,13 @@ function QueuedRow({
 }
 
 /**
- * The line a folded queue stands as, which opens and folds it: the queued
- * glyph, how many wait, and the chevron saying whether it stands open, then
- * why the queue stands paused, where it does, with Resume, so a paused queue
- * says so folded too.
- */
-function FoldLine({
-  count,
-  open,
-  paused,
-  onToggle,
-  onResume,
-}: {
-  readonly count: number;
-  readonly open: boolean;
-  readonly paused: string | undefined;
-  readonly onToggle: () => void;
-  readonly onResume: (() => void) | undefined;
-}) {
-  const colors = useColors();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-  const words = FOLD_WORDS.count(count);
-
-  return (
-    <HStack
-      spacing={SPACE.ROW}
-      modifiers={[padding({ leading: SPACE.ROW, trailing: SPACE.TIGHT })]}
-    >
-      <Button
-        onPress={onToggle}
-        modifiers={[
-          buttonStyle("plain"),
-          accessibilityLabel(words),
-          accessibilityValue(open ? FOLD_WORDS.OPEN : FOLD_WORDS.FOLDED),
-          accessibilityHint(FOLD_WORDS.HINT),
-        ]}
-      >
-        {/* Note that the press's frame and its shape stand on the label, not on the button, since a plain button takes a press only where its label is hit. */}
-        <HStack
-          spacing={SPACE.ROW}
-          modifiers={[
-            frame({
-              minHeight: PRESS_SIZE,
-              maxWidth: Number.POSITIVE_INFINITY,
-              alignment: "leading",
-            }),
-            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-          ]}
-        >
-          <Image {...glyphImage(GLYPH.QUEUED)} size={glyph} color={colors.TEXT_MUTED} />
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-              foregroundStyle(colors.TEXT_BODY),
-            ]}
-          >
-            {words}
-          </Text>
-          {paused === undefined ? null : (
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                foregroundStyle(colors.TEXT_MUTED),
-                lineLimit(1),
-              ]}
-            >
-              {paused}
-            </Text>
-          )}
-          <Image
-            {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-            size={glyph}
-            color={colors.TEXT_MUTED}
-          />
-        </HStack>
-      </Button>
-      {onResume === undefined || paused === undefined ? null : (
-        <LineAct label={WORDS.RESUME} symbol={GLYPH.PLAY} onPress={onResume} />
-      )}
-    </HStack>
-  );
-}
-
-/**
  * The messages queued behind the agent's turn, oldest first, standing over
  * its composer in a glass of their own, as the panel's queue dock stands
  * over its box: each on one line led by the panel's queued glyph, with
  * Steer, which sends it into the turn now, and Delete. A long press on a
  * line offers the same with Edit, Move Up and Move Down, each only where a
  * line stands to pass, and one being edited stands muted with Cancel. Why
- * the queue stands paused heads them, with Resume. Two or more fold under
- * one line saying how many wait, the paused words and Resume on it, which a
- * press opens and folds again, so the queue and the composer's head leave
- * the transcript most of the screen while the keyboard stands; one being
- * edited holds it open, so its Cancel stays in reach. Note
+ * the queue stands paused heads them, with Resume. Note
  * that the lines stand at the height their words take, and past three they
  * scroll, so a long queue never pushes the composer off the screen; no line
  * is dragged, since SwiftUI drags a row only in its list, which cannot size
@@ -389,11 +288,8 @@ export function QueuedLines({
   const colors = useColors();
   const large = useAccessibilitySize();
   const press = useScaledSize(PRESS_SIZE);
-  const [opened, setOpened] = useState(false);
 
   if (lines.length === 0 && paused === undefined) return null;
-  const folds = lines.length >= FOLD_AT;
-  const open = !folds || opened || lines.some((line) => line.editing === true);
 
   const row = large ? press * LARGE_ROW_PRESSES : press;
   const rowLook = [padding({ leading: SPACE.ROW, trailing: SPACE.TIGHT })];
@@ -423,16 +319,7 @@ export function QueuedLines({
   // Note that a queue past three lines scrolls, as tall as three rows of its size stand.
   return (
     <VStack spacing={0} modifiers={[padding({ vertical: SPACE.TIGHT }), ...BAR_GLASS]}>
-      {folds ? (
-        <FoldLine
-          count={lines.length}
-          open={open}
-          paused={paused}
-          onToggle={() => setOpened((was) => !was)}
-          onResume={onResume}
-        />
-      ) : null}
-      {folds || paused === undefined ? null : (
+      {paused === undefined ? null : (
         <HStack
           spacing={SPACE.ROW}
           modifiers={[padding({ leading: SPACE.ROW, trailing: SPACE.TIGHT })]}
@@ -451,13 +338,11 @@ export function QueuedLines({
           )}
         </HStack>
       )}
-      {open ? (
-        lines.length > LINES_IN_SIGHT ? (
-          <ScrollView modifiers={[frame({ height: row * LINES_IN_SIGHT })]}>{stack}</ScrollView>
-        ) : (
-          stack
-        )
-      ) : null}
+      {lines.length > LINES_IN_SIGHT ? (
+        <ScrollView modifiers={[frame({ height: row * LINES_IN_SIGHT })]}>{stack}</ScrollView>
+      ) : (
+        stack
+      )}
     </VStack>
   );
 }

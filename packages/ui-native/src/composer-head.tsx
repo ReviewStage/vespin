@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place, and an agent's threads line.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place.
 
 import { Button, HStack, Image, ScrollView, Spacer, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -557,76 +557,5 @@ export function EditingLine({ onCancel }: { readonly onCancel: () => void }) {
         </Text>
       </Button>
     </HStack>
-  );
-}
-
-/** What a press on the threads line is heard to do. */
-const THREADS_HINT = "Opens the thread in the Inbox";
-
-/**
- * The line over an agent's field while it has posted threads, as the
- * panel's threads dock stands over its box: the Inbox's glyph and, while
- * any waits on the reader, Inbox in the ink with how many wait at its end
- * in copper, as the Inbox's tab counts them; once none waits, how many
- * threads it posted, quiet in the muted ink. A press opens the thread the
- * line names, the oldest waiting or else the latest changed.
- */
-export function ThreadsLine({
-  words,
-  waiting,
-  onOpen,
-}: {
-  readonly words: string;
-  /** How many of the agent's threads wait on the reader; none at rest. */
-  readonly waiting: number;
-  readonly onOpen: () => void;
-}) {
-  const colors = useColors();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-  const waits = waiting > 0;
-
-  return (
-    <Button
-      onPress={onOpen}
-      modifiers={[
-        buttonStyle("plain"),
-        accessibilityLabel(waits ? `${words}, ${waiting} waiting` : words),
-        accessibilityHint(THREADS_HINT),
-      ]}
-    >
-      {/* Note that the shape stands on the line's full-width frame, since a plain button takes a press only where its label is hit. */}
-      <HStack
-        spacing={SPACE.TIGHT * 2}
-        modifiers={[
-          frame({
-            maxWidth: Number.POSITIVE_INFINITY,
-            minHeight: PRESS_SIZE,
-            alignment: "leading",
-          }),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        ]}
-      >
-        <Image {...glyphImage(GLYPH.INBOX)} size={glyph} color={colors.TEXT_MUTED} />
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: waits ? "medium" : "regular" }),
-            foregroundStyle(waits ? colors.TEXT_BODY : colors.TEXT_MUTED),
-            frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          ]}
-        >
-          {words}
-        </Text>
-        {waits ? (
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
-              foregroundStyle(colors.ACCENT),
-            ]}
-          >
-            {String(waiting)}
-          </Text>
-        ) : null}
-      </HStack>
-    </Button>
   );
 }
