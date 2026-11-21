@@ -183,8 +183,8 @@ migration's approval unanswered so a flow sees an answer standing Not delivered
 (`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
 flows run with no server. A change to one of the fixture agent's pull
 requests is taken as GitHub would take it and moves it on the document,
-merged or out of the queue (`pullRequestPartsAppState`), so a flow sees its
-press land. A `-authServer stub` launch argument
+merged, out of the queue, closed, reopened, or a draft
+(`pullRequestPartsAppState`), so a flow sees its press land. A `-authServer stub` launch argument
 instead signs in against an account service the app answers itself
 (`src/host/stub-auth-server.ts`), whose authorization page grants at once,
 which is how `maestro/sign-in.yaml` signs in, relaunches signed in, and

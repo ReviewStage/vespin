@@ -637,8 +637,8 @@ function memberAt<Member>(
  * mark and a task's each move their row's dot (`keepInboxReadMark`,
  * `keepReadMark`), and a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
- * would, so a screen draws it merged or out of the queue, and a reminder
- * set or cleared moves its item there, as the host draws one, so the Inbox
+ * would, so a screen draws it merged, out of the queue, closed, or a
+ * draft, and a reminder set or cleared moves its item there, as the host draws one, so the Inbox
  * puts it away under Reminders, and a change of an agent's model, permission
  * mode, servers, name, or pin moves the agent there, as the host draws one,
  * and a change to its queue moves the queue there, a Stop pausing it, so a
