@@ -1,0 +1,20 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fviewer10335
+Set orientation PORTRAIT... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot viewer-0-thread... COMPLETED
+Tap on "The invite page"... COMPLETED
+Assert that id: picture-viewer-close is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot viewer-1-open... COMPLETED
+Swipe from (50%, 45%) to (50%, 85%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "The invite page" is visible... COMPLETED
+Take screenshot viewer-2-closed... COMPLETED

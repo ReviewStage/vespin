@@ -1,0 +1,67 @@
+built main 003fd74f26 + as 003fd74f26
+install 0
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 21:32:30 16807 MB
+curve 21:33:01 16466 MB
+curve 21:33:31 14683 MB
+curve 21:34:01 14489 MB
+curve 21:34:31 14212 MB
+curve 21:35:01 14194 MB
+curve 21:35:31 14104 MB
+curve 21:36:02 14013 MB
+curve 21:36:32 13715 MB
+curve 21:37:02 13583 MB
+curve 21:37:32 14104 MB
+curve 21:38:02 14046 MB
+curve 21:38:32 14016 MB
+curve 21:39:03 13812 MB
+curve 21:39:33 13673 MB
+curve 21:40:03 13453 MB
+curve 21:40:33 13397 MB
+curve 21:41:03 13352 MB
+curve 21:41:33 13316 MB
+curve 21:42:04 13260 MB
+curve 21:42:34 13230 MB
+curve 21:43:04 13199 MB
+curve 21:43:34 13188 MB
+curve 21:44:04 13171 MB
+curve 21:44:35 13150 MB
+curve 21:45:05 13118 MB
+curve 21:45:35 13096 MB
+curve 21:46:05 13059 MB
+curve 21:46:35 13046 MB
+curve 21:47:05 12868 MB
+curve 21:47:35 12842 MB
+curve 21:48:06 12807 MB
+curve 21:48:36 12781 MB
+curve 21:49:06 12751 MB
+curve 21:49:36 12746 MB
+curve 21:50:06 12690 MB
+curve 21:50:37 12653 MB
+curve 21:51:07 12633 MB
+curve 21:51:37 12490 MB
+curve 21:52:07 12426 MB
+curve 21:52:38 11985 MB
+curve 21:53:08 11814 MB
+curve 21:53:38 11761 MB
+curve 21:54:08 11526 MB
+curve 21:54:38 11470 MB
+curve 21:55:09 11393 MB
+curve 21:55:39 11285 MB
+curve 21:56:09 14856 MB
+curve 21:56:39 21750 MB
+curve 21:57:09 22929 MB
+curve 21:57:39 22873 MB
+curve 21:58:09 22867 MB
+curve 21:58:39 22833 MB
+curve 21:59:09 22707 MB
+curve 21:59:40 22707 MB
+curve 22:00:10 22611 MB
+BUILD EXIT 0 22:00:40
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatmain8.app: replacing existing signature
+p10331-iphone-dark-largetitle: fails 0 shots 4 
+p10335-iphone-light-viewer: fails 0 shots 3 
+p10335 viewer.mp4 3906 KB
