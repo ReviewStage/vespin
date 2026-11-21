@@ -37,7 +37,12 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { useAnnounced, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL } from "./call.js";
-import { Composer, type ComposerDictation, type ComposerMenu } from "./composer.js";
+import {
+  Composer,
+  type ComposerDictation,
+  type ComposerMenu,
+  type ComposerPills,
+} from "./composer.js";
 import {
   type AttachedPicture,
   AttachedPictures,
@@ -349,6 +354,8 @@ type StartPageProps = {
   readonly onTalk?: (() => void) | undefined;
   /** The names a flow finds the field and the + by. */
   readonly testIds: { readonly field: string; readonly add: string };
+  /** Draws the words with their mentions and files as pills (`ComposerPills`), the files then standing in the words rather than in a row over them; the system's plain field where none is given. */
+  readonly pills?: ComposerPills | undefined;
 };
 
 /**
@@ -406,11 +413,13 @@ function StartHead({ title, head }: Pick<StartPageProps, "title" | "head">) {
 export function StartPage(props: StartPageProps) {
   const { words, skills, mentions, pictures, onDetach, notes } = props;
   const { add, chips, trailing, ready, onStart, onTalk } = props;
+  // Note that a field of pills stands each picture attached in its words, so no row over the field repeats them.
+  const shown = props.pills === undefined ? pictures : [];
 
   const head =
     skills === undefined &&
     mentions === undefined &&
-    pictures.length === 0 &&
+    shown.length === 0 &&
     notes.length === 0 ? undefined : (
       <>
         {skills === undefined ? null : (
@@ -423,7 +432,7 @@ export function StartPage(props: StartPageProps) {
             onPick={mentions.onPick}
           />
         )}
-        <AttachedPictures pictures={pictures} onDetach={onDetach} />
+        <AttachedPictures pictures={shown} onDetach={onDetach} />
         {notes.map((note) => (
           <StartNote key={note} words={note} />
         ))}
@@ -450,6 +459,7 @@ export function StartPage(props: StartPageProps) {
           autoFocus
           onDropPictures={props.onDropPictures}
           testIds={props.testIds}
+          pills={props.pills}
         />
       }
     >

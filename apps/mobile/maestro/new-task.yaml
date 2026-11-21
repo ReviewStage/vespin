@@ -166,10 +166,10 @@ env:
                 index: 0
                 optional: true
       - tapOn: "Add|Done"
-      # Note that a picture stands as its thumbnail, heard as its ×
-      # ("Remove Picture 1").
+      # Note that a picture stands as its pill in the words, which the field
+      # is heard by, its words and each pill's name ("Picture 1").
       - extendedWaitUntil:
-          visible: "Remove Picture 1"
+          visible: ".*Picture 1.*"
           timeout: 30000
       - waitForAnimationToEnd
       - takeScreenshot: new-task-picture
