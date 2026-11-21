@@ -1,4 +1,4 @@
-# pill-field.yaml -- the pill field on its scratch page: laid in with a mention of every kind and a picture's and a file's marker as pills, then cleared, typed into, an `@` word picked into a pill, a picture attached at the caret, and the Markdown it writes shown under it.
+# pill-field.yaml -- the pill field on its scratch page: laid in with a mention of every kind and a picture's and a file's marker as pills, then cleared, typed into, an `@` word picked into a pill, a picture attached at the caret, and the Markdown it writes shown under it; then the document field a description is edited in, drawn with no syntax, its table and diagram as cards.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -53,3 +53,24 @@ appId: dev.vespin.ios
     id: "pill-field-styled"
 - waitForAnimationToEnd
 - takeScreenshot: pill-field-styled-caret
+# Under them, the document field a description is edited in, as Notion edits
+# a page: each block drawn with no syntax (a heading, bold words, a mention's
+# pill, the lists' bullets, numbers and boxes, a quote, code, a rule), and a
+# table and a diagram, which the phone does not edit, as cards. The Markdown
+# it writes is shown under it, each block it was handed kept as its exact
+# source, so the table stands as it was written.
+- runFlow: subflows/lower-keyboard.yaml
+- scrollUntilVisible:
+    element:
+      id: "document-field"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- takeScreenshot: document-field
+- swipe:
+    from:
+      id: "document-field"
+    direction: UP
+- waitForAnimationToEnd
+- takeScreenshot: document-field-cards
+- assertVisible: "(?s).*\\| Role \\| May withdraw \\|\\n\\| - \\| - \\|.*"

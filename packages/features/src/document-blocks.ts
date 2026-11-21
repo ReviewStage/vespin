@@ -294,6 +294,31 @@ function locked(source: string, kind: LockedKind): BlockContent {
   };
 }
 
+/** A task item's box with no words after it, which GFM reads as the words "[ ]", as an empty task's printing writes it. */
+const EMPTY_TASK = /^\[([ xX])\]$/u;
+
+/** Whether an item is a task, and checked: GFM's reading, else an item holding only an empty task's box. */
+function itemChecked(
+  markdown: string,
+  item: RootContent & { readonly type: "listItem" },
+): boolean | undefined {
+  if (item.checked !== null && item.checked !== undefined) return item.checked;
+  const [paragraph, ...rest] = item.children;
+  const start = paragraph?.position?.start.offset;
+  const end = paragraph?.position?.end.offset;
+
+  if (
+    rest.length > 0 ||
+    paragraph?.type !== "paragraph" ||
+    start === undefined ||
+    end === undefined
+  )
+    return undefined;
+  const box = EMPTY_TASK.exec(markdown.slice(start, end).trim());
+
+  return box === null ? undefined : box[1] !== " ";
+}
+
 /** A list read as its items, each one paragraph, or none where an item holds more, such as a nested list. */
 function listContent(
   markdown: string,
@@ -301,18 +326,25 @@ function listContent(
   files: ReadonlySet<string>,
 ): BlockContent | undefined {
   const lines: BlockLine[] = [];
-  const task = node.children.some((item) => item.checked !== null && item.checked !== undefined);
+  const checks = node.children.map((item) => itemChecked(markdown, item));
+  const task = checks.some((checked) => checked !== undefined);
 
-  for (const item of node.children) {
+  for (const [index, item] of node.children.entries()) {
+    const checked = checks[index];
     const [paragraph, ...rest] = item.children;
 
     if (rest.length > 0) return undefined;
 
+    // Note that an empty task's box is its item's whole paragraph, so the line holds no words.
+    const empty = (item.checked === null || item.checked === undefined) && checked !== undefined;
+
     const read =
-      paragraph === undefined ? [{ runs: [] }] : paragraphLines(markdown, [paragraph], files);
+      paragraph === undefined || empty
+        ? [{ runs: [] }]
+        : paragraphLines(markdown, [paragraph], files);
 
     if (read === undefined) return undefined;
-    lines.push(...read.map((line) => (task ? { ...line, checked: item.checked === true } : line)));
+    lines.push(...read.map((line) => (task ? { ...line, checked: checked === true } : line)));
   }
 
   if (node.ordered === true)
@@ -466,8 +498,14 @@ function markedRuns(runs: readonly InlineRun[], depth: number): string {
       const first = group[0];
 
       if (first === undefined || !has(first) || mark === INLINE_MARK.CODE) return inner;
+      // Note that spaces at a stretch's edges stand outside its fences, since `**a **` reads back as no mark at all.
+      const core = inner.trim();
 
-      return `${MARK_FENCE[mark]}${inner}${MARK_FENCE[mark]}`;
+      if (core === "") return inner;
+      const lead = inner.slice(0, inner.length - inner.trimStart().length);
+      const trail = inner.slice(inner.trimEnd().length);
+
+      return `${lead}${MARK_FENCE[mark]}${core}${MARK_FENCE[mark]}${trail}`;
     })
     .join("");
 }
