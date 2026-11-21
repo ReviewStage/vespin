@@ -20,7 +20,7 @@ appId: dev.vespin.ios
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
       refuseWrites: "true"
 - extendedWaitUntil:
-    visible: "Then add a Resend button beside each pending invite."
+    visible: "2 queued"
     timeout: 30000
 # A follow-up sent and left unanswered stands at the transcript's end marked
 # Not delivered, the field empty under it.
