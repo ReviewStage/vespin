@@ -35,7 +35,6 @@ import {
   type AnswerFieldKind,
   AnswerFields,
   AskNote,
-  AttachedPictures,
   type BarAction,
   type BarFootItem,
   type BarMenu,
@@ -46,6 +45,7 @@ import {
   Composer,
   ComposerFoot,
   GLYPH,
+  MentionSuggestions,
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -57,6 +57,8 @@ import {
   pickPictures,
   takePictures,
 } from "../use-attached-pictures.js";
+import { useMentionOffer } from "../use-mention-offer.js";
+import { usePillField } from "../use-pill-field.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
@@ -300,8 +302,10 @@ const GOT_IT_SEND = { label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK } as co
  * settles it without messaging its agent, with Undo; a word or a picture
  * makes it Send again.
  * Its + attaches pictures from Photos, as the panel's box attaches files,
- * held on the thread's draft as capsules over the field until a send
- * carries them, and holds the panel's "Send as a new thread to" the
+ * held on the thread's draft until a send carries them, each standing as
+ * its marker's pill in the words, as an agent's composer stands it, and an
+ * `@` offers what the thread's task can mention, a pick standing as its
+ * pill (`usePillField`), and holds the panel's "Send as a new thread to" the
  * thread's agent, which turns the next send into a new thread's first
  * message, its line asking to start one. What the picker or a bound said
  * of the pictures stands in the field's head.
@@ -311,8 +315,11 @@ export function ThreadComposer({
   answer,
   agentName,
   inColumn,
+  place,
 }: {
   readonly item: InboxItem;
+  /** The workspace and task the thread stands in, whose agents, tasks, people and pages an `@` offers. */
+  readonly place: { readonly workspaceId: string; readonly taskId: string };
   readonly answer: ThreadAnswer;
   /** The thread's agent's name, which the new thread's switch names. */
   readonly agentName: string;
@@ -352,14 +359,23 @@ export function ThreadComposer({
     }));
   };
 
-  // Note that each picture's thumbnail draws from its bytes, made once for the files the draft holds, so a redraw neither builds its address anew nor hands the thumbnail a new string.
+  // The files the draft holds, by the names their markers name, each a pill in the words.
   const pictures = useMemo(() => attachedFiles(draft.attachments), [draft.attachments]);
+  const onNote = (note: string) => onDraft((now) => ({ ...now, note }));
+  const pillField = usePillField(draft.note, onNote, { attached: pictures, detach });
+  const mentions = useMentionOffer(draft.note, onNote, place, pillField.mentions).offered;
 
-  // Note that the box's head holds the pictures attached, then what the picker refused, then why the last send didn't go.
+  // Note that the box's head holds what an `@` offers, then what the picker refused, then why the last send didn't go.
   const head =
-    pictures.length === 0 && pictureNote === undefined && sendNote === undefined ? undefined : (
+    mentions === undefined && pictureNote === undefined && sendNote === undefined ? undefined : (
       <>
-        <AttachedPictures pictures={pictures} onDetach={detach} />
+        {mentions === undefined ? null : (
+          <MentionSuggestions
+            groups={mentions.groups}
+            empty={mentions.empty}
+            onPick={mentions.pick}
+          />
+        )}
         {pictureNote === undefined ? null : <AskNote words={pictureNote} />}
         {sendNote === undefined ? null : <AskNote words={sendNote} />}
       </>
@@ -374,7 +390,8 @@ export function ThreadComposer({
   const props = {
     placeholder,
     words: draft.note,
-    onWords: (note: string) => onDraft({ ...draft, note }),
+    onWords: onNote,
+    pills: pillField.pills,
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && (answerReady || nods),
     onSend: () => (asNew ? start() : nods ? acknowledge() : send()),
