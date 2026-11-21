@@ -19,7 +19,12 @@
 import { AUTOMATION_PRESET, type AutomationPresetName } from "@repo/features/automation-presets";
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
 import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
-import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
+import {
+  ROUTED_PLACE,
+  useWindowPlace,
+  useWindowPlaceNow,
+  type WindowPlace,
+} from "./places/routed-places.js";
 import { pathUnder } from "./route-gates.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 
@@ -141,10 +146,8 @@ function navigationTo(to: AutomationsPlace, workspace: string): NavigateOptions 
   }
 }
 
-/** Which Automations page the router stands, if any. */
-export function useAutomationsPlace(): AutomationsStanding {
-  const here = useWindowPlace();
-
+/** Which Automations page the window stands on at `here`, if any. */
+function standingAt(here: WindowPlace): AutomationsStanding {
   const standing =
     here.place === ROUTED_PLACE.AUTOMATIONS
       ? placeOf(here.leaf, here.params, here.search)
@@ -158,15 +161,34 @@ export function useAutomationsPlace(): AutomationsStanding {
   };
 }
 
-/** The Automations pages as the router stands them, in a room `narrow` or not, kept standing by the window's routed stay where a leave was asked of them before a door asked for the page standing. */
-export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRoute {
+/** Which Automations page the router stands, if any. */
+export function useAutomationsPlace(): AutomationsStanding {
+  return standingAt(useWindowPlace());
+}
+
+/** The Automations pages' presses, read against where the window stands as each is pressed (`useAutomationsOpen`). */
+export interface AutomationsOpen {
+  readonly onOpen: AutomationsRoute["onOpen"];
+  readonly standsAt: AutomationsRoute["standsAt"];
+  /** The address step of the workspace the Automations page standing is in, as the window stands at the call; none off it. */
+  readonly standingInNow: () => string | undefined;
+}
+
+/**
+ * Opens an Automations page, read against where the window stands as it is
+ * pressed, so its holder is drawn again for no move of the window: the page
+ * already standing moves nothing and keeps standing, and the automation a
+ * new page made takes that page's step. Answers where the window stands as
+ * it is called too, for a door whose way back opens the list under the
+ * workspace the page standing is in.
+ */
+export function useAutomationsOpen(): AutomationsOpen {
   const router = useRouter();
   const navigate = useNavigate();
-  const standing = useAutomationsPlace();
   const exits = useRoutedExits();
+  const placeNow = useWindowPlaceNow();
   // Only grows: every automation the window has seen deleted.
   const deleted = useRoutedMemory().deletedAutomations;
-  const { standingIn } = standing;
 
   const standsAt = (to: AutomationsPlace, workspace: string) =>
     router.buildLocation(navigationTo(to, workspace)).href === router.history.location.href;
@@ -189,6 +211,19 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
     const replace = inPlace || (to.kind === AUTOMATIONS_PAGE.EDIT && to.created === true);
     void navigate({ ...options, replace });
   };
+
+  return { onOpen, standsAt, standingInNow: () => standingAt(placeNow()).standingIn };
+}
+
+/** The Automations pages as the router stands them, in a room `narrow` or not, kept standing by the window's routed stay where a leave was asked of them before a door asked for the page standing. */
+export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRoute {
+  const router = useRouter();
+  const navigate = useNavigate();
+  const standing = useAutomationsPlace();
+  const { onOpen, standsAt } = useAutomationsOpen();
+  // Only grows: every automation the window has seen deleted.
+  const deleted = useRoutedMemory().deletedAutomations;
+  const { standingIn } = standing;
 
   const automation =
     standing.place.kind === AUTOMATIONS_PAGE.EDIT && standingIn !== undefined

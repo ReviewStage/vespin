@@ -10,7 +10,7 @@ appId: dev.vespin.ios
 # Launched on the host's Inbox fixture with `-refuseWrites true`, opened on
 # its invitations agent's page as `compose.yaml` is, so the fixture leaves
 # each message to the agent unanswered and keeps it as the host keeps a
-# refused line (`src/host/fixture-host.ts`'s `keepRefusedSend`); nothing
+# refused line (`src/host/fixture-host.ts`'s `keepSend`); nothing
 # reaches a server. Note that the value is quoted, as `failure-notice.yaml`
 # says why.
 - launchApp:
@@ -20,7 +20,7 @@ appId: dev.vespin.ios
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
       refuseWrites: "true"
 - extendedWaitUntil:
-    visible: "Then add a Resend button beside each pending invite."
+    visible: "2 queued"
     timeout: 30000
 # A follow-up sent and left unanswered stands at the transcript's end marked
 # Not delivered, the field empty under it.

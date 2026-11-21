@@ -68,7 +68,13 @@ import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-door
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { NAMED_ORDER, useNamedTask, useNamedTasks } from "../task-list-collections.js";
+import {
+  NAMED_ORDER,
+  useNamedTask,
+  useNamedTasks,
+  useTaskListCollections,
+  useTaskNames,
+} from "../task-list-collections.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -460,6 +466,7 @@ function DescriptionDocument({
   room: ShellRoom;
   away: TaskHeadBack;
 }): React.JSX.Element {
+  const collections = useTaskListCollections();
   const { region } = tasks;
   const pins = usePins(tasks.typedNamesNow);
   const account = useWindowAccount();
@@ -530,9 +537,11 @@ function DescriptionDocument({
   const headingTask = region.kind === TASK_REGION.READY ? region.task.id : undefined;
   const columnHeld = useMemo(() => ({ current: column }), [column]);
 
+  // Note that only a phone watches the heading, because its row alone picks it up, and the words it reads off the drawn
+  // heading would draw the whole document again for nothing, after the draw that opened the task.
   const documentHeld = useMemo(
-    () => ({ current: headingTask === undefined ? null : documentBox }),
-    [documentBox, headingTask],
+    () => ({ current: !phone || headingTask === undefined ? null : documentBox }),
+    [documentBox, headingTask, phone],
   );
 
   const descriptionHeading = useHeadingAway(columnHeld, documentHeld);
@@ -602,7 +611,7 @@ function DescriptionDocument({
   // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
   const readMentionAgents = useMentionAgentsReader(
     opened?.workspaceId,
-    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
+    useTaskNames(tasks.typedNames),
     tasks.agents.models,
   );
 
@@ -1631,7 +1640,7 @@ function DescriptionDocument({
                           {runPlace === undefined ? null : (
                             <AutomationRunSteps
                               place={runPlace}
-                              onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
+                              onOpenAgent={(agentId) => openRunAgent(tasks, collections, agentId)}
                             />
                           )}
                           <CopyChord copy={tasks.copy} workspaceId={task.workspaceId} />
@@ -1881,12 +1890,48 @@ function startingPage(
 }
 
 /**
+ * What of the Tasks tab the task's page reads nothing of: the task the window
+ * is bound for, and the task its own place stands on. Both move at the press
+ * that opens another task, a round trip before that task opens, while the
+ * page still draws the task open, so a page drawn again for them would draw
+ * that task again for nothing. Note that nothing under the page may read
+ * either, because the page holds the tab it was last drawn with while only
+ * these move.
+ */
+const UNDRAWN_ON_PAGE = ["boundFor", "taskView"] as const satisfies readonly (keyof TasksControl)[];
+
+/** Whether two of the Tasks tab hand the task's page the same, every field but those it reads nothing of the same one. */
+function samePageTasks(was: TasksControl, now: TasksControl): boolean {
+  if (was === now) return true;
+  const undrawn: readonly (keyof TasksControl)[] = UNDRAWN_ON_PAGE;
+  // SAFETY: a tab's own keys are the fields of its shape, the one both sides are drawn from.
+  const keys = Object.keys(now) as (keyof TasksControl)[];
+
+  if (keys.length !== Object.keys(was).length) return false;
+
+  return keys.every((key) => undrawn.includes(key) || was[key] === now[key]);
+}
+
+/** Whether the work column is handed the same, the tab compared as its page reads it (`samePageTasks`). */
+function sameWorkColumn(was: WorkColumnProps, now: WorkColumnProps): boolean {
+  return (
+    was.looks === now.looks &&
+    was.room === now.room &&
+    was.away === now.away &&
+    was.accountName === now.accountName &&
+    was.staged === now.staged &&
+    samePageTasks(was.tasks, now.tasks)
+  );
+}
+
+/**
  * The Tasks tab's work column on a task's place: the open task's page, or
  * its page in the shape it lands in while the host opens it.
  *
  * A memo boundary: the shell drawn again over the same tasks, as a setting
  * that moves draws it, leaves the open plan, its transcripts, and its side
- * panel as they were.
+ * panel as they were, and so does a press opening another task, until that
+ * task opens (`UNDRAWN_ON_PAGE`).
  */
 export const DesktopTasks = memo(function DesktopTasks({
   tasks,
@@ -1920,7 +1965,7 @@ export const DesktopTasks = memo(function DesktopTasks({
       />
     </SkillFiles>
   );
-});
+}, sameWorkColumn);
 
 /**
  * The Tasks tab's work column on Home, the page of no task bound, whose own

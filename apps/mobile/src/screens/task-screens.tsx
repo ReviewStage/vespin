@@ -34,6 +34,7 @@ import {
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
+import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
   agentRunsOnWords,
   agentStillWriting,
@@ -94,10 +95,10 @@ import { TASKS_GROUP } from "@repo/features/tasks-page-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
-  CHOOSE_AN_ITEM_WORDS,
   countWords,
   NO_RESULTS_HINT,
   noResultsForWords,
+  noSelectionWords,
   readFailedWords,
   readingWords,
   TERM,
@@ -175,6 +176,7 @@ import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
+  type ComponentProps,
   type ReactElement,
   type ReactNode,
   useDeferredValue,
@@ -193,12 +195,14 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePushStood } from "../push-stood.js";
+import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+
 import { useOnOwnTab } from "../tab-route.js";
 import {
   threadComments,
@@ -304,6 +308,8 @@ const WORDS = {
   UNLISTED_TASK: "Task",
   STOP: "Stop",
   ARCHIVE: "Archive",
+  UNARCHIVE: "Unarchive",
+  ARCHIVED: "Archived",
 } as const;
 
 /** The statuses a row's Status and the page's status chip offer, in the panel's order. */
@@ -1073,6 +1079,7 @@ function TaskBranchRows({
 
 /** The words of a section header's long press menu, as the panel's sidebar says them. */
 const SECTION_MENU_WORDS = {
+  NEW_TASK: "New task",
   RENAME_SECTION: "Rename section",
   DELETE_SECTION: "Delete section",
   OPEN_ON_GITHUB: "Open on GitHub",
@@ -1082,13 +1089,17 @@ const SECTION_MENU_WORDS = {
  * What a long press on a group's header offers, as the panel's right-click
  * on the sidebar's same header does: Mark all as read on Pinned, Following
  * and the tasks with no repository, only while one of its tasks is unread;
- * on one of the member's sections, Rename and Mark all as read, then Delete
- * section, its Undo in the notice; and on a repository's group, Open on
- * GitHub, then Mark all as read. Note that the panel's New task, Change
- * icon, and a repository's Keep at top are left out, since the phone starts
- * no task in a section, picks no icon, and keeps no repository at top.
+ * on one of the member's sections, New task, then Rename and Mark all as
+ * read, then Delete section, its Undo in the notice; and on a repository's
+ * group, Open on GitHub, then Mark all as read. Note that the panel's Change
+ * icon and a repository's Keep at top are left out, since the phone picks
+ * no icon and keeps no repository at top.
  */
-function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPressGroup[] {
+function groupMenu(
+  group: TaskTreeGroup,
+  listing: TasksListing,
+  newTaskIn: (sectionId: string) => void,
+): readonly LongPressGroup[] {
   const unread = group.rows.map(({ task }) => task).filter((task) => listing.lookOf(task).unread);
 
   const read: LongPressGroup =
@@ -1111,6 +1122,14 @@ function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPr
     if (section === undefined) return [read];
 
     return [
+      [
+        {
+          label: SECTION_MENU_WORDS.NEW_TASK,
+          symbol: GLYPH.NEW_TASK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => newTaskIn(section.id),
+        },
+      ],
       [
         {
           label: WORDS.RENAME,
@@ -1154,11 +1173,36 @@ function groupMenu(group: TaskTreeGroup, listing: TasksListing): readonly LongPr
   return [read];
 }
 
+/** Opens New task on one of the member's sections, which files the task in it once it starts, as the panel's section header's + and New task open its card. */
+function useNewTaskIn(): (sectionId: string) => void {
+  const router = useRouter();
+
+  return (sectionId) => router.push({ pathname: "/start-task", params: { section: sectionId } });
+}
+
+/**
+ * The + a section of the member's ends its header in, as the panel's
+ * sidebar section's does: New task in it (`useNewTaskIn`); none on any
+ * other group, which the panel's sidebar heads with no +.
+ */
+function sectionAdd(
+  group: TaskTreeGroup,
+  newTaskIn: (sectionId: string) => void,
+): ComponentProps<typeof ListSection>["add"] {
+  if (group.kind !== TASK_TREE_GROUP.SECTION) return undefined;
+  const label = `${SECTION_MENU_WORDS.NEW_TASK} in ${group.title ?? ""}`;
+
+  return { label, acts: [{ label, symbol: GLYPH.ADD, onPress: () => newTaskIn(group.key) }] };
+}
+
 /**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
- * heads a repository group the tree draws no heading for. A task's row dragged onto
- * its header, as an iPad drags, moves the task there (`placeIn`).
+ * heads a repository group the tree draws no heading for. A section of the
+ * member's holding no task stands as its header alone, its icon, menu and +
+ * still there, as the panel's sidebar keeps an empty section, and folds
+ * nothing. A task's row dragged onto its header, as an iPad drags, moves
+ * the task there (`placeIn`).
  */
 function GroupSection({
   group,
@@ -1169,9 +1213,11 @@ function GroupSection({
   readonly listing: TasksListing;
   readonly hold: TreeHold;
 }) {
+  const newTaskIn = useNewTaskIn();
+
   return (
     <ListSection
-      menu={groupMenu(group, listing)}
+      menu={groupMenu(group, listing, newTaskIn)}
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
       glyphColor={
@@ -1180,10 +1226,11 @@ function GroupSection({
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
-      foldable
+      foldable={group.rows.length > 0}
       folded={hold.folded.has(group.key)}
       onFold={(shut) => hold.setFolded(group.key, shut)}
       onDropLink={dropOnto(group, listing)}
+      add={sectionAdd(group, newTaskIn)}
     >
       <FoldedRows rows={group.rows} listing={listing} parents={groupParents(hold, group.key)} />
     </ListSection>
@@ -1303,12 +1350,9 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
-      {/* Note that a section holding no task is left out, as Reminders keeps an empty list off a grouped view. */}
-      {tree.sections
-        .filter((group) => group.rows.length > 0)
-        .map((group) => (
-          <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
-        ))}
+      {tree.sections.map((group) => (
+        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+      ))}
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
@@ -1949,13 +1993,17 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
  * An agent row's swipe: Stop while it works, which a full swipe runs, or
  * Archive once it rests, which asks first (`useAgentRowAsk`), as the
  * agent page's menu asks, since the phone has no Undo to offer after; a
- * destructive act never runs on a full swipe.
+ * destructive act never runs on a full swipe. An archived agent's row
+ * offers Unarchive in Archive's place, at once, as the panel's does, since
+ * it stops nothing.
  */
 function agentSwipes(
   agent: TaskAgentLine["agent"],
   acts: ReturnType<typeof useAgentRowActs>,
   onArchive: ((agentId: string) => void) | undefined,
 ): readonly RowSwipe[] {
+  if (agent.archivedAt !== undefined) return [unarchiveAct(agent, acts)];
+
   if (agentStillWriting(agent.status)) {
     return [
       {
@@ -1979,6 +2027,19 @@ function agentSwipes(
   ];
 }
 
+/** An archived agent's Unarchive, on its row's swipe and in its menu. */
+function unarchiveAct(
+  agent: TaskAgentLine["agent"],
+  acts: ReturnType<typeof useAgentRowActs>,
+): RowAction {
+  return {
+    label: WORDS.UNARCHIVE,
+    symbol: GLYPH.UNARCHIVE,
+    tone: ROW_ACTION_TONE.ARCHIVE,
+    onPress: () => acts.unarchive(agent.id),
+  };
+}
+
 /** What an agent row's Rename asks, as the agent page's Rename asks it (`askForName`). */
 const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
 
@@ -1987,7 +2048,7 @@ const AGENT_RENAME_WORDS = { TITLE: "Rename agent", ACT: "Rename" } as const;
  * (`agentMenuGroups`) and its row's choice of them: Copy link and Open in
  * browser, once its workspace is known; Rename; Stop while it works and
  * Archive, asked first; and last and alone, Permanently delete, asked
- * always. Copy transcript stays on the agent's page, as the panel's row
+ * always, an archived agent's offering Unarchive in Archive's place. Copy transcript stays on the agent's page, as the panel's row
  * leaves it out too (`NOT_ON_A_ROW`).
  */
 function agentMenu({
@@ -2050,20 +2111,24 @@ function agentMenu({
       ]
     : [];
 
-  if (asking === undefined) return [links, [rename], stop];
+  const archived = agent.archivedAt !== undefined;
+
+  if (asking === undefined) return [links, [rename], archived ? [unarchiveAct(agent, acts)] : stop];
 
   return [
     links,
     [rename],
-    [
-      ...stop,
-      {
-        label: WORDS.ARCHIVE,
-        symbol: GLYPH.ARCHIVE,
-        tone: ROW_ACTION_TONE.ARCHIVE,
-        onPress: asking.archive,
-      },
-    ],
+    archived
+      ? [unarchiveAct(agent, acts)]
+      : [
+          ...stop,
+          {
+            label: WORDS.ARCHIVE,
+            symbol: GLYPH.ARCHIVE,
+            tone: ROW_ACTION_TONE.ARCHIVE,
+            onPress: asking.archive,
+          },
+        ],
     [
       {
         label: WORDS.DELETE,
@@ -2404,6 +2469,47 @@ function OverviewAgents({
           onPress={() => router.navigate("/inbox")}
         />
       )}
+    </ListSection>
+  );
+}
+
+/** Whether the reader left Archived open, one choice for every task's page for as long as the app runs. */
+let archivedUnfolded = false;
+
+/**
+ * The task's archived agents under Archived, after its Agents, as the
+ * panel's phone Overview folds them under its agents: each the same row as
+ * a listed agent's, which opens its page, where its transcript is read and
+ * it is brought back, and offers Unarchive in Archive's place; folded until
+ * opened, then standing as the reader left it on every task's page; none
+ * while the task has none.
+ */
+function OverviewArchived({
+  overview,
+  asking,
+}: {
+  readonly overview: TaskOverview;
+  readonly asking: AgentAsking;
+}) {
+  const [folded, setFolded] = useState(!archivedUnfolded);
+
+  if (overview.archived.length === 0) return null;
+
+  return (
+    <ListSection
+      title={WORDS.ARCHIVED}
+      glyph={GLYPH.ARCHIVE}
+      count={overview.archived.length}
+      foldable
+      folded={folded}
+      onFold={(shut) => {
+        archivedUnfolded = !shut;
+        setFolded(shut);
+      }}
+    >
+      <RowForEach data={overview.archived} keyOf={(line) => line.agent.id}>
+        {(line) => <TaskAgentRow line={line} task={overview.task} asking={asking} />}
+      </RowForEach>
     </ListSection>
   );
 }
@@ -2781,6 +2887,7 @@ function OverviewPage({
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
+  useNoteOpened({ kind: SEARCH_FOUND_KIND.TASKS, id: task.id, workspaceId: task.workspaceId });
   const sections = useSectionsShown(task.id) && entered;
 
   const { data: descriptions = false } = useQuery({
@@ -2816,6 +2923,7 @@ function OverviewPage({
       </ListSection>
       {sections ? <OverviewRelations overview={overview} /> : null}
       {sections ? <OverviewAgents overview={overview} asking={asking} /> : null}
+      {sections ? <OverviewArchived overview={overview} asking={asking} /> : null}
       {sections ? <OverviewPages overview={overview} /> : null}
       {!sections || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
@@ -2981,7 +3089,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
         entered
       />
     ) : selected === undefined ? (
-      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
+      <NoSelection title={noSelectionWords(TERM.TASK)} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (

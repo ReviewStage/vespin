@@ -144,6 +144,8 @@ export const GLYPH = {
   NOT_FOUND: lucide(LUCIDE_SYMBOL.SEARCH_X),
   OFFLINE: lucide(LUCIDE_SYMBOL.WIFI_OFF),
   TIME: lucide(LUCIDE_SYMBOL.CLOCK),
+  /** A reminder for tomorrow morning, as Mail's Remind Me draws its Tomorrow. */
+  TOMORROW: lucide(LUCIDE_SYMBOL.SUNRISE),
   QUEUED: lucide(LUCIDE_SYMBOL.LIST_END),
   STATUS: lucide(LUCIDE_SYMBOL.CIRCLE_DASHED),
   CHECK: lucide(LUCIDE_SYMBOL.CHECK),
@@ -174,6 +176,8 @@ export const GLYPH = {
   SAVE: lucide(LUCIDE_SYMBOL.DOWNLOAD),
   LINK: lucide(LUCIDE_SYMBOL.LINK),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
+  /** Open, which brings a row's lifted preview up to its whole page in the app; the arrow out is kept for what leaves it. */
+  OPEN: lucide(LUCIDE_SYMBOL.MAXIMIZE_2),
   OPEN_EXTERNALLY: lucide(LUCIDE_SYMBOL.EXTERNAL_LINK),
   PIN: lucide(LUCIDE_SYMBOL.PIN),
   UNPIN: lucide(LUCIDE_SYMBOL.PIN_OFF),
@@ -208,6 +212,7 @@ export const GLYPH = {
   EDIT_MESSAGE: lucide(LUCIDE_SYMBOL.PENCIL),
   REWIND: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
   FORK: lucide(LUCIDE_SYMBOL.SPLIT),
+  CONTINUE: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
   UPDATE: lucide(LUCIDE_SYMBOL.CIRCLE_ARROW_UP),
   RUN: lucide(LUCIDE_SYMBOL.PLAY),
   // A sound clip's play and pause, as the panel's audio player draws them.

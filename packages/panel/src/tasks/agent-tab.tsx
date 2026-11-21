@@ -1,6 +1,14 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
 import {
+  CONTINUE_AGAIN_LABEL,
+  CONTINUE_LABEL,
+  continuedByIds,
+  continuedByTitles,
+  endLineOffersContinue,
+  endLineReason,
+} from "@repo/features/agent-continue-model";
+import {
   GOAL_REACH,
   goalConditions,
   goalControlLine,
@@ -285,17 +293,11 @@ import {
   agentLines,
   agentName,
   agentWorkingSince,
-  CONTINUE_AGAIN_LABEL,
-  CONTINUE_LABEL,
-  continuedByIds,
-  continuedByTitles,
   dockedPullRequests,
   type EndLineParts,
-  endLineOffersContinue,
   endLineOffersOtherModel,
   endLineOffersTryAgain,
   endLineParts,
-  endLineReason,
   finishedReplyLead,
   lastTurnEnding,
   lineSender,

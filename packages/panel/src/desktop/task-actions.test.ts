@@ -203,7 +203,7 @@ function sidebarTask(
       tasks,
       task,
       current,
-      unread: false,
+      unread: () => false,
       now: task.updatedAt,
       onOpen: () => asked.opened.push(task.id),
     }),

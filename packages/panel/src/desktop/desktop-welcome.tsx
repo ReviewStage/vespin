@@ -31,9 +31,9 @@ export function useHomeNewTask(box: RefObject<HTMLElement | null>, asks: number)
 
 /**
  * Whether the task list holds a task in the workspace named, or in any while
- * none is: one live query over the task collection (`findOne`), so a
- * delivery moving a task draws the reader again only where the answer
- * moves.
+ * none is: one live query over the task collection (`findOne`), which
+ * selects the id alone, so a delivery moving a task, the one found among
+ * them, draws the reader again only where the answer moves.
  */
 export function useListsTask(workspaceId: string | undefined): boolean {
   const { tasks } = useTaskListCollections();
@@ -47,7 +47,9 @@ export function useListsTask(workspaceId: string | undefined): boolean {
           workspaceId === undefined
             ? every
             : every.where(({ task }) => eq(task.workspaceId, workspaceId))
-        ).findOne();
+        )
+          .select(({ task }) => ({ id: task.id }))
+          .findOne();
       },
     }).data !== undefined
   );

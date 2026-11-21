@@ -5,7 +5,7 @@ import {
   openItems,
 } from "@repo/features/inbox-list-model";
 import { useMemo } from "react";
-import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
+import { useTaskListRows } from "../task-list-collections.js";
 import {
   type HolderInboxItems,
   taskHoldings,
@@ -49,15 +49,23 @@ type UseListedInboxGroupsResult = {
  */
 export function useListedInboxGroups(tasks: TasksControl): UseListedInboxGroupsResult {
   const { inboxTasks } = useListedInbox(tasks);
-  const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
+  // Note that only the plans holding items are read, each by its id with its name as it is being typed, so a plan that holds none moving, as each turn of its agents does, groups nothing again, nor draws the sidebar counting them (`useInboxViewCount`).
+  const holderRows = useTaskListRows(tasks.typedNames);
+  const workspaceId = tasks.workspace?.id;
 
   // Note that every plan holding an item is read, not only those main counts as waiting on the
   // account, because those are its own agents' alone, and the Inbox lists every member's.
-  const holdings = useMemo(() => {
-    const listedIds = new Set(listed.map((task) => task.id));
+  const { holdings, listed } = useMemo(() => {
+    const held = inboxTasks.flatMap((holding) => {
+      const task = holderRows.task(holding.taskId);
 
-    return inboxTasks.filter((holding) => listedIds.has(holding.taskId));
-  }, [inboxTasks, listed]);
+      return task === undefined || (workspaceId !== undefined && task.workspaceId !== workspaceId)
+        ? []
+        : [{ holding, task }];
+    });
+
+    return { holdings: held.map(({ holding }) => holding), listed: held.map(({ task }) => task) };
+  }, [inboxTasks, holderRows, workspaceId]);
 
   const read = useHolderInboxItems(useMemo(() => taskHoldings(holdings), [holdings]));
 

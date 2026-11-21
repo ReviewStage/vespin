@@ -3,7 +3,7 @@
  */
 
 import { isWireString } from "@repo/wire";
-import type { Element, ElementContent, Root } from "hast";
+import type { Element, ElementContent, ElementData, Root } from "hast";
 import { Fragment } from "react";
 import type { Components } from "streamdown";
 import { Checkbox } from "../components/checkbox/checkbox.js";
@@ -18,7 +18,7 @@ interface CountedBoxes {
 }
 
 /** A task item's checkbox as drawn: the offset its item starts at in the words, where they say it, its place among the words' boxes and the count it is among, and the item's own words, which name it. */
-interface TaskItem {
+export interface TaskItem {
   readonly at: number | undefined;
   readonly index: number;
   readonly counted: CountedBoxes;
@@ -63,8 +63,17 @@ export type MarkdownTaskTick = (item: TaskBoxOrdinal) => React.ReactNode;
  */
 export type MarkdownTaskBox = (item: TaskBoxItem) => React.ReactNode;
 
-/** Each task item's checkbox, by the tree's own node. */
-const TASK_ITEMS = new WeakMap<Element, TaskItem>();
+/**
+ * Each task item's checkbox is placed on its own node, in the tree rather
+ * than beside it, so a tree kept and drawn again as a copy
+ * (`markdown-trees.ts`) carries its boxes' items with it.
+ */
+declare module "hast" {
+  interface ElementData {
+    /** The task item a checkbox stands for (`placeTaskItems`). */
+    taskItem?: TaskItem | undefined;
+  }
+}
 
 /** A list item's own words, a picture's alt text among them, without the words of a list nested in it. */
 function itemWords(node: ElementContent): string {
@@ -96,7 +105,11 @@ function placeTasks(
 
     if (child.tagName === "input" && child.properties.type === "checkbox" && own) {
       const label = own.children.map(itemWords).join("").trim();
-      TASK_ITEMS.set(child, { at, index: counted.boxes, counted, label });
+      const taskItem = { at, index: counted.boxes, counted, label };
+
+      // SAFETY: the `position` hast-util-from-parse5 declares on an element's data is written only by a verbose HTML parse, which no Markdown here takes.
+      child.data ??= {} as ElementData;
+      child.data.taskItem = taskItem;
       counted.boxes += 1;
     }
 
@@ -143,7 +156,7 @@ function readTaskBox({
 }: React.InputHTMLAttributes<HTMLInputElement> & {
   node?: Element | undefined;
 }): React.JSX.Element {
-  const item = node === undefined ? undefined : TASK_ITEMS.get(node);
+  const item = node?.data?.taskItem;
 
   if (props.type !== "checkbox") return <input {...props} />;
 
@@ -164,7 +177,7 @@ export const readTaskInput: NonNullable<Components["input"]> = readTaskBox;
 /** How a note draws a task item's checkbox where its reader can tick it, as `drawBox` draws it. */
 export function taskInput(drawBox: MarkdownTaskBox): NonNullable<Components["input"]> {
   return ({ node, ...props }) => {
-    const item = node === undefined ? undefined : TASK_ITEMS.get(node);
+    const item = node?.data?.taskItem;
     const at = item?.at;
 
     return item === undefined || at === undefined ? (
@@ -185,7 +198,7 @@ export function taskInput(drawBox: MarkdownTaskBox): NonNullable<Components["inp
  */
 export function orderedTaskInput(drawBox: MarkdownTaskTick): NonNullable<Components["input"]> {
   return ({ node, ...props }) => {
-    const item = node === undefined ? undefined : TASK_ITEMS.get(node);
+    const item = node?.data?.taskItem;
     const checked = props.checked === true;
 
     if (props.type !== "checkbox" || item === undefined) return readTaskBox({ node, ...props });

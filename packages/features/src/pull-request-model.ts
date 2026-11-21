@@ -380,7 +380,12 @@ export function mergeSentence(
   action: MergeAction | undefined,
   { queueShown = false }: { readonly queueShown?: boolean } = {},
 ): string {
-  const { merge, merging } = pullRequest;
+  const { merging } = pullRequest;
+
+  // Note that a draft says so whatever merge state was read with it, as its chip and its merge press read its state, so the three never disagree.
+  const merge =
+    pullRequest.state === PULL_REQUEST_STATE.DRAFT ? MERGE_STATE.DRAFT : pullRequest.merge;
+
   const line = mergeWords(merge, pullRequest.base);
   const blocked = merge === MERGE_STATE.BLOCKED;
   const standing = (blocked ? blockedWords(merging, action === undefined) : undefined) ?? line;
