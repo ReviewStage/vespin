@@ -1,0 +1,45 @@
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-chip-marks-narrow
+FETCH FAILED pin2b/agent/ios-chip-marks-narrow
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-inbox-groups-holders
+FETCH FAILED pin2b/agent/ios-inbox-groups-holders
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-task-by-key
+FETCH FAILED pin2b/agent/ios-task-by-key
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-mention-lists-on-ask
+FETCH FAILED pin2b/agent/ios-mention-lists-on-ask
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-task-open-instant
+FETCH FAILED pin2b/agent/ios-task-open-instant
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-status-mark-memo
+FETCH FAILED pin2b/agent/ios-status-mark-memo
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-root-reads-narrow
+FETCH FAILED pin2b/agent/ios-root-reads-narrow
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-new-task-reads
+FETCH FAILED pin2b/agent/ios-new-task-reads
+fatal: couldn't find remote ref refs/heads/pin2b/agent/ios-managers-read-narrow
+FETCH FAILED pin2b/agent/ios-managers-read-narrow
+screen.mp4 kept
+merging pin2b/agent/ios-chip-marks-narrow at d4f901de65f
+merging pin2b/agent/ios-inbox-groups-holders at 28bbe4b0570
+merging pin2b/agent/ios-task-by-key at 837a6051597
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging packages/host/src/fixture-inbox.ts
+merging pin2b/agent/ios-mention-lists-on-ask at 118c855c9f9
+Auto-merging apps/mobile/src/host/host-provider.tsx
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+Auto-merging apps/mobile/src/use-mention-offer.ts
+merging pin2b/agent/ios-task-open-instant at 2cb5c24f41e
+Auto-merging apps/mobile/src/tasks/use-tasks.ts
+merging pin2b/agent/ios-status-mark-memo at 2c2d701bafc
+merging pin2b/agent/ios-root-reads-narrow at 60be7c1d68c
+merging pin2b/agent/ios-new-task-reads at c633a87df0f
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+merging pin2b/agent/ios-managers-read-narrow at 1375e06670d
+Auto-merging apps/mobile/src/screens/start-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/host/src/fixture-inbox.ts
+Auto-merging packages/ui-native/src/marks.tsx
+built 2d675faeaf6 = probe + pin2b/agent/ios-chip-marks-narrow pin2b/agent/ios-inbox-groups-holders pin2b/agent/ios-task-by-key pin2b/agent/ios-mention-lists-on-ask pin2b/agent/ios-task-open-instant pin2b/agent/ios-status-mark-memo pin2b/agent/ios-root-reads-narrow pin2b/agent/ios-new-task-reads pin2b/agent/ios-managers-read-narrow (PROFILE=0)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ALLDONE
