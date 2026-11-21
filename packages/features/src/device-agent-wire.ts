@@ -166,6 +166,12 @@ export const DEVICE_CAPABILITY = {
   RESTORE_CHECKOUT: "restore-checkout",
   /** It answers a diff request (`DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT`); a follower from before it would fail its whole requests read on one, so none is queued to a device without it. */
   DIFF_CHECKOUT: "diff-checkout",
+  /**
+   * It runs each agent in a VM of its own, the agent image it runs them on
+   * already pulled: a workspace's machine registers it once it is ready,
+   * and no agent is placed on a workspace's machine without it.
+   */
+  VM_AGENTS: "vm-agents",
 } as const;
 
 export type DeviceCapability = (typeof DEVICE_CAPABILITY)[keyof typeof DEVICE_CAPABILITY];

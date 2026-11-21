@@ -96,7 +96,9 @@ export const reachedAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
  * Whether the account may message the agent, open or use a shell in its
  * sandbox, or start an agent from it: any member who reaches it, but only
  * its starter for one that runs on the starter's own GitHub token, or on
- * the starter's own Mac, whose machine is theirs alone to drive.
+ * the starter's own Mac, whose machine is theirs alone to drive. One on a
+ * machine its workspace owns is controlled as one in the cloud is, since
+ * that machine runs every member's agents and is no one member's to drive.
  */
 export function controlsAgent(
   userId: string,
