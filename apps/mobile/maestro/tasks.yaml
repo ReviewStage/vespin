@@ -100,8 +100,11 @@ env:
     direction: UP
 - waitForAnimationToEnd
 # A swipe from the leading edge reveals Unpin, which a full swipe would
-# press at once, so the flow swipes partway across the first row, under
-# Pinned's header, and a tap on the row's own words closes it unpressed.
+# press at once, so the flow swipes partway across Pinned's row, under the
+# Managers group and Pinned's header, and a tap on the row's own words
+# closes it unpressed. Note that the swipe's height is the row's on the
+# iPhone 18 Pro since the Managers group stood above Pinned; at the old
+# height it ran over Release manager and opened its page (j10404).
 # Note that the row is closed before anything else is pressed, because a row
 # left open takes the next press on the list, the long press below among
 # them, only to close itself; and that a regular window, whose swipes read
@@ -111,8 +114,8 @@ env:
       notVisible: "No task selected"
     commands:
       - swipe:
-          start: "8%, 21%"
-          end: "38%, 21%"
+          start: "8%, 33%"
+          end: "38%, 33%"
           duration: 900
       - waitForAnimationToEnd
       - takeScreenshot: tasks-swipe-leading
@@ -134,14 +137,12 @@ env:
     element: "Unpin"
     direction: DOWN
 # Note that the menu is scrolled to its last act, which a short window, the
-# iPhone Duo's, stands below its foot, and which an iPad's menu, clipped
-# beside its preview, holds out of sight though the tree calls it visible
-# (`menu-foot.yaml`).
+# iPhone Duo's, stands below its foot. An iPad's menu, clipped beside its
+# preview, is left at its top here, so Rename below stands in it; it is
+# drawn to its foot only before Permanently delete (`menu-foot.yaml`).
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
-- runFlow:
-    file: subflows/menu-foot.yaml
 - takeScreenshot: tasks-row-menu
 # Rename asks for the name in the system's alert, opened on the task's name,
 # and Cancel keeps it.
