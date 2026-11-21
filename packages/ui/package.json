@@ -57,6 +57,7 @@
     "./use-disclosure": "./src/use-disclosure.js",
     "./testing/frames": "./src/testing/frames.js",
     "./testing/held-exits": "./src/testing/held-exits.js",
+    "./testing/point-at-turns": "./src/testing/point-at-turns.js",
     "./testing/leaving-place": "./src/testing/leaving-place.js",
     "./testing/reported-failure": "./src/testing/reported-failure.js",
     "./testing/selectable-list": "./src/testing/selectable-list.js",

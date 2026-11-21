@@ -10,6 +10,7 @@ import {
 import type { Task } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab, subagentTab } from "@repo/ui/tab-strip-model";
+import { pointAtTurns } from "@repo/ui/testing/point-at-turns";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -298,6 +299,7 @@ test("the card a transcript opens on offers Copy, which copies the brief's text"
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const { container } = await mount({ reader: DEAN.userId, main: agentTab(AGENT.id) });
+  pointAtTurns(container);
 
   const copy = container.querySelector<HTMLButtonElement>(
     '.agent-origin button[aria-label="Copy message"]',
