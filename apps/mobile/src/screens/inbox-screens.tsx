@@ -44,12 +44,13 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
-  CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
   noResultsForWords,
+  noSelectionWords,
   PATH_OPENS,
   SELECTION_WORDS,
   selectedWords,
+  TERM,
 } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -1435,7 +1436,7 @@ function InboxSplitScreen({
 
   const detail =
     selected === undefined ? (
-      <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
+      <NoSelection title={noSelectionWords(TERM.INBOX_ITEM)} />
     ) : (
       <ThreadColumn key={selected} id={selected} remindMenu={remind.itemMenu} onOpen={select} />
     );
