@@ -75,7 +75,7 @@ describe("menuTree", () => {
         },
         act("Unfollow", { disabled: true, detail: "You're the assignee" }),
       ],
-      [act("Permanently delete", { tone: ROW_ACTION_TONE.DESTRUCTIVE })],
+      [act("Permanently delete", { tone: ROW_ACTION_TONE.DESTRUCTIVE, symbol: GLYPH.DELETE })],
     ];
 
     expect(menuTree(groups, INKS)).toEqual([
@@ -158,6 +158,7 @@ describe("menuTree", () => {
         {
           kind: MENU_NODE.ACT,
           label: "Permanently delete",
+          icon: { ...glyph(glyphImage(GLYPH.DELETE)), color: "#4d4d4d" },
           destructive: true,
           disabled: false,
           heard: "Permanently delete",
