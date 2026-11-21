@@ -192,6 +192,7 @@ function SealedPageAt({
   );
 
   // Note that the web view is hidden from accessibility until the ground has gone, because WebKit hands its words to accessibility before they are drawn.
+  // Note that a failed load ends the ground too, since react-native-webview calls `onLoadEnd` on an error, and so does WebKit's page process ending before it loaded, which calls neither, so the ground never stands for good.
   return (
     <View style={styles.page}>
       <WebView
@@ -200,6 +201,7 @@ function SealedPageAt({
         originWhitelist={EVERY_ADDRESS}
         onShouldStartLoadWithRequest={staysSealed}
         onLoadEnd={() => setLoaded(true)}
+        onContentProcessDidTerminate={() => setLoaded(true)}
         javaScriptEnabled
         domStorageEnabled={false}
         cacheEnabled={false}
