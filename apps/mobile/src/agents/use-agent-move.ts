@@ -63,6 +63,7 @@ export function useAgentMove(agent: MovedAgent | undefined): AgentMove {
   const acts = useHostActs();
   const write = useWrite();
   const [note, setNote] = useState<string | undefined>(undefined);
+
   const on =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.MOVE_AGENTS) }).data === true;
 
