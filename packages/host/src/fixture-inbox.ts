@@ -3417,6 +3417,22 @@ const ANSWERS: StagedAnswers = {
 
     return { queue: { messages: [], revision: 2 } };
   },
+  // Note that an agent's own read is answered with the agent as the list holds it, so a fresh read, such as an Archive asked about at rest reads before it goes, finds it resting rather than failing and asking again as Stop and archive.
+  [ACT_KIND.AGENTS_PAGE]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const task = [...OWN_TASKS, ...LISTED_TASKS].find((each) => each.id === held.taskId);
+
+    return {
+      agent: {
+        ...held,
+        automationId: null,
+        workspaceId: FIXTURE_IDS.WORKSPACE,
+        repository: task?.repository ?? null,
+      },
+    };
+  },
   [ACT_KIND.AGENTS_STOP]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 
