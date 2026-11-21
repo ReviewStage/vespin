@@ -6,6 +6,7 @@ import {
   type PortAct,
   type PortRow,
 } from "@repo/features/agent-ports-model";
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_KIND,
   AGENT_MACHINE,
@@ -15,6 +16,7 @@ import {
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
+import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
 import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import {
@@ -101,6 +103,7 @@ import {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  type UndeliveredLine,
   useAnnounced,
   useColors,
   useWindowSizeClass,
@@ -135,6 +138,8 @@ import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-appr
 import {
   type AgentComposer,
   type SuggestedSend,
+  type UndeliveredActs,
+  undeliveredWhole,
   useAgentComposer,
 } from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
@@ -460,6 +465,7 @@ function AgentComposerArea({
   messageSent,
   suggested,
   editMessage,
+  undeliveredActs,
   approvals,
   onShowWaiting,
   servers,
@@ -476,6 +482,7 @@ function AgentComposerArea({
   readonly messageSent: Parameters<typeof useAgentComposer>[4];
   readonly suggested: Parameters<typeof useAgentComposer>[5];
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
+  readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
   readonly servers: AgentServers;
@@ -493,7 +500,8 @@ function AgentComposerArea({
   const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
-  }, [editMessage, composer.editMessage]);
+    undeliveredActs.current = composer.undelivered;
+  }, [editMessage, composer.editMessage, undeliveredActs, composer.undelivered]);
 
   return (
     <>
@@ -918,6 +926,27 @@ function AgentConversation({
 
   // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
   const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
+  // Note that a refused line's Retry, Edit, and Delete reach the composer the same way.
+  const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
+
+  // A line of the member's the service refused, marked Not delivered where it went, with why and what mends it, as the panel keeps it.
+  const undelivered = useCallback(
+    (lineId: string): UndeliveredLine | undefined => {
+      const line = sending?.find((each) => each.id === lineId);
+
+      if (line?.refused === undefined) return undefined;
+      const whole = undeliveredWhole(line);
+
+      return {
+        why: whole ? messageFailureWords(line.refused.failure) : UNDELIVERED_FILES_LOST,
+        newThread: false,
+        onRetry: whole ? () => undeliveredActs.current?.retry(lineId) : undefined,
+        onEdit: () => undeliveredActs.current?.edit(lineId),
+        onDelete: () => undeliveredActs.current?.drop(lineId),
+      };
+    },
+    [sending],
+  );
 
   const composer = useMemo(
     () => ({
@@ -1092,6 +1121,7 @@ function AgentConversation({
       messageSent={approvals.messageSent}
       suggested={suggested}
       editMessage={editMessage}
+      undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
       servers={servers}
@@ -1134,6 +1164,7 @@ function AgentConversation({
       onOpenAddress={openInSafari}
       messageLink={messageLink}
       messageMore={messageActs.more}
+      undelivered={undelivered}
       onOpenPullRequest={(item) => openPullRequest(item.url)}
       pullRequestActs={(item) => {
         const key = keyOf(item.url);

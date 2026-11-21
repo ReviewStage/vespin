@@ -377,7 +377,6 @@ export {
   type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
-  type ThreadUndelivered,
 } from "./thread-page.js";
 
 export { BRAND_COLOR } from "./tokens/brand-colors.js";
@@ -423,6 +422,8 @@ export {
   withSending,
   withWaitingLine,
 } from "./transcript-model.js";
+
+export { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 
 export {
   ASYNC_ACTION_STAGE,
