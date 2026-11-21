@@ -79,6 +79,34 @@ public final class PillFieldModule: Module {
         view.blur()
       }
     }
+
+    View(DocumentFieldView.self) {
+      Events("onLines", "onHeight", "onFocusChange")
+
+      Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
+        view.take(value.lines.map(DocumentLine.init), seen: value.seen)
+      }
+
+      Prop("look") { (view: DocumentFieldView, look: LookRecord) in
+        view.look = Look(look)
+      }
+
+      Prop("placeholder") { (view: DocumentFieldView, placeholder: String?) in
+        view.placeholder = placeholder ?? ""
+      }
+
+      Prop("editable") { (view: DocumentFieldView, editable: Bool?) in
+        view.editable = editable ?? true
+      }
+
+      AsyncFunction("focus") { (view: DocumentFieldView) in
+        view.focus()
+      }
+
+      AsyncFunction("blur") { (view: DocumentFieldView) in
+        view.blur()
+      }
+    }
   }
 }
 
@@ -157,6 +185,13 @@ struct Pill: Equatable {
   let glyph: String
   let heard: String
 
+  init(markdown: String, words: String, glyph: String, heard: String) {
+    self.markdown = markdown
+    self.words = words
+    self.glyph = glyph
+    self.heard = heard
+  }
+
   init(_ record: PillRecord) {
     markdown = record.markdown
     words = record.words
@@ -215,7 +250,7 @@ enum MarkStyle: String {
 }
 
 /// The looks laid on the words as an attribute of their own, so they move with each edit.
-private let markStylesKey = NSAttributedString.Key("VespinMarkStyles")
+let markStylesKey = NSAttributedString.Key("VespinMarkStyles")
 
 /// The runs JavaScript hands, the words joined as the view holds them, and the looks of each span of the drawn words.
 struct StyledRuns {
@@ -273,12 +308,12 @@ struct Look: Equatable {
 // MARK: - The pill
 
 /// The body's face at the reader's text size, which the words are typed in.
-private func bodyFont() -> UIFont {
+func bodyFont() -> UIFont {
   UIFont.preferredFont(forTextStyle: .body)
 }
 
 /// The pill's face: the subheadline's size at the reader's text size, medium, as the panel's chip sets its name.
-private func pillFont() -> UIFont {
+func pillFont() -> UIFont {
   UIFont.systemFont(ofSize: UIFont.preferredFont(forTextStyle: .subheadline).pointSize, weight: .medium)
 }
 

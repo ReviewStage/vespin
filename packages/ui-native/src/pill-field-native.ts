@@ -24,7 +24,7 @@ export interface NativeValue {
 }
 
 /** The colors the view draws in. */
-interface NativeLook {
+export interface NativeLook {
   readonly text: ColorValue;
   readonly placeholder: ColorValue;
   readonly tint: ColorValue;
