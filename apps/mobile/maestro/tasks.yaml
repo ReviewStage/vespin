@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its archive confirmed, the agent then folded under Archived, its page standing Unarchive in the composer's place, and its row's Unarchive bringing it back, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link in More copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its archive confirmed, the agent then folded under Archived, its page standing Unarchive in the composer's place, and its row's Unarchive bringing it back, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -92,9 +92,10 @@ env:
 # A long press on a task lifts its preview, its Overview at a glance: its
 # status, key and repository, its name, and its agents, the pinned Weekly
 # digest email's at work. Under it stands the panel's row menu, in the
-# panel's order: Open; Copy link and Open in browser; Rename and Mark as
-# unread; Status, Priority and Assignee; Task relation; Unpin on a pinned
-# task; and Permanently delete.
+# panel's order: Open; Rename and Mark as unread; Status, Priority and
+# Assignee; Unpin on a pinned task and More, which holds the rarer acts;
+# and Permanently delete, the whole menu standing beside the preview on an
+# iPad (STAG-3801).
 - scrollUntilVisible:
     element: "Weekly digest email"
     direction: UP
@@ -126,20 +127,17 @@ env:
     env:
       ROW: Weekly digest email
       ITEM: Open
-- assertVisible: "Copy link"
-- assertVisible: "Open in browser"
 - assertVisible: "Rename"
 - assertVisible: "Mark as unread"
 - assertVisible: "Status"
 - assertVisible: "Priority"
 - assertVisible: "Assignee"
+- assertVisible: "More"
 - scrollUntilVisible:
     element: "Unpin"
     direction: DOWN
 # Note that the menu is scrolled to its last act, which a short window, the
-# iPhone Duo's, stands below its foot. An iPad's menu, clipped beside its
-# preview, is left at its top here, so Rename below stands in it; it is
-# drawn to its foot only before Permanently delete (`menu-foot.yaml`).
+# iPhone Duo's, stands below its foot.
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
@@ -173,8 +171,6 @@ env:
 - scrollUntilVisible:
     element: "Permanently delete"
     direction: DOWN
-- runFlow:
-    file: subflows/menu-foot.yaml
 - tapOn:
     text: "Permanently delete"
     retryTapIfNoChange: false
@@ -187,13 +183,15 @@ env:
       QUESTION: "Permanently delete task?"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
-# Copy link copies the task's address at once, as Safari's and Notes' do,
-# with no share sheet, so the list stands back under the closed menu.
+# Copy link, in More, copies the task's address at once, as Safari's and
+# Notes' do, with no share sheet, so the list stands back under the closed
+# menu.
 - runFlow:
     file: subflows/row-menu.yaml
     env:
       ROW: Weekly digest email
-      ITEM: Copy link
+      ITEM: More
+- tapOn: "More"
 - tapOn: "Copy link"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
