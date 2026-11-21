@@ -325,6 +325,17 @@ env:
     point: "50%, 20%"
 - waitForAnimationToEnd
 - assertNotVisible: "build-box.*"
+# Note that the tap puts away only Move to's submenu, leaving the ⋯ menu it
+# opened from, whose Permanently delete is its alone, standing over the bar;
+# a tap off it near the screen's foot, which no menu reaches, puts it away
+# too, so the bar's own More can be reached again.
+- runFlow:
+    when:
+      visible: "Permanently delete"
+    commands:
+      - runFlow:
+          file: subflows/dismiss.yaml
+- assertNotVisible: "Permanently delete"
 # Archive asks first, in the panel's words, since the agent still works and
 # archiving it stops it; putting the question away (a tap off the iPhone's
 # action sheet, the iPad alert's Cancel) leaves it.
