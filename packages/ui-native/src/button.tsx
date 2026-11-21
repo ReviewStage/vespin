@@ -45,7 +45,14 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
-import { Avatar, type Face, TaskPriorityMark, TaskStatusMark, ToneGlyph } from "./marks.js";
+import {
+  Avatar,
+  type Face,
+  TaskPriorityMark,
+  TaskStatusMark,
+  ToneGlyph,
+  UnassignedMark,
+} from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -356,6 +363,8 @@ type FieldChipProps = {
   readonly priority?: TaskPriority | undefined;
   /** A person, whose face leads the chip, their picture where one is known. */
   readonly face?: Face | undefined;
+  /** Whether it names no one, as an assignee's chip does with no one assigned, led by no one's mark (`UnassignedMark`) where a face would stand. */
+  readonly nobody?: boolean | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
   readonly symbol?: Glyph | undefined;
   /** A mark leading the chip in its tone where none of the above does, such as a pull request's state. */
@@ -389,6 +398,8 @@ function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number
       />
     );
   }
+
+  if (props.nobody === true) return <UnassignedMark size={MARK_SIZE.FACE} />;
 
   if (props.symbol !== undefined) {
     return <Image {...glyphImage(props.symbol)} size={glyphSize} color={colors.TEXT_MUTED} />;
