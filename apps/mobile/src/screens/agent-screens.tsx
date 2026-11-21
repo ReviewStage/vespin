@@ -1,4 +1,4 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, or Unarchive in its place while it is archived, Continue in new agent over it where only a new agent goes on, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, or Unarchive in its place while it is archived, Continue in new agent over it where only a new agent goes on, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions, its Move to › and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
 
 import {
   CONTINUE_AGAIN_LABEL,
@@ -158,6 +158,7 @@ import {
 } from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
+import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
@@ -217,6 +218,7 @@ const MENU_WORDS = {
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
   UNARCHIVE: "Unarchive",
+  MOVE_TO: "Move to",
   DELETE: "Permanently delete",
   OVERVIEW: "Overview",
   SETTINGS: "Settings…",
@@ -1138,8 +1140,11 @@ function AgentConversation({
   const commands = useAgentCommandsPlace(id);
 
   // Note that the newest refusal of the page's own acts stands over the field, so a server's switch refused after a Pin says its own words rather than the older one's.
+  const move = useAgentMove(agent);
+
   const note = useNewestNote([
     actions.note,
+    move.note,
     transcriptCopy.note,
     servers.note,
     mode?.note,
@@ -1474,9 +1479,23 @@ function AgentConversation({
                 </Stack.Toolbar.MenuAction>
               </Stack.Toolbar.Menu>
             )}
-            {agent === undefined || barActs ? null : (
+            {agent === undefined || (barActs && move.places === undefined) ? null : (
               <Stack.Toolbar.Menu inline>
-                {archived ? (
+                {move.places === undefined ? null : (
+                  <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MOVE)} title={MENU_WORDS.MOVE_TO}>
+                    {move.places.map((place) => (
+                      <Stack.Toolbar.MenuAction
+                        key={place.key}
+                        icon={glyphSymbol(place.glyph)}
+                        {...(place.detail === undefined ? undefined : { subtitle: place.detail })}
+                        onPress={place.onPress}
+                      >
+                        {place.label}
+                      </Stack.Toolbar.MenuAction>
+                    ))}
+                  </Stack.Toolbar.Menu>
+                )}
+                {barActs ? null : archived ? (
                   <Stack.Toolbar.MenuAction
                     icon={glyphSymbol(GLYPH.UNARCHIVE)}
                     onPress={actions.unarchive}
