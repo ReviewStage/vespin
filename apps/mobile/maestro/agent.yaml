@@ -250,14 +250,45 @@ env:
     timeout: 5000
 - takeScreenshot: agent-options-fast
 # Note that the sheet is drawn up first, because its permissions and their
-# note stand below a short window's fold.
+# note stand below a short window's fold. A regular window stands Options as
+# a popover from the composer's chip, with no Done, which a drag up the
+# window would put away, so there the popover is scrolled from inside it,
+# from its own Ask for approval, until its other modes stand.
 - runFlow:
-    file: subflows/full-sheet.yaml
+    when:
+      visible: "Done"
+    commands:
+      - runFlow:
+          file: subflows/full-sheet.yaml
+- runFlow:
+    when:
+      notVisible: "Approve for me.*"
+    commands:
+      - swipe:
+          from:
+            text: "Ask for approval"
+          direction: UP
+      - waitForAnimationToEnd
 - tapOn: "Approve for me.*"
-# Note that the sheet opens at half height in a compact window, so the permission section's footer may stand below the fold until scrolled to.
-- scrollUntilVisible:
-    element: "Takes effect from the next turn."
-    direction: DOWN
+# Note that the sheet opens at half height in a compact window, so the permission section's footer may stand below the fold until scrolled to; a popover is scrolled from inside it, as above.
+- runFlow:
+    when:
+      visible: "Done"
+    commands:
+      - scrollUntilVisible:
+          element: "Takes effect from the next turn."
+          direction: DOWN
+- repeat:
+    times: 3
+    while:
+      notVisible: "Takes effect from the next turn."
+    commands:
+      - swipe:
+          from:
+            text: "Approve for me.*"
+          direction: UP
+      - waitForAnimationToEnd
+- assertVisible: "Takes effect from the next turn."
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-options-mode

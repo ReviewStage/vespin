@@ -1,4 +1,4 @@
-# task-relations.yaml -- a task row's long press holding Task relation, Move to section, and its repository; a task's ⋯ holding Task relation, opening the Task relation sheet on its four kinds, as its Task relations group's + does while it holds a row; and Mark as blocked by…, which lists the workspace's other tasks under a search, a task that cannot take the relation dimmed with why.
+# task-relations.yaml -- a task row's long press holding Task relation, Move to section, and its repository in its More menu; a task's ⋯ holding Task relation, opening the Task relation sheet on its four kinds, as its Task relations group's + does while it holds a row; and Mark as blocked by…, which lists the workspace's other tasks under a search, a task that cannot take the relation dimmed with why.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -17,8 +17,13 @@ appId: dev.vespin.ios
       TAB: Tasks
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
-# A row's long press menu holds Task relation, the four kinds under it.
-- longPressOn: "Weekly digest email"
+# A row's long press menu holds Task relation in More, the four kinds under it.
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: More
+- tapOn: "More"
 - assertVisible: "Task relation"
 - takeScreenshot: task-relations-row-menu
 - tapOn: "Task relation"
