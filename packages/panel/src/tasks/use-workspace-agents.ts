@@ -71,6 +71,30 @@ function newestOf(
   return { agents };
 }
 
+/**
+ * `workspaceId`'s newest agents, on `repository` where one is named, as the
+ * task list carries them at the call, where `listed` says it carries them
+ * (`newestOf`). For a reader that offers them only when asked, as an `@`
+ * list does, so nothing stands drawn to hear each step of an agent's turn.
+ */
+export function workspaceAgentsNow(
+  collections: Pick<TaskListCollections, "agents">,
+  listed: AgentsListed | undefined,
+  workspaceId: string,
+  repository: string | null,
+): WorkspaceAgents {
+  const unarchived = collections.agents.toArray.filter(
+    (agent) => agent.workspaceId === workspaceId && agent.archivedAt === undefined,
+  );
+
+  return newestOf(listed, unarchived, repository);
+}
+
+/** Where the task list stands on carrying the workspaces' agents (`selectAgentsListed`), which moves only as the list is first carried or fails. */
+export function useAgentsListed(): AgentsListed | undefined {
+  return useQuery({ ...appStateQuery, select: selectAgentsListed }).data;
+}
+
 /** `workspaceId`'s newest agents, on `repository` where one is named, as the task list carries them; none while no workspace is named. */
 export function useWorkspaceAgents(
   workspaceId: string | undefined,
@@ -109,6 +133,19 @@ export function listedAgentIn(
   agentId: string,
 ): ListedAgent | undefined {
   return collections.agents.get(agentId);
+}
+
+/**
+ * Every agent the task list carries, the archived among them, in no order,
+ * read at the call; none while `carried` says the list carries no agents.
+ * For a press that reads them once, as a task gone back to lands on one of
+ * its agents, so nothing stands drawn to hear each step of an agent's turn.
+ */
+export function listedAgentsNow(
+  collections: Pick<TaskListCollections, "agents">,
+  carried: boolean,
+): readonly ListedAgent[] | undefined {
+  return carried ? collections.agents.toArray : undefined;
 }
 
 /**

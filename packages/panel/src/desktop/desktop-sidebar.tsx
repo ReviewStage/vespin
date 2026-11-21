@@ -166,7 +166,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors, useSteadyList } from "../steady-door.js";
-import { useTaskListCollections } from "../task-list-collections.js";
+import { useTaskListCollections, useTaskListRows } from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
@@ -862,6 +862,7 @@ const placeOf = (row: PinnedRow): PinPlace => row.place;
 function pinnedRows(
   pinned: readonly TaskSummary[],
   listed: (taskId: string) => TaskSummary | undefined,
+  listedAgent: (agentId: string) => ListedAgent | undefined,
   tasks: SidebarTasks,
 ): PinnedRow[] {
   const taskRows = pinned.map(
@@ -875,7 +876,7 @@ function pinnedRows(
   const taskAgentRows = tasks.taskAgentPins.flatMap((pin): PinnedRow[] => {
     // Note that an agent pinned on no task, a Manager, is drawn as its own row instead (`PinnedManagers`).
     const task = pin.taskId === null ? undefined : listed(pin.taskId);
-    const agent = tasks.liveAgents?.find((each) => each.id === pin.agentId);
+    const agent = tasks.agentsCarried ? listedAgent(pin.agentId) : undefined;
 
     if (task === undefined || agent === undefined) return [];
     const drawn = agentPinOf(pin, task, agent, tasks);
@@ -2314,9 +2315,11 @@ function SidebarColumn({
   const listedInbox = useListedInbox(tasks);
   // The list is the chosen workspace's; the unread marks above read every task.
   const listedTasks = useListedTasks(tasks);
+  const rows = useTaskListRows();
   // Note that while the view shows finished sub-tasks, those a parent's count names that the list holds not are read into it.
   useSubTaskReads(listedTasks.unheldSubTasks, taskView.view.finishedSubTasks && tasks.listRead);
-  const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, tasks);
+  // Note that a pinned agent is read by its id alone (`useTaskListRows`), so a step of any other agent's turn draws the sidebar nothing.
+  const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, rows.agent, tasks);
   const pinnedManagers = usePinnedManagers(tasks, tasks.taskAgentPins);
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands.

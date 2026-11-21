@@ -73,6 +73,7 @@ import { FindScope } from "../find-in-tab.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
@@ -136,7 +137,9 @@ function placeFound(agent: ListedAgent): AgentFound {
 
 /** The agent of `agentId` as the task list carries it, else as its one read by its id answered. */
 function useAgentFound(tasks: TasksControl, agentId: string): AgentFound {
-  const listed = tasks.liveAgents?.find((each) => each.id === agentId);
+  // Note that the agent is read by its id alone, so a step of any other agent's turn draws the page nothing.
+  const row = useTaskListRow(useTaskListCollections().agents, agentId);
+  const listed = tasks.agentsCarried ? row : undefined;
   const read = useQuery({ ...agentPageQueryOptions(agentId), enabled: listed === undefined });
 
   if (listed !== undefined) return placeFound(listed);

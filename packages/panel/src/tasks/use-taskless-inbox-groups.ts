@@ -22,9 +22,11 @@ import {
 } from "@repo/features/inbox-list-model";
 import { agentName } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { inArray, useLiveQuery } from "@tanstack/react-db";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef } from "react";
 import { inboxItemsQuery } from "../live-reads.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { agentPageQueryOptions } from "./agent-reads.js";
 
 /** No agent on no task holding items. */
@@ -73,22 +75,59 @@ export interface TasklessInboxGroups {
 
 /**
  * Every agent on no task the feed holds items of in `workspaceId`, or in any
- * while none is named, each with its items, the agents named from `listed`
- * first and else from their own read; and where the feed stands, since a
+ * while none is named, each with its items, the agents named from the list
+ * followed live first, where it carries them (`carried`), and else from their
+ * own read; and where the feed stands, since a
  * reader whose only threads stand on no task is told the feed's state by
  * nothing else.
  */
 export function useTasklessInboxGroups(
   workspaceId: string | undefined,
-  listed: readonly ListedAgent[] | undefined,
+  carried: boolean,
   models: readonly CatalogModel[] | undefined,
 ): TasklessInboxGroups {
   const feed = useQuery(inboxItemsQuery());
   const fed = feed.data?.agents;
   const ids = useMemo(() => Object.keys(fed ?? NO_AGENTS), [fed]);
+  const { agents } = useTaskListCollections();
+
+  // Note that the agents are read as what names them alone, and only those the feed holds, so a step of any agent's turn tells the query nothing.
+  const { data: listed } = useLiveQuery((q) =>
+    carried
+      ? q
+          .from({ agent: agents })
+          .where(({ agent }) => inArray(agent.id, ids))
+          .select(({ agent }) => ({
+            id: agent.id,
+            workspaceId: agent.workspaceId,
+            repository: agent.repository,
+            face: agent.face,
+            title: agent.title,
+            automationName: agent.automationName,
+            model: agent.model,
+          }))
+      : undefined,
+  );
 
   const byId = useMemo(
-    () => new Map((listed ?? []).map((agent) => [agent.id, agent] as const)),
+    () =>
+      new Map(
+        (listed ?? []).map(
+          ({ id, workspaceId, repository, title, model, face, automationName }) => {
+            const source: NamedSource = {
+              id,
+              workspaceId,
+              repository,
+              title,
+              model,
+              ...(face === undefined ? undefined : { face }),
+              ...(automationName === undefined ? undefined : { automationName }),
+            };
+
+            return [id, source] as const;
+          },
+        ),
+      ),
     [listed],
   );
 

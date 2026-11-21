@@ -39,6 +39,7 @@ import { liveStepTitle, type NamedStep } from "../history-titles.js";
 import type { InboxRoute } from "../inbox-route.js";
 import { inboxItemsQuery, workspaceMembersQuery } from "../live-reads.js";
 import type { RouteAccess } from "../route-gates.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import type { HistoryRows } from "./history-rows.js";
 import { placeParamsOf } from "./place-params.js";
@@ -659,7 +660,7 @@ export function useStepReach(input: {
   readonly access: RouteAccess;
   readonly tasks: Pick<
     TasksControl,
-    "boundFor" | "listFailed" | "mainTabs" | "workspace" | "workspaces" | "liveAgents"
+    "boundFor" | "listFailed" | "mainTabs" | "workspace" | "workspaces" | "agentsCarried"
   >;
   /** The task list's rows, by id. */
   readonly rows: HistoryRows;
@@ -671,6 +672,8 @@ export function useStepReach(input: {
   const { access, tasks, rows, columnSeen, automations } = input;
   const { boundFor } = tasks;
   const router = useRouter();
+  // Note that an agent is read as the list holds it at the call, never followed, so a step of its turn draws the window nothing; whether it stands on no task is all that is read, which no turn moves.
+  const { agents } = useTaskListCollections();
   // The tabs each task's column stood with as the window last stood on it, so a step on a tab since closed is passed over.
   // Note that a task reopened before its agents are read keeps the column it was last seen with.
   const knownColumns = useRef(new Map<string, ReadonlySet<string>>()).current;
@@ -715,8 +718,7 @@ export function useStepReach(input: {
     taskStands,
     columnStands,
     automationStands: (automationId: string) => !automations.deletedNow(automationId),
-    agentOnNoTask: (agentId: string) =>
-      tasks.liveAgents?.some((each) => each.id === agentId && each.taskId === null) === true,
+    agentOnNoTask: (agentId: string) => tasks.agentsCarried && agents.get(agentId)?.taskId === null,
     listed: (workspace: string) =>
       workspaceOfSlug(tasks.workspaces, workspace)?.id === listedWorkspace,
   });

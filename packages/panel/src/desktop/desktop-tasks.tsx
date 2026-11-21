@@ -68,7 +68,13 @@ import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-door
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { NAMED_ORDER, useNamedTask, useNamedTasks } from "../task-list-collections.js";
+import {
+  NAMED_ORDER,
+  useNamedTask,
+  useNamedTasks,
+  useTaskListCollections,
+  useTaskNames,
+} from "../task-list-collections.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -460,6 +466,7 @@ function DescriptionDocument({
   room: ShellRoom;
   away: TaskHeadBack;
 }): React.JSX.Element {
+  const collections = useTaskListCollections();
   const { region } = tasks;
   const pins = usePins(tasks.typedNamesNow);
   const account = useWindowAccount();
@@ -602,7 +609,7 @@ function DescriptionDocument({
   // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
   const readMentionAgents = useMentionAgentsReader(
     opened?.workspaceId,
-    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
+    useTaskNames(tasks.typedNames),
     tasks.agents.models,
   );
 
@@ -1631,7 +1638,7 @@ function DescriptionDocument({
                           {runPlace === undefined ? null : (
                             <AutomationRunSteps
                               place={runPlace}
-                              onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
+                              onOpenAgent={(agentId) => openRunAgent(tasks, collections, agentId)}
                             />
                           )}
                           <CopyChord copy={tasks.copy} workspaceId={task.workspaceId} />
