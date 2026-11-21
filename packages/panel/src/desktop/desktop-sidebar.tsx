@@ -182,7 +182,7 @@ import {
   samePin,
 } from "../tasks/use-side-panel.js";
 import { useSubTaskReads } from "../tasks/use-sub-task-reads.js";
-import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
+import { useReadMark, useUnreadWatching } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
@@ -2109,6 +2109,8 @@ interface SidebarColumnProps {
   onPressWithin: () => void;
   /** The room the panel's stage gives; narrow, the sidebar is a phone's drawer. Wide where left out. */
   room?: ShellRoom | undefined;
+  /** The plan the window's look names as the shell is drawn (`useTaskLooks`), which its row draws read. */
+  watched: string | undefined;
 }
 
 /**
@@ -2183,6 +2185,7 @@ function SidebarColumn({
   onSignOut,
   onPressWithin,
   room = SHELL_ROOM.WIDE,
+  watched,
 }: SidebarColumnProps): React.JSX.Element {
   // Note that the column's tasks stand while neither the window's nor the pins change, because every row is handed them, and a new one draws every row again.
   const pins = useSteadyDoors(usePins(control.typedNamesNow));
@@ -2335,7 +2338,7 @@ function SidebarColumn({
     control: taskView,
     shared,
   });
-  const unread = useUnreadTasks({ staged: sidebar.staged });
+  const unread = useUnreadWatching({ staged: sidebar.staged, watched });
   const listedPullRequests = useListedTaskPullRequests();
   const activityOrder = useActivityOrder();
   const now = useMinute();

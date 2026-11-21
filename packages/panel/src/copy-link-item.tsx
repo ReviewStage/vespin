@@ -8,8 +8,8 @@ import type { MenuAction } from "./desktop/action-menu.js";
 import {
   SHORTCUT_SUBJECT,
   shortcutSubject,
+  useKeyPrinted,
   useShortcutTarget,
-  useShortcutTargetsOf,
 } from "./shortcut-target.js";
 import { useNumberedPlace } from "./tasks/use-link-standing.js";
 
@@ -117,13 +117,17 @@ export function usePlaceLink(): (place: LinkDestination) => string | undefined {
 export function useLinkItems(): (place: LinkDestination) => MenuAction[] {
   const linkOfPlace = usePlaceLink();
   const copy = useCopyToast();
-  // Note that Copy link prints ⇧⌘C as the chord's link changes, so whoever draws it is drawn again as it does.
-  useShortcutTargetsOf(APP_COMMAND.COPY_LINK);
+  // Note that Copy link prints ⇧⌘C only where its link is the one the chord copies now, so whoever draws it is drawn
+  // again once that moves for a link it drew, and only then.
+  const printed = useKeyPrinted(APP_COMMAND.COPY_LINK);
 
   return (place) => {
     const link = linkOfPlace(place);
 
-    return link === undefined ? [] : linkItems(copy, link);
+    if (link === undefined) return [];
+    printed(shortcutSubject(SHORTCUT_SUBJECT.LINK, link));
+
+    return linkItems(copy, link);
   };
 }
 

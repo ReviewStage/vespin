@@ -410,6 +410,7 @@ export const NO_LEAVE_ASK: PlaceLeave = {
     move(true);
     landed();
   },
+  free: () => true,
   stays: ignore,
   stayed: () => false,
   along: ignore,

@@ -745,6 +745,8 @@ export function useTasksTab(input: {
   linkReads: LinkRead;
   /** Writes the step a link opens on a task's own place before the window stands there, as one move (`places/window-history.ts`'s `onVisitTask`). */
   visitTask: (at: TaskAt, step: LinkStep) => boolean;
+  /** Writes the step any other door opens on a task's own place with its move, where it is a step of its own (`places/window-history.ts`'s `onOpenTask`). */
+  openTask: (at: TaskAt, taskId: string) => boolean;
   /** Takes the step the window stands on as a start's page, which the task it starts takes in place (`places/window-history.ts`'s `onStartStands`). */
   startStands: () => void;
   /** Answers whether the window stands on a start's page, letting it go (`places/window-history.ts`'s `onLeaveStart`). */
@@ -1742,10 +1744,18 @@ export function useTasksTab(input: {
     if (standing) return false;
     // Note that a link's door names what it opens there, so its step is written at once, at its address, with it.
     const step = linking.current;
-    const visited = step !== undefined && step.taskId === toward && input.visitTask(at, step);
 
+    if (step !== undefined && step.taskId === toward && input.visitTask(at, step)) return true;
     // Note that a start's page and the task it lands on are one step, so a move off that page takes its step in place.
-    if (!visited) input.taskView.onOpen(at, takesStepless, input.leaveStart());
+    const inPlace = input.leaveStart();
+
+    // Note that any other door's step names the task with its move too, so the window writing it once the task is drawn
+    // fills in what it shows rather than naming the task anew, which would draw the window again before the task lands.
+    // Only where nothing holds the move, because that step is written past the router's blocker (`places/place-leave.ts`);
+    // a move a page's leave ask holds is the router's own, which asks.
+    const written = !inPlace && placeLeave.free() && input.openTask(at, toward);
+
+    if (!written) input.taskView.onOpen(at, takesStepless, inPlace);
 
     return true;
   };
@@ -2211,13 +2221,12 @@ export function useTasksTab(input: {
 
     if (mainTabs.remembers(taskId)) return;
 
-    const agentId = resumingAgentOf(
-      taskId,
-      listedAgentsNow(listCollections, agentsCarried),
-      inboxWaiting,
-    );
+    const listedAgents = listedAgentsNow(listCollections, agentsCarried);
+    const agentId = resumingAgentOf(taskId, listedAgents, inboxWaiting);
+    // Note that an agent the list carries unarchived opens as the task's live agents do, so the task landing writes nothing more.
+    const live = agentsOfTask(listedAgents, taskId).some((agent) => agent.id === agentId);
 
-    if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId));
+    if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId), live);
     else if (narrow) mainTabs.onShow(taskId, MAIN_TAB.OVERVIEW);
   };
 

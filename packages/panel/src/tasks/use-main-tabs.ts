@@ -200,8 +200,12 @@ export interface MainTabsControl {
   newTabAsked: boolean;
   /** Shows the tab, opening an agent's where it was closed or is archived. */
   onChoose: (tab: MainTab) => void;
-  /** Shows the tab on the task given, as `onChoose` does on the open task: what a pin, a notification, or the call card asks, the task opened beside it. */
-  onShow: (taskId: string, tab: MainTab) => void;
+  /**
+   * Shows the tab on the task given, as `onChoose` does on the open task: what a pin, a notification, or the call card asks,
+   * the task opened beside it. `live` says the caller read the agent among that task's live agents, so its tab opens
+   * as theirs do rather than among the archived ones opened, which the task's own read would let go of again.
+   */
+  onShow: (taskId: string, tab: MainTab, live?: boolean) => void;
   /** Closes the tab, and only the view: an agent goes on as it was; Overview never closes. */
   onClose: (tab: MainTab) => void;
   /** Moves a tab to the place `to` among the tabs after Overview, leaving the chosen one chosen; Overview stays where it leads. */
@@ -497,12 +501,22 @@ function withChosen(held: HeldState, tab: MainTab, drawn: DrawnTabs): HeldState 
 
 /**
  * The state with the tab shown on the task given: on the open task as
- * `withChosen` shows it, and on another as the tab it will open on.
+ * `withChosen` shows it, and on another as the tab it will open on. Note that
+ * an agent's tab on another task is kept open among the archived agents
+ * opened unless the caller read it `live`, because the open task's agents
+ * say nothing of another's; one kept there that its task then reads live is
+ * let go of again (`withLiveLetGo`), a second write as the task lands.
  */
-function withShown(held: HeldState, on: string, tab: MainTab, drawn: DrawnTabs): HeldState {
+function withShown(
+  held: HeldState,
+  on: string,
+  tab: MainTab,
+  drawn: DrawnTabs,
+  live: boolean,
+): HeldState {
   if (on === drawn.taskId) return withChosen(held, tab, drawn);
 
-  return withViewed(withOpened(held, tab, liveOn(drawn, on, tab)), on, [tab]);
+  return withViewed(withOpened(held, tab, live || liveOn(drawn, on, tab)), on, [tab]);
 }
 
 /** The state with an agent's tab closed, kept closed, and dozing where it closed for being idle; as it is for any other kind, whose close holds nothing. */
@@ -719,7 +733,8 @@ export function useMainTabs(
   // Note that a tab shown on another task is not counted viewed after the
   // open task's, because the task it is viewed on is the one about to open.
   const onShow = useCallback(
-    (on: string, tab: MainTab) => update((held) => withShown(held, on, tab, drawn)),
+    (on: string, tab: MainTab, live = false) =>
+      update((held) => withShown(held, on, tab, drawn, live)),
     [update, drawn],
   );
 

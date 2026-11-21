@@ -22,7 +22,7 @@ import { type ConflictWords, KEEP_MINE } from "@repo/features/description-edit-w
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TasksEditAnswer } from "@repo/features/tasks-view";
 import { STATUS_TONE, useWait } from "@repo/ui";
-import { MutationObserver, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MutationObserver, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createStore, type Store, useCreateStore, useSelector } from "@tanstack/react-store";
 import { Duration, Effect } from "effect";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
@@ -31,6 +31,7 @@ import type {
   EditorHistory,
   HistoryStep,
 } from "../description-editor/contract.js";
+import { useMutationCalls } from "../mutation-calls.js";
 import { type ToastNotice, useToast, useWithdrawToast } from "../toast.js";
 import {
   appStateQuery,
@@ -343,7 +344,9 @@ export function useDescriptionEditing(
   place: EditPlace,
 ): DescriptionEditing {
   const queryClient = useQueryClient();
-  const { mutateAsync: save } = useMutation(edit);
+  // Note that only the save's call is held, because nothing here reads where a save stands, and a mutation followed
+  // would draw the description that holds it again as it mounts, and as each save goes and lands.
+  const { mutateAsync: save } = useMutationCalls(edit);
   const [editor, setEditor] = useState<DocumentEditor | undefined>(undefined);
   const [placement, setPlacement] = useState<DescriptionEditorPlacement | undefined>(undefined);
   const [selecting, setSelecting] = useState<EditorHost | undefined>(undefined);
