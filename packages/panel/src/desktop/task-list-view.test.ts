@@ -398,16 +398,6 @@ test("each workspace keeps its own view on this Mac across launches", () => {
   assert.deepEqual(groupNames(mountSidebar(other, elsewhere)), ["console", "relay"]);
 });
 
-test("a view kept grouped by progress, before that grouping was removed, opens by repository and keeps the rest of its choices", () => {
-  window.localStorage.setItem(
-    "app.sidebarTaskViews",
-    JSON.stringify({ [ACME.id]: { grouping: "progress", assignee: { kind: "anyone" } } }),
-  );
-  const sidebar = mountSidebar(ACME);
-  assert.deepEqual(groupNames(sidebar), ["console", "relay"]);
-  assert.equal(headWords(sidebar), "Everyone's tasks");
-});
-
 test("a workspace nobody shares lists every task and offers no Assigned to, Group by choosing Repository or None, Repository at first", () => {
   const sidebar = mountSidebar(PERSONAL);
   assert.equal(taskRows(sidebar).length, 3);

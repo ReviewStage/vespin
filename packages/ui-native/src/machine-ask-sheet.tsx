@@ -319,7 +319,7 @@ function DenyFaceView({
  * whole; what it says scrolls where a long command runs past it, its acts
  * held at the foot, so a command is read whole before it is allowed. Dragged away,
  * it sets the ask aside on this phone. Note that it stands in a host of its
- * own, the size of nothing, as `RemindSheet` does, so it opens over
+ * own, the size of nothing, as `RemindPickSheet` does, so it opens over
  * whatever screen stands.
  */
 export function MachineAskSheet({

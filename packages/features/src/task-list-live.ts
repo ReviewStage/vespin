@@ -396,8 +396,6 @@ export const TASK_ROWS_READ = liveRead({
   },
 });
 
-export type TaskRowsLiveAnswer = LiveReadAnswer<typeof TASK_ROWS_READ>;
-
 /**
  * The tasks related to the task `id` names, read once rather than followed,
  * for a window drawing its relations past the list it holds: every sub-task

@@ -6,7 +6,11 @@
  * and anything it portals into `document.body` carry the same pair, and a
  * dialog reads the window's tokens rather than none. A web surface may carry
  * a third, `data-ui-density`, which sets the site's roles at a denser size.
+ * The palette is the app's Theme setting (`@repo/settings`' `THEME`), worn
+ * as it stands: `system` follows the Mac's appearance and is the desktop's.
  */
+
+import type { THEME, Theme } from "@repo/settings";
 
 /** Which app's roles a surface is drawn at: the desktop's density, or the site's. */
 export const PROFILE = {
@@ -15,15 +19,6 @@ export const PROFILE = {
 } as const;
 
 export type Profile = (typeof PROFILE)[keyof typeof PROFILE];
-
-/** Which palette a surface is drawn in; `system` follows the Mac's appearance and is the desktop's. */
-export const THEME = {
-  DARK: "dark",
-  LIGHT: "light",
-  SYSTEM: "system",
-} as const;
-
-export type Theme = (typeof THEME)[keyof typeof THEME];
 
 /**
  * How densely a web surface is drawn, where it is not at the site's own

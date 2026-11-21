@@ -17,11 +17,17 @@
  */
 
 import { createHash } from "node:crypto";
+import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type AgentStoreEffect,
   readRunnerTokenConversation,
 } from "@repo/database/models/agent-store";
 import { Effect, Option } from "effect";
+import {
+  HOSTED_REFUSAL,
+  type HostedRefusal,
+  hostedStoreOrUnavailable,
+} from "../../http/http-effect.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 
 /** What a bearer header leads with before the bearer. */
@@ -91,4 +97,34 @@ export function admitRunnerBearer(
           }),
     ),
   );
+}
+
+/** A native-events request as its bearer admitted it: the bearer, which a held read reads again, and the runner it stands for. */
+export interface AdmittedRunnerRequest {
+  readonly bearer: string;
+  readonly runner: AdmittedRunner;
+}
+
+/**
+ * The runner a native-events request is admitted as, by the bearer it
+ * presents and the launch its URL names: refused as an invalid token where
+ * it presents none or the store admits none, and as unavailable where the
+ * store could not answer.
+ */
+export function admitRunnerRequest(
+  request: Request,
+): Effect.Effect<AdmittedRunnerRequest, HostedRefusal, DatabaseServices> {
+  return Effect.gen(function* () {
+    const bearer = presentedBearer(request);
+
+    if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
+    const admitted = yield* hostedStoreOrUnavailable(
+      admitRunnerBearer(bearer, presentedLaunch(request)),
+    );
+
+    if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
+    return { bearer, runner: admitted.value };
+  });
 }

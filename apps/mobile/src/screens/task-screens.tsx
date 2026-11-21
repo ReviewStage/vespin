@@ -1,11 +1,6 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import {
-  AGENT_MACHINE,
-  AGENT_STATUS,
-  type AgentStatus,
-  type ListedAgent,
-} from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
@@ -159,7 +154,6 @@ import {
   type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
-  runsOnGlyph,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -193,6 +187,7 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
+import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -200,6 +195,7 @@ import { useInboxActs } from "../inbox/use-inbox.js";
 import { useKeeping } from "../keeping.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos } from "../menu-photos.js";
+import { useOpenDrawnCount } from "../open-drawn.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePushStood } from "../push-stood.js";
 import { useNoteOpened } from "../search/recent-opened.js";
@@ -224,7 +220,6 @@ import { useFollowWrite } from "../tasks/use-following.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
-import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type RowAsks,
@@ -417,18 +412,18 @@ function settleSwipes(
 
 /**
  * How a section leads its choice in Move to section's menu, as the panel's
- * menu leads each with its icon: its glyph, or its emoji set before its
- * name, since a menu item's image takes a symbol alone.
+ * menu leads each with its icon: its glyph, or its emoji as the item's
+ * image, so every section's name lines up.
  */
 function sectionChoiceLead(
   title: string,
   icon: TaskSectionIcon | undefined,
-): { readonly label: string; readonly symbol?: Glyph | undefined } {
+): { readonly label: string; readonly symbol?: Glyph | undefined; readonly emoji?: string } {
   const emoji = sectionEmoji(icon);
 
   return emoji === undefined
     ? { label: title, symbol: sectionGlyph(icon) }
-    : { label: `${emoji} ${title}` };
+    : { label: title, emoji };
 }
 
 /**
@@ -2403,8 +2398,8 @@ export function TaskAgentRow({
           linkStep,
         );
 
-  // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
-  const platform = useDevicePlatform(agent.mac?.deviceId);
+  // Note that a machine's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac, whether it is the member's device or the workspace's.
+  const placeGlyph = useAgentPlaceGlyph(agent);
 
   return (
     <AgentRow
@@ -2413,7 +2408,7 @@ export function TaskAgentRow({
       harness={harness}
       state={agentState(agent.status)}
       runsOn={runsOn}
-      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
+      runsOnGlyph={placeGlyph}
       waiting={waiting}
       depth={nest?.depth}
       fold={nest?.fold}
@@ -3368,6 +3363,7 @@ export function TaskScreen() {
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
+  useOpenDrawnCount(handed ? undefined : PRODUCT_SURFACE.TASK);
   // Note that the read waits for the push to end, since the list it redraws under a push still running left the page unpushed (`usePushStood`).
   const stood = usePushStood();
   useTaskReadOnOpen(handed || !stood ? undefined : overview?.task.id);

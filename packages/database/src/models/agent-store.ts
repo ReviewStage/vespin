@@ -3550,30 +3550,6 @@ export function archiveUnmovedAgent(
   );
 }
 
-const findConversationSeq = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: Schema.Struct({ seq: Schema.Number }),
-  execute: ({ userId, agentId }) =>
-    Database.use((db) =>
-      db
-        .select({ seq: conversations.nextMessageSeq })
-        .from(agentTable)
-        .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
-        .where(reachableAgent(userId, agentId)),
-    ),
-});
-
-/** How far the agent's conversation's lines have run, as `archiveUnmovedAgent` is handed it; nothing for an agent the account cannot read. */
-export function agentConversationSeq(
-  userId: string,
-  agentId: string,
-): AgentStoreEffect<Option.Option<number>> {
-  return Effect.map(
-    findConversationSeq({ userId, agentId }),
-    Option.map((row) => row.seq),
-  );
-}
-
 /** The title written where the agent has none yet, so a name the developer gave stands whatever this carries; answers whether it was written. */
 export function fillAgentTitle(
   userId: string,

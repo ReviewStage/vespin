@@ -97,6 +97,21 @@ export function markContent(label: string, mark: IntegrationProvider) {
 }
 
 /**
+ * An act's words beside an emoji, as a system menu draws them: the emoji
+ * drawn as an image at a menu glyph's size with its colors kept
+ * (`emojiSize`, from the app's `@expo/ui` patch), since a menu's item holds
+ * an image alone in its glyph's place, so its words line up with the items
+ * a glyph leads.
+ */
+export function emojiContent(label: string, emoji: string) {
+  return {
+    children: (
+      <Label title={label} icon={<Image emoji={emoji} emojiSize={MARK_SIZE.MENU_PHOTO} />} />
+    ),
+  };
+}
+
+/**
  * A picker's option as a system menu draws it: its words beside its photo,
  * or its glyph in the color the menu keeps, or its words alone, tagged with
  * the value picking it chooses, as SwiftUI's `Picker` reads its options.

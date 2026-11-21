@@ -16,7 +16,6 @@
  * own `answer` says first, which may be nothing at all.
  */
 
-import type { CdpEvent, PageTarget } from "@repo/features/browser-cdp";
 import {
   type CommandAsk,
   type CommandRun,
@@ -48,6 +47,7 @@ import {
   BROWSER_UNREACHABLE,
   BrowserUnreachable,
 } from "../agents/browser/agent-browser.js";
+import type { CdpEvent, PageTarget } from "../agents/browser/browser-cdp.js";
 import {
   BRIDGE_SOURCE,
   BROWSER_START_OUTPUT,
