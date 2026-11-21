@@ -239,6 +239,13 @@ function windowRect(): Rect {
   return { width: window.innerWidth, height: window.innerHeight };
 }
 
+/** Where a run stands at its end: its whole height but a view's, by what its rows measured or are estimated at, in the view it lays its rows out in. */
+function endOffsetOf(virtualizer: Virtualizer<HTMLElement, HTMLElement>): number {
+  const view = virtualizer.scrollRect ?? virtualizer.options.initialRect ?? windowRect();
+
+  return Math.max(virtualizer.getTotalSize() - view.height, 0);
+}
+
 /** Whether two runs of keys name the same rows in the same order. */
 function sameKeys(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((key, at) => key === b[at]);
@@ -541,6 +548,8 @@ export function VirtualRows({
 
   // What the run measured when last drawn, taken once, as the virtualizer reads it once.
   const [seed] = useState(() => [...measurements]);
+  // The virtualizer, once made, which the run's first offset is read from.
+  const made = useRef<Virtualizer<HTMLElement, HTMLElement> | null>(null);
 
   const virtualizer = useVirtualizer<HTMLElement, HTMLElement>({
     count: keys.length,
@@ -556,8 +565,13 @@ export function VirtualRows({
     scrollEndThreshold: END_THRESHOLD_PX,
     paddingEnd,
     initialMeasurementsCache: seed,
-    // Note that the run opens wherever its scroller stands, kept as the reader left it, since several runs may share it; one anchored to its end then takes it there.
-    initialOffset: () => scroller.current?.scrollTop ?? 0,
+    // Note that a run anchored to its start opens wherever its scroller stands, kept as the reader left it, since several runs may share it.
+    // One anchored to its end opens at its end, by what its rows measured or are estimated at, so its first draw is of the rows it opens on,
+    // rather than of its first rows, drawn and measured and then let go as its scroll to its end lands.
+    initialOffset: () =>
+      fromEnd && made.current !== null
+        ? endOffsetOf(made.current)
+        : (scroller.current?.scrollTop ?? 0),
     measureElement: measured,
     observeElementRect: sizeWhileShown,
     initialRect: windowRect(),
@@ -565,6 +579,8 @@ export function VirtualRows({
     directDomUpdates: true,
     directDomUpdatesMode: "position",
   });
+
+  made.current = virtualizer;
 
   // What the run measured is handed back as it is let go, the rows it measured alone (`takeSnapshot()`).
   const heard = useRef(onMeasurements);

@@ -18,8 +18,9 @@ import {
  * though the rows far from the view are not drawn at all; and a run read
  * from its top draws the rows its scroller shows, wherever in the scroller
  * the boxes around it place it, by the sizes it measured when it was last
- * drawn where it is handed them. A run anchored to its end, drawn before its
- * scroller is laid out, opens at its end once the scroller is. A list of
+ * drawn where it is handed them. A run anchored to its end draws its last
+ * rows from its first draw, and, drawn before its scroller is laid out,
+ * opens at its end once the scroller is. A list of
  * several runs answers every row's key, in the order its runs stand.
  */
 
@@ -314,6 +315,46 @@ test("a run anchored to its end, first drawn in a scroller not laid out, opens a
     }
   });
   assert.equal(top, 49_400);
+});
+
+test("a run anchored to its end draws its last rows on its first draw, before its scroll to its end is heard", () => {
+  vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+  // Note that the scroller is laid out at 600px over the 50,000px its 500 rows of 100px stand in, and a scroll written to it is not heard back, as a frame drawn before the browser's scroll event lands.
+  const isScroller = (element: Element) => element.id === "scroller";
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return isScroller(this) ? 600 : 0;
+  });
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return isScroller(this) ? 50_000 : 0;
+  });
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value() {} });
+  const keys = Array.from({ length: 500 }, (_, index) => `row-${index}`);
+  const scroller = createRef<HTMLDivElement>();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      createElement(
+        "div",
+        { id: "scroller", ref: scroller },
+        createElement(VirtualRows, {
+          scroller,
+          keys,
+          estimate: 100,
+          anchor: VIRTUAL_ROWS_ANCHOR.END,
+          children: (index: number) => createElement("p", null, keys[index]),
+        }),
+      ),
+    ),
+  );
+  const drawn = [...container.querySelectorAll("p")].map((row) => row.textContent);
+  assert.ok(drawn.includes("row-499"), "the last row is drawn");
+  assert.ok(!drawn.includes("row-0"), "the first row is not");
 });
 
 type Held = { runs?: VirtualRuns };
