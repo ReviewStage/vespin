@@ -350,7 +350,7 @@ const SidebarHistoryButtons = memo(function SidebarHistoryButtons({
   return history === undefined ? null : <HistoryButtons history={history} room={room} />;
 });
 
-/** The steps a list names a step by where nothing named it as the window stood on it. */
+/** The label of a step the window gave no title. */
 const UNNAMED_STEP = "Earlier page";
 
 /**
@@ -415,8 +415,7 @@ function HistoryButton({
   };
 
   return (
-    // A press held, the mouse's as a touch's, opens the list, as a browser's Back does, and so
-    // does a right-click, which opens no list a hold already opened.
+    // Note that a right-click opens no list a hold already opened.
     <HoldPress
       mouse
       disabled={!able}
@@ -782,12 +781,12 @@ function TaskRows({
   repository?: (task: TaskSummary) => React.ReactNode;
 }): React.JSX.Element {
   const { faces } = context;
-  // Note that the rows keep the view's order, so a row is dragged only out of them, into a section or Pinned.
   const { dropOut } = context;
   const nested = useNestedRows(tasks, context.opened, context.currentTask, context.every);
   const drawn = useLeaving(nested, ({ task }) => task.id);
   const keys = useMemo(() => drawn.map(({ key }) => key), [drawn]);
 
+  // Note that the rows keep the view's order, so a row is dragged only out of them, into a section or Pinned.
   const drag = useRunRowDrag(undefined, {
     onDropOut:
       dropOut === undefined
@@ -1937,12 +1936,7 @@ function SidebarSearchRow({ onOpen }: { onOpen: () => void }): React.JSX.Element
   );
 }
 
-/**
- * Home's row, between Search and the Inbox and drawn as they are: the
- * house, its name, and its chord at its end while the row is hovered or
- * reached from the keyboard. A press goes to Home from wherever the window
- * stands, and the row is the place shown while Home is.
- */
+/** Home's row, between Search and the Inbox. A press goes to Home from wherever the window stands. */
 function SidebarHomeRow({
   current,
   disabled,
@@ -1972,10 +1966,9 @@ function SidebarHomeRow({
 
 /**
  * The Tasks page's row, under the Inbox's. A press opens the listed
- * workspace's tasks as a List or a Board (`tasks-page.tsx`), as its chord
- * does, and the row is the place shown while it stands. It is always offered.
- * The page's chunk is read once the signed-in window is idle, or as the
- * pointer comes onto the row, so the first press finds it landed.
+ * workspace's tasks as a List or a Board (`tasks-page.tsx`). The page's chunk
+ * is read once the signed-in window is idle, or as the pointer comes onto
+ * the row, so the first press finds it landed.
  */
 function SidebarTasksRow({
   current,
@@ -2013,12 +2006,11 @@ function SidebarTasksRow({
 }
 
 /**
- * The Automations page's row, after the Tasks page's and drawn as it is: the
- * zap, its name, and its chord. A press opens the window's Automations page
- * (`automations-page.tsx`), and the row is the place shown while it stands.
- * While a run of the account's own automation failed to start since that
- * automation was opened, the row wears the failed mark at its end, where the
- * Inbox's count stands on its row, giving way to the chord as that does.
+ * The Automations page's row, after the Tasks page's. A press opens the
+ * window's Automations page (`automations-page.tsx`). While a run of the
+ * account's own automation failed to start since that automation was
+ * opened, the row wears the failed mark at its end, where the Inbox's count
+ * stands on its row, giving way to the chord as that does.
  * While agents its workspace's automations started still work, it counts
  * them in the working tone beside that mark, as the Runs tab does.
  */
@@ -2057,10 +2049,9 @@ function SidebarAutomationsRow({
 }
 
 /**
- * The Merge queue page's row, after the Automations page's and drawn as it
- * is: the queue's glyph and its name, with no count, since counting would
- * read every repository's queue as the window opens. A press opens the
- * window's Merge queue page, and the row is the place shown while it stands.
+ * The Merge queue page's row, after the Automations page's. It draws no
+ * count, since counting would read every repository's queue as the window
+ * opens.
  */
 function SidebarMergeQueueRow({
   current,
@@ -2139,45 +2130,33 @@ function useFirstUsableSpan(tasks: TasksControl): void {
 }
 
 /**
- * The window's left column: at its head the workspace chosen, by its tile
- * and name and who shares it, with the menu that chooses another
- * (`workspace-switcher.tsx`) and New task's glyph at its end, or the app's identity while no workspace is read;
- * Search, which opens the command palette, every task of the
- * workspace chosen, and the account's
- * row, whose menu and gear lead to Settings and the rest. Home's row, the
- * Inbox's, and the Automations page's follow Search above the rule: Home's
- * goes to Home (`desktop-home.tsx`), the Inbox's counts what waits on the
- * developer and opens the window's Inbox, and the Automations page's opens the window's Automations page. The pinned tasks, and the side panel tabs
- * pinned to the sidebar, stand in the Pinned section while any are pinned,
- * newest pinned first, under a head that folds it, every row one line whose
- * hover card says the rest; whatever the list's view says, they stand as
- * pinned. The rest stand in the Tasks section, grouped and ordered as its
- * View options say and the workspace keeps on this Mac
- * (`task-list-view.ts`): under their repositories' headers by default, the
- * pinned repositories first, newest pinned first, then the group updated
- * most recently first; under their creators'; or in one run. A task
- * archived by an older build, before archiving went, stands nowhere.
- * It is where the developer moves between things; what they work on is the
- * column beside it. On a phone it is the Tasks page (`mobile-bar.tsx`),
- * whose bar already holds New task, Search, the Inbox, and Tasks, and whose
- * phone opens on the Inbox rather than Home, so it leaves those rows to the bar,
- * and heads itself as every phone place does, its workspaces and account
- * behind the reader's face (`phone-account.tsx`) rather than at its head and foot.
- * The open task's row is marked, or, where the task was opened from a pin,
- * that pin's row, while the task stays open.
- * A task's actions are a right-click on it away, whether or not it is open.
- * The strip above the head is the window's drag handle and the traffic lights'
- * room, with back and forward at its right. Its right edge resizes it, and a drag well past its least width
- * folds it away. Folded away, it is inert as well as out of sight, so no key
- * reaches a row nobody can see, until it floats open over the work
- * (`sidebar-collapse.ts`). A floating sidebar is put away by a choice in it,
- * by Escape, by a press outside, or once the pointer leaves a peek, a press
- * in it or not, though not for a menu it raised, nor while a popup raised
- * from it, as Resources' card, stands open (`hover-pane.ts`). Opened
- * from away, it takes the keyboard at the row it marks, else at Search,
- * holds it there against Tab, and Escape gives the keyboard back where it
- * was. Floating, it has no edge to drag, since only a pinned sidebar is
- * resized.
+ * The window's left column. Pinned shows its pins whatever the list's view
+ * filters, since a pin is already the reader's own choice. The Tasks
+ * section is grouped and ordered as its View options say and the workspace
+ * keeps on this Mac (`task-list-view.ts`): by default under repository
+ * headers, the pinned repositories first, newest pinned first, then the
+ * group updated most recently first. A task archived by an older build,
+ * before archiving went, is drawn nowhere.
+ *
+ * Note that the open task's row is marked, or the pin's row where the task
+ * was opened from a pin, for as long as the task stays open.
+ *
+ * On a phone the column is the Tasks page (`mobile-bar.tsx`). The bar
+ * already holds New task, Search, the Inbox, and Tasks, and the phone opens
+ * on the Inbox rather than Home, so the column leaves those rows to the bar.
+ * Its workspaces and account sit behind the reader's face
+ * (`phone-account.tsx`), as on every phone place.
+ *
+ * Its right edge resizes it, and a drag well past its least width folds it
+ * away. Folded, it is inert as well as hidden, so no key reaches a row
+ * nobody can see, until it floats open over the work (`sidebar-collapse.ts`).
+ * A floating sidebar is put away by a choice in it, by Escape, by a press
+ * outside, or once the pointer leaves a peek. It stays for a menu it raised
+ * and while a popup raised from it is open, such as Resources' card
+ * (`hover-pane.ts`). Opened from away, it takes the keyboard at the row it
+ * marks, else at Search, and holds it against Tab; Escape gives the keyboard
+ * back where it was. Floating, it has no edge to drag, since only a pinned
+ * sidebar is resized.
  */
 function SidebarColumn({
   sidebar,
@@ -2243,8 +2222,6 @@ function SidebarColumn({
   });
 
   const bodyRef = useMemo(() => joinRefs(body, roving.ref), [roving.ref]);
-  // The window's Inbox, an agent's or a person's page, the Automations page, the Board, and Admin stand in the task's place, so while one does no task is the place shown.
-  // Note that Admin, the Board, a person's page, and the Automations pages stand over the window's state, which stays as it was under them, so no place of that state is shown then.
   const { place } = useWindowPlace();
   const board = useBoardDoor(tasks);
   const admin = useAdminDoor(tasks);
@@ -2279,6 +2256,8 @@ function SidebarColumn({
     sidebar.staged,
   );
 
+  // The window's Inbox, an agent's or a person's page, the Automations page, the Board, and Admin stand in the task's place, so while one does no task is the place shown.
+  // Note that Admin, the Board, a person's page, and the Automations pages stand over the window's state, which stays as it was under them, so no place of that state is shown then.
   const standingIn =
     inInbox ||
     inAutomations ||
@@ -2291,12 +2270,9 @@ function SidebarColumn({
   const inboxCount = useInboxViewCount(tasks);
   const inboxOn = useInboxOn();
 
-  // A press in the list is always about tasks, so it brings the Tasks tab
-  // forward from Settings as well as choosing; a task's row goes back to work
-  // on it, on the agent waiting on the developer where one does (`onResume`).
-  // A press for a place of the window's state leaves a routed place standing for it, Settings or Admin (`panel-router.tsx`).
-  // Note that the row's door moves the window first, which asks while a page holds unsaved work, and the Tasks tab is
-  // brought forward once it lands there, so a move kept at the ask changes nothing (`places/place-leave.ts`'s `arrive`).
+  // A press in the list brings the Tasks tab forward from Settings as well as choosing. Note that the row's door
+  // moves the window first, which asks while a page holds unsaved work, and the Tasks tab comes forward once it
+  // lands, so a move kept at the ask changes nothing (`places/place-leave.ts`'s `arrive`).
   const arriveFor = (door: () => void) =>
     tasks.placeLeave.arrive(door, () => onTabChange(PANEL_TAB.TASKS));
 
@@ -2379,7 +2355,6 @@ function SidebarColumn({
       samePin(row.pin, chosenPin),
   )?.pin;
 
-  // The account's own sections stand while a workspace is listed.
   const sectionsShown = tasks.signedIn && tasks.workspace !== undefined;
 
   const sectionedIn = sectionsShown ? tasks.workspace?.id : undefined;
@@ -2398,7 +2373,7 @@ function SidebarColumn({
   const sectionDialogs = useSectionDialogs(tasks, tasks.shown && overlay.inSight);
   const sectionEdits = useSectionEdits();
 
-  // A slot a row is let go at in an open section, counted among its rows as drawn, child tasks nested, read back in the section's own order; a folded one takes it on top, as it always has.
+  // A slot a row is let go at in an open section, counted among its rows as drawn, child tasks nested, read back in the section's own order; a folded one takes it on top.
   const sectionSlot = (target: DrawnSection, at: number) =>
     folds.sectionFolded(target.section.id)
       ? at
@@ -2522,11 +2497,10 @@ function SidebarColumn({
     );
   };
 
-  // Note that the pins are never filtered, because a pin is already the
-  // reader's own choice. A task an automation's run made leaves Tasks too, once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
-  // Note that the list stands as it was while the open task or the one watched moves and no row comes or goes, as they do on each move between tasks.
   const { inbox: waitingInbox } = listedInbox;
 
+  // A task an automation's run made leaves Tasks once its run finished and it holds nothing of the reader's (`finished-runs.ts`).
+  // Note that the list stands as it was while the open task or the one watched moves and no row comes or goes, as they do on each move between tasks.
   const unpinnedTasks = useSteadyList(
     useMemo(
       () =>
@@ -2773,7 +2747,6 @@ function SidebarColumn({
 
   // Whether New task's words are in sight; a person's page stands in Home's place without leaving its page, and draws no composer.
   const newTaskShown = tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON);
-  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
   const phone = room === SHELL_ROOM.NARROW;
 
   // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
@@ -2800,6 +2773,7 @@ function SidebarColumn({
     onSignOut,
   });
 
+  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
   const places = (
     <>
       <SidebarPlaces>
@@ -2909,12 +2883,9 @@ function SidebarColumn({
         />
       )}
 
-      {/* One scroller for the pages' rows and both sections, so neither the
-          rows nor the pinned tasks hold the column above the rest: on an
-          iPad's or a short window's column they left the tasks a strip. It
-          reaches the column's end edge and its body pads the rows back in,
-          so the strip its fade keeps whole for the scroll bar stands in the
-          column's inset rather than over the rows' ends. */}
+      {/* One scroller for the pages' rows and both sections, so a short column still leaves the tasks room.
+          It reaches the column's end edge and its body pads the rows back in, so the strip its fade keeps
+          for the scroll bar stands in the column's inset rather than over the rows' ends. */}
       <ReplayUnmask>
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
           <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
@@ -2968,7 +2939,6 @@ function SidebarColumn({
                         />
                       )}
                     />
-                    {/* Following stands while it holds a task, and leaves after its exit once it holds none. */}
                     <LeavingGroups
                       groups={
                         tasks.signedIn && homedFollowing.length > 0
@@ -2985,7 +2955,7 @@ function SidebarColumn({
                         />
                       )}
                     />
-                    {/* The Tasks head heads what its view filters, the sections and the list, Pinned standing above it unfiltered, and folds them together as Pinned's head folds its pins, while they hold a task, so a note saying the list is empty or still read never folds away; a row let go on it leaves its section, as one let go on the list does. */}
+                    {/* The Tasks head folds the sections and the list together only while they hold a task, so a note saying the list is empty or still read never folds away. A row let go on it leaves its section. */}
                     <div
                       className="sidebar-group sidebar-tasks-head"
                       data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
